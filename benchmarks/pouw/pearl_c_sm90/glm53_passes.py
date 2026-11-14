@@ -2,7 +2,7 @@
 the default, one TP8 rank, or ``llama32_1b``'s, one card): the gate and three retained passes, then the reference replay of each.
 
   python benchmarks/pouw/pearl_c_sm90/glm53_passes.py capture --out DIR [--model glm53|llama32_1b] [--cubin C] [--schedule S] [--graphs]  # on the card
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py volunteer --out DIR [--jobs J] [--passes P ...] [--device DEBIT_CUBIN
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py volunteer --out DIR [--jobs J] [--passes P ...] [--device CUBIN
                                                                 [--device-check N]]  # on CPUs (and the card), before verify
   python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --out DIR [--jobs J] [--fast] [--draws T]  # on CPUs, after
   python benchmarks/pouw/pearl_c_sm90/glm53_passes.py full --out DIR [--jobs J] [--without-y] [--passes P ...]  # on CPUs, after
@@ -25,15 +25,17 @@ shape's (a pass calls every weight the epoch commits, `audit.Epoch`'s rule).
 ``volunteer`` is the prover's step between the capture and the sampling coin (`volunteer_pass.volunteer`, V-EX's remedy): it
 replays every tile of prefill's and decode's passes (``--passes``) word by word, or with ``--device`` counts every word on
 the card and replays every ``--device-check``-th tile (`volunteer_pass.words_device`), and gives up, in each pass's records,
-the rows that leave a tile or one of its credited rows over its debit cap, which the screen can't see (the debit reads the
-noised codes); the transcript is the capture's.  ``verify`` runs `verify_run.verify` on each pass ``capture.json`` lists
-(grouped_check.py's too) under ``coins.json``: every pass but control must be accepted (replay-verified, development
-shortcut; the protocol's check is a ZK proof) and control rejected.  ``full`` checks prefill's and decode's outputs (``--passes``) in full, every tile of every call rather than verify's samples: its
-openings and its leaf against C~ and U recomputed from the opened rows on the device record (`clear_audit.Verifier.check_tile`,
-the verifier's own), then every real row's served y against y_unit of those U and α (RN_f32(RN_f32(U·RN_f32(1/α_A))·RN_f32(1/α_B)),
-then BF16 nearest-even, as `pearl_c.PearlC.useful` states it and fixture.py's y is), on `fast_tile`'s batch forms with every
-``--cross-check``-th tile on the scalar reference too.  Each mode writes its JSON in DIR (``capture.json``, ``volunteer.json``,
-``verify.json``, ``full.json``) and exits 0 only when everything it checks holds.
+the rows that leave a tile or one of its credited rows over its inert-work bound, which the screen can't see (the inert
+work is counted on the noised codes); the transcript is the capture's.  ``verify`` runs `verify_run.verify` on each pass
+``capture.json`` lists (grouped_check.py's too) under ``coins.json``: every pass but control must be accepted
+(replay-verified, development shortcut; the protocol's check is a ZK proof) and control rejected.  ``full`` checks
+prefill's and decode's outputs (``--passes``) in full, every tile of every call rather than verify's samples: its
+openings and its leaf against C~ and U recomputed from the opened rows on the device record
+(`clear_audit.Verifier.check_tile`, the verifier's own), then every real row's served y against y_unit of those U and α
+(RN_f32(RN_f32(U·RN_f32(1/α_A))·RN_f32(1/α_B)), then BF16 nearest-even, as `pearl_c.PearlC.useful` states it and
+fixture.py's y is), on `fast_tile`'s batch forms with every ``--cross-check``-th tile on the scalar reference too.  Each
+mode writes its JSON in DIR (``capture.json``, ``volunteer.json``, ``verify.json``, ``full.json``) and exits 0 only when
+everything it checks holds.
 """
 
 from __future__ import annotations
@@ -64,7 +66,7 @@ def capture(a) -> int:
     import bench_arm as BA
     import e2e
     import torch
-    from verity.protocols.pouw.verifier.audit import weights_root
+    from verity.protocols.accounting.pouw.verifier.audit import weights_root
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     out, dev = Path(a.out), torch.device("cuda")
@@ -114,7 +116,7 @@ def capture(a) -> int:
 
 def volunteer(a) -> int:
     import volunteer_pass as VP
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
 
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
@@ -134,7 +136,7 @@ def volunteer(a) -> int:
 
 def verify(a) -> int:
     import verify_run as VR
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
 
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
@@ -282,7 +284,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
 
 
 def full(a) -> int:
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
 
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
@@ -304,10 +306,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cubin", help="the build's cubin (default this directory's)")
     p.add_argument("--model", choices=("glm53", "llama32_1b"), default="glm53", help="capture: whose in-domain linears")
     p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear of --model)")
-    p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.protocols.pouw.verifier.serving.SCHEDULES)")
+    p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.protocols.accounting.pouw.verifier.serving.SCHEDULES)")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--fast", action="store_true", help="verify_run's --fast")
-    p.add_argument("--draws", type=int, help="verify: tiles drawn a pass (default verify_run's DRAWS)")
+    p.add_argument("--draws", type=int, help="verify: tiles sampled a pass (default verify_run's DRAWS)")
     p.add_argument("--cross-check", type=int, default=64, help="with --fast, and full: every N-th tile on the scalar reference too")
     p.add_argument("--without-y", action="store_true", help="full: C~ and U alone (passes captured before served y was retained)")
     p.add_argument("--passes", nargs="+", choices=FULL, default=list(FULL), help="volunteer and full: the passes (default both)")

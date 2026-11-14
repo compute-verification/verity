@@ -7,7 +7,7 @@ The trace corpus serves so (`benchmarks/network_e2e/traces/corpus.py`, ``--admit
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
 stdlib, `verity_vllm.settings`, `verity_vllm.engine.hooks` and `serve_admit`, and `register` imports vLLM only once
 ``VERITY_TICK`` is set. `serve_admit` reads a watermark line with the network certifier's own reader
-(`verity.protocols.certifier.verifier.release`, which imports only the stdlib), and imports it when the first line
+(`verity.protocols.accounting.certifier.verifier.release`, which imports only the stdlib), and imports it when the first line
 comes, so only the API server's process does, and it needs ``verity``, this package's dependency, on its path.
 """
 from __future__ import annotations
@@ -21,7 +21,8 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline.serve_admit import RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH, Tick, TickGate, Watermark, install, release_of
+from verity_vllm.pipeline.serve_admit import (RELEASE_HEADER, WATERMARK_PATH, Tick, TickGate, Watermark, install, open_watermark,
+                                              release_of)
 
 __all__ = ["OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "TickFeed", "register", "route_of", "tick_config",
            "unseeded"]
@@ -123,7 +124,8 @@ class TickFeed:
     the feed file the records `serve_admit.TickGate.take` reads: a numbered request's release before the server sees the
     request (its key the request's X-Request-Id, ``verity-<run>-<N>`` set where the client sent none), that it won't reach
     the engine (no 200 response began), and the watermark's lines from its ``POST /verity/watermark``, which it answers
-    itself. A malformed or repeated release and a malformed watermark are answered 400.
+    itself. A malformed or repeated release and a malformed watermark are answered 400, and so is a watermark POST that
+    is a client's (it carries a release) or a run's second, which feeds no line (`serve_admit.open_watermark`).
 
     It serves an allow-list, matched on the route less the server's ``root_path`` (`route_of`): ``/v1/completions`` and
     ``/v1/chat/completions`` (`SAMPLED_PATHS`), the watermark's, and ``/health``, ``/ping``, ``/version``, ``/v1/models``,
@@ -139,6 +141,7 @@ class TickFeed:
         cfg = tick_config()
         self.fd = None if cfg is None else os.open(cfg["feed"], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
         self.seen: dict[str, set[int]] = {}
+        self.streams: set[str] = set()              # the runs whose watermark stream has come
 
     def write(self, rec: dict[str, Any]) -> None:
         os.write(self.fd, (json.dumps(rec, separators=(",", ":")) + "\n").encode())
@@ -151,8 +154,6 @@ class TickFeed:
             return await send({"type": "websocket.close", "code": 1008})
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers") or ()}
         route = route_of(scope)
-        if route == WATERMARK_PATH:
-            return await self._watermark(headers.get(RUN_HEADER, "").strip(), receive, send)
         try:
             rel = release_of(headers)
             if rel is not None and rel[1] in self.seen.setdefault(rel[0], set()):
@@ -160,7 +161,14 @@ class TickFeed:
         except ValueError as e:
             return await _answer(send, 400, str(e))
         why = None
-        if route in SAMPLED_PATHS:
+        if route == WATERMARK_PATH:
+            try:
+                w = open_watermark(headers, self.streams, self.write)
+            except ValueError as e:
+                why = str(e)
+            else:
+                return await self._watermark(w, receive, send)
+        elif route in SAMPLED_PATHS:
             body, receive = await _buffered(receive)
             why = unseeded(body)
         elif route not in OTHER_PATHS:
@@ -194,8 +202,7 @@ class TickFeed:
             if not began:
                 self.write({"run": run, "n": n, "passed": True})
 
-    async def _watermark(self, run: str, receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
-        w = Watermark(run, self.write)
+    async def _watermark(self, w: Watermark, receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
         while True:
             message = await receive()
             if message.get("type") == "http.disconnect":

@@ -1,4 +1,4 @@
-"""Cross-Call recomputes (`verity.definitions.cross_call`): a Call computed twice, a subset of a Call's gates computed twice by
+"""Cross-Call recomputes (`verity.circuits.cross_call`): a Call computed twice, a subset of a Call's gates computed twice by
 another Call of its spec, one gate computed in two Calls of different specs, each caught and named; structure (values from constants
 alone) not counted; the honest synthetic Program passes; the hierarchical support analysis equals the gate-by-gate one."""
 from __future__ import annotations
@@ -13,11 +13,12 @@ from verity.circuits.cut import separable
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions import cross_call as X
-from verity.definitions import word as W
+from verity.circuits import cross_call as X
+from verity.circuits import word as W
 from verity.definitions.registry import prims as P
 
 from verity_vllm.pipeline import manifest as M
+from verity_vllm.query import program_view as PV
 
 F32 = P.F32
 
@@ -37,7 +38,7 @@ def _append(inst: dict, rows: list[dict]) -> dict:
 
 
 def test_the_honest_program_computes_every_value_in_one_call():
-    r = X.check_program(_honest())
+    r = X.check_program(_honest(), specialize=PV.specialization)
     assert r["ok"] and r["recomputes"] == [] and r["recomputed_gates"] == 0 and r["unrefined"] == {}
 
 
@@ -48,13 +49,13 @@ def test_a_call_computed_twice_is_caught_and_named():
     n = len(inst["rows"])
     copy_gemm = dict(gemm, name=gemm["name"] + "/copy", args=[[["n", n, *gemm["args"][0][0][2:]]]] + gemm["args"][1:])
     doc = _append(inst, [dict(norm, name=norm["name"] + "/copy"), copy_gemm])     # the Gemm reads the copy: computed again too
-    r = X.check_program(doc, strict=False)
+    r = X.check_program(doc, strict=False, specialize=PV.specialization)
     got = {a["definition"].split("{")[0]: a for a in r["recomputes"]}
     assert set(got) == {"RMSNormTriton_v1", "Gemm_v1"} and all(a["level"] == "call" and a["calls"] == 1 for a in got.values())
     assert got["RMSNormTriton_v1"]["examples"] == [[norm["name"] + "/copy", norm["name"]]]
-    assert got["Gemm_v1"]["gates"] == X.analyze(W.specialization("Gemm_v1", {"K": 16, "N": 80})).total > 0
+    assert got["Gemm_v1"]["gates"] == X.analyze(PV.specialization("Gemm_v1", {"K": 16, "N": 80})).total > 0
     with pytest.raises(X.RecomputeViolation, match="RMSNormTriton_v1.*" + norm["name"].replace("[", r"\[").replace("]", r"\]")):
-        X.check_program(doc)
+        X.check_program(doc, specialize=PV.specialization)
 
 
 def _defs():
@@ -114,7 +115,7 @@ def test_values_from_constants_alone_are_structure():
                                          ("Gemm_v1", {"K": 64, "N": 8}), ("TokenSelect_v1", {"V": 64}), ("RMSNormTriton_v1", {"N": 64, "EPS": 1e-05}),
                                          ("Embedding_v1", {"V": 64, "H": 16})])
 def test_the_hierarchical_analysis_is_the_gate_by_gate_one(fam, statics):
-    fn = W.specialization(fam, statics)
+    fn = PV.specialization(fam, statics)
     a = X.analyze(fn, {})
     b = X._expand(fn, np.repeat(np.array([1 << k for k in range(len(X._params(fn)))], np.int64), [int(t.leaves) for _, t in X._params(fn)]))
     assert a.gates == b.gates and a.prims == b.prims and np.array_equal(a.out, b.out)
@@ -134,13 +135,13 @@ def test_the_manifest_build_runs_the_check(tmp_path):
 def test_members_of_a_separable_definition_are_compared():
     # word.unit_rule cuts each member of a body that reads only its parameters on its own: the FP8 block GEMM's coordinates each
     # compute their block's scale product sx[kb] * sw[kb], 127 copies per (weight block, kb)
-    fp8 = W.specialization("ScaledMmFp8Block_v1", {"K": 256, "N": 256, "G": 128})
+    fp8 = PV.specialization("ScaledMmFp8Block_v1", {"K": 256, "N": 256, "G": 128})
     (v,) = [v for v in W.unit_rule(fp8)["violations"] if v["class"] == "cut"]
     assert v["codes"] == ["gate-recomputed"] and v["detail"]["gate-recomputed"]["n"] == 2 * 2 * 127
     (a,) = v["detail"]["gate-recomputed"]["classes"]
     assert a["level"] == "operands" and a["definition"].startswith("ScaledMmFp8BlockCoordinate") and a["calls"] == 2 * 127
     with pytest.raises(W.QueryRuleViolation, match="ScaledMmFp8Block_v1.*cut"):
-        W.check_calls([{"family": "ScaledMmFp8Block_v1", "statics": {"K": 256, "N": 256, "G": 128}, "definition": fp8.id, "calls": 1}])
+        W.check_calls([{"family": "ScaledMmFp8Block_v1", "statics": {"K": 256, "N": 256, "G": 128}, "definition": fp8.id, "calls": 1}], specialize=PV.specialization)
 
     def twice(B, S, x):
         return tuple_of(B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1]))
@@ -150,4 +151,4 @@ def test_members_of_a_separable_definition_are_compared():
     (v,) = W.unit_rule(f)["violations"]
     assert v["class"] == "cut" and v["detail"]["gate-recomputed"]["n"] == 1
     for fam, st in (("Gemm_v1", {"K": 64, "N": 8}), ("Attention_v3", {"T": 21, "NH": 4, "KVH": 2, "D": 64, "BN": 128}), ("RoPE_v1", {"NHEADS": 3, "D": 16})):
-        assert W.unit_rule(W.specialization(fam, st))["violations"] == []
+        assert W.unit_rule(PV.specialization(fam, st))["violations"] == []

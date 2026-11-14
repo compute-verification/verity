@@ -3,7 +3,7 @@ f32 `e_score_correction_bias`, top-6 of 384, renormalised, x2.5), the hash route
 `tid2eid`, the CUDA kernel `dsv4HashTopkSoftplusSqrt`) and the clamped SwiGLU (`_C.silu_and_mul_with_clamp`, limit 10), against
 `registry.dsv4_moe`'s `MoeRouterSqrtSoftplus_v1{E=384,SCALE=2.5}`, `MoeRouterHash_v1{E=384,SCALE=2.5}` and `SiluMulClamp_v1{I,LIMIT=10.0}`.
 
-One GPU process writes `<out>/dsv4_moe_capture.json`, the property record `dsv4_moe_capture` (`properties.record`), and `<out>/rows.npz`:
+One GPU process writes `<out>/dsv4_moe_capture.json`, the property record `dsv4_moe_capture` (`records.property_record`), and `<out>/rows.npz`:
 every captured row's inputs and both launches' outputs.  `ok` = every check below.  The device gate runs first and nothing else runs
 when it fails (exit 3):
 
@@ -67,7 +67,7 @@ from verity.definitions.numerics.dsv4_moe_twin import (
     router_twin,
     score_words,
 )
-from verity.definitions.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.definitions.registry import dsv4_moe as D
 from verity.definitions.registry import mla_check as MC
 
@@ -673,7 +673,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
 def run(out: str, seed: int, n: int, clamp_n: int, min_driver: int, want_cc: str, want_sms: int, workers: int,
         program_sample: int) -> dict[str, Any]:
     from verity_vllm.engine import engine_profile as prof
-    from verity_vllm.properties.record import seal as seal_record
+    from verity_vllm.records.property_record import seal as seal_record
 
     from tests.properties import fa2_target_capture_gpu as C
     from tests.properties import fa_tap_exactness_gpu as G
@@ -760,7 +760,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
     if a.verify:
-        from verity_vllm.properties.record import PropertyRecord
+        from verity_vllm.records.property_record import PropertyRecord
 
         rec = PropertyRecord(json.loads(Path(a.verify).read_text()))
         problems = rec.problems()

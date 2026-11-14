@@ -5,7 +5,7 @@
 `GemmF32Out_v1`), and each model's lm_head shard and indexer projection (``F.linear``, core's `Gemm_v2`), at their TP8 shapes
 (`MODELS`) at vLLM's default cuBLAS configuration, with the former split-K-off route kept as a named comparison variant.
 
-One GPU process writes `<out>/glm53_bf16_gemm_capture.json`, the property record `glm53_bf16_gemm_capture` (`properties.record`),
+One GPU process writes `<out>/glm53_bf16_gemm_capture.json`, the property record `glm53_bf16_gemm_capture` (`records.property_record`),
 and prints one line per case and then `GLM53-BF16-GEMM GO` or `NO-GO` with each model's verdict.  `ok` (GO) = every check below,
 for every model run.  The device gate runs first and nothing else runs when it fails (exit 3).  A case that raises records its
 error and fails the verdict without stopping the others.
@@ -112,15 +112,15 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
-from verity.definitions.ops import gemm as CG
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import gemm as CG
+from verity.circuits.ops.boolean import gemm as BG
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import ll_bf16 as LL
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v6"
 RECORD = "glm53_bf16_gemm_capture.json"

@@ -1,4 +1,4 @@
-"""The SASS gate (`benchmarks/pouw/harness/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
+"""The SASS gate (`verity/protocols/accounting/pouw/prover/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
 `ftz_refused.cu` (sm_120a, and 13.0.1's sm_90a): builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
 and the approximate -prec-div=false -prec-sqrt=false fail, as does every kernel of `ftz_refused.cu`; a cubin whose ptxas
 (version, build, arguments) isn't pinned with a numeric run exempts nothing; an instruction a toolkit excepts (MUFU.EX2
@@ -158,8 +158,8 @@ def test_one_ptxas_build_may_have_an_entry_per_target():
     p["toolkits"]["12.9.1-sm_90a"] = {**p["toolkits"]["12.9.1"], "args": ["-arch sm_90a -m 64", "-arch sm_90a -m 64 -fmad false"]}
     sm90 = note(args="-arch sm_90a -m 64 -fmad false")
     assert SG.toolkit_of(sm90, p) == ("12.9.1-sm_90a", None) and SG.toolkit_of(NOTES["plain"], p) == ("12.9.1", None)
-    assert SG.toolkit_of(note(args="-arch sm_100a -m 64"), p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 "
-                                                                        "with unpinned arguments '-arch sm_100a -m 64'")
+    assert SG.toolkit_of(note(args="-arch sm_100a -m 64"), p) == (
+        None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 with unpinned arguments '-arch sm_100a -m 64'")
     p["toolkits"]["12.9.1-sm_90a"]["numeric"] = None
     assert SG.toolkit_of(sm90, p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned without a numeric run")
 
@@ -171,8 +171,8 @@ def test_ptxas_verbose_flag_is_not_an_argument_that_matters():
 
 def test_a_toolkit_pinned_without_a_numeric_run_exempts_nothing():
     v = verdict("plain", p=pins(numeric=None))
-    assert v["toolkit"] is None and v["unpinned"] == "ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned " \
-                                                     "without a numeric run"
+    assert v["toolkit"] is None and v["unpinned"] == ("ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned "
+                                                      "without a numeric run")
     assert v["offending_n"] == v["flagged"]
 
 
@@ -583,13 +583,13 @@ def test_another_mufu_or_another_form_of_ex2_is_still_refused(new, why):
 def test_the_exception_names_the_definition_and_table_its_runs_measured():
     """The shipped exception is MufuEx2Ftz_v1 over the library's ex2 table, the evaluator the sweep's digests came from;
     another id or table is another Definition, which needs its own run. No other toolkit excepts anything."""
-    from verity.definitions.circuits import library
-    from verity.definitions.ops import mufu
+    from verity.circuits import library
+    from verity.circuits.ops import mufu
 
     p = SG.load_pins()
     exc = p["toolkits"]["13.0.1-sm_90a"]["exceptions"]
     assert set(exc) == set(SG.EXCEPTABLE) == {"MUFU.EX2"}
-    assert exc["MUFU.EX2"]["definition"].startswith(f"verity.definitions.ops.mufu.MufuEx2Ftz ({mufu.MufuEx2Ftz.id}, ")
+    assert exc["MUFU.EX2"]["definition"].startswith(f"verity.circuits.ops.mufu.MufuEx2Ftz ({mufu.MufuEx2Ftz.id}, ")
     assert library.table("ex2").sha512 in exc["MUFU.EX2"]["definition"] and len(mufu.table("ex2")) == 1 << 23
     assert exc["MUFU.EX2"]["numeric"]["runs"] == ["r20261026-015355-aec6", "r20261026-032225-3cee"]
     assert [tk for tk, rec in p["toolkits"].items() if rec.get("exceptions")] == ["13.0.1-sm_90a"]
@@ -828,8 +828,8 @@ def test_why_failed_names_the_first_instruction_and_why():
 
 
 def test_ftz_or_approximate_ptx_fails():
-    r = judge("plain", ptx=["\tadd.rn.f32 %f1, %f2, %f3;\n\tfma.rn.ftz.f32 %f4, %f1, %f2, %f3;\n\tdiv.full.f32 %f5, %f1, %f2;"
-                            "\n\tsqrt.approx.f32 %f6, %f1;\n\tadd.rn.f32 %f7, %f1, %f2; // .ftz\n"])
+    r = judge("plain", ptx=[("\tadd.rn.f32 %f1, %f2, %f3;\n\tfma.rn.ftz.f32 %f4, %f1, %f2, %f3;\n\tdiv.full.f32 %f5, %f1, %f2;"
+                             "\n\tsqrt.approx.f32 %f6, %f1;\n\tadd.rn.f32 %f7, %f1, %f2; // .ftz\n")])
     assert not r["ok"] and r["ptx_bad"] == ["fma.rn.ftz.f32 %f4, %f1, %f2, %f3;", "div.full.f32 %f5, %f1, %f2;",
                                             "sqrt.approx.f32 %f6, %f1;"]
 

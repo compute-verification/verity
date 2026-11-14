@@ -2,13 +2,13 @@
 rational, keyed by what an attempt ran, so the attempt ledger (`ledger.py`) looks the gap up at both FP32 prices instead of
 anyone typing it. A row's `gamma` field is that gap.
 
-A twin is one pinned theorem: the GGap statement of a device record at a cast (FP8 v1 and v2), or the value lemma of the
+A twin is one guarantee: the GGap statement of a device record at a cast (FP8 v1 and v2), or the value lemma of the
 gap's function (v1-hot, v2-hot, Pearl-C4 v1 and v2). The Lean store's pins keep their names from before the gap's rename
 (`pearlCGamma…`, `gammaHot…`, `gammaFp4…`, stating `εPearlC`), so both spellings are read, and `_short` gives one key for
 both. Its key is
 
   statement   the panel line and version it is the gap for, hashing format aside: pearl-c-sm120/v2, pearl-c-fp4/v1, ...
-  path        the priced path, as `verity.protocols.pouw.verifier.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
+  path        the priced path, as `verity.protocols.accounting.pouw.verifier.serving.KernelVariant.prices` and `GateRecord.prices` name it: cast-8 (the
               statement's), cast-8.72, cast-16, cast-32, cast-32.06; lut256 or rcpApprox for Pearl-C4's block scale
   fadd        the FP32 add's W1 price: 8 (the cheapest bit-exact FADD) or 1047/125 (the measured in-loop one)
   reading     forming-credited, chain-only or chain-cap

@@ -145,7 +145,7 @@ keeps or drops from and never adds to.
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
   under `data` (`tests`, `run_paths`; `--no-runs` skips them). Generated data stays out of Git and out of the key of
   `check`'s audit step, so a test of the package's own checks that the generator still writes the recorded data
-  (PoUW's `verity/protocols/pouw/verifier/tests/test_lean_package.py`).
+  (PoUW's `verity/protocols/accounting/pouw/verifier/tests/test_lean_package.py`).
 - `axioms` (optional): the allowed axioms.
 - `assumptions_module`, `assumptions`, `domain`, `open`: the premises the guarantees take, by kind
   (`assumption_records`, `unfolding`, `read_props`). A named assumption is declared in a module `assumptions_module`
@@ -267,7 +267,7 @@ The auditor:
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.
 - `settings.py`: the environment variables the Lean tools read. `moved.py`: where a path of an earlier layout is now
-  (`setup.sh` runs it). `public_lock.py`: a lock as the public export ships it.
+  (`setup.sh` runs it).
 - `headers.py`: the one reading of a Lean file's import header. `modules.py`: the module-system codemod.
 - `module_keys.py`: a Lake module's key, under which the node's artifact cache, which every sandboxed build fills,
   restores it.

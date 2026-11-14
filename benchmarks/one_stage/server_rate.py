@@ -54,6 +54,10 @@ circuit, prover file or proof). A type whose server fails at some K is recorded 
 provers on the rest (`ProofServer`'s placement). Either way a row keeps it (``verifier_cpus``) and the verifiers' CPU
 seconds a statement over the timed sessions beside the provers' (``verifier_cpu_s_per_statement``).
 
+An ``FC_`` switch in the environment reaches every prover, ``FC_UNIT_WALK`` among them, and a row says which unit kernel its
+window's device reps ran (``unit_walk``: ``[true]`` the device's level walk in every rep, ``[false]`` in none, both when
+the sessions differ, empty when no session's record says).
+
 A row is **void** when any session was refused (a refused session files fast, so it would raise the rate), any of the
 server's processes exited nonzero, a prover's log reports the device out of memory, or a finished session ran another
 statement version than the row's: it has no rate (``statements_per_s`` is null), ``void`` lists the reasons, and a
@@ -75,10 +79,10 @@ import time
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/flock/prover/python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/python"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.protocols.spot.verifier.one_stage.proofs import verifier_env
+from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
 from verity_flock import circuit as FC
 from verity_flock.proof_server import ProofServer, Statement
 
@@ -251,6 +255,14 @@ class Host:
         gib = lambda kb: round(kb / 2**20, 2)  # noqa: E731
         return {"provers_gib": gib(self.provers_kb), "verifiers_gib": gib(self.verifiers_kb),
                 "each_gib": {k: gib(v) for k, v in sorted(self.peak.items())}, "exited_while_sampled": sorted(self.gone)}
+
+
+def unit_walk(lives) -> list[bool]:
+    """Which unit kernel the sessions' device reps ran, from each session's record's ``buckets``: ``[True]`` when every
+    rep's units were the device's level walk's, ``[False]`` when none's were, both when the sessions differ, and none when
+    no record says (a CPU prover's, or a prover without the field)."""
+    return sorted({b["unit_walk"] for live in lives for b in (live or {}).get("buckets") or []
+                   if isinstance(b, dict) and isinstance(b.get("unit_walk"), bool)})
 
 
 def void_reasons(refused: int, sessions: int, exits: dict[str, int], out: Path) -> list[str]:
@@ -472,6 +484,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
                                             for r in done])
     if rec["median"]["e2e_s"] is not None and rec["median"]["prove_total_s"] is not None:
         rec["median"]["front_s"] = round(rec["median"]["e2e_s"] - rec["median"]["prove_total_s"], 4)
+    rec["unit_walk"] = unit_walk(r["s"].live for r in win)
     if lean is not None:
         rec["lean"] = []
         for s in judged:

@@ -116,7 +116,7 @@ def lean_key(commit: str, packages: list[str], cwd: Path | None = None) -> str:
 
 #: preflight.py's AVX512, for a tree from before it
 AVX512_BEFORE_PREFLIGHT = r"target-cpu=(native|x86-64-v4)\b|avx512"
-UPSTREAM = "verity/protocols/flock/agreement/upstream.json"
+UPSTREAM = "verity/protocols/proofs/flock/prover/agreement/upstream.json"
 
 
 def _show(commit: str, path: str, cwd: Path | None = None) -> str | None:
@@ -288,7 +288,7 @@ def main(argv: list[str], client=None) -> int:
 
 
 def worker_main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="research worker", description="stage 1's dispatcher (research/jobs/dispatch.py)")
+    ap = argparse.ArgumentParser(prog="research worker", description="step 1's dispatcher (research/jobs/dispatch.py)")
     ap.add_argument("--dispatch", action="store_true", help="claim jobs and run them with `research run --on` onto --pods")
     ap.add_argument("--pods", required=True, help="machines.toml names, comma-separated; one job per pod at a time")
     ap.add_argument("--name", default="rc", help="the worker is dispatch:{name}")
@@ -299,7 +299,7 @@ def worker_main(argv: list[str]) -> int:
     ap.add_argument("--token-file", type=Path, help="the dispatcher's token (default: $JOBS_WORKER_TOKEN, else WORKDIR/dispatch-NAME.token)")
     ns = ap.parse_args(argv)
     if not ns.dispatch:
-        print("research worker: only --dispatch exists until pull workers (stage 2)", file=sys.stderr)
+        print("research worker: only --dispatch exists until pull workers (step 2)", file=sys.stderr)
         return 2
     kinds = tuple(k for k in ns.kinds.split(",") if k)
     if set(kinds) - set(DISPATCH_KINDS):

@@ -5,6 +5,8 @@ framed, and a stream that doesn't reach ``[DONE]`` ends without the trailer or a
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import gc
 import http.client
 import itertools
 import json
@@ -14,8 +16,8 @@ import threading
 from typing import Any
 
 import pytest
-from verity.protocols.certifier.verifier import io_tie as IT
-from verity.protocols.certifier.verifier import release as REL
+from verity.protocols.accounting.certifier.verifier import io_tie as IT
+from verity.protocols.accounting.certifier.verifier import release as REL
 
 from tests.pipeline import test_serve_openai as served
 from verity_vllm.config import UsageError
@@ -60,9 +62,20 @@ def choice(ids: list[int] | None, text: str = "", **more: Any) -> dict:
                          **({} if ids is None else {"token_ids": ids}), **more}]}
 
 
+def request_on(c: socket.socket) -> bytes:
+    """The request a connection brings: its head and the body it states."""
+    got = b""
+    while b"\r\n\r\n" not in got and (more := c.recv(65536)):
+        got += more
+    head, _, body = got.partition(b"\r\n\r\n")
+    stated = re.search(rb"content-length: (\d+)", head)
+    while len(body) < int(stated.group(1) if stated else 0) and (more := c.recv(65536)):
+        body += more
+    return head + b"\r\n\r\n" + body
+
+
 class Scripted(threading.Thread):
-    """A server of scripted bytes: of each connection it keeps the request (its head and the body it states), sends
-    ``answer`` and closes."""
+    """A server of scripted bytes: of each connection it keeps the request (`request_on`), sends ``answer`` and closes."""
 
     requests: list[bytes]
 
@@ -78,15 +91,58 @@ class Scripted(threading.Thread):
             for _ in range(self.connections):
                 c, _ = self.sock.accept()
                 with c:
-                    got = b""
-                    while b"\r\n\r\n" not in got and (more := c.recv(65536)):
-                        got += more
-                    head, _, body = got.partition(b"\r\n\r\n")
-                    stated = re.search(rb"content-length: (\d+)", head)
-                    while len(body) < int(stated.group(1) if stated else 0) and (more := c.recv(65536)):
-                        body += more
-                    self.requests.append(head + b"\r\n\r\n" + body)
+                    self.requests.append(request_on(c))
                     c.sendall(self.answer)
+
+
+class Silent(threading.Thread):
+    """A server that takes one connection's request, sends ``answer`` and then nothing, as vLLM's own server does for a
+    request the tick gate dropped: ``sent`` is set once ``answer`` is out, and the thread ends only when the other side
+    has ended the connection, closed or reset."""
+
+    def __init__(self, answer: bytes) -> None:
+        super().__init__(daemon=True)
+        self.sock = socket.create_server(("127.0.0.1", 0))
+        self.address = self.sock.getsockname()[:2]
+        self.answer, self.sent, self.requests = answer, threading.Event(), []
+        self.start()
+
+    def run(self) -> None:
+        with self.sock:
+            c, _ = self.sock.accept()
+            with c:
+                self.requests.append(request_on(c))
+                c.sendall(self.answer)
+                self.sent.set()
+                with contextlib.suppress(ConnectionError):
+                    while c.recv(65536):
+                        pass
+
+
+class Paused(threading.Thread):
+    """A server that takes one connection's request, sends ``first``, reads until the other side has ended its sending
+    (``ended`` is set then), sends ``rest`` only once ``go`` is set, and closes."""
+
+    def __init__(self, first: bytes, rest: bytes) -> None:
+        super().__init__(daemon=True)
+        self.sock = socket.create_server(("127.0.0.1", 0))
+        self.address = self.sock.getsockname()[:2]
+        self.first, self.rest, self.ended, self.go = first, rest, threading.Event(), threading.Event()
+        self.start()
+
+    def run(self) -> None:
+        with self.sock:
+            c, _ = self.sock.accept()
+            with c, contextlib.suppress(OSError):        # a front that has closed its side takes no more
+                try:
+                    request_on(c)
+                    c.sendall(self.first)
+                    while c.recv(65536):
+                        pass
+                finally:
+                    self.ended.set()
+                self.go.wait()
+                c.sendall(self.rest)
 
 
 class Echo(threading.Thread):
@@ -108,14 +164,19 @@ class Echo(threading.Thread):
 
 class Fronted:
     """`ids_front.serve` on a thread's own loop, before the server at ``upstream``, its clock a counter (1, 2, 3, ...
-    seconds a reading) and its records kept in ``log``."""
+    seconds a reading) and its records kept in ``log``, ``recorded`` released once a record."""
 
     address: tuple[str, int]                 # where the front listens, known once `__enter__` returns
 
     def __init__(self, upstream: tuple[str, int], payload: int = P) -> None:
         ticks = itertools.count(1)
         self.log: list[dict] = []
-        self.front = F.Front(tuple(upstream), payload, log=self.log.append, clock=lambda: float(next(ticks)))
+        self.recorded = threading.Semaphore(0)
+
+        def log(rec: dict) -> None:
+            self.log.append(rec)
+            self.recorded.release()
+        self.front = F.Front(tuple(upstream), payload, log=log, clock=lambda: float(next(ticks)))
         self.ready = threading.Event()
 
     def __enter__(self) -> Fronted:
@@ -277,6 +338,67 @@ def test_a_stream_that_does_not_reach_done_ends_without_the_trailer(answer, sent
     server.join()
     assert raw == b"".join(IT.id_event(t, P) for t in sent) and IT.TRAILER not in raw
     assert [(r["ids"], r["ended"], r["why"]) for r in f.log] == [(len(sent), False, why)]
+
+
+@pytest.mark.parametrize("answer, sent", [
+    (b"", []),                                                              # the server holds the request and says nothing
+    (STREAM, []),                                                           # its 200 head and no chunk
+    (STREAM + chunked(event(choice([7], " a")))[:-5], [7]),                 # one chunk, then no more
+])
+@pytest.mark.parametrize("half", [False, True])
+def test_once_the_certifiers_side_has_ended_the_front_ends_the_servers(answer, sent, half):
+    """While the front waits on the server's stream of an id request (the server has sent nothing, its 200 head and no
+    chunk, or a chunk and no more, as vLLM's own server does for a request the tick gate dropped), the network
+    certifier's side ends, closed or only its sending half. The front then closes its connection to the server, which
+    is what tells that server to abort the request, and its own to the certifier, with the ids so far and no trailer;
+    the record says why. Without it the server's thread, which waits for that close, never ends."""
+    server = Silent(answer)
+    with Fronted(server.address) as f:
+        with socket.create_connection(f.address) as c:
+            c.sendall(released())
+            server.sent.wait()
+            got = b""
+            while len(got) < len(sent) * P:
+                got += c.recv(65536)
+            if half:
+                c.shutdown(socket.SHUT_WR)
+                assert c.recv(65536) == b""
+        server.join()
+        f.recorded.acquire()
+    assert got == b"".join(IT.id_event(t, P) for t in sent)
+    assert server.requests == [F.server_request(released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n", FIELDS,
+                                                b"%s:%d" % (server.address[0].encode(), server.address[1]))]
+    assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": len(sent), "ended": False, "why": F.GONE,
+                      "at": 1.0, "ms": [1000.0] * len(sent)}]
+
+
+def test_a_relayed_connection_whose_client_has_ended_its_sending_gets_the_servers_answer_whole():
+    """Once a client has ended its sending, asyncio no longer watches its connection, so the handler that waits on the
+    server for the rest of the answer is held by nothing but itself. A collection during that wait must not destroy
+    it: the answer still comes whole."""
+    first, rest = b"HTTP/1.1 200 OK\r\ncontent-length: 10\r\n\r\n12345", b"67890"
+    server = Paused(first, rest)
+
+    async def collect() -> None:
+        gc.collect()
+
+    try:
+        with Fronted(server.address) as f, socket.create_connection(f.address) as c:
+            c.sendall(b"GET /v1/models HTTP/1.1\r\n\r\n")
+            c.shutdown(socket.SHUT_WR)
+            got = b""
+            while len(got) < len(first):
+                got += c.recv(65536)
+            server.ended.wait()                          # the front has read the client's end and passed it on
+            asyncio.run_coroutine_threadsafe(collect(), f.loop).result()
+            server.go.set()
+            with contextlib.suppress(ConnectionError):
+                while chunk := c.recv(65536):
+                    got += chunk
+    finally:
+        server.go.set()
+    server.join()
+    assert got == first + rest
 
 
 def test_a_server_that_is_not_there_closes_the_connection():

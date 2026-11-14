@@ -16,13 +16,18 @@ versions, the consistency gate. It uses the CUDA primary context through ctypes,
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (the RTX PRO 6000 node) |
 | `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune; a space too big for one run is searched in slices, `--lt-enumerate-range START:STOP`, and its best tuned together, `--lt-enumerate-names FILE`), from each cuBLASLt loaded, CUTLASS's sm_120 kernels, and the plain NVFP4 and FP8 GEMMs of `../nvfp4_sm120/nvf4_plain.cu` (source `verity`, `verity_nvf4_256x128*` and `verity_fp8_256x128*`: 256×128 tiles, one persistent CTA an SM, m a multiple of 256, n of 128, k of 128 or for FP8 64, one tile order, a workspace of their own for their tensor maps), and the bit-exact gate on ternary operands |
 | `example_arm.py` | an example arm, **not a PoUW scheme** (plain cuBLASLt FP8 and a stand-in read of D): the smoke test of the arm path and a template |
-| `sass_gate.py` | the SASS gate, before anything is timed: no instruction with `.FTZ` and no FP32 `MUFU` (so no `-ftz=true`, `--use_fast_math` or approximate div/sqrt build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run, except inside ptxas's IEEE div/sqrt/rcp and integer-division sequences as a ptxas pinned in `sass_pins.json` (version, build, arguments, numeric run) builds them (a div body that folds a constant numerator in, for that constant alone: `numerators`), and except an instruction a pinned toolkit's `exceptions` list (one of `EXCEPTABLE`, in its one form, naming the Definition that models it bit for bit and the numeric run that held the card to it: `MUFU.EX2` under 13.0.1-sm_90a, `MufuEx2Ftz`); nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python sass_gate.py BINARY...`, `--pin`); and `mma_gate`, the build gate each kernel family's `sass_gate.py` (`pearl_c_sm90/`, `pearl_c_sm120/` and torch_gpu's `s8_linear/`) runs on ptxas's report and the cubin's SASS with its own WANT table |
+| `verity/protocols/accounting/pouw/prover/sass_gate.py` | the SASS gate, which is beside PoUW's prover and not in this directory (`bench.py` and `ieee_pin.py` load it from its file), before anything is timed: no instruction with `.FTZ` and no FP32 `MUFU` (so no `-ftz=true`, `--use_fast_math` or approximate div/sqrt build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run, except inside ptxas's IEEE div/sqrt/rcp and integer-division sequences as a ptxas pinned in `sass_pins.json` beside the gate (version, build, arguments, numeric run) builds them (a div body that folds a constant numerator in, for that constant alone: `numerators`), and except an instruction a pinned toolkit's `exceptions` list (one of `EXCEPTABLE`, in its one form, naming the Definition that models it bit for bit and the numeric run that held the card to it: `MUFU.EX2` under 13.0.1-sm_90a, `MufuEx2Ftz`); nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python verity/protocols/accounting/pouw/prover/sass_gate.py BINARY...` from the repository's root, `--pin`); and `mma_gate`, the build gate each kernel family's `sass_gate.py` (`pearl_c_sm90/`, `pearl_c_sm120/` and torch_gpu's `s8_linear/`) runs on ptxas's report and the cubin's SASS with its own WANT table |
 | `ieee_pin.py`, `ieee_pin.cu` | the gate's numeric pin, and where its pins come from: builds `ieee_pin.cu` with each pinned toolkit and flag set and three negative controls, checks each toolkit's `sass_pins.json` entry is what its builds pin, gates them, runs them under `gpu-lease 1` (rcp and sqrt on all 2^32 inputs, div on 2^32 pairs weighted to subnormals, integer division exhaustively or weighted, every subnormal input against the host too) and writes `ieee-pin.json`; its run is each toolkit's `numeric` |
 | `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier, a replay, on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments. An accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck) |
 | `ledger.py` | the attempt ledger: `verify.py` writes one `kernel-attempt/v1` record per arm and shape under the run's `ledger/` (the variant, parent, tier, gate version, metrics, step times, γ, the verifier's lines, the hypothesis) and publishes it with `--publish`; `ledger.py publish RUN_DIR` later, `ledger.py outcome ART OUTCOME --reason ...`, and `ledger.py rows`, what `panel.py` reads beside `attempts.jsonl` |
 | `price_twins.py`, `price_twins.json` | the gap's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`, or `--repository-only` when only `security/lean-audit.json` changed): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, at its cube or its linear (n, k) (`lookup(..., layout=)` for a served layout's), and never takes one typed in |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
 | `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) and `../nvfp4_sm120/nvf4_plain.cu`'s in the same registry (`cutlass_api.h`; `PH_NO_CUTLASS=1` builds only these); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
+
+The runner is `run.sh JOB [ARGS]`, which `verity bench pouw harness JOB [ARGS]` runs: it starts one job as it is, with
+ARGS and the environment. JOB is `build` (`native/build.sh`), `pin_target` (`jobs/pin_target.sh`), or `bench`,
+`characterize`, `verify`, `ledger`, `price_twins` or `ieee_pin`, the Python script of that name, under `"$PY"` where
+`jobs/env.sh` has set it and under `python3` else. The commands below start the same scripts by their paths.
 
 Build (no GPU needed; nvcc 12.9, about 7 GB of memory per CUTLASS 3.x unit):
 
@@ -62,7 +67,7 @@ CUDA_VISIBLE_DEVICES=5 CUDA_DEVICE_ORDER=PCI_BUS_ID python characterize.py --gpu
 Where there is no CUDA 12.8+ toolkit, or it isn't the build's (the RTX PRO 6000 node has 13.0), `jobs/env.sh BUILD`
 gives the run NVIDIA's cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `art:<id>` of one
 preserved with `research data put --kind pouw-harness-build/v1 --tree DIR --preserve`), and this tree's `verity` and
-`verity.protocols.pouw.verifier` on `PYTHONPATH`. On that node, `gpu-lease 1` picks the GPU, so the run names it
+`verity.protocols.accounting.pouw.verifier` on `PYTHONPATH`. On that node, `gpu-lease 1` picks the GPU, so the run names it
 `--gpu lease` (the one index the lease set, checked against `server.md`'s GPU table); a timed run holds the node with
 `gpu-lease 8 --wait --timed` and times on its first GPU (`--timed` pauses the fill queue: without it, fill jobs keep
 running beside the timed run). A timed run also passes `research run --no-sampler`, so `research`'s own telemetry
@@ -104,9 +109,9 @@ Decode rows count on the panel only as a dependent chain, which needs a library 
 `--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface
 v0.6) gets the split when its calls expose
 `phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
-`tile_hash`, `screen`, as `verity.protocols.pouw.verifier.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
+`tile_hash`, `screen`, as `verity.protocols.accounting.pouw.verifier.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
 after (tile_hash, screen, the movable groups), and the report's `split_groups` names the groups each time covers. The
-side-stream variant times the served `deferred` schedule (`verity.protocols.pouw.verifier.serving.DEFERRED`): tile hashing (`arm.DEFERRED`)
+side-stream variant times the served `deferred` schedule (`verity.protocols.accounting.pouw.verifier.serving.DEFERRED`): tile hashing (`arm.DEFERRED`)
 off the main lane, the screen on it. v0.4's `before`, `gemm` and `after` still work, each as its part, and are deprecated;
 their one `after` can't be split that way, so they get no side-stream variant. `arm.py` has the contract.
 
@@ -118,7 +123,8 @@ An arm's `build` names every cubin, fatbin or library its kernels come from in `
 with `cuModuleLoadData` is never mapped, so the gate can't find it alone). The gate needs `cuobjdump` and `nvdisasm`
 (`POUW_CUDA_BIN`, `CUDA_HOME/bin`, the PATH or `/usr/local/cuda/bin`), and the system's `libzstd.so.1` for a binary whose
 device code nvcc compressed (build with `--no-compress` and it needs none), and caches passes by the binary's sha256
-(`POUW_SASS_GATE_CACHE`). To check a build before a run: `python sass_gate.py my_kernels.cubin --json gate.json`. Build
+(`POUW_SASS_GATE_CACHE`). To check a build before a run, from the repository's root:
+`python verity/protocols/accounting/pouw/prover/sass_gate.py my_kernels.cubin --json gate.json`. Build
 sm_120a with a pinned toolkit (CUDA 12.9.1 from `jobs/toolkit.sh`, or 13.0.1, the RTX PRO 6000 node's `/usr/local/cuda`)
 and without `-ftz=true`, `--use_fast_math`, `-prec-div=false` or `-prec-sqrt=false`; `-fmad=false` is pinned too. Any
 other toolkit, architecture or ptxas argument fails closed until it is pinned (`--pin ... --toolkit`, from
@@ -150,10 +156,7 @@ Every gate's record and every negative control carry `wall_s`, the host's second
 and each shape its `wall_s` by stage (`operands`, `baseline_gates`, then `screen` alone under `--screen-only`, else
 `arm_gates`, `tune`, `chain_gates`, `sass_gate`, `warmup`, `timed`, `transcripts`, `report`), so a lease's idle minutes
 show where they went: operands are filled on the device in milliseconds, while an arm's CPU reference inside its gates can
-take minutes. So `refs.py` gives arms `pool()`, a forked process pool of the job's CPUs (`OMP_NUM_THREADS`, a fill job's
-`cpus=`), for such references, and an arm with `prefetch(dev, call, shape, flags)` (optional, arm interface v0.6) is told
-every call a flag set's gate is about to check before the first of them, so their references compute side by side; the gate still compares against the
-inputs as the device holds them at the gate.
+take minutes.
 
 **Poisoned transcripts and the no-write control** (a panel rule). An arm with `dump` (arm interface v0.5)
 lets the harness make its transcripts after the timed items: every buffer the transcript reads (`call.transcript_buffers`,

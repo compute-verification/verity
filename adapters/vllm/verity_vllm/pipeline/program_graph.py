@@ -34,7 +34,7 @@ from typing import Any
 import numpy as np
 from verity.circuits.codec import definition_digest
 from verity.circuits.defs import bind
-from verity.definitions import word as word_query
+from verity.circuits import word as word_query
 from verity.definitions.encoding import encode_specialization, word_values
 
 from verity_vllm.config import option
@@ -48,6 +48,7 @@ from verity_vllm.query.program_view import (
     spec_base,
     spec_statics,
 )
+from verity_vllm.query.program_view import specialization as _specialization
 
 __all__ = ["Options", "main"]
 
@@ -454,9 +455,6 @@ def fold_hints(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return runs
 
 
-_specialization = word_query.specialization
-
-
 def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> tuple[dict[str, dict[str, Any]], list[str | None]]:
     """Every specialization the roots use, down to primitives, in the codec's v0 node form, each composite with its fold hints, and
     each root's specialization id (None when the registry cannot bind it; recorded as `unresolved` with the reason)."""
@@ -607,7 +605,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                       "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
     g.setdefault("rules", {})["q_word_v1"] = (
-        "verity.definitions.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
+        "verity.circuits.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
         "committed once at serving (the Call's inputs are committed; a program's values, its weights, constants and tables and a request's "
         "data and parameters, are registered or run inputs, committed under hiding leaves; only an operation's own constant bits and "
         "wiring are structure); outputs of <= X "

@@ -16,7 +16,7 @@ The served sizes it reads:
 - SPOT: the GLM-5.3 workload card (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): its window of one
   request (the floor), and one request of 3,320.5 computed tokens (`benchmarks/spot_figures/breakeven/reprice.py`), at
   the card's cut.
-- Monitoring periods: `verity/protocols/reporting.py`'s week, month and year, in hourly phases.
+- Monitoring periods: `verity/protocol.py`'s week, month and year, in hourly phases.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ lg = math.log2
 CARD = Path(__file__).resolve().parents[1] / "spot_figures" / "cards" / "workload.glm-5.3.json"
 #: the prover's budget in SHA-512 calls, log2; each row also gives `2^64` where the budget moves it
 T = 80
-#: hourly phases in a week, a month and a year (`verity/protocols/reporting.py`'s PERIODS)
+#: hourly phases in a week, a month and a year (`verity/protocol.py`'s MONITORING_PERIODS)
 PHASES = {"week": 7 * 24, "month": 30 * 24, "year": 365 * 24}
 
 # Flock, one `--zk` session (`security/Proofs/Flock/Claims/NumbersDeploy.lean`): κ ≤ n·2^-202.98 at n tables, at most
@@ -40,8 +40,11 @@ KAPPA_TABLE = -202.98
 GAMMA_ONE = 51.0
 TABLES_MAX = 64
 
-# The recursion's outer proof (its κ + t·ε lemma in `security/Proofs/Flock/Claims/Recursion/`): Pr[acc ∧ ¬R] ≤ κ + t·ε.
-REC_KAPPA, REC_EPS = -167.7, -174.95
+# The recursion's outer proof, `Verity.Recursive.Dep.ksAt` (`security/Proofs/Properties/Verity/Recursive.lean`):
+# min(κ + t·ε, t·2^-λ₂) at the deployment's tables, t·2^-λ₂ off them; λ₂ ≥ 135.7 at an accepted statement (`calls_lam`).
+REC_KAPPA, REC_EPS, REC_LAM = -167.7, -174.95, 135.7
+# `RecursiveAuditC3`'s δ_s: the sample's miss, a hypothesis, at the epoch's δ.
+REC_DELTA_S = Fraction(1, 100)
 
 # Pearl+ as served.
 PASSES = (128, 4, 4, 4)
@@ -54,7 +57,7 @@ RHO = Fraction(1, 400)
 H100 = {"r": 32, "G": 4, "add": 32, "bf16": 2, "fs": 64, "qa": 4, "c": 0}
 G0 = Fraction(1, 400)
 
-# The deployed PoUW window (`verity/protocols/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
+# The deployed PoUW window (`verity/protocols/proofs/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
 WINDOW_DELTA = Fraction(1, 2**40)
 SERVED_DELTA = Fraction(1, 100)
 # A K_d that `security/Definitions/Accounting/Guarantees/Compose.lean`'s docstring takes as its example; not served.
@@ -62,7 +65,7 @@ COMPOSE_KD = 96000
 # The Sm120 headlines' window (`security/Definitions/Accounting/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
 SM120_CHECKS, SM120_BUDGET = 48000, -41.0
 
-# Dither's design point (`verity/protocols/pouw/verifier/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
+# Dither's design point (`verity/protocols/experimental/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
 DITHER = {"delta_coin": 1e-6, "G": 1.15e7, "q": 13816}
 
 # SPOT's binding error ε_bind as its one-stage audit states it, at k = ⌈2^24/e⌉ and M, R_w at 2^192.
@@ -84,6 +87,17 @@ def session_ks(t: float = T, tables: int = 1) -> float:
         gamma = lg(16 * (math.sqrt(2 * r * c) + r) ** 2)
     fork = 0.5 * (gamma + 2 * (t + 1) - 513)
     return l2sum(KAPPA_TABLE + lg(tables), fork)
+
+
+def up(x: float) -> str:
+    """A log2 bound to two decimals, rounded up (a float within 1e-9 of the grid counts as on it)."""
+    return f"{math.ceil(x * 100 - 1e-9) / 100:.2f}"
+
+
+def rec_ks(t: float = T) -> tuple[float, float]:
+    """The recursion's `ksAt` at `2^t` calls: at the deployment's tables (`OneTable`), and off them."""
+    off = t - REC_LAM
+    return min(l2sum(REC_KAPPA, t + REC_EPS), off), off
 
 
 def pearl_gap(n: int, k: int) -> Fraction:
@@ -185,6 +199,15 @@ def rows() -> list[dict[str, Any]]:
         e = (1 + float(eps_a)) / (1 - sampling_eps(d)) - 1
         row("pearl+ ε", f"{served}, with the sample", "(1 + ε_a)/(1 − ε_s) − 1, ε_s = 1 − δ^(1/t)", f"t = {SAMPLE}, δ_s = {d}",
             f"{e:.3%}", "TTOutTilePearlCH100Rev1 (ε_a)", "assumed")
+
+    for t in (T, 64):
+        on, off = rec_ks(t)
+        row("recursive audit δ", "Flock.Guarantees.RecursiveAuditC3 (Verity.Recursive.Dep.delta), one proof",
+            "δ_s + E[ksAt] + √(min(W, 2n)·E[bindBudget]/2^256)", f"t = 2^{t}, δ_s = {REC_DELTA_S}",
+            f"δ_s {up(lg(REC_DELTA_S))} (by design) + ksAt {up(on)} ({up(off)} off the deployment's tables)"
+            " + binding: no value",
+            "FinderCR, else ⊤; the binding term waits on a lemma evaluating the extractor's `runs` at the deployed shape;"
+            f" over a period: none, δ_s alone sums to 1 at {math.ceil(1 / REC_DELTA_S)} proofs")
 
     for t in (T, 64):
         one = l2sum(REC_KAPPA, t + REC_EPS)

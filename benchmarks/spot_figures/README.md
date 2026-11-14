@@ -1,7 +1,7 @@
 # spot_figures
 
 The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
-(`verity.protocols.spot.optimize`) and the model's cards. A model, not a measurement: every input is a
+(`verity.protocols.proofs.spot.prover.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series. Lean checks the design behind every exfiltration and skipped-work point of both forms of Figure 1
 (`plancheck`, which builds `sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point
@@ -189,7 +189,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   a curve per share of compute spent on replays, interior commitments and proofs.
   - Scopes are the world (rho's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
     datacenter (the census's `dc-12500-machines-600s`), each over a week, a month and a year
-    (`reporting.PERIODS`).
+    (`verity.protocol.MONITORING_PERIODS`).
   - Costs are the scope's GPU-seconds: a replay costs the `replay` card's factor times what it re-runs at serving's
     MFU (`total_cost.batch`: a machine's replay block, an engine step's batch at one layer, or one request),
     proving a proof block takes the marginal proof overhead (the x-axis) times its FLOP at the H200's dense FP8 peak
@@ -209,7 +209,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
     its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
     an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its
-    layer (`verity/protocols/spot/verifier/README.md`).
+    layer (`verity/protocols/proofs/spot/verifier/README.md`).
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
     its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public
@@ -330,8 +330,12 @@ Limits of the model:
 - The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
   only what it serves; the capped ones charge at most what it serves, the sets' form on
   `card_influenceTwo_le_served_min` and the patterns' form on `card_influenceTwo_le_patterns`.
-- The patterns' form takes each request to serve at most S bits and no proof block to be shared across requests: a
-  batched or routed block that several requests read needs the planner changed.
+- The patterns' form takes no proof block to be shared across requests and each request to serve exactly S bits.
+  Replay blocks that read one another's values (a batched or routed block that several requests read, a value
+  another replay block committed) are one request there, priced at the replay grain's fan-out F as serving F S bits
+  (`optimize.two_stage_exfil`'s `fanout`). Lean certifies that point only for a window whose groups each hold F replay
+  blocks, and `plancheck.two` writes it only for a caller that says they do (`whole_groups`). Every figure here is at
+  F = 1 (`figure1.FANOUT`).
 - A verification phase's statements are sized for the first stage's count alone: a Definition's blocks in a sampled
   replay block are its own count, and its sessions' padding to one size within a statement, not to one size across
   Definitions. A pod-wide or datacenter-wide verification phase needs one committer over its machines' boundary rows.

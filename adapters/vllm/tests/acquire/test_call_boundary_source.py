@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 from verity.circuits.evaluation import evaluate, evaluate_batch
-from verity.definitions.call_scope import specialization
 
 from tests.acquire.call_boundary_programs import (
     DENSE,
@@ -33,6 +32,7 @@ from tests.acquire.call_boundary_programs import (
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.query.compose import compose_global
 from verity_vllm.query.manifest.format import spec_family
+from verity_vllm.query.program_view import specialization
 from verity_vllm.query.program_view import definition_ports, spec_statics
 
 if TYPE_CHECKING:
@@ -290,7 +290,7 @@ def test_a_body_that_reads_a_program_input_or_another_step_is_refused_by_name(tm
 # ------------------------------------------------------------------------------------------------------------------------------ FP8
 @pytest.fixture(scope="module")
 def fp8(tmp_path_factory):
-    from tests.check.test_sampled_replay_fp8 import G, I, _e4m3, _program_fp8
+    from tests.check.test_sampled_replay_fp8 import INTER, G, _e4m3, _program_fp8
     from tests.check.test_sampled_replay_fp8 import H as HF
 
     inst, woff, wbits = _program_fp8()
@@ -298,7 +298,7 @@ def fp8(tmp_path_factory):
     fields = {n: (_e4m3(rng, hi - lo) if wbits[n] == 8 else np.exp2(rng.uniform(-9, -3, hi - lo)).astype(np.float32).view(np.uint32)
                   if wbits[n] == 32 else _bf16(rng, hi - lo, 0.5)) for n, (lo, hi) in woff.items()}
     pdir, man = build_dir(tmp_path_factory.mktemp("fp8"), inst, ["model.layers.0.mlp.act_fn"])
-    return types.SimpleNamespace(inst=inst, woff=woff, fields=fields, pdir=pdir, man=man, G=G, H=HF, I=I)
+    return types.SimpleNamespace(inst=inst, woff=woff, fields=fields, pdir=pdir, man=man, G=G, H=HF, I=INTER)
 
 
 def _fp8_rows(rng, rows, n, edges):

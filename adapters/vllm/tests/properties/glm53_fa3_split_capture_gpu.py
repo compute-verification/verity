@@ -3,7 +3,7 @@ default `FLASH_ATTN_MLA_SPARSE` decode (`forward_mqa` passes no `num_splits`, so
 heuristic and `FlashAttnFwdCombine` merges the splits), and for `MufuLg2Ftz_v1` on sm_90, at GLM-5.3's TP8 statics (8 heads,
 rope 64, latent 512, top-k 2048, the scale 1/16).
 
-One GPU process writes `<out>/glm53_fa3_split_capture.json`, the property record `glm53_fa3_split_capture` (`properties.record`),
+One GPU process writes `<out>/glm53_fa3_split_capture.json`, the property record `glm53_fa3_split_capture` (`records.property_record`),
 and prints one line per launch, then `GLM53-FA3-SPLIT GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first
 and nothing else runs when it fails (exit 3).  A phase that raises records its error and fails the verdict without stopping the
 others.
@@ -57,7 +57,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fa3-split-capture/v2"
 RECORD = "glm53_fa3_split_capture.json"
@@ -293,7 +293,7 @@ def sweep_words() -> np.ndarray:
 
 def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """lg2 on the exponent bands, the sweep and the powers of two below 1; ex2 and rcp on core's table domains and the sweep."""
-    from verity.definitions.ops import mufu as MU
+    from verity.circuits.ops import mufu as MU
     from verity.definitions.numerics import sparse_mla_split_twins as TW
     from verity.definitions.registry import sparse_mla_split as W
 

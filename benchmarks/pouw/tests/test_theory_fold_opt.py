@@ -10,7 +10,7 @@ from pathlib import Path
 import fold_opt as F
 import pytest
 
-from verity.protocols.pouw.receipts import receipt_folds as R
+from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as R
 
 THEORY = Path(__file__).resolve().parents[1] / "theory"
 SCRIPT = THEORY / "fold_opt.py"

@@ -70,7 +70,7 @@ incorrect set of the trace the extractor recovers.
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
      `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until proved
-     (PoUW's: `verity/protocols/pouw/verifier/`).
+     (PoUW's: `verity/protocols/accounting/pouw/verifier/`).
 
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
 declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes
@@ -139,7 +139,7 @@ part 4's slowdown is a consequence of it, not a further source of difficulty. Al
 count** in one convention: the product arguments count weighted multiplications, the recovery argument counts output
 observations, and an application of the argument fixes one convention for Ω_*, every q_I and Q_rem.
 
-The numbers come from the slowdown calculator (`verity/protocols/inference_only/rho`), not from this file.
+The numbers come from the slowdown calculator (`benchmarks/rho`), not from this file.
 
 ### Objects
 
@@ -462,7 +462,7 @@ None of these is assumed silently; each would restate the conclusion:
 | SPOT | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
 | The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
-| Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
+| Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
 | The floor | `Nci.Guarantees.CapabilityFloor` | Proved, under coverage |
@@ -484,9 +484,9 @@ to) and build or run Lean in a package's Lake environment. No outside package re
 
 - Lean files importing `Proofs.*` and the programs that build or run them: the one list is in `Proofs/README.md`.
 - The NCP pin's command in `tools/verity/check/pins.py` builds and runs Lean in `security`'s environment.
-- Generators: `lean_headline.py`, `lean_headline_dc.py` and `machine_model/` (the ACCEL model; it prints `Sheets/`)
-  in `benchmarks/pouw/`; `verity/definitions/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
-  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/pouw/verifier/lean/scripts/`.
+- Generators: `machine-model lean-headline` and `machine-model --device DEVICE sheet --lean`
+  (the second prints `Sheets/`); `verity/circuits/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
+  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/accounting/pouw/verifier/lean/scripts/`.
 
 ## The lock
 
@@ -531,7 +531,7 @@ the statement's named assumptions, not the conditions on its inputs and setup (t
 | PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory challenger's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
 | Bandwidth audit, PoUB's per-pass lemma | `Accounting.Guarantees.Remote.AuditRO`, `Definitions/Accounting/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
-| Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, and sampled proofs' `Claims.SamplingGeneric.Compiled.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
+| Network certification | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean` | Proved under named assumptions: `TrustedHost`, and sampled proofs' `Claims.SamplingGeneric.Compiled.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
 | PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/Accounting/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`RemoteAudit.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. In its own form it is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
 
@@ -539,7 +539,7 @@ PoUW has other guarantees, outside protocol soundness.
 
 ## The remote protocol in Lean
 
-Remote (`verity/protocols/remote/verifier`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
+Remote (`verity/protocols/compose/verifier/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes three subprotocols, SPOT (one-stage v2; the recursive audit refused), PoUW's period check
 (`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`NciCheck.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the
@@ -559,7 +559,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs are
-  onsite's (`verity/protocols/spot/verifier/README.md`): `CoinsConfidential`, the named Prop
+  onsite's (`verity/protocols/proofs/spot/verifier/README.md`): `CoinsConfidential`, the named Prop
   `Pouw.Assumptions.CoinsConfidential` (`Definitions/Pouw/Assumptions/Dither.lean`, in the lock, taken by
   `Pouw.Guarantees.Dither.FleetSound`), and `OneClock`, prose only.
   Remote's coin path is three assumptions over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
@@ -570,7 +570,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network certifiers and memory
   challengers are onsite's.
 - **Not the remote composite.** `Accounting.Remote` and `Properties.Accounting.Remote` are PoUB
-  (`verity/protocols/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
+  (`verity/protocols/accounting/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
   of onsite only.
 
 ## Building and checking

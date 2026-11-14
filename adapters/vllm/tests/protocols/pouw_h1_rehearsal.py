@@ -59,7 +59,7 @@ leaf and refused hellos and seals ``hellos.jsonl``; with ``--served`` the tree m
 archived with the int8 checkpoints' manifest
 its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 snapshot on the node):
 
-    git archive --format=tar.gz -o gate-tree.tgz COMMIT verity verity/composite/device/live_challenger \\
+    git archive --format=tar.gz -o gate-tree.tgz COMMIT verity verity/protocols/compose/device/live_challenger \\
       adapters/vllm/manifests/checkpoints-int8.json
     git rev-list --first-parent origin/main > main.txt
     research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz --send main.txt \\
@@ -80,7 +80,7 @@ rehearsal's ``out/program/``), its circuit files' directory (``--circuits``), an
       PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
       -m tests.protocols.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \\
       --circuits $RESEARCH_RUN_DIR/inputs/circuits \\
-      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84" \\
+      --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes GATE_LOGIN" \\
       --peer vy-nebius-2 --at 127.0.0.1:7811 --period vllm-h1-live-1 \\
       --key-sha512 27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc'
 
@@ -206,7 +206,8 @@ class Gate:
     """The gate's verbs as ``argv + VERB``, each call and its answer kept in ``log``."""
 
     def __init__(self, argv: list[str]) -> None:
-        self.argv, self.log = argv, []
+        self.argv = argv
+        self.log: list[dict[str, Any]] = []
 
     def raw(self, *args: str) -> tuple[int, bytes]:
         from tests.protocols.pouw_h1_gpu import gate_argv
@@ -361,7 +362,7 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
     doc = GPU.check_challenger(str(calls), str(tree / "out" if window is not None else tree), pin, str(out),
                                [str(p) for p in ledger], None if wfile is None else str(wfile), period, descriptor,
                                [str(p) for p in pins or ()], main,
-                               None if draw is None else str(draw / "out" if window is not None else draw))
+                               draw_directory=None if draw is None else str(draw / ("out" if window is not None else "")))
     return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period", "credit")}
 
 
@@ -380,7 +381,7 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     from a sampling challenge phase the gate reserves beside it and opens withheld on the window's sample root
     (`pouw_h1_window.DrawSession`), as `test_pouw_h1._salted` forges one in process: (the forged commitment, its
     challenge phase, its sample's)."""
-    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.accounting.pouw.verifier import window as Wd
 
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import requests as RQ
@@ -419,7 +420,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
              main: list[str] | None = None) -> dict[str, Any]:
     """Each case the verifier's side must refuse, on edited copies of the run's record and ledger (CPU only), and with
     `gate` (the local gate's), challenge phases forged through it; `main` is the verifier's first-parent history of main."""
-    from verity.protocols.pouw.verifier import salt as PS
+    from verity.protocols.accounting.pouw.verifier import salt as PS
     record_path = out / "serve" / "pouw-h1-calls.json"
     record = json.loads(record_path.read_text())
     c = record["commitment"]
@@ -453,7 +454,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     case("pins_cut", record_path, pn=[rt / "pins-cut.jsonl"])
     logged = [ln for ln in (g / "pins.jsonl").read_text().split("\n") if ln]
     if logged:
-        from verity.protocols.spot.device import challenger as LC
+        from verity.protocols.proofs.spot.device import challenger as LC
         e = json.loads(logged[0])
         logged[0] = LC.pin_line(e["commit"], e["main"], "2000-01-01T00:00:00Z")
     (rt / "pins-rewritten.jsonl").write_text("".join(ln + "\n" for ln in logged))
@@ -625,7 +626,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
 
 def _main_of(a: argparse.Namespace) -> list[str] | None:
     """The verifier's own first-parent history of main at ``--main`` (`remote.main_lines`), or None without one."""
-    from verity.protocols.spot.device import remote
+    from verity.protocols.proofs.spot.device import remote
     return None if a.main is None else remote.main_lines(a.main)
 
 

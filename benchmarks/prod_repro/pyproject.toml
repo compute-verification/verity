@@ -42,29 +42,28 @@ inputs = [
     # `window_code` takes the window it charges from the certifier's prover (`window_charge.Advice`) and its code
     # word's width from the certifier's verifier (`arith_encode.CW`); those two load the certifier's chain checks
     # beside them and the grid and certificate `head_check` reads
-    "verity/protocols/__init__.py",
-    "verity/protocols/certifier/__init__.py",
-    "verity/protocols/certifier/prover/__init__.py",
-    "verity/protocols/certifier/prover/window_charge.py",
-    "verity/protocols/certifier/verifier/__init__.py",
-    "verity/protocols/certifier/verifier/arith_encode.py",
-    "verity/protocols/certifier/verifier/charge_chain.py",
-    "verity/protocols/certifier/verifier/replay_chain.py",
-    "verity/protocols/certifier/verifier/head_check.py",
-    "verity/protocols/certifier/verifier/certificate.py",
-    "verity/protocols/certifier/verifier/grid.py",
-    "verity/protocols/certifier/verifier/schedule.py",
+    "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
+    "verity/protocols/accounting/certifier/__init__.py",
+    "verity/protocols/accounting/certifier/prover/__init__.py",
+    "verity/protocols/accounting/certifier/prover/window_charge.py",
+    "verity/protocols/accounting/certifier/verifier/__init__.py",
+    "verity/protocols/accounting/certifier/verifier/arith_encode.py",
+    "verity/protocols/accounting/certifier/verifier/charge_chain.py",
+    "verity/protocols/accounting/certifier/verifier/replay_chain.py",
+    "verity/protocols/accounting/certifier/verifier/head_check.py",
+    "verity/protocols/accounting/certifier/verifier/certificate.py",
+    "verity/protocols/accounting/certifier/verifier/grid.py",
+    "verity/protocols/accounting/certifier/verifier/schedule.py",
     # the chain checks import SPOT's produced and registered row helpers
-    "verity/protocols/spot/__init__.py",
-    "verity/protocols/spot/verifier/__init__.py",
-    "verity/protocols/spot/verifier/one_stage/__init__.py",
-    "verity/protocols/spot/verifier/one_stage/partition.py",
-    "verity/protocols/spot/verifier/one_stage/produced.py",
-    "verity/protocols/spot/verifier/one_stage/registered.py",
+    "verity/protocols/proofs/spot/__init__.py",
+    "verity/protocols/proofs/spot/verifier/__init__.py",
+    "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
+    "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
+    "verity/protocols/proofs/spot/verifier/one_stage/produced.py",
+    "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
     # `head_check` counts a Definition's ANDs with the census
     "verity/definitions/__init__.py",
-    "verity/definitions/circuits/__init__.py",
-    "verity/definitions/circuits/census.py",
+    "verity/circuits/census.py",
     # the certifier's checks are circuits: what `verity.circuits` and its Boolean forms load to build and evaluate
     # them (the evaluator's directory is read whole), with the errors they raise
     "verity/errors.py",
@@ -112,3 +111,5 @@ inputs = [
     # the record of the value settings in force, which the suite makes as the benchmark does (serve_tax.value_settings)
     "adapters/vllm/verity_vllm/settings.py",
 ]
+# the runner's tests start `run.sh` under bash, a program the read guard can't trace: keyed on the suite's whole tree
+untraced = ["tests/test_prod_repro.py"]

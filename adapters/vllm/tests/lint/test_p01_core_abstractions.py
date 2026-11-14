@@ -12,7 +12,7 @@ Checked today, against ``allowlists/p01_core_abstractions.json``:
   that another file, in the integration or in core, also registers.  One entry per integration file and id.
 
 Not checked here: ids built at run time, such as the ``Const<w>[0x..]`` family (``tests/program/
-test_registry_one_process.py`` loads ``verity.definitions.ops`` and every integration registry module into one process, where
+test_registry_one_process.py`` loads ``verity.circuits.ops`` and every integration registry module into one process, where
 core's Definition registry refuses a second object under an id); one id computing two functions, which only
 evaluation can see; and verifying a production opening with core alone.
 """
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import ast
 from collections import defaultdict
-from functools import lru_cache
+from functools import cache
 from typing import TypeGuard
 
 import pytest
@@ -43,8 +43,8 @@ def _core(name: str | None) -> TypeGuard[str]:
 
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.definitions.private_circuits", "verity.definitions.ops",
-                "verity.definitions.silicon", "verity.definitions.circuits.targets", "verity.definitions.kernels", "verity.ml.flock",
+    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.circuits.private_circuits", "verity.circuits.ops",
+                "verity.circuits.silicon", "verity.circuits.targets", "verity.circuits.kernels", "verity.ml.flock",
                 "verity.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.claims"))))
@@ -139,7 +139,7 @@ def definition_violations() -> list[R.Violation]:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out = definition_violations()
     for p in R.library_files():

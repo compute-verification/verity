@@ -24,7 +24,7 @@ import json
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeGuard
 
@@ -37,6 +37,9 @@ DEFINITIONS = REPO / "verity" / "definitions"
 #: what of ``DEFINITIONS`` moved out of the integration: the modules at its top and these packages of it. Any other package
 #: of that directory is core's
 MOVED_OUT = frozenset({"numerics", "registry", "tests"})
+#: the modules at its top that stay with core when the served Definitions leave it, so are no more the library's than its
+#: other packages
+CORE_TOPS = frozenset({"call_scope.py", "cross_call.py", "tiny.py", "word.py"})
 #: the scanned packages: the integration's, and the Definitions that moved out of it
 LIBRARY = (PKG, DEFINITIONS)
 ALLOWLISTS = HERE / "allowlists"
@@ -63,11 +66,11 @@ def in_library(p: Path) -> bool:
     integration (``MOVED_OUT``)."""
     if p.is_relative_to(DEFINITIONS):
         parts = p.relative_to(DEFINITIONS).parts
-        return len(parts) == 1 or parts[0] in MOVED_OUT
+        return (len(parts) == 1 and parts[0] not in CORE_TOPS) or parts[0] in MOVED_OUT
     return p.is_relative_to(PKG)
 
 
-@lru_cache(maxsize=None)
+@cache
 def library_files(suffix: str = ".py", root: Path | None = None) -> tuple[Path, ...]:
     """Library files under ``root`` (default every ``LIBRARY`` package), excluding ``tests`` directories and ``test_*`` files;
     a root outside ``LIBRARY`` (core's) without the library's files inside it (``in_library``)."""
@@ -89,7 +92,7 @@ def rel(p: Path) -> str:
 
 
 def module_name(p: Path) -> str:
-    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/definitions/tiny.py`` -> ``verity.definitions.tiny``; a
+    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/circuits/tiny.py`` -> ``verity.circuits.tiny``; a
     package's ``__init__.py`` names the package."""
     parts = list(p.relative_to(ROOT if p.is_relative_to(ROOT) else REPO).with_suffix("").parts)
     if parts[-1] == "__init__":
@@ -97,12 +100,12 @@ def module_name(p: Path) -> str:
     return ".".join(parts)
 
 
-@lru_cache(maxsize=None)
+@cache
 def source(p: Path) -> str:
     return p.read_text(encoding="utf-8")
 
 
-@lru_cache(maxsize=None)
+@cache
 def parse_src(src: str) -> ast.Module:
     """One shared (read-only) tree per source text, so the rules parse each file once."""
     return ast.parse(src)
@@ -128,7 +131,7 @@ def walk(node: ast.AST, symbol: str = "<module>") -> tuple[tuple[ast.AST, str], 
     return _walk(node, symbol)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _walk(node: ast.AST, symbol: str) -> tuple[tuple[ast.AST, str], ...]:
     out: list[tuple[ast.AST, str]] = []
 
@@ -141,7 +144,7 @@ def _walk(node: ast.AST, symbol: str) -> tuple[tuple[ast.AST, str], ...]:
     return tuple(out)
 
 
-@lru_cache(maxsize=None)
+@cache
 def docstring_ids(tree: ast.AST) -> frozenset[int]:
     """ids of string constants that are docstrings or bare string statements (prose, not code)."""
     return frozenset(id(node.value) for node in ast.walk(tree)
@@ -235,7 +238,7 @@ class Aliases:
         return f"{origin}.{rest}" if rest else origin
 
 
-@lru_cache(maxsize=None)
+@cache
 def aliases(tree: ast.Module, module: str = "", is_package: bool = False) -> Aliases:
     return Aliases(tree, module, is_package)
 

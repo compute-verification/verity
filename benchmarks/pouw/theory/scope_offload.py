@@ -48,14 +48,14 @@ package.
 
 Run: `python scope_offload.py [--mutations] [--device-lean security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
 Stdlib, exact_kit, and verity_machine_model for each headline design's eps and credited time a word.
-Sources: each device's card (verity.hardware.cards): MAC_rate = s8 macs/SM/clk * SMs * f_max (`verity.hardware.cards.rate` at the
+Sources: each device's card (verity.device.load_card): MAC_rate = s8 macs/SM/clk * SMs * f_max (`verity.device.rate` at the
 card's SM clock), and its device memory; the headline eps at both
 readings, `headline.row` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
 NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); H1's smallest tile
-4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: `benchmarks/host_tiles` runs, cited where they're used; host
-core counts from each run's lscpu, and NVIDIA's DGX H200 / B200 data sheets (2 x 56 cores beside 8 GPUs); cores and
-clocks of the Xeon 6776P, 8468, 8480C, 8570 and 8580 from Intel ARK.
+4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: measured per core, each cited where it's set (the AMX
+bench, `ncp_amx`, is not in this tree); host core counts from each run's lscpu, and NVIDIA's DGX H200 / B200 data
+sheets (2 x 56 cores beside 8 GPUs); cores and clocks of the Xeon 6776P, 8468, 8480C, 8570 and 8580 from Intel ARK.
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ from verity_machine_model.eps import design, machine, setup
 from verity_machine_model.headline import CREDIT, OPERANDS, READINGS, row, spec
 from verity_machine_model.model import device as family_data
 
-from verity.hardware import cards
+from verity.device import load_card, rate
 
 MAC_PER_WORD = 32  # a committed word sums 32 int8 products (FOLD-BW)
 BYTES_PER_WORD = 4  # a fresh s32
@@ -81,9 +81,9 @@ M32 = 0xFFFFFFFF
 INT8 = range(-128, 128)
 WEIGHT = range(-63, 64)
 
-# Per device, its card (verity/hardware/cards), whose numbers are read from it.
-CARDS = {"sm_120 RTX PRO 6000": cards.load("rtx-pro-6000-server"), "H200 sm_90": cards.load("h200-sxm-141gb"),
-         "B200 sm_100": cards.load("b200-sxm-180gb")}
+# Per device, its card (hardware/cards), whose numbers are read from it.
+CARDS = {"sm_120 RTX PRO 6000": load_card("rtx-pro-6000-server"), "H200 sm_90": load_card("h200-sxm-141gb"),
+         "B200 sm_100": load_card("b200-sxm-180gb")}
 # Per device: s8 dense MACs a SM clock, SMs, f_max (Hz, the SM clock).
 DEVICES = {name: (c["rate"]["tensor"]["value"], c["sm"]["count"]["value"], c["clock"]["sm"]["value"] * 1e6)
            for name, c in CARDS.items()}
@@ -145,7 +145,7 @@ HOSTS = {
 
 def mac_rate(device: str) -> float:
     """The device's s8 MACs a second at f_max, the SM clock its credited word is timed at (`credited_word`)."""
-    return float(cards.rate(CARDS[device], mhz=CARDS[device]["clock"]["sm"]["value"]))
+    return float(rate(CARDS[device], mhz=CARDS[device]["clock"]["sm"]["value"]))
 
 
 def amx_rate(host: str, mode: str) -> float:

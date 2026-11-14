@@ -47,7 +47,7 @@ from verity.circuits import codec, refs
 from verity.circuits.program import is_input
 from verity.circuits.types import RecordType
 from verity.circuits.types import Tuple as TupleT
-from verity.definitions.call_scope import spec_base, spec_statics
+from verity.circuits.call_scope import spec_base, spec_statics
 
 from verity_vllm.program.compact import expanded_file_args
 from verity_vllm.query.type_repr import parse_type_repr
@@ -577,6 +577,14 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     ports = ports_of_type(ret)
     _PORTS_CACHE[spec] = ports
     return ports
+
+
+def specialization(fam: str, statics: dict[str, Any]) -> Any:
+    """`call_scope.specialization` over the catalog, every module loaded (`registry.catalog.load`): the registered Definition
+    `fam` bound to `statics`."""
+    from verity.circuits.call_scope import specialization as bound
+    from verity.definitions.registry.catalog import load
+    return bound(fam, statics, load()[0])
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------

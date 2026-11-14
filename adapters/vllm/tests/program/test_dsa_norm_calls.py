@@ -1,6 +1,6 @@
-"""`boolean_dsa_norm`'s units written as Calls (`DsaRMSNormSumSq_v3`, `DsaRMSNormApply_v3`, `DsaRMSNorm_v3`): each has its traced
-`_v2`'s word view and signature and is that `_v2` and the word bit for bit; the scale and the apply unit have the `_v2`'s gates,
-count for count; the pieces are the word body's steps; at GLM-5.3's served rows the scale is the word, a thread's later registers
+"""`boolean_dsa_norm`'s units written as Calls (`DsaRMSNormSumSq_v3`, `DsaRMSNormApply_v3`, `DsaRMSNorm_v3`, which
+`boolean_version` gives): each has its traced `_v2`'s word view and signature and is that `_v2` and the word bit for bit; the
+scale and the apply unit have the `_v2`'s gates, count for count; the pieces are the word body's steps; at GLM-5.3's served rows the scale is the word, a thread's later registers
 and second vector included; at the served statics a unit's description does not grow with its row, it fits a Flock block, and
 its block is not over its word view's; and the pieces lower by their builders to the circuit their gates lower to."""
 from __future__ import annotations
@@ -17,8 +17,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program
 from verity.definitions import boolean as SW
-from verity.definitions.ops.boolean import cast as BC
-from verity.definitions.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.definitions.registry import boolean_dsa_norm as BN
 from verity.definitions.registry import dsa_norm as DN
 from tests.program.test_boolean_fp8 import _flat, _inputs
@@ -46,14 +46,14 @@ def _differ(unit, got, want) -> None:
 @pytest.mark.slow
 @pytest.mark.parametrize("name", list(UNITS))
 def test_a_unit_as_calls_is_the_traced_unit(name: str) -> None:
-    """Each `_v3` has its `_v2`'s word view and its function, special words included, and `boolean_version` still gives the
-    `_v2`; the scale and the apply unit have the `_v2`'s gates, count for count (the row computes an element's own gates for
-    its square and again for its output).  The row traces 1.6M ANDs (about a minute): only this holds a unit written as Calls
+    """Each `_v3` has its `_v2`'s word view and its function, special words included, and `boolean_version` gives the `_v3`;
+    the scale and the apply unit have the `_v2`'s gates, count for count (the row computes an element's own gates for its
+    square and again for its output).  The row traces 1.6M ANDs (about a minute): only this holds a unit written as Calls
     to the traced one bit for bit."""
     d_calls, d_traced, S = UNITS[name]
     calls, traced = bind(d_calls, **S), bind(d_traced, **S)
     word = TR.word_of(calls)
-    assert word.id == TR.word_of(traced).id and SW.boolean_version(word).id == traced.id
+    assert word.id == TR.word_of(traced).id and SW.boolean_version(word).id == calls.id
     assert calls.signature() == traced.signature()
     inputs = _inputs(word, 96, sum(map(ord, calls.id)))
     want = E.evaluate_batch(word, *inputs)

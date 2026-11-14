@@ -1,11 +1,11 @@
 """``served_passes.py lean``, the served Pearl+ flow's Lean step, against a stand-in ``pouw-pearlplus`` (a shell script that
 records its command line and prints what a test gives it) over a served run ``verify`` judged: two honest passes of one
-epoch (`test_pearl_c_vllm.proved_pass`) in a serve dir, verified at 3 samples on the node's sample, its coins fixed.
+epoch (`test_pearl_c_vllm.proved_pass`) in a serve dir, verified at 3 samples on this node's coins, which are fixed.
 
-The step runs the executable on the passes that run's document names, the epoch's coins, its samples, its coin record, the W
-``verify --tie`` held the passes to and, on a live session's coins, ``--of-record`` (`lean_argv`), and writes the Lean's
-answer, W at ``tie``, only where the Lean's printout is the Python's on every field #7221's difftest holds (`LEAN_HELD`),
-its ``drawn`` the samples and its W the Python's (or none on both).
+The step runs the executable on the passes that run's document names, the epoch's coins, its sample count, its coin
+record, the W ``verify --tie`` held the passes to and, on a live session's coins, ``--of-record`` (`lean_argv`), and
+writes the Lean's answer, W at ``tie``, only where the Lean's printout is the Python's on every field the Lean's
+difftest holds (`LEAN_HELD`), its ``drawn`` the sample count and its W the Python's (or none on both).
 Anything else (a field that differs, an exit code that isn't its verdict's, a printout that isn't one, no coin record,
 passes other than those the verdict read, no executable) writes none and removes one there, and both verdicts go to the
 check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``.
@@ -17,29 +17,18 @@ didn't read, or on a Lean answer over another source."""
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import stat
-import sys
 from pathlib import Path
 
 import pytest
 
 pytest.importorskip("torch")
 
-HERE = Path(__file__).resolve().parent
+import test_pearl_c_vllm as T  # the served passes' test: its honest passes, their serve dir and its `verify`
+from conftest import load
 
-
-def _module(name: str, path: Path):
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
-        sys.modules[name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(sys.modules[name])
-    return sys.modules[name]
-
-
-T = _module("test_pearl_c_vllm", HERE / "test_pearl_c_vllm.py")
-SP = T.load("pearl_c_vllm_served_passes", T.KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+SP = load("pearl_c_vllm/served_passes.py")
 H100 = "pearl-c-h100-v1-h3"
 SOURCE = b"verifier" * 4
 W = "d7" * 64
@@ -49,7 +38,7 @@ pytestmark = pytest.mark.slow
 @pytest.fixture(scope="module")
 def run(tmp_path_factory) -> tuple[Path, Path, dict]:
     """The serve dir, ``verify``'s document's path and the document, accepted."""
-    from verity.protocols.pouw.verifier import verifier as PV
+    from verity.protocols.accounting.pouw.verifier import verifier as PV
 
     tmp = tmp_path_factory.mktemp("lean")
     with pytest.MonkeyPatch.context() as mp:
@@ -85,9 +74,9 @@ def lean(tmp_path: Path, verify: Path, d: Path, exe: Path, *more: str) -> tuple[
 
 
 def test_an_agreeing_lean_verdict_is_written_where_the_compose_reads_it_with_both_verdicts_and_its_command_line(run, tmp_path):
-    """The step runs the executable on the run's passes in order, the epoch's coins, the samples and the coin record verify
-    wrote, and writes the Lean's printout as its answer; the check document holds both verdicts, the command line and
-    the executable's SHA-256."""
+    """The step runs the executable on the run's passes in order, the epoch's coins, the sample count and the coin record
+    verify wrote, and writes the Lean's printout as its answer; the check document holds both verdicts, the command
+    line and the executable's SHA-256."""
     d, verify, doc = run
     got = printout(doc)
     exe = stub(tmp_path, got, 0)
@@ -139,11 +128,11 @@ def test_the_lean_verdicts_w_is_the_answers_tie_and_must_be_the_pythons(run, tmp
 
 def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(run, tmp_path):
     """The W ``verify --tie`` named goes to the Lean as ``--tie W``, and a run on a live session's coins (``coins.json`` of
-    `window.LIVE_SCHEME`) adds ``--of-record``; both after the over-cap rule and test instance and before the passes,
-    which stay last."""
+    `window.LIVE_SCHEME`) adds ``--of-record``; both after the rule on a tile over its inert-work bound and the test
+    instance and before the passes, which stay last."""
     import shutil
-    from verity.protocols.pouw.verifier import window as Wd
-    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.accounting.pouw.verifier import window as Wd
+    from verity.protocols.proofs.spot.device import challenger as Ch
 
     d, verify, doc = run
     (wfile := tmp_path / "w.json").write_text("{}")
@@ -198,9 +187,10 @@ def case(d: Path, verify: Path, answer: Path, out: Path) -> int:
 
 
 def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_privately(run, tmp_path, capsys):
-    """The params are the epoch's coins, the samples and the coin record's run and source; the manifests the retained
-    passes' in order; the evidence, per pass, each file the Lean's opened tiles read (`tile_files`, sampled and exclusion
-    tiles alike) under the SHA-512 of its bytes, and the blobs exactly those files, each once, 0700 with files 0600."""
+    """The params are the epoch's coins, the sample count and the coin record's run and source; the manifests the
+    retained passes' in order; the evidence, per pass, each file the Lean's opened tiles read (`tile_files`, sampled and
+    exclusion tiles alike) under the SHA-512 of its bytes, and the blobs exactly those files, each once, 0700 with files
+    0600."""
     d, verify, doc = run
     assert lean(tmp_path, verify, d, stub(tmp_path, printout(doc), 0))[0] == 0
     answer, out = tmp_path / "piece" / "pearlplus-lean.json", tmp_path / "case"

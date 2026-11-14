@@ -40,14 +40,14 @@ configured.
 
 Implementations:
 
-- `reference`: `verity.protocols.pous.verifier` on CPU processes.
+- `reference`: `verity.protocols.accounting.pous.verifier` on CPU processes.
 - `vllm-gpu`: the GPU kernels of `verity_vllm.engine.pous`, from their own tree, through its frozen
   harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
 
 - `band-gpu`: the same band and dense kernels, moved into `band_gpu/` with no vLLM dependency, run by the POUS-only
   harness `band_gpu/harness.py` (steps and metrics in its docstring). Its whole-chain decode runs on lane pairs
   (`harness.KERNELS`, `dense.CHAIN_PAIRS`); `pod.sh KERNELS='{"chain_pairs": false}'` runs the run of record's kernels:
-  - kernel gates first: the pinned whole-segment vector on the device, sampled segments of `C` equal to `verity.protocols.pous.verifier`'s
+  - kernel gates first: the pinned whole-segment vector on the device, sampled segments of `C` equal to `verity.protocols.accounting.pous.verifier`'s
     encoding, and the round trip. A failed gate stops the run: nothing is timed and no measurement is published;
   - encode GB/s, with `C` then resident;
   - decode overhead on a synthetic loop of the weight set's GEMMs at T = 1, 8, 32 and 2048 tokens, against the same GEMMs
@@ -65,7 +65,7 @@ Implementations:
   - the `Π₂` step floor, the fastest honest kernel for a whole call, with the SM clock sampled while it runs, the floor
     scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it, against the certificate's
     `call_ns`: 241.5 µs, the 4,830 sequential Keccak-f of a 64 KiB call in a chain at 50 ns each (the rounds' absorbs
-    stream behind the squeezes; `verity/protocols/pous/verifier/PROTOCOL.md`), so in the ideal-permutation model `D = 5` covers
+    stream behind the squeezes; `verity/protocols/accounting/pous/verifier/PROTOCOL.md`), so in the ideal-permutation model `D = 5` covers
     `Δ + RTT < 1.449` ms and the band's cliff at `d = 12` is about 3.14 ms. It is not an upper bound on an attacker's
     floor, and neither are the margins derived from it: at the reference Feistel-SHAKE256 `Π₂` an attacker completes no
     call and rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team).
@@ -74,10 +74,10 @@ Implementations:
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
-- `p2-v1-gpu`: P2 v4 (`verity/protocols/pous/verifier/README.md`, "P2"), in `p2_v1/`, with
+- `p2-v1-gpu`: P2 v4 (`verity/protocols/accounting/pous/verifier/README.md`, "P2"), in `p2_v1/`, with
   the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
   - `reference.py`: the scheme on the CPU in its own setup framing (the counter-mode SHA-512 keys and the maps, both
-    `schemes.p2`'s, and the RFC 6962 tree over v4's leaves, `verity.protocols.pous.verifier.verifier`'s; v4's leaves and the
+    `schemes.p2`'s, and the RFC 6962 tree over v4's leaves, `verity.protocols.accounting.pous.verifier.verifier`'s; v4's leaves and the
     mode-0 audit derivation on `verity.commitments.randomness`), pinned by `vectors.json` (`VECTORS_SHA512`);
     `wire.py` is `p2-audit-wire/v4` with its reference verifier, and `vectors.py` regenerates every vector file in one command;
   - `p2v1.cu`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device just before
@@ -146,7 +146,7 @@ the synthetic loop (decode overhead and bandwidth) and the step floor (P2 v1's S
 audit or control runs, so there is no certificate gate and no storage profile. `bench-result.json` and `result.json`'s
 fingerprint say `timed: false` and `audits: skipped (untimed placement)`, so no audit or latency number is cited from it.
 
-`streamed_wipe/` times the streamed-label wipe (`verity/protocols/pous/verifier/PROTOCOL.md`, "The streamed-label wipe")
+`streamed_wipe/` times the streamed-label wipe (`verity/protocols/accounting/pous/verifier/PROTOCOL.md`, "The streamed-label wipe")
 on one node: the labels one GPU derives (`labels.cu`, gated against `streamed_wipe.label`), what reaches pinned host
 memory, the NIC's line rate and RDMA loopback, and 74,000-challenge round trips at batch sizes from 1 to 74,000, plus one
 whole reference session, judged by the Lean verdict (`--verdict lean|both|python`, `wipe_verdict.py`'s `VERDICT` by
@@ -163,8 +163,9 @@ window is served on, before its engine loads, with the memory challenger on vy-a
 `benchmarks/one_stage/served_verdicts.sh` runs it as
 `WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. It refuses a card that isn't idle or a gate
 key that isn't on the node, and kills nothing. Its verdict trusts the one challenger key `WIPE_KEY_SHA512` pins (the
-SHA-512 of the wipe party's public key, by default vy-auditor-2's): a session signed under another is rejected, and
-with none pinned, the setting empty, the piece refuses before it asks for a card. Its header lists the challenger's
+SHA-512 of the wipe party's public key, by default vy-auditor-2's, `wipe_party.AUDITOR_KEYS`): a session signed under
+another is rejected, and with none pinned, the setting empty, the piece refuses before it asks for a card. A session
+accepted under any other pin is a rehearsal: its record says no bound. Its header lists the challenger's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 
 `served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`): `served_piece.py` holds the served weights as `C*` on

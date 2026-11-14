@@ -7,17 +7,17 @@ public import Proofs.Properties.Challenger.Window
 /-!
 # The coins a sample reads are the ones its challenger drew
 
-`drawCoins` reads its coins under the session the ledger opens on the window (`Session.drawCoins_ok`), and they are the
+`drawCoins` reads its coins under the session the ledger opens on the window (`ChallengePhase.drawCoins_ok`), and they are the
 coins any run of the device released whose commitment and roots are that session's (`Coins.drawn_released`), or a break.
 The session is one a run of the device under the key closed with that commitment and those roots, its log that run's
-lines (`Session.sessionOf_run`), and the device's own ledger opens it withheld on the window (`Window.window_opens`), or a
+lines (`ChallengePhase.challengePhaseOf_run`), and the device's own ledger opens it withheld on the window (`Window.run_opens`), or a
 break; so that run released the coins, its log the session's, and the stream `challengerStream` accepted is read under
 that run's commitment and its family's roots (`session_run`, with `drawn_log` from it), and `DrawnByDevice` holds
 (`drawn`, `drawnByDevice`), with `CoinsFromLog` from it (`coinsFromLog_holds`). `challengerStream` accepts those roots
 only when every one is the sample's `after` (`Coins.stream_ok`), so the run's own log shows no other root in the family
-(`session_family`, `family`), and `FamilyOneCommitment` holds (`familyOneCommitment`). `session_run` takes the four
-checks themselves, which `coinsReason` runs too under the key its evidence names (`Coins.coinsReason_none`), so the
-same holds of the bytes a stream's run read (`familyOneCommitmentRead`).
+(`session_family`, `family`), and `FamilyOneCommitment` holds (`familyOneCommitment`). `coinsReason` reads what
+`drawCoins` reads from the same evidence, under the key it is handed (`Coins.coinsReason_none`), so the same holds of
+the bytes a stream's run read (`familyOneCommitmentRead`).
 -/
 
 @[expose] public section
@@ -33,10 +33,10 @@ variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 withheld on `w` under `key`, the segment is of family `label`, and `challengerStream` accepts its openings under that
 session's commitment and its roots of the family, a run the device's own ledger opens withheld on `w` released the
 stream as its coins of `label` after `after`, the commitment and the roots that run's own (`releasedRootsOf` over its
-log, which is the session's); or the finder outputs a break. What `drawCoins` and `coinsReason` both check
-(`Coins.drawCoins_ok`, `Coins.coinsReason_none`). -/
+log, which is the session's); or the finder outputs a break. What `drawCoins` checks (`Coins.drawCoins_ok`), and
+`coinsReason` through it. -/
 theorem session_run {w : String} {after ξ : ByteArray} {c : LiveCommitment} {roots : Roots}
-    (ht : trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
+    (ht : trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
       (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots))
     (hw : withheldOn (getD coins "ledger") w = true)
     (hl : getD (getD coins "segment") "label" = Json.str label)
@@ -46,11 +46,11 @@ theorem session_run {w : String} {after ξ : ByteArray} {c : LiveCommitment} {ro
       s.commitment = some c ∧ releasedRootsOf c s.log = .ok roots ∧
       ∃ ls : Array Json, getD (getD coins "session") "log" = .arr ls ∧ ls.toList = s.log.map Json.str) ∨
       Break dev key label coins := by
-  obtain ⟨r, hrj, hrc⟩ := Coins.trustedSession_record ht
-  obtain ⟨a, hp, hn⟩ := Session.trustedSessionOf_ok ht
-  obtain ⟨⟨c', roots', sid⟩, ho, rfl, rfl, rfl⟩ := Window.sessionNamed_sid hn
-  rcases Window.window_opens (dev := dev) (label := label) hp hw with hopen | b
-  · rcases Session.sessionOf_run (dev := dev) (label := label) ho with ⟨s, hs, hc, hid, -, hr, hlog⟩ | b
+  obtain ⟨r, hrj, hrc⟩ := Coins.trustedChallengePhase_record ht
+  obtain ⟨a, hp, hn⟩ := ChallengePhase.trustedChallengePhaseOf_ok ht
+  obtain ⟨⟨c', roots', sid⟩, ho, rfl, rfl, rfl⟩ := Window.challengePhaseNamed_sid hn
+  rcases Window.run_opens (dev := dev) (label := label) hp hw with hopen | b
+  · rcases ChallengePhase.challengePhaseOf_run (dev := dev) (label := label) ho with ⟨s, hs, hc, hid, -, hr, hlog⟩ | b
     · rcases Coins.stream_released hs hc hr hrj hrc hl hst with e | b
       · exact .inl ⟨s, hs, hid ▸ hopen, e, hc, hr, hlog⟩
       · exact .inr b
@@ -60,7 +60,7 @@ theorem session_run {w : String} {after ξ : ByteArray} {c : LiveCommitment} {ro
 /-- The run `session_run` gives shows no root in the family but `after`: `challengerStream` accepted its roots
 (`Coins.stream_ok`). -/
 theorem session_family {w : String} {after ξ : ByteArray} {c : LiveCommitment} {roots : Roots}
-    (ht : trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
+    (ht : trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
       (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots))
     (hw : withheldOn (getD coins "ledger") w = true)
     (hl : getD (getD coins "segment") "label" = Json.str label)
@@ -110,11 +110,11 @@ theorem drawnByDevice : DrawnByDevice :=
 theorem familyOneCommitment : FamilyOneCommitment :=
   fun _ _ _ _ _ _ _ h => family h
 
-/-- **`FamilyOneCommitmentRead`**: `coinsReason`'s four checks are `drawCoins`', under the key its evidence names. -/
+/-- **`FamilyOneCommitmentRead`**: `coinsReason` reads `drawCoins`' stream, under the key it is handed. -/
 theorem familyOneCommitmentRead : FamilyOneCommitmentRead := by
-  intro dev w label after read coins h
-  obtain ⟨k, c, roots, ξ, hk, ht, hw, hl, hst, hpre, hall⟩ := Coins.coinsReason_none h
-  refine ⟨k, hk, (session_family (dev := dev) ht hw hl hst).imp ?_ id⟩
+  intro dev key main w label after read coins h
+  obtain ⟨ξ, hd, -, hpre, hall⟩ := Coins.coinsReason_none h
+  refine (family (dev := dev) hd).imp ?_ id
   rintro ⟨s, hs, ho, rfl, hroots⟩
   exact ⟨s, hs, ho, hpre, hall, hroots⟩
 

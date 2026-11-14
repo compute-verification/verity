@@ -79,7 +79,7 @@ python3 benchmarks/pouw/filler/comm/report.py OUT [--json]                      
 
 `dfill_ref.py` and `pfill_ref.py` are the filler tiles' receipts in Python, held to the kernels' own host reference
 (`pfill_host.cpp` builds `pfill.cuh`'s with g++ for the tests); `pfill_ref.py` and `pfill.cuh` take their folds, key
-rules and lane starts from the receipts reference (`verity/protocols/pouw/receipts/`). One test outside the directory,
+rules and lane starts from the receipts reference (`verity/protocols/accounting/pouw/verifier/receipts/`). One test outside the directory,
 `../tests/test_receipts_adopters.py`, loads `pfill_ref.py`, `pfill.cuh` and `scoring.py`'s `FOLDS` and `RECEIPT_TAGS`
 and holds them to that reference; nothing else outside the directory loads its Python or includes its kernels.
 `arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `dfill_ref.py`, `capacity_of.py`, `pfill_proved.py` and
@@ -93,4 +93,5 @@ The tests are one suite, `uv run tools/verity/check/suites.py benchmarks/pouw/fi
 A test imports the directory's modules and the harness's `ledger` by name: the suite's `pyproject.toml` puts both
 directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
 `comm/report.py` from `load` in the suite's `tests/conftest.py`, as the module `comm_report`.
-`../tests/test_budget.py`, `test_eps_budget.py` and `test_lean_headline_dc.py` test `benchmarks/pouw`'s own modules.
+`../tests/test_budget.py` and `test_eps_budget.py` test `benchmarks/pouw`'s own modules, and
+`test_lean_headline_dc.py` tests `verity_machine_model.lean_headline_dc`.

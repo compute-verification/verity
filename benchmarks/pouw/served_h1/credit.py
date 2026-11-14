@@ -31,7 +31,7 @@ sample is uniform over every unit position of the window, dead ones included, ne
 """
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -49,7 +49,7 @@ def queue_of(spans: Sequence[Sequence[tuple[str, int]]], steps: int, t: int) -> 
     """The request queue from the scheduler's record: ``spans[s]``, step s's (request id, rows) in batch order, its rows the
     step's slots in that order.  Requests take indices 1, 2, .. by first appearance; each is live from its first step to
     one past its last.  Steps past the record are empty."""
-    from verity.protocols.pouw.prover.circuit import admit as A
+    from verity.protocols.accounting.pouw.prover.circuit import admit as A
     if len(spans) > steps:
         raise ValueError(f"the record has {len(spans)} steps, past the window's {steps}")
     index: dict[str, int] = {}
@@ -72,7 +72,7 @@ def queue_of(spans: Sequence[Sequence[tuple[str, int]]], steps: int, t: int) -> 
 
 def queue_select(queue: dict, s: int) -> np.ndarray:
     """(T,) bool: step s's selection, the slots the queue assigns a request live at s (`admit.select_bit`)."""
-    from verity.protocols.pouw.prover.circuit import admit as A
+    from verity.protocols.accounting.pouw.prover.circuit import admit as A
     req = queue["requests"]
     return np.array([bool(A.select_bit(s, int(x), *req[int(x)])) for x in queue["slot_map"][s]], dtype=bool)
 
@@ -85,7 +85,7 @@ def scales(rows: np.ndarray) -> list[int]:
 
 def queue_admit(queue: dict, s: int, rows: np.ndarray) -> np.ndarray:
     """(T,) bool: step s's admit bits, `PouwQueueAdmit`'s word on each 16 slots' queue entries and committed rows' scales."""
-    from verity.protocols.pouw.prover.circuit import admit as A
+    from verity.protocols.accounting.pouw.prover.circuit import admit as A
     q = [int(x) for x in queue["slot_map"][s]]
     req, sc = queue["requests"], scales(rows)
     if len(sc) != len(q):
@@ -179,7 +179,7 @@ def tally(calls: Sequence[dict], counts: Sequence[int], steps: int, sites: Seque
 
 def published(macs: int) -> dict:
     """Cr's grid level and the published credit Pub = point(level) <= Cr (`pouw.window`'s grid)."""
-    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.accounting.pouw.verifier import window as Wd
     if macs < 1:
         return {"level": None, "pub_macs": 0}
     ell = Wd.level(Wd.floor_point(macs))
@@ -206,10 +206,10 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
             "tally": f"no proof block until a tally Definition exists; the harness computes and commits {steps * len(sites)} "
                      f"per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over the steps (< 2^16), and "
                      "the level (window.level(floor_point(sum_site count N K)), <= 9 bits)",
-            "dead_unit": "a drawn dead unit proves, with the live tile's template (PouwH1Tile_v4), that its 32 bound "
-                         "admit bits are 0 and so its receipt is the canonical empty receipt; no noise is computed when "
-                         "serving. Its rows are the canonical empty row because the admit unit refuses a slot not "
-                         "admitted whose row is not",
+            "dead_unit": "a dead unit in the sample proves, with the live tile's template (PouwH1Tile_v4), that its 32 "
+                         "bound admit bits are 0 and so its receipt is the canonical empty receipt; no noise is "
+                         "computed when serving. Its rows are the canonical empty row because the admit unit refuses a "
+                         "slot not admitted whose row is not",
             "egress": "no dead slot's output reaches a served output: the receipts are beside the served y and feed no "
                       "egress, and vLLM samples each served token from the step's selected rows only (admit is the served "
                       "prefix [1] * m + [0] * (T - m) in every call)"}

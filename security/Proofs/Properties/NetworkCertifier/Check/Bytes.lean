@@ -90,39 +90,6 @@ theorem uBE_split {w : Nat} {x y : Int} {n n' : String} {b b' : ByteArray} {r r'
   subst hb
   exact ⟨by rw [← uBE_value h, ← uBE_value h'], hr⟩
 
-theorem byte_toNat (x : UInt64) (k : Nat) (hk : k < 64) :
-    ((x >>> (UInt64.ofNat k)).toUInt8).toNat = x.toNat / 2 ^ k % 256 := by
-  simp [UInt64.toNat_shiftRight, Nat.shiftRight_eq_div_pow, Nat.mod_eq_of_lt hk]
-
-theorem be64_inj {x y : UInt64} (h : be64 x = be64 y) : x = y := by
-  have h' := congrArg bs h
-  rw [be64_bs, be64_bs] at h'
-  simp only [List.cons.injEq] at h'
-  obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, -⟩ := h'
-  have e : ∀ k, k < 64 → (x >>> (UInt64.ofNat k)).toUInt8 = (y >>> (UInt64.ofNat k)).toUInt8 →
-      x.toNat / 2 ^ k % 256 = y.toNat / 2 ^ k % 256 := fun k hk he => by
-    rw [← byte_toNat x k hk, ← byte_toNat y k hk, he]
-  have a0 := e 56 (by omega) h0
-  have a1 := e 48 (by omega) h1
-  have a2 := e 40 (by omega) h2
-  have a3 := e 32 (by omega) h3
-  have a4 := e 24 (by omega) h4
-  have a5 := e 16 (by omega) h5
-  have a6 := e 8 (by omega) h6
-  have a7 := e 0 (by omega) h7
-  have hx := x.toNat_lt
-  have hy := y.toNat_lt
-  apply UInt64.toNat_inj.mp
-  simp only [Nat.reducePow] at a0 a1 a2 a3 a4 a5 a6 a7 hx hy ⊢
-  omega
-
-/-- `field`'s length prefix of a string under `2^64` bytes determines its length. -/
-theorem be64_size_inj {n m : Nat} (hn : n < 2 ^ 64) (hm : m < 2 ^ 64) (h : be64 n.toUInt64 = be64 m.toUInt64) :
-    n = m := by
-  have := congrArg UInt64.toNat (be64_inj h)
-  simp only [Nat.toUInt64, UInt64.toNat_ofNat'] at this
-  rwa [Nat.mod_eq_of_lt hn, Nat.mod_eq_of_lt hm] at this
-
 /-! ## Text and status -/
 
 theorem text_ok {s n : String} {b : ByteArray} (h : text s n = .ok b) :
@@ -332,7 +299,7 @@ theorem messageInput_ok {k s : ByteArray} {l : String} {d : Direction} {w : Int}
   · simp [throw, throwThe, MonadExceptOf.throw] at h
   rename_i hk
   simp only [Except.ok.injEq] at h
-  exact ⟨by simpa [digestBytes] using hg, by simpa [sessionBytes] using hs, by simpa using hk, wb, hwb, h.symm⟩
+  exact ⟨by simpa [digestBytes] using hg, by simpa [attachmentBytes] using hs, by simpa using hk, wb, hwb, h.symm⟩
 
 theorem value_inj {d d' : Direction} (h : d.value.toUTF8 = d'.value.toUTF8) : d = d' := by
   cases d <;> cases d' <;> first | rfl | (exfalso; revert h; decide)

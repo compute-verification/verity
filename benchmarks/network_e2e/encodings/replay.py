@@ -44,7 +44,7 @@ from verity_vllm.pipeline.advice_code.replay import (
 )
 from verity_vllm.pipeline.advice_code.schedule import (
     cdiv, DraftEngine as DraftEngine, Engine, BlockHashes as BlockHashes, RequestState as RequestState, RequestIO, Row as Row,
-    RUNNING as RUNNING, Step, Tick,
+    RUNNING as RUNNING, speculative, Step, Tick,
 )
 
 STEP_TRACE = "verity-vllm/step-trace/v1"
@@ -284,6 +284,67 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in lines[:-1] if line.strip()]
 
 
+def _draft(argv: Sequence[str]) -> int:
+    """K, the drafts a decode row carries, from a server's arguments: its ``--speculative-config``, given as JSON or
+    as dotted settings (``--speculative-config.method mtp``), read as a step trace's header's are
+    (`schedule.speculative`: one MTP module's, everything else refused by name); 0 for a server with no argument that
+    begins ``--speculative``. Any other such argument is refused: the reader doesn't know what it sets. The directory
+    has none of the scheduler's own draft settings, which a step trace's header has, so the arguments alone don't tell
+    a draft of several MTP modules from one's: what shows one is the replay differing from the steps the engine ran."""
+    spec: dict[str, Any] = {}
+    named = [k for k, a in enumerate(argv) if a.startswith("--speculative")]
+    for k in named:
+        flag, given, value = argv[k].partition("=")
+        head, _, name = flag.partition(".")
+        if head.replace("_", "-") != "--speculative-config":
+            raise ValueError(f"the server's argument {flag}: the reader takes a draft from --speculative-config only")
+        if not given:
+            if k + 1 == len(argv):
+                raise ValueError(f"the server's argument {flag} has no value")
+            value = argv[k + 1]
+        if name:
+            # a dotted setting's value, as vLLM's argument parser converts one: a boolean, an integer, else the text
+            word = value.lower()
+            spec[name] = word == "true" if word in ("true", "false") else int(value) if re.fullmatch(r"[+-]?\d+", value) else value
+            continue
+        try:
+            read = json.loads(value)
+        except ValueError as e:
+            raise ValueError(f"the server's argument {flag}: its value isn't a JSON object of draft settings") from e
+        if not isinstance(read, dict):
+            raise ValueError(f"the server's argument {flag}: its value isn't a JSON object of draft settings")
+        spec.update(read)
+    return speculative({"speculative": spec or {"method": None}}) if named else 0
+
+
+def _sampled(raw: Sequence[dict[str, Any]], steps: Sequence[Step], ids: Sequence[str],
+             outputs: Sequence[Sequence[int]]) -> list[dict[int, int]]:
+    """With a draft, the tokens each step's rows emitted (`Trace.emitted`), read off what the corpus hook records of
+    the model runner's output: the tokens it sampled for each row of its batch (``batch``, ``sampled``), a row's own
+    token and then the drafts it kept. The request takes them up to its last output: the scheduler cuts a row's tokens
+    where the request stops, and a row run after that, as async scheduling runs one, gives it none. Refuses a trace
+    whose rows' tokens aren't its requests' outputs, in order and all of them."""
+    done = [0] * len(ids)
+    out = []
+    for k, (s, st) in enumerate(zip(raw, steps)):
+        tokens = dict(zip(s.get("batch") or (), s.get("sampled") or ()))
+        emitted = {}
+        for i, _, _ in st.rows:
+            got = tuple(int(x) for x in tokens.get(ids[i]) or ())[:len(outputs[i]) - done[i]]
+            if not got:
+                continue
+            if got != tuple(outputs[i][done[i]:done[i] + len(got)]):
+                raise ValueError(f"request {ids[i]}: step {k} sampled {list(got)}, which aren't its outputs from "
+                                 f"{done[i]} on")
+            emitted[i] = len(got)
+            done[i] += len(got)
+        out.append(emitted)
+    for i, n in enumerate(done):
+        if n != len(outputs[i]):
+            raise ValueError(f"request {ids[i]}: its rows sampled {n} of its {len(outputs[i])} outputs")
+    return out
+
+
 def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int | None = None,
                       egress: str = "engine", ingress: str = "client") -> Trace:
     """One trace of the trace corpus (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its
@@ -294,6 +355,10 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     new requests in arrival order), and a step's release is the time its output was back. With `egress="client"` each
     kept output left when the client got the streamed chunk that carried it (its `chunks`), which is what an egress
     certifier on the link sees.
+
+    A server with a draft (`_draft`: its ``--speculative-config``) is read as a `DraftEngine`. The replay then needs
+    the drafts each row kept, which the hook doesn't name: they are read off the tokens the model runner sampled for
+    the row (`_sampled`), as each request's `RequestIO.kept` and the trace's `emitted`.
 
     A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
@@ -325,12 +390,14 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
         L = int(opt("--max-model-len") or 0)
         # vLLM logs int(num_blocks / cdiv(L, block_size) * L) (`get_kv_cache_capacity`), which this inverts exactly
         num_gpu_blocks = cdiv(int(m.group(1).replace(",", "")) * cdiv(L, block_size), L)
-    engine = Engine(max_num_seqs=int(opt("--max-num-seqs") or 0), max_num_batched_tokens=int(opt("--max-num-batched-tokens") or 0),
-                    max_model_len=int(opt("--max-model-len") or 0), num_gpu_blocks=num_gpu_blocks, block_size=block_size,
-                    enable_chunked_prefill="--no-enable-chunked-prefill" not in argv,
-                    enable_prefix_caching="--enable-prefix-caching" in argv,
-                    async_scheduling="--no-async-scheduling" not in argv,
-                    long_prefill_token_threshold=int(opt("--long-prefill-token-threshold") or 0))
+    config: dict[str, Any] = dict(
+        max_num_seqs=int(opt("--max-num-seqs") or 0), max_num_batched_tokens=int(opt("--max-num-batched-tokens") or 0),
+        max_model_len=int(opt("--max-model-len") or 0), num_gpu_blocks=num_gpu_blocks, block_size=block_size,
+        enable_chunked_prefill="--no-enable-chunked-prefill" not in argv,
+        enable_prefix_caching="--enable-prefix-caching" in argv, async_scheduling="--no-async-scheduling" not in argv,
+        long_prefill_token_threshold=int(opt("--long-prefill-token-threshold") or 0))
+    K = _draft(argv)
+    engine = DraftEngine(**config, num_speculative_tokens=K) if K else Engine(**config)
     raw = [s for s in _jsonl(d / "steps.jsonl") if s["total_num_scheduled_tokens"]]
     reqs = {r["id"]: r for r in _jsonl(d / "requests.jsonl")}
     order, seen = [], set()
@@ -363,6 +430,11 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
                                      if not r.get("resumed") and r["num_computed_tokens"]}))
         emits.append(any(s.get("sampled") or ()))
         release.append(s.get("t_output"))
+    emitted = None
+    if K:
+        emitted = _sampled(raw, steps, order, [q.tokens[q.prompt_len:q.prompt_len + q.output_len] for q in requests])
+        emits = [bool(e) for e in emitted]
+        requests = [replace(q, kept=tuple(e[i] - 1 for e in emitted if i in e)) for i, q in enumerate(requests)]
     first = [-1] * len(order)
     for k, st in enumerate(steps):
         for i, _, _ in st.rows:
@@ -393,7 +465,7 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
         releases = Releases(Tick(int(tk["bucket_us"]), int(tk["sat_us"]), int(tk["free_us"])), float(tk["origin_unix"]),
                             tuple(int(reqs[rid]["release"]) for rid in order), tuple(int(reqs[rid]["bucket"]) for rid in order))
     return Trace(engine=engine, ids=order, requests=requests, before_step=first, steps=steps, emits=emits,
-                 ingress_t=ingress_t, release_t=release, output_t=output_t, releases=releases,
+                 ingress_t=ingress_t, release_t=release, output_t=output_t, releases=releases, emitted=emitted,
                  header={"kind": "header", "schema": "vllm-trace-corpus/v1", "config": dict(engine.__dict__), "source": str(d),
                          "egress": egress, "ingress": ingress})
 
@@ -759,7 +831,7 @@ def v0_widths(trace: Trace, *, window_buckets: int) -> dict[str, int]:
 
 
 def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
-    """The trace as advice v0, built with its module `v0` (`verity.protocols.certifier.verifier.advice`): the
+    """The trace as advice v0, built with its module `v0` (`verity.protocols.accounting.certifier.verifier.advice`): the
     trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
     step's release bucket. v0 validates it as it builds it."""
     rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
@@ -957,8 +1029,8 @@ def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s:
             "kept_count": kept_bits(trace, codes.values())}
 
 
-#: advice v0's module (`verity.protocols.certifier.verifier.advice`)
-V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "certifier" / "verifier" / "advice.py"
+#: advice v0's module (`verity.protocols.accounting.certifier.verifier.advice`)
+V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "advice.py"
 
 
 def load_v0(spec: str | Path | None) -> Any:

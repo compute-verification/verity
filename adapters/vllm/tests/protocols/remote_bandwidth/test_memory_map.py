@@ -15,9 +15,9 @@ import struct
 
 import numpy as np
 import pytest
-from verity.definitions.circuits import requirement
-from verity.protocols.poub.verifier import audit, codec, memory_map
-from verity.protocols.poub.verifier.memory_map import MemoryMapError, Replay
+from verity.circuits import requirement
+from verity.protocols.accounting.poub.verifier import audit, codec, memory_map
+from verity.protocols.accounting.poub.verifier.memory_map import MemoryMapError, Replay
 
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME, Lines
@@ -275,6 +275,16 @@ def test_digests_are_taken_once_the_steps_bytes_are_in_place():
     assert step.step == 0 and step.written[0].slot == 3 + 12
     assert step.written[0].digest == codec.digest(CODEC.decode(b"\x07" * BLOCK, s.region("kv/0").word_index(12)))
     assert m.flush() == []
+
+
+@pytest.mark.parametrize("lifetime", [0, -1, True, 2.0, None])
+def test_a_lifetime_that_is_not_a_positive_count_of_windows_is_refused(lifetime):
+    """A map is recorded under a lifetime of one or more whole windows: zero, a negative count, a bool, a float and
+    None are each refused, and the store then records no map."""
+    s, _ = store()
+    with pytest.raises(ValueError, match="is a positive number of windows"):
+        s.record_memory_map(registration=registration(s).digest, lifetime=lifetime)
+    assert s.memory_map is None
 
 
 def test_a_live_block_is_re_keyed_once_its_window_is_lifetime_old():

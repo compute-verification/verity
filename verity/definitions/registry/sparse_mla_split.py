@@ -35,7 +35,7 @@ whatever the max (`F32FmaFtz_v2`; the `_v1` FMAs return 0x7FC00000, which no out
 split end writes a NaN lse, since a NaN or infinite max makes its sum NaN and its lse -inf.
 
 MUFU.LG2 (`MufuLg2Ftz_v1`, `lg2.approx.ftz.f32`).  The fraction v(m) of log2(1.m) in units of 2^-36 is the special-function unit's
-quadratic interpolator, `verity.definitions.ops.boolean.mufu.Fit` over `mufu_lg2.json` (64 segments of 2^17 mantissas, the square
+quadratic interpolator, `verity.circuits.ops.boolean.mufu.Fit` over `mufu_lg2.json` (64 segments of 2^17 mantissas, the square
 from column 19, square_shift 1, shift 2), and v(0) = 0.  With E the exponent field and t = (E + 1) mod 128, M is the 43-bit
 `t << 36 | v` for E >= 127 and its complement below (|log2 x| 2^36 less one), and the word is M truncated to 24 significant bits:
 exponent bit_length(M) + 90, sign E < 127, +0 at M = 0.  A zero or subnormal gives -inf, a negative word or a NaN the MUFU NaN
@@ -75,10 +75,10 @@ from importlib import resources
 import numpy as np
 
 from verity.circuits.defs import bind, composite, primitive
-from verity.definitions.ops import scalar as SC
-from verity.definitions.ops.boolean.mufu import Fit
-from verity.definitions.ops.mufu import DivFullRcp
-from verity.definitions.ops.prims import const
+from verity.circuits.ops import scalar as SC
+from verity.circuits.ops.boolean.mufu import Fit
+from verity.circuits.ops.mufu import DivFullRcp
+from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.evidence import EVIDENCE
@@ -511,7 +511,8 @@ def split_chain(row, cols: int | None = None) -> list[tuple[object, int]]:
     At NS = 1 the one split is the head, ended by `SparseMlaHeadEnd_v1`; above it, each split is ended in its DV / G column
     blocks (`SparseMlaSplitEndCols_v1{G, C}`, G = `combine_cols(DV)`), and `SparseMlaCombine_v1{NSPLIT, DV = G}` combines
     each column block of the splits.  With ``cols``, each key block is its scores unit and its values units of G = ``cols``
-    columns (`sparse_mla.block_units`), so a chain's O is in column blocks already: at NS = 1 the head ends on each
+    columns, and its key rows' writers, once for all the heads (`sparse_mla.block_units`), so a chain's O is in column blocks
+    already: at NS = 1 the head ends on each
     (`SparseMlaHeadEnd_v1{DV = G}`), and above it each split ends on each (`SparseMlaSplitEnd_v1{DV = G}`, the last scores
     unit's max and lanes and that column block's last values unit's O) before the same combines.  What `serving_templates`
     stages a row as; the chain of whole blocks is what circuit-check holds to the block in its place."""
@@ -525,10 +526,11 @@ def split_chain(row, cols: int | None = None) -> list[tuple[object, int]]:
     first: dict[int, int] = {}
     for _b0, b1 in splits:
         nvis = min(T, b1 * BN) - (b1 - 1) * BN
-        first[nvis] = first.get(nvis, 0) + NH
-    out = [u for n, k in first.items() for u in M.block_units(S, cols, n, True, k)]
-    if later := NH * sum(b1 - b0 - 1 for b0, b1 in splits):
-        out += M.block_units(S, cols, BN, False, later)
+        first[nvis] = first.get(nvis, 0) + 1
+    out = [u for n, k in first.items() for u in M.block_units(S, cols, n, True, k, NH)]
+    if later := sum(b1 - b0 - 1 for b0, b1 in splits):
+        out += M.block_units(S, cols, BN, False, later, NH)
+    out = M.merged(out)
     if NS == 1:
         G = M.chain_cols(DV, cols)
         return out + [(bind(M.SparseMlaHeadEnd, DV=G, INV=S["INV"]), NH * (DV // G))]

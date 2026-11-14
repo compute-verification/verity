@@ -1,10 +1,13 @@
-"""The premise the products count takes on a batch (`work.P_BATCH`), and the three batches that break it, each held on
-the model's forward: positions the count charges as words of their own that hold equal words, to rounding."""
+"""The premise the products count takes on a batch where it has no count of the batch's repeats (`work.P_BATCH`), and
+the three batches that break it, each held on the model's forward: positions that premise charges as words of their
+own that hold equal words, to rounding. A job counts the first two on its own batch (`flops.repeats`), and the
+positions it counts are exactly those whose words equal an earlier position's."""
+import numpy as np
 import pytest
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
-from training_slowdown import model, work
+from training_slowdown import flops, model, work
 from training_slowdown.model import LM, Size
 
 #: a tiny lf model: three blocks, so "at every layer" has a first, a middle and a last
@@ -86,7 +89,7 @@ PROPORTIONS = [[1, 2, 1, 2, 1, 2, 3, 4],
 
 def test_two_rows_that_share_their_first_tokens_hold_equal_words_at_the_shared_positions():
     """Rows 0 and 1 share their first three tokens. A position reads only the tokens up to it, so the two rows hold
-    equal words at places 0, 1 and 2 at every product of every layer. The count leaves out place 0
+    equal words at places 0, 1 and 2 at every product of every layer. Under the premise the count leaves out place 0
     (`work.SHARED_PREFIX`) and charges places 1 and 2 in both rows. The control is the next place, where the rows'
     tokens differ."""
     at = words(PREFIX)
@@ -98,9 +101,9 @@ def test_two_rows_that_share_their_first_tokens_hold_equal_words_at_the_shared_p
 def test_a_row_that_starts_with_a_run_of_one_token_holds_equal_words_along_the_run(rotation, monkeypatch):
     """Row 0 starts with five of one token. Attention at a place of the run reads keys and values of that one token
     alone, and a weighted mean of one value is that value whatever the weights, so the rotation, which only moves the
-    weights, changes nothing: the five places hold equal words at every product of every layer, and the count
-    charges the four past the first (`work.SHARED_PREFIX`). The control is the same places of a row with no token
-    twice."""
+    weights, changes nothing: the five places hold equal words at every product of every layer, and under the
+    premise the count charges the four past the first (`work.SHARED_PREFIX`). The control is the same places of a row
+    with no token twice."""
     if not rotation:
         monkeypatch.setattr(model, "rope", lambda x, cos, sin: x)
     at = words(RUN)
@@ -122,3 +125,53 @@ def test_without_the_rotation_one_token_after_the_same_proportions_holds_equal_w
     assert spread(first, same)[1] <= EQUAL
     assert spread(first, [((0, 1), (2, 3))])[0] >= APART
     assert all(spread([x], same)[1] >= PART for x in second)
+
+
+#: how far apart a position the count keeps is from every position before it at the least, at the product where the
+#: two are farthest apart. Over seeds 0 to 999 of `words`, on the four batches of
+#: `test_the_positions_the_count_leaves_out_are_exactly_those_that_repeat_an_earlier_positions_words`, the nearest is
+#: 0.183 apart, and the farthest a position it leaves out is from the nearest before it is 1.6e-6
+KEPT = APART
+
+
+def repeated(rows: list[list[int]]) -> set[tuple[int, int]]:
+    """The positions (row, place) of `rows` past each row's first that the count leaves out (`flops.repeats`): those
+    whose key, its row's tokens up to it, its own included (inside a row's leading run of one token, that one token),
+    is a first position's or a position's before it, row by row."""
+    def key(r: list[int], i: int) -> tuple:
+        p = tuple(r[: i + 1])
+        return p[:1] if len(set(p)) == 1 else p
+
+    seen, out = {key(r, 0) for r in rows}, set()
+    for n, r in enumerate(rows):
+        for i in range(1, len(r)):
+            if key(r, i) in seen:
+                out.add((n, i))
+            seen.add(key(r, i))
+    return out
+
+
+def nearest(at: list[torch.Tensor], rows: list[list[int]]) -> dict[tuple[int, int], float]:
+    """How far each position past its row's first is from the nearest position before it (every row's first, then
+    the rest row by row), at the product of `at` where the two are farthest apart (`apart`): at most `EQUAL` where it
+    holds one of those positions' words at every product of every layer."""
+    order = [(n, 0) for n in range(len(rows))] + [(n, i) for n in range(len(rows)) for i in range(1, len(rows[n]))]
+    return {p: min(max(apart(x, p, q) for x in at) for q in order[:j])
+            for j, p in enumerate(order) if p[1]}
+
+
+@pytest.mark.parametrize("rows,rotation", [(PREFIX, True), (PREFIX, False), (RUN, True), (RUN, False)],
+                         ids=["prefix", "prefix-no-rotation", "run", "run-no-rotation"])
+def test_the_positions_the_count_leaves_out_are_exactly_those_that_repeat_an_earlier_positions_words(
+        rows, rotation, monkeypatch):
+    """The count's rule on the batch's tokens, on the shared-prefix batch and the leading-run batch, with the rotation
+    and without: every position it leaves out holds an earlier position's words at every product of every layer,
+    and no position it keeps does (`KEPT`). The proportions batch, whose equal words part at the second attention,
+    is the premise's edge without the rotation, which the count doesn't look for."""
+    if not rotation:
+        monkeypatch.setattr(model, "rope", lambda x, cos, sin: x)
+    gone = repeated(rows)
+    assert len(gone) == flops.repeats(np.array(rows)) == {id(PREFIX): 2, id(RUN): 4}[id(rows)]
+    far = nearest(words(rows), rows)
+    assert max(far[p] for p in gone) <= EQUAL
+    assert min(far[p] for p in far if p not in gone) >= KEPT

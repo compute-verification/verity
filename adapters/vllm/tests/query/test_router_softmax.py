@@ -7,14 +7,14 @@ import json
 import types
 
 import pytest
-from verity.definitions import word as W_
+from verity.circuits import word as W_
 
 from verity_vllm.acquire import plan
 from verity_vllm.acquire import plan as PL
 from verity_vllm.acquire.sources import router_softmax_source as S
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.correspondence.reader_for_acquire import (
-    AnnotationCorrespondence,
+    AcquireCorrespondence,
     runtime_tree_from_paths,
 )
 from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -26,6 +26,7 @@ from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
 from verity_vllm.query.units import ValueRef
+from verity_vllm.query import program_view as PV
 
 W = "model.model"
 H, E, K = 8, 4, 2
@@ -127,20 +128,20 @@ def test_the_plan_anchors_the_tap_on_the_moe_module():
     mod = next(x["moe_module"] for x in man["identities"] if x["family"] == RS.FAMILY)
     rt = runtime_tree_from_paths({"": ["M"], mod: ["FusedMoE"]}, buffers=[], runner={"sample": True}, source="synthetic")
     (v,) = [v for v in PL.value_classes(man) if v.family == RS.FAMILY]
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(rt, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(rt, wrapper_prefix="", aliases={}))
     assert [(s.kind, s.module, s.slot) for s in legal] == [("native_tap", "moe/L1", RS.MEMBER)] and not refused
     gone = runtime_tree_from_paths({"": ["M"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(gone, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(gone, wrapper_prefix="", aliases={}))
     assert not legal and "is not a module of the runtime tree" in refused[0]["why"]
 
 
 def test_word_check_sees_the_tapped_softmax_as_committed():
     groups = [{"family": fam, "statics": {"E": 64, "TOPK": 8, "VPT": 8}, "definition": f"{fam}{{E=64,TOPK=8,VPT=8}}", "calls": 3,
                "where": "model.layers.0.mlp.experts"} for fam in RS.ROUTERS]
-    tapped = W_.check_calls(groups, acquired=RS.TAP_WORDS)
+    tapped = W_.check_calls(groups, acquired=RS.TAP_WORDS, specialize=PV.specialization)
     assert tapped["ok"] and [g["acquired_interior_words"] for g in tapped["groups"]] == [3 * 130, 3 * 139]
     with pytest.raises(W_.QueryRuleViolation, match="interior-not-acquired"):
-        W_.check_calls(groups[:1], acquired={"MoeRouterTopKOrdered_v1": 129})
+        W_.check_calls(groups[:1], acquired={"MoeRouterTopKOrdered_v1": 129}, specialize=PV.specialization)
 
 
 def test_the_manifest_cli_and_verify_carry_the_policy(monkeypatch):

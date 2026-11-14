@@ -1,4 +1,4 @@
-"""Flock's committed synthetic sets (``verity/protocols/flock/prover/tests/fixtures/synthetic_sets``) are what the generator writes for
+"""Flock's committed synthetic sets (``verity/protocols/proofs/flock/prover/tests/fixtures/synthetic_sets``) are what the generator writes for
 their recipes (``verity_numerical.bench.fixture_sets``)."""
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from verity_numerical.bench import fixture_sets as FS
 from verity_flock import subcircuit_templates as TM
+from verity_numerical.bench import fixture_sets as FS
 
 
 def test_the_committed_synthetic_sets_are_the_generators():

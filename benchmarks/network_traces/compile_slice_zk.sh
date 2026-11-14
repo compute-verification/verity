@@ -22,13 +22,13 @@ CS_CACHE=${CS_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 if mkdir -p "$CS_CACHE" 2>/dev/null && [ -w "$CS_CACHE" ]; then export HZ_CACHE=$CS_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-# the encodings' traces and the certifier's vectors that compile_slice_zk.py reads are fetched fixtures (fixtures/artifacts.json)
+# the encodings' traces and the certifier's vectors that compile_slice_zk.py reads are fetched fixtures (artifacts.json)
 PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
-  benchmarks/network_e2e/encodings/tests/fixtures verity/protocols/certifier/verifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
+  benchmarks/network_e2e/encodings/tests/fixtures verity/protocols/accounting/certifier/verifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
   || { tail -20 "$OUT/fetch-fixtures.log"; exit 7; }
-(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 if [ -n "${CS_PLAIN:-}" ]; then
   mode=cszk-plain points=${CS_POINTS:-}

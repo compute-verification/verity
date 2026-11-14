@@ -14,7 +14,7 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import mufu as BM
 from verity.definitions.registry import boolean_dsa_norm as BD
 from verity.definitions.registry import boolean_norms as BN
 from verity.definitions.registry import boolean_norms_split as BS
@@ -54,8 +54,8 @@ FAMILIES = {
         "model.layers.{L}.post_attention_layernorm"),
     "DsaRMSNorm_v1": (
         lambda: bind(DN.DsaRMSNorm, N=N, EPS=EPS), (("x", N), ("w", N)), ("out",),
-        lambda b: bind(BD.DsaRMSNormSumSqV2 if b else DN.DsaRMSNormSumSq, N=N, EPS=EPS),
-        lambda b: bind(BD.DsaRMSNormApplyV2 if b else DN.DsaRMSNormApply, G=G), "model.layers.{L}.self_attn.kv_a_layernorm"),
+        lambda b: bind(BD.DsaRMSNormSumSqV3 if b else DN.DsaRMSNormSumSq, N=N, EPS=EPS),
+        lambda b: bind(BD.DsaRMSNormApplyV3 if b else DN.DsaRMSNormApply, G=G), "model.layers.{L}.self_attn.kv_a_layernorm"),
     "AllReduceRmsNormMnnvl_v1": (
         lambda: bind(TA.AllReduceRmsNormMnnvl, WORLD=WORLD, N=N, SHOT=1, CLUSTER=1, EPS=EPS, FMA=False),
         (("parts", WORLD * N), ("res", N), ("w", N)), ("normed", "residual"),

@@ -4,7 +4,7 @@
 and `persistent_topk`) and `sparse_mla_split.SparseMlaHeadSplit_v1` (FA3, `FLASH_ATTN_MLA_SPARSE`) at GLM-5.3's statics on one TP8 rank (8 MLA
 heads; the indexer's 32 heads replicated), and the run that settles the RoPE contraction of the two Triton kernels.
 
-One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`properties.record`), and the two
+One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`records.property_record`), and the two
 Triton kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one line per phase, a `ROPE`
 line, then `GLM53-DSA GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else runs when it fails
 (exit 3).  vLLM runs at its defaults, as it serves: `engine.env.served_defaults` clears every switch the process inherited before
@@ -106,8 +106,8 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
-from verity.definitions.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
-from verity.definitions.ops.fp32 import f32_sub_bits as sub
+from verity.circuits.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
+from verity.circuits.ops.fp32 import f32_sub_bits as sub
 from verity.definitions.registry import boolean_rope as BR
 from verity.definitions.registry import dsa
 from verity.definitions.registry import ref_prims as RP
@@ -118,7 +118,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
 from verity_vllm.pipeline.cli import MACHINE
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-dsa-capture/v3"
 RECORD = "glm53_dsa_capture.json"
@@ -381,9 +381,9 @@ def rope_forms(x1, x2, c, s) -> dict[str, np.ndarray]:
 
 def rope_forms_exact(x1: int, x2: int, c: int, s: int) -> dict[str, int]:
     """`rope_forms` of one quadruple through core's exact bit functions (the non-flushing forms)."""
-    from verity.definitions.ops.fp32 import f32_add_bits as add
-    from verity.definitions.ops.fp32 import f32_fma_bits as fma
-    from verity.definitions.ops.fp32 import f32_mul_bits as mul
+    from verity.circuits.ops.fp32 import f32_add_bits as add
+    from verity.circuits.ops.fp32 import f32_fma_bits as fma
+    from verity.circuits.ops.fp32 import f32_mul_bits as mul
 
     X1, X2, Cc, Ss = ((v & 0xFFFF) << 16 for v in (x1, x2, c, s))
     n = 0x80000000

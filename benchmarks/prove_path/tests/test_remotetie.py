@@ -74,8 +74,8 @@ from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import served as SV
 from verity_vllm.protocols.pouw.h1.words import chunk_words, ids_words
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registered as G, registration as REG
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, registration as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.windows import interface as IF, rows as CS
@@ -438,8 +438,8 @@ def lean(toy, written, tmp_path_factory) -> SimpleNamespace:
     one = _one_stage()
     SC = one.SC
     exes = SimpleNamespace(v1=SC.build(*SC.V1_LEAN), policy=SC.build(*SC.INFERENCE_ONLY_LEAN),
-                           period=SC.build(ROOT / "verity/protocols/pouw/verifier/lean/check", "pouw-period"),
-                           remote=SC.build(ROOT / "verity/protocols/remote/verifier", "remote"))
+                           period=SC.build(ROOT / "verity/protocols/accounting/pouw/verifier/lean/check", "pouw-period"),
+                           remote=SC.build(ROOT / "verity/protocols/compose/verifier/remote", "remote"))
     W, R = toy.h1.W, written.R
     serve = _serve(one, tmp_path_factory.mktemp("serve"), _v1_case(one, toy, written, W, R), W, R, exes.period)
     out = io.StringIO()

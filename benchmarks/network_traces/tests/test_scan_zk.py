@@ -32,10 +32,10 @@ import pytest
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parents[1]
-PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
 def _load():
@@ -359,7 +359,7 @@ def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     regs = {d["registration"]["direction"]: d["registration"] for d in map(json.loads, (
         tmp_path / "run" / "cells.jsonl").read_text().splitlines()) if d["registration"]["window"] == 0}
     assert {r["port"]: (r["root"], r["domain"], r["leaves"]) for r in sz.warden_roots(
-        [{"warden": m.warden} for m in h.rounds["honest"]])} == {
+        [{"network_certifier": m.warden} for m in h.rounds["honest"]])} == {
         f"rows/{d}/0": (regs[d]["root"], regs[d]["domain"], sz.PARAMS.window) for d in ("ingress", "egress")}
 
 
@@ -380,7 +380,7 @@ def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
     regs = _cells(run)
-    roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]])
+    roots = sz.warden_roots([{"network_certifier": m.warden} for m in h.rounds["honest"]])
     assert roots == [
         {"port": f"rows/{d}/{w}", "root": regs[d, w]["root"], "leaves": T, "domain": regs[d, w]["domain"]}
         for d in ("egress", "ingress") for w in range(G)]
@@ -389,7 +389,7 @@ def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp
     assert {e["value"] for v in verdicts.values() for e in v["registered"].values()} == {
         f"warden/{d}/{w}" for d in ("egress", "ingress") for w in range(G)}
     assert sz.AU.session_registered(verdicts, {"roots": roots}) == {}
-    tampered, w = sz.warden_roots([{"warden": m.warden} for m in h.rounds["tampered"]]), h.at.tampered.window
+    tampered, w = sz.warden_roots([{"network_certifier": m.warden} for m in h.rounds["tampered"]]), h.at.tampered.window
     assert [r["port"] for r in tampered] == [f"rows/egress/{x}" for x in range(G)]
     assert tampered[w]["root"] == h.at.tampered.registration["root"] != regs["egress", w]["root"]
     assert all(tampered[x]["root"] == regs["egress", x]["root"] for x in range(G) if x != w)
@@ -414,7 +414,7 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
         signed[f"rows/{d}/{w}"] = (head.root.hex(), dom.domain_id.hex())
     assert len(signed) == 2 * G
     honest = h.rounds["honest"]
-    roots = sz.warden_roots([{"warden": m.warden} for m in honest])
+    roots = sz.warden_roots([{"network_certifier": m.warden} for m in honest])
     assert {r["port"]: (r["root"], r["domain"]) for r in roots} == signed
     read: dict[str, set] = {}
     for m in honest:
@@ -432,7 +432,7 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
     at = SimpleNamespace(**{**vars(h.at), "sides": {**h.at.sides, "egress": egress}})
     mb = next(mb for mb in sz.members_of(sz.TEMPLATES, G, h.at.T) if mb.template == "egress" and mb.window == w)
     m = sz.member(at, "honest", mb)
-    assert (sz.registered_file(m)["ports"]["o1"]["root"], sz.warden_roots([{"warden": m.warden}])[0]["root"]) == (
+    assert (sz.registered_file(m)["ports"]["o1"]["root"], sz.warden_roots([{"network_certifier": m.warden}])[0]["root"]) == (
         signed[f"rows/egress/{w}"][0],) * 2
     assert m.refused == "registered reads: table row 0 does not open the registered root at position 0"
 
@@ -449,7 +449,7 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     in its public when there are any (``rests_on_period_check``, an extra key the period check's parser takes); a
     refused audit a reject of the same registration naming why; an accepted record of another registration the driver's
     error."""
-    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.pouw.verifier import core_check as CC
 
     G, T = 2, 4
     defs = {"first": FIRST, "ingress": ING, "egress": EG}
@@ -569,7 +569,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     progs = [{"root": tr.root.hex(), "leaves": nb, "domain": sz.ADV.domain(tr.binding, nb).domain_id.hex()}
              for tr in trs]
     state = {"root": st.root.hex(), "leaves": T, "domain": sz.ADV.domain(st.binding, T).domain_id.hex()}
-    roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
+    roots = sz.warden_roots([{"network_certifier": m.warden} for m in h.rounds["honest"]]) + [
         *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}]
     law = sz.DR.parse_design(f"stratified:{2 * T}")
     reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)

@@ -93,8 +93,10 @@ def test_one_mathlib():
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
 # security's list: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
-# their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"security": 221, "security/Properties": 184, "verity/protocols/flock/verifier": 7}
+# their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
+# Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
+# restated at the deployed session its domain hypothesis fixes
+UNWITNESSED = {"security": 222, "security/Properties": 182, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -322,7 +324,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 888, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
+INLINE = {"security": 888, "security/Properties": 132, "verity/protocols/proofs/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -338,7 +340,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between `next`'s count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
+ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/accounting/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
 
 
 def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
@@ -572,7 +574,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/pouw/verifier/lean/check": 282, "verity/protocols/flock/verifier": 725}
+OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/accounting/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:

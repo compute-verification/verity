@@ -27,7 +27,9 @@ Two kinds of local copy can go, and only these:
   object, ref or stash of its own), its HEAD is the commit, no index entry is marked skip-worktree or assume-unchanged, and
   `git status`, run without system or global config, shows nothing but READY.json, build caches and fetched fixtures, ignored
   files included (`_local_changes`); (2) nothing uses it: no live process names it (cwd, root, exe, open file, map, command line,
-  environment, any `src/<sha>` they spell, any sha a process inside `<src>` names, a thread's cwd when its leader exited), no git worktree made from it, no run that has not ended and no request without a
+  environment, any `src/<sha>` they spell, any sha a process inside `<src>` names, a thread's cwd when its leader exited), no git
+  worktree made from it that may still exist (`_worktrees`: a registration in its `.git/worktrees` whose worktree is gone, which
+  git itself prunes only months later, keeps nothing), no run that has not ended and no request without a
   run dir names it, no live check or Lean slot holder or waiter (`<root>/locks`) names it, no job script queued for the fill
   (`retention.JobScripts`) names it, and nothing in it changed and no run naming it was recorded within `SRC_KEEP_S`; (3) no run
   record holds it as its source's only copy: its READY.json names its own commit, and every run record naming it, but a refused
@@ -68,7 +70,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from ..telemetry.procs import gone
 from . import ids, sealed
-from .local import LocalStore, manifest_key, object_key, sha256_file
+from .local import REPLICA_MAPS, LocalStore, manifest_key, object_key, sha256_file
 from .model import utc_now
 
 MIN_BYTES = 1 << 20          # blobs / files below this are not worth an eviction (and a re-fetch)
@@ -550,6 +552,11 @@ def _field(status: str, key: str) -> list[str]:
     return next((ln.split()[1:] for ln in status.splitlines() if ln.startswith(f"{key}:")), [])
 
 
+def _tops(path: Path | str) -> frozenset[str]:
+    """The top directories `path` is under, as it is spelled and as it resolves."""
+    return frozenset(Path(p).parts[1] for p in (os.path.abspath(path), os.path.realpath(path)) if len(Path(p).parts) > 1)
+
+
 def _nginx_worker(proc: Path, pid: str, src_root: Path, conf: Path) -> bool:
     """Whether unreadable process `pid` is an nginx worker that cannot name a tree: RunPod's proxy (a worker as `nobody` on every
     pod, which a container without CAP_SYS_PTRACE can't read).  A worker is forked from its master without exec and opens only what
@@ -566,7 +573,7 @@ def _nginx_worker(proc: Path, pid: str, src_root: Path, conf: Path) -> bool:
         text = conf.read_text(errors="replace")
     except OSError:
         return False
-    tops = {Path(p).parts[1] for p in (os.path.abspath(src_root), os.path.realpath(src_root)) if len(Path(p).parts) > 1}
+    tops = _tops(src_root)
     return (exe == "/usr/sbin/nginx" and title == "nginx: master process /usr/sbin/nginx"
             and not re.search(r"\b(include|load_module)\b", text) and not any(t in text for t in tops))
 
@@ -796,9 +803,12 @@ _CLEAN_C = ["-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c
 
 
 def _fixture_paths(tree: Path) -> list[str]:
-    """The paths `fixtures/artifacts.json` registers (fetched fixtures are among them); [] when it is absent or unreadable."""
-    doc = _doc(_quiet((tree / "fixtures" / "artifacts.json").read_text))
-    return [p.strip("/") for k, p in (doc or {}).items() if k.startswith("art:") and isinstance(p, str) and p.strip("/")]
+    """The paths the tree's registry registers (fetched fixtures are among them), read at each place a tree may hold it
+    (`REPLICA_MAPS`); [] when it is absent or unreadable.  A tree holding it at both gives both's paths, where the store reads
+    the first: a research of either age may have fetched into the tree, each from the place it names, so a path either
+    registers is one whose bytes its id fetches again."""
+    docs = [_doc(_quiet((tree / place).read_text)) for place in REPLICA_MAPS]
+    return [p.strip("/") for doc in docs for k, p in (doc or {}).items() if k.startswith("art:") and isinstance(p, str) and p.strip("/")]
 
 
 def _ignored_ok(tree: Path, path: str, fixtures: list[str]) -> bool:
@@ -818,20 +828,85 @@ def _ignored_ok(tree: Path, path: str, fixtures: list[str]) -> bool:
     return True
 
 
-def _local_changes(tree: Path, sha: str) -> set[str]:
+WORKTREE = "2: a git worktree made from it (.git/worktrees) may be in use"
+
+
+def _worktrees(gd: Path) -> tuple[str | None, set[str]]:
+    """What `gd/worktrees`, git's registrations of the worktrees made from this repository, says: why one may still exist, or
+    None and the directories of the registered worktrees, every one of them gone.  A worktree's work is in its own directory (and
+    its commits in the repository's objects, which `_local_changes` reads), and git keeps the registration of one removed without
+    `git worktree remove` for months, so a registration alone keeps nothing.  Its worktree is gone only when it is not locked
+    (git's mark on one being made, or kept where it is not always mounted), its `gitdir` reads as one absolute path to a
+    worktree's `.git`, as git writes it, and that worktree's directory is not there: ENOENT, since any other failure leaves it
+    unknown.  Whether a process still names such a directory, which it would where the directory is out of this pass's sight, is
+    `dir_uses`'s to say."""
+    d = gd / "worktrees"
+    try:
+        names = sorted(os.listdir(d))
+    except (FileNotFoundError, NotADirectoryError):
+        return None, set()
+    except OSError as e:
+        return f"{WORKTREE}: cannot list {d}: {e.strerror}", set()
+
+    def there(p: Path | str) -> bool:
+        try:
+            os.lstat(p)
+        except FileNotFoundError:
+            return False
+        return True
+
+    gone: set[str] = set()
+    for n in names:
+        try:
+            if there(d / n / "locked"):
+                return f"{WORKTREE}: {n} is locked", set()
+            path = (d / n / "gitdir").read_bytes().rstrip(b" \t\n\r").decode()       # what git trims, and no more
+            wt, base = os.path.split(path)
+            if not path.startswith("/") or base != ".git" or "\0" in path or "\n" in path:
+                return f"{WORKTREE}: {n}'s gitdir is not an absolute path to a worktree's .git: {path[-120:]!r}", set()
+            if there(wt):
+                return f"{WORKTREE}: {wt[-120:]} is there", set()
+        except (OSError, UnicodeDecodeError) as e:
+            return f"{WORKTREE}: cannot tell whether {n}'s worktree is gone: {type(e).__name__}: {e}"[:300], set()
+        gone.add(wt)
+    return None, gone
+
+
+def dir_uses(dirs: set[str], proc: Path = Path("/proc"), nginx_conf: Path = NGINX_CONF) -> dict[str, set[str]]:
+    """{directory: reasons} for the directories of `dirs` a live process names, as spelled or as resolved, in anything
+    `proc_uses` reads.  Unestablished as there; an unreadable nginx worker is passed over only when its configuration cannot
+    name the directories either, so they are read for one group of top directories at a time."""
+    groups: dict[frozenset[str], list[str]] = {}
+    for d in sorted(dirs):
+        groups.setdefault(_tops(d), []).append(d)
+    uses: dict[str, set[str]] = {}
+    for ds in groups.values():
+        spelled = {s: d for d in ds for s in (d, os.path.realpath(d))}
+        pattern = re.compile("(" + "|".join(map(re.escape, sorted(spelled, key=len, reverse=True))) + ")")
+        for found, why in proc_uses(pattern, proc, None, Path(ds[0]), nginx_conf).items():
+            for s, d in spelled.items():
+                if found.startswith(s):         # a longer spelling found is also every spelling it starts with
+                    uses.setdefault(d, set()).update(why)
+    return uses
+
+
+def _local_changes(tree: Path, sha: str, uses: Callable[[set[str]], dict[str, set[str]]]) -> set[str]:
     """Why the tree is not exactly its commit, so deleting it would lose work no ref of the node's repo holds: a `.git` that is not
     a ship's (any config key but SHIP_CONFIG's, an exclude, a sparse checkout, an object or ref of its own, a stash, a worktree made
-    from it), a HEAD other than `sha`, an index entry `git status` is told to skip, or any change `git status` shows, tracked,
-    untracked, or ignored but READY.json, regenerable caches and fetched fixtures.  Git runs without system or global config and
-    with every command-running key off.  Run only for a tree about to go: it reads every file's metadata."""
+    from it that may still exist), a HEAD other than `sha`, an index entry `git status` is told to skip, or any change `git status`
+    shows, tracked, untracked, or ignored but READY.json, regenerable caches and fetched fixtures.  Git runs without system or
+    global config and with every command-running key off.  Run only for a tree about to go: it reads every file's metadata, and
+    for a tree nothing else keeps whose registered worktrees are all gone (`_worktrees`), the live processes once more (`uses`,
+    `dir_uses` of those worktrees' directories): one that names such a directory, or that cannot be read, keeps the tree."""
     gd = tree / ".git"
     if not os.path.lexists(gd):
         return {"1: not recoverable on the node: no .git to compare it with its commit"}
     if gd.is_symlink() or not gd.is_dir():
         return {"1: not recoverable on the node: .git is not a directory, so another repository may hold its state"}
     why: set[str] = set()
-    if _quiet(lambda: os.listdir(gd / "worktrees")):
-        why.add("2: a git worktree made from it (.git/worktrees) may be in use")
+    held, gone = _worktrees(gd)
+    if held:
+        why.add(held)
 
     def git(*args: str) -> str | None:
         try:
@@ -885,6 +960,13 @@ def _local_changes(tree: Path, sha: str) -> set[str]:
         return {f"1: cannot read its ignored files: {type(e).__name__}: {e}"}
     if kept:
         why.add(f"1: not recoverable on the node: {len(kept)} ignored path(s) no build regenerates, e.g. {kept[0][-120:]!r}")
+    if gone and not why:
+        try:
+            if named := uses(gone):
+                d = min(named)
+                why.add(f"{WORKTREE}: {d[-120:]} is gone, but {min(named[d])[len('2: '):]}")
+        except Unestablished as e:
+            why.add(f"{WORKTREE}: whether a process names one that is gone (e.g. {min(gone)[-120:]}) is unknown: {str(e)[len('2: '):]}")
     return why
 
 
@@ -977,6 +1059,9 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
                 why.setdefault(s, set()).add(f"2: {r}")
         return why
 
+    def naming(dirs: set[str]) -> dict[str, set[str]]:
+        return dir_uses(dirs, proc, nginx_conf)
+
     try:
         names = _entries(src_root)
     except Unestablished as e:
@@ -1011,7 +1096,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
             if clock() - t0 > budget_s:
                 reasons[s].add(f"budget: no deletion starts after {budget_s / 60:g} min; the next pass goes on")
                 continue
-            if changes := _local_changes(src_root / s, s):
+            if changes := _local_changes(src_root / s, s, naming):
                 reasons[s] |= changes
                 continue
             if dry_run:
@@ -1029,7 +1114,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
                 reasons[s].add(f"error: {type(e).__name__}: {e}")
                 continue
             try:
-                after = live({s}).get(s, set()) | _local_changes(aside, s)
+                after = live({s}).get(s, set()) | _local_changes(aside, s, naming)
             except BaseException:
                 _put_back(aside, src_root / s)
                 raise

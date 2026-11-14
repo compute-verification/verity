@@ -32,7 +32,7 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity.definitions.numerics import fa3_model as FA3
-from verity.definitions.ops.prims import (
+from verity.circuits.ops.prims import (
     BlackwellE4m3QmmaDot32,
     BlackwellNvf4OmmaDot64,
     HopperBF16WgmmaDot16,
@@ -105,8 +105,8 @@ TARGETS: dict[str, dict[str, Any]] = {
                            "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (cc 12.0 has no wgmma; under VLLM_BATCH_INVARIANT=1 "
                                           "vLLM's linear layers run the Triton matmul_kernel_persistent, then `output + bias` in bf16, at every M; "
                                           "other bf16 matmuls stay on cuBLASLt with split-K disabled, the same chain without a bias)",
-                           "pipeline": "verity.definitions.silicon.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
-                                       "verity.definitions.silicon.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
+                           "pipeline": "verity.circuits.silicon.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
+                                       "verity.circuits.silicon.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
                            "flash_attn_versions": (2,),
                            "fa2_construction": "check-inf-per-iteration",
                            # the fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`)
@@ -415,7 +415,9 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
     if launch.get("conflict"):
         raise LaunchContextConflict("the launch context of this request shape is not one value ('conflict'): requests of the same (LP, T) are "
                                     "co-scheduled with different batches; build one Program per (shape, arrival) or declare the contexts")
-    by = launch.get("max_seqlen_q_by_step") or {}
+    by = launch.get("max_seqlen_q_by_step")
+    if not by:
+        by = {}
     v = by.get(int(step))
     if v is None:
         raise LaunchContextInvalid(f"the declared launch context names steps {sorted(by)} but the request runs step {int(step)}: declare every "

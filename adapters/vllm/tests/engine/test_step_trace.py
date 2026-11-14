@@ -6,9 +6,9 @@ import threading
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.accounting.certifier.verifier import replay_step as RS
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, drive
-from verity.protocols.certifier.verifier import replay_step as RS
 from verity_vllm.engine import step_trace as ST
 
 
@@ -51,8 +51,9 @@ class _HeldPath:
 
 
 def _served(path, **kw) -> tuple[FakeScheduler, ST.StepTrace]:
-    trace = ST.StepTrace(path.path if isinstance(path, _HeldPath) else path, **kw)
-    if isinstance(path, _HeldPath):
+    held = isinstance(path, _HeldPath)
+    trace = ST.StepTrace(path.path if held else path, **kw)
+    if held:
         trace.path = path
     sched = FakeScheduler(budget=8, max_seqs=4)
     return sched, trace.install(sched)
@@ -229,6 +230,18 @@ def test_an_arrival_after_an_empty_schedule_says_how_many():
     arrive("d", (0,))                           # the engine drained: the schedule that held its last request back still counts
     assert [(r["request"], r["before_step"], r.get("after_empty")) for r in trace.records if r["kind"] == "arrive"] == [
         ("a", 0, None), ("b", 1, 2), ("c", 2, None), ("d", 2, 1)]
+
+
+def test_a_request_added_again_under_an_id_the_scheduler_holds_is_one_arrival():
+    sched = FakeScheduler()
+    trace = ST.StepTrace().install(sched)
+    sched.add_request(_req("a", 3, [5, 2], 4))
+    sched.add_request(_req("a", 3, [5, 2], 4))                  # held: no second record
+    sched.add_request(_req("b", 2, [2], 1))
+    del sched.requests["a"]
+    sched.add_request(_req("a", 3, [5, 2], 4))                  # no longer held: it arrives again
+    assert [r["request"] for r in trace.records if r["kind"] == "arrive"] == ["a", "b", "a"]
+    trace.uninstall()
 
 
 def test_the_header_says_where_the_launch_left_the_context_limit_to_vllm():

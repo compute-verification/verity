@@ -6,15 +6,15 @@ imports it with no `sys.path` entry.
 
 The kit holds no theory and no fold semantics. A referee and the author it checks may both use it, and neither re-runs
 the other's argument. Fold semantics belong to the receipt-fold module. MMA semantics come from
-`verity.definitions.silicon` and are never re-derived here.
+`verity.circuits.silicon` and are never re-derived here.
 
 **What a caller may import** is each module's `__all__` (`exact_kit.checks`, `exact_kit.f2`, `exact_kit.wrap`,
 `exact_kit.search`, `exact_kit.sat`); the package itself re-exports nothing. Its readers are `../theory/`'s scripts and
 `../edited_gemm/egemm_depthr_check.py`.
 
 **What it never does.** It imports nothing of Verity and nothing of `research`: the standard library, numpy and pysat
-alone. It reads the environment in one place, `Checks.finish`, for where the verdict and the run's result go, and writes
-no other file.
+alone. It reads the environment in one place, `exact_kit.settings` (`OUT` and the three variables `research run` sets),
+which only `Checks.finish` asks, for where the verdict and the run's result go, and writes no other file.
 
 ## API
 

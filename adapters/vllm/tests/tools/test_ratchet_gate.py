@@ -17,7 +17,8 @@ the silent-except check beside that (a new swallowing handler, typed or broad, f
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
 counted lints counting one change), the retired-terms check (a new use refused with the term the checkout's glossary gives),
 a site the base's tree holds compared by its file and what it is, with a count, and never by its line (one an edit above it
-moves is the base's, one more of its kind is the change's, a file's count that a mended site lowers is no new violation),
+moves is the base's, one more of its kind is the change's, a file's count that a mended site lowers is no new violation, a
+renamed file's are its old path's),
 a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
 counted or ruff lint's violations in a lint module the gate runs as the base has it judged on the change's own copy
@@ -789,6 +790,25 @@ def test_shared_lint_code_runs_every_lint_and_an_error_is_named(linted):
         "p10_size: test_no_new_x raised FileNotFoundError: gone.py"]
 
 
+@pytest.mark.parametrize("runner, wrote, error", [
+    ("import sys\nsys.exit('the runner broke')\n", "the runner broke", ValueError),
+    ("import sys\nprint('half a document')\nsys.exit('the runner broke')\n", "the runner broke", ValueError),
+    ("print('{}')\n", "{}", KeyError),
+    ("print('null')\n", "null", TypeError)])
+def test_a_base_lint_run_that_ends_without_its_document_decides_no_verdict_and_names_what_it_wrote(linted, monkeypatch, runner,
+                                                                                                  wrote, error):
+    """The runner's process printing no JSON, or JSON that isn't its document, is the gate unable to judge: a `GitError`
+    naming both ends of the change and the end of what the process wrote (its stderr first), with the reading's own error
+    behind it, and never a verdict."""
+    top = linted.commit("a helper", {"adapters/vllm/tests/lint/_helper.py": "X = 1\n"})
+    base = linted.git("rev-parse", "main")
+    monkeypatch.setattr(G, "RUNNER", runner)
+    with pytest.raises(G.GitError) as e:
+        G.gate("main", "pr")
+    assert str(e.value) == f"the base's lints at {base[:12]} didn't run on {top[:12]}: {wrote}"
+    assert isinstance(e.value.__cause__ or e.value.__context__, error)
+
+
 REAL_LINT = SCRIPT.parents[1] / "tests" / "lint"
 RUFF_LINT = "adapters/vllm/tests/lint/test_ruff.py"
 RUFF_JSON = "adapters/vllm/tests/lint/allowlists/ruff.json"
@@ -1100,11 +1120,11 @@ def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypat
     seen: list[list[str]] = []
     monkeypatch.setattr(G, "ruff_findings", _noting(seen, lambda ruff, config, files: sorted(files), G.ruff_findings))
     both_ruffed.git("checkout", "-q", "main")
-    both_ruffed.commit("definitions", {"verity/definitions/word.py": "X = 1\n"})
+    both_ruffed.commit("definitions", {"verity/definitions/registry/word.py": "X = 1\n"})
     both_ruffed.git("checkout", "-q", "-B", "pr")
     both_ruffed.commit("a clean file, and others the lint doesn't hold", {
         "tools/c.py": "C = 1\n", "adapters/vllm/verity_vllm/c.py": "import os\n",
-        "verity/definitions/tiny.py": "import os\n", "verity/definitions/word.py": None, "tools/notes.md": "import os\n"})
+        "verity/definitions/registry/tiny.py": "import os\n", "verity/definitions/registry/word.py": None, "tools/notes.md": "import os\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["linted"]) == ("passed", ["tools/c.py"]), c["why"]
     assert seen == [[], ["tools/c.py"]]
@@ -1766,6 +1786,50 @@ def test_a_count_that_rises_past_its_bases_is_the_changes_whatever_its_list_allo
     [c] = G.gate("main", "pr")["changes"]
     assert c["verdict"] == "failed" and "finds 2 violation(s) on its tree" in c["why"], c["why"]
     assert c["fix"] == ["repo_retired_terms: docs/b.md: 5 found, 2 allowed", B_SITE.format(11)], c["why"]
+
+
+#: docs/b.md renamed and edited, so no pure move: a line above its four uses, which move down a line
+B_MOVED = {"docs/b.md": None, "docs/c/b.md": "# B\n\nMoved.\n" + B_USES.removeprefix("# B\n"),
+           REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {"file": "docs/c/b.md", "count": 2})}
+
+
+def test_a_renamed_file_is_its_old_paths_file_so_the_sites_its_base_holds_past_its_list_are_no_new_ones(terms_behind):
+    """A change that renames and edits a file its base's list is behind in, and moves the file's entry with it: the sites
+    are the base's at the old path, so the change passes, each named where the base holds it, with the change that
+    wrote it."""
+    wrote = terms_behind.git("rev-parse", "main").strip()[:12]
+    terms_behind.commit("b.md moves to c/, a line longer, and its entry moves with it", B_MOVED)
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["repo_retired_terms"]), c["why"]
+    assert ("finds 5 violation(s) its own tree already holds, which aren't this change's: "
+            f"added by {wrote}: {', '.join(B_SITE.format(n) for n in (5, 7, 9, 3))}, "
+            "repo_retired_terms: docs/b.md: 4 found, 2 allowed") in c["why"], c["why"]
+
+
+def test_one_more_site_in_a_renamed_file_is_the_changes(terms_behind):
+    """The same rename with a fifth use of the term in the moved file: it holds one more site than its old path did, so
+    the change fails, naming the new path's count and the one new site."""
+    terms_behind.commit("b.md moves to c/ and uses the term a fifth time", {
+        **B_MOVED, "docs/c/b.md": B_MOVED["docs/c/b.md"] + "\nA teapot naps.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and "finds 2 violation(s) on its tree" in c["why"], c["why"]
+    moved = B_SITE.replace("docs/b.md", "docs/c/b.md")
+    assert c["fix"] == ["repo_retired_terms: docs/c/b.md: 5 found, 2 allowed", moved.format(13)], c["why"]
+
+
+def test_a_violation_at_a_renamed_file_is_named_at_its_new_path_by_the_lint_s_own_root():
+    """`at_paths`: a repository lint's violation names its file from the root, an integration lint's from the
+    integration, and each moves with its file; one at a file the change doesn't rename stays as it is."""
+    to = {"docs/b.md": "docs/c/b.md", f"{G.INTEGRATION}/verity_vllm/a.py": f"{G.INTEGRATION}/verity_vllm/z.py"}
+    repo = frozenset({"repo_retired_terms", "repo_ruff"})
+    assert G.at_paths(["repo_retired_terms: docs/b.md:3 x", "repo_retired_terms: docs/b.md: 4 found, 2 allowed",
+                       "repo_ruff: docs/b.md [E501]: 2 found, 0 allowed", "p01_core: verity_vllm/a.py:2 k",
+                       "ruff: verity_vllm/a.py:4 [F401] unused", "repo_retired_terms: verity_vllm/a.py:3 x",
+                       "repo_retired_terms: docs/a.md:3 x", "p01_core: something else"], to, repo) == [
+        "repo_retired_terms: docs/c/b.md:3 x", "repo_retired_terms: docs/c/b.md: 4 found, 2 allowed",
+        "repo_ruff: docs/c/b.md [E501]: 2 found, 0 allowed", "p01_core: verity_vllm/z.py:2 k",
+        "ruff: verity_vllm/z.py:4 [F401] unused", "repo_retired_terms: verity_vllm/a.py:3 x",
+        "repo_retired_terms: docs/a.md:3 x", "p01_core: something else"]
 
 
 def test_a_list_lowered_under_a_tree_its_bases_list_covered_fails(terms_behind):

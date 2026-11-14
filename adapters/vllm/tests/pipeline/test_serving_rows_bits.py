@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.gates.embedding import read
@@ -86,7 +86,7 @@ def test_every_unit_of_the_long_row_but_its_read_is_a_bits_template_on_its_defin
                                      for g, (nm, schema, bits, ps) in enumerate(rows)], outs), tid
         assert [(bits, ps) for _nm, _schema, bits, ps in rows] == [(ty.leaves, [nm]) for nm, ty in d.signature()[0]], tid
     assert {spec_base(x) for x in _templates(t)} == {
-        "DsaTopKDigitCount_v1", "DsaTopKDigitPick_v1", "DsaTopKMaskBlock_v1", "DsaMaskPositions_v1", "DsaPositionsMerge_v1",
+        "DsaTopKDigitCount_v1", "DsaTopKDigitPick_v2", "DsaTopKMaskBlock_v2", "DsaMaskPositions_v2", "DsaPositionsMerge_v2",
         "DsaPositionsChunk_v1", "DsaPositionsSlot_v1"}
     read = descriptor_id(t.bindings["READ"])
     assert ST.template(read).layout == ("history" if ST.history_read(read) else "read")
@@ -107,15 +107,15 @@ def test_the_small_units_but_the_pick_stage_in_the_proved_form(tmp_path) -> None
     stager's reference check passes on random units, and the file is in the proved form and range. The cheapest test that
     builds these units' statements."""
     seen = set()
-    for k, tid in enumerate(t for t in _templates(_cut(64, 32, 32)) if spec_base(t) != "DsaTopKDigitPick_v1"):
+    for k, tid in enumerate(t for t in _templates(_cut(64, 32, 32)) if spec_base(t) != "DsaTopKDigitPick_v2"):
         fam = (spec_base(tid), tuple(b for _r, _s, b, _ps in CR.unit_rows(ST.template(tid))[0]))
         if fam in seen:
             continue
         seen.add(fam)
         got = _staged(tid, tmp_path / str(k))
         assert got["why"] is None and got["k_log"] <= FC.K_MAX and got["regions"] <= REGIONS_MAX, (tid, got)
-    assert {f for f, _b in seen} == {"DsaTopKDigitCount_v1", "DsaTopKMaskBlock_v1", "DsaMaskPositions_v1",
-                                     "DsaPositionsMerge_v1", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1"}
+    assert {f for f, _b in seen} == {"DsaTopKDigitCount_v1", "DsaTopKMaskBlock_v2", "DsaMaskPositions_v2",
+                                     "DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1"}
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_LONG_ROW_UNITS"),

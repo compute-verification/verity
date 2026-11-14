@@ -2,7 +2,7 @@
 `fused_grouped_topk` launches for `GroupedTopKRouter`) at one group, top-8 of 256 experts, renormalized, x2.5, on f32 logits and an
 f32 correction bias, against `registry.moe.MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL}`.
 
-One GPU process writes `<out>/sigmoid_router_capture.json`, the property record `sigmoid_router_capture` (`properties.record`), and
+One GPU process writes `<out>/sigmoid_router_capture.json`, the property record `sigmoid_router_capture` (`records.property_record`), and
 `<out>/rows.npz`: every captured row's logits, each launch group's bias and both launches' outputs.  `ok` = every check below.  vLLM
 runs at its defaults, as it serves: `engine.env.served_defaults` clears every switch the process inherited before vLLM is imported.
 The device gate runs first and nothing else runs when it fails (exit 3):
@@ -52,7 +52,7 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.definitions.registry import moe
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v2"
@@ -485,7 +485,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
 def run(out: str, seed: int, n: int, min_driver: int, want_cc: str, want_sms: int, workers: int, program_sample: int,
         do_sweep: bool) -> dict[str, Any]:
     from verity_vllm.engine.env import served_defaults
-    from verity_vllm.properties.record import seal as seal_record
+    from verity_vllm.records.property_record import seal as seal_record
 
     from tests.properties import fa2_target_capture_gpu as C
     from tests.properties import fa_tap_exactness_gpu as G
@@ -564,7 +564,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
     if a.verify:
-        from verity_vllm.properties.record import PropertyRecord
+        from verity_vllm.records.property_record import PropertyRecord
 
         rec = PropertyRecord(json.loads(Path(a.verify).read_text()))
         problems = rec.problems()

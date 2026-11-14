@@ -200,14 +200,14 @@ def has(data: Path) -> bool:
 def _reader(p: Path, cards: dict):
     """`read(v, key)`: a table's (value, grade, source), its `card` line's (every entry it names a ceiling of its card:
     `cards[""]` for `PATH`, `cards["host"]` for `host:PATH`) or its own `key`, `grade` and `source`."""
-    from verity.hardware.cards import number   # here: only a reader of the card needs verity
+    from verity.device import number   # here: only a reader of the card needs verity
 
     def entry(tok: str) -> tuple[str, str, dict]:
         which, _, path = tok.rpartition(":")
         if which not in cards:
             raise SystemExit(f"{p}: {tok} names no card; an entry is PATH, of the device's card, or host:PATH")
         e = cards[which]
-        file = f"verity/hardware/cards/{e['sku']}.toml"
+        file = f"hardware/cards/{e['sku']}.toml"
         for k in path.split("."):
             e = e.get(k) if isinstance(e, dict) else None
         if not isinstance(e, dict) or "value" not in e:

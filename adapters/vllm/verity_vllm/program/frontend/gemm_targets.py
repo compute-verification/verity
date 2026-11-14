@@ -134,7 +134,7 @@ class GemmTarget:
     #: the block-FP8 fused-MoE experts (`TritonExperts`: `fused_moe_kernel` with `use_fp8_w8a8` over [M, K/G] x [E, cdiv(N, G), K/G]
     #: scales), as measured: the e4m3 k32 step of its `tl.dot` (`targets.FP8_DOTS`; `targets.moe_expert_fp8_gemm_spec` binds each
     #: (token, slot) pair over it); blackwell_consumer's is measured by property blackwell_fp8_capture (`evidence`); hopper's is the
-    #: wgmma k32 step its blockwise FP8 linear runs (`fp8_block_dot`), the step the `MoeExpertFp8BlockGemm(W)_v1` forms hard-code, whose
+    #: wgmma k32 step its blockwise FP8 linear runs (`fp8_block_dot`), the step the `MoeExpertFp8BlockCoordinate(W)_v1` forms hard-code, whose
     #: composition in `fused_moe_kernel` property glm53_block_fp8_capture checks on the H200.  None = that kernel has no registered
     #: Definition on this target, and the block-FP8 experts are refused by name.
     fp8_moe_dot: str | None = None
@@ -181,7 +181,7 @@ REGISTERED: dict[str, GemmTarget] = {
         key="ada", compute_capabilities=((8, 9),), vllm_arch_family="ada", dot="AmpereBF16TcDot16", tuned_table=ADA_TUNED_GEMM,
         evidence=(("Tier A: LLAMA32_1B / SMOLLM2 / QWEN05 eager captures on the RTX 4090 and L40S (sm_89), every GEMM launch "
                   "(default tiling and the (2048,2048) table buckets M<=1 / M<=32) bit-exact against Gemm_v1{K,N} — tests/engine/test_gen_llama.py, "
-                  "mma.AMPERE_BF16 (Ada's bf16 mma.sync is parameter-identical to Ampere's, verity.definitions.silicon.models.ADA_BF16_M16N8K16)"),
+                  "mma.AMPERE_BF16 (Ada's bf16 mma.sync is parameter-identical to Ampere's, verity.circuits.silicon.models.ADA_BF16_M16N8K16)"),
                   ("Measured by verity_vllm/program/gemm_target_correspondence.py --model ada-tuned-table on an L40S (cc 8.9, 142 SMs, "
                   "vLLM d9105ea80 family 'ada'): ALL five tuned (N,K) rows x M in {1,2,4,5,8,9,16,17,32,33,64,65,256,257,512,513,1024,1033,2048,2049} "
                   "(+ stress families at M 1/17/257 on (2048,6144)/(4096,2048)) = 124 cases, 30 distinct launch configs (every tabled bm 16/32/64/128 "
@@ -207,14 +207,14 @@ REGISTERED: dict[str, GemmTarget] = {
     # The pinned vLLM installs the aten override on cc 8.x only, but its linear layers call `linear_batch_invariant` (the Triton
     # `matmul_kernel_persistent`, then `output + bias` in bf16) on every CUDA target; the other bf16 matmuls stay on cuBLASLt with
     # split-K disabled (VLLM_BATCH_INVARIANT=1).  Both equal the ascending chain of the target's k16 step without a bias.  sm_120
-    # has no wgmma: that step is `mma.sync.m16n8k16`, whose pinned model on sm_120 (core `verity.definitions.silicon.instructions`, measured on an RTX
+    # has no wgmma: that step is `mma.sync.m16n8k16`, whose pinned model on sm_120 (core `verity.circuits.silicon.instructions`, measured on an RTX
     # 5090) is HOPPER_BF16_M16N8K16, not the Ampere/Ada pipeline.  `HopperBF16WgmmaDot16_v1` evaluates HOPPER_BF16_WGMMA_K16, the same
     # parameters.  vLLM family None: a Triton launch would take the default tiling for every shape.
     "blackwell_consumer": GemmTarget(
         key="blackwell_consumer", compute_capabilities=((12, 0),), vllm_arch_family=None, dot="HopperBF16WgmmaDot16", tuned_table={},
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_dot="BlackwellE4m3QmmaDot32", fp8_scale_order="no_swap",
         fp8_block_dot="BlackwellE4m3QmmaDot32", fp8_moe_dot="BlackwellE4m3QmmaDot32", fp4_dot="BlackwellNvf4OmmaDot64",
-        evidence=(("core verity.definitions.silicon.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
+        evidence=(("core verity.circuits.silicon.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
                   "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2: "
                   "204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)"),
                   ("Measured by verity_vllm/program/gemm_target_correspondence.py on an RTX PRO 6000 (188 SMs, driver "
@@ -259,7 +259,7 @@ REGISTERED: dict[str, GemmTarget] = {
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
         batch_invariant_refusal="vLLM's tuned 'blackwell' table of matmul_kernel_persistent is not pinned and no batch-invariant launch "
                                 "on cc 10.0 has a correspondence run",
-        evidence=(("core verity.definitions.silicon.instructions: the cc 10.0 tcgen05.mma kind::f16 entry (SASS 1x UTCHMMA) is pinned to "
+        evidence=(("core verity.circuits.silicon.instructions: the cc 10.0 tcgen05.mma kind::f16 entry (SASS 1x UTCHMMA) is pinned to "
                   "HOPPER_BF16_WGMMA_K16's total step (tc_probe: 42,418,176 swept + 5,688,320 chained elements and, "
                   "with enable_input_d = 0, 17,842,176 + 3,703,808, every word; dossier "
                   "art:8a14058ec2dc4f080af1523d55326e11484123feaf0726200473644de51f4765), and the cc 10.0 mma.sync.m16n8k16 entry "

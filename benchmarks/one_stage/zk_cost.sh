@@ -6,7 +6,7 @@
 #   (a job run from a clone of the tree, on a GPU host, 32 CPUs, 96 GB, up to 240 min)
 # (a guest job on a shared GPU node is preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
 # env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_DRAWS=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
-#      ZK_UNITS="fp8-coord:K=6144 router" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
+#      ZK_UNITS="fp8-coord:K=6144 router-row" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
 #      defaults to half,full, ZK_DRAWS to c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
 #      ZK_STAGE_ONLY=1 (with ZK_UNITS: stage on this node's CPUs, keep the records, no CUDA, build or GPU)
 #      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD=rtx-pro-6000-server (the card whose datasheet
@@ -34,7 +34,7 @@ if [ ! -x "$PY" ]; then
   (exec 8>"$FLOCK_WORK/flock-circuit/venv.lock"; flock 8; [ -x "$PY" ] || { "$UV" venv -q --python 3.12 "$FLOCK_WORK/flock-circuit/py" \
     && "$UV" pip install -q --python "$PY" numpy blake3; })
 fi
-export PYTHONPATH=$REPO:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 keep() {
@@ -73,7 +73,7 @@ fi
 C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 
 log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK and $PT_WORK"
-OUT=$O/build bash verity/protocols/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${ZK_SM:-}" > "$O/build.txt" 2>&1 &
+OUT=$O/build bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${ZK_SM:-}" > "$O/build.txt" 2>&1 &
 OUT=$O/lean bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 PT_WORK="$PT_WORK" > "$O/lean-build.txt" 2>&1 &
 wait
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1)

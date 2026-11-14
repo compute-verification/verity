@@ -4,7 +4,7 @@
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
   tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS``, ``CHECKPOINTS`` and ``RECORDS``; a row id finds its file through
   :func:`row_file`, which also reads the directories ``$VERITY_WORKLOADS`` names.  A workload's bytes are a fixture in the
-  evidence store: the tree keeps its name, its digest (``workloads/SHA256SUMS``) and its art id (``fixtures/artifacts.json``),
+  evidence store: the tree keeps its name, its digest (``workloads/SHA256SUMS``) and its art id (``artifacts.json``),
   and every reader takes the file through :func:`workload_file`, which fetches it by that id and checks the digest.
 * **What runs.**  :class:`RowConfig`, a row's one config (its file ``workloads/<row>.json``: the workload and the pinned
   :class:`RowEngine`), the done source a row of record must declare (``DONE_SOURCES``, :func:`done_source_refusal`: its public
@@ -40,6 +40,15 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.records import workload as workload_record
 
+#: The names the library's other modules read here.
+__all__ = [
+    "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "TARGETS", "TARGET_NUM_SMS", "VLLM",
+    "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
+    "RowId", "RunEnv", "UsageError", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
+    "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
+    "row_world", "rows_of_record", "run_store", "vllm_revision", "workload_arg", "workload_file", "workload_files",
+]
+
 #: The source tree holding the ``verity_vllm`` package, ``manifests/`` and ``workloads/``.
 ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
@@ -72,9 +81,9 @@ def run_store(module: str, entry: str) -> ModuleType:
     except ModuleNotFoundError as e:
         if not f"{module}.".startswith(f"{e.name}."):
             raise
-        raise UsageError(f"{entry} is refused: {module} is not on this tree. The public release leaves out the run store (`research`), "
-                         "the tool that records the source identity and runs a row's stages as Attempts; in the team's tree, put "
-                         "tools/research/src on PYTHONPATH (verity-vllm row exports it)") from e
+        raise UsageError(f"{entry} is refused: {module} is not on this tree. It needs the run store (`research`), the tool that "
+                         "records the source identity and runs a row's stages as Attempts: put tools/research/src on PYTHONPATH "
+                         "(verity-vllm row exports it)") from e
 
 
 def option(*flags: str, env: str | None = None, env_empty: bool = False, **kw: Any) -> Any:
@@ -334,7 +343,7 @@ def vllm_revision() -> str:
 WORKLOAD_SCHEMA = workload_record.SCHEMA
 
 
-#: The repository root: its ``fixtures/artifacts.json`` registers each stored workload file by its art id.
+#: The repository root: its ``artifacts.json`` registers each stored workload file by its art id.
 REPO = ROOT.parent.parent
 #: A workload directory's digests, ``<sha256>  <name>`` a line (``sha256sum``'s format): each file it lists is a fixture in the
 #: evidence store, gitignored here, and every reader takes it through :func:`workload_file`.
@@ -355,7 +364,7 @@ def _fetch(paths: list[Path]) -> None:
     by that tree's own ``research``."""
     by_repo: dict[Path, list[Path]] = {}
     for p in paths:
-        repo = next((d for d in p.resolve().parents if (d / "fixtures" / "artifacts.json").is_file()), REPO)
+        repo = next((d for d in p.resolve().parents if (d / "artifacts.json").is_file()), REPO)
         by_repo.setdefault(repo, []).append(p)
     for repo, ps in by_repo.items():
         rels = [os.path.relpath(p.resolve(), repo) for p in ps]
@@ -372,7 +381,7 @@ def _fetch(paths: list[Path]) -> None:
 
 def workload_file(path: str | Path) -> Path:
     """``path``, made present and checked when its directory's ``SHA256SUMS`` lists it: an absent file is fetched by the art id
-    ``fixtures/artifacts.json`` gives its path (``research data fetch-fixtures``), and a file whose SHA-256 is not the listed one is
+    ``artifacts.json`` gives its path (``research data fetch-fixtures``), and a file whose SHA-256 is not the listed one is
     refused.  A file its directory doesn't list is returned as it is."""
     p = Path(path)
     want = stored_workloads(p.parent).get(p.name)
@@ -382,7 +391,7 @@ def workload_file(path: str | Path) -> Path:
         _fetch([p])
     if (got := hashlib.sha256(p.read_bytes()).hexdigest()) != want:
         raise RuntimeError(f"{p}: SHA-256 {got} is not the {want} its {DIGESTS} lists: a changed workload is a new fixture "
-                           "(`research data put --kind fixture/v1 --file PATH --preserve`, its id in fixtures/artifacts.json, "
+                           "(`research data put --kind fixture/v1 --file PATH --preserve`, its id in artifacts.json, "
                            f"its digest in {DIGESTS}); `research data fetch-fixtures PATH` restores the stored one")
     return p
 
@@ -430,7 +439,8 @@ DONE_SOURCES = ("public-cap", "eos-token")
 
 def rows_of_record() -> frozenset[str]:
     """The row ids ``RECORDS`` lists (none without the file)."""
-    return frozenset(json.loads(RECORDS.read_text()).get("rows") or {}) if RECORDS.is_file() else frozenset()
+    rows = json.loads(RECORDS.read_text()).get("rows") if RECORDS.is_file() else None
+    return frozenset(rows) if rows else frozenset()
 
 
 def done_source(workload: Mapping[str, Any]) -> str:
@@ -448,14 +458,16 @@ def done_source_refusal(workload: Mapping[str, Any], *, of_record: bool = False)
     row = sw.get("row_id") if isinstance(sw, Mapping) else None
     if not of_record and row not in rows_of_record():
         return None
-    s = workload.get("sampling") if isinstance(workload.get("sampling"), Mapping) else {}
+    sampling = workload.get("sampling")
+    s: Mapping[str, Any] = sampling if isinstance(sampling, Mapping) else {}
     if done_source(workload) != "public-cap":
         why = (f"its done source is 'eos-token' (sampling.ignore_eos is {s.get('ignore_eos')!r}): declare sampling.ignore_eos: true, "
                f"so every request runs its public max_tokens")
     elif stops := [k for k in ("stop_token_ids", "stop") if s.get(k)]:
         why = f"sampling.{stops[0]} {s[stops[0]]!r} stops a request before its cap: drop it"
-    elif uncapped := [str(r.get("request_id", i)) for i, r in enumerate(workload.get("requests") or [])
-                      if isinstance(r.get("max_tokens"), bool) or not isinstance(r.get("max_tokens"), int) or r["max_tokens"] < 1]:
+    elif (requests := workload.get("requests")) and (uncapped := [
+            str(r.get("request_id", i)) for i, r in enumerate(requests)
+            if isinstance(r.get("max_tokens"), bool) or not isinstance(r.get("max_tokens"), int) or r["max_tokens"] < 1]):
         why = f"request(s) {', '.join(uncapped[:4])} declare no public cap (a positive integer max_tokens)"
     else:
         return None
@@ -490,13 +502,16 @@ class RowEngine:
         if stale:
             raise ValueError(f"workload keys {', '.join(stale)} are the v1 layout: regenerate the file (`verity-vllm workload`) or move "
                              f"them into its `engine` block ({', '.join(f'{k} -> engine.{_V1_KEYS[k]}' for k in stale)})")
-        e = doc.get("engine") or {}
+        engine = doc.get("engine")
+        e = engine if engine else {}
         unknown = sorted(set(e) - {f.name for f in fields(cls)})
         if unknown:
             raise ValueError(f"engine block: unknown field(s) {', '.join(unknown)} (known: {', '.join(f.name for f in fields(cls))})")
-        eng = cls(revision=e.get("revision"), vllm=str(e.get("vllm", VLLM)), args=dict(e.get("args") or {}),
-                  env={str(k): str(v) for k, v in (e.get("env") or {}).items()}, target=dict(e["target"]) if e.get("target") else None,
-                  reasons={str(k): str(v) for k, v in (e.get("reasons") or {}).items()})
+        eng = cls(revision=e.get("revision"), vllm=str(e.get("vllm", VLLM)),
+                  args=dict(args) if (args := e.get("args")) else {},
+                  env={str(k): str(v) for k, v in env.items()} if (env := e.get("env")) else {},
+                  target=dict(e["target"]) if e.get("target") else None,
+                  reasons={str(k): str(v) for k, v in reasons.items()} if (reasons := e.get("reasons")) else {})
         if eng.vllm != VLLM:
             raise ValueError(f"engine.vllm {eng.vllm!r}: this tree derives and serves on vLLM {VLLM} only (config.VLLM)")
         if eng.target and eng.target.get("vllm_revision", eng.vllm) != eng.vllm:

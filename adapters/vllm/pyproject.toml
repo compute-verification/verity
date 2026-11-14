@@ -45,7 +45,7 @@ addopts = "-q -p no:cacheprovider"
 # tests/regression (the reference regression; skipped unless VERITY_REGRESSION=1) is run explicitly: `pytest tests/regression -m regression`.
 markers = [
     "slow: takes over about 5 s; deselect with -m 'not slow'",
-    "boolean_sweep: a random Boolean-vs-word sweep; skipped unless VERITY_VLLM_BOOLEAN_SWEEPS=1 (circuit-check's word_view checks the equality on every merge)",
+    "boolean_sweep: a random Boolean-vs-word sweep; skipped unless VERITY_VLLM_BOOLEAN_SWEEPS=1 (circuit-check's word_view checks the equality, off the merge gate)",
     "regression: the v1 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
@@ -67,7 +67,6 @@ untraced = [
     "tests/lint/test_mypy.py",
     "tests/lint/test_ruff.py",
     "tests/lint/test_ruff_vllm.py",
-    "tests/migrate/test_superseded_quarantine.py",
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
     "tests/ops/test_vllm_env.py",
@@ -104,8 +103,8 @@ untraced = [
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
 # tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
-# period-open's --circuit-files with infra's gate (verity/composite/device/live_challenger/auditor.py), and the in-process gate
-# (tests/protocol_options/challenger_host.py) runs infra's model registry (verity/composite/device/live_challenger/models.py);
+# period-open's --circuit-files with infra's gate (verity/protocols/compose/device/live_challenger/auditor.py), and the in-process gate
+# (tests/protocol_options/challenger_host.py) runs infra's model registry (verity/protocols/compose/device/live_challenger/models.py);
 # tests/pipeline/test_served_unit_rows.py pins the statements of the served GLM-5.3 partitions' chunked templates
 # (benchmarks/one_stage/glm53_*.json), and tests/tools/test_description_sizes.py holds the description of every template
 # they name to its size (each glm53_*_tp8_step*.json, so a partition file added there is listed here);
@@ -119,16 +118,16 @@ untraced = [
 # compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 inputs_only = true
-inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json",
+inputs = ["verity", "hardware/cards", "verity/README.md", "tools/config/verity_config", "artifacts.json",
           "demos/vllm/workloads/SHA256SUMS", ".gitignore",
-          "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/protocols/pouw/verifier/lean/check/lakefile.toml",
-          "verity/protocols/poub/verifier/lean/lakefile.toml",
+          "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/accounting/pouw/verifier/lean/check/lakefile.toml",
+          "verity/protocols/accounting/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
-          "benchmarks/remote_session/prover.py", "verity/protocols/poub/verifier/session/verifier.py", "verity/protocols/poub/verifier/session/wire.py",
-          "verity/protocols/poub/verifier/session/checks.py", "verity/protocols/poub/verifier/session/lean_verifier.py", "verity/protocols/poub/verifier/session/challengers.py",
-          "benchmarks/remote_session/store_layout.py", "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/host.json",
-          "verity/composite/device/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
+          "benchmarks/remote_session/prover.py", "verity/protocols/accounting/poub/verifier/session/verifier.py", "verity/protocols/accounting/poub/verifier/session/wire.py",
+          "verity/protocols/accounting/poub/verifier/session/checks.py", "verity/protocols/accounting/poub/verifier/session/lean_verifier.py", "verity/protocols/accounting/poub/verifier/session/challengers.py",
+          "benchmarks/remote_session/store_layout.py", "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json",
+          "verity/protocols/compose/device/live_challenger/models.py", "verity/protocols/accounting/pouw/prover/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
           "benchmarks/pous/p2_v1/load.py", "benchmarks/pous/p2_v1/gpu.py",
           "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
@@ -149,7 +148,7 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
 parallel = true
 # benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
-# (benchmarks/pouw/harness/sass_gate.py)
+# (verity/protocols/accounting/pouw/prover/sass_gate.py)
 # a worker's peak grows with its share of the suite, since what its tests leave held isn't returned: 6.2 GB on 14 workers, 12 GB on
 # 8 (test_codec's alias test takes 6.3 GB over the 5.6 GB held before it), 15.5 GB on 5. `--mem-gb`, or a job's memory cgroup,
 # divides by this, so a 16 GB job runs the suite on at most two workers. tools/suite_parts.py runs it as 8 parts at once, each on
@@ -160,6 +159,11 @@ worker_gb = 8
 # slot runs it on 2 or 3
 timeout_s = 14400
 timeout_workers = 5
+# check runs it as three parts by test id (`lean-suites:verity-vllm:K/3`, `suites.py`'s `id_part_of`), each collecting every
+# file and running the tests whose node id hashes to K, so that ci.toml's plans put one part beside the security analysis's
+# audit and two beside the Rust build: whole, on the workers a shard's memory gives it when the audit isn't deferred, it ran
+# longest of any gating step
+parts = 3
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -223,7 +227,7 @@ paths = ["adapters/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/commit/test_pinned_pool_exact.py", "tests/observe/test_pouw_fold.py"]
-paths = ["adapters/vllm/verity_vllm", "verity/protocols/poub/verifier", "verity/circuits"]
+paths = ["adapters/vllm/verity_vllm", "verity/protocols/accounting/poub/verifier", "verity/circuits"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/engine/collectives/test_tp_collective.py", "tests/properties/test_quarantine_lint.py"]
@@ -290,14 +294,14 @@ tests = [
     "tests/pipeline/test_serve_remote.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
-paths = ["benchmarks/remote_session", "verity/protocols/poub/verifier"]
+paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_serve_row.py"]
 paths = [
     "adapters/vllm/verity_vllm/engine",
     "adapters/vllm/verity_vllm/pipeline",
-    "verity/protocols/certifier",
+    "verity/protocols/accounting/certifier",
     "verity/commitments/crypto",
 ]
 
@@ -307,11 +311,11 @@ tests = [
     "tests/program/predict/test_window_circuit_fa3.py",
     "tests/program/predict/test_window_circuit_int8.py",
 ]
-paths = ["verity/definitions/ops"]
+paths = ["verity/circuits/ops"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/predict/test_window_rows.py"]
-paths = ["verity/protocols/certifier"]
+paths = ["verity/protocols/accounting/certifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_compiled_relations_warm_vml.py"]

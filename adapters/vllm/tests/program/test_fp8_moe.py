@@ -4,7 +4,7 @@ BLOCK_SIZE_K 32) and its Boolean versions (`boolean_fp8_moe`), and `fp8`'s block
 
 * the plain-integer reference (`verity.circuits.evaluation.evaluate`) against a model written here from the kernels: core's k32 step
   (`HopperE4m3QgmmaDot32`), FMUL and FFMA each rounded once from the exact rational, and `cvt.rn.bf16.f32`;
-* the step's pinned vectors (`verity/definitions/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
+* the step's pinned vectors (`verity/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k{32,1536}.json`, model replays) through both GEMMs'
   coordinates;
 * operands on which the per-tile promotion, SWAP_AB and CUTLASS's per-block promotion give different words;
 * the numpy twins in `derived_rows` and `fp8_moe_rows` that the H200 capture compares the kernels with, against the Definitions;
@@ -35,8 +35,8 @@ from verity.definitions import boolean as SW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import fp8_moe_rows as MR
 from verity.definitions.numerics.moe_twins import nv_expf_bits
-from verity.definitions.ops.prims import F32ToE4m3Sat
-from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as DOT
+from verity.circuits.ops.prims import F32ToE4m3Sat
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
 from verity.definitions.registry import act as A
 from verity.definitions.registry import boolean_fp8 as BF
 from verity.definitions.registry import boolean_fp8_moe as BM
@@ -45,7 +45,7 @@ from verity.definitions.registry import fp8_moe as M
 
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
 
-VECTORS = Path(__file__).resolve().parents[4] / "verity" / "definitions" / "silicon" / "captures" / "vectors"
+VECTORS = Path(__file__).resolve().parents[4] / "verity" / "circuits" / "silicon" / "captures" / "vectors"
 SIGN, ONE = 1 << 31, 0x3F800000
 
 
@@ -148,9 +148,9 @@ def test_gemm_rows_read_their_weight_block_scales(W: bool) -> None:
     K, N, G = 256, 200, 128
     x, sx, w, ws = _operands(np.random.default_rng(7 + W), K, G, N)
     g = int(np.float32(0.375).view(np.uint32))
-    fam = M.MoeExpertFp8BlockGemmW if W else M.MoeExpertFp8BlockGemm
+    fam = M.MoeExpertFp8BlockGemmWV3 if W else M.MoeExpertFp8BlockGemmV3
     args = (x, sx, g) if W else (x, sx)
-    got = evaluate(bind(fam, K=K, N=N, G=G, KB=32, SWAP=False), *args, sum(w, []), sum(ws, []))
+    got = evaluate(bind(fam, K=K, N=N, G=G, KB=32, SWAP=False, DOT=DOT), *args, sum(w, []), sum(ws, []))
     assert got == tuple(moe_model(x, sx, w[n], ws[n // G], K, G, 32, False, g if W else None) for n in range(N))
 
 
@@ -167,8 +167,8 @@ def test_cutlass_block_gemm_over_a_ragged_n(N: int) -> None:
 
 def test_glm53_fused_qkv_a_proj_has_21_scale_rows() -> None:
     """q_a_proj (2048) + kv_a_proj_with_mqa (576) = 2624 rows read cdiv(2624, 128) = 21 weight-scale rows."""
-    for fam in (F.ScaledMmFp8Block, F.ScaledMmFp8BlockSharedScale, M.MoeExpertFp8BlockGemm):
-        statics = {"KB": 32, "SWAP": False} if fam is M.MoeExpertFp8BlockGemm else {}
+    for fam in (F.ScaledMmFp8Block, F.ScaledMmFp8BlockSharedScale, M.MoeExpertFp8BlockGemmV3):
+        statics = {"KB": 32, "SWAP": False, "DOT": DOT} if fam is M.MoeExpertFp8BlockGemmV3 else {}
         params, _ = bind(fam, K=6144, N=2048 + 576, G=128, **statics).signature()
         assert type_shape(dict(params)["ws"]) == (21, 48), fam.name
 
@@ -274,14 +274,14 @@ def _twin_agrees(want: tuple, got: np.ndarray, nonfinite: np.ndarray) -> None:
 @pytest.mark.parametrize("KB,SWAP,W,wide", [(32, False, False, False), (32, True, True, False), (64, False, True, False),
                                              (128, True, False, False), (32, False, True, True), (32, True, False, True)])
 def test_the_moe_twin_is_the_gemm(KB: int, SWAP: bool, W: bool, wide: bool) -> None:
-    """`fp8_moe_rows.moe_expert_fp8_block_row` against `MoeExpertFp8BlockGemm(W)_v1` over a ragged N (200 = 128 + 72, or 6 * 32 + 8
-    for the wide scales)."""
+    """`fp8_moe_rows.moe_expert_fp8_block_row` against `MoeExpertFp8BlockGemm(W)_v3` at `HopperE4m3QgmmaDot32_v1` (the twin's
+    default step) over a ragged N (200 = 128 + 72, or 6 * 32 + 8 for the wide scales)."""
     K, N, G = 256, 200, 32 if wide else 128
     rng = np.random.default_rng(KB + 2 * SWAP + 4 * W + 8 * wide)
     x, sx, w, ws = (_wide if wide else _operands)(rng, K, G, N)
     g = int(np.float32(rng.uniform(0.01, 1.0)).view(np.uint32))
-    fam = M.MoeExpertFp8BlockGemmW if W else M.MoeExpertFp8BlockGemm
-    want = evaluate(bind(fam, K=K, N=N, G=G, KB=KB, SWAP=SWAP), *((x, sx, g) if W else (x, sx)), sum(w, []), sum(ws, []))
+    fam = M.MoeExpertFp8BlockGemmWV3 if W else M.MoeExpertFp8BlockGemmV3
+    want = evaluate(bind(fam, K=K, N=N, G=G, KB=KB, SWAP=SWAP, DOT=DOT), *((x, sx, g) if W else (x, sx)), sum(w, []), sum(ws, []))
     got, nonfinite = MR.moe_expert_fp8_block_row(np.array(x), np.array(sx), np.array(w), np.array(ws), G=G, KB=KB, swap=SWAP,
                                                  g=g if W else None)
     _twin_agrees(want, got, nonfinite)
@@ -432,8 +432,6 @@ PINS = {
         (109778, 197810, 11175, "94332fbb6c435fd7a8344438ac9402c3021410860b04032cad9c253d621ddf11897c17dbee1b6640a600295bfe8324c81077ee22459a581778d3e1f96d283071"),
     "MoeExpertFp8BlockCoordinateW_v2{K=256,G=128,KB=32,SWAP=False}":
         (112208, 202460, 11285, "c31feda4eca0e41c22447406df556f76638ddb553ec548b8e56c6a76e9efb09d135f63ee56caff5dc513aa936b5d5046e26a3eb0f91eae4be66c0347b8b74502"),
-    "MoeExpertFp8BlockGemm_v2{K=32,N=40,G=32,KB=32,SWAP=False}":
-        (551200, 992480, 56400, "02bf354d3d15fd0343efdc9434e277df290446a412dc26ea0b8e8d9d6449d19b24560c22fdf9a10b2862ab020c4c4fe542a81bce55f183ef391efdd7b9e10c00"),
     "ScaledMmFp8Block_v2{K=32,N=40,G=32}":
         (551200, 992480, 56400, "7dc8e98a0274e6b1dd7a6b88c7b60488ad3eef4c3a0376704007526ed5b709d58c56e2a6a8feb20be84dd97c0b82190f5e8d9545e579bddc9a0983d4e186282a"),
     "ScaledMmFp8BlockSharedScale_v2{K=32,N=40,G=32}":
@@ -445,18 +443,15 @@ PINS = {
 }
 PINNED = [bind(BM.MoeExpertFp8BlockCoordinateV2, K=256, G=128, KB=32, SWAP=False),
           bind(BM.MoeExpertFp8BlockCoordinateWV2, K=256, G=128, KB=32, SWAP=False),
-          bind(BM.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False),
           bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
           bind(BM.SiluMulFp8BlockQuantResultV2), bind(BM.SiluMulFp8BlockQuantV2, I=8, G=4)]
 
-#: two tiles over two scale blocks, two tiles in one block, two steps in one tile, SWAP_AB; the GEMMs and the ragged CUTLASS GEMM
-#: over a whole and a partial weight block, and over a partial block alone
+#: two tiles over two scale blocks, two tiles in one block, two steps in one tile, SWAP_AB; the ragged CUTLASS GEMMs over a whole and
+#: a partial weight block, and over a partial block alone
 AGREEMENT = [bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=32, KB=32, SWAP=False),
              bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=32, SWAP=True),
              bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=64, SWAP=False),
              bind(BM.MoeExpertFp8BlockCoordinateWV2, K=64, G=32, KB=32, SWAP=True),
-             bind(BM.MoeExpertFp8BlockGemmV2, K=32, N=40, G=32, KB=32, SWAP=False),
-             bind(BM.MoeExpertFp8BlockGemmWV2, K=32, N=40, G=32, KB=32, SWAP=True),
              bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
              bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=8, G=32),
              bind(BM.SiluMulFp8BlockQuantResultV2), bind(BM.SiluMulFp8BlockQuantGroupV2, G=4), bind(BM.SiluMulFp8BlockQuantV2, I=8, G=4)]

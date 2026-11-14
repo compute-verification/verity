@@ -1,8 +1,9 @@
 """What an integration hands Verity (integrations are frontends, and Verity is agnostic to them), one window
 at a time, in four records:
 
-1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
-   (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
+1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition a catalog registers
+   (`catalog`: Verity's own, or a catalog package's, as the circuits of the kernels an adapter serves are the adapter's),
+   with its unit count, in order. Their population program and template query (`rows.population_program`)
    partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
    (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as the network certifier states it. The
@@ -109,7 +110,8 @@ import numpy as np
 
 from verity.circuits import boolean as B, partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_id
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition,
+                                  bind)
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT
@@ -141,19 +143,26 @@ _ID = re.compile(r"([A-Za-z][A-Za-z0-9]*_v[0-9]+)(?:\{(.*)\})?", re.S)
 
 
 def _verity(d: Any) -> bool:
+    """Whether a catalog registers ``d``: the registry holds this object under its id, and its code is in a ``verity`` module
+    or in a catalog package (`defs.catalog_package`: the package that named itself, or a module under it). The catalog that
+    registered it decides, not where its file is."""
     code = d.evaluate if isinstance(d, PrimitiveDefinition) else d.body
-    return d.id in REGISTRY.defs and REGISTRY[d.id] is d and code.__module__.startswith("verity.")
+    at = code.__module__
+    return (d.id in REGISTRY.defs and REGISTRY[d.id] is d
+            and (at.startswith("verity.") or any(at == p or at.startswith(f"{p}.") for p in CATALOG_PACKAGES)))
 
 
 def catalog(fn: Any) -> None:
-    """Refuse (ValueError) a template that is not a complete binding of a Definition Verity registers from a ``verity`` module:
-    an integration's own Definition never defines what a unit computes."""
+    """Refuse (ValueError) a template that is not a complete binding of a Definition a catalog registers (`_verity`): Verity's
+    own, from a ``verity`` module, or a catalog package's. A Definition no catalog registers never defines what a unit
+    computes."""
     base = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     if not isinstance(base, CompositeDefinition) or (isinstance(fn, SpecializedDefinition) and not fn.complete):
         raise ValueError(f"{getattr(fn, 'id', fn)!r}: a template is a complete binding of a composite Definition")
     if not _verity(base):
-        raise ValueError(f"{base.id}: not a Definition Verity registers (defined in {base.body.__module__}); an integration "
-                         "builds its units from Verity's Definitions and silicon semantics, never its own")
+        raise ValueError(f"{base.id}: not a Definition a catalog registers (defined in {base.body.__module__}); a unit's "
+                         "Definition is registered from a verity module or from a catalog package, one that names itself "
+                         "with verity.circuits.defs.catalog_package as it loads, and from nowhere else")
 
 
 def _bindings(record: str) -> dict[str, Any]:
@@ -184,15 +193,15 @@ def _static(v: Any) -> Any:
     return v
 
 
-# A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/definitions/ops`)
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/circuits/ops`)
 # and not the rest of `verity/definitions` (its `loads` in tests/import_order.toml).
 
 @functools.cache
 def _load_catalog() -> None:
-    """Import every module of `verity.definitions.ops`, the catalog's, the embedding's registered read
+    """Import every module of `verity.circuits.ops`, the catalog's, the embedding's registered read
     (`commitments.gates.embedding`) and the streamed SHA-512 a checkpoint tie reads (`commitments.gates.sha512_stream`):
     each registers its Definitions as it loads."""
-    from verity.definitions import ops
+    from verity.circuits import ops
 
     for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
         if ".tests" not in m.name:
@@ -202,13 +211,14 @@ def _load_catalog() -> None:
 
 
 def resolve(tid: str, *, template: bool = True) -> Any:
-    """The Definition descriptor id ``tid`` names in Verity's catalog (every Definition registered from a ``verity`` module):
+    """The Definition descriptor id ``tid`` names among those a catalog registers (every Definition registered from a
+    ``verity`` module or from a catalog package, `_verity`):
     its base and binding record parsed (`codec.descriptor_id`'s form) and bound; a ``template`` refused unless `catalog`'s.
     Refused (ValueError) unless the Definition it binds is named exactly ``tid``."""
     _load_catalog()
     m = _ID.fullmatch(tid)
     if m is None or m[1] not in REGISTRY.defs or not _verity(REGISTRY[m[1]]):
-        raise ValueError(f"{tid}: names no Definition in Verity's catalog")
+        raise ValueError(f"{tid}: names no Definition a catalog registers")
     base = REGISTRY[m[1]]
     try:
         if m[2] is not None:
@@ -373,7 +383,7 @@ def words(a: Any, width: int, n: int, count: int) -> np.ndarray:
     return w.astype(np.uint16)
 
 
-def _port_leaves(rows: np.ndarray, ty: Any) -> np.ndarray:
+def leaves_of_rows(rows: np.ndarray, ty: Any) -> np.ndarray:
     """A port's ``(n, words)`` u16 rows as its ``(n, leaves)`` leaves of type ``ty``, as `evaluate_batch` takes them: a row
     is the little-endian bit concatenation of the leaves, so a 16-bit leaf is one word, and a 1-bit leaf (a Boolean-profile
     port's, whose rows are its `boolean.word_type` words) one bit."""
@@ -388,8 +398,8 @@ def _port_leaves(rows: np.ndarray, ty: Any) -> np.ndarray:
                      for lo, hi in zip(at, at[1:])], axis=1)
 
 
-def _port_rows(leaves: np.ndarray, ty: Any, count: int) -> np.ndarray:
-    """`_port_leaves`' inverse: ``(n, leaves)`` of type ``ty`` as their ``(n, count)`` u16 rows, zero-padded."""
+def rows_of_leaves(leaves: np.ndarray, ty: Any, count: int) -> np.ndarray:
+    """`leaves_of_rows`' inverse: ``(n, leaves)`` of type ``ty`` as their ``(n, count)`` u16 rows, zero-padded."""
     w = ty.homogeneous_width()
     if w is not None and w % 8 == 0:
         b = np.ascontiguousarray(leaves.astype(f"<u{w // 8}")).view(np.uint8)
@@ -1032,8 +1042,8 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
             raise ValueError(f"table read {r.doc()}: a declared table's root or domain id, a 64-byte port")
         rects.append((r.reader, r.port, r.at, r.at + r.units, 0, k, r.doc()))
     for o in reg.openings:
-        units(o.reader, o.at, o.units, o.doc())
         port(o.reader, o.key, o.doc())
+        units(o.reader, o.at, o.units, o.doc())
         if o.table not in tables or o.verdict not in dict(templates[o.reader][0].outs) or not o.ports:
             raise ValueError(f"opening {o.doc()}: a declared table's row at its key, with a verdict output")
         for p in o.ports:
@@ -2323,7 +2333,7 @@ class Window:
     def mismatches(self, kernel: str = "reference") -> dict[str, list[int]]:
         """Per template, the units whose recorded outputs are not its Definition's outputs on their recorded inputs
         (`evaluate_batch` under ``kernel``): what the proof of a sampled one would refuse. The Definition reads each input row
-        by its leaves' width (`_port_leaves`: a Boolean-profile port bit by bit), and each output row it gives is held to
+        by its leaves' width (`leaves_of_rows`: a Boolean-profile port bit by bit), and each output row it gives is held to
         the committed row whole, its zero padding too."""
         out = {}
         for fn, _n in self.circuit.templates:
@@ -2331,11 +2341,11 @@ class Window:
             (params, ret), lay = fn.signature(), layout(fn)
             for b in self._recorded.get(tid, ()):
                 given = self.input_words(tid, at, b.n) if any(x is None for x in b.inputs) else b.words[:len(params)]
-                want = np.asarray(evaluate_batch(fn, *(_port_leaves(r, ty) for r, (_, ty) in zip(given, params)),
+                want = np.asarray(evaluate_batch(fn, *(leaves_of_rows(r, ty) for r, (_, ty) in zip(given, params)),
                                                  kernel=kernel)).reshape(b.n, -1)
                 wrong, k = np.zeros(b.n, dtype=bool), 0
                 for ty, (_, count), got in zip(_fields(ret), lay.outs, b.words[len(params):]):
-                    wrong |= (_port_rows(want[:, k:k + ty.leaves], ty, count) != got).any(axis=1)
+                    wrong |= (rows_of_leaves(want[:, k:k + ty.leaves], ty, count) != got).any(axis=1)
                     k += ty.leaves
                 bad += [at + int(i) for i in np.flatnonzero(wrong)]
                 at += b.n

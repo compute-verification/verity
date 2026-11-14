@@ -111,42 +111,43 @@ import math
 import os
 import subprocess
 import sys
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import numpy as np
+from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 from verity.commitments.identity import identity_digest_sha512, tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
-from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.circuits.codec import canonical_json
+from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.randomness import Key, derive
-from verity.protocols.certifier.verifier.active import RUN_ID_BYTES
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import verifier as PV
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.prover.circuit import leaves as L
-from verity.protocols.pouw.prover.circuit import pc8
-from verity.protocols.pouw.verifier.coins import Challenger as Coins
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
-from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as D
-from verity.protocols.spot.verifier.one_stage import partition as PT
-from verity.protocols.spot.verifier.one_stage import registration as R
-from verity.protocols.spot.verifier.one_stage.verdict import Verdict, _Collect
+from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
+from verity.protocols.accounting.certifier.verifier.active import RUN_ID_BYTES
+from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.pouw.prover.circuit import pc8
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import verifier as PV
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.coins import Challenger as Coins
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import of_record as OR  # noqa: E402
+import of_record as OR
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
@@ -243,9 +244,9 @@ def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, An
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
     ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
-    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, root_W), "
-                         "each the verifier's own recomputation at the registered level, the length its fixed max_tokens "
-                         "(`public_problem`)"),
+    ("window", "output", ("PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, "
+                          "root_W), each the verifier's own recomputation at the registered level, the length its "
+                          "fixed max_tokens (`public_problem`)")),
     (f"leaves:{PORT}", "structure", "P, the public bound on a window's entries"),
     (f"domain:{PORT}", "structure", "the entries' served domain: the window's program, partition and context"),
     ("leaves:W", "structure", "|W|, the deployment's weight rows at k = n = K"),
@@ -315,7 +316,8 @@ def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
     unless `record` is its file): refused (ValueError) unless the record is a challenger-key/v1 record whose public key's
     SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and the one the public key hashes to."""
     if record is None:
-        from research.store.local import LocalStore  # noqa: PLC0415  only the verifier's own reading fetches
+        # only the verifier's own reading fetches
+        from research.store.local import LocalStore
         record = LocalStore().fetch(CHALLENGER_KEY_PIN)
     try:
         doc = json.loads(Path(record).read_bytes())
@@ -760,7 +762,7 @@ def _all(units: list[dict], name: str) -> dict[str, Any]:
                    "sessions": [d for v in vs for d in (v or {}).get("sessions", ())]}}
 
 
-#: a sample over the key's stream: (law, N, the stream's bytes) to the units
+#: a sample over the key's stream: (the sampling design, N, the stream's bytes) to the units
 Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
@@ -1036,7 +1038,8 @@ class Challenger:
             return self._certified(name, rec, stream, replay, manifest, recorded)
         how = self.pass_epoch(manifest, recorded, name) if replay is None else None
         ell = level_of(rec)
-        sampler = self._keyed if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
+        replayed = None if replay is None else self._drawn(replay)
+        sampler = self._keyed if replay is None else (lambda law, n: replayed.units)
         st = self.stream(stream, ell, sampler)
         if not self.predates_deadline and self.salt_released_at is not None and (stream, ell) not in self._salted:
             st.salt_released(self.openings["salt"].coin, self.salt_released_at)
@@ -1654,13 +1657,14 @@ def main(argv=None) -> int:
     p = sub.add_parser("challenger")
     p.add_argument("params")
     p.add_argument("log")
-    p.add_argument("--lean", help="Lean flock-verify, whose draw over the sampling coin's key is the challenger's "
-                                  "(default: its Python twin, stream_subset)")
+    p.add_argument("--lean", help="Lean flock-verify, whose sample over the sampling challenge's key is the "
+                                  "challenger's (default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
-    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's coins flipped "
-                                   "from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's coins "
-                                   "before serving); default: fresh from the Lean verifier of record when this process "
-                                   "starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes LOG/coins.json")
+    p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's challenges "
+                                   "came from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's "
+                                   "challenges before serving); default: fresh from the Lean verifier when this "
+                                   "process starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes "
+                                   "LOG/coins.json")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
