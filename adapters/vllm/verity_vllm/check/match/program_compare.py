@@ -38,13 +38,7 @@ from typing import Any
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import split_selects
 from verity_vllm.check.match.instance_sequence import RootView
-
-# tests/program/test_compact.py and tests/check/test_glm53_rank_rehearsal.py read `LOAD_NOTES` through this module.
-from verity_vllm.check.match.program_loaders import (
-    LOAD_NOTES,  # noqa: F401
-    load_derived,
-    load_oracle,
-)
+from verity_vllm.check.match.program_loaders import load_derived, load_oracle
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.compact import expand_mixed as _expand_mixed
