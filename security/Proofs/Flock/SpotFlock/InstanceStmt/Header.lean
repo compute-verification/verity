@@ -32,7 +32,7 @@ sample and its registered reads (`FlockDeploy.jsonOf`). For a run `r` whose stri
 
 * `headerLine`: the public file's first line is the header's text (`findByte_pub`), which parses back to
   `hdrJ r circ cls` (`parse_hdr`);
-* `jsonOf_draw`, `jsonOf_reg`: the sample and the registered reads parse back to `drawJ` and `regJ`.
+* `jsonOf_sample`, `jsonOf_reg`: the sample and the registered reads parse back to `sampleJ` and `regJ`.
 
 `InstanceStmt.Round2` makes round 2's statement of them. Each object's members are its list in key order (`*_model`,
 by `kernel_rfl`, the run's strings left as variables), so `plain` reads it member by member (`Concrete.plain_obj_of`).
@@ -228,20 +228,20 @@ theorem headerLine {r : Run} (hr : r.Plain) {circ cls : String} (hc : plainStr c
 
 /-! ## The sample and the registered reads -/
 
-theorem draw_obj : drawJ = .obj ⟨⟨objT drawJ⟩⟩ := by kernel_rfl
-theorem draw_model : (objT drawJ).toListModel =
+theorem sample_obj : sampleJ = .obj ⟨⟨objT sampleJ⟩⟩ := by kernel_rfl
+theorem sample_model : (objT sampleJ).toListModel =
     [⟨"k", jn 1⟩, ⟨"law", .str "subset"⟩, ⟨"population", jn 2⟩, ⟨"units", .arr #[jn 0]⟩] := by kernel_rfl
-theorem draw_asc : ascending (objT drawJ) = true := by kernel_rfl
+theorem sample_asc : ascending (objT sampleJ) = true := by kernel_rfl
 
-theorem draw_plain : plain drawJ = true := by
-  rw [draw_obj]
-  refine plain_obj_of draw_model draw_asc ?_
+theorem sample_plain : plain sampleJ = true := by
+  rw [sample_obj]
+  refine plain_obj_of sample_model sample_asc ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
   exact ⟨⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, by plain_lit⟩, ⟨by plain_lit, by plain_lit⟩,
     ⟨by plain_lit, by plain_lit⟩⟩
 
-theorem fjnorm_draw : FlockSoundness.Discharge.Recursion.FirewallJson.norm drawJ = drawJ := by kernel_rfl
-theorem norm_draw : Flock.norm drawJ = drawJ := by kernel_rfl
+theorem fjnorm_sample : FlockSoundness.Discharge.Recursion.FirewallJson.norm sampleJ = sampleJ := by kernel_rfl
+theorem norm_sample : Flock.norm sampleJ = sampleJ := by kernel_rfl
 
 theorem port_obj (value : String) (dom bc : ByteArray) (words : Nat) :
     regPortJ value dom bc words = .obj ⟨⟨objT (regPortJ value dom bc words)⟩⟩ := by kernel_rfl
@@ -285,9 +285,9 @@ theorem jsonOf_print {j : Json} (h : plain j = true) (hn : FlockSoundness.Discha
   rw [parse_printJson h, hn]
   rfl
 
-/-- **The sample file reads back** to `drawJ`. -/
-theorem jsonOf_draw (what : String) : FlockDeploy.jsonOf what (printJson drawJ).toUTF8 = .ok drawJ :=
-  jsonOf_print draw_plain fjnorm_draw what
+/-- **The sample file reads back** to `sampleJ`. -/
+theorem jsonOf_sample (what : String) : FlockDeploy.jsonOf what (printJson sampleJ).toUTF8 = .ok sampleJ :=
+  jsonOf_print sample_plain fjnorm_sample what
 
 /-- **The registered-reads file reads back** to `regJ`. -/
 theorem jsonOf_reg (what : String) : FlockDeploy.jsonOf what (printJson regJ).toUTF8 = .ok regJ :=

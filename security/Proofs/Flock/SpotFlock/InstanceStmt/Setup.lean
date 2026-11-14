@@ -65,7 +65,7 @@ import all Init.WF
 `load_pubX` walks `HmIn.loadPublic` on the public file `pubOf` to the population `popX`: its header reads back
 (`findByte_pub`, `parse_hdr`), both instances are of the circuit's class `C` (`any_bne_two`), and the header's units
 and the header itself are as `canon` and `canonUtf8` write them, which it takes as hypotheses (`hu1`, `hu2`, `hd`).
-`setup_stX` walks `Stmt.setupHidden` on the circuit and public files, the sample `drawJ`, the partition `partObj` and
+`setup_stX` walks `Stmt.setupHidden` on the circuit and public files, the sample `sampleJ`, the partition `partObj` and
 the program `progBytes` to the statement `stX`: the partition checks (`cpo_part`, `canon_part`), the sample's header is
 `hdrD`, whose text it takes as a hypothesis (`hd2`), and Δ is kept as `oA` and `oB`, as `FlockDeploy.Concrete.setup_stW`
 keeps `HmRow.delta`'s. Its partition finding is `checkPartition_X`'s, `HmRow.checkPartition` at the statement's circuit
@@ -159,7 +159,7 @@ fwd_def dtX deriveTemplateUnits_X (ls lh : HmNets.Laid) (H C : ByteArray) (A B A
   shallow [metaText]
 
 fwd_def lcX linksCheck_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String) :
-    HmLinks.check (cO ls lh H C A B A' B' s1) (popX r ls lh H C A B A' B' s1 s3 s4) (HmLinks.readersOf (some drawJ))
+    HmLinks.check (cO ls lh H C A B A' B' s1) (popX r ls lh H C A B A' B' s1 s3 s4) (HmLinks.readersOf (some sampleJ))
       progBytes by
   [Decode.decode_prog, cO_meta, Decode.ex_forIn_one, Decode.ex_forIn_empty, Decode.ex_forIn_range_empty]
   block [canon, canonUtf8, Program.decode]
@@ -183,7 +183,7 @@ fwd_def stX setup_stX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' 
     (hd2 : canonUtf8 (hdrD r (cO ls lh H C A B A' B' s1) (hexOf H) (hexOf C)) = .ok s5)
     (hid : canonUtf8 (Tags.rowV2Identity tz.identity) = .ok s6)
     (hhello : ∀ σ m, helloOf tz σ m coinsX = .ok (hello σ m)) :
-    Stmt.setupHidden tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX [] (some drawJ) (some partObj)
+    Stmt.setupHidden tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX [] (some sampleJ) (some partObj)
       (some progBytes) none by
   [parseOut_cX ls lh H C A B A' B' s1 hH hcl hls hlh hps hph hc1 hc2 hck,
     load_pubX r ls lh H C A B A' B' s1 s3 s4 hr hCe hu1 hu2 hd, checkPartition_X ls lh H C A B A' B' s1, map_some_ok,
@@ -213,7 +213,7 @@ fwd_def tabX setupTables_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A 
     (hd2 : canonUtf8 (hdrD r (cO ls lh H C A B A' B' s1) (hexOf H) (hexOf C)) = .ok s5)
     (hid : canonUtf8 (Tags.rowV2Identity tz.identity) = .ok s6)
     (hhello : ∀ σ m, helloOf tz σ m coinsX = .ok (hello σ m)) :
-    Stmt.setupTables tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX 1 [] (some drawJ) (some partObj)
+    Stmt.setupTables tz (bytesOf ls lh) (pubOf r (hexOf H) (hexOf C)) coinsX 1 [] (some sampleJ) (some partObj)
       (some progBytes) none none none none by
   [setup_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello hr hH hcl hls hlh hps hph hc1 hc2 hck hCe hu1 hu2 hd hd2 hid
     hhello, cO_meta, cO_classSha, cO_g, cO_upv, hCe, hH, hcl, hls, hlh, hps, hph, hc1, hc2, hck, hu1, hu2, hd, hd2, hid,

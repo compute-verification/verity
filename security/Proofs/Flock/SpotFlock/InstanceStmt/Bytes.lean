@@ -16,7 +16,7 @@ table, of
   zero, with the run's input set and its ports' bindings to the run;
 * the program (`progText`): its root a batch of two members of the primitive `T_v1`, partitioned by
   `Q_template_instance` v0 at `T_v1` (`partObj`);
-* the sample (`drawJ`): unit 0 of the two, and the header the verifier writes for the sampled statement (`hdrD`);
+* the sample (`sampleJ`): unit 0 of the two, and the header the verifier writes for the sampled statement (`hdrD`);
 * the registered reads (`regJ`): `i0` and `o0` at one leaf each, which both units read.
 
 Every registered root is its one leaf: the zero row's `b ‖ c` under its value's domain (`regRoot`). The circuit file's
@@ -187,12 +187,12 @@ def pubOf (r : Run) (circ cls : String) : ByteArray := (printJson (hdrJ r circ c
 
 /-! ## The sample and the registered reads -/
 
-def drawJ : Json := Json.mkObj [("k", jn 1), ("law", js "subset"), ("population", jn 2), ("units", ja [jn 0])]
+def sampleJ : Json := Json.mkObj [("k", jn 1), ("law", js "subset"), ("population", jn 2), ("units", ja [jn 0])]
 
-/-- The sampled statement's header, as `HmRow.drawn` writes it at `drawJ`: the population's, with the sample, one instance
+/-- The sampled statement's header, as `HmRow.drawn` writes it at `sampleJ`: the population's, with the sample, one instance
 of the two, and the sampled instance's units. -/
 def hdrD (r : Run) (c : Circuit) (circ cls : String) : Json :=
-  ((((hdrJ r circ cls).setObjVal! "unit_draw" drawJ).setObjVal! "instances" (Lean.toJson (1 : Nat))).setObjVal!
+  ((((hdrJ r circ cls).setObjVal! "unit_draw" sampleJ).setObjVal! "instances" (Lean.toJson (1 : Nat))).setObjVal!
     "population" (Lean.toJson (2 : Nat))).setObjVal! "units" (HmRow.unitsEntry { c with outPorts := #[] } #[0])
 
 /-- A registered value's one-leaf root: its leaf, the zero row's under its domain. -/
@@ -210,7 +210,7 @@ def regJ : Json := Json.mkObj [("format", js "verity/registered-reads/v1"), ("po
 /-- The statement at the fixed nets' layouts `ls`, `lh`, the circuit file's SHA-512 `H` and its class `C`. -/
 def rawOf (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : FlockDeploy.Raw :=
   { statement := NAME, circuit := bytesOf ls lh, publicFile := pubOf r (hexOf H) (hexOf C), tables := [], zk := true,
-    osCoins := false, count := 1, draw := some (printJson drawJ).toUTF8, partition := some (printJson partObj).toUTF8,
+    osCoins := false, count := 1, draw := some (printJson sampleJ).toUTF8, partition := some (printJson partObj).toUTF8,
     program := some progBytes, work := none, workTable := none, stratified := none, closure := none,
     registered := some (printJson regJ).toUTF8, publicInputs := none }
 

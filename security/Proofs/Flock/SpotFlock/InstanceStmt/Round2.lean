@@ -28,11 +28,11 @@ Round 2 makes a session's statement of four JSON parts (`SpotFlock`'s `stmtJsonO
 file's header, the sample and the registered reads, which `InstanceStmt.Header` reads back, and names it by the
 canonical digests of the header and the reads (`Spot.SecondStage.Stmt.checked`):
 
-* `stmt_ofJson`: the four make the statement `⟨t, hdrJ r circ cls, drawJ, regJ⟩`. Its keys are its tree's members in
-  order (`stmt_model`, by `kernel_rfl`; `keys?_model`), which `qsort`, well-founded and so not unfolded by the kernel,
-  leaves as they are (`qsort_of_sorted`), and each field is its member (`SpotFlock.getD_mkObj`);
+* `stmt_ofJson`: the four make the statement `⟨t, hdrJ r circ cls, sampleJ, regJ⟩`. Its keys are its tree's members
+  in order (`stmt_model`, by `kernel_rfl`; `keys?_model`), which `qsort`, well-founded and so not unfolded by the
+  kernel, leaves as they are (`qsort_of_sorted`), and each field is its member (`SpotFlock.getD_mkObj`);
 * `checked_stmt`: `Stmt.checked` names it by the two canonical digests, its sample and one table;
-* `good_drawJ`: the sample is a printable value.
+* `good_sampleJ`: the sample is a printable value.
 -/
 
 @[expose] public section
@@ -62,16 +62,16 @@ theorem keys?_model {t : Impl String (fun _ => Json)} {l : List String} (hs : l.
   exact congrArg some (Array.ext' (Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted (as := l.toArray) hs))
 
 theorem stmt_obj (r : Run) (circ cls t : String) :
-    Json.mkObj [("draw", drawJ), ("header", hdrJ r circ cls), ("registered", regJ), ("template", .str t)] =
-      .obj ⟨⟨objT (Json.mkObj [("draw", drawJ), ("header", hdrJ r circ cls), ("registered", regJ),
+    Json.mkObj [("draw", sampleJ), ("header", hdrJ r circ cls), ("registered", regJ), ("template", .str t)] =
+      .obj ⟨⟨objT (Json.mkObj [("draw", sampleJ), ("header", hdrJ r circ cls), ("registered", regJ),
         ("template", .str t)])⟩⟩ := by kernel_rfl
 theorem stmt_model (r : Run) (circ cls t : String) :
-    (objT (Json.mkObj [("draw", drawJ), ("header", hdrJ r circ cls), ("registered", regJ),
+    (objT (Json.mkObj [("draw", sampleJ), ("header", hdrJ r circ cls), ("registered", regJ),
       ("template", .str t)])).toListModel =
-      [⟨"draw", drawJ⟩, ⟨"header", hdrJ r circ cls⟩, ⟨"registered", regJ⟩, ⟨"template", .str t⟩] := by kernel_rfl
+      [⟨"draw", sampleJ⟩, ⟨"header", hdrJ r circ cls⟩, ⟨"registered", regJ⟩, ⟨"template", .str t⟩] := by kernel_rfl
 
 theorem keys_stmt (r : Run) (circ cls t : String) :
-    Spot.keys? (Json.mkObj [("draw", drawJ), ("header", hdrJ r circ cls), ("registered", regJ),
+    Spot.keys? (Json.mkObj [("draw", sampleJ), ("header", hdrJ r circ cls), ("registered", regJ),
       ("template", .str t)]) = some Spot.SecondStage.STMT_KEYS := by
   rw [stmt_obj r circ cls t]
   exact keys?_model (l := ["draw", "header", "registered", "template"]) (by decide)
@@ -79,15 +79,15 @@ theorem keys_stmt (r : Run) (circ cls t : String) :
 
 /-- **The four parts make round 2's statement** of template `t`. -/
 theorem stmt_ofJson (r : Run) (circ cls t : String) :
-    Spot.SecondStage.Stmt.ofJson? (Json.mkObj [("draw", drawJ), ("header", hdrJ r circ cls), ("registered", regJ),
-      ("template", .str t)]) = some ⟨t, hdrJ r circ cls, drawJ, regJ⟩ := by
+    Spot.SecondStage.Stmt.ofJson? (Json.mkObj [("draw", sampleJ), ("header", hdrJ r circ cls), ("registered", regJ),
+      ("template", .str t)]) = some ⟨t, hdrJ r circ cls, sampleJ, regJ⟩ := by
   have hd : FlockComplete.JsonRT.Distinct
-      [("draw", drawJ), ("header", hdrJ r circ cls), ("registered", regJ), ("template", Json.str t)] := by simp
+      [("draw", sampleJ), ("header", hdrJ r circ cls), ("registered", regJ), ("template", Json.str t)] := by simp
   unfold Spot.SecondStage.Stmt.ofJson?
   rw [keys_stmt r circ cls t, bne_self_eq_false, ite_eq_right Bool.false_ne_true,
     SpotFlock.getD_mkObj hd (k := "template") (v := .str t) (by simp),
     SpotFlock.getD_mkObj hd (k := "header") (v := hdrJ r circ cls) (by simp),
-    SpotFlock.getD_mkObj hd (k := "draw") (v := drawJ) (by simp),
+    SpotFlock.getD_mkObj hd (k := "draw") (v := sampleJ) (by simp),
     SpotFlock.getD_mkObj hd (k := "registered") (v := regJ) (by simp)]
   all_goals rfl
 
@@ -108,8 +108,8 @@ theorem intJ_reg : IntJ regJ = true := by kernel_rfl
 /-- **What a verdict of record names of the statement**: the canonical digests of its header and its registered reads,
 its sample and one table. -/
 theorem checked_stmt (r : Run) (circ cls t : String) :
-    (⟨t, hdrJ r circ cls, drawJ, regJ⟩ : Spot.SecondStage.Stmt).checked =
-      some ⟨shaOf (hdrJ r circ cls), .str (shaOf regJ), drawJ, Spot.SecondStage.ONE_TABLE⟩ := by
+    (⟨t, hdrJ r circ cls, sampleJ, regJ⟩ : Spot.SecondStage.Stmt).checked =
+      some ⟨shaOf (hdrJ r circ cls), .str (shaOf regJ), sampleJ, Spot.SecondStage.ONE_TABLE⟩ := by
   unfold Spot.SecondStage.Stmt.checked
   simp only [canonSha512_eq (intJ_hdr r circ cls)]
   split
@@ -118,8 +118,8 @@ theorem checked_stmt (r : Run) (circ cls t : String) :
     rfl
 
 /-- **The sample is a printable value.** -/
-theorem good_drawJ : Claims.Json.Good drawJ := by
-  unfold drawJ
+theorem good_sampleJ : Claims.Json.Good sampleJ := by
+  unfold sampleJ
   refine FlockComplete.JsonRT.good_mkObj (by simp) ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
   refine ⟨.num _, .str _, .num _, .arr fun x hx => ?_⟩

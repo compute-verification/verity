@@ -41,7 +41,7 @@ import all Init.Data.Repr
 /-! # The two-instance statement's inputs: `Raw.ins` and its reading
 
 `ins_x` walks `Raw.ins` on `rawOf r ls lh H C` to `insX r ls lh H C`: the tags `Tags.circuit`, tree coins for one table,
-the sample `drawJ` (rebuilt by `norm`, which leaves it as it is), the partition `partObj`, the program's bytes and the
+the sample `sampleJ` (rebuilt by `norm`, which leaves it as it is), the partition `partObj`, the program's bytes and the
 registered reads `regPorts` (`Registered.ofJson regJ`). At the fixed nets' layouts and a run whose strings are plain,
 `x r` decodes to that `Raw` (`decode_x`), so the verifier reads it as `rX` (`readOf_x`), under the masked tags `tz`
 (`tags_rX`), whose outputs are hidden (`hiddenOf_x`).
@@ -110,14 +110,14 @@ theorem optMapM_ok {α β ε : Type} {f : α → Except ε β} {a : α} {b : β}
   rw [Option.mapM_some, h]
   rfl
 
-theorem map_norm_draw : (some drawJ).map Flock.norm = some drawJ := congrArg some norm_draw
+theorem map_norm_sample : (some sampleJ).map Flock.norm = some sampleJ := congrArg some norm_sample
 
 /-- What the verifier reads of the statement. -/
 def rX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Read :=
   { I := { tags := t0, circuitFile := bytesOf ls lh, publicFile := pubOf r (hexOf H) (hexOf C),
            coins := .tree (Zk.coinSpec (t0.tableNames 1)), count := 1, tables := [], partition := some partObj,
            program := some progBytes, work := none, stratified := none, closure := none },
-    zk := true, draw := some drawJ, publicInputs := none, registered := true }
+    zk := true, draw := some sampleJ, publicInputs := none, registered := true }
 
 /-- The statement's inputs: its tags, the registered reads and the reading. -/
 def insX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Ins :=
@@ -125,7 +125,7 @@ def insX (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) : Ins :=
 
 theorem ins_x (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) :
     (rawOf r ls lh H C).ins = .ok (insX r ls lh H C) := by
-  fwd_walk [byName_t0, plain_t0, optMapM_ok, jsonOf_draw, map_norm_draw, norm_draw, jsonOf_part, jsonOf_reg,
+  fwd_walk [byName_t0, plain_t0, optMapM_ok, jsonOf_sample, map_norm_sample, norm_sample, jsonOf_part, jsonOf_reg,
       ofJson_reg]
     block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, canon, canonUtf8, Net.parse, Registered.ofJson, Flock.norm,
       FlockDeploy.jsonOf, printJson]
