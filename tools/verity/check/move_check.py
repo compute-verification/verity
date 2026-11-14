@@ -494,17 +494,33 @@ IMPORT_AS = re.compile(rf"^{_OPEN}import\s+([\w.]+)(?:\s+as\s+(\w+))?\s*{_CLOSE}
 FROM_PAREN = re.compile(r"^(\s*)from\s+([\w.]+)\s+import\s+\(([\w\s,]*?),?\s*\)?\s*(#.*)?$")
 #: `from a import x, y, \`, its names continued likewise
 FROM_SLASH = re.compile(r"^(\s*)from\s+([\w.]+)\s+import\s+([\w\s,]*?),?\s*\\()$")
+#: a continuation line of such an import: more of its names, and its end (`)`, or no `\`)
+NAMES = re.compile(r"^\s*([\w\s,]*?),?\s*(\)|\\)?\s*(#.*)?$")
 
 
 def bindings(lines: list[str], path: str) -> list[tuple[str, str, str, str]] | None:
     """Each name the import lines bind, as (indent, comment, the dotted name it binds, the name), or None if a line isn't
-    one such import. A parenthesized `from a import (`, or one continued after `\\`, also binds `a` itself, under the name
-    `(`: its continuation lines may be unchanged context, so `a`'s rewrite must be checked even when the line names nothing."""
-    out = []
+    one such import or a continuation of one. A parenthesized `from a import (`, or one continued after `\\`, also binds `a`
+    itself, under the name `(`, unless its names end among the lines: its continuation lines may be unchanged context, so
+    `a`'s rewrite must be checked even when the line names nothing."""
+    out, cont = [], None
     for line in lines:
-        if (m := FROM.match(line)) or (m := FROM_PAREN.match(line)) or (m := FROM_SLASH.match(line)):
+        if cont is not None:
+            if not (m := NAMES.match(line)):
+                return None
+            for part in filter(str.strip, m.group(1).split(",")):
+                name, _, alias = (w.strip() for w in part.partition(" as "))
+                if not name.isidentifier() or (alias and not alias.isidentifier()):
+                    return None
+                out.append((*cont[1][:2], f"{cont[1][2]}.{name}", alias or name))
+            if m.group(2) == ")" or (cont[0] is FROM_SLASH and m.group(2) != "\\"):
+                out.remove(cont[1])
+                cont = None
+        elif (m := FROM.match(line)) or (m := FROM_PAREN.match(line)) or (m := FROM_SLASH.match(line)):
             if m.re is not FROM:
-                out.append((m.group(1), m.group(4) or "", absolute(m.group(2), path), "("))
+                out.append(opened := (m.group(1), m.group(4) or "", absolute(m.group(2), path), "("))
+                if m.re is FROM_SLASH or not line.split("#")[0].rstrip().endswith(")"):
+                    cont = (m.re, opened)
             for part in filter(str.strip, m.group(3).split(",")) if m.re is not FROM else m.group(3).split(","):
                 name, _, alias = (w.strip() for w in part.partition(" as "))
                 if not name.isidentifier() or (alias and not alias.isidentifier()):
