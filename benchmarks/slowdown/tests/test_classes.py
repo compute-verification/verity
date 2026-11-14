@@ -89,8 +89,8 @@ def test_e1_drafts_match_its_numbers():
     for beta_v, overhead in ((0.18, 2.8e4), (0.63, 9.8e4)):
         assert math.isclose(e1(classes.output_premise(K, 7168, 7168, 2.5, 0.87, beta_v)), overhead, rel_tol=0.03)
     h = (17 + 2700) / 7168, (17 + 6200) / 7168
-    assert math.isclose(classes.output_cap(7168, 0.06, h[0], 0.63) / 8e6, 0.9, rel_tol=0.05)
-    assert math.isclose(classes.output_cap(7168, 0.19, h[1], 0.18) / 8e6, 23, rel_tol=0.05)
+    assert math.isclose(classes.output_threshold(7168, 0.06, h[0], 0.63) / 8e6, 0.9, rel_tol=0.05)
+    assert math.isclose(classes.output_threshold(7168, 0.19, h[1], 0.18) / 8e6, 23, rel_tol=0.05)
     assert classes.output_premise(1e9, 7168, 7168, 0.06, h[0], 0.63) == math.inf
 
 

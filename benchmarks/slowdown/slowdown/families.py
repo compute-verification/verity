@@ -427,7 +427,7 @@ def algorithms() -> Mapping[str, dict]:
 class Nci(Premises):
     """An algorithm of the `benchmarks/nci` library (`benchmarks/nci/algorithms.json`), from its traits under `library.py`'s attacker
     convention (the rate a block pays per weight and per boundary entry clipped at the literature's central rates,
-    `nci.rate_cap` and `nci.boundary_bits_cap`), with the carried state clipped as `Full`'s (`nci.state_bits_cap`):
+    `nci.rate_ceiling` and `nci.boundary_bits_ceiling`), with the carried state clipped as `Full`'s (`nci.state_bits_ceiling`):
 
     * the state is `state_bits_per_param · updated_fraction · n_total`, or `description_bits` when it doesn't split;
     * `κ`, `c` (`uses_per_thread`), threads' `d` (`entry_fee_override`), fan-out and threads' `e`
@@ -444,20 +444,20 @@ class Nci(Premises):
     The premises the traits don't give come from the family's table, or `family.full`'s for `nci:<id>`."""
 
     algorithm: str
-    state_bits_cap: float = math.inf
-    rate_cap: float = math.inf
-    boundary_bits_cap: float = math.inf
+    state_bits_ceiling: float = math.inf
+    rate_ceiling: float = math.inf
+    boundary_bits_ceiling: float = math.inf
 
     def profile(self, model: Model, run: Run) -> Profile:
         a = algorithms()[self.algorithm]
         t = a["traits"]
         uf, c = t["updated_fraction"], t["uses_per_thread"]
-        carried = min(t["state_bits_per_param"], self.state_bits_cap)
+        carried = min(t["state_bits_per_param"], self.state_bits_ceiling)
         state = carried * uf * model.n_total if t["state_splits"] else t["description_bits"]
-        hard = min(t["state_bits_per_param"], self.rate_cap) if t["state_splits"] else None
+        hard = min(t["state_bits_per_param"], self.rate_ceiling) if t["state_splits"] else None
         multiplier = (a.get("multiplier") or {}).get("value")
         efficiency = ({"pretrain": 1 / multiplier} if multiplier else {}) | dict(self.efficiency)
-        b_a = min(t["boundary_bits"], self.boundary_bits_cap)
+        b_a = min(t["boundary_bits"], self.boundary_bits_ceiling)
         counted = t["kappa"] * t["flops_per_token_per_param"] * model.n_active / 2
         trained = Trained(uf * model.n_total, uf * model.n_active, lambda m: uf * m.size, model.layers, counted,
                           counted / c, splits=t["state_splits"], decode=t["decode_flops_per_param"] * model.n_total,
@@ -522,7 +522,7 @@ def _checked(cls: type, prefix: str, values: Mapping[str, Any]) -> Mapping[str, 
 
 
 def _nci(registry: Registry, name: str, values: Mapping[str, Any]) -> Nci:
-    ceilings = {k: registry[f"nci.{k}"] for k in ("state_bits_cap", "rate_cap", "boundary_bits_cap")}
+    ceilings = {k: registry[f"nci.{k}"] for k in ("state_bits_ceiling", "rate_ceiling", "boundary_bits_ceiling")}
     values = ceilings | {"algorithm": name.removeprefix("nci:")} | dict(values)
     if values["algorithm"] not in algorithms():
         raise KeyError(f"{name}: no algorithm {values['algorithm']!r} in {ALGORITHMS}")
