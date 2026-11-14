@@ -82,11 +82,14 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
 ../../Definitions/NetworkCertifier/MonitoringPeriodChecked.lean  trusted: the run at the network certifier's rows
     (certifierRun) and the leak relation there (RLeakCertifierChecked)
 ../../Definitions/NetworkCertifier/Guarantees/MonitoringPeriodChecked.lean  trusted: ExecutionPhaseGoodChecked and MonitoringPeriodLeakChecked
+../../Definitions/NetworkCertifier/Guarantees/MonitoringPeriodFails.lean  trusted: the period's leak with each failure charged
+    (failPatterns, KraftWeights; MonitoringPeriodLeakFails, MonitoringPeriodLeakFailsAtMost, MonitoringPeriodLeakCharged)
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the instances the honest and nontrivial lemmas are
     stated at, each built by hand (trivLay, notLay, certOps; the honest certifier at a
     Program, the reference schedule, the verifier and the sender that accept and leak
     everything, a sampled audit, the rows format of the fixture `fxQueue`, the record
-    format of no connection, noFormat)
+    format of no connection, noFormat; the record format
+    of one bit, bitFmt)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
     each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -122,6 +125,13 @@ MonitoringPeriodChecked.lean  the period's leak with the checked inputs left out
     bound at the network certifier's rows with a valid run
     (monitoringPeriodChecked_first), and the records counted by Carried's count at the
     empty pool (encard_monitoringPeriodChecked_le, monitoringPeriodChecked_second)
+MonitoringPeriodFails.lean  the period's leak with each failure charged (monitoringPeriodLeakFails, monitoringPeriodLeakFailsAtMost,
+    monitoringPeriodLeakCharged): monitoringPeriodLeakChecked at each fail pattern
+    (checked_at_pattern), summed over the patterns (exists_failPatterns,
+    encard_failsExactly_le, encard_weighted_le)
+MonitoringPeriodLengths.lean  a lengths format reads back under the link's parameters (LengthsRows.readsBy): a lane is
+    its length, released data and fail cell (lanesView_laneRecord); no
+    device's layout is modelled
 MonitoringPeriod.lean  MonitoringPeriodLeakAccepted as MonitoringPeriodLeakChecked's instance at no checked input
     (monitoringPeriodLeak_of_checked, monitoringPeriodLeak; monitoringPeriodLeak_fixed at operators fixed
     before the period)
@@ -165,6 +175,13 @@ PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its op
 PeriodCheckedChecks.lean  MonitoringPeriodLeakChecked held to the trace's run is false (freeL_traceRun_insufficient,
     monitoringPeriodLeakChecked_traceRun_fails, freeL_certifierRun_miss); its nontrivial lemma, and
     its honest lemma at the toy code over a period of no windows
+MonitoringPeriodCheckedExclusion.lean  a placed window: no count without ReadsBy (MonitoringPeriodLeakChecked_readsBy_exclusion);
+    premises hold together (MonitoringPeriodLeakChecked_placed)
+MonitoringPeriodFailsChecks.lean  at a placed window whose operator follows the fail pattern: the count without the
+    failures' factor fails and the factor is 2 (MonitoringPeriodLeakFailsAtMost_factor_met); the charged
+    count fails at weights that sum to 2 (MonitoringPeriodLeakCharged_nontrivial,
+    MonitoringPeriodLeakCharged_kraft_exclusion); the charged form's premises at the toy code, a period of
+    no windows and no connection (MonitoringPeriodLeakCharged_honest)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
     draft's toy
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
@@ -390,10 +407,17 @@ The other 15 are the rest of the Capacity table's bounds:
 - **The period's bound with checked inputs** (`MonitoringPeriodChecked.lean`):
   `MonitoringPeriodLeakChecked` is `MonitoringPeriodLeakAccepted` with each window's checked inputs left out of the count and the client's
   view read from the records under a registered parameter (`RecordFormat.ReadsBy`), so the count is `#Θ` times the
-  windows'. Its check is held to the run at the network certifier's rows (`CheckedWitness` at `certifierRun`): held
-  to the trace's run the statement is false (`MonitoringPeriodCheckedChecks.lean`). `RegisteredInputsHeld` names that the trace
-  holds the registration's values at the registered inputs. Its count is `Carried`'s at the empty pool, and
-  `MonitoringPeriodLeakAccepted` is its instance at no checked input (`checkedUnique_empty`, `checkedWitness_true`).
+  windows'; without it the count fails (`MonitoringPeriodCheckedExclusion.lean`). Its check is held to the run at the
+  network certifier's rows (`certifierRun`): held to the trace's run the statement is false
+  (`MonitoringPeriodCheckedChecks.lean`). `RegisteredInputsHeld` names that the trace holds the registration's values at the
+  registered inputs. `MonitoringPeriodLeakAccepted` is its instance at no checked input.
+- **The period's bound with each failure charged as it happens** (`MonitoringPeriodFails.lean`): where the operator's moves
+  and the registered values may follow the network certifier's fail cells, the secrets whose run fails exactly `j`
+  connections, each below its cap, number at most `failPatterns cap j` times `MonitoringPeriodLeakChecked`'s count
+  (`MonitoringPeriodLeakFails`); at most `j`, the factor summed over `0 … j`, with the lengths held at each run's own pattern
+  (`MonitoringPeriodLeakFailsAtMost`); and under weights on the number of failures that sum to at most one (`KraftWeights`),
+  the secrets charged at most `log2 T` number at most `T` (`MonitoringPeriodLeakCharged`). Each is `MonitoringPeriodLeakChecked` applied
+  once a fail pattern, and takes its premises and no other but the weights' sum.
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
