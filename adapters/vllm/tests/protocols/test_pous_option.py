@@ -20,6 +20,7 @@ from concurrent import futures
 import pytest
 import torch
 
+from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
@@ -260,11 +261,16 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
     the setup case and its check; an accepted period says plainly that this point certifies 0 bits."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CS, "session", session)
+
+    def side_of(doc, node, key, local, what=None):
+        assert (key, what) == ("pous", None), "PoUS's side is period.json's challenger.pous"
+        return Side.of(doc, node, key, local, what)
+
     with PO.install(toy, _ctx(ENTRY)) as comp:
         opt = comp.get("pous")
         for n in (0, 1):
             out = tmp_path / f"out{n}"
-            got = opt.leg(_period_dir(tmp_path, n), NODE, out, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+            got = opt.leg(_period_dir(tmp_path, n), NODE, out, side_of=side_of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
             assert got["profile"]["placement"]["trusted-host"].startswith(f"holds: the memory challenger ran on {AUDITOR}")

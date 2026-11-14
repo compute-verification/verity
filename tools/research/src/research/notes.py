@@ -227,7 +227,8 @@ def wake_hint(text: str, now: dt.datetime | None = None) -> str | None:
     for m in _CHECK_BACK.finditer(text):
         try:
             at = now.replace(hour=int(m[1]), minute=int(m[2]), second=0, microsecond=0)
-        except ValueError:
+        except ValueError as e:
+            print(f"notes: check-back time {m[1]}:{m[2]} is not a time, skipped ({e})", file=sys.stderr, flush=True)
             continue
         delta = (at - now).total_seconds()
         delays.append((delta + 86400, at + dt.timedelta(days=1)) if delta < -12 * 3600 else (delta, at))
@@ -304,9 +305,12 @@ def bind(root: Path, lane: str, branch: str | None = None, worktree: str | None 
 
 
 def _binding_json(root: Path, lane: str) -> dict:
+    if not (root / "lanes" / lane / BINDING).exists():
+        return {}
     try:
         return json.loads((root / "lanes" / lane / BINDING).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"notes: lane {lane}'s {BINDING} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
 
 
@@ -368,9 +372,12 @@ def attempt(root: Path, lane: str, succ: dict[str, str] | None = None) -> tuple[
 
 def _seen(root: Path, lane: str) -> float | None:
     p = root / "lanes" / lane / SEEN
+    if not p.exists():
+        return None
     try:
         return float(_io(p.read_text).strip())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"notes: {p} unread, so lane {lane} has no time seen ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -485,7 +492,8 @@ def lane_status(path: Path, now: dt.datetime, stale_min: float) -> dict:
 def _git(repo: Path, *args: str, timeout: float = 20) -> str | None:
     try:
         out = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=timeout)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"notes: git {args[0] if args else ''} in {repo} did not run ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
     return out.stdout if out.returncode == 0 else None
 
@@ -552,8 +560,8 @@ def parse_pod_probe(out: str) -> dict:
         elif parts[0] == "FILE" and len(parts) >= 3 and parts[1] != "none":
             try:
                 res["file_age_s"] = max(0, int(parts[2]) - int(float(parts[1])))
-            except ValueError:
-                pass
+            except ValueError as e:
+                print(f"notes: a FILE line's times did not parse, so no file age ({e})", file=sys.stderr, flush=True)
     return res
 
 
@@ -631,9 +639,12 @@ def load_fleet(root: Path, probe: bool = True, pods: Callable[[], list[dict]] = 
 
 
 def _started(p: dict) -> dt.datetime | None:
+    if not p.get("lastStartedAt"):
+        return None
     try:
-        return dt.datetime.strptime(str(p.get("lastStartedAt") or "")[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=dt.timezone.utc)
-    except ValueError:
+        return dt.datetime.strptime(str(p.get("lastStartedAt"))[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=dt.timezone.utc)
+    except ValueError as e:
+        print(f"notes: a start time did not parse, read as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -1114,9 +1125,12 @@ ON_RE = re.compile(r"--on[= ](\S+)")
 
 
 def load_state(root: Path) -> dict:
+    if not (root / STATE_FILE).exists():
+        return {}
     try:
         doc = json.loads((root / STATE_FILE).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"notes: {root / STATE_FILE} unread, so the watch starts from none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return doc if isinstance(doc, dict) else {}
 
@@ -1131,9 +1145,12 @@ def load_env_file(path: Path, environ: dict | None = None) -> list[str]:
     """KEY=VALUE lines (`export`, quotes, # comments allowed) into the environment where the key is unset or empty: the watcher runs
     under launchd, without the R2 credentials.  -> the keys it set."""
     env = os.environ if environ is None else environ
+    if not path.exists():
+        return []
     try:
         text = path.read_text()
-    except OSError:
+    except OSError as e:
+        print(f"notes: {path} unread, so no key is set from it ({type(e).__name__})", file=sys.stderr, flush=True)
         return []
     done = []
     for line in text.splitlines():
@@ -1206,7 +1223,8 @@ def run_custody(pod_id: str, runs_dir: Path | None = None, registered: Callable[
     for rj in sorted((runs_dir or runs_root()).glob("*/remote.json")):
         try:
             rec = json.loads(rj.read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"notes: {rj} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if not isinstance(rec, dict) or rec.get("pod_id") != pod_id or rec.get("phase") in NEVER_RAN or (rj.parent / "refused.json").exists():
             continue
@@ -1457,9 +1475,12 @@ def steward_rule(name: str, fn: Callable[..., list[str]], *args, **kw) -> list[s
 def guardian_kills(path: Path, state: dict, max_bytes: int = 8 << 20) -> list[str]:
     """The guardian log's KILLED lines since the offset saved in the state.  The first look only records where the log ends; a
     rotated or truncated log starts over from its beginning."""
+    if not path.exists():
+        return []
     try:
         st = path.stat()
-    except OSError:
+    except OSError as e:
+        print(f"notes: {path} unread, so no kill is reported ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     g = state.get("guardian") or {}
     if g.get("path") != str(path):
