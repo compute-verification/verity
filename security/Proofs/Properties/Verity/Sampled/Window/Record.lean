@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Streams
 public import Proofs.Properties.Verity.Sampled.RootB
 
 /-!
-# Sampled proofs' coupling over a window: a session's moves are its record's
+# SPOT's coupling over a window: a session's moves are its record's
 
 A member's session's trace answers its rounds at releases of the one play's log (`Window/Answered.lean`), which the
 window's readings name as the `u`-th session's link and rep rounds (`Window/Sessions.lean`). This module reads what

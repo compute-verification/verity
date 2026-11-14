@@ -1,5 +1,5 @@
 """serve-openai's Pearl+ arm (`serve_pearl`) on CPU, over test_serve_openai's stand-in engine and committer: one Pearl+
-epoch a Commit window, its composition Pearl-C beside sampled proofs cut at Pearl-C's sites, each engine step's forward
+epoch a Commit window, its composition Pearl-C beside SPOT cut at Pearl-C's sites, each engine step's forward
 one pass ended at the model runner the committer patched first (`pearl_c.passes.hook_steps`' ``runner``; the class's
 wrapper, under the committer's patch, never runs), and each window's ``pearl/w<k>/served.json`` and ``coins.json``, from
 which Pearl+'s window record W is written (`pearl_c.window.write`).

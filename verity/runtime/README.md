@@ -17,7 +17,8 @@ The names, in four groups. A protocol's parties are written against `verity.part
 with `verity.protocol`'s `place` and `site_of` for a placement (`Topology`, `PlaceResult`). The configuration is the
 rest of `verity.config`: `check`, `digest`, `new`, `parse`, `render`, `canonical`, `declared` and `composite`, with
 `COMPOSITES`, `LOCAL`, `PARTY`, `CHANNEL` and `TRANSPORT`. The runtime is `runner`'s `run` and `RunResult`, `stream`'s
-`Side`, and the sources a caller hands `runner.run` (`sources`): `VirtualClock` on a `VirtualTime`, `SeededCoins`,
+`Side`, and the sources a caller hands `runner.run` (`sources`): `VirtualClock` on a `VirtualTime`, `RealClock` (a
+machine's clock and its name, `MONOTONIC` by default, which the party reads as `Identity.clock`), `SeededCoins`,
 `seeded` and `OWNER`. A refusal by name is raised as the wire's `Refused`: import it from `verity.channel`.
 
 | Entry point | What it is |
@@ -35,7 +36,7 @@ Internal, which no code outside this directory imports and `runner.run` reaches 
 - `transcript` (`transcript.py`): `PartyLog` and `record`, which outside code reads as a `RunResult`'s `transcripts`
   and `record()`.
 - the rest of `sources` (`sources.py`, clocks and coins as parties on the same machine): their messages, and
-  `RealClock` and `OsCoins`, which a run with no seed attaches itself.
+  `OsCoins`, which a run with no seed attaches itself, as it attaches `RealClock()`.
 - `process.spawn` (`process.py`): a party in a process of its own on this machine, over TCP to the run that spawned it.
 
 The served table of `verity run` doesn't go through `runner.run`: it runs `served_verdicts.sh`.
@@ -43,7 +44,9 @@ The served table of `verity run` doesn't go through `runner.run`: it runs `serve
 ## Where to look
 
 - `tools/verity/cli/verity_cli/run.py`: `verity run` and `verity config`, the commands over this package.
-- `verity/protocols/accounting/pous/verifier/wipe_parties.py`, `verity/protocols/accounting/poub/verifier/session_parties.py` and
-  `verity/protocols/accounting/pouw/verifier/parties.py`: protocols' parties on the runtime.
+- `verity/protocols/accounting/poub/verifier/session_parties.py` with `verity/protocols/accounting/poub/prover/session_prover.py`,
+  `verity/protocols/accounting/pous/device/wipe_challenger.py` with `verity/protocols/accounting/pous/prover/wipe_prover.py`,
+  and `verity/protocols/accounting/pouw/verifier/parties.py`: protocols' parties on the runtime, the two sides of the
+  first two each in its own file.
 - `tests/deploy_example.py`: a two-party protocol the tests run every way the runtime runs one; `tests/test_deploy.py`
   and `tests/test_stream.py` are the suite (`uv run tools/check/suites.py verity/runtime`).
