@@ -917,7 +917,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if drawn is not None:
         union_draw, drawn_law, receipt = (dict(x) for x in drawn)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-        trees = drawn_trees(a, members)
+        trees = stage_trees(a, members)
         if getattr(a, "stage", None) is not None and not trees:
             a.stage["coins"].release(0)
     elif not streamed(a):
@@ -1519,7 +1519,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
     the sample, its registered file, its units and its circuit's ``vus_per_block``, and a sampled member's session and
     the tables its circuit looks up, one path a table. None for a window of one member, whose form is the one
     statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's stage's challenger session,
-    `drawn_trees`); or why the audit has no per-member case."""
+    `stage_trees`); or why the audit has no per-member case."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     if len(members) < 2 and not one:
@@ -1576,8 +1576,8 @@ def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
             and len(a.coins.ranks()) == 1)
 
 
-def drawn_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
-    """`window_trees` for a caller's sampled sample (``drawn``): the sessions take their coin trees from the caller's
+def stage_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
+    """`window_trees` for a caller's sample (``drawn``): the sessions take their coin trees from the caller's
     stage's own challenger session (``a.stage``, `two_stage`'s ``--interior-trees``), held for them since before its
     sample ended, a window of one member's too: that caller's case is the per-member form's at any number of members
     (`members_proof`'s ``one``). Without ``a.stage`` the sessions keep a challenger of their own."""

@@ -8,7 +8,7 @@ public import VStarRecursive.SampledTwo
 `sampled-two-on` is `sampled-two` with the check at the switch on (`VStar.Recursive.SampledTwo.checkBlobsAtWith true`),
 under an id of its own. The form's accept test drives it on one honest play, so that a change after which the form
 accepts no play fails a test. No party runs it and nothing dispatches to it: the form's own check (`sampled-two`,
-`VStar.Recursive.SampledTwo.protocol`) keeps its switch (`FORM`), and sampled proofs refuses the form by name.
+`VStar.Recursive.SampledTwo.protocol`) keeps its switch (`FORM`), and `VStar.Recursive.Sampled` refuses the form by name.
 -/
 
 @[expose] public section

@@ -1383,7 +1383,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--interior-trees", action="store_true",
                    help="the interior's sessions take their coin trees from this stage's challenger session, whose "
                         "families carry the second stage's tag (a5_coins.SECOND), as the two-stage form's check reads "
-                        "two windows; needs FLOCK_CHALLENGER=1 and two members or more (a5.drawn_trees)")
+                        "two windows; needs FLOCK_CHALLENGER=1 and two members or more (a5.stage_trees)")
     g.add_argument("--form-case", action="store_true",
                    help="write the two-stage form's case of this run under OUT/form (sampled_two_case.from_run)")
     g.add_argument("--out", required=True)

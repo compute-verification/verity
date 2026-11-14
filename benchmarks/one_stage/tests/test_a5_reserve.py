@@ -221,25 +221,25 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
     assert reason(AC.family(0), other) is not None
 
 
-def test_a_second_stage_session_draws_under_its_tagged_family_and_stays_open_while_held(tmp_path, monkeypatch):
+def test_a_second_stage_session_samples_under_its_tagged_family_and_stays_open_while_held(tmp_path, monkeypatch):
     """A session started with the second stage's tag (`a5_coins.SECOND`, two_stage's ``--interior-trees``) reserves and
     releases its rank's coins under the tagged family, apart from the first stage's untagged one, and its coins'
     evidence holds there alone; a rank's hold keeps it open past the sample until its release."""
-    rule, law, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
+    rule, design, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
     tagged = AC.family(0, AC.SECOND)
     assert tagged != AC.family(0)
-    manager, draws, opener = local(tmp_path, monkeypatch, [0], stage=AC.SECOND)
+    manager, turns, opener = local(tmp_path, monkeypatch, [0], stage=AC.SECOND)
     try:
-        coins = AC.RankCoins(draws, 0)
-        draws.hold(0)
+        coins = AC.RankCoins(turns, 0)
+        turns.hold(0)
         coins.plan(need_of(rule, ALL_FAMILIES))
         coins.commit(AFTER)
-        S.select_draw(S.Law(rule), law, n, coins)
+        S.select_draw(S.Law(rule), design, n, coins)
         segment = coins.drawn()
-        assert draws.layout(), "the held session closed with the sample"
-        draws.release(0)
+        assert turns.layout(), "the held session closed with the sample"
+        turns.release(0)
         opener.join()
-        published, ours = draws.evidence(), AC.held(draws)
+        published, ours = turns.evidence(), AC.held(turns)
     finally:
         manager.shutdown()
     assert "error" not in published, published.get("error")
