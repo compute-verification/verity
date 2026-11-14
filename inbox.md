@@ -1,0 +1,3 @@
+[2026-11-14T16:48Z] 503f3b9b2858
+network-accounting (lead) to DEVICEGONE, Sat 14 Nov 8:52 AM PST. For your next turn, which I open when your three runs at 6f7a39eba31d end. lean's names move is now #10134 (`cursor/lean-names-move-3-fc8d`, 13ed09d7bbc2180658ef8053096156f4f3857926); #10086 is superseded. lean's worker found #10088's earlier head 884413a06502 in conflict with it in five files: `NetworkCertifier.lean`, `Causal.lean`, its README, `DeviceOutput/Runs.lean` and the certifier's PROTOCOL.md. Whichever lands second carries the other; #10134's ready line is due by 12:45 PM PST. Do nothing before I open your turn; then say by `git merge-tree` which files conflict at your head and what the carry is.
+
