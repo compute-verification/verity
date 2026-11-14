@@ -662,17 +662,31 @@ def test_an_end_is_accepted_only_when_all_its_lines_are_out(host, tmp_path):
 def test_no_line_is_published_beside_a_deployment_that_doesnt_fix_its_forms(host):
     """The forms of a line's link, schedule and signature are the run's deployment's. A deployment that doesn't
     give them, or gives one out of form, gives no form at all, and no certificate or registration is published
-    beside it."""
+    beside it. A key's parameters are in form exactly where the signer's own bounds take them (`lms.Params`), so
+    the gate reads a signature's length of no others."""
+    for params in ([64, 1, 1], [64, 2, 13], [64, 4, 20], [64, 8, 30]):
+        assert A.in_form(params, A.KEY_PARAMS) and A.lms.Params(*params).signature_bytes() > 0
+    for params in ([32, 8, 1], [64, 3, 1], [64, 16, 1], [64, 8, 0], [64, 8, 31], [64, 8, True]):
+        assert not A.in_form(params, A.KEY_PARAMS)
+        with pytest.raises(ValueError, match="LMS parameters are"):
+            A.lms.Params(*params)
+    for params in ([64, 8], [64, 8, 1, 1], (64, 8, 1), "64 8 1", None, {"N": 64}, [64.0, 8, 1]):
+        assert not A.in_form(params, A.KEY_PARAMS)
     for less in ("link", "digest", "params", "key"):
         doc = {k: v for k, v in DEPLOYMENT.items() if k != less}
         (host.root / "deployment.json").write_text(json.dumps(doc))
         assert A.deployment_forms(host.root / "deployment.json") == {}
     for bad in ({"link": "a link"}, {"digest": "31" * 63}, {"params": {"cell_bytes": 512, "window": -600}},
-                {"params": {"cell_bytes": "512", "window": 600}}, {"key": {"params": [64, 3, 1]}},
-                {"key": {"params": [64, 8]}}):
+                {"params": {"cell_bytes": "512", "window": 600}}, {"params": [512, 600]},
+                {"key": {"params": [64, 3, 1]}}, {"key": {"params": [64, 8]}}, {"key": [64, 8, 1]}):
         (host.root / "deployment.json").write_text(json.dumps(DEPLOYMENT | bad))
         assert A.deployment_forms(host.root / "deployment.json") == {}
+    for text in (json.dumps([DEPLOYMENT]), json.dumps(DEPLOYMENT)[:-1], ""):
+        (host.root / "deployment.json").write_text(text)
+        assert A.deployment_forms(host.root / "deployment.json") == {}
     assert A.deployment_forms(host.root / "none.json") == {}
+    (host.root / "deployment.json").write_text(json.dumps(DEPLOYMENT))
+    assert A.deployment_forms(host.root / "deployment.json") == GIVEN
     run, end = run_warden(host, WARDEN_FILES.replace(f"{DEPLOYMENT!r} | ", "", 1))
     assert end["rc"] == 2 and end["ended"] == "unruled" and set(end["files"]) == {"deployment.json"}
     assert end["verdict"] == NOT_ACCEPTED

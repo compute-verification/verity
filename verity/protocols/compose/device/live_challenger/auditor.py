@@ -609,6 +609,9 @@ ROW_FORMAT, ROW_SCHEMA, ROW_WORD_BITS = "verity-network-warden/registration/v2",
 #: the links a run certifies under, by what follows its deployment's link: the wire's two directions under the link
 #: itself, and the reasons' records under their own name (`warden_serve.CERTIFIED`)
 CERTIFIED_LINKS = ("", "-fails")
+#: a key's parameters as a deployment gives them, in form: the hash's bytes, the Winternitz width and the height,
+#: each within `lms.Params`' own bounds, so that `deployment_forms` reads a signature's length of no other
+KEY_PARAMS = [(64,), (1, 2, 4, 8), tuple(range(1, 31))]
 #: every key of a line of `cells.jsonl` that holds a registration (`warden_serve.Publisher`,
 #: `warden_rows.registration`'s keys), each ruled: left out (`WITHHELD`), an object by its own keys,
 #: or published in the form it names (`in_form`, `Given`, `NAMED`). It is the one list of what `out/` publishes of a
@@ -2853,15 +2856,14 @@ def deployment_forms(path: Path) -> dict:
     digest (`parameters`), a cell's bytes and an execution phase's `buckets`, each the deployment's one value; and
     a `signature`, hex of the length its key's parameters give. Empty for a deployment that doesn't read or isn't
     itself in form: no line is published beside it."""
-    try:
-        doc = json.loads(path.read_text())
-        link, digest = doc["link"], doc["digest"]
-        cell_bytes, buckets = doc["params"]["cell_bytes"], doc["params"]["window"]
-        signature = lms.Params(*doc["key"]["params"]).signature_bytes()
-    except (OSError, ValueError, KeyError, TypeError):
+    doc = public_deployment(path) or {}
+    link, digest = doc.get("link"), doc.get("digest")
+    params, key = (doc[k] if isinstance(doc.get(k), dict) else {} for k in ("params", "key"))
+    cell_bytes, buckets = params.get("cell_bytes"), params.get("window")
+    if not (in_form(link, LOAD_NAME) and in_form(digest, ROOT) and in_form(cell_bytes, int) and in_form(buckets, int)
+            and in_form(key.get("params"), KEY_PARAMS)):
         return {}
-    if not (in_form(link, LOAD_NAME) and in_form(digest, ROOT) and in_form(cell_bytes, int) and in_form(buckets, int)):
-        return {}
+    signature = lms.Params(*key["params"]).signature_bytes()
     links = tuple(link + follows for follows in CERTIFIED_LINKS)
     return {"link": (link,), "links": links, "parameters": (digest,), "cell_bytes": (cell_bytes,),
             "buckets": (buckets,), "signature": re.compile("[0-9a-f]{%d}" % (2 * signature))}
