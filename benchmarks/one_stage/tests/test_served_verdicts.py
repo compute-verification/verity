@@ -4853,6 +4853,7 @@ FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3"
 
 
 IDS = "--protocol ids --id-payload 503"
+SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "$2"'
 
 
 @pytest.mark.parametrize("load, front, takes, serve_args, line", [
@@ -4876,6 +4877,51 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
            "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
                         check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+SESSION = {"LOAD": "session", "CERTIFIER_FRONT": FRONT + " --session --client-port 18191 --windows 8",
+           "LOAD_CMD": "the-callers-load", "CERTIFIER_CLOSE": SESSION_CLOSE, "SERVE_ARGS": IDS}
+SESSION_TAKES = "--gate --warmup --bucket-ms --session --client-port --windows"
+NO_SESSION = ("PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens "
+              "(certifier_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes "
+              "(certifier_piece.py close), and {} is unset")
+
+
+@pytest.mark.parametrize("env, takes, line", [
+    (SESSION, SESSION_TAKES, None),
+    ({**SESSION, "CERTIFIER_FRONT": ""}, SESSION_TAKES, NO_SESSION.format("CERTIFIER_FRONT")),
+    ({**SESSION, "LOAD_CMD": ""}, SESSION_TAKES, NO_SESSION.format("LOAD_CMD")),
+    ({**SESSION, "CERTIFIER_CLOSE": ""}, SESSION_TAKES, NO_SESSION.format("CERTIFIER_CLOSE")),
+    ({**SESSION, "CERTIFIER_FRONT": FRONT}, SESSION_TAKES,
+     "PREFLIGHT: LOAD=session sends the caller's load through a relay session, and CERTIFIER_FRONT passes no "
+     "--session, so its front would send a group of its own"),
+    (SESSION, "--gate --warmup --bucket-ms --client-port --windows",
+     "PREFLIGHT: CERTIFIER_FRONT passes --session, which this tree's certifier front doesn't take"),
+    ({**SESSION, "SERVE_ARGS": ""}, SESSION_TAKES, "PREFLIGHT: the certifier front's warden sends id-form requests, "
+     "which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
+    ({**SESSION, "LOAD": "varied", "CERTIFIER_CLOSE": "", "CERTIFIER_FRONT": FRONT}, SESSION_TAKES,
+     "PREFLIGHT: LOAD_CMD is LOAD=session's, and LOAD is varied: unset it"),
+    ({**SESSION, "LOAD": "fixed", "LOAD_CMD": "", "CERTIFIER_FRONT": ""}, SESSION_TAKES,
+     "PREFLIGHT: CERTIFIER_CLOSE is LOAD=session's, and LOAD is fixed: unset it"),
+    ({**SESSION, "LOAD": "front", "LOAD_CMD": "", "CERTIFIER_CLOSE": ""}, SESSION_TAKES,
+     "PREFLIGHT: CERTIFIER_FRONT passes --session, which opens a relay session for a caller's load, and LOAD is "
+     "front, which sends none through it: LOAD=session, or a front without --session"),
+], ids=["a session", "no front", "no load", "no close", "a front without --session", "a tree whose front takes none",
+        "an endpoint off the id form", "a load under varied", "a close under fixed", "a session's front under front"])
+def test_the_preflight_takes_a_session_only_whole_and_none_of_it_under_another_load(tmp_path, env, takes, line):
+    """LOAD=session starts only with its three commands, a front that passes ``--session`` and that this tree's
+    front takes, on an endpoint in the id form; under every other LOAD a session's load, its close and a front that
+    passes ``--session`` are each refused, so no run of another load starts a relay session."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    (tree / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, check=False,
+                        env={"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent),
+                             "OUT": str(tmp_path / "out"), **env}).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     assert (rc, said) == ((3, [line]) if line else (0, []))
 
@@ -5643,10 +5689,13 @@ def test_serve_openai_declares_the_day_only_under_day(tmp_path, env, flags):
 def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], list[str]]:
     """`served_verdicts.sh serve` in a toy tree whose venv python stands in for every command the runner issues through
     it: serve-openai listens with one window closed and sealed and holds until the runner stops it, the load answers
-    each of its 4 requests, the weights' registration refuses and every other command exits 0. The exit status, each
+    each of its 4 requests, the weights' registration refuses, the certifier's front under ``--session`` leaves an open
+    relay session in the serve dir (or, with FRONT_REFUSES set, exits 2 and leaves none), its close keeps a fetch
+    beside it (exit 2 with none open) and every other command exits 0. The exit status, each
     command issued through that python in order and the lines the runner published, ``TMP`` for ``tmp_path`` in both.
     The runner's `sleep` returns once the endpoint listens, so nothing here waits on a clock."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
+    session = tmp_path / "serve" / "private" / "certifier" / "run-1"
     for d in (tree / "adapters" / "vllm", bin_, venv):
         d.mkdir(parents=True)
     for fifo in ("ready", "hold"):
@@ -5662,6 +5711,10 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
               f"    : > {tmp_path}/up; echo > {tmp_path}/ready; read _ < {tmp_path}/hold ;;\n"
               "  *serve_load.py*) echo '4/4 ok'; exit 0 ;;\n"
               "  *weights-registration*) exit 1 ;;\n"
+              "  *'certifier_piece.py front '*' --session '*)\n"
+              "    [ -z \"$FRONT_REFUSES\" ] || exit 2\n"
+              f"    mkdir -p {session} && echo '{{}}' > {session}/relay.json ;;\n"
+              f"  *'certifier_piece.py close '*) [ -f {session}/relay.json ] || exit 2; : > {session}/fetch.tar.gz ;;\n"
               "  *) exit 0 ;;\n"
               "esac")
     for path, body in ((venv / "python", python), (bin_ / "sleep", f"[ -e {tmp_path}/up ] || read _ < {tmp_path}/ready")):
@@ -5716,7 +5769,9 @@ SAID_LOAD = [f"REQUESTS (exit 0, release run {RELEASE_RUN}): every request answe
 SAID_STOPPED = ["SERVE stopped (exit 143): every closed window sealed"]
 
 
-@pytest.mark.parametrize("env, issued, said", [
+#: each LOAD the runner had before a session's, with and without a rehearsal's front: its settings, what the serve step
+#: issues after the endpoint and the weights' registration, and what it says between coming up and stopping
+LOADS = pytest.mark.parametrize("env, issued, said", [
     ({}, [NEW_RELEASE_RUN, VARIED_LOAD], SAID_LOAD),
     ({"LOAD": "varied"}, [NEW_RELEASE_RUN, VARIED_LOAD], SAID_LOAD),
     ({"LOAD": "fixed"}, [NEW_RELEASE_RUN, FIXED_LOAD], SAID_LOAD),
@@ -5725,6 +5780,9 @@ SAID_STOPPED = ["SERVE stopped (exit 143): every closed window sealed"]
     ({"LOAD": "fixed", "CERTIFIER_FRONT": REHEARSAL_FRONT}, [FRONT_CALL, FRONT_LINE, NEW_RELEASE_RUN, FIXED_LOAD],
      SAID_FRONT + SAID_LOAD),
 ], ids=["default", "varied", "fixed", "front", "varied behind a rehearsal's front", "fixed behind a rehearsal's front"])
+
+
+@LOADS
 def test_the_serve_step_issues_these_commands_and_lines_under_each_load(tmp_path, env, issued, said):
     """Under LOAD varied (the default), fixed and front, with and without a rehearsal's front, the serve step issues
     through the venv's python exactly these commands in this order and publishes exactly these lines: the endpoint, the
@@ -5733,6 +5791,55 @@ def test_the_serve_step_issues_these_commands_and_lines_under_each_load(tmp_path
     rc, calls, lines = _serve_calls(tmp_path, env)
     assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
     assert lines == SAID_UP + said + SAID_STOPPED
+
+
+def _notes(tmp_path: Path, what: str, rc: int = 0) -> str:
+    """A caller's command that notes ``what`` and its arguments beside the commands `_serve_calls` returns, then exits
+    ``rc``."""
+    return f'echo "{what}: $*" >> {tmp_path}/calls; exit {rc}'
+
+
+@LOADS
+def test_under_every_other_load_the_serve_step_starts_nothing_of_a_session(tmp_path, env, issued, said):
+    """A run that isn't LOAD=session starts no relay session's command: with a session's load and close named in its
+    environment (which the preflight refuses), the serve step runs neither, calls the certifier's piece only where the
+    caller's own rehearsal front does, and issues and says what it does without them."""
+    rc, calls, lines = _serve_calls(tmp_path, {**env, "LOAD_CMD": _notes(tmp_path, "a session's load"),
+                                               "CERTIFIER_CLOSE": _notes(tmp_path, "a session's close")})
+    assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
+    assert lines == SAID_UP + said + SAID_STOPPED
+    assert not [c for c in calls if "--session" in c or "certifier_piece.py close" in c or "a session's" in c]
+    assert sum("certifier_piece.py" in c for c in calls) == ("CERTIFIER_FRONT" in env)
+
+
+SESSION_FRONT = REHEARSAL_FRONT + " --session --client-port 18191 --windows 8"
+SESSION_FRONT_CALL = FRONT_CALL + " --session --client-port 18191 --windows 8"
+CLOSE_CALL = "benchmarks/network_traces/certifier_piece.py close TMP/serve TMP/serve/private/certifier-front"
+CALLERS_LOAD = "the caller's load: TMP/serve/private/certifier/run-1/relay.json TMP/serve"
+SAID_SENT = ("REQUESTS (exit {rc}): the caller's load, sent through the network certifier's relay session (the serve "
+             "dir's load.log, on the node)")
+
+
+@pytest.mark.parametrize("extra, load_rc, rc, issued, said", [
+    ({}, 0, 0, [SESSION_FRONT_CALL, CALLERS_LOAD, CLOSE_CALL, FRONT_LINE],
+     [SAID_SENT.format(rc=0), "CERTIFIER-FRONT (exit 0): "]),
+    ({}, 5, 1, [SESSION_FRONT_CALL, CALLERS_LOAD, CLOSE_CALL, FRONT_LINE],
+     [SAID_SENT.format(rc=5), "CERTIFIER-FRONT (exit 0): "]),
+    ({"FRONT_REFUSES": "1"}, 0, 1, [SESSION_FRONT_CALL, CLOSE_CALL, FRONT_LINE],
+     ["REQUESTS: none sent: the front opened no relay session (exit 2)", "CERTIFIER-FRONT (exit 2): "]),
+], ids=["a session", "the caller's load fails", "the front opens no session"])
+def test_a_sessions_serve_step_runs_the_callers_load_between_the_front_and_the_close_and_sends_none_itself(
+        tmp_path, extra, load_rc, rc, issued, said):
+    """Under LOAD=session the serve step calls the front, which opens the relay session, then the caller's load with
+    the open session's relay.json and the serve dir, then the close, whose exit the CERTIFIER-FRONT line says; it
+    makes no release run and sends no load of its own. A load that fails fails the step after the close has run; a
+    front that opened no session runs no load, and the close still says why."""
+    got, calls, lines = _serve_calls(tmp_path, {"LOAD": "session", "CERTIFIER_FRONT": SESSION_FRONT,
+                                                "LOAD_CMD": _notes(tmp_path, "the caller's load", load_rc),
+                                                "CERTIFIER_CLOSE": SESSION_CLOSE, **extra})
+    assert got == rc and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (got, calls)
+    assert lines == SAID_UP + said + SAID_STOPPED
+    assert not [c for c in calls if "serve_load.py" in c or c == NEW_RELEASE_RUN]
 
 
 class _Response:
