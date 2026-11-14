@@ -3,10 +3,10 @@
 environment (`staging_environ`) where it refuses, excludes families, traces the footprint or drops a flush point; the Programs'
 forecast (`c2_programs_forecast`) where an instance file can't be read; the serving loop (`run_workload`) where a request
 arrives late, the engine has nothing to serve or a request is let go unfinished, over `test_commit_main`'s stand-in engine;
-the hooks-only ablation (`make_committer`'s ``hooks_only``); the check that the engine is left as it was (`assert_pristine`)
-where a runner's method or a module's forward is still wrapped, or the sampler keeps a hook; and the kept bytes' digests
-(`tensor_digests`): a whole FA2 row's planes, a row of zeros, a later pair's differences and the step dumped.  The two
-commands each reader runs, and `commit`'s clock, are stood in.  CPU only."""
+the windowed worker and the hooks-only ablation (`make_committer`'s ``native_collect_v2b`` and ``hooks_only``); the check
+that the engine is left as it was (`assert_pristine`) where a runner's method or a module's forward is still wrapped, or the
+sampler keeps a hook; and the kept bytes' digests (`tensor_digests`): a whole FA2 row's planes, a row of zeros, a later
+pair's differences and the step dumped.  The two commands each reader runs, and `commit`'s clock, are stood in.  CPU only."""
 from __future__ import annotations
 
 import dataclasses
@@ -123,7 +123,7 @@ def test_a_late_read_drops_its_leaf_from_the_gather_flush_points_and_says_so(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
         environ: Callable[[], dict[str, str | None]]) -> None:
     before = NC.GATHER_FLUSH_LEAVES
-    leaf = sorted(before)[0]
+    leaf = min(before)
     monkeypatch.setattr(NC, "GATHER_FLUSH_LEAVES", before)
     commit.staging_environ(staged(tmp_path, late_read=leaf))
     left = NC.GATHER_FLUSH_LEAVES
@@ -205,6 +205,29 @@ def test_the_hooks_only_ablation_counts_the_device_tensors_its_hooks_see_and_com
     assert (job.metas, waited, com._layouts) == ([None, None], [100.75], {3: []})
     assert com._done == {3: StepCommitment(3, zero, zero, 0, 0, 2, b"\0" * 32, 99.0, 100.75, 2)}
     assert (com.spans.total["acquisition"], com.spans.per_step[3]["acquisition"]) == (0.75, 0.75)
+
+
+@pytest.mark.parametrize("given, arena_bytes, threads, scheme", [
+    ({"arena_mb": 3, "pinned_populate_threads": 5, "commit_scheme": "rows-sha512"}, 3 << 20, 5, "rows-sha512"),
+    ({"arena_mb": None}, None, None, None),
+    ({"arena_mb": 0}, None, None, None),
+])
+def test_the_windowed_worker_is_the_native_collector_gathering_on_native_hooks_with_the_commits_arena_threads_and_scheme(
+        monkeypatch: pytest.MonkeyPatch, given: dict[str, Any], arena_bytes: int | None, threads: int | None,
+        scheme: str | None) -> None:
+    """``native_collect_v2b`` is the native collector with its gather windows, native hooks, automatic blocks and native worker
+    on, the engine and the run's id passed through, the arena in bytes when the Commit names one, and the populate threads and
+    the commit scheme as the Commit has them."""
+    made: list[tuple[Any, dict[str, Any]]] = []
+
+    def collector(eng: Any, **kw: Any) -> str:
+        made.append((eng, kw))
+        return "the collector"
+    monkeypatch.setattr(NC, "NativeCollectCommitter", collector)
+    eng = object()
+    assert commit.make_committer("native_collect_v2b", cast(Any, eng), cast(Any, SimpleNamespace(**given)), "r7") == "the collector"
+    assert made == [(eng, {"run_id": "r7", "arena_bytes": arena_bytes, "gather": True, "native_hooks": True, "auto_blocks": True,
+                           "native_worker": True, "populate_threads": threads, "commit_scheme": scheme})]
 
 
 def engine(**runner: Any) -> Any:
