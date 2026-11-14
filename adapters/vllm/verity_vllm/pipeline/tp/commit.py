@@ -291,11 +291,12 @@ def main(args: Options) -> int:
                               "flip_partial": args.flip_partial},
                 "required_manifest": args.required_manifest, "value_check": bool(args.value_check), "rules_version": "r15-tp04-v1",
                 "build_program_digest_kind": None}
+    C2.remove_earlier(out)                            # a used --out: the rows and the verdict are of the Commit `versions.json` is of
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     reqs, sampling = wl["requests"], wl["sampling"]
     PH.warmups(args.warmup, lambda i: run_workload(eng, va.throwaway_requests(eng, reqs, seed=100 + i), sampling))
     envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
-                "max_new": max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs),
+                "max_new": max(int(r.get("max_tokens") or 1) for r in reqs),
                 "max_num_batched_tokens": kw.get("max_num_batched_tokens"), "max_model_len": kw.get("max_model_len")}
     builds = _build_dirs(args)
     built = {r: build_program_digest(builds.get(r)) for r in range(world)}
@@ -323,7 +324,7 @@ def main(args: Options) -> int:
     # rule commit_delta applies, so the manifest's r<k> rows and the rank's request->rows map name the same request
     request_ids = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
     arrivals = {f"r{int(r.get('index', i))}": int(r.get("arrive_step") or 0) for i, r in enumerate(reqs)}
-    caps = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for i, r in enumerate(reqs)}
+    caps = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or 1) for i, r in enumerate(reqs)}
     match_tokens, match_rec = TPM.match_record(args.match_dir, request_ids, world) if args.match_dir else (None, None)
     versions["match_record"] = match_rec
     match_capture_dir = (str(Path(args.match_dir) / "capture") if (args.match_dir and not args.no_match_oracle) else None)
@@ -353,7 +354,7 @@ def main(args: Options) -> int:
             of_record[str(r)] = sorted(digs)
         replay_cfg = {"programs": {str(r): str(builds[r]) for r in range(world) if builds.get(r)}, "of_record": of_record,
                       "requests": [{"request_id": request_ids[str(r.get("request_id"))], "arrive_step": int(r.get("arrive_step") or 0), "prompt_len": len(r["prompt_token_ids"]),
-                                    "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]], "seed": int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)} for r in reqs],
+                                    "max_tokens": int(r.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]], "seed": int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)} for r in reqs],
                       "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "seed": args.replay_seed, "workers": args.replay_workers,
                       "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": ring_slots(args.committer, settings.raw("VERITY_WINDOW_MB"), settings.raw("VERITY_WINDOW_SLOTS"), retain_env)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,

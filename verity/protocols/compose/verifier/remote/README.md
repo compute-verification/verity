@@ -51,7 +51,7 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/recursion/verifier/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
+| Sampled proofs ([README](../../../proofs/spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/proofs/spot_flock/verifier/lean`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../../../accounting/pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted sample | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../../../policy/inference_only/verifier/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `NciCheck.Protocol.protocol` (`inference_only/verifier/nci/lean`) | `verity/inference-only/v0` |
@@ -417,8 +417,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The verifier's verdicts.** SPOT's one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
   the proof check (`verity verify proof verify --zk`) itself; v1, which takes the verdicts as
   evidence, and the recursive form, which SPOT's soundness doesn't cover, are refused. Where v2 accepts, its session
-  is in V3's and V5's events (`Verity.Sampled.checkBlobs_event`); only V5's is coupled to it
-  (`Verity.Sampled.CouplingTarget`).
+  is in V5's event (`Verity.Sampled.checkBlobs_event`), which is coupled to it (`Verity.Sampled.CouplingTarget`).
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.

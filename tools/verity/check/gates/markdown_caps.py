@@ -84,12 +84,12 @@ def gate(base: str, top: str) -> dict:
         if not (over := caps.markdown_over_cap(path, size)):
             continue
         if before is not None and before > cap and size <= before:
-            notes.append(f"{path} is {size} bytes, over its {cap}-byte cap, but was {before} bytes at {lo[:12]} below: not "
+            notes.append(f"{path} is {size} bytes, over its {cap}-byte limit, but was {before} bytes at {lo[:12]} below: not "
                          f"this change's")
             continue
         where = over.split("; ", 1)[1] if "; " in over else over
         failures.append({"path": path, "size": size, "below": before, "cap": cap,
-                         "why": f"{path} is {size} bytes at {top[:12]}, over its {cap}-byte cap ({CAPS}), and "
+                         "why": f"{path} is {size} bytes at {top[:12]}, over its {cap}-byte limit ({CAPS}), and "
                                 + ("is new" if before is None else f"was {before} bytes") + f" at {lo[:12]} below",
                          "fix": [f"trim {path} to {cap} bytes or fewer ({size - cap} over): {where}"]})
     return {"kind": KIND, "base": base, "top": top, "below": lo, "files": files, "failures": failures, "notes": notes}

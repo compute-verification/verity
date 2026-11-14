@@ -72,10 +72,10 @@ def SessionFactsJ (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spe
 theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
     {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Flock.JsonParse.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
-    (trs : Array Trace) (tape : TapeZk) (hC : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v → ∀ g extra lanePad salt cm,
+    (trs : Array Trace) (tape : TapeZk) (hC : ∀ st ∈ tabs, ∀ v, Zk.schedule st.wideLeaf st.m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 g extra lanePad
         salt = .ok cm → 0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
-    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v →
+    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.wideLeaf st.m = .ok v →
       ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
@@ -87,11 +87,11 @@ theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
     SessionFactsJ (Claims.hOf H) resp spec tabs hz ct r bodies := by
   unfold sessionPZk at hrun
   obtain ⟨schs, l1, hA, hrun⟩ := go_bind_ok hrun
-  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.m = .ok v) _ fun a _ =>
-    Ret.monadLift (Zk.schedule a.m)) hA
+  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.wideLeaf st'.m = .ok v) _ fun a _ =>
+    Ret.monadLift (Zk.schedule a.wideLeaf a.m)) hA
   have hl1 := Still.go (Still.mapM_array (fun a l => by rw [monadLift_go]) _) hA
   subst hl1
-  have hv : ∀ i (hi : i < tabs.size), Zk.schedule tabs[i]!.m = .ok schs[i]! := fun i hi => by
+  have hv : ∀ i (hi : i < tabs.size), Zk.schedule tabs[i]!.wideLeaf tabs[i]!.m = .ok schs[i]! := fun i hi => by
     rw [getElem!_pos tabs i hi, getElem!_pos schs i (by omega)]
     exact hsf i hi (by omega)
   dsimp only at hrun

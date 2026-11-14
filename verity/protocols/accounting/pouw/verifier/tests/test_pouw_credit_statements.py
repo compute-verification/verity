@@ -143,7 +143,7 @@ def _layout(d: dict) -> dict:
 
 
 def _units(d: dict, k: int) -> list[int]:
-    got, why = Cr.drawn(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
+    got, why = Cr.drawn_twin(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
                         {"receipts": d["draw"]["receipts"]}, _layout(d), k)
     assert why is None, why
     return got
@@ -697,7 +697,7 @@ def test_an_honest_periods_credit_is_the_leans_and_a_disagreement_refuses_it(see
 @pytest.mark.parametrize("name", ["honest", *rc.SALT_NAMES])
 def test_the_salt_check_of_record_is_the_leans_with_its_python_twin_beside_it(name, asked):
     case = rc.salt_instance(random.Random(f"{name}/0"), name)
-    python = CC.salt(*rc.salt_args(case))
+    python = CC.salt_twin(*rc.salt_args(case))
     assert CC.salt_of_record(*rc.salt_args(case)) == python and asked.fns == ["salt"]
     assert python is None or name != "honest"
     asked.say["salt"] = lambda _v: None if python is not None else {"refused": ["salt", "stub"]}

@@ -58,16 +58,4 @@ def TTOutTilePearlCDevRev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTile CM (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
-/-- **`tt-out/pearl-c-h100-rev1`**: rev1 at the H100 record, the repair of `TTOutPearlC · Costs.adopted`, with `CM` the
-H100's W1 accounting, a `wgmma` priced by its whole shape. -/
-def TTOutPearlCH100Rev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutPearlCDevRev1 CM devH100 sem ρ
-
-/-- **`tt-out-tile/pearl-c-h100-rev1`**: rev1 per audit tile at the H100 record, the repair of
-`TTOutTilePearlC · Costs.adopted`. -/
-def TTOutTilePearlCH100Rev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTilePearlCDevRev1 CM devH100 sem ρ
-
 end Pouw.PearlC.Assumptions

@@ -317,7 +317,7 @@ def _report(oracle: MatchOracle, wcheck: dict[str, Any], max_report: int, query_
                if padding_not_cmp else {}),
             "steps_compared": sorted(steps_cmp), "steps_not_snapshotted": steps_not_snap, "complete": complete,
             "attribution": {"complete": attribution_complete, "pairs": len(pairs_seen), "unverified": attrib_missing[:max_report], "unverified_n": len(attrib_missing),
-                            "ambiguous_steps": ambiguous, "requests": sorted({r for _, r in pairs_seen}, key=lambda x: int(x[1:]) if x[1:].isdigit() else 0)},
+                            "ambiguous_steps": ambiguous, "requests": sorted({r for _, r in pairs_seen}, key=lambda x: int(x[1:]) if x[1:].isdecimal() else 0)},
             "workload_check": wcheck, "oracle": oracle.provenance()}
 
 

@@ -1,11 +1,3 @@
-/-
-`Tmpl.fold` against the lincheck's unit fold: on `Flock.Test.Tmpl`'s unit and variants (one copy, copies in lanes that
-reach 64 and past, a run of 3 in 4 lanes, a lane binding its caller's input, the constant bound), laid out by
-`Tmpl.layoutM` under each `Mode`, the fold from the description equals `foldRef`, the sum over the unrolled rows at their
-positions, and that equals `Stmt.project (Stmt.baseOf α (Stmt.tensor lw ρ) A B none sl) (eqTable r)` on `A` and `B` of the
-net committed at the layout's positions (`Tmpl.unrollAt`), the matrices a flat unit's slot would hold, and so does
-`foldSplit`, on these and on units whose pair or quad the call tree reaches on two paths, where it folds tables.
--/
 module
 
 public import Flock.NetAt
@@ -17,6 +9,15 @@ meta import Flock.NetAt
 meta import Flock.Statement
 meta import Flock.Test.TmplLayout
 meta import Flock.TmplSplit
+
+/-!
+`Tmpl.fold` against the lincheck's unit fold: on `Flock.Test.Tmpl`'s unit and variants (one copy, copies in lanes that
+reach 64 and past, a run of 3 in 4 lanes, a lane binding its caller's input, the constant bound), laid out by
+`Tmpl.layoutM` under each `Mode`, the fold from the description equals `foldRef`, the sum over the unrolled rows at their
+positions, and that equals `Stmt.project (Stmt.baseOf α (Stmt.tensor lw ρ) A B none sl) (eqTable r)` on `A` and `B` of the
+net committed at the layout's positions (`Tmpl.unrollAt`), the matrices a flat unit's slot would hold, and so does
+`foldSplit`, on these and on units whose pair or quad the call tree reaches on two paths, where it folds tables.
+-/
 
 @[expose] public section
 
