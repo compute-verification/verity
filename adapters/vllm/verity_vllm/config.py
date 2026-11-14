@@ -81,9 +81,9 @@ def run_store(module: str, entry: str) -> ModuleType:
     except ModuleNotFoundError as e:
         if not f"{module}.".startswith(f"{e.name}."):
             raise
-        raise UsageError(f"{entry} is refused: {module} is not on this tree. The public release leaves out the run store (`research`), "
-                         "the tool that records the source identity and runs a row's stages as Attempts; in the team's tree, put "
-                         "tools/research/src on PYTHONPATH (verity-vllm row exports it)") from e
+        raise UsageError(f"{entry} is refused: {module} is not on this tree. It needs the run store (`research`), the tool that "
+                         "records the source identity and runs a row's stages as Attempts: put tools/research/src on PYTHONPATH "
+                         "(verity-vllm row exports it)") from e
 
 
 def option(*flags: str, env: str | None = None, env_empty: bool = False, **kw: Any) -> Any:
@@ -168,7 +168,7 @@ class RowId:
             pfx = _ROW_INT_PREFIX.get(name)
             if pfx is None:
                 vals[name] = tok
-            elif tok.startswith(pfx) and tok[len(pfx):].isdigit():
+            elif tok.startswith(pfx) and tok[len(pfx):].isdecimal():
                 vals[name] = int(tok[len(pfx):])
             else:
                 raise ValueError(f"row id {row!r}: field {name} is {tok!r}, expected {pfx}<N>")

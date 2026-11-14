@@ -252,7 +252,8 @@ def test_row_config_grammar_matches_the_tool_declaration():
     sys.path.insert(0, str(RESEARCH_SRC))
     sys.path.insert(0, str(store_io.REPO_ROOT))
     from adapters.vllm.verity_vllm.pipeline import research_tools as RT
-    for rid in (ROW, "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager", "gemma2-2b__bf16__h100__tp1__b1__i512__o64__burst__stochastic__bi-graph", "bad"):
+    for rid in (ROW, "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager", "gemma2-2b__bf16__h100__tp1__b1__i512__o64__burst__stochastic__bi-graph", "bad",
+                ROW.replace("__tp1__", "__tp²__")):                                   # a digit `int` does not read stays as written, in both
         assert AP.row_config(rid) == RT.row_config(rid), rid
     assert ("row", "model", "revision", "query", *AP.ROW_FIELDS) == AP.CONFIG_KEYS
     assert set(AP.CONFIG_KEYS) <= set(RT.ROW_KEY_PARAMS)

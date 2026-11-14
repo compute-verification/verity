@@ -550,7 +550,7 @@ def test_a_clone_run_after_a_source_run_shipped_the_commit_without_git_launches(
     ready = json.loads((shared / remote.READY_FILE).read_text())
     assert ready["checkout"] is True and ready["transport"] == "stream+git" and ready["identity"] == sha
     assert (shared / ".lake" / "packages" / "dep").is_dir(), "the source run's tree is the one made a checkout, not a new one"
-    assert remote.tracked_dirt(shared) == [] and _git(shared, "rev-parse", "HEAD") == sha
+    assert remote.tracked_dirt(shared, sha) == [] and _git(shared, "rev-parse", "HEAD") == sha
     assert json.loads((run_dir / "job.json").read_text())["run"]["remote"]["source_transport"] == "stream+git"
     assert go(2, "clone").is_dir() and not list((machine / "src").glob(f"{sha}.git-*")), "reused, nothing left beside it"
 
@@ -587,20 +587,27 @@ def _request(root: Path, src: Path, sha: str, run_id: str, *, custody: bool = Fa
 
 
 def test_the_machine_refuses_a_tree_it_cannot_clone_as_the_shipped_commit(tmp_path, repo):
-    """The launcher's refusals rest on what it shipped; the runner checks the tree it is given."""
+    """The launcher's refusals rest on what it shipped; the machine checks the tree it is given.  A checkout at another commit is
+    refused at the launch request, as for any run of the commit, before a runner starts; the clone asks again, as a run in the
+    shared tree can move its HEAD after that.  A tree without .git reaches the runner, which has nothing to clone."""
     root = tmp_path / "root"
     head = _git(repo, "rev-parse", "HEAD")
     moved, plain = "d" * 40, "e" * 40
     subprocess.run(["git", "clone", "-q", "--shared", str(repo), str(root / "src" / moved)], check=True)
     (root / "src" / plain).mkdir(parents=True)
-    for sha, why in ((moved, f"is at {head}, not {moved}, the commit the run was shipped for"),
-                     (plain, "is not the top level of a git checkout")):
+    with pytest.raises(clone.Refused, match=f"is at {head}, not {moved}, the commit the run was shipped for"):
+        clone.make(root / "src" / moved, tmp_path / "c", commit=moved)
+    for sha, fault, why in ((moved, "SourceNotReady", f"HEAD is at {head}, not at {moved}"),
+                            (plain, "CloneRefused", "is not the top level of a git checkout")):
         out = remote.launch_request(_request(root, root / "src" / sha, sha, f"r-{sha[0]}", custody=True))
-        assert not out["started"] and out["fault"] == "CloneRefused" and why in out["refused"], out
+        assert not out["started"] and out["fault"] == fault and why in out["refused"], out
         run_dir = root / "runs" / f"r-{sha[0]}"
-        wait_runner(run_dir)
+        if fault == "CloneRefused":
+            wait_runner(run_dir)
+        else:
+            assert not (run_dir / "launch.json").exists(), "no runner started"
         refused = json.loads((run_dir / "refused.json").read_text())
-        assert refused["fault"] == "CloneRefused" and why in refused["reason"], refused
+        assert refused["fault"] == fault and why in refused["reason"], refused
         assert R.summarize(run_dir)["state"] == "refused" and not (run_dir / "job.json").exists()
         assert not (root / "scratch" / f"r-{sha[0]}").exists()
         assert not (root / "requests" / f"r-{sha[0]}" / remote.CUSTODY_DIR / "cred.json").exists(), "nothing will publish: the key goes now"

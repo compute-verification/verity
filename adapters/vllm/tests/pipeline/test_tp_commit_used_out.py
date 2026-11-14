@@ -126,9 +126,11 @@ def test_the_summary_of_a_commit_refused_at_its_served_switches_never_gains_an_e
 
 
 IN_PROCESS = {"pass": True, "replay_deferred": {"skipped": "world 4: deferral is proven at [2] only"}}
+ANOTHER = {"pass": None, "replay_deferred": {"record": "replay_deferred_p0.json", "pending_pairs": [0], "bundles": []}}
 
 
-@pytest.mark.parametrize("summary", [None, IN_PROCESS], ids=["no summary", "the summary of a Commit that replayed its ranks in process"])
+@pytest.mark.parametrize("summary", [None, IN_PROCESS, ANOTHER], ids=[
+    "no summary", "the summary of a Commit that replayed its ranks in process", "a summary that names a record by another name"])
 def test_a_deferred_record_whose_summary_names_no_deferred_record_is_refused_before_a_rank_replays_and_nothing_is_written(
         pair, tmp_path, caplog, summary):
     _deferred_commit(pair, tmp_path)
