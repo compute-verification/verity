@@ -11,9 +11,9 @@ import torch
 from verity.circuits.defs import bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import fa2_train as FT
-from verity.definitions.registry import fa2_train_bwd as FTB
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import fa2_train as FT
+from verity_vllm.definitions.registry import fa2_train_bwd as FTB
 
 from verity_vllm.program.frontend.rules.training_emit import (
     BF16,

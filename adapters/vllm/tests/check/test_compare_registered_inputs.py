@@ -7,7 +7,7 @@ from verity.circuits.codec import encode_program
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.check.match import program_compare as C
 

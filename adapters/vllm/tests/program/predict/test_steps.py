@@ -45,9 +45,9 @@ from verity_vllm.program.predict.steps import (
     trace_dir,
 )
 from verity_vllm.program.prune import dead_free_versions
-from verity.definitions.registry import io_shell as IO
-from verity.definitions.registry import stop_check as SC
-from verity.definitions.registry.topp_geometry import registered_splits
+from verity_vllm.definitions.registry import io_shell as IO
+from verity_vllm.definitions.registry import stop_check as SC
+from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
 import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.circuits.defs import bind
@@ -962,7 +962,7 @@ def test_class_g_samples_by_the_selects_circuit_check_binds_at_its_vocabulary(tm
     `prune`'s dead-free versions of the two at its vocabulary are the bindings `dead_free.circuit-check.py` holds for it."""
     import runpy
 
-    from verity.definitions.registry import dead_free as DF
+    from verity_vllm.definitions.registry import dead_free as DF
 
     from verity_vllm.program.predict.common import kind
 

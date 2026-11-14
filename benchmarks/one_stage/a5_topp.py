@@ -48,9 +48,9 @@ from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.commitments.windows import interface as IF  # noqa: E402
 from verity.commitments.windows import rows as CS  # noqa: E402
-from verity.definitions.registry import sampling as SA  # noqa: E402
-from verity.definitions.registry import topp_keep_builder as K  # noqa: E402
-from verity.definitions.registry import topp_stages as T  # noqa: E402
+from verity_vllm.definitions.registry import sampling as SA  # noqa: E402
+from verity_vllm.definitions.registry import topp_keep_builder as K  # noqa: E402
+from verity_vllm.definitions.registry import topp_stages as T  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
