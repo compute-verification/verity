@@ -1,5 +1,6 @@
 """A node window's boundary reads (`node_window.node_window`): where the class's Definition's parameters and return meet
-the window's units, as `interface.Read`s, each in 16-bit leaves of the parameter or the return it names. Two so far:
+the window's units, as `interface.Read`s, each in 16-bit leaves of the parameter or the return it names: the circuit's
+`Circuit.boundary_reads`. Two so far:
 
 - **The prompt's read** (`prompt_reads`): each unit the window leaves free under the Program's prompt reads its ids from
   `PROMPT`, at the leaves its stand-in rows name (`NodeWindow.stood`, built with ``stand_ins``). The prefill's embedding

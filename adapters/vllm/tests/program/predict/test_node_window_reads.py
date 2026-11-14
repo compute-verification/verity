@@ -4,6 +4,8 @@ ids (block b of token t at unit ``32 b + t``, id t at its leaves ``2 t`` and ``2
 write the served ids, output k at leaves ``2 k`` and ``2 k + 1``. Another rank's window reads the prompt and writes none."""
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_embed as NE
@@ -73,6 +75,16 @@ def test_rank_0_alone_writes_the_served_ids(rank0, rank1):
         NR.written_once(reads[1:], 2 * OUTPUTS)
     with pytest.raises(ValueError, match="past the return's"):
         NR.written_once(reads, 2 * OUTPUTS - 1)
+
+
+def test_the_window_declares_them(rank0):
+    """Rank 0's circuit with its boundary reads passes `interface.Circuit`'s checks (`check_inputs`: each on its template's
+    port and units, no row declared twice) and records them as its ``boundary_reads``; the served ids declared twice don't."""
+    circuit, w = rank0
+    reads = tuple(NR.boundary_reads(w, 0))
+    assert dataclasses.replace(circuit, boundary_reads=reads).description()["boundary_reads"] == [r.doc() for r in reads]
+    with pytest.raises(ValueError, match="both fill rows"):
+        dataclasses.replace(circuit, boundary_reads=(*reads, *NR.served_reads(w, 0)))
 
 
 def test_refused_by_name():
