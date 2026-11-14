@@ -63,6 +63,7 @@ DECL = re.compile(r"^\s*(?:@\[[^\]]*\]\s*)*(?:(?:private|protected|public|noncom
                   r"local|meta)\s+)*(?:def|theorem|lemma|abbrev|structure|inductive|class|instance|opaque|axiom)\s+"
                   r"([^\s(:{\[]+)", re.M)
 LEAN_FIELD = re.compile(r"^\s+(\w+)\s*:", re.M)
+HYPOTHESIS = re.compile(r"^\s*(?:from|import)\s+hypothesis\b", re.M)
 SERIALIZES = re.compile(r"\basdict\(|\bfields\(|__dict__|\bvars\(")
 
 
@@ -290,6 +291,8 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
                 for w in sorted(words - set(why)):
                     if spells(g, w):
                         why[w] = f"{g}, not ours, imports it and spells `{w}`"
+            if "draw" in words and HYPOTHESIS.search(text(f)):
+                why.setdefault("draw", "Hypothesis's `draw`, the library's name, kept")
             if SERIALIZES.search(text(f)):
                 for w in sorted(words & py_declares(f)):
                     why.setdefault(w, f"serializes its records by field name and declares `{w}`")
