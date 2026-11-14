@@ -1,7 +1,7 @@
 """A recorded honest session held to the honest worker's Lean (`Flock.Firewall.honestReqs`, `FirewallHonest.honestRows`):
 every request `rec_live` relayed to Lean's live firewall on an honest recursive session of the unmodified prover, in order,
 the ZK server's answer to each with the salts it drew, and the challenger's live-coin part's record (`fixtures/honest-session/`, from
-`../pod/93-rec-honest-session.sh`, which keeps `flock-firewall live`'s stdin and stdout through a tee: RoPE d64, one head).
+`pod/93-rec-honest-session.sh`, which keeps `flock-firewall live`'s stdin and stdout through a tee: RoPE d64, one head).
 
 The relayed requests, read back to what the worker brought (`test_honest_reqs.honest_of`), are Lean's `honestReqs` of it
 byte for byte (`firewall-honest-difftest`, whose reference is `rec_live`'s encoder); each commitment the ZK server sent is
