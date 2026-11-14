@@ -303,8 +303,8 @@ TEST = Setup(
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
     (0, 1, 1), ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43)), windows=1, A=6, max_tokens=5, seed=11)
 #: test's class and its three requests, and a fourth admitted at bucket 12 of execution phase 0 and anchored at bucket
-#16, : execution phase 1's first boundary: the state execution phase 1 starts from holds it live, its Program due at
-#that boundary
+#: 16, execution phase 1's first boundary: the state execution phase 1 starts from holds it live, its Program due at
+#: that boundary
 TEST2 = TEST._replace(name="test2", prompts=(*TEST.prompts, (7, 8, 9)), arrivals=(*TEST.arrivals, 12),
                       responses=(*TEST.responses, (51, 52, 53)), windows=2)
 SETUPS = {s.name: s for s in (W63, W63K4, TEST, TEST2)}
@@ -313,8 +313,8 @@ CLASS, PARAMS = W63.cls, W63.params
 SHAPE = CLASS.egress
 SESSION = bytes(range(32))
 #: an execution phase's scan's templates in its Program's order: the start unit (`IngressScanStart`), then every
-#bucket's : ingress unit (`IngressScanBucket`, bucket 0's too) and its egress unit, 2T + 1 units, one execution phase a
-#registration
+#: bucket's ingress unit (`IngressScanBucket`, bucket 0's too) and its egress unit, 2T + 1 units, one execution phase a
+#: registration
 TEMPLATES = ("start", "ingress", "egress")
 #: the unread round's: the ingress units alone, every bucket's
 UNREAD = ("ingress",)
@@ -339,7 +339,8 @@ ROW_SCHEMAS = {("block", "x"): SCHEMA_HM96_SHA512_ROW_SEG}
 FIXED = {"start": 1, "ingress": 2, "egress": 1}
 #: each kind of round's templates, and its outcome: accepted, refused by Lean's registered reads, or proved with every
 #: read held and one unit's ok bit 0; the block first, since the scan reads its outputs. A round is one execution
-#phase's, : ``<kind>-<w>`` (`round_name`)
+#: phase's,
+#: ``<kind>-<w>`` (`round_name`)
 ROUNDS = {"block": (BLOCK, "accepted"), "honest": (TEMPLATES, "accepted"), "chain": (TEMPLATES, "does not open"),
           "tampered": (("egress",), "does not open"), "unread": (UNREAD, "ok 0"), "stale": (STALE, "does not open")}
 #: the kinds of round with a start unit, whose record names the state its scan starts from (`carry_of`)

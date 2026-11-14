@@ -1206,7 +1206,7 @@ UNWIRED = "the scan's prog is no compute audit's slot entries"
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 MISREAD = "the scan's state reads are not its transitions' chain"
 #: `startCheck`'s refusals, after its window's number: an execution phase that is not the run's first, and a start that
-#is : not the empty state.
+#: is not the empty state.
 CARRIED = "the scan's start is the state the link-window before it ended in"
 UNPINNED = "the scan's start is not the empty state"
 
@@ -1720,12 +1720,13 @@ UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
 #: `RENAMED_SELECT_ENTRY`)
 UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
 #: How `rows-state-untied` breaks its execution phase's tie of the scan's state to its wired audit's `SCAN_STATE` while
-#its : `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of
-#the : scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no
-#string, : or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, beside a
-#second, or : held in its window's `activations.values` alone (`audit-activations`), as a window circuit's registration
-#commits : its per-window values (`{"program", "values": {value: entry}}`), under its own name and at the scan's state's
-#root : and domain: no entry of its `roots` or its `registered`, the two places `stateEntries` reads
+#: its
+#: `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of the
+#: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
+#: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, beside a second, or
+#: held in its window's `activations.values` alone (`audit-activations`), as a window circuit's registration commits
+#: its per-window values (`{"program", "values": {value: entry}}`), under its own name and at the scan's state's root
+#: and domain: no entry of its `roots` or its `registered`, the two places `stateEntries` reads
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra",
             "audit-activations")
 #: the program a tied audit's window's `activations` names
