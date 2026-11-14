@@ -98,20 +98,38 @@ for a new benchmark.
 
 ## Metrics
 
-`metrics.toml` declares the numbers a lead is held to, one `[[metric]]` each, and the console's Metrics tab shows each
-one's history from the evidence store. A metric's value is a measurement in a run's `result.json` named by its `id`,
-`OWNER/NAME`, which the benchmark records it under (`serve_tax`'s `Model.metric`), so a value without a run doesn't
-exist. Its keys:
+Each benchmark declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs (the first
+`.py` or `.sh` under `benchmarks/`, `demos/` or `tools/` the command names: `benchmarks/serve_tax/run.sh`'s in
+`benchmarks/serve_tax/metrics.toml`), one `[[metric]]` table per number. Each row's `owner` owns its file: the longest
+`owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a lead's numbers in
+another lead's directory take a file entry of their own there. The console's Metrics tab and `research metrics show`
+read every such file on `main` and show each number's history from the evidence store.
 
-- `id`, `title`, `owner` (a handle in `.agents/skills/using-slack/registry.json`, the id's prefix) and `unit`, the
-  unit its measurements carry.
+A metric's value is the measurement its `id` names in a run's `result.json`, which the benchmark records it under
+(`serve_tax`'s `Model.metric`) and `research run` preserves to the evidence store, so a value without a preserved run
+doesn't exist. The row's owner runs its `command` at least once every `every`. The site indexes preserved runs, so a
+value reaches the tab up to an hour after its run is preserved. Its keys:
+
+- `id`: `OWNER/NAME`, under its owner's prefix.
+- `title`, `owner` (a handle in the registry) and `unit`, the unit its measurements carry.
 - `better`: `lower` or `higher`.
 - `command`: the one command that measures it, whose script's directory records it under `id`.
-- `every`: how often it is measured (`7d`, `12h`); a value older than that is stale.
-- Optional: `floor`, the number it must not cross; `goal`, the plan's goal it serves; `tags`, a list of words.
+- `every`: how often its owner measures it (`7d`, `12h`), well over the index's hour; a value older than that is stale.
+- Optional: `floor`, the number it must not cross; `goal`, the narrowest goal on the Goals page it serves; `tags`, a
+  list of words.
 
-`tests/test_metrics_registry.py` refuses a repeated id, an unknown owner, an id outside its owner's prefix, a `better`
-other than `lower` or `higher`, and a command whose script is missing or whose directory never names the id.
+Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
+writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
+and also writes as the first of its `inputs`, where the tab reads it until it reads `mark`.
+
+The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
+that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
+"parked".
+
+`tests/test_metrics_registry.py` refuses an id declared twice across all the files, an unknown owner, an owner who
+doesn't own the row's file, an id outside its owner's prefix, a `better` other than `lower` or `higher`, a command whose
+script is missing or whose directory never names the id, a row whose command's first script is outside the directory
+of the file declaring it, and a shared `metrics.toml` directly under `benchmarks/`.
 
 ## Index
 
@@ -151,7 +169,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses), the served path's SHA-512 commitment library (`lib/`), and vLLM's int8-exact linear kernels (`exactlin/`) | maintained |
 | `flock_kernels/` | Flock's CUDA prover kernels on one GPU, each printing a digest of its output beside its time so that builds against two trees' kernels compare word for word: hm96's leaves (`hm96_leaves.cu`) | maintained |
-| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the store's load with bandwidth receipts (`p2_stage`), the exact W8A8 linear (`s8_linear`) and J10-R's units on the H200 (`j10r_sm90`) | maintained |
+| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the store's load with bandwidth receipts (`p2_stage`) and the exact W8A8 linear (`s8_linear`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
 | `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |

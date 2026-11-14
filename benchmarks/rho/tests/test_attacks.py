@@ -1,5 +1,6 @@
 """The constructions: the shard port against `benchmarks/nci/slowdown.py`'s `search`, the tile against a brute-force
-search, and measured executions extended monotonically. Every allowance must be achieved, never an estimate."""
+search, held layers against E1's Proposition 3 on its activation rate, and measured executions extended monotonically.
+Every allowance must be achieved, never an estimate."""
 
 import importlib.util
 import itertools
@@ -8,10 +9,12 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from rho import attacks
+from rho import attacks, classes
 from rho.attacks import ATTACKS, Measured, Point
 from rho.classes import FlopBudget, Outside
+from rho.params import Registry
 from rho.profile import Profile
+from rho.scenario import build
 
 KIMI = Profile(
     name="full", kappa=0.602, state_bits=1.04e12 * 16, kappa_forward=0.294, token_state_bits=8e10,
@@ -99,6 +102,64 @@ def test_the_tile_allowance_converts_its_forward_products():
     assert math.isclose(a, attacks.tile(2e7, 8, 2.6, 16, 7168, 4096) * 0.602 / 0.294)
     with pytest.raises(Outside, match="psum_bits"):
         ATTACKS["tile"].allowance(replace(KIMI, psum_bits=None))
+
+
+def test_held_layers_takes_the_best_whole_number_of_layers():
+    assert attacks.held_layers(10, 3, 1, 2, math.inf, 5) == 4
+    assert attacks.held_layers(10, 3, 1, 2, 1, 5) == 2
+    assert attacks.held_layers(10, 3, 1, 2, math.inf, 1) == 3.5
+    assert attacks.held_layers(2, 3, 1, 2, math.inf, 5) == 0
+
+
+def _held(name):
+    """The scenario's server block, its first family's profile, and the forward products a block holding whole layers
+    finishes over E1's Proposition 3's limit on its activation rate, by the block's novel bits."""
+    s = build(Registry.load(), name)
+    p = s.families[0].profile(s.model, s.run)
+    products = p.kappa_forward * p.flops_per_token / (2 * p.layers)
+
+    def over(k):
+        forward = attacks.held_layers(k, p.layer_bits, products, p.beta_x * p.map_width, p.step_tokens, p.layers)
+        return forward / classes.fanout_priced(k, p.fanout, p.beta_x)
+    return s, p, products, over
+
+
+def test_held_layers_breaks_the_activation_rate_at_the_server_block():
+    """At the reference server block a block holding two whole layers finishes 1.93 times the forward products E1's
+    Proposition 3 allows it on its activation rate, within the block's compute, and the calculator applies the rate
+    there: the block is past the premise's credible size and short of the update's last layer."""
+    s, p, products, over = _held("reference-onsite-h200")
+    block = s.regime.budget(s.context)
+    k = block.inputs
+    assert over(k) == pytest.approx(1.93, rel=0.01)
+    two = 2 * products * (k - 2 * p.layer_bits) / (p.beta_x * p.map_width)
+    assert over(k) * classes.fanout_priced(k, p.fanout, p.beta_x) == pytest.approx(two)
+    assert 2 * two / p.kappa_forward < s.context.units.flops(block.gates)
+    assert k > s.premises["draft:E1-activation-rate"]["credible_bits"]
+    assert classes.expensive_share(k, p.layer_bits, p.layers) > 0.9
+
+
+def test_held_layers_breaks_the_activation_rate_from_one_layer_and_its_tokens_entries():
+    """The construction finishes nothing below one layer's update, and passes the limit once the block also holds
+    enough tokens' entries: from `layer_bits / (1 − aOut d / P)`, 2.56 layers' updates at the reference model, and at
+    every larger block the calculator applies the rate at."""
+    _, p, products, over = _held("reference-onsite-h200")
+    assert over(p.layer_bits) == 0
+    least = p.layer_bits / (1 - p.fanout * p.map_width / products)
+    assert least / p.layer_bits == pytest.approx(2.56, rel=0.01)
+    assert over(least * 0.999) < 1 < over(least * 1.001)
+    last = (p.layers - 1) * p.layer_bits
+    assert classes.expensive_share(last, p.layer_bits, p.layers) == 0
+    assert all(over(least * (last / least) ** (i / 500)) > 1 for i in range(1, 501))
+
+
+def test_held_layers_finishes_nothing_where_no_layer_fits():
+    """`onsite-w63`'s server block is past the activation rate's credible size and smaller than one layer's update:
+    the construction finishes nothing there, and the rate is unbroken at that size."""
+    s, p, _, over = _held("onsite-w63")
+    k = s.regime.budget(s.context).inputs
+    assert s.premises["draft:E1-activation-rate"]["credible_bits"] < k < p.layer_bits
+    assert over(k) == 0
 
 
 def test_a_measured_execution_extends_monotonically_and_never_beyond_what_it_ran():

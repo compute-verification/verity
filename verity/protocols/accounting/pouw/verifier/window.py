@@ -75,35 +75,35 @@ import json
 import math
 import struct
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.circuits.codec import canonical_json
 from verity.commitments import domains, hm96
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.randomness import Key, derive
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES
-from verity.commitments.randomness import Key, derive
+from verity.protocols.proofs.spot.device import challenger as Ch
 
 GRID_BITS = 3
 
 #: (item, kind, source, reason): the execution phase's public items, in the service's `Public` form
 PUBLIC = (
     ("verdict", "output", "outcome", "what the credit rests on: every drawn tile was proved and opened, or not"),
-    ("work", "output", "window", "the credited work, as the tile count padded to a grid level: the draw ranges over its N "
-                                 "tiles and the auditor credits its work; one level, so at most log2 q bits"),
-    ("check", "structure", "parameter", "the check's identity: the tile template, its work per tile and the commitment "
-                                        "scheme fix the auditor's verifier"),
-    ("sampling", "structure", "parameter", "ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee "
-                                           "is stated in them"),
-    ("length", "structure", "parameter", "the rows of record's fixed length: each slot's max_tokens, served whatever it "
-                                         "samples (ignore_eos), so the useful work is public"),
+    ("work", "output", "window", ("the credited work, as the tile count padded to a grid level: the draw ranges over its N "
+                                  "tiles and the auditor credits its work; one level, so at most log2 q bits")),
+    ("check", "structure", "parameter", ("the check's identity: the tile template, its work per tile and the "
+                                         "commitment scheme fix the auditor's verifier")),
+    ("sampling", "structure", "parameter", ("ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee "
+                                            "is stated in them")),
+    ("length", "structure", "parameter", ("the rows of record's fixed length: each slot's max_tokens, served whatever it "
+                                          "samples (ignore_eos), so the useful work is public")),
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
@@ -187,7 +187,7 @@ class Work:
     n: int
 
     @classmethod
-    def at(cls, ell: int, bits: int = GRID_BITS) -> "Work":
+    def at(cls, ell: int, bits: int = GRID_BITS) -> Work:
         return cls(ell, point(ell, bits), point(ell + 1, bits))
 
     def to_json(self, tile_work: int) -> dict[str, int]:
@@ -415,7 +415,7 @@ class Entry:
         return list(struct.unpack(f"<{ENTRY_WORDS}H", self.row()))
 
     @classmethod
-    def from_row(cls, row: bytes) -> "Entry":
+    def from_row(cls, row: bytes) -> Entry:
         """The entry a row holds; raises ValueError for a row of another length, an unknown kind or a nonzero pad."""
         row = bytes(row)
         if len(row) != ENTRY_BYTES:
@@ -432,7 +432,7 @@ class Entry:
         return cls(kind, lo, hi, n_a, n_b, row[48:112], row[112:176], row[176:240], row[272:336], tile0, cols, m)
 
     @classmethod
-    def from_words(cls, words: Sequence[int]) -> "Entry":
+    def from_words(cls, words: Sequence[int]) -> Entry:
         if len(words) != ENTRY_WORDS or any(not 0 <= int(w) < 1 << 16 for w in words):
             raise ValueError(f"an entry row is {ENTRY_WORDS} u16 words")
         return cls.from_row(struct.pack(f"<{ENTRY_WORDS}H", *map(int, words)))
@@ -443,7 +443,7 @@ class Entry:
                 "m": self.m, "record": self.record.hex()}
 
     @classmethod
-    def from_json(cls, x: Mapping[str, Any]) -> "Entry":
+    def from_json(cls, x: Mapping[str, Any]) -> Entry:
         return cls(x["kind"], x["lo"], x["hi"], x["n_a"], x["n_b"], bytes.fromhex(x["root_a"]), bytes.fromhex(x["root_b"]),
                    bytes.fromhex(x["root_h3"]), bytes.fromhex(x["record"]), x["tile0"], x["cols"], x["m"])
 

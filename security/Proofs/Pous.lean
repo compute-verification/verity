@@ -224,17 +224,18 @@ theorem StreamedWipeMeets141GB : Pous.Guarantees.StreamedWipeMeets141GB := PousS
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
 theorem StreamedWipeMeetsH200 : Pous.Guarantees.StreamedWipeMeetsH200 := PousStreamedWipe.streamed_wipe_meets_H200
 
-/-- **`StreamedWipeMeetsH200`'s honest lemma**: the H200's numbers are `StreamedWipeMeetsReads`' antecedents, `r = 33`
-with `32^2906 · 2^129 ≤ 33^2906` and `n = 2,365,587,456` labels, and its threshold is `Reads`' at them and `R = 0`:
-`512·(⌈n/33⌉ − 1) + n + ⌊log₂ 2906⌋ + 130 = 39,068,035,213`. -/
+/-- **`StreamedWipeMeetsH200`'s honest lemma**: some prover, the honest server (`PousStreamedWipe.honest`, whose memory
+is the labels and which keeps nothing of its prior content), is accepted by the wipe's own acceptance
+(`StreamedWipe.Accepts`: every answer is its label) with probability 1, on the guarantee's H200 instance with no egress
+and no slack: `2,365,587,456` labels of 512 bits, 2906 challenges, `39,068,035,213` bits of prior content and memory
+`2,365,587,456 · 512`, with labels sampled by the PRF that outputs its 512-bit key. -/
 theorem StreamedWipeMeetsH200_honest :
-    0 < 33 ∧ 32 ^ 2906 * 2 ^ 129 ≤ 33 ^ 2906 ∧ 0 < 2365587456 ∧
-      512 * Pous.StreamedWipe.missing 2365587456 33 + 2365587456 + Nat.log2 2906 + 130 + 0 = 39068035213 := by
-  have h1 : Nat.log2 2906 < 12 := (Nat.log2_lt (by norm_num)).2 (by norm_num)
-  have h2 : 11 ≤ Nat.log2 2906 := (Nat.le_log2 (by norm_num)).2 (by norm_num)
-  refine ⟨by norm_num, by decide +kernel, by norm_num, ?_⟩
-  unfold Pous.StreamedWipe.missing
-  omega
+    ∃ (prf : Pous.Bits 512 → Fin 2365587456 → Pous.Bits 512)
+      (P : Pous.StreamedWipe.Prover 2365587456 2906 512 39068035213 (2365587456 * 512) 0),
+      Pous.pr (fun x : (Pous.Bits 39068035213 × (Fin 2906 → Fin 2365587456)) × Pous.Bits 512 =>
+        Pous.StreamedWipe.Accepts P x.1.1 (prf x.2) x.1.2) = 1 :=
+  ⟨fun K _ => K, PousStreamedWipe.honest 2365587456 2906 512 39068035213,
+    Pous.Claims.pr_of_forall fun _ => PousStreamedWipe.honest_accepts _ _ _⟩
 
 /-- **`StreamedWipeMeetsH200`'s nontrivial lemma**: its bound is false at `StreamedWipe.acceptAll`, on the H200's
 instance with no egress, for some key-free PRF and a prover (`keepAll`) keeping the threshold's `39,068,035,213`
