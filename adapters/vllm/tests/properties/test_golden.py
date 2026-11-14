@@ -1,6 +1,7 @@
-"""golden.py (protected): a corpus log absent from the checkout is fetched, and one the fetch can't give is skipped with why; with
-the fold left out, what `check` makes of each entry, what `record` writes, and what `main` prints and exits with. The frozen
-corpus itself, whose logs are over a tracked file's limit, is `test_golden_of_record`."""
+"""golden.py (protected): a corpus log absent from the checkout is fetched, and one the fetch can't give is skipped with why;
+what `measure` asks of the fold and gives of its result; with the fold left out, what `check` makes of each entry, what
+`record` writes, and what `main` prints and exits with. The frozen corpus itself, whose logs are over a tracked file's limit,
+is `test_golden_of_record`."""
 from __future__ import annotations
 
 import hashlib
@@ -73,6 +74,36 @@ def test_the_attribution_is_each_instances_step_event_pattern_and_specialization
         assert golden.attribution(folded(inst, {**counts, key: "changed"}))[0] != sha, key
     assert golden.attribution(folded(inst, counts, nodes=4))[0] != sha
     assert golden.attribution(folded(inst, counts, nodes=None)) == golden.attribution(folded(inst, counts, nodes=0))
+
+
+def test_measure_folds_the_log_under_the_named_profile_with_its_program_and_not_strictly(monkeypatch):
+    """And gives the fold's digest, what it could not support or resolve, the attribution with its four counts, and the
+    seconds the fold took, to a hundredth."""
+    from verity_vllm.check import fold_compare
+
+    result = folded([{"step": 0, "event": 4, "pattern": "gemm", "spec": "Gemm{N=4}"}, {"step": 1, "event": 4, "pattern": None, "spec": "Add{N=4}"}],
+                    {"steps": 2, "computes": 2})
+    result.digest, result.unresolved, result.report.unsupported = "digest-of-the-fold", 2, 3
+    calls: list[tuple[Any, ...]] = []
+
+    def load_profile(*a: Any, **kw: Any) -> str:
+        calls.append(("load_profile", a, kw))
+        return "the profile"
+
+    def fold_log(*a: Any, **kw: Any) -> SimpleNamespace:
+        calls.append(("fold_log", a, kw))
+        return result
+    monkeypatch.setattr(fold_compare, "load_profile", load_profile)
+    monkeypatch.setattr(fold_compare, "fold_log", fold_log)
+    readings = iter((16, 17))
+    monkeypatch.setattr(golden, "time", SimpleNamespace(time=lambda: next(readings) / 8))                  # the fold takes an eighth of a second
+    m = golden.measure("data/logs/one.jsonl.gz", "prof")
+    assert calls == [("load_profile", ("prof",), {}),
+                     ("fold_log", ("data/logs/one.jsonl.gz", "the profile"), {"strict": False, "with_program": True})]
+    sha, info = golden.attribution(result)
+    assert info == {"n_instances": 2, "n_steps": 2, "patterns": ["", "gemm"], "specs": 2}
+    assert m == {"digest": "digest-of-the-fold", "attribution_sha": sha, "unsupported": 3, "unresolved": 2, "seconds": 0.12, **info}
+    assert next(readings, None) is None                                                                    # the clock is read twice
 
 
 def measured(digest: str, sha: str) -> dict:
@@ -188,7 +219,11 @@ def test_main_records_with_a_log_and_a_profile_and_prints_the_entry(monkeypatch,
     def record(*a, **kw):
         calls.append((a, kw))
         return {"name": "one", "digest": "d1"}
+
+    def check(**kw):
+        raise AssertionError("--record goes on to no check of the corpus")
     monkeypatch.setattr(golden, "record", record)
+    monkeypatch.setattr(golden, "check", check)
     for argv in (["--record", "one"], ["--record", "one", "--log", "one.jsonl.gz"], ["--record", "one", "--profile", "prof"]):
         with pytest.raises(UsageError) as refused:
             golden.main(cli.parse("golden", argv, {}))

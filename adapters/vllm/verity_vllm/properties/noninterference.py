@@ -61,12 +61,15 @@ from pathlib import Path
 
 from verity_vllm import settings
 from verity_vllm.config import option, workload_arg
+from verity_vllm.log import init_logger
 from verity_vllm.properties.noninterference_families import (
     FINAL_NORM_MODULES,
     parallel_residual_boundaries,
     unfused_norm_boundaries,
 )
 from verity_vllm.records.property_record import REGISTRY, seal
+
+logger = init_logger(__name__)
 
 # the decoder-layer module and the final norm under their family's vLLM names: Llama-style
 # `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE families) and GPT-NeoX `gpt_neox.layers.N` /
@@ -453,7 +456,8 @@ def case_of_args(args) -> str | None:
     try:
         doc = json.loads(Path(args.workload).read_text())
         return doc.get("case") or "B0"
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.debug("the workload file %s gives no case, so B0: %r", getattr(args, "workload", None), e)
         return "B0"
 
 
@@ -464,7 +468,8 @@ def expected_layers_for(case: str | None) -> int | None:
     try:
         from verity_vllm.observe.fold.profiles import profile_for_case
         return int(profile_for_case(case).config["NL"])
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.debug("no layer count for case %r: %r", case, e)
         return None
 
 
@@ -556,8 +561,8 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
         else:
             expected_steps = max(int(r["max_tokens"]) for r in c_doc["requests"])
             expected_steps_source = "max(max_tokens)"
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.debug("%s gives no step count, so %d: %r", d / "c_bare" / "tokens.json", expected_steps, e)
     layer_counts = {(r.get("layers_a"), r.get("layers_b")) for r in per_step}
     layers_ok = len(layer_counts) == 1 and all(a == b and a and a > 0 for a, b in layer_counts)
     # gate I3 (generalization plan): the layer count is checked against the profile's C["NL"], not only for self-consistency
