@@ -2,7 +2,7 @@
 from the bottom for blocks of 64 MiB and more, the top of the highest free block that holds them for smaller ones, 256-byte
 alignment, neighbours merged on release) and every ``ffi_malloc``/``ffi_free`` and Ligerito arena call the prover makes, in its
 order and at its sizes, for a shape (m, k_log, M1 or M0, the statement's slot types, level 0's padding, the ring switch's
-extra claims). A session is two reps: with keep, rep 0 leaves level 0's commitment in the open arena and rep 1 takes it;
+extra claims, the unit's level walk). A session is two reps: with keep, rep 0 leaves level 0's commitment in the open arena and rep 1 takes it;
 without, each rep begins and finishes the arena. ``need`` is the smallest arena (in MiB) a session fits in.
 
 Ligerito's ladder is upstream's: ``LIGERITO[m]`` is ``prover_config_for(m - 7, embedded_initial_k_or_default(m), Fast100)``
@@ -64,6 +64,8 @@ class Shape:
     l0_rows: bool = True
     #: before keep-L0, a keeping rep 0 held a and b through Ligerito and a copy of z from its witness on
     keep_ab: bool = False
+    #: the unit's level walk (fc_unit_walk): the bytes of each of its three working arrays, held while a rep's witness is built
+    walk_bytes: int = 0
     ligerito: tuple = field(default=None, compare=False)
     #: the wide level-0 leaf's statement version: `WIDE`'s ladder where it has one, else `LIGERITO`'s
     wide: bool = False
@@ -104,6 +106,11 @@ def rep_events(s: Shape, mode: str) -> Iterator[tuple]:
     yield a("df", W)
     yield a("d_a", W)
     yield a("d_b", W)
+    if s.walk_bytes:
+        for name in ("walk_z", "walk_a", "walk_b"):
+            yield a(name, s.walk_bytes)
+        for name in ("walk_b", "walk_a", "walk_z"):
+            yield r(name)
     if keep and s.keep_ab:
         yield a("z_copy", W)
     k_code = log_n - ik + rates[0]
@@ -398,7 +405,9 @@ def shapes(ms=range(21, 38), k_logs=range(20, 28)) -> Iterator[Shape]:
 
 def worst(s: Shape) -> list[Shape]:
     """s and its statement-dependent extremes: twelve slot types of 2^(k_log - 4) columns and one of K (fc_fold's folds), an
-    extra claim of the whole witness (the ring switch's gather), level 0's padding at its cap (t_pad = L, so L/2 queries)."""
+    extra claim of the whole witness (the ring switch's gather), level 0's padding at its cap (t_pad = L, so L/2 queries), a
+    unit whose level walk has a quarter of a block's rows and one with a whole block's (32 bytes a row in each working
+    array)."""
     log_l = s.m - 7 - s.lig()[0]
     return [s, replace(s, type_logs=(s.k_log - 4,) * 11 + (s.k_log,)), replace(s, extra_free=(s.m - 7,)),
-            replace(s, t_pad=1 << log_l)]
+            replace(s, t_pad=1 << log_l), replace(s, walk_bytes=32 << (s.k_log - 2)), replace(s, walk_bytes=32 << s.k_log)]

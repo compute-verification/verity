@@ -62,7 +62,7 @@ from verity.definitions.registry.prims import bits_of
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fused-rmsnorm-capture/v2"
 RECORD = "glm53_fused_rmsnorm_capture.json"
@@ -352,7 +352,7 @@ def bind_check() -> dict[str, Any]:
     for _, N, _, _ in NORMS:
         try:
             fn = bind(DN.DsaRMSNorm, N=N, EPS=EPS)
-            out[fn.id] = bool(fn.signature()) and SW.boolean_version(fn).id == f"DsaRMSNorm_v2{{N={N},EPS={EPS}}}"
+            out[fn.id] = bool(fn.signature()) and SW.boolean_version(fn).id == f"DsaRMSNorm_v3{{N={N},EPS={EPS}}}"
         except Exception as e:  # noqa: BLE001
             out[f"DsaRMSNorm_v1{{N={N}}}"] = DS._error(e)
     return {"bindings": out, "ok": len(out) == len(NORMS) and all(v is True for v in out.values())}

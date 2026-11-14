@@ -2,7 +2,7 @@ module
 
 public import Proofs.Core.QSort
 public import Proofs.Properties.Pouw.LiveSalt.Canon
-public import Proofs.Properties.NetworkCertifier.Records.Bytes
+public import Proofs.Flock.Bytes
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
