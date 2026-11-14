@@ -1,6 +1,6 @@
 """`.cursor/hooks.json`'s Task hook keeps a coordinator from waiting on a local worker in the foreground, which holds its turn
-(and so every Slack, Linear and timer event) until the worker ends, and keeps a cloud agent from
-writing Linear through its MCP connector, which acts as the person who connected it."""
+(and so every Slack, Linear and timer event) until the worker ends, keeps a cloud agent from launching a worker on
+another model than Opus 5.5 or Sonnet 5.5, and keeps a cloud agent from writing Linear through its MCP connector, which acts as the person who connected it."""
 import json
 import os
 import subprocess
@@ -35,7 +35,7 @@ def test_a_task_call_through_the_dynamic_tool_wrapper_is_judged_like_a_direct_on
     fg = {"subagent_type": "generalPurpose", "prompt": "x"}
     assert answer(tmp_path, HOLDER, {"namespace": "cursor", "toolName": "Task", "arguments": fg},
                   "CallDynamicTool")["permission"] == "deny"
-    bg = {**fg, "environment": "cloud", "run_in_background": True}
+    bg = {**fg, "environment": "cloud", "run_in_background": True, "model": "claude-opus-5-5-high"}
     assert answer(tmp_path, HOLDER, {"namespace": "cursor", "toolName": "Task", "arguments": bg},
                   "CallDynamicTool") == {"permission": "allow"}
     recs = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
@@ -97,15 +97,41 @@ def test_a_coordinators_local_worker_in_the_foreground_is_refused_with_the_way_t
 
 
 @pytest.mark.parametrize("conversation_id,tool_input", [
-    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud"}),
-    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "run_in_background": True}),
+    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud", "model": "claude-opus-5-5-high"}),
+    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "run_in_background": True, "model": "claude-opus-5-5-high"}),
     (HOLDER, {"subagent_type": "explore", "prompt": "x"}),
     (HOLDER, {"subagent_type": "cursor-guide", "prompt": "x", "run_in_background": False}),
-    (WORKER, {"subagent_type": "generalPurpose", "prompt": "x"}),
+    (WORKER, {"subagent_type": "generalPurpose", "prompt": "x", "model": "claude-sonnet-5-5-high"}),
     (None, {"subagent_type": "generalPurpose", "prompt": "x"}),
     (HOLDER, "not an object"),
 ])
 def test_cloud_workers_foreground_lookups_and_other_agents_pass(tmp_path, conversation_id, tool_input):
+    assert answer(tmp_path, conversation_id, tool_input) == {"permission": "allow"}
+
+
+@pytest.mark.parametrize("conversation_id", [HOLDER, WORKER])
+@pytest.mark.parametrize("model", ["claude-fable-5-2-xhigh", "claude-fable-5-2-medium", "inherit", None, "gpt-5"])
+def test_a_cloud_agents_launch_naming_neither_opus_nor_sonnet_5_5_is_refused_with_the_model_to_name(tmp_path,
+                                                                                                   conversation_id, model):
+    """Only leads run Fable 5.2: a launch on it, on `inherit` or on the account default gives a worker the lead's model."""
+    args = {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud", "model": model}
+    a = answer(tmp_path, conversation_id, args)
+    assert a["permission"] == "deny" and f"model `{model}`" in a["agent_message"]
+    assert '"claude-opus-5-5-high"' in a["agent_message"] and '"claude-sonnet-5-5-high"' in a["agent_message"]
+    (rec,) = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
+    assert (rec["deny"], rec["model"]) == (True, model)
+
+
+@pytest.mark.parametrize("conversation_id,tool_input", [
+    (WORKER, {"subagent_type": "generalPurpose", "prompt": "x", "model": "claude-opus-5-5-high"}),
+    (WORKER, {"subagent_type": "generalPurpose", "prompt": "x", "model": "claude-sonnet-5-5"}),
+    (WORKER, {"prompt": "go on", "resume": HOLDER}),
+    (WORKER, {"prompt": "go on", "resume": HOLDER, "model": "claude-fable-5-2-xhigh"}),
+    (WORKER, {"subagent_type": "explore", "prompt": "x"}),
+    ("6f1d2c3e-0000-4000-8000-000000000000", {"subagent_type": "generalPurpose", "prompt": "x", "model": "claude-fable-5-2"}),
+])
+def test_opus_or_sonnet_5_5_a_resume_a_lookup_and_a_local_sessions_launch_pass_the_model_rule(tmp_path, conversation_id,
+                                                                                              tool_input):
     assert answer(tmp_path, conversation_id, tool_input) == {"permission": "allow"}
 
 

@@ -6,7 +6,9 @@ Slack, Linear and timer events reach an agent only while its turn is free, and a
 until it ends; one in the background doesn't. Local workers also share the coordinator's VM, where one OOM kills them all (so:
 cloud workers where the Task tool offers them, background always). So for an agent that holds a handle (its id is in a `holder`
 of the Slack registry, `.agents/skills/using-slack/registry.json`) it refuses a local Task call in the foreground, unless it is
-one of the short read-only lookups in `LOOKUPS`. Cloud and background calls pass, and so does every other agent's. Reads
+one of the short read-only lookups in `LOOKUPS`. Cloud and background calls pass, and so does every other agent's. A cloud
+agent's launch that names neither Opus 5.5 nor Sonnet 5.5 (`WORKER_MODEL`) is refused too: only leads run Fable 5.2, so
+no launch names it; a resume, which keeps its agent's model, and a lookup pass. Reads
 Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes, and so does another
 step's event, unlogged. Each verdict is appended to
 $AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type, background flag,
@@ -32,6 +34,7 @@ OWN_REGISTRY = Path(__file__).resolve().parents[2] / ".agents/skills/using-slack
 REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY", OWN_REGISTRY))
 LOG = Path(os.environ.get("AGENT_GUARD_TASK_LOG", "/tmp/agent-guard-task.jsonl"))
 LOOKUPS = {"explore", "cursor-guide", "ci-investigator", "videoReview"}
+WORKER_MODEL = re.compile(r"claude-(?:opus|sonnet)-5-5(?:-[a-z]+)?")
 AGENT_ID = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LINEAR_READS = ("get_", "list_", "search_", "extract_")
 #: the Linear connector's tools that write, as a direct MCP call names them (`MCP:<tool>`)
@@ -78,6 +81,19 @@ def reason(event: dict) -> str | None:
             f"foreground: {', '.join(sorted(LOOKUPS))}.")
 
 
+def model_reason(event: dict) -> str | None:
+    """Why a cloud agent's Task launch is refused for its model, else None: only leads run Fable 5.2, and they launch
+    workers, so a launch names Opus 5.5 or Sonnet 5.5. A resume keeps its agent's model and a lookup is read-only."""
+    args = task_input(event)
+    if not AGENT_ID.fullmatch(str(event.get("conversation_id") or "")) or not isinstance(args, dict):
+        return None
+    if args.get("resume") or args.get("subagent_type") in LOOKUPS or WORKER_MODEL.fullmatch(str(args.get("model") or "")):
+        return None
+    return (f"Refused by tools/agent-guard/task_hook.py: this Task launch names model `{args.get('model')}`, and a worker "
+            "runs Opus 5.5 or Sonnet 5.5, never Fable 5.2, `inherit` or the default (the team skill). Name it: `model: "
+            "\"claude-opus-5-5-high\"`, or `\"claude-sonnet-5-5-high\"` for a fully specified task.")
+
+
 def linear_write(event: dict) -> str | None:
     """Why a cloud agent's call of a Linear connector tool that writes is refused, else None."""
     args, name = event.get("tool_input"), str(event.get("tool_name") or "")
@@ -113,7 +129,7 @@ def main() -> int:
     if why := linear_write(event):
         print(json.dumps({"permission": "deny", "agent_message": why, "user_message": why}))
         return 0
-    why, args = reason(event), task_input(event)
+    why, args = reason(event) or model_reason(event), task_input(event)
     if (event.get("tool_name") == "CallDynamicTool" or str(event.get("tool_name") or "").startswith("MCP:")) and args is None:
         print(json.dumps({"permission": "allow"}))
         return 0

@@ -18,8 +18,8 @@ side by side; it is not a package.
 | `inbox.py` | Messages to a running agent, on this VM or another. | The team skill; `research digest` |
 | `research.sh` | The `research` on an agent VM's PATH: it runs origin/main's `tools/research/src/research/at_main.py`, which runs the checkout's `research` or, when the checkout is only behind, origin/main's. | `install.sh`; `at_main.py` |
 
-The rest: `task_hook.py` (a coordinator never waits on a local worker in the foreground, and a cloud agent writes
-Linear through `research msg`; each Task call's verdict, model and resume flag, never its prompt, go to
+The rest: `task_hook.py` (a coordinator never waits on a local worker in the foreground, a cloud agent's launch names
+Opus 5.5 or Sonnet 5.5, and a cloud agent writes Linear through `research msg`; each Task call's verdict, model and resume flag, never its prompt, go to
 `$AGENT_GUARD_TASK_LOG`, default `/tmp/agent-guard-task.jsonl`), `stop_hook.py` (it offers a message still waiting when a
 turn ends to the runtime as a follow-up, which no delivery relies on: a message reaches an agent at its next shell
 command, and one its VM holds unshown when its turn ends may be gone by its next turn, so an agent whose turn has ended
