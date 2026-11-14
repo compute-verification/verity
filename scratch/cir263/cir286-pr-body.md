@@ -28,7 +28,13 @@ PENDING
 
 ## circuit-check
 
-PENDING
+`r20261114-081226-83a2` at `9badaf0ec718cc1f3414ec94b182d25607e27aae`, the report on the three Definitions the two forms are held to, by id [run]:
+- `DsaRMSNorm_v1{N=2048, EPS=1e-05}`: ok, 0 failures, 0 unchecked [run].
+- `DsaRMSNorm_v1{N=512, EPS=1e-05}`: ok, 0 failures, 0 unchecked [run].
+- `RoPEHeadGptJ_v2{D=64}`: ok, 0 failures, 0 unchecked [run].
+- 3 targets, 0 failures, each compared with a realization on random vectors [run].
+
+No Definition, binding or pin changes here, so circuit-check's inputs are `main`'s but for the merged CIR-263 below it [read].
 
 ## Checks at this head
 

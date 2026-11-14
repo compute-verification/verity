@@ -56,35 +56,33 @@ One H200 card, each run read on its node, Fri 13 Nov 15:45Z to 15:52Z, one lease
 
 ## circuit-check
 
-`r20261113-210950-1125` at `08d6acdced2231eafdf6b10bf0245d6e0d2a8ef0`, in its own clone [run]:
+`r20261114-080211-687f` at this head, `8ab720de29ac6dc20fe574c5834a2b691b1dfefe`, in its own clone [run]. The merge with `main` changed circuit-check's own code and the Boolean modules it reads, so it ran again here [read: `git diff`].
 
-- The update pass on both sidecars and the two slices: 14 targets, 0 failures, exit 0; the pins' diff after it is empty and the tree clean [run].
+- The update pass on both sidecars and the two slices: 14 targets, 0 failures, exit 0; the pins' diff after it is empty [run].
 - The report on both sidecars, `DsaRMSNormApply_v1{G=64}` (the apply the norm's cut uses, `dsa_norm`'s binding), the two slices and the two whole rows: 17 targets, 4 failures, 6 `vectors/none` warnings; 11 targets compared with a realization on random vectors [run].
   - Every Definition added here passes: `MtpEhNorm_v2` at H 256 and 6144, `MtpEhZero_v2` at H 16, 256 and 6144, `TritonBlockRMSNormSumSq_v2` and `TritonBlockRMSNormMeanRsqrt_v1` at N 256 and 6144 [run].
   - The word Definitions with no realization at their bound size (`MtpEhNorm_v1`, `MtpEhZero_v1` and `TritonBlockRMSNormSumSq_v1` at 6144, and `DsaRMSNormApply_v1{G=64}`) carry `vectors/none` and no failure; their Boolean versions above are compared at the same size [run].
-  - `Gemm_v2{K=12288, N=1, …}` and `CublasSplitKGemm_v1{K=12288, N=1, SPLIT_K=2, …}`: ok, 0 failures, each one unit of 16 bits out [run].
-  - The four failures are the two whole rows': `block/past-range` on both (2^38 bits; Flock's proved range is 2^27), and on the split-K row also `partition/unpartitioned` and `correspondence/unprobed-table` (75,497,472 leaves of W) [run]. `Gemm_v2`'s whole row matched its reference on correspondence (1,312 s) [run]. `circuit-check --all` checks neither whole row, since a family's members over 150,000 gates are left out unless pinned (`select` in `tools/verity/circuit_check/src/circuit_check/targets.py`) [read]. The served indexer's whole-row bindings in `cublas_bf16.circuit-check.py` are in the same position [read; that they too are past range is my arithmetic, inferred].
+  - `Gemm_v2{K=12288, N=1, …}` and `CublasSplitKGemm_v1{K=12288, N=1, SPLIT_K=2, …}`: ok [run].
+  - The four failures are on the two whole rows, when named by id: `block/past-range` on both (2^38 bits; Flock's proved range is 2^27), and on the split-K row also `partition/unpartitioned` and `correspondence/unprobed-table` [run]. `circuit-check --all` checks neither whole row, since a family's members over 150,000 gates are left out unless pinned (`select` in `tools/verity/circuit_check/src/circuit_check/targets.py`) [read]. The served indexer's whole-row bindings in `cublas_bf16.circuit-check.py` are in the same position [read; that they too are past range is my arithmetic, inferred].
+- The same 14 and 17 targets gave the same verdicts at `08d6acdced22`, before the merge [run: `r20261113-210950-1125`].
 
 ## Checks at this head
 
-All at `08d6acdced2231eafdf6b10bf0245d6e0d2a8ef0`, against the `main` this branch merged, `f479876a87581c572c7b7b74ba2f23aa95785851`.
+All at `8ab720de29ac6dc20fe574c5834a2b691b1dfefe`, against the `main` it merged, `d260e6bb9cb3f9278634d55f09aa9b2ebbd14e1b`.
 
-- **Suites.** `suites.py --changed f479876a8758` names 64 suites [run: `r20261113-213643-9f06`]. That run ended at its three-hour limit with 53 passed and none failed, `verity-vllm` among them (17,910 passed, 565 skipped) [run]. The eleven it never reached were run by name:
-  - `verity-flock`: 2,102 passed, 69 skipped [run: `r20261114-013424-7b75`, the twin that ran `r20261114-013250-e04e`'s job].
-  - Nine passed in `r20261114-013209-983d`: `verity/definitions` 1,136; `verity/circuits` 1,125; `verity/circuits/ops` 985; `verity/commitments` 649; `verity/commitments/windows` 103; `verity-core-evaluate` 67; `verity-numerical` 662; `research` 5,086; `verity/protocols/accounting/pouw/verifier` 2,114 [run].
-  - circuit-check's own suite (`tools/verity/circuit_check/tests`), in the same run: its 448 tests passed (5 skipped), and the suite failed its input guard: "its tests read 1 files outside its inputs, for example verity/channel.py (read by a conftest or session fixture)" [run]. That did not reproduce. At this head, alone, with an empty records directory and `--fresh`: 448 passed, 5 skipped, all 894 bindings built, no read outside its inputs [run: `r20261114-061636-54bc`]. At the merged `main`, the same way: 448 passed with all 883 built [run: `r20261114-035410-ad25`]. The untraced records build of all 894 bindings at this head never imports `verity.channel` (an audit hook on its imports and opens) [run: `r20261114-051352-6875`]. So the read came from the traced session in that one run, which shared its node with other suites and ran on 2 workers rather than 4. Which fixture made it, I don't know [inferred].
-- **The adapter's ratchet gate**, `python3 adapters/vllm/tools/ratchet_gate.py f479876a8758 HEAD --json`: one change, verdict passed, 0 failures [run: `r20261114-013321-78ad`].
-- **Pins**, `python3 tools/verity/check/pins.py --stale`: exit 0, no pin named, both at the merge `3e9855683f6c` [run: `r20261113-194328-88d1`] and at this head [run: `r20261114-013321-78ad`].
-- **Retired terms**, `tests/test_retired_terms.py` and `tests/lint/test_repo_retired_terms.py`: 40 passed, with 5 bookkeeping warnings [run: `r20261114-013321-78ad`]. None of the files they name is one this branch changes, and no line it adds holds a retired term [run; the overlap is mine, from the run's log]. The gate says the same for the files it reads [run].
+- **Suites.** SUITES_LINE
+- **The adapter's ratchet gate**, `python3 adapters/vllm/tools/ratchet_gate.py d260e6bb9cb3 HEAD --json`: verdict passed, exit 0; it prints "no retired-term site is new in the 14 file(s) it changes", and the same for direct environment reads, silent except handlers and lane text [run: `r20261114-080211-ab72`].
+- **Pins**, `python3 tools/verity/check/pins.py --stale`: exit 0 [run: `r20261114-080211-ab72`].
+- **Retired terms**, `tests/test_retired_terms.py` and `tests/lint/test_repo_retired_terms.py`: 43 passed, with 5 bookkeeping warnings (stale `ALLOWED` entries, maintained docs, Lean names, a count's growth) [run: `r20261114-080211-ab72`]. This branch changes no `.lean` or `.md` file, and no line it adds holds a retired term [read: `git diff --stat`, and the gate above].
 
 ## Runs
 
 Each read on its node; every head below is in this branch's history [run: `git merge-base --is-ancestor`].
 
-- At this head, `08d6acdced22`: circuit-check `r20261113-210950-1125`; suites `r20261113-213643-9f06` (cut at its limit), `r20261114-013209-983d` and `r20261114-013424-7b75`; gate, pins and retired terms `r20261114-013321-78ad`; `research.carry` `r20261114-015101-b9b2`.
-- At `7c96ba47aed0`, which differs from this head only in the sidecar's two slice bindings: circuit-check on both sidecars `r20261113-194646-9c64` (12 targets in the update pass, 13 in the report, 0 failures, empty pins diff), and on the whole rows by id `r20261113-201855-8dbc` (the 4 failures above) [run].
+- At this head, `8ab720de29ac`: circuit-check `r20261114-080211-687f`; suites RUNS_SUITES; gate, pins and retired terms `r20261114-080211-ab72`.
+- At `08d6acdced22`, before the merge with `d260e6bb9cb3`: circuit-check `r20261113-210950-1125`; suites against `f479876a8758` `r20261113-213643-9f06` (cut at its limit, 53 passed, none failed), `r20261114-013209-983d` and `r20261114-013424-7b75` (the eleven it never reached, all passed but circuit-check's own suite's input guard, which `r20261114-061636-54bc` did not reproduce); gate, pins and retired terms `r20261114-013321-78ad`; `research.carry` `r20261114-015101-b9b2`.
+- At `7c96ba47aed0`, which differs from `08d6acdced22` only in the sidecar's two slice bindings: circuit-check on both sidecars `r20261113-194646-9c64`, and on the whole rows by id `r20261113-201855-8dbc` (the 4 failures above) [run].
 - At the merge `3e9855683f6c`: pins `r20261113-194328-88d1`.
-- At the merged `main` `f479876a8758`: circuit-check's own suite `r20261114-032615-711c` (448 passed, its records reused) and `r20261114-035410-ad25` (empty records). At this head again: that suite alone `r20261114-061636-54bc`, and the records build under the audit hook `r20261114-051352-6875`.
 - At `ce09de03c318`: the three captures of record above.
 - Earlier, before the carry: `r20261112-141330-0ffd` at `0fbd2a35cb3c` (the whole norm row past range); `r20261113-031522-215e` at `920597d5ca7f` (the split-K probe that raised); `r20261113-040826-9fec` at `78884a1b8aa7` (the 18 sibling tests that saw a third model).
 
