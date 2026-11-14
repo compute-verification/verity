@@ -20,15 +20,18 @@ a keyword, a key).  A file's count is its matching tokens.
 It reads the cards' TOML itself rather than through ``verity.device``, since the ``loaded_by`` of that trusted place only
 shrinks, and it imports only the standard library, since the ratchet gate runs ``test_no_new_device_figures`` without pytest.
 
-An entry ``{"file", "count", "lane"}`` allows ``count`` matching tokens in its file, and one that stays says why (``"why"``: a
-record, a made-up device, a citation); it has no line numbers.  A file with more than its entry allows (an unlisted file's
-entry is 0), or an entry above its file's count, warns (``tests/conftest.py``'s ``BOOKKEEPING``): a copy that equals its card
-makes no claim false when it lands.  It cannot see a copy that already differs from its card (it matches exact values) or a
-figure the card has no key for.
+An entry ``{"file", "count", "lane"}`` of ``allowlists/device_figures.json`` allows ``count`` copies in its file, to be read
+from the card: that list only shrinks, and the ratchet gate holds it.  An entry of ``tests/device_figures_kept.json`` allows
+numbers that stay and says why (``"why"``: another number that happens to be equal, a record, a made-up device, a
+citation); that list may grow.  Neither has line numbers, and a file's allowance is its two entries' sum.  A file with more
+than its allowance (an unlisted file's is 0), or an allowance above its file's count, warns (``tests/conftest.py``'s
+``BOOKKEEPING``): a copy that equals its card makes no claim false when it lands.  A move doesn't warn: a file no list
+names that has an untracked listed file's base name and finds exactly that file's allowance takes it over (``paired``).
+It cannot see a copy that already differs from its card (it matches exact values) or a figure the card has no key for.
 
-    python3 tests/lint/test_device_figures.py --record          # the list is what this tree finds, each lane the registry's
+    python3 tests/lint/test_device_figures.py --record          # the lists are what this tree finds, each lane the registry's
     python3 tests/lint/test_device_figures.py --prune           # lower and delete what this tree no longer finds
-    python3 tests/lint/test_device_figures.py --move OLD NEW    # a file (or directory) moved: its entry follows it
+    python3 tests/lint/test_device_figures.py --move OLD NEW    # a file (or directory) moved: its entries follow it
 """
 from __future__ import annotations
 
@@ -49,6 +52,9 @@ from typing import NamedTuple
 NAME = "device_figures"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
+#: the numbers that equal a figure and stay, each entry saying why; outside the lint directory, so the ratchet gate, which
+#: runs the base's lint directory, reads the change's copy, and holds only ``LIST`` to shrink
+KEPT = ROOT / "tests" / f"{NAME}_kept.json"
 REGISTRY = ".agents/skills/using-slack/registry.json"
 CARDS, NODES = "hardware/cards/", "hardware/nodes/"
 #: the readings of a GPU's tensor clock its card states: the tensor's own, then the SM clock (``verity.device.READINGS``;
@@ -383,9 +389,10 @@ def sites(text: str, path: str, figs: Figures) -> list[tuple[Run, Figure]]:
     return [(r, f) for r in runs(text, path, frozenset(figs.sms)) if (f := match(r, figs)) is not None]
 
 
-def files() -> list[str]:
+@lru_cache(maxsize=None)
+def files() -> tuple[str, ...]:
     out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout
-    return sorted(p for p in out.decode().split("\0") if p and holds(p))
+    return tuple(sorted(p for p in out.decode().split("\0") if p and holds(p)))
 
 
 @lru_cache(maxsize=None)
@@ -403,26 +410,66 @@ def scan() -> tuple[tuple[str, Run, Figure], ...]:
                  for r, fig in sites((ROOT / f).read_text(encoding="utf-8", errors="replace"), f, figs))
 
 
-def parse(doc: object) -> dict[str, dict]:
-    """Each file's entry, from a list's document."""
-    assert isinstance(doc, dict) and isinstance(doc.get("entries"), list), f"{LIST.name}: {{'entries': [...]}} expected"
+def parse(doc: object, kept: bool = False) -> dict[str, dict]:
+    """Each file's entry, from a list's document: an entry of ``KEPT`` says why its numbers stay, one of ``LIST`` doesn't."""
+    name = (KEPT if kept else LIST).relative_to(ROOT).as_posix()
+    keys = {"file", "count", "lane", "why"} if kept else {"file", "count", "lane"}
+    assert isinstance(doc, dict) and isinstance(doc.get("entries"), list), f"{name}: {{'entries': [...]}} expected"
     out: dict[str, dict] = {}
     for e in doc["entries"]:
-        assert isinstance(e, dict) and {"file", "count", "lane"} <= set(e) <= {"file", "count", "lane", "why"} and \
-            all(isinstance(e.get(k, ""), str) and e.get(k, "x") for k in ("file", "lane", "why")), \
-            f"{LIST.name}: an entry is {{file, count, lane}} and, for one that stays, its why: {e}"
-        assert type(e["count"]) is int and e["count"] >= 1, f"{LIST.name}: count must be a positive int: {e}"
-        assert e["file"] not in out, f"{LIST.name}: duplicate entry {e}"
+        assert isinstance(e, dict) and set(e) == keys and all(isinstance(e[k], str) and e[k] for k in keys - {"count"}), (
+            f"{name}: an entry is {{{', '.join(sorted(keys, key=['file', 'count', 'lane', 'why'].index))}}}"
+            + (f"; one without a why is a copy to read from its card, in {LIST.relative_to(ROOT).as_posix()}" if kept
+               else f"; one that stays says why, in {KEPT.relative_to(ROOT).as_posix()}") + f": {e}")
+        assert type(e["count"]) is int and e["count"] >= 1, f"{name}: count must be a positive int: {e}"
+        assert e["file"] not in out, f"{name}: duplicate entry {e}"
         out[e["file"]] = e
     return out
 
 
-def allowed() -> dict[str, dict]:
-    return parse(json.loads(LIST.read_text(encoding="utf-8")))
+def lists() -> tuple[dict[str, dict], dict[str, dict]]:
+    """``LIST``'s entries and ``KEPT``'s."""
+    return tuple(parse(json.loads(p.read_text(encoding="utf-8")), p == KEPT) if p.is_file() else {}
+                 for p in (LIST, KEPT))  # type: ignore[return-value]
+
+
+def allowed() -> Counter:
+    """Each file's allowance: its entries' counts in both lists."""
+    out: Counter = Counter()
+    for entries in lists():
+        for f, e in entries.items():
+            out[f] += e["count"]
+    return out
 
 
 def found() -> Counter:
     return Counter(f for f, *_ in scan())
+
+
+def paired(allow: Counter, now: Counter, tracked: set[str]) -> dict[str, str]:
+    """{new: old}: a file no list names that has an untracked listed file's base name and finds exactly its allowance, which
+    it takes over silently: a move.  Each listed file pairs once."""
+    gone = sorted(f for f in allow if f not in tracked)
+    out: dict[str, str] = {}
+    for f in sorted(now):
+        if f not in allow:
+            old = next((g for g in gone if g not in out.values() and g.rsplit("/", 1)[-1] == f.rsplit("/", 1)[-1]
+                        and allow[g] == now[f]), None)
+            if old:
+                out[f] = old
+    return out
+
+
+def carried(entries: dict[str, dict], pairs: dict[str, str]) -> dict[str, dict]:
+    """``entries`` with each paired file's entry moved to its new path."""
+    for new, old in pairs.items():
+        entries = moved(entries, old, new)
+    return entries
+
+
+def owners() -> list[tuple[str, str]]:
+    reg = json.loads((ROOT / REGISTRY).read_text(encoding="utf-8"))
+    return [(p, h["handle"]) for h in reg["handles"] for p in h.get("owns", [])]
 
 
 def say(f: str, run: Run, fig: Figure) -> str:
@@ -431,23 +478,39 @@ def say(f: str, run: Run, fig: Figure) -> str:
     return f"    {where}: {token} equals {fig.what}. Read it, {fig.read}, or take it as a parameter."
 
 
+def warn(f: str, n: int, allow: int, kept: int, at: list[str], owner: str, gone: list[str]) -> str:
+    """A file's warning: its sites, each with the card's reader, and the entry to add for the ones that are other numbers."""
+    entry = json.dumps({"file": f, "count": kept + n - allow, "lane": owner, "why": "what the number is"})
+    return "\n".join([f"  {f}: {n} found, {allow} allowed", *at,
+                      f"    If one is another number, {'raise its entry to' if kept else 'add'} {entry} "
+                      f"{'in' if kept else 'to'} {KEPT.relative_to(ROOT).as_posix()}.",
+                      *(f"    If it moved from {g}, its entry follows it: `python3 tests/lint/test_{NAME}.py --move {g} {f}`."
+                        for g in gone)])
+
+
 def test_no_new_device_figures() -> None:
-    have, at = allowed(), {}
+    allow, now, (_, kept) = allowed(), found(), lists()
+    tracked = set(files())
+    pairs = paired(allow, now, tracked)
+    gone = [g for g in allow if g not in tracked and g not in pairs.values()]
+    at: dict[str, list[str]] = {}
     for f, run, fig in scan():
         at.setdefault(f, []).append(say(f, run, fig))
-    new = [f"  {f}: {n} found, {have[f]['count'] if f in have else 0} allowed\n" + "\n".join(at[f])
-           + f"\n    If one is another number, raise {f}'s count in tests/lint/allowlists/{NAME}.json and say what it is."
-           for f, n in sorted(found().items()) if n > (have[f]["count"] if f in have else 0)]
-    assert not new, (f"device figures: {len(new)} file(s) state more of a card's figures than tests/lint/allowlists/"
-                     f"{NAME}.json allows; a figure is written in its card (hardware/) and read from it. If the file "
-                     f"moved, move its entry: `python3 tests/lint/test_{NAME}.py --move OLD NEW`.\n" + "\n".join(new))
+    owns = owners()
+    new = [warn(f, n, allow[f], kept[f]["count"] if f in kept else 0, at[f], lane(f, owns),
+                [g for g in gone if g.rsplit("/", 1)[-1] == f.rsplit("/", 1)[-1]])
+           for f, n in sorted(now.items()) if f not in pairs and n > allow[f]]
+    assert not new, (f"device figures: {len(new)} file(s) state more of a card's figures than {LIST.relative_to(ROOT)} "
+                     "allows; a figure is written in its card (hardware/) and read from it.\n" + "\n".join(new))
 
 
 def test_the_list_is_current() -> None:
-    have, now = allowed(), found()
-    stale = [f"  {f}: {e['count']} allowed, {now[f]} found" for f, e in sorted(have.items()) if e["count"] > now[f]]
-    assert not stale, (f"device figures: {len(stale)} entries of tests/lint/allowlists/{NAME}.json allow more than their "
-                       f"file holds; lower them (`python3 tests/lint/test_{NAME}.py --prune`):\n" + "\n".join(stale))
+    allow, now = allowed(), found()
+    moved_from = set(paired(allow, now, set(files())).values())
+    stale = [f"  {f}: {allow[f]} allowed, {now[f]} found" for f in sorted(allow) if allow[f] > now[f] and f not in moved_from]
+    assert not stale, (f"device figures: {len(stale)} entries of {LIST.relative_to(ROOT)} or {KEPT.relative_to(ROOT)} allow "
+                       f"more than their file holds; lower them (`python3 tests/lint/test_{NAME}.py --prune`), or move a "
+                       f"moved file's (`--move OLD NEW`):\n" + "\n".join(stale))
 
 
 CARD = """kind = "gpu"
@@ -522,20 +585,29 @@ def test_what_is_a_figure_and_what_is_not() -> None:
     assert not holds("README.md") and holds("security/A.lean")
 
 
-def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
+def test_the_lists_are_well_formed_and_an_entry_moves_with_its_file() -> None:
     assert parse({"entries": [{"file": "a.py", "count": 2, "lane": "x"}]})["a.py"]["count"] == 2
-    for bad in ({"file": "a.py", "count": 0, "lane": "x"}, {"file": "a.py", "count": True, "lane": "x"},
-                {"file": "a.py", "count": 1}, {"file": "a.py", "count": 1, "lane": "x", "why": ""},
-                {"file": "a.py", "count": 1, "lane": "x", "line": 3}):
+    assert parse({"entries": [{"file": "a.py", "count": 2, "lane": "x", "why": "a size"}]}, kept=True)["a.py"]["why"]
+    for bad, kept in (({"file": "a.py", "count": 0, "lane": "x"}, False), ({"file": "a.py", "count": True, "lane": "x"}, False),
+                      ({"file": "a.py", "count": 1}, False), ({"file": "a.py", "count": 1, "lane": "x", "why": "w"}, False),
+                      ({"file": "a.py", "count": 1, "lane": "x", "line": 3}, False), ({"file": "a.py", "count": 1, "lane": "x"}, True),
+                      ({"file": "a.py", "count": 1, "lane": "x", "why": ""}, True)):
         try:
-            parse({"entries": [bad]})
+            parse({"entries": [bad]}, kept)
         except AssertionError as e:
-            assert str(e).startswith(f"{LIST.name}: "), e
+            assert str(e).startswith(f"{(KEPT if kept else LIST).relative_to(ROOT).as_posix()}: "), e
         else:
             raise AssertionError(f"{bad} parsed")
     e = {"a/x.py": {"file": "a/x.py", "count": 2, "lane": "x"}, "b.py": {"file": "b.py", "count": 1, "lane": "y"}}
     assert moved(e, "a", "c") == {"c/x.py": {"file": "c/x.py", "count": 2, "lane": "x"}, "b.py": e["b.py"]}
     assert moved(e, "a/x.py", "b.py")["b.py"]["count"] == 3
+    allow = Counter({"a/x.py": 2, "a/y.py": 3, "b.py": 1})
+    assert paired(allow, Counter({"c/x.py": 2, "c/y.py": 4, "b.py": 1}), {"c/x.py", "c/y.py", "b.py"}) == {"c/x.py": "a/x.py"}
+    assert paired(allow, Counter({"c/x.py": 2}), {"a/x.py", "c/x.py"}) == {}
+    assert carried(e, {"c/x.py": "a/x.py"})["c/x.py"]["count"] == 2
+    w = warn("c/y.py", 4, 1, 1, ["    c/y.py:3: ..."], "x", ["a/y.py"])
+    assert f'{{"file": "c/y.py", "count": 4, "lane": "x", "why": "what the number is"}} in {KEPT.relative_to(ROOT)}' in w
+    assert "--move a/y.py c/y.py`" in w and "raise" in w and "allowlists" not in w
 
 
 def moved(entries: dict[str, dict], old: str, new: str) -> dict[str, dict]:
@@ -555,25 +627,34 @@ def lane(path: str, owns: list[tuple[str, str]]) -> str:
     return best[1]
 
 
-def dump(entries: dict[str, dict]) -> None:
-    keys = ("file", "count", "lane", "why")
+def dump(entries: dict[str, dict], kept: bool = False) -> None:
+    keys, path = ("file", "count", "lane", "why"), KEPT if kept else LIST
+    rule = ("a number that equals a device's figure and stays, saying why" if kept
+            else "a device figure outside its card, to be read from it")
     lines = [f"    {json.dumps({k: e[k] for k in keys if k in e}, ensure_ascii=False)}"
              for _, e in sorted(entries.items()) if e["count"] > 0]
-    LIST.write_text(f'{{\n  "rule": "a device figure outside its card (tests/lint/test_{NAME}.py)",\n  "entries": [\n'
+    path.write_text(f'{{\n  "rule": "{rule} (tests/lint/test_{NAME}.py)",\n  "entries": [\n'
                     + ",\n".join(lines) + "\n  ]\n}\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
+    first, kept = lists()
     if sys.argv[1:2] == ["--move"] and len(sys.argv) == 4:
-        dump(moved(allowed(), *sys.argv[2:]))
-    elif sys.argv[1:] == ["--prune"]:
+        dump(moved(first, *sys.argv[2:]))
+        dump(moved(kept, *sys.argv[2:]), kept=True)
+    elif sys.argv[1:] in (["--prune"], ["--record"]):
         now = found()
-        dump({f: {**e, "count": min(e["count"], now[f])} for f, e in allowed().items()})
-    elif sys.argv[1:] == ["--record"]:
-        reg = json.loads((ROOT / REGISTRY).read_text(encoding="utf-8"))
-        owns = [(p, h["handle"]) for h in reg["handles"] for p in h.get("owns", [])]
-        have = allowed() if LIST.is_file() else {}
-        dump({f: {**have.get(f, {}), "file": f, "count": n, "lane": have.get(f, {}).get("lane") or lane(f, owns)}
-              for f, n in found().items()})
+        pairs = paired(allowed(), now, set(files()))
+        first, kept = carried(first, pairs), carried(kept, pairs)
+        owns = owners() if sys.argv[1] == "--record" else []
+        out = {}
+        for f in set(first) | set(kept) | (set(now) if owns else set()):
+            k = min(kept[f]["count"], now[f]) if f in kept else 0
+            n = now[f] - k if owns else min(first[f]["count"] if f in first else 0, now[f] - k)
+            out[f] = {**first.get(f, {}), "file": f, "count": n, "lane": first.get(f, {}).get("lane") or lane(f, owns)}
+            if f in kept:
+                kept[f] = {**kept[f], "count": k}
+        dump(out)
+        dump(kept, kept=True)
     else:
         sys.exit(__doc__.rsplit("\n\n", 1)[-1])

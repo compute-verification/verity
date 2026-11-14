@@ -1,9 +1,8 @@
 {
-  "rule": "a device figure outside its card (tests/lint/test_device_figures.py)",
+  "rule": "a device figure outside its card, to be read from it (tests/lint/test_device_figures.py)",
   "entries": [
     {"file": "adapters/vllm/manifests/capture-maps/deepseek-v4-eager-hopper-tp8-v0.json", "count": 2, "lane": "circuits"},
     {"file": "adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json", "count": 2, "lane": "circuits"},
-    {"file": "adapters/vllm/tools/description_sizes.json", "count": 18, "lane": "vllm", "why": "a template's description size in bytes (1830), not a clock"},
     {"file": "adapters/vllm/tools/wgbench/wgbench.py", "count": 1, "lane": "vllm"},
     {"file": "benchmarks/census/hardware.json", "count": 3, "lane": "compute-accounting"},
     {"file": "benchmarks/census/workloads.json", "count": 2, "lane": "compute-accounting"},
