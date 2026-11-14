@@ -3,7 +3,7 @@ makes visible in place of the opaque `vllm.moe_forward` dispatcher: generic in t
 (E experts, TOPK, hidden H, intermediate I, tokens M), nothing about a model.
 
 The block, in launch order, and what each rule binds (numerics: `verity.definitions.registry.moe`, difftested bit-exact in
-`verity_vllm/check/moe_kernel_xcheck.py` against the same kernels on cp-moe):
+`verity_vllm.program.moe_difftest` against vLLM's `fused_experts`: the two GEMM launches, `silu_and_mul` and `moe_sum`, routing given; the router's difftests are at `TOPK_SOFTMAX_E_TESTED`):
 
     _moe_C.topk_softmax(w!, ids!, tei!, logits, renormalize, bias=None, is_padding=None)
         -> MoeRouterTopK{E,TOPK,VPT} per token row: f32 softmax in the CUDA kernel's reduction geometry, TOPK rounds of lowest-index argmax.
@@ -95,8 +95,8 @@ MOE_GEMM_PINS: dict[str, Any] = {
     "num_warps": 4, "num_stages": 3,
 }
 
-#: `topk_softmax` fused kernel geometry for bf16 gating logits: 16-byte loads -> 8 elements per thread-vector; E/VPT threads per row.
-#: Difftested for E in {64, 128} (`moe_kernel_xcheck.py`); other E refuse (`numerics_unregistered`) until an xcheck row exists.
+#: `topk_softmax` fused kernel geometry for bf16 gating logits: 16-byte loads -> 8 elements per thread-vector; E/VPT threads per row.  Its difftests: the installed kernel against the ordered router on a GPU,
+#: E = 64 and 128 (`tests/properties/router_tap_exactness.py`); the ordered against the kernel-order router, E = 16 and 64 (`tests/program/test_moe_router_ordered.py`).  Other E refuse (`numerics_unregistered`).
 TOPK_SOFTMAX_VPT = {torch.bfloat16: 8, torch.float16: 8, torch.float32: 4}
 TOPK_SOFTMAX_E_TESTED = frozenset({64, 128})
 
