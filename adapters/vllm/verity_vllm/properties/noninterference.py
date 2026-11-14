@@ -276,9 +276,9 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
 
 
 def _write_tokens(out: Path, wl: dict, tokens: dict, timing: dict, accepted: dict, per_step: dict | None, variant: str) -> None:
-    doc = {"requests": [], "per_step_sampled": per_step, "timing": timing, "variant": variant,
-           "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
-           "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
+    doc: dict = {"requests": [], "per_step_sampled": per_step, "timing": timing, "variant": variant,
+                 "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
+                 "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
     all_eq = True
     per_req = timing.get("requests") or {}
     for r in wl["requests"]:
@@ -323,7 +323,7 @@ def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
             continue
         se = step_events(step)
         s = se.start.step
-        rec = {"hidden": {}, "residual": {}, "final": None, "logits": None, "rows": len(se.start.rows)}
+        rec: dict = {"hidden": {}, "residual": {}, "final": None, "logits": None, "rows": len(se.start.rows)}
         if se.sample is not None:
             sample_ids[s] = list(se.sample.sampled_token_ids)
             sample_rows[s] = [str(r) for r, _ in se.start.logits_rows]
@@ -388,7 +388,7 @@ def hooks_boundary_hashes(b_dir: Path) -> tuple[dict, list[str]]:
     for s in doc["steps"]:
         if s.get("step") is None:
             continue
-        rec = {"hidden": {}, "residual": {}, "final": None, "logits": None, "rows": None, "noncontiguous": []}
+        rec: dict = {"hidden": {}, "residual": {}, "final": None, "logits": None, "rows": None, "noncontiguous": []}
         for r in s["records"]:
             if not r["contiguous"]:
                 rec["noncontiguous"].append(f"{r['module']}[{r['index']}]")

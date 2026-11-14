@@ -27,6 +27,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+__all__ = ["Free", "check", "check_params", "run_field"]
+
 KINDS = ("block", "certified", "registered", "advice", "witness")
 
 #: the window charge's terms that count a Program input's bits: none yet (`ChargeCount_v2` counts advice v1's decisions, its
