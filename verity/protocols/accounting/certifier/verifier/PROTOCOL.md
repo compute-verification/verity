@@ -2262,6 +2262,8 @@ prompt ids and a size of ids released, each a power of two.
     length in bytes are the schedule's whatever the load.
   - **The work under form 2** of laying and committing an execution phase's tables follows its counts, and so may
     the time its head is signed and published. Nothing here charges the counts or that time to a bound.
+  - **A run keeps the registration on its private side** under either form, and the auditor's gate publishes its
+    certificate alone.
 
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
 digest, records, heads and certificates. So do the request words, where a schedule has them: one without them
@@ -2498,7 +2500,8 @@ signer (`Issuer.sign`: the certifier message for the key, the session and the ex
 record's own certificate of that execution phase signs its salted record digest, so neither verifies as the other.
 
 **The registration** (`registration`, `verity-network-warden/registration/v2`) is the head, the rows' format and order
-(`layout`: T, S, r and the first bucket w·T) and the certificate, as one public JSON object. `check_registration` is
+(`layout`: T, S, r and the first bucket w·T) and the certificate, as one JSON object. A run keeps it on its private
+side: the auditor's gate publishes its certificate alone, and the wiring is private. `check_registration` is
 the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
 execution phase give, and the certificate verifies over the head under the network certifier's key in the session.
 
