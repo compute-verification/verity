@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The harness's runner: one job of the directory by its name, started as it is with the rest of the arguments and the
-# environment. `build` is native/build.sh and `pin_target` is jobs/pin_target.sh; `bench`, `characterize`, `verify`,
+# environment. `build` is verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh and `pin_target` is jobs/pin_target.sh; `bench`, `characterize`, `verify`,
 # `ledger`, `price_twins` and `ieee_pin` are the Python script of that name, under "$PY" where jobs/env.sh has set it and
 # under python3 else. A job that needs a GPU is the command of a `research run`: README.md has each job's command, and
 # the job's own header its arguments and what it writes.

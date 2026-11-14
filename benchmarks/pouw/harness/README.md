@@ -22,10 +22,10 @@ versions, the consistency gate. It uses the CUDA primary context through ctypes,
 | `ledger.py` | the attempt ledger: `verify.py` writes one `kernel-attempt/v1` record per arm and shape under the run's `ledger/` (the variant, parent, tier, gate version, metrics, step times, γ, the verifier's lines, the hypothesis) and publishes it with `--publish`; `ledger.py publish RUN_DIR` later, `ledger.py outcome ART OUTCOME --reason ...`, and `ledger.py rows`, what `panel.py` reads beside `attempts.jsonl` |
 | `price_twins.py`, `price_twins.json` | the gap's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`, or `--repository-only` when only `security/lean-audit.json` changed): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, at its cube or its linear (n, k) (`lookup(..., layout=)` for a served layout's), and never takes one typed in |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
-| `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) and `../../../verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/nvf4_plain.cu`'s in the same registry (`cutlass_api.h`; `PH_NO_CUTLASS=1` builds only these); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
+| `../../../verity/protocols/accounting/pouw/prover/kernels/harness/native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) and `../../../verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/nvf4_plain.cu`'s in the same registry (`cutlass_api.h`; `PH_NO_CUTLASS=1` builds only these); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
 
 The runner is `run.sh JOB [ARGS]`, which `verity bench pouw harness JOB [ARGS]` runs: it starts one job as it is, with
-ARGS and the environment. JOB is `build` (`native/build.sh`), `pin_target` (`jobs/pin_target.sh`), or `bench`,
+ARGS and the environment. JOB is `build` (`../../../verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh`), `pin_target` (`jobs/pin_target.sh`), or `bench`,
 `characterize`, `verify`, `ledger`, `price_twins` or `ieee_pin`, the Python script of that name, under `"$PY"` where
 `jobs/env.sh` has set it and under `python3` else. The commands below start the same scripts by their paths.
 
@@ -35,7 +35,7 @@ Build (no GPU needed; nvcc 12.9, about 7 GB of memory per CUTLASS 3.x unit):
 export POUW_HARNESS_LIB="$(verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh)"   # prints the library's path, nothing else
 ```
 
-The build lands in `native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache), keyed by the sources, nvcc's version and the
+The build lands in `../../../verity/protocols/accounting/pouw/prover/kernels/harness/native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache), keyed by the sources, nvcc's version and the
 cuBLAS headers', with `build.json` (the key, versions, the library's hash, each kernel's SASS MMA counts); an existing build is
 reused, and so is each object whose unit, headers and flags are unchanged. A run refuses a library its `build.json` doesn't
 describe. Where there is no CUDA 12.9 (the RTX PRO 6000 node has 13.0), `. jobs/toolkit.sh` first assembles it from
