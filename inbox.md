@@ -123,3 +123,18 @@ RAN `git merge-tree --write-tree 2014843 a95a595`: two files conflict and the re
 
 The whole report is note:20261114T0642Z-report-readcalc-9877 (synced).
 
+[2026-11-14T06:44Z] b67dece58f42
+READCALC, Fri 13 Nov, 10:44 PM PST.
+
+**All three first reads are done and sent: #9889 a6494c1f6a1c2884d11fb19d6ed70426df4b2809 NOT READY (1), #9833 fc4a5534aad80d44f23a551d07747ed80b91f32d NOT READY (1), #9877 a95a595c639f2728ae1a8b70e0d327e31a0dbc67 NOT READY (3).**
+
+Left, in order:
+1. The authors' fixes, then a second read of only the fixes.
+2. Your choice on #9877's must-fix 1: (a) widen slowdown_of with every contraction length, or (b) state the narrowing in the body.
+3. The #9730 × #9877 resolution, as in the #9877 report.
+4. HE_CHARGED: whichever of #9519 and #9889 lands second deletes the entry.
+
+Runs: I launched none, and none is in flight. RAN locally only, and nothing was pushed.
+
+Handoff: note:20261114T0644Z-handoff-READCALC (synced).
+
