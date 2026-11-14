@@ -152,7 +152,7 @@ theorem Loop.Level0Src.realOf_cm0 {src : Msg → Flock.Wit →
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, -⟩ := h
       rw [_root_.Flock.ZkServer.Finish.tabOfLevel0_cm0 htb]
-      obtain ⟨hm, -, ⟨s, hz, hlv⟩, -, hlay, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl
+      obtain ⟨hm, -, ⟨s, hz, hlv⟩, -, hlay, -⟩ := _root_.Flock.ZkServer.Level0.ofSamples_ok hl
       have hm' : l.m = (Masked.stAt x j).m := by
         rw [show l.m = l.toIn.m from rfl, hin]
         rfl
@@ -160,7 +160,7 @@ theorem Loop.Level0Src.realOf_cm0 {src : Msg → Flock.Wit →
         rw [show l.wideLeaf = l.toIn.wideLeaf from rfl, hin]
         rfl
       rw [hm] at hm'
-      rw [_root_.Flock.ZkServer.Level0.ofDraws_wideLeaf hl] at hw'
+      rw [_root_.Flock.ZkServer.Level0.ofSamples_wideLeaf hl] at hw'
       rw [hm', hw'] at hz
       obtain ⟨hs', ht'⟩ := Prod.mk.inj (Except.ok.inj (hz.symm.trans (Masked.zkTab x j).hz))
       have hlv' : l.lv = Masked.lv0 x j := by rw [hlv, hs']; rfl

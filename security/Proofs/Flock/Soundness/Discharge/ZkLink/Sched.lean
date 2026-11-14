@@ -26,7 +26,7 @@ open Flock Accounting Refine
 
 variable {wideLeaf : Bool}
 
-/-- What `DrawSetupZK` needs of `Zk.schedule m`'s schedule and `t_pad`, as a `Bool` (`true` where it refuses `m`). -/
+/-- What `SampleSetupZK` needs of `Zk.schedule m`'s schedule and `t_pad`, as a `Bool` (`true` where it refuses `m`). -/
 def zkSchedFacts (wideLeaf : Bool) (m : ℕ) : Bool :=
   match Zk.schedule wideLeaf m with
   | .ok (s, t) =>
@@ -66,7 +66,7 @@ theorem schedule_spec {m : ℕ} {r : Flock.Schedule × ℕ} (h : Zk.schedule wid
   exact ⟨hm.1, hm.2, Option.isSome_iff_exists.1 hsome.symm⟩
 
 
-/-- **`Zk.schedule`'s schedule has `DrawSetupZK`'s shape, `m` and padding** (`PadOK`, its radius from `ρ' ≤ 0.98`). -/
+/-- **`Zk.schedule`'s schedule has `SampleSetupZK`'s shape, `m` and padding** (`PadOK`, its radius from `ρ' ≤ 0.98`). -/
 theorem schedule_zk {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
     (2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
       (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧

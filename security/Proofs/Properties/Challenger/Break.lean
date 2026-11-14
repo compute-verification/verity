@@ -6,7 +6,7 @@ public import Properties.Challenger
 # When the fixed finder outputs a break
 
 `findBreak` outputs only breaks (`findBreak_valid`), so a run carries a `Break` exactly when the finder outputs anything
-(`break_iff`). It outputs something on every run with a signature `drawCoins` checks that verifies over a message the
+(`break_iff`). It outputs something on every run with a signature `sampleCoins` checks that verifies over a message the
 device didn't sign (`break_of_forgery`), and on every run where two different strings among those it hashes have one
 SHA-512 digest (`break_of_collision`), whichever it finds first. So a verifying signature is over a message the device
 signed or the run carries a break (`signed_or_break`), and two strings it hashes with one digest are one string or the run
@@ -84,7 +84,7 @@ theorem collisionIn_ne_none {xs : List ByteArray} {x y : ByteArray} (hx : x ∈ 
   apply List.find?_eq_none.1 h1 _ hmy
   simp [he, Ne.symm hne]
 
-/-- **A forgery is a break**: a signature `drawCoins` checks that verifies over a message the device didn't sign. -/
+/-- **A forgery is a break**: a signature `sampleCoins` checks that verifies over a message the device didn't sign. -/
 theorem break_of_forgery {m sig : ByteArray} (hm : (m, sig) ∈ signatures key coins) (hv : LmsVerifies key m sig)
     (hs : ¬ Signed dev key.pub m) : Break dev key label coins := by
   refine break_iff.2 ?_
@@ -114,7 +114,7 @@ theorem break_of_collision {x y : ByteArray} (hx : x ∈ readHashed key label co
   · intro h
     exact collisionIn_ne_none hx hy hne he (Option.map_eq_none_iff.1 h)
 
-/-- A signature `drawCoins` checks that verifies is over a message the device signed, or the run carries a break. -/
+/-- A signature `sampleCoins` checks that verifies is over a message the device signed, or the run carries a break. -/
 theorem signed_or_break {m sig : ByteArray} (hm : (m, sig) ∈ signatures key coins) (hv : LmsVerifies key m sig) :
     Signed dev key.pub m ∨ Break dev key label coins := by
   by_cases hs : Signed dev key.pub m

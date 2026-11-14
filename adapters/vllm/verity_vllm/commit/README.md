@@ -16,7 +16,7 @@ The Commit: it commits a served run's values while it serves. The package's docs
   five more of the committer's modules (`device_pool`, `flush_points`, `plan_cache`, `run_values`, `topp_splits`).
   Not yet behind an `__all__`: `protocols.pouw.h1` reads five private helpers of `row_tables_device` (`_build`, `_hm`,
   `_prefixes`, `_width`, `_words`), and one module of another package reads `store_dump._as_bytes`.
-- **Loaded by:** the integration's `pipeline`, `check`, `acquire`, `protocols`, `properties`, `engine` and
+- **Loaded by:** the integration's `pipeline`, `check`, `acquire`, `protocols`, `engine` and
   `program.predict` packages and its `glue`, and `benchmarks/served_commit` and the other benchmarks that commit or open
   a run's values.
 - **Loads:** `verity.commitments`, `verity.circuits`, `verity.commitments.cuda`, `verity.commitments.periods`,

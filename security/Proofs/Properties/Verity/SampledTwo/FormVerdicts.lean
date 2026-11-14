@@ -154,11 +154,11 @@ theorem paired_at {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.S
 /-! ## Each statement's sessions, accepted at its member's statement -/
 
 /-- **A session the statement's run accepted, with its sample's fit kept**: `MemberChecks.SessionAccepted`, and the
-record's sample fits its length word (`Spot.OneStageZk.drawFitsWhy`), which `Spot.OneStageZk.step` checks before its
+record's sample fits its length word (`Spot.OneStageZk.sampleFitsWhy`), which `Spot.OneStageZk.step` checks before its
 verdict. -/
 def SessionRead (a : Spot.OneStageZk.StepAt) (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles) : Prop :=
   ∃ coinKeys b record, bs.get s.record s!"session {s.name}'s record" = .ok b ∧ String.fromUTF8? b = some record ∧
-    Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none ∧
+    Spot.OneStageZk.sampleFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none ∧
     Spot.OneStageZk.verdictOf a.I a.scope a.ksFiles a.population coinKeys record
       (Flock.Witness.recordDraw record) (Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record))
       (Spot.OneStageZk.filesOf bs s (Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record)))
@@ -309,7 +309,7 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
         Flock.Zk.verify spec tabs record proofs = .ok () ∧
         Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB (Spot.OneStageZk.tablesOf k.blobs)
           (some m.own.program) (some m.own.partition) m.own.registered = none ∧
-        Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none := by
+        Spot.OneStageZk.sampleFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none := by
   obtain ⟨k', hk', pp, c, e', pub, prof, hdec, hck⟩ := hacc
   obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
   have hpe : (pp, e') = (p, e) := Option.some.inj ((SessionMsgs.formOf_of_decoded hdec).symm.trans hf)
@@ -349,7 +349,7 @@ theorem stmtAtCase_of_member {k : Case} {p : VStar.Recursive.SampledTwo.Params}
     {circuitB pubB : ByteArray} (hc : k.blobs.get m.own.circuit "circuit" = .ok circuitB)
     (hp : k.blobs.get m.own.pub "public file" = .ok pubB) :
     SessionMsgs.stmtAtCase k t =
-      some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.drawBytes record)
+      some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.sampleBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode := by
   unfold SessionMsgs.stmtAtCase
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq]

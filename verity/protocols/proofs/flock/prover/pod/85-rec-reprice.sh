@@ -76,7 +76,7 @@
 #      PREBUILT=DIR (another node's out/ship, e.g. research run --send's inputs/: each binary copied into its cache, and a
 #              step that would build one refuses instead)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
-#      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's sample: every unit; none: no sample)
+#      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_SAMPLE=all (a --zk loopback's sample: every unit; none: no sample)
 #      RETRY= (oprove, MODES=zk_server: a statement's name, which gets a second session after its first, on a fresh coin
 #              server and in the run's record; a negative control, whose composition lean_verdicts.py requires refused)
 #      GPU=1 (0: the CPU prover end to end: built GPU=0, no CUDA, no lease, prove without --gpu; for a small K and N)
@@ -288,9 +288,9 @@ loopback() {
   local name=$1 pub=$2 inst=$3 circ=$4 zk=${5:-} s=$DD/$STEP-$1 PORT=$(free_port) PIN=$(sha512sum $4 | cut -d' ' -f1)
   rm -rf $s; mkdir -p $s $O/$STEP/$name
   # the verifier's sample on a --zk session (Lean refuses a session without one, D12), as rec-private-outer.sh's:
-  # LOOPBACK_DRAW=all (default) every unit; none: no sample
+  # LOOPBACK_SAMPLE=all (default) every unit; none: no sample
   local DRAW=()
-  [ -n "$zk" ] && [ "${LOOPBACK_DRAW:-all}" = all ] \
+  [ -n "$zk" ] && [ "${LOOPBACK_SAMPLE:-all}" = all ] \
     && DRAW=(--draw subset:$(python3 -c 'import json, sys; print(json.loads(open(sys.argv[1], "rb").readline())["instances"])' $pub))
   taskset -c $VCPU $B serve $zk --listen 127.0.0.1:$PORT --out $s/sessions --instances $pub --circuit $circ --pin $PIN \
     "${DRAW[@]}" $(links_at $(dirname $circ)) ${RRUN:+--rec-run $RRUN --rec-part $RPART} --operator loopback --concurrency $((NS + 1)) \
@@ -671,7 +671,7 @@ inner)
   taskset -c $VCPU env $INNER_COINS $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt $(links_at $D) > $O/inner/statement.txt 2>&1 \
     || { tail -5 $O/inner/statement.txt; exit 1; }
   python3 -m verity_flock.rec_live --schedule-for $O/inner/statement.txt > $O/inner/schedule.json || exit 1
-  # the verifier's full sample, which verify requires of a session over the inner session (RecSetup.innerDrawn)
+  # the verifier's full sample, which verify requires of a session over the inner session (RecSetup.innerSampled)
   inner_partition > $O/inner/partition.txt || exit 1
   cp $D/draw.json $O/inner/
   [ -x $FC_ZK_SERVER_LEAN ] || lean_build > $O/inner/build-lean.log 2>&1 || { tail -20 $O/inner/build-lean.log; exit 1; }

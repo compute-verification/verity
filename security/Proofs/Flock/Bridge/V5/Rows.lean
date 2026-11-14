@@ -27,14 +27,14 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **The sampling design the verifier samples under is on the registration's strata**: `designAt` is `drawnLaw`'s
-(`lawOn_drawsUnder`) or `subset 0`, which samples no proof block. -/
+/-- **The sampling design the verifier samples under is on the registration's strata**: `designAt` is `sampledLaw`'s
+(`lawOn_samplesUnder`) or `subset 0`, which samples no proof block. -/
 theorem _root_.Flock.Bridge.lawOn_designAt {desc : Claims.Msg} {qr lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
     (hpop : Bridge.PopMatches desc qr n) :
     Bridge.LawOn (Bridge.designAt desc qr lj tb n) (Bridge.nsOf desc qr)
       (Bridge.lawK (Bridge.designAt desc qr lj tb n)) := by
   rcases Bridge.designAt_cases desc qr lj tb n with hlaw | h0
-  · exact Bridge.lawOn_drawsUnder hpop hlaw (Bridge.notBernoulli_drawsUnder hlaw)
+  · exact Bridge.lawOn_samplesUnder hpop hlaw (Bridge.notBernoulli_samplesUnder hlaw)
   · rw [h0]
     exact ⟨rfl, Nat.zero_le _⟩
 
@@ -63,7 +63,7 @@ theorem _root_.Flock.Bridge.sampledKSLiveV5_rows :
       let kd := Bridge.lawK law
       ∀ (hdiv : kd % nTab I = 0)
       (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-      (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+      (y₀ : SampleSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
       (wr : (S : Finset (Fin n)) → (R : Reg) →
         LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) →
           Discharge.Exec.Transcript)

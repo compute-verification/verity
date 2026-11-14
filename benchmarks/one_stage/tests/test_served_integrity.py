@@ -239,7 +239,7 @@ def test_a_refused_audit_record_names_leans_refusals(tmp_path):
     assert "position 2" in a["reason"] and "position 3" not in a["reason"] and a["reason"].endswith("and 2 more")
 
 
-def test_a_tampered_wired_window_names_the_drawn_units_its_sessions_refused_before_leans_missing_files(tmp_path):
+def test_a_tampered_wired_window_names_the_sampled_units_its_sessions_refused_before_leans_missing_files(tmp_path):
     """A sampled member whose live session the verifier rejects leaves no proof files, so Lean's replay finds
     none: the reason names the sampled proof blocks not proved, by template, and the verifier's rejection first."""
     mm, quant = "ScaledMmS8_v1{K=128,N=128}", "QuantRowS8_v1{N=128,RELU=true}"

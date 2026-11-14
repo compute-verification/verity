@@ -14,7 +14,7 @@ hands `Frames.round` and the rep's configuration as the loop started its frame. 
 * `roundPlace_cfg`, `roundStep_cfg`: the frame `roundPlace` readies has the configuration of the frame it found, and so
   has the frame the round puts back, and its coins' put (`Loop.coinsOf`, by definition): a rep's frame keeps its
   start's configuration.
-* **`ofLoop_cfg`**: the model's configuration at a round of rep stream `k` is `Cfg.ofDraws` at the stream's start
+* **`ofLoop_cfg`**: the model's configuration at a round of rep stream `k` is `Cfg.ofSamples` at the stream's start
   (`Drive.start` at table `k / 2`'s statement) of the rep's samples on the tape, with the start's mask slot, as
   `Frames.startRep` starts the rep's frame.
 -/
@@ -109,7 +109,7 @@ theorem roundStep_cfg {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {
   subst hput
   rfl
 
-/-- **The model's configuration at a round of rep stream `k`** (`Loop.repOf`) is `Cfg.ofDraws` at the stream's start
+/-- **The model's configuration at a round of rep stream `k`** (`Loop.repOf`) is `Cfg.ofSamples` at the stream's start
 (`Drive.start` at table `k / 2`'s statement) of the rep's samples on the tape, with the start's mask slot, as
 `Frames.startRep` starts the rep's frame. -/
 theorem ofLoop_cfg (T : ZKMal.CoinLayer.TableData)
@@ -125,7 +125,7 @@ theorem ofLoop_cfg (T : ZKMal.CoinLayer.TableData)
     {mask : _root_.Flock.ZkServer.Frame.MaskSlot}
     (hst : _root_.Flock.ZkServer.Drive.start sts[Loop.repOf x h.length / 2]! = .ok (lay, mask)) :
     (LeanRelease.ofLoop T L₀ real).cfg x ρ h =
-      Cfg.ofDraws lay (Draws.ofBytes lay ((LeanRelease.ofLoop T L₀ real).draws ρ (Loop.repOf x h.length)))
+      Cfg.ofSamples lay (Draws.ofBytes lay ((LeanRelease.ofLoop T L₀ real).draws ρ (Loop.repOf x h.length)))
         (some mask) := by
   have hS : Loop.startOf x (Loop.repOf x h.length) = .ok (lay, mask) := by
     unfold Loop.startOf
@@ -140,7 +140,7 @@ theorem ofLoop_cfg (T : ZKMal.CoinLayer.TableData)
     show (Loop.startOf x (Loop.repOf x h.length)).toOption.map (·.2) = some mask
     rw [hS]
     rfl
-  unfold LeanRelease.cfg LeanRelease.drawsAt
+  unfold LeanRelease.cfg LeanRelease.samplesAt
   rw [hr, hl, hsl]
 
 end Claims.ZKServer.Relay

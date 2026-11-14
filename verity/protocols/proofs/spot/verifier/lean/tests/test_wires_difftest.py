@@ -259,7 +259,7 @@ def ordered(templates, wires, order):
     return None
 
 
-def reference_drawn(j):
+def reference_sampled(j):
     """The sampled proof blocks' wired rows (`wires_drawn`): each is its writer's when both public strings are given and equal."""
     _keys(j, {"templates", "cuts", "wires", "drawn", "reads", "writes"})
     drawn, reads, writes = set(), {}, {}
@@ -393,7 +393,7 @@ def _orders(draw, templates: dict, wires: list):
 
 
 @st.composite
-def drawn_instances(draw, broken: bool = False):
+def sampled_instances(draw, broken: bool = False):
     """An instance of `instances` with some units sampled, and public strings for most of their wired rows and writers,
     mostly equal, some another string or missing."""
     j = draw(instances())
@@ -417,12 +417,12 @@ def drawn_instances(draw, broken: bool = False):
 
 
 INPUTS = st.one_of(*[instances() for _ in range(6)], instances(broken=True), JSON)
-DRAWN_INPUTS = st.one_of(*[drawn_instances() for _ in range(6)], drawn_instances(broken=True), JSON)
+SAMPLED_INPUTS = st.one_of(*[sampled_instances() for _ in range(6)], sampled_instances(broken=True), JSON)
 WIRES = D.Port(PIECES, "wires", reference, INPUTS, package=PACKAGE, of_record="lean")
 WIRES_UNROLLED = D.Port(PIECES, "wires_unrolled", reference, INPUTS, package=PACKAGE, of_record="lean")
 
-WIRES_DRAWN = D.Port(PIECES, "wires_drawn", reference_drawn, DRAWN_INPUTS, package=PACKAGE, of_record="lean")
-WIRES_DRAWN_UNROLLED = D.Port(PIECES, "wires_drawn_unrolled", reference_drawn, DRAWN_INPUTS, package=PACKAGE,
+WIRES_DRAWN = D.Port(PIECES, "wires_drawn", reference_sampled, SAMPLED_INPUTS, package=PACKAGE, of_record="lean")
+WIRES_SAMPLED_UNROLLED = D.Port(PIECES, "wires_drawn_unrolled", reference_sampled, SAMPLED_INPUTS, package=PACKAGE,
                               of_record="lean")
 
 pieces = D.server_fixture(WIRES)
@@ -434,8 +434,8 @@ def test_a_wires_piece_agrees(pieces, port):
     assert stats.outputs > 1000 and stats.rejects > 0, stats
 
 
-@pytest.mark.parametrize("port", [WIRES_DRAWN, WIRES_DRAWN_UNROLLED], ids=["wires_drawn", "wires_drawn_unrolled"])
-def test_a_drawn_wires_piece_agrees(pieces, port):
+@pytest.mark.parametrize("port", [WIRES_DRAWN, WIRES_SAMPLED_UNROLLED], ids=["wires_drawn", "wires_drawn_unrolled"])
+def test_a_sampled_wires_piece_agrees(pieces, port):
     stats = D.run(port, examples=1500, server=pieces)
     assert stats.outputs > 1000 and stats.rejects > 0, stats
 
@@ -542,7 +542,7 @@ def test_the_order(pieces, name, j, want):
         assert pieces.call(fn, j) == ("output", D.canonical(got)), fn
 
 
-def test_the_drawn_check_reads_only_drawn_units(pieces):
+def test_the_sampled_check_reads_only_sampled_units(pieces):
     """The gather with unit 1 sampled: its three wired rows are checked; unit 0's row that is not its writer's is not."""
     j = _gather()
     del j["queries"]
@@ -550,12 +550,12 @@ def test_the_drawn_check_reads_only_drawn_units(pieces):
           "reads": [["A", 1, "k", 0, "s3"], ["A", 1, "k", 1, "s4"], ["A", 1, "k", 2, "s5"], ["A", 0, "k", 0, "bad"]],
           "writes": [["G", u, "o0", f"s{u}"] for u in range(6)]}
     want = {"ok": True, "accepted": True, "checked": 3, "bad": []}
-    assert reference_drawn(j) == want
+    assert reference_sampled(j) == want
     for fn in ("wires_drawn", "wires_drawn_unrolled"):
         assert pieces.call(fn, j) == ("output", D.canonical(want))
     j["drawn"] = [["A", 0], ["A", 1]]
     want = {"ok": True, "accepted": False, "checked": 6, "bad": [["A", 0, "k", 0], ["A", 0, "k", 1], ["A", 0, "k", 2]]}
-    assert reference_drawn(j) == want
+    assert reference_sampled(j) == want
     for fn in ("wires_drawn", "wires_drawn_unrolled"):
         assert pieces.call(fn, j) == ("output", D.canonical(want))
 
