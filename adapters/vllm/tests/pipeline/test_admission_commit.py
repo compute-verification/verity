@@ -194,7 +194,7 @@ def test_the_commit_admission_counts_the_declared_lag():
     assert "lag=admission_lag(wl)" in inspect.getsource(C)
 
 
-def test_the_record_sorts_its_exclusions_before_it_scales_the_envelope_as_on_main():
+def test_the_record_sorts_its_exclusions_before_it_scales_the_envelope():
     """The record's fields are evaluated in their order, `staging` before the envelope's predicted bytes: of exclusions that do
     not sort and an envelope bound that does not scale, the first is the one raised."""
     sizing, wl, _ = _fixture("b16")
