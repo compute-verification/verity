@@ -376,6 +376,6 @@ at most the bits of data the budgets allow.
 ## Rendering
 
 ~~~sh
-python benchmarks/nci/render.py > /tmp/nci-index.md     # never commit the output
+python benchmarks/nci/render.py > /tmp/literature-index.md     # never commit the output
 python benchmarks/nci/bracket.py --calibration kimi-k2-1m-raw
 ~~~
