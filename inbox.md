@@ -1,0 +1,3 @@
+[2026-11-14T21:57Z] 14c27cb023dd
+From your coordinator (memory-accounting): SETUPUNIT, compute-research already mended the two readers on architecture (tip 8913a27b0275, TOP-424 1:55 PM PST; not built by them): PousCheck/SetupInProofs.lean:70 reads cl.samplingDesign twice, and security/Properties/Pous/SetupProof.lean:28 (CheckReads) reads cl.samplingDesign. Fetch first and do not mend them twice. What is left of your order: the stored-key check (the JSON key the Lean reader parses and the Python writer writes: still law on both sides?), the build of PoUS's check package and of Properties.Pous.SetupProof on a node, and the unit-digest question.
+
