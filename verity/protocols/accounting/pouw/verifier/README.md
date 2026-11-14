@@ -1,6 +1,6 @@
 # PoUW (`verity.protocols.accounting.pouw.verifier`)
 
-Proof of useful work: certifies that a served model's registered matrix products were computed, by sampled proofs over
+Proof of useful work: certifies that a served model's registered matrix products were computed, by SPOT over
 committed, noised checked values. An accepted run establishes a credited size S of noised matrix products, at least
 (1 − ε)·S of their AND gates computed right, except with probability δ. One protocol carries several named schemes
 behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof system registers each execution phase, samples
@@ -67,7 +67,7 @@ don't hold, and a live phase's round challenges aren't in them yet.
 
 ## PoUW in the remote protocol
 
-The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
+The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: SPOT's
 one-stage audit, PoUW as Pearl+'s run verdict, `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`,
 `lean/pearlplus`), and the inference-only policy's check (`Core.Remote.V1.components` in
 `verity/protocols/compose/verifier/remote/CoreRemote.lean`, id `verity/remote/v1`). It accepts only when every subprotocol accepts
@@ -121,7 +121,7 @@ execution phase:
 
 How it is run: the difftests run the Lean against the Python on generated cases
 (`uv run tools/verity/check/suites.py verity/protocols/accounting/pouw/verifier/lean/check`, and likewise `lean/window` and
-`lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside sampled proofs'
+`lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside SPOT's
 (`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
 
@@ -162,14 +162,27 @@ reads. Proved:
 - **In ε form:** the audit end to end, `Pouw.SecurityProofs.EndToEndEps` (under TT(g₀) and the bound Ω_max, the
   protocol's advantage is ε = Ω_max/(1 − g₀) − 1, and an audit of t work-weighted samples accepts while
   (1 + ε)/(1 − ε_s)·T < W with probability at most (1 − ε_s)^t + δ, for every share ε_s < 1 of the reference work W);
-  NCP's `Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1`; Pearl-C's at 8192³ on the RTX PRO 6000 (sm_120) at an inert-work
-  share of 1/1,000, `Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192` (ε = 1648180439/444424569561, 0.371%).
-  Each follows from its gap form. Pearl-C's figure is not the served point's. What is served is Llama 3.2 1B on an
+  NCP's `Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1`. Each follows from its gap form. Pearl-C's at 8192³ on the RTX PRO
+  6000 (sm_120) at an inert-work share of 1/1,000 is a lemma beside its gap form, not a listed guarantee
+  (`PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192`, ε = 1648180439/444424569561, 0.371%, in
+  `security/Proofs/Pouw/Lemmas/PearlCRecords.lean`), and its figure is not the served point's. What is served is Llama 3.2 1B on an
   H200, credited under the H100 record at an inert-work share of 1/400, and its gap is a lemma, not yet a listed
   guarantee: `pearlCGapH100Rev1_llama32_1b` (`security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean`), under
   `TTOutPearlCH100Rev1`, g = 69533/10736000 (0.648%) on the model's four linears in one layout, which is `down`'s
   (n = 2048, K = 8192); as an advantage, ε = g/(1 − g) = 69533/10666467 (0.652%). This is the assumption's gap alone:
   sampling's ε_s at δ_s multiplies in as (1 + ε)/(1 − ε_s), and the assumption's own δ adds.
+- **The two S8 guarantees** (`security/Definitions/Pouw/Guarantees/PearlCS8.lean`) bound the credit of the tensor-clock
+  record `devH100Tensor`, the H100 record with its SM pipes priced per second at the 1830 MHz tensor clock beside the
+  1980 MHz SM clock: `Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b` at g = 5040227/775520000 (0.650%,
+  ε = 0.654%) and `…S8_8192` at 8192³ (0.538%). Their open premises are `w1-complete-h100` (W1 on the H100 with INT8
+  at those prices, at zero SHA-512 and fetch prices, matches every adversary within its cost and query bound with
+  good-tile credit at least as likely to exceed any threshold; the device reading's FP32 price is refuted on the H200,
+  so this premise is falsified there) and `tt-out-tile-pearl-c-h100-rev1` (TT_OUT rev1 per
+  audit tile over that W1 setting, falsification test `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py`). They do
+  not cover what is served: `pearl-c-h100-v1-h3` pays by the per-clock record `devH100`, about 1.5% more, and at the
+  two-clock reading no statement of this form covers that credit, since the honest program with its first promotion
+  skipped falls about 1% under TT_OUT's threshold for it. TT_OUT rev1 is refuted by proofs' red-team rating, so both
+  guarantees are implications from refuted premises.
 - **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GapFromTT`, through two lemmas in
   `security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's gap g holds with failure probability δ, and the
   sample misses more than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts
@@ -195,7 +208,8 @@ against its code.
 
 The guarantees rest on named assumptions, each a hypothesis of the statement: the schemes' conjectures, stated and not
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
-`Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1`), the receipt clock (`Pouw.Assumptions.HonestClock`), and the claims
+`Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1` and, at the H100, `Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8`
+beside the device model `Pouw.PearlC.Assumptions.W1CompleteH100`), the receipt clock (`Pouw.Assumptions.HonestClock`), and the claims
 `trusted-device`, `live-verifier`, `cr/sha-512` and `prf/sha-512` (`verity.claims`). The lemmas at device records
 (`security/Proofs/Pouw/Lemmas/PearlCRecords.lean`) rest on further forms that no listed statement takes: Pearl-C4's
 TT_OUT at its sm_120 record (`TTOutFp4Sm120W1`), the seeded noise's forms (`RowSeedNoise`, `CodeSeedNoise`) and the

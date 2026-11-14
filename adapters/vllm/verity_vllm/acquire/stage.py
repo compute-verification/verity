@@ -18,7 +18,7 @@ from typing import Any
 from verity_vllm.acquire.gate import run as gate_run
 from verity_vllm.acquire.install import IncompletePlan
 from verity_vllm.acquire.plan import AcquisitionPlan
-from verity_vllm.observe.runtime_tree import RuntimeTree, runtime_tree_of
+from verity_vllm.records.runtime_tree import RuntimeTree, runtime_tree_of
 
 MANIFEST_ENV = "ACQUIRE_MANIFEST"       # the row's required-value manifest path when the stage's CLI has no flag for it
 

@@ -1444,8 +1444,8 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     evidence with its ``verdicts`` replaced by the statements, one for each member with a session, in the members' order
     (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
     ``blobs``, the paths of the statements' files, of the circuit and public files of each member with no session, which
-    v2's check of the form reads too, and of the pinned lookup ``tables`` the statements' circuits look up. The
-    statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
+    v2's check of the form reads too, and of the pinned lookup ``tables`` the members' circuits look up, any member's.
+    The statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
     (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
     RP = own_replay()
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -1552,7 +1552,8 @@ def session_dirs(sdir: Path) -> tuple[Path, ...]:
 
 def looked_up_tables(st_dir: Path) -> list[Path]:
     """The pinned MUFU tables under a staged member's ``st_dir`` that its circuit looks up (`proofs.circuit_lookups`):
-    v2 holds the blobs' tables to exactly those."""
+    v2 holds the blobs' tables to exactly those, and in the per-member form a member's statement to those among the
+    blobs'."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     tdir = st_dir / "tables"
@@ -1563,10 +1564,11 @@ def looked_up_tables(st_dir: Path) -> list[Path]:
 def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: bool = False) -> dict | str | None:
     """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
     members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
-    the sample, its registered file, its units and its circuit's ``vus_per_block``, and a sampled member's session and
-    the tables its circuit looks up, one path a table. None for a window of one member, whose form is the one
-    statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's stage's challenger session,
-    `drawn_trees`); or why the audit has no per-member case."""
+    the sample, its registered file, its units and its circuit's ``vus_per_block``, a sampled member's session, and
+    the tables every member's circuit looks up, sampled or not, one path a table: v2 holds each member's statement to
+    its own circuit's tables among the blobs (`OneStageZk.ownTables`) and reads every member's files. None for a window
+    of one member, whose form is the one statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's
+    stage's challenger session, `drawn_trees`); or why the audit has no per-member case."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     if len(members) < 2 and not one:
@@ -1584,8 +1586,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
         reads = st.get("registered_file")
         out.append(PF.Member(m.key, PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
                              st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
-        if sessions:
-            tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
+        tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
     return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 
 

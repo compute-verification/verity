@@ -67,9 +67,11 @@ def code(text: str) -> str:
 
 
 def modules(package: Path = LEAN) -> dict[str, Path]:
-    """{module: file} of a Lean package's own sources."""
+    """{module: file} of a Lean package's own sources: a directory under it with a lakefile of its own is another
+    package (the sigma difftest, `sigma/`), whose modules are not this one's."""
+    nested = {f.parent for f in package.rglob("lakefile.toml") if f.parent != package and ".lake" not in f.parts}
     return {".".join(p.relative_to(package).with_suffix("").parts): p
-            for p in sorted(package.rglob("*.lean")) if ".lake" not in p.parts}
+            for p in sorted(package.rglob("*.lean")) if ".lake" not in p.parts and not nested & set(p.parents)}
 
 
 def imports(text: str) -> list[str]:

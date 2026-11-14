@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.PearlC.DeviceRev1
-public import Definitions.Pouw.PearlC.DevicePrices
+public import Proofs.Pouw.PearlC.Records
 import Mathlib.Tactic.Positivity.Finset
 
 /-!

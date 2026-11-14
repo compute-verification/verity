@@ -1,12 +1,13 @@
-/-
-**Round 2's examples**: `SecondStage`'s checks run, at elaboration, on small records, statements and replay blocks
-(`#guard`): the statement check's codes, the reads a link, a wire or a port of its own may make, and the links, wires
-and rows the verifier derives from a replay block's Definition.
--/
 module
 
 public import Spot.SecondStage
 meta import Spot.SecondStage
+
+/-!
+**Round 2's examples**: `SecondStage`'s checks run, at elaboration, on small records, statements and replay blocks
+(`#guard`): the statement check's codes, the reads a link, a wire or a port of its own may make, and the links, wires
+and rows the verifier derives from a replay block's Definition.
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true

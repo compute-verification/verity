@@ -1,12 +1,13 @@
-/-
-The byte tags of the circuit statement (`Flock.Circuit`), as a parameter: every string here is hashed into Σ or the
-statement digest, or matched byte for byte against the pinned files, so each version of the circuit prover's statement is one value.
--/
 module
 
 public import Lean.Data.Json
 public import Flock.Hm96
 public import Flock.CanonForm
+
+/-!
+The byte tags of the circuit statement (`Flock.Circuit`), as a parameter: every string here is hashed into Σ or the
+statement digest, or matched byte for byte against the pinned files, so each version of the circuit prover's statement is one value.
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true

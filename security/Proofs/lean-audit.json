@@ -115,14 +115,12 @@
   "Proofs.Properties.Verity.Sampled.Record.Facts",
   "Proofs.Properties.Verity.Sampled.Record.Session",
   "Proofs.Properties.Verity.Sampled.Record.Accepts",
-  "Proofs.Properties.Verity.Sampled.Record.Pass",
-  "Proofs.Properties.Verity.Sampled.Record.Law",
   "Proofs.Properties.Verity.Sampled.Record.Runs",
   "Proofs.Properties.Verity.Sampled.Record.Opens",
   "Proofs.Properties.Verity.Sampled.Record.Scope",
   "Proofs.Properties.Verity.Sampled.Record.Inner",
-  "Proofs.Properties.Verity.Sampled.Record.KS",
   "Proofs.Properties.Verity.Sampled.Record.Reg",
+  "Proofs.Flock.Claims.Sampling.Select.Prefix",
   "Proofs.Properties.Verity.Sampled.OpensAt",
   "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Challenger.Window",
@@ -422,7 +420,8 @@
   "Fwd.taintReason": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "SpotFlock.RecordNames.jpBody": "partial def of jp_body and jp_close (Proofs.Properties.Verity.SampledTwo.JpWalk, under `compile_time`): elaborator code that takes one step down a registration check's do block and runs again on each goal the step leaves; no statement reads it, and the kernel checks every proof it builds",
-  "SpotFlock.RecordNames.walkGoal": "partial def of jp_walk (Proofs.Properties.Verity.SampledTwo.JpWalk, under `compile_time`): elaborator code that walks one goal's hypothesis down the path of a registration check on which no code is added; no statement reads it, and the kernel checks every proof it builds"
+  "SpotFlock.RecordNames.walkGoal": "partial def of jp_walk (Proofs.Properties.Verity.SampledTwo.JpWalk, under `compile_time`): elaborator code that walks one goal's hypothesis down the path of a registration check on which no code is added; no statement reads it, and the kernel checks every proof it builds",
+  "Fwd.evalFields": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds"
  },
  "compile_time": {
   "Proofs.Flock.Claims.Complete.CostWalk": {
@@ -472,6 +471,12 @@
   "Proofs.Flock.SpotFlock.DoWalk": {
    "why": "jp_intro, head_zeta, head_whnf, throws, jp_step, do_walk and lit_walk, the tactics that walk an Except do block by its join points (SpotFlock/ParamsWf.lean's proofs of what the parameters' readers return): elaborators that replace a hypothesis by a definitionally equal one or generalize a join point to a variable, and macros that expand to repeat', first, cases, split, refine, obtain, subst, dsimp only, clear, have, apply, assumption, trivial and done. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "9c4f23f64cf0313080637290463c0ca73562e221f45a1b38979550f0bb3f145a"
+  },
+  "Proofs.Flock.SpotFlock.InstanceStmt.Header": {
+   "why": "plain_lit, the tactic that shows a literal leaf or key of an instance statement's header plain, a macro that expands to one simp call over the module's plain, plainStr and literal definitions. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
+  },
+  "Proofs.Flock.SpotFlock.InstanceStmt.Plain": {
+   "why": "plain_json, the tactic that shows an instance statement's JSON object plain, a macro that expands to one simp call over FirewallObj.plain_mkObj and the module's plain, plainStr and hex lemmas. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
   },
   "Proofs.Properties.Verity.SampledTwo.JpWalk": {
    "why": "name_lets, jp_mono, jp_body, jp_close, jp_core, jp_disch, jp_ext and jp_walk, the tactics that walk a registration check's do block by its join points (SampledTwo/RecordNames.lean's proofs that a check with no code names its registration's names): elaborators and macros that rename the context's lets and expand to simp only, dsimp only, split, apply, exact, intro, obtain, extract_lets and assumption over the module's code-list lemmas. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
