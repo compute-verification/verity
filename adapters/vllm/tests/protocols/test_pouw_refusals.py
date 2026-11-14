@@ -7,8 +7,9 @@ quantizer's of a value that is not finite, and the native prover's of a unit out
 a scheme its path doesn't run or that a test instance names otherwise, of a kernel directory without one cubin, of a
 pass whose coins don't parse or are no object, of a live salt over other weights than its workload's, of a group of
 experts that repeat, are another group's, differ in shape or whose bytes are not the kernel's size for them, of a
-grouped call under a schedule with other side steps, and of B̃'s prefetch and the shared-memory split of pd_commit and
-pd_tree on a kernel without them, and the in-process certifier's of fewer coin bytes than it asks for."""
+grouped call under a schedule with other side steps or with counts that aren't its rows, and of B̃'s prefetch and the
+shared-memory split of pd_commit and pd_tree on a kernel without them, and the in-process certifier's of fewer coin
+bytes than it asks for."""
 from __future__ import annotations
 
 import random
@@ -407,6 +408,40 @@ def test_a_grouped_call_is_refused_under_a_schedule_with_other_side_steps_before
         with pytest.raises(Reached):
             PG.gemm_grouped(SimpleNamespace(entry="e", schedule=SimpleNamespace(name="s", side=side)), [0, 1], None, [0, 0])
     assert reached == [(0, 1)] * 3
+
+
+def test_a_grouped_call_is_refused_unless_its_counts_are_its_experts_rows_of_x_and_with_no_unit_returns_no_rows(monkeypatch):
+    """Past its group, a grouped call takes one count an expert, none negative, summing to x's rows, each of the group's
+    k; else it is refused before its units are read.  Counts that make no unit return no rows of the group's n, with
+    the bias where one is given, before the run's pass or kernel is read."""
+    import torch
+    asked: list[tuple[int, ...]] = []
+
+    class Reached(Exception):
+        pass
+
+    def units(counts: tuple[int, ...]) -> list:
+        asked.append(counts)
+        if any(counts):
+            raise Reached
+        return []
+
+    monkeypatch.setattr(PG, "group", lambda run, ws: SimpleNamespace(G=None, n=8, k=4, units=units))
+    run = SimpleNamespace(entry="e", schedule=SimpleNamespace(name="s", side=()), cur=None, kernel=SimpleNamespace(run=None))
+    cases: tuple[tuple[tuple[int, ...], tuple[int, int], tuple[int, ...]], ...] = (
+        ((0, 1), (3, 4), (3,)), ((0, 1), (3, 4), (1, 1)), ((0, 1), (3, 4), (4, -1)), ((0,), (0, 4), (0, 0)),
+        ((0, 1), (3, 5), (1, 2)))
+    for ws, shape, counts in cases:
+        said = f"e: x {shape} isn't Σ counts = {sum(counts)} rows of k = 4 over {len(ws)} experts"
+        with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
+            PG.gemm_grouped(run, ws, torch.zeros(shape), counts)
+    assert asked == []
+    with pytest.raises(Reached):
+        PG.gemm_grouped(run, (0, 1), torch.zeros(3, 4), (1, 2))
+    for bias, dtype in ((None, torch.float32), (torch.ones(8, dtype=torch.float64), torch.float64)):
+        out = PG.gemm_grouped(run, (0, 1), torch.zeros(0, 4), (0, 0), bias)
+        assert (out.shape, out.dtype) == ((0, 8), dtype)
+    assert asked == [(1, 2), (0, 0), (0, 0)]
 
 
 def test_a_prefetch_of_b_is_refused_on_a_kernel_whose_pipeline_lacks_it():
