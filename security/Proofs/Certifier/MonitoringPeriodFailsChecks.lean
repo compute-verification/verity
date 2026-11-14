@@ -55,7 +55,7 @@ The operator's ingress is whether the connection failed: it follows the fail pat
 registers the window at both secrets (`bit_registers`) and both meet the good event (`bit_good`).
 
 **The factor is met** (`MonitoringPeriodLeakFailsAtMost_factor_met`). Every premise of `MonitoringPeriodLeakFailsAtMost` holds there at
-one connection of bound 1 and at most one failure, and the two secrets are counted: against `#Θ · windowsCount = 1`
+one connection of bound 1 and at most one failure, and the two secrets are counted: against `#Θ · executionPhasesCount = 1`
 the count fails, and the statement's factor there is 2 (`failsFactor_one`). So the count of `MonitoringPeriodLeakChecked`
 does not hold at an operator that follows the fail pattern, and no smaller factor does at this period. It drops no
 premise: it is a lemma about the factor, and no exclusion.
@@ -146,11 +146,11 @@ theorem failsFactor_one : ∑ i ∈ Finset.range (1 + 1), failPatterns (fun _ : 
 and `δ = 0` is nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning,
 `TrustedHost`, the read-back under the one registered parameter and the channel all hold; the network certifier
 registers its observations at both secrets; the two secrets, each with at most one failure below the bound 1 and a
-window that meets its good event, are counted against `#Θ · windowsCount = 1`, which fails; and the factor of
+window that meets its good event, are counted against `#Θ · executionPhasesCount = 1`, which fails; and the factor of
 `MonitoringPeriodLeakFailsAtMost` there is 2. -/
 theorem MonitoringPeriodLeakFailsAtMost_factor_met :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
-      WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
+      ExecutionPhasesPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
       Verity.Assumptions.TrustedHost ()
         (fun (_ : Unit) (p : CertifierSchedule Unit × Bool) => recordingCode bitFmt p.1 (bitArr p.2))
@@ -166,7 +166,7 @@ theorem MonitoringPeriodLeakFailsAtMost_factor_met :
             ∀ i : Fin 1, ExecutionPhaseGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
               (fun _ _ => True ∧ True) 1 (posStmt false) (fun _ => false) posTops (posX z) ⟨[]⟩
               ((recordingCode bitFmt oneSched (bitArr z)).2 i)}.encard ≤
-          ({()} : Set Unit).encard * ((windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
+          ({()} : Set Unit).encard * ((executionPhasesCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
             (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) : ℕ) : ℕ∞) ∧
       ∑ i ∈ Finset.range (1 + 1), failPatterns (fun _ : Unit => 1) i = 2 := by
   refine ⟨⟨true⟩, le_rfl, posL_ks id, posCm_binds id, pos_placed, pos_checkedUnique, fun _ => rfl,
@@ -188,10 +188,10 @@ theorem not_kraftWeights_one : ¬ KraftWeights (fun _ => 1) (Fintype.card Unit) 
 /-- At the weights `w_j = 1` and `T = 1`, each secret's run is charged at most `log2 T`. -/
 theorem bit_charge (z : Bool) :
     ((failPatterns (fun _ : Unit => 1) (failCount (failCell oneSched (bitArr z))) *
-        (({()} : Finset Unit).card * windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
+        (({()} : Finset Unit).card * executionPhasesCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
           (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0)) : ℕ) : ℚ≥0) ≤
       (1 : ℚ≥0) * ((1 : ℕ) : ℚ≥0) := by
-  rw [failPatterns_unit, pos_windowsCount]
+  rw [failPatterns_unit, pos_executionPhasesCount]
   simp
 
 /-- **`MonitoringPeriodLeakCharged`'s count fails at weights that sum to 2.** At `posL`, one window, the connection of `oneSched`
@@ -201,7 +201,7 @@ against 1. -/
 theorem MonitoringPeriodLeakCharged_nontrivial :
     ¬ {z : Bool | z ∈ (Set.univ : Set Bool) ∧ FailsBelow (fun _ : Unit => 1) (failCell oneSched (bitArr z)) ∧
           ((failPatterns (fun _ : Unit => 1) (failCount (failCell oneSched (bitArr z))) *
-              (({()} : Finset Unit).card * windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
+              (({()} : Finset Unit).card * executionPhasesCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
                 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0)) : ℕ) : ℚ≥0) ≤
             (1 : ℚ≥0) * ((1 : ℕ) : ℚ≥0) ∧
           ∀ i : Fin 1, ExecutionPhaseGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
@@ -220,7 +220,7 @@ network certifier registers its observations at both secrets; the weights `w_j =
 connection; and the two secrets, each charged at most `log2 1`, are counted against `T = 1`. -/
 theorem MonitoringPeriodLeakCharged_kraft_exclusion :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
-      WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
+      ExecutionPhasesPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
       Verity.Assumptions.TrustedHost ()
         (fun (_ : Unit) (p : CertifierSchedule Unit × Bool) => recordingCode bitFmt p.1 (bitArr p.2))
@@ -235,7 +235,7 @@ theorem MonitoringPeriodLeakCharged_kraft_exclusion :
       ¬ KraftWeights (fun _ => 1) (Fintype.card Unit) ∧
       ¬ {z : Bool | z ∈ (Set.univ : Set Bool) ∧ FailsBelow (fun _ : Unit => 1) (failCell oneSched (bitArr z)) ∧
             ((failPatterns (fun _ : Unit => 1) (failCount (failCell oneSched (bitArr z))) *
-                (({()} : Finset Unit).card * windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
+                (({()} : Finset Unit).card * executionPhasesCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
                   (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0)) : ℕ) : ℚ≥0) ≤
               (1 : ℚ≥0) * ((1 : ℕ) : ℚ≥0) ∧
             ∀ i : Fin 1, ExecutionPhaseGoodChecked id (posL Bool) 1 1 1 (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅)
@@ -270,7 +270,7 @@ as a premise), of which the period has none, and the weights `2^-(j+1)` on the n
 most one (`kraftWeights_halves`). The premises hold together there, and the lemma shows nothing more. The toy code
 parses no statement and its verifier rejects every run, so no run passes there, and the period has no window and no
 connection: it covers no run with a failure, and holds no window's placement, check or registration to anything. Where
-a window is placed and a run is accepted, the window's placement (`WindowsPlaced`), its check's pinning
+a window is placed and a run is accepted, the window's placement (`ExecutionPhasesPlaced`), its check's pinning
 (`CheckedUnique`), its registration (`CertifierRegisters`), the read-back of a format with a connection
 (`RecordFormat.ReadsBy`) and its channel (`MonitoringPeriodChannelReg`) are not shown here, with or without a failure; the
 weights' sum alone is shown at every number of connections. -/
@@ -279,7 +279,7 @@ theorem MonitoringPeriodLeakCharged_honest :
         (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
       (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
         (fun _ _ _ => [])).commit.Binds FlockDeploy.sha512 ∧
-      WindowsPlaced
+      ExecutionPhasesPlaced
         (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
           (fun _ _ _ => [])).partition 0 (Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) Fin.elim0 Fin.elim0 ∧
       (∀ i : Fin 0, CheckedUnique ((Fin.elim0 : Fin 0 → Claims.Sampling.AuditStatement) i).prog
