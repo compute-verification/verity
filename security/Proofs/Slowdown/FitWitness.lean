@@ -17,6 +17,8 @@ Each window reads 3 bits (a weight and the activation), so `S = 3 < N* b_w = 2 Â
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.SecurityProofs.FitWitness
 
 open Verity Finset

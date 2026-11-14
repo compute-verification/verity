@@ -35,6 +35,8 @@ and the two that SPOT and PoUW's deficit add:
 
 open Verity.Game renaming prPMFReal → prob
 
+open InferenceOnly
+
 namespace Slowdown.Guarantees
 
 open Verity Slowdown.Slowdown

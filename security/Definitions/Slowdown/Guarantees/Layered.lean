@@ -15,6 +15,8 @@ circuit is keyed there (`Assumptions.ReferenceLayered`), that is `(10, 2328)` fo
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Guarantees
 
 open Verity

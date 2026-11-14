@@ -26,6 +26,8 @@ gates is its instance at one slot per weight gate (`Slowdown.SecurityProofs.Fit.
 
 @[expose] public section
 
+open Slowdown
+
 namespace Accounting.SecurityProofs.Actual
 
 open Verity InferenceOnly Finset

@@ -21,6 +21,8 @@ so `ThreadedReadsSlots` applies here (`reads`).
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.SecurityProofs.WeightsSlotsWitness
 
 open Verity Finset Slowdown.SecurityProofs.FitSlotsWitness

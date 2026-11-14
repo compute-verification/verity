@@ -16,6 +16,8 @@ for a token-routed mixture of experts, the per-sequence form at sequence threads
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Assumptions
 
 open Verity

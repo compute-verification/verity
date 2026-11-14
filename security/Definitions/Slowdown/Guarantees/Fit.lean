@@ -15,6 +15,8 @@ is its case of one slot per weight gate.
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Guarantees
 
 open Verity

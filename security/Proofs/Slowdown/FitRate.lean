@@ -17,6 +17,8 @@ most `R + r ω`, and `FitBound` gives the count over the `n J` windows. Its comp
 
 @[expose] public section
 
+open InferenceOnly InferenceOnly.SecurityProofs
+
 namespace Slowdown.SecurityProofs
 
 open Verity Accounting Finset

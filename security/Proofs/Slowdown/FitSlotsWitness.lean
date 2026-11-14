@@ -24,6 +24,8 @@ window uses two, so `Fits` charges window 0 `2 b_w ≤ 6 ≤ S`, while `Reach` a
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.SecurityProofs.FitSlotsWitness
 
 open Verity Finset

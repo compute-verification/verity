@@ -22,6 +22,8 @@ the bound: a citation that leaves work out charges it.
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.SecurityProofs.Fit
 
 open Verity Finset

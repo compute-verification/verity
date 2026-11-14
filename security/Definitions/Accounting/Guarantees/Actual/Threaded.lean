@@ -35,6 +35,8 @@ needs the read bound in its determination form.
 
 @[expose] public section
 
+open Slowdown
+
 namespace Accounting.Guarantees.Actual
 
 open Verity InferenceOnly Finset

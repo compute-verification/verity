@@ -64,6 +64,8 @@ fail.
 
 open Verity.Game renaming prPMFReal → prob
 
+open InferenceOnly
+
 namespace Slowdown.Guarantees
 
 open Verity Slowdown.Slowdown

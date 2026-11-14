@@ -24,6 +24,8 @@ once the block cap `ReadsAtMost`, the verdict, or the total is dropped.
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Cut.Guarantees
 
 open Verity Finset

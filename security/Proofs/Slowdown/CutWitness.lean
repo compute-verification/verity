@@ -33,6 +33,8 @@ is tight.
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Cut.SecurityProofs
 
 open Verity Finset

@@ -34,6 +34,8 @@ also discharges the declared computation's with `ThreadedThrottled`, and `Slowdo
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Guarantees
 
 open Verity Slowdown.Slowdown

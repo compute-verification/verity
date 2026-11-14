@@ -25,6 +25,8 @@ for it once.
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Guarantees
 
 open Verity

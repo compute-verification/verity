@@ -20,6 +20,8 @@ bound of the same form, which the whole-word variant (`Aligned`) reuses.
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Cover.SecurityProofs
 
 open Finset

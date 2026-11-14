@@ -20,6 +20,8 @@ public import Proofs.Slowdown.Threads
 
 @[expose] public section
 
+open Slowdown Slowdown.SecurityProofs
+
 namespace InferenceOnly.SecurityProofs
 
 open Verity Finset

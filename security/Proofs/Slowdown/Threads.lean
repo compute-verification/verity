@@ -25,6 +25,8 @@ computed` (`ThreadedThrottledSlots`). Each guarantee over weight gates is its `S
 
 @[expose] public section
 
+open InferenceOnly InferenceOnly.SecurityProofs
+
 namespace Slowdown.SecurityProofs
 
 open Verity Finset

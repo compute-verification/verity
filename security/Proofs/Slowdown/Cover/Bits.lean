@@ -29,6 +29,8 @@ is handed at least `f` of the region's bits, since all bits of one gate read the
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Cover.SecurityProofs
 
 open Finset BitView

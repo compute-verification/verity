@@ -43,6 +43,8 @@ computation at the min-cut toy (`Slowdown.Cut.Toy`), where the count verdict `Co
 
 open Verity.Game renaming prPMFReal → prob
 
+open InferenceOnly
+
 namespace Slowdown.Guarantees
 
 open Verity Finset Slowdown.Capability.Toy Slowdown.Witness Slowdown.Slowdown

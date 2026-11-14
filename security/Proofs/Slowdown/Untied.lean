@@ -74,6 +74,8 @@ that untied circuit, at each block of `G`'s own budget, and (E), the squared bud
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Verity
 
 open Finset

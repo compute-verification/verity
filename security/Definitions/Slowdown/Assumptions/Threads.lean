@@ -15,6 +15,8 @@ through containment. `WeightsIncompressibleSlots` is the same assumption with we
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Assumptions
 
 open Verity

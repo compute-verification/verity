@@ -17,6 +17,8 @@ or to a lookup (at most `eLk` each), with a lookup costing a read of its token (
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.SecurityProofs
 
 open Verity Finset

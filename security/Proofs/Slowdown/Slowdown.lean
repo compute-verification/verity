@@ -16,6 +16,8 @@ hypothesis. `SlowdownThreadedSlots` discharges the declared computation's bound 
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.SecurityProofs
 
 open Verity Slowdown.Slowdown

@@ -19,6 +19,8 @@ reuse (`Slowdown.Threading.bound`, which is `Slowdown.Slowdown.Lambda`). `Thread
 
 @[expose] public section
 
+open Slowdown
+
 namespace Accounting.Guarantees.Actual
 
 open Verity InferenceOnly Finset Slowdown.Slowdown

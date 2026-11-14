@@ -24,6 +24,8 @@ has no counted multiplication and bound `e`.
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.Witness
 
 open Verity Finset Slowdown.Capability.Toy

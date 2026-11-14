@@ -21,6 +21,8 @@ multiplications in a window number at most `reuse` per slot it uses there (`card
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown.SecurityProofs.Fit
 
 open Verity Finset

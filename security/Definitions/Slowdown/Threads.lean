@@ -24,6 +24,8 @@ thread's work. It states them over `C` itself, not over the declared circuit, wh
 
 @[expose] public section
 
+open InferenceOnly
+
 namespace Slowdown
 
 open Verity Finset
