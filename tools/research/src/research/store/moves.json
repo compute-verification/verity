@@ -2410,6 +2410,14 @@
       "paths": {
         "verity/protocols/accounting/pouw/clear/": "verity/protocols/accounting/pouw/prover/clear/"
       }
+    },
+    {
+      "paths": {
+        "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
+        "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
+        "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
+        "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
+      }
     }
   ]
 }

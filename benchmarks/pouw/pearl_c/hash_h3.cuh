@@ -5,7 +5,7 @@
 // hm96-sha512 leaves (`audit.Hm96Domain`, `verity.commitments.hm96.SHA512`) salted by ChaCha20 (`audit.hm96_salt`).
 // Every SHA-512 word is big-endian; buffers hold bytes, loaded as little-endian u32 (`rs_be64`).  A frame message's integers
 // have minimal big-endian lengths, so each thread assembles it in its own slice of shared memory (`SMsg`), never in a local
-// array.  SHA-512's compression is sha512.cuh's; the frame messages and the hm96 leaf are verity/circuits/kernels/row_commit.cuh's
+// array.  SHA-512's compression is sha512.cuh's; the frame messages and the hm96 leaf are verity/commitments/cuda/row_commit.cuh's
 // over it.  pearl_c_sm120.cu includes it; hash_host.cpp builds it for the host tests.
 #pragma once
 #include <cstdint>
@@ -15,7 +15,7 @@ struct Args { uint64_t p[16]; int32_t i[16]; };
 #define DEV __device__ __forceinline__
 
 #include "sha512.cuh"
-#include "../../../verity/circuits/kernels/row_commit.cuh"
+#include "../../../verity/commitments/cuda/row_commit.cuh"
 
 // Pearl-C's compression (rs_compress) as the row commitment's policy
 struct PcSha {
