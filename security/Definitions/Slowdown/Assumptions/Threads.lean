@@ -15,7 +15,9 @@ through containment. `WeightsIncompressibleSlots` is the same assumption with we
 
 @[expose] public section
 
-namespace InferenceOnly.Assumptions
+open InferenceOnly
+
+namespace Slowdown.Assumptions
 
 open Verity
 
@@ -57,4 +59,4 @@ def WeightsIncompressibleSlots (r : RegisteredCircuit) (T : Threading r) (σ : T
   ∀ R, Small r c k R →
     b_w * (σ.slotsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ freshInput r R
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions

@@ -18,7 +18,7 @@ Two lemmas of the formalism (`Definitions.Slowdown.Formalism`), which its theore
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism
+namespace Slowdown.Formalism
 
 open Finset
 open Verity (Circuit RegisteredCircuit)
@@ -100,4 +100,4 @@ theorem reads_split (d : RegisteredCircuit) (I : Finset (Fin d.D.N)) :
       · exact ⟨hv, hθ⟩
       · exact ⟨hv, fun hθ => h (mem_inputs_of_mem_θ hθ)⟩
 
-end InferenceOnly.Formalism
+end Slowdown.Formalism

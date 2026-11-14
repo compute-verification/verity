@@ -2,7 +2,9 @@
 `unread.py`'s fixture with the Lean tools beside it and the fixture's kept facts where the gate keeps facts by key: a change
 to a Python file that takes away a declaration's last mention fails, naming the module, the file and line and the fix, with
 no Lean built; a change that leaves every name somewhere, or that changes what a Lean check reads, passes; with none of the
-tree's facts it can't judge; the store lookup takes the newest recorded check's facts of a key whose bytes check out."""
+tree's facts it can't judge; the store lookup takes the newest recorded check's facts of a key whose bytes check out. What it
+costs: it refreshes the store only from the oldest commit it looks up, and its git calls don't grow with the seed files a
+change takes names from."""
 from __future__ import annotations
 
 import gzip
@@ -224,7 +226,7 @@ def test_with_neither_tree_s_facts_it_judges_on_the_newest_ancestor_s_a_check_pu
     published = {at(k): (data, hashlib.sha256(data).hexdigest()) for k in keys.values()}
     store = Store([("r2", {at(partial["security"]): published[at(keys["security"])]}), ("r1", published)],
                   {"r2": lean, "r1": old})
-    monkeypatch.setattr(G, "evidence_store", lambda: store)
+    monkeypatch.setattr(G, "evidence_store", lambda since: store)
     monkeypatch.setattr(G, "ANCESTORS", 1)
     assert G.main([main, top]) == 2
     err = capsys.readouterr().err
@@ -259,6 +261,68 @@ def test_the_store_lookup_takes_the_newest_recorded_check_s_facts_of_each_key_wh
     got, _ = G.stored({"security": k1}, tmp_path / "old", "1", store=Store([runs[0], runs[2]], {"r1": "c" * 40}), scan=1,
                       commits=("c" * 40,))
     assert got["security"].read_bytes() == b"oldest", "a check of the commit judged is read however many checks ran since"
+
+
+class Refreshed:
+    """A store with a remote that records each refresh's arguments and holds no attempt."""
+
+    remote = "s3://x"
+
+    def __init__(self):
+        self.refreshes = []
+        self.index = type("Index", (), {"sql": staticmethod(lambda q, args: [])})()
+
+    def refresh(self, **kw):
+        self.refreshes.append(kw)
+
+
+def test_the_store_is_refreshed_only_from_the_oldest_commit_looked_up_less_the_skew(repo, monkeypatch):
+    """The remote holds every attempt ever started, and a refresh with no bound lists them all and fetches each this machine
+    lacks, a cost that grows with the store past what a ready mark's preflight gives the gate.  A check of a commit starts
+    after it, so a lookup refreshes from its oldest commit's committer time less `SKEW_S`, once, and again only for an older
+    one."""
+    store = Refreshed()
+    monkeypatch.setattr(G, "_STORE", [store, None])
+    at = {}
+    for day in ("01", "02", "03"):
+        monkeypatch.setenv("GIT_COMMITTER_DATE", f"2026-11-{day}T12:00:00Z")
+        at[day] = commit(repo, f"day {day}", {f"tools/day{day}.py": "x = 1\n"})
+    since = lambda day: f"r202611{day}-110000"  # noqa: E731  (noon less `SKEW_S`)
+    assert G.SKEW_S == 3600
+    G.stored({"security": "1" * 64}, Path("."), "1", commits=(at["02"],))
+    G.stored({"security": "1" * 64}, Path("."), "1", commits=(at["03"],))
+    assert store.refreshes == [{"attempts_only": True, "since": since("02")}], "a newer commit's checks are refreshed already"
+    G.checked_commits([at["03"], at["02"], at["01"]], "1")
+    assert store.refreshes[1:] == [{"attempts_only": True, "since": since("01")}], "an older commit's are refreshed from it"
+
+
+def test_the_git_calls_do_not_grow_with_the_seed_files_a_change_takes_names_from(repo, tmp_path, monkeypatch):
+    """A git call per changed file or per name would take a large change past what a ready mark's preflight gives the gate.
+    Ten times as many changed seed files, each losing a name, run the same git calls, on both of the gate's paths: only git
+    (no name went that the Lean could hold) and the ratchet on the facts."""
+    base = git(repo, "rev-parse", "HEAD")
+    keep_facts(repo, base, tmp_path / "keys")
+    real = subprocess.run
+
+    def calls(n: int, also: dict[str, str]) -> int:
+        git(repo, "checkout", "-q", "-B", f"n{n}{len(also)}", base)
+        files = {f"tools/seed{i}.py": f"NAME = 'Elsewhere.name{i}'\n" for i in range(n)}
+        mid = commit(repo, f"{n} seed files", files)
+        top = commit(repo, "each loses its name", {f: "NAME = None\n" for f in files} | also)
+        count = []
+        monkeypatch.setattr(subprocess, "run", lambda argv, *a, **k: count.append(argv[0]) or real(argv, *a, **k))
+        try:
+            doc = G.judged(mid, mid, top, G.archive(mid, tmp_path / f"code{n}{len(also)}", *G.CODE),
+                           tmp_path / "cache" / "unread-gate", tmp_path)
+        finally:
+            monkeypatch.setattr(subprocess, "run", real)
+        assert len(doc["seed_files"]) == n + len(also), doc
+        return len(count)
+
+    lonely = {"tools/lonely.py": LONELY.replace('NAME = "Dead.lonely"\n', "")}
+    calls(1, lonely)  # the gate's cache of what the Lean declares, which both sizes then read
+    assert calls(4, {}) == calls(40, {}), "the path of git alone"
+    assert calls(4, lonely) == calls(40, lonely), "the path of the ratchet on the facts"
 
 
 def test_the_names_lean_declares_read_alike_under_any_locale_and_are_kept_by_the_lean_s_tree(repo, tmp_path, monkeypatch):

@@ -5,6 +5,7 @@ public import Proofs.Poub.Bandwidth.Honest
 public import Proofs.Poub.Bandwidth.Relay
 public import Proofs.Poub.Bandwidth.Interactive
 public import Proofs.Accounting.Actual.Physical
+public import Proofs.Accounting.Bandwidth.Witnesses
 public import Proofs.Poub.Bandwidth.Ticked
 public import Proofs.Poub.Bandwidth.Causal
 public import Proofs.Poub.Bandwidth.Joint

@@ -19,9 +19,9 @@ activation, which `S` reads), so they are at least `c` and `|J_S| ≤ k / c`.
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs.Covering
+namespace Slowdown.SecurityProofs.Covering
 
-open Verity Finset InferenceOnly.Covering
+open Verity Finset Slowdown.Covering
 
 variable {C : Circuit}
 
@@ -70,11 +70,11 @@ theorem mul_card_le_of_disjoint {ι α : Type*} [DecidableEq α] (F : Finset ι)
     _ = ((F.biUnion fun i => f i ∩ Y).card : ℝ) := by rw [hU]; push_cast; rfl
     _ ≤ Y.card := by exact_mod_cast hY
 
-end InferenceOnly.SecurityProofs.Covering
+end Slowdown.SecurityProofs.Covering
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open Verity Finset InferenceOnly.Covering InferenceOnly.SecurityProofs.Covering
+open Verity Finset Slowdown.Covering Slowdown.SecurityProofs.Covering
 
 theorem CoveringBound : Guarantees.CoveringBound := by
   classical
@@ -191,4 +191,4 @@ theorem CoveringBound : Guarantees.CoveringBound := by
     _ ≤ (n : ℝ) * ((s : ℝ) / d.D.N) := mul_le_mul_of_nonneg_right hdiv (by positivity)
     _ = (s : ℝ) * n / d.D.N := by ring
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

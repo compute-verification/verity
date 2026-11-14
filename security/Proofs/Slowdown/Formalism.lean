@@ -8,7 +8,7 @@ public import Proofs.Slowdown.Formalism.Witnesses
 /-!
 # Proofs of the training formalism v2's theorems
 
-`InferenceOnly.Formalism.SecurityProofs.G : InferenceOnly.Formalism.Guarantees.G` for each theorem of `Definitions.Slowdown.Guarantees.Formalism`:
+`Slowdown.Formalism.SecurityProofs.G : Slowdown.Formalism.Guarantees.G` for each theorem of `Definitions.Slowdown.Guarantees.Formalism`:
 Fit's three statements (`Proofs.Slowdown.Formalism.Fit`); the counting lemma over kinds, the token kind's cap from A1 and the
 token-work bound and its clean form, Slowdown and Security (`Proofs.Slowdown.Formalism.Slowdown`); and their honest and
 nontrivial lemmas
