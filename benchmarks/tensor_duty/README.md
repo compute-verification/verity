@@ -30,7 +30,7 @@ clock64 for the whole kernel and for its tensor phases) are diagnostics. Timings
   made-up points.
 
 `run.sh --arms fp32-beside` asks a second question of the same card: how many FP32 adds it retires per tensor MAC,
-per second over the host's wall clock, when both pipes are busy (`price.fp32_loop` in the card file; PRF-612's clock
+per second over the host's wall clock, when both pipes are busy (`price.fp32_loop` in the card file; that price's clock
 falsifier). Its arms are duty.cu's A (the e4m3 wgmma alone, R_t), B (a loop of 64 FADDs and 3 loop instructions alone,
 on two warps a scheduler), C (both in one kernel, the adds in the wgmma's shadow on warps of their own, at add:MAC
 ratios 1/128, 1/32 and 1/8) and D (the two alone in alternating phases of 1, 10 and 100 ms), on zero, constant and
