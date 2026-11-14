@@ -29,8 +29,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from verity.configuration.wire import KINDS, Message
-from verity.configuration.wire.handshake import Key
+from verity.channel import KINDS, Message
+from verity.runtime.handshake import Key
 
 type Params = Mapping[str, Any]
 """A protocol's public structural parameters, canonical JSON."""
