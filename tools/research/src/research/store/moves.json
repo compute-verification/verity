@@ -3209,6 +3209,12 @@
         "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_core.py": "benchmarks/pouw/served_zk/replay_core.py",
         "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py": "benchmarks/pouw/served_zk/replay_window.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/filler/pfill_ref.py": "benchmarks/pouw/filler/pfill_ref.py",
+        "verity/protocols/accounting/pouw/prover/kernels/filler/dfill_ref.py": "benchmarks/pouw/filler/dfill_ref.py"
+      }
     }
   ]
 }
