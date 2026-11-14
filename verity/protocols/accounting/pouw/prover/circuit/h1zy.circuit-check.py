@@ -26,16 +26,13 @@ def _pouw_roots() -> list[Any]:
     chunks, and `PouwH1Combine_v2` over the v5 leaf, v1's receipt check AND its 4 lanes' ok rows (each the word 1). All
     are bound as
     Definitions, since `h1zy.lane`, `h1zy.lane_chunk` and `h1zy.combine` stage only a
-    leaf whose R is a multiple of 16, and the combine only at K >= 384 (`h1zy.LEAST_K`). None where
-    `circuit.segment` is not on the tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`,
+    leaf whose R is a multiple of 16, and the combine only at K >= 384 (`h1zy.LEAST_K`). `PouwZyDequant`, `PouwZyCell`,
     `PouwAndBit` and `PouwMuxBit` are catalog roots (static-free)."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
     from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
     from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
 
-    if H.SG is None:
-        return []
     def tile(d: Any, r: int, c: int, k: int = 64) -> Any:
         exact = bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
         return bind(d, EXACT=exact, R=r, C=c, PAIRS=tuple((i, j) for i in range(r) for j in range(c)))

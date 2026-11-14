@@ -5,7 +5,7 @@ logits' version 4, whose word view is `_v3`.
     U32And_v2, I32Sub_v2, I32ToF32_v2, F32CeilFtz_v2     traced: and.b32, sub.s32, cvt.rn.f32.s32, cvt.rpi.ftz.f32.f32
     DsaUe8m0Scale_v2, DsaUe8m0Quant_v2{N}
     DsaIndexerKRow_v2{D,ROPE,EPS}, DsaIndexerQHead_v2{D,ROPE,NH}, DsaIndexerQ_v2{H,D,ROPE}
-    DsaMqaLogit_v4{H,D}, DsaMqaLogits_v4{N,H,D}          the H200's (`DsaMqaLogit_v3`); _v2 is the refuted `_v1` on bits
+    DsaMqaLogit_v4{H,D}, DsaMqaLogits_v4{N,H,D}          the H200's (`DsaMqaLogit_v3`); `DsaMqaLogit_v2` is the refuted `_v1` on bits
     DsaMqaLogitsQ_v1{H,D}, DsaMqaLogitsKey_v1{H,D}      DsaMqaLogit_v4's circuit cut at what a row's keys share; no word view
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
 
@@ -219,18 +219,6 @@ DsaMqaLogitV2 = flat(
     _logit, D.DsaMqaLogit)
 
 
-def _logits(B, S, q, w, k, ks):
-    """`DsaMqaLogits_v1`'s body on bits."""
-    return B.batch(bind(DsaMqaLogitV2, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
-
-
-DsaMqaLogitsV2 = flat(
-    "DsaMqaLogits", 2, ["N", "H", "D"],
-    lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
-                ("ks", Array(S.N, F32))), Array(S.N, F32)),
-    _logits, D.DsaMqaLogits)
-
-
 def _logit_sig(S):
     return ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32)
 
@@ -296,5 +284,4 @@ DsaTopKShortRowV2 = EW.specialized("DsaTopKShortRow", 2, ["TOPK"], _topk, lambda
                                    doc=_topk.__doc__, word=lambda b: bind(D.DsaTopKShortRow, TOPK=b["TOPK"]))
 
 BOOLEAN_DSA = [U32AndV2, I32SubV2, I32ToF32V2, F32CeilFtzV2, DsaUe8m0ScaleV2, DsaUe8m0QuantV2, DsaIndexerKRowV2, DsaIndexerQHeadV2,
-               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaMqaLogitV4, DsaMqaLogitsQ, DsaMqaLogitsKey, DsaMqaLogitsV4,
-               DsaTopKShortRowV2]
+               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitV4, DsaMqaLogitsQ, DsaMqaLogitsKey, DsaMqaLogitsV4, DsaTopKShortRowV2]

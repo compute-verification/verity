@@ -106,16 +106,28 @@ def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_wi
 @pytest.mark.slow
 @pytest.mark.usefixtures("code_versions_stood_in")
 def test_the_session_compiled_under_the_windows_coin_carries_the_seed_the_window_committed(tmp_path):
-    """`compile_steps` on the same inputs builds the request's Program, seconds in a process that has built none, and hands
-    on its plan's seed: the Program is of the window's one request, whose `seed` Input takes the seed the window committed."""
+    """`compile_steps` on each input the test above plans and accepts builds the request's Program, runs `check_compiled` on
+    it and hands on its plan's seed: the window's coin, another coin, the body with another temperature, length and prompt,
+    and a window whose engine used a seed of its own. Each Program is of the window's one request, whose `seed` Input takes
+    the seed its plan derived."""
     from tests.program.predict.test_steps import _registered
     from verity_vllm.program.predict.steps import compile_steps
 
-    run, rec, advice = _served(tmp_path)
-    key = bytes.fromhex(AC.window_coin(run, 0)["coin"])
-    compiled = compile_steps(_registered(), advice, AC.served_inputs(run, 0)[2], salt=key)
-    (unit,) = compiled.requests
-    assert unit.seed == rec["committed_seeds"][0] == derived(key, "q0") and set(compiled.programs) == {unit.digest}
+    (tmp_path / "ok").mkdir()
+    run, rec, advice = _served(tmp_path / "ok")
+    key, bodies, other = bytes.fromhex(AC.window_coin(run, 0)["coin"]), AC.served_inputs(run, 0)[2], bytes(64) + b"\x01"
+    body = {**bodies["q0"], "temperature": 0.5, "max_tokens": 3, "prompt": [9, 8, 7, 6, 5]}
+    (tmp_path / "own").mkdir()
+    own, _, own_advice = _served(tmp_path / "own", seed_override=7)
+    own_key = bytes.fromhex(AC.window_coin(own, 0)["coin"])
+    reg = _registered()
+    for adv, ingress, salt, seed in ((advice, bodies, key, rec["committed_seeds"][0]), (advice, bodies, other, derived(other, "q0")),
+                                     (advice, {"q0": body}, key, rec["committed_seeds"][0]),
+                                     (own_advice, AC.served_inputs(own, 0)[2], own_key, derived(own_key, "q0"))):
+        compiled = compile_steps(reg, adv, ingress, salt=salt)
+        (unit,) = compiled.requests
+        assert unit.seed == seed and set(compiled.programs) == {unit.digest}
+    assert rec["committed_seeds"][0] == derived(key, "q0") != 7
 
 
 def test_the_registered_default_seed_is_the_public_one_and_a_run_that_used_another_is_refused():

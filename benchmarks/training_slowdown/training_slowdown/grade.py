@@ -844,6 +844,24 @@ def read(root: Path) -> list[dict]:
             for p in sorted(root.glob("*/*/run.json")) if p.parent.name in SPLITS and p.parent.parent.name.isdigit()]
 
 
+def config_of(path: Path) -> dict:
+    """A config as the grade reads it: its TOML, named by its file's stem."""
+    return tomllib.loads(Path(path).read_text()) | {"name": Path(path).stem}
+
+
+def report(config: dict, starts: dict, runs: list[dict], honest: list[dict], out: Path | None = None,
+           others: dict[str, list[dict]] | None = None, as_if_assumed: bool = False) -> dict:
+    """`grade`, its block printed (`text`) and, with `out`, written to `out/slowdown.json` (`AS_IF_FILE` under
+    `as_if_assumed`): what this module's command does, and `verity bench training-slowdown` once every job of a config
+    and of its honest config has its record. Raises `grade`'s `ValueError` where it refuses, before it prints."""
+    s = grade(config, starts, runs, honest, others, as_if_assumed)
+    print(text(s))
+    if out:
+        out.mkdir(parents=True, exist_ok=True)
+        (out / (AS_IF_FILE if as_if_assumed else "slowdown.json")).write_text(json.dumps(_plain(s), indent=1) + "\n")
+    return s
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--config", type=Path, required=True, help="the attack's config; its stem is its name")
@@ -858,13 +876,9 @@ def main(argv=None) -> int:
                     help="count every record by the assumed dtypes, whatever dtype its op log names, and label "
                          "every line as-if: for records that name dtypes beside records that name none")
     a = ap.parse_args(argv)
-    config = tomllib.loads(a.config.read_text()) | {"name": a.config.stem}
     others = {n: read(Path(d)) for n, _, d in (x.partition("=") for x in a.also)}
-    s = grade(config, tomllib.loads(a.starts.read_text()), read(a.records), read(a.honest), others, a.as_if_assumed)
-    print(text(s))
-    if a.out:
-        a.out.mkdir(parents=True, exist_ok=True)
-        (a.out / (AS_IF_FILE if a.as_if_assumed else "slowdown.json")).write_text(json.dumps(_plain(s), indent=1) + "\n")
+    report(config_of(a.config), tomllib.loads(a.starts.read_text()), read(a.records), read(a.honest), a.out, others,
+           a.as_if_assumed)
     return 0
 
 

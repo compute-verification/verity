@@ -191,7 +191,9 @@ budget, the seeds, the windows it asks for where it asks, and what the grade rea
 jobs, one per seed and split, each labelled in the store `training-slowdown=<digest>/<seed>/<split>`, and runs the ones
 its labels lack: on the queue (kind `training-attack`, `infra/cluster/kinds/training.toml`), on one machine with `--on`,
 or here, one after another, with `--local`. It exits 0 when every job has its record, 3 while one is pending or
-stopped, 4 when one stalled (below) and 1 when one failed; a failed job is never run again. A job's run gets the
+stopped, 4 when one stalled (below) and 1 when one failed; a failed job is never run again. With every record in, it grades
+those jobs alone, prints the block below and writes `slowdown.json` (`run.py`'s docstring says where), exiting 5 if the grade
+refuses. A job's run gets the
 time its config's budget gives it (`budget.minutes`, the job's own limit over every run it continues in; without it, the kind's). A queued job
 writes nothing into the tree it runs from, which every run of its commit shares: its Python environment is the
 run's own, built by `uv sync --frozen` in a directory the job makes under /tmp (`UV_PROJECT_ENVIRONMENT`), which the
@@ -362,6 +364,8 @@ start, and `--starts-root` points at it.
 python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.toml --records DIR --honest DIR \
     [--also NAME=DIR ...] [--out OUT] [--as-if-assumed]
 ~~~
+
+The command above grades a config's own jobs; this one, over whole directories, is for `--also` and `--as-if-assumed`.
 
 A config names its `start`, its `target.gain`, its `policy`, its `honest` config and its `seeds`; each DIR holds one
 config's records as its jobs wrote them, `DIR/<seed>/<split>/run.json` (`split` is `search` or `final`). The grade

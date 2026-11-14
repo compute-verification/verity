@@ -11,8 +11,8 @@ What differs from ``attention-head`` (AttentionHead_v3): the tensor-core step (s
 ``Check_inf``), and the first block's padding. The units' shape is v3's, so the same ``tc_units`` reads them off the graph.
 
 T is per instance: a statement covers the instances of one T (:func:`lowering` takes it; :func:`lowering_for_set` reads it off a
-set whose instances share it). The one unit netlist is the same for every T; the leaf maps and the tail are T's. Proved under
-``verity/flock-circuit`` only (:data:`SCHEMES`)."""
+set whose instances share it). The unit's one circuit description is the same for every T; the leaf maps and the tail are T's.
+Proved under ``verity/flock-circuit`` only (:data:`SCHEMES`)."""
 TEMPLATE = "attention-head-v18"
 FAMILY = "AttentionHead_v18"
 UNIT = "attention-head-v18/sm120-fa2-bf16/tc-step"

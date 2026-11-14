@@ -29,11 +29,13 @@ from typing import TYPE_CHECKING
 
 import torch
 
+#: why the fused epilogue can't run here, or None: `refuse` says it
+NO_TRITON: str | None = None
 try:
     import triton
     import triton.language as tl
-except ImportError:
-    triton = None
+except ImportError as e:
+    triton, NO_TRITON = None, f"no Triton here ({e})"
 
 if TYPE_CHECKING:
     from triton.compiler import CompiledKernel
@@ -149,5 +151,5 @@ def refuse(x: torch.Tensor, sx: torch.Tensor, w: torch.Tensor, sw: torch.Tensor,
         return f"out {out.dtype} {tuple(out.shape)} on {out.device}: pass a contiguous bfloat16 [{m}, {n}] on {x.device}"
     if epilogue == "fused" and (triton is None or x.device.type != "cuda"):
         return (f"the fused epilogue is a Triton kernel on CUDA ({x.device.type} tensors"
-                f"{', and no Triton here' if triton is None else ''}): pass epilogue='eager'")
+                f"{', and ' + NO_TRITON if NO_TRITON else ''}): pass epilogue='eager'")
     return None

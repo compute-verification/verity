@@ -142,7 +142,7 @@ verity_vllm/
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
   protocols/         the subprotocols' adapters: sampled proofs, PoUS, PoUB's registered store (remote_bandwidth/)
     pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
-  properties/        property harnesses: non-interference, kernel census, golden and holdout corpora, admission difftests
+  properties/        property harnesses: admission difftests, the quarantine lint, the kernel allowlist
   records/           typed stage records, one for each kind one stage writes and another reads
   ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment
                      of another build of engine.stock.BUILDS beside it); each workload's served pin per device

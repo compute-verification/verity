@@ -1,6 +1,6 @@
 //! flock-pure: the Flock backend's full committed relation, proved in one binary-field union proof with no link.
 //!
-//! The statement (`verity/flock-pure/v1`): for every VU `v` of an instance set's range, with x row `x_v` and W column
+//! The statement (`verity/flock-pure/v1`): for every VU `v` of an input set's range, with x row `x_v` and W column
 //! `w_v` (K words, `blake3-keyed/row/v2` row leaves under frame-v3 trees `a` and `b`) and output word `y_v` (tree `y`),
 //! `y_v = epilogue(chain(x_v, w_v))`, where `chain` is the subcircuit's `units` tensor-core transition units from
 //! c = +0. Flock proves ONE circuit over two gate types:
@@ -12,7 +12,7 @@
 //!   accumulator input is the previous unit's output (the public zero word for unit 0), and the last unit's output word
 //!   (the BF16 word for an epilogue relation, else the FP32 accumulator) is public.
 //!
-//! The verifier holds the instance set. It recomputes the three roots and Σ (relation, lowering digests, counts,
+//! The verifier holds the input set. It recomputes the three roots and Σ (relation, lowering digests, counts,
 //! instance reference, roots), refuses a `Hello` for another Σ, and in `Commit` checks the public chunk values against
 //! its own keyed-BLAKE3 row digests (parent compressions natively) and the public output words against its own words,
 //! before any coin. Flock's coins are live (flock-128-r2: Fast100, two reps on one root, R1–R8 of flock-live).
@@ -372,8 +372,8 @@ impl Pure {
         TableSpec { name: TABLE.into(), binding: Binding::Circuit { registry_digest: self.shape.registry.digest(), counts_le, circuit_digest: self.shape.circuit.digest() } }
     }
 
-    /// Σ: the relation, the lowering (netlist sha256, circuit and registry digests, counts), the instance reference and
-    /// the three roots.
+    /// Σ: the relation, the lowering (circuit description sha256, circuit and registry digests, counts), the instance reference
+    /// and the three roots.
     fn sigma(&self, inst: &Instances, roots: &[[u8; 32]; 3]) -> [u8; 32] {
         let mut h = Sha256::new();
         h.update(SIGMA_TAG);
@@ -586,8 +586,8 @@ impl StatementVerifier for PureVerifier {
     }
 }
 
-/// The verifier for the instance set it holds: its own commitments (checked against the file's, computed by the
-/// Python reference), its own Σ, and the netlist pinned by sha256.
+/// The verifier for the input set it holds: its own commitments (checked against the file's, computed by the
+/// Python reference), its own Σ, and the circuit description pinned by sha256.
 fn server(p: &Arc<Pure>, inst: &Instances) -> Server {
     let c = commit(inst);
     let sigma = p.sigma(inst, &c.roots);
@@ -787,7 +787,7 @@ fn neg(p: &Arc<Pure>, pv: &Arc<Pure>, prover: &Instances, verifier: &Instances, 
 
 fn selftest(p: Arc<Pure>, inst: Instances, other_net: Option<Arc<UnitNet>>) {
     let mut all = true;
-    // The native rows and public words are the circuit's own (the online phase over the netlist's gate evaluation).
+    // The native rows and public words are the circuit's own (the online phase over the circuit description's gate evaluation).
     let (b3, units, public) = p.rows(&inst);
     let w = p.shape.run(&p.inputs(&inst), &[]);
     let same = w.rows::<Blake3Gate>(p.s_b3) == b3.as_slice() && w.rows::<UnitGate>(p.s_unit) == units.as_slice() && w.public == public;
@@ -839,7 +839,7 @@ fn selftest(p: Arc<Pure>, inst: Instances, other_net: Option<Arc<UnitNet>>) {
     let (_, honest_proofs) = session(&p, &inst, inproc(&p, &inst).0, &h());
     t("cross_session_replay_both_reps", "link neg 15", Plan { substitute: Some(honest_proofs), ..h() }, false, None, None);
     if let Some(net2) = other_net {
-        // A prover whose lowering is another netlist: its shape has other registry and circuit digests.
+        // A prover whose lowering is another circuit description: its shape has other registry and circuit digests.
         let p2 = Arc::new(Pure::new(p.vus, p.units, p.row_bytes, net2));
         all &= neg(&p2, &p, &inst, &inst, "prover_lowering_other_netlist", "Σ (netlist sha256)", &h(), false);
         let sig = p.sigma(&inst, &commit(&inst).roots);
@@ -852,14 +852,14 @@ fn selftest(p: Arc<Pure>, inst: Instances, other_net: Option<Arc<UnitNet>>) {
 
 
 // ------------------------------------------------------------------------------------------------------------
-// Re-verification of a recorded session (the store's copy: session record, proof files, the instance set)
+// Re-verification of a recorded session (the store's copy: session record, proof files, the input set)
 // ------------------------------------------------------------------------------------------------------------
 
 fn f128_of_hex(s: &str) -> F128 {
     F128::new(u64::from_str_radix(&s[16..32], 16).unwrap(), u64::from_str_radix(&s[..16], 16).unwrap())
 }
 
-/// Replay a verifier's session record against its proofs with this machine's own statement (instance set, lowering,
+/// Replay a verifier's session record against its proofs with this machine's own statement (input set, lowering,
 /// commitments): the replayed coins are the recorded ones, so this is not transferable evidence, but every message
 /// the proofs carry must hash to what the verifier recorded before issuing each coin.
 fn replay(p: &Arc<Pure>, inst: &Instances, rec: &Value, proofs: &[Vec<u8>]) -> Result<Value, String> {
