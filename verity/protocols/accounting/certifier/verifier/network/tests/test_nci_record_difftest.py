@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`NciCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 682 cases (600 random circuits,
-two in five broken in one way, and 82 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 688 cases (600 random circuits,
+two in five broken in one way, and 88 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount` and `RecordRows` give Python's results on every case, and unless SPOT's reader reads the
@@ -30,7 +30,10 @@ a unit of it at the root that the record does not list. The fourteenth is a bloc
 rows the reference adds up unit by unit are what the record's listing gives, a template's units in a block times its
 rows of one unit, with the rate rule's two failures in rows and the refusal of a table that lacks a template. The
 fifteenth is a history table: a table over no registered parameter, so every row read of one is fresh, whatever
-pins and registers the rest.
+pins and registers the rest. The sixteenth is the row an opening may declare: an output of its reader, as the
+verdict is, by which nothing is filled or counted. The seventeenth is the opening whose row is its verdict's own
+output: taken, and held by its reader's pin and its table reads or not at all, so that under no pin every one of its
+ports is fresh and counts.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -99,6 +102,8 @@ KEYED = {f"2x3 {what}, {how}": "templates" for what in vectors.KEYED for how in 
 HISTORIES = {f"2x3 {what}": stage for what, (stage, _) in vectors.HISTORIES.items()}
 #: of those, the one the form takes that the interface refuses, and the one whose opening is against a history
 LOOSE, OPENED = f"2x3 {vectors.LOOSE}", "2x3 the opening against a history"
+#: the cases on an opening that declares its row, each with the stage that refuses it, None where the form takes it
+ROW_ROLE = {f"2x3 {what}": stage for what, (stage, _) in vectors.ROW_ROLE.items()} | {f"2x3 {vectors.ROW_UNPINNED}": None}
 
 
 @pytest.fixture(scope="module")
@@ -113,7 +118,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 682 cases and the reference's results, byte for byte as the record pins them."""
+    """All 688 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -164,7 +169,7 @@ def test_the_served_shape(shaped):
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
     got = {what: vectors.results(m["case"]) for what, m in shaped.items()
-           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES}
+           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | ROW_ROLE}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -233,7 +238,8 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
-            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES).items() if isinstance(v, str)}
+            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | ROW_ROLE).items()
+            if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
         detail, count, m = got[what]["detail"], got[what]["count"], shaped[what]
@@ -960,3 +966,87 @@ def test_a_history_is_a_table_over_no_registered_parameter(shaped):
         k: d0[k] for k in ("blocks", "gates", "inputs", "wired_rows", "wired_bits")}
     assert (d["failure"], r["count"]["failure"], r["block_rows"]["failure"]) == ("nci", "fresh", "nci")
     assert r["block_rows"]["rows"] == held["block_rows"]["rows"] and r["block_rows"]["fresh"] == d["fresh"]
+
+
+def test_an_opening_may_declare_its_row(shaped):
+    """An opening may declare its `row`, the output of its reader that returns the row opened. The form holds it to
+    the reader's outputs, as it holds the verdict, and reads nothing else of it: the served shape's record with its
+    opening declaring the output that returns the row, or the verdict's own, counts as the accepted record does, row
+    by row, and no row is of another kind for it. One whose row is no output of the reader (an input row of it among
+    them) or no string is refused with the declarations. A record that declares no row is read as before: the accepted
+    record is each of these with the key dropped. `verity.commitments.windows.interface` takes and refuses the same,
+    and reads the row back as the record states it."""
+    accepted = shaped["2x3 registered"]
+    held = vectors.results(accepted["case"])
+    built = json.loads(accepted["case"]["instance"]["record"])
+    assert all("row" not in o for o in built["registered"]["openings"])
+    embed = next(fn for fn, _ in accepted["circuit"].templates if codec.descriptor_id(fn) == vectors.EMBED)
+    lay = IF.layout(embed)
+    assert set(ROW_ROLE.values()) == {None, "inputs"}
+    for what, (stage, row) in vectors.ROW_ROLE.items():
+        m = shaped[f"2x3 {what}"]
+        r = vectors.results(m["case"])
+        doc = json.loads(m["case"]["instance"]["record"])
+        opening, = doc["registered"]["openings"]
+        assert opening.pop("row") == row and doc == built, what
+        assert m["case"]["instance"]["pins"] == accepted["case"]["instance"]["pins"] != [], what
+        assert (stage is None) == (isinstance(row, str) and row in dict(lay.outs)), what
+        assert _interface(m)[0] == stage, what
+        if stage is not None:
+            assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == r["block_rows"] == {"error": stage}, what
+            continue
+        assert (r["detail"], r["count"], r["block_rows"]) == (held["detail"], held["count"], held["block_rows"]), what
+        inst, tr = m["case"]["instance"], m["case"]["trusted"]
+        units = dict(built["templates"])[vectors.EMBED]
+        rows = [[vectors.EMBED, p, u, 0] for p, _ in lay.rows for u in range(units)]
+        before = accepted["case"]["instance"], accepted["case"]["trusted"]
+        assert ref.kinds(inst, tr, rows) == ref.kinds(*before, rows), what
+        assert ref.exported(inst, tr, rows) == ref.exported(*before, rows), what
+        read, = IF.Registered.of(json.loads(inst["record"])["registered"]).openings
+        assert read.row == row and read.doc()["row"] == row, what
+
+
+def test_an_opening_whose_row_is_its_verdicts_output_is_taken_and_its_ports_count(shaped):
+    """An opening whose `row` is its verdict's own output is taken, and the row it declares takes none of its ports
+    off the count. Nothing reads the row: what holds an opening is its reader's pin with its table reads (`held`), as
+    it is for an opening that declares none. Under the pin the record counts as the accepted record does. Under no
+    pin nothing holds the opening, and every one of its ports is fresh (`openings`) and counted, so that the rate
+    refuses, in gates, in rows and by the count: bit for bit what the same record counts with the key dropped. The
+    row and its verdict are one output, and no port is held for it."""
+    accepted, pinned = shaped["2x3 registered"], shaped[f"2x3 {vectors.ROW_VERDICT}"]
+    loose = shaped[f"2x3 {vectors.ROW_UNPINNED}"]
+    built = json.loads(accepted["case"]["instance"]["record"])
+    embed = next(fn for fn, _ in accepted["circuit"].templates if codec.descriptor_id(fn) == vectors.EMBED)
+    bits = {p: 16 * words for p, words in IF.layout(embed).rows}
+    units = dict(built["templates"])[vectors.EMBED]
+    ports = ("row", "salt", "path")
+    rows = [[vectors.EMBED, p, u, 0] for p in ports for u in range(units)]
+    for m in (pinned, loose):
+        doc = json.loads(m["case"]["instance"]["record"])
+        opening, = doc["registered"]["openings"]
+        assert opening["row"] == opening["verdict"] == "o1" and tuple(opening["ports"]) == ports
+        assert opening.pop("row") and doc == built
+        assert m["broken"] is None and "error" not in vectors.results(m["case"])["detail"]
+        assert _interface(m)[0] is None
+    # under the pin: held as the accepted record's opening is, by the pin and the table reads
+    before = accepted["case"]["instance"], accepted["case"]["trusted"]
+    inst, tr = pinned["case"]["instance"], pinned["case"]["trusted"]
+    assert inst["pins"] == before[0]["pins"] != []
+    assert ref.kinds(inst, tr, rows) == ref.kinds(*before, rows) == ["theta"] * len(rows)
+    # under no pin: every port of the opening fresh, and counted
+    inst, tr = loose["case"]["instance"], loose["case"]["trusted"]
+    assert inst["pins"] == []
+    assert ref.kinds(inst, tr, rows) == ["openings"] * len(rows)
+    assert all(reason is None for _, reason in ref.exported(inst, tr, rows))
+    r, held = vectors.results(loose["case"]), vectors.results(accepted["case"])
+    d, d0 = r["detail"], held["detail"]
+    a_block = units // d["blocks"]
+    assert d["openings"] == a_block * sum(bits[p] for p in ports) > 0 == d0["openings"]
+    assert d["fresh"] == d0["fresh"] + d["openings"]
+    assert (d["failure"], r["count"]["failure"], r["block_rows"]["failure"]) == ("nci", "fresh", "nci")
+    # the row holds none of them: the same record with the key dropped counts the same, row by row
+    bare = copy.deepcopy(loose)
+    vectors._rewrite(bare, lambda doc: doc["registered"]["openings"][0].pop("row"))
+    assert json.loads(bare["case"]["instance"]["record"]) == built
+    assert bare["case"]["instance"]["pins"] == [] and vectors.results(bare["case"]) == r
+    assert ref.kinds(bare["case"]["instance"], bare["case"]["trusted"], rows) == ["openings"] * len(rows)
