@@ -19,6 +19,8 @@ ROWS, SALTS = "rows.jsonl", "rows.salts"
 FILED = "filed.jsonl"
 #: a line's key for the word that its execution phase has no head, where a head's line has `registration`
 NO_HEAD = "no_head"
+#: a line's key where its execution phase's line wasn't back by its last tick (`runner_parts.Lines`)
+MISSED = "missed"
 #: the ``format`` of the registrations' file's first line, the line that says what the file was checked under
 CHECKED = "verity-network-certifier/checked-registrations/v1"
 #: what a check says that is asked for the registrations' file and was handed nothing to check under
@@ -30,9 +32,12 @@ def read(run: Path, params: WardenParams) -> list[tuple[dict, dict[str, list[byt
     """`rows.jsonl` and `rows.salts`, line by line: each execution phase's registration (or the word that it has no
     head, or a refusal) and cost, and its rows' salts by table, none where no table was committed. A table's salts
     are one a row: the schedule's rows, or where a class's rows are a count (`content_rows.counted`) the rows the
-    line's registration gives the table, and there a line without a registration has no salts read."""
+    line's registration gives the table, and there a line without a registration has no salts read. In a schedule
+    with a head offset the lines are taken by execution phase, the order the blobs were kept in."""
     path = run / ROWS
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
+    if params.head_offset is not None:
+        lines.sort(key=_phase)
     blobs = bf.read_blobs(run / SALTS)
     listed = [(name, rows) for name, rows, _ in CR.tables_of(params)]
     size = WR.SALT_BYTES * sum(rows for _, rows in listed)
@@ -72,8 +77,9 @@ def _counted(doc: Mapping, blob: bytes, listed: Sequence[tuple[str, int]]) -> li
 
 def _phase(doc: Mapping) -> int:
     """The execution phase a line of `rows.jsonl` is of."""
-    if "refused" in doc:
-        return doc["refused"][2]
+    for key in ("refused", MISSED):
+        if key in doc:
+            return doc[key][2]
     return doc["registration" if "registration" in doc else NO_HEAD]["window"]
 
 
@@ -135,7 +141,13 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     of those returned. With ``registrations`` it leaves the registrations' file there (`keep_registrations`),
     written only where neither it nor its caller found a problem: ``found`` is the problems of the caller's own
     check, of which this one is the last part, and a problem of the deployment record that is already among them
-    is not returned again. ValueError for ``registrations`` without ``under``."""
+    is not returned again. ValueError for ``registrations`` without ``under``. A line holds no tick: the tick it
+    left at is the network certifier's own note, in its log alone (`warden.json`'s `heads`). No check and no
+    verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which is not built. The check
+    does read a `missed` line, unsigned, in a schedule with a head offset: the execution phase has no head. That is
+    safe: it stands where a head or the word would, so it can only take one away. What an execution phase with no
+    head is charged is its reader's: each class's whole schedule, which no reader here charges yet. The summary's
+    `heads` names those execution phases for it."""
     open_registrations(registrations, under)
     problems: list[str] = [p for p in ([] if under is None else not_under(dep, under)) if p not in found]
     if params.lengths is None:
@@ -180,9 +192,13 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
         """A problem where the run kept a line of `filed.jsonl` for execution phase `w` that is not `record`."""
         if w in listed and listed[w] != record:
             problems.append(f"execution phase {w}'s line of {FILED} is not its records' filing under its head")
-    costs, registered, worded, passed = [], 0, 0, []
+    costs, registered, worded, passed, missed = [], 0, 0, [], []
     for w in sorted(set(want) | set(kept) | set(without)):
         doc, salts = kept.get(w, (None, None))
+        if params.head_offset is not None and doc is not None and MISSED in doc and 0 <= w < windows:
+            # no head, and no word that none comes: the line wasn't back by its last tick
+            missed.append(w)
+            continue
         if w not in want and not params.closes:
             problems.append(f"execution phase {w} has connection rows, and its records or the next one's weren't "
                             f"published complete")
@@ -225,4 +241,6 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     summary = {"registered": registered, "of": len(want), "tables": sorted({c["tables"] for c in costs}),
                "rows": sorted({c["rows"] for c in costs}), "row_bytes": sorted({c["row_bytes"] for c in costs}),
                **{k: _spread([c[k] for c in costs]) for k in ("build_ms", "commit_ms", "sign_ms")}}
+    if params.head_offset is not None:
+        summary |= {"heads": {"offset": params.head_offset, "wait": params.head_wait, "missed": missed}}
     return summary | ({NO_HEAD: {"signed": worded, "of": len(without)}} if params.closes else {}), problems
