@@ -308,6 +308,13 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
             out |= {g for g in whys if g.endswith(".py") and any(by_module.get(m) == f for m in py_imports(g))}
         return {g for g in out if g in whys and g != f}
     links = {f: linked(f) for f in whys}
+    by_last: dict[str, set[str]] = defaultdict(set)
+    for g in whys:
+        if g in module_of:
+            by_last[module_of[g].rsplit(".", 1)[-1]].add(g)
+    for f, (words, _) in whys.items():
+        for q in re.findall(rf"\b([A-Z]\w*)\.(?:{'|'.join(map(re.escape, words))})\b", text(f)):
+            links[f] |= by_last.get(q, set()) - {f}
     declares = {f: (lean_declares(f, module_of.get(f, "")) if f.endswith(".lean") else py_declares(f)) for f in whys}
     changed = True
     while changed:
