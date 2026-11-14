@@ -607,6 +607,19 @@ def test_the_report_gives_each_sources_share_and_the_totals_with_their_range():
     assert modeled["status"] == "modeled" and modeled["missing"] == [] and modeled["steady_time_share"] < 1.0
 
 
+def test_a_total_whose_every_type_is_steady_or_warm_is_modeled_never_measured():
+    """Only steady-state and warm-session rows, every type priced from a run of its own: the total is still modeled,
+    since a statement proved from warm sessions on one card is not the steady state."""
+
+    both = P.Census.of({**CENSUS, "definitions": {k: CENSUS["definitions"][k] for k in (GEMM64, GEMM32)}})
+    rows = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),)
+    warm = (P.Warm(P.definition_id(GEMM32), 19, 4, 4, 2.0, 1, 4, "r20261115-000000-0001", "gemm32"),)
+    doc = P.report(P.Flock(rows, SESSIONS, "art:card", warm=warm).table(both), 1.0)
+    assert sorted(r["source"] for r in doc["rows"]) == [P.STEADY, P.WARM]
+    assert doc["totals"]["status"] == "modeled" and doc["totals"]["missing"] == []
+    assert doc["totals"]["steady_time_share"] < 1.0
+
+
 def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatch):
     """One steady-state type and one type with no figure at three quarters of the blocks: steady-state measurements
     cover all of the time the total prices, and the total is still partial, never measured. It names the type it leaves

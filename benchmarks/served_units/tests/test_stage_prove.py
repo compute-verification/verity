@@ -8,6 +8,7 @@ staged on its cards alone."""
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -36,8 +37,8 @@ done
 '''
 #: lake: its call and the cards it sees logged; fails, unless $LAKE_OK
 LAKE = '#!/usr/bin/env bash\necho "lake $* cvd=[${CUDA_VISIBLE_DEVICES-unset}]" >> "$CALLS"\n[ -n "${LAKE_OK:-}" ]\n'
-#: findmnt -no OPTIONS|TARGET -T PATH: a mount that allows exec
-FINDMNT = '#!/usr/bin/env bash\ncase "$*" in *OPTIONS*) echo rw,relatime ;; *) echo / ;; esac\n'
+#: findmnt -no OPTIONS|TARGET -T PATH: a mount that allows exec, unless $NOEXEC
+FINDMNT = '#!/usr/bin/env bash\ncase "$*" in *OPTIONS*) echo rw,relatime${NOEXEC:+,noexec} ;; *) echo / ;; esac\n'
 #: window.py stage|prove UNITS: its call, groups, allowed cards and visible cards logged; `stage` stages one statement
 WINDOW = r'''import os, sys
 from pathlib import Path
@@ -49,7 +50,15 @@ if sys.argv[1] == "stage":
     d = Path(os.environ["FLOCK_WORK"]) / "data" / "s"
     d.mkdir(parents=True, exist_ok=True)
     (d / ".done").touch()
+    if os.environ.get("FALLS_TO"):  # the node's memory falls while it stages, and it stages until it is stopped
+        Path(os.environ["MEMINFO"]).write_text(f"MemAvailable: {int(os.environ['FALLS_TO']) << 20} kB\n")
+        import signal
+        signal.pause()
 '''
+#: /proc/meminfo as the job reads it, at GB of MemAvailable
+def meminfo(path: Path, gb: int) -> str:
+    path.write_text(f"MemTotal: {2015 << 20} kB\nMemAvailable: {gb << 20} kB\n")
+    return str(path)
 
 
 @pytest.fixture
@@ -70,7 +79,7 @@ def job(tmp_path, monkeypatch):
     def run(**extra: str) -> tuple[int, str, list[str]]:
         env = {**os.environ, "HOME": str(tmp_path), "RESEARCH_RUN_DIR": str(run_dir),
                "CALLS": str(calls), "UNITS": str(tmp_path / "units"), "DEV": "gpu", "CARDS": "4,5", "SM": "90",
-               "KILL_AT": FAR, "RESEARCH_SOURCE_SHA": TREE, **extra}
+               "KILL_AT": FAR, "RESEARCH_SOURCE_SHA": TREE, "MEMINFO": meminfo(tmp_path / "meminfo", 1000), **extra}
         p = subprocess.run(["bash", str(SP)], cwd=tmp_path, capture_output=True, text=True, env=env)
         steps = (run_dir / "out/steps.txt").read_text() if (run_dir / "out/steps.txt").exists() else ""
         return p.returncode, steps, calls.read_text().splitlines() if calls.exists() else []
@@ -105,12 +114,67 @@ def test_reads_the_leases_among_its_cards_alone_and_goes_on_when_they_are_free(j
 
 
 def test_stages_nowhere_in_ram(job):
-    """FLOCK_WORK holds flock-tmpl-unit, which a noexec /dev/shm can't run: a WORK_ROOT there is refused before staging."""
+    """FLOCK_WORK holds flock-tmpl-unit, which a noexec /dev/shm can't run: without RAM_WORK=1 a WORK_ROOT there is refused
+    before staging."""
     rc, steps, _ = job(LAKE_OK="1", WORK_ROOT="/dev/shm/stage-prove-test")
     assert rc == 4 and "REFUSED: WORK_ROOT /dev/shm/stage-prove-test is in RAM" in steps, steps
     assert "window.py stage" not in steps and not Path("/dev/shm/stage-prove-test").exists()
     rc, steps, _ = job(LAKE_OK="1", STEPS="stage", FLOCK_WORK="/dev/shm/stage-prove-test")
     assert rc == 4 and "REFUSED: FLOCK_WORK /dev/shm/stage-prove-test is in RAM" in steps, steps
+
+
+@pytest.fixture
+def shm(tmp_path):
+    d = Path("/dev/shm") / f"stage-prove-test-{tmp_path.name}"
+    yield d
+    shutil.rmtree(d, ignore_errors=True)
+
+
+def test_ram_work_stages_in_ram_with_the_executables_on_disk(job, tmp_path: Path, shm: Path):
+    """Under RAM_WORK=1 a FLOCK_WORK in /dev/shm holds the statements, and each directory an executable is built or run in is
+    a symlink into DISK_WORK; STEPS=prove of the same commit proves it and removes both."""
+    disk = tmp_path / "disk"
+    rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(disk))
+    assert rc == 0 and f"RAM_WORK=1: FLOCK_WORK {shm} holds the statements in RAM" in steps, steps
+    assert all((shm / d).is_symlink() and (shm / d).resolve() == disk / d
+               for d in ("py", "flock-gpu-link", "flock-circuit", "tmpl-unit"))
+    assert (shm / ".disk_work").read_text().strip() == str(disk) and (shm / "data/s/.done").exists()
+    assert (shm / ".staged").read_text().split()[0] == TREE
+    rc, steps, _ = job(STEPS="prove", FLOCK_WORK=str(shm), HELD="6")
+    assert rc == 0 and not shm.exists() and not disk.exists(), steps
+
+
+def test_ram_work_stage_alone_keeps_a_partial_staging_without_staged(job, tmp_path: Path, shm: Path):
+    (tmp_path / "units").write_text("census:A@full\t1\t1\t1\t1\ncensus:B@full\t1\t1\t1\t1\n")
+    rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(tmp_path / "disk"))
+    assert rc == 0 and (shm / "data/s/.done").exists() and not (shm / ".staged").exists(), steps
+    assert (tmp_path / "disk/py").is_dir()
+
+
+def test_ram_work_refuses_a_disk_work_in_ram_or_on_a_noexec_mount(job, tmp_path: Path, shm: Path):
+    rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=f"{shm}-exec")
+    assert rc == 4 and f"REFUSED: DISK_WORK {shm}-exec is in RAM" in steps, steps
+    rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(tmp_path / "d"),
+                       NOEXEC="1")
+    assert rc == 4 and f"REFUSED: DISK_WORK {tmp_path / 'd'} is on a noexec mount" in steps, steps
+    assert "window.py stage" not in steps
+
+
+def test_ram_work_stages_nothing_under_the_memory_floor(job, tmp_path: Path, shm: Path):
+    rc, steps, calls = job(LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(tmp_path / "disk"),
+                           MEMINFO=meminfo(tmp_path / "low", 499))
+    assert rc == 5 and "REFUSED: the node's MemAvailable is 499 GB, under MEM_FLOOR_GB=500: nothing staged" in steps, steps
+    assert not any(c.startswith("window") for c in calls) and not shm.exists() and not (tmp_path / "disk").exists()
+
+
+def test_ram_work_stops_staging_and_removes_everything_when_memory_falls_under_the_floor(job, tmp_path: Path, shm: Path):
+    """The floor is read while window.py stages: once MemAvailable is under it the staging is stopped, and FLOCK_WORK and
+    DISK_WORK are removed, under STEPS=stage too, which otherwise keeps them."""
+    for steps_ in ("stage prove", "stage"):
+        rc, steps, _ = job(STEPS=steps_, LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(tmp_path / "disk"),
+                           FALLS_TO="420", MEM_POLL_S="0.05", HELD="6")
+        assert rc == 5 and "STOPPED: the node's MemAvailable fell to 420 GB, under MEM_FLOOR_GB=500" in steps, steps
+        assert not shm.exists() and not (tmp_path / "disk").exists() and "window.py prove" not in steps
 
 
 def test_refuses_a_device_or_steps_it_does_not_know(job):
