@@ -296,7 +296,7 @@ theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)
 
 /-- The numbers of a session of one table `t`. -/
 noncomputable def numsT (t : Flock.Stmt) : Claims.Recursion.Nums :=
-  ⟨FlockDeploy.tableErr true t.spec t, (2 : ℚ) ^ (Claims.Flock.zkLevel0 t.m).d, FlockDeploy.tableWeight true t,
+  ⟨FlockDeploy.tableErr true t.spec t, (2 : ℚ) ^ (Claims.Flock.zkLevel0 t.wideLeaf t.m).d, FlockDeploy.tableWeight true t,
     2 + 2 * FlockDeploy.repRounds true t.spec t, Claims.Flock.Numbers.waits, Claims.Flock.Numbers.cap, 0, 0⟩
 
 theorem rounds_one (zk : Bool) (spec : SessionSpec) (t : Flock.Stmt) :
