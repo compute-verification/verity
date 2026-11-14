@@ -123,11 +123,11 @@ class _Specs:
                 self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS, TARGET=target, M=M) for n in (C.NH, C.KVH)
             )
             self.q_gather, self.k_gather = [self.kind("all_gather2", N=n * C.D) if world > 1 else None for n in (C.NH, C.KVH)]
-        self.gate_up, self.down, self.logits = self.linear(C.H, 2 * C.I), self.linear(C.I, C.H), self.gemm(C.H, VS)
+        self.gate_up, self.down, self.logits = self.linear(C.H, 2 * C.INTER), self.linear(C.INTER, C.H), self.gemm(C.H, VS)
         if C.E:
             self.moe()
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
-        self.silu = self.kind(_ACTS[C.act], I=C.I)
+        self.silu = self.kind(_ACTS[C.act], I=C.INTER)
         if C.norm_chain:
             self.chain = {r: self.kind(r, N=C.H) for r in ("square_bf16", "square_f32", "mean_triton", "add_widened_bf16", "scale_row_bf16",
                                                            "scale_row_f32", "mul_vec_f32", "narrow_f32_bf16")}
@@ -165,8 +165,8 @@ class _Specs:
             raise Unexpressible(f"numerics_unregistered: {e}") from None
         extra = {} if dot is None else {"DOT": dot}
         sfx = "" if dot is None else "_dot"
-        self.expert_up = self.kind("moe_expert_gemm" + sfx, E=C.E, K=C.H, N=2 * C.I, **extra)
-        self.expert_down = self.kind("moe_expert_gemm_w" + sfx, E=C.E, K=C.I, N=C.H, **extra)
+        self.expert_up = self.kind("moe_expert_gemm" + sfx, E=C.E, K=C.H, N=2 * C.INTER, **extra)
+        self.expert_down = self.kind("moe_expert_gemm_w" + sfx, E=C.E, K=C.INTER, N=C.H, **extra)
         self.moe_sum = self.kind("moe_sum", TOPK=C.TOPK, H=C.H)
 
     kind = staticmethod(kind)
