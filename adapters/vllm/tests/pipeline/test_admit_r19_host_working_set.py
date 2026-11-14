@@ -43,13 +43,9 @@ def world():
 @pytest.fixture(autouse=True)
 def _heap_not_frozen_by_an_earlier_test():
     """vLLM's `EngineCore.__init__` calls `freeze_gc_heap()` and never unfreezes, so an in-process engine built earlier in the same worker
-    leaves a permanent generation these tests would read as their own; it is frozen again afterwards."""
-    frozen = gc.get_freeze_count()
-    if frozen:
-        gc.unfreeze()
-    yield
-    if frozen:
-        gc.freeze()
+    leaves a permanent generation these tests would read as their own, and a bare interpreter starts with objects in it too. It is
+    emptied before each test and not frozen again afterwards: a freeze then would take in all the worker holds, whoever made it."""
+    gc.unfreeze()
 
 
 def _child_probe(vu: dict) -> tuple[dict, dict, float]:
