@@ -8,26 +8,25 @@ from __future__ import annotations
 
 import hashlib
 import itertools
-import logging
 import socket
 import threading
 import types
 
-import pous_test_signer as ts
 import pytest
-import settings
 
-from verity.commitments.crypto import lms
+import pous_test_signer as ts
+import settings
 from verity.runtime import sources as S
 from verity.party import Finish
 from verity.runtime.runner import ProtocolDef, run
-from verity.channel import canonical
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WPS
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 from verity.protocols.accounting.pous.verifier import wipe_store as WS
+from verity.channel import canonical
+from verity.commitments.crypto import lms
 
 TEST_ID = mc.TEST_PREFIX + W.PROTOCOL
 C, P = WPS.CHALLENGER, WPS.PROVER
@@ -54,9 +53,8 @@ def verify(public: bytes, message: bytes, signature: bytes) -> bool:
     return lms.verify(KEY, public, message, lms.Signature.decode(KEY, signature))
 
 
-def serve(monkeypatch, params: sw.WipeParams, secret: bytes, stop_after: int | None = None) -> sw.WipeMemoryChallenger:
-    """`wipe_party.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins; the prover
-    leaves after `stop_after` batches when given."""
+def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.WipeMemoryChallenger:
+    """`wipe_party.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins."""
     coins = S.SeededCoins(SEED)
     monkeypatch.setattr(WP, "secrets", types.SimpleNamespace(token_bytes=coins.draw))
     monkeypatch.setattr(sw, "os", types.SimpleNamespace(urandom=coins.draw))
@@ -66,30 +64,29 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes, stop_after: int | N
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=log, egress_bits=0, reads=params.k,
+            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=log, reads=params.k,
                                 clock=itertools.count(T0, STEP).__next__)
 
     t = threading.Thread(target=side)
     t.start()
     with b, b.makefile("rwb") as f:
-        WP.answer(f, sw.Prover(params), stop_after)
+        WP.answer(f, sw.Prover(params))
     t.join()
     return got["c"]
 
 
-def challenger_capabilities(secret: bytes, params: sw.WipeParams) -> dict:
-    return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "egress_bits": 0, "reads": params.k}
+def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
+    return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "reads": params.k}
 
 
 def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,
          prover=WPS.Prover, state=None, request=None):
-    capabilities = {C: challenger_capabilities(secret, params), P: {"store": store}}
+    caps = {C: challenger_caps(secret, params), P: {"store": store}}
     protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.MemoryChallengerParty(chunk), P: prover})
     given = {} if mode == "simulated" else {
         "sources": {C: {"clock": S.VirtualClock(S.VirtualTime(T0), STEP), "coins": S.SeededCoins(SEED)}}}
     return run({"protocol": WPS.ID, "params": request or WP.request_of("n0", params)}, BOTH, mode, state,
-               protocols={WPS.ID: protocol}, keys={p: PartyKey(p) for p in BOTH}, verify=verify,
-               capabilities=capabilities,
+               protocols={WPS.ID: protocol}, keys={p: PartyKey(p) for p in BOTH}, verify=verify, capabilities=caps,
                seed=SEED if mode == "simulated" else None, clock_step_ns=STEP, **given)
 
 
@@ -153,16 +150,6 @@ def test_a_prover_that_leaves_leaves_the_session_unsigned():
     assert verdict(out, b"left")["verdict"] == "undecided"
 
 
-def test_serve_says_that_the_prover_left(monkeypatch, caplog):
-    """`wipe_party.serve`, whose `log` is its session log, leaves the session unsigned and says so on the module's
-    logger."""
-    with caplog.at_level(logging.WARNING, logger=WP.__name__):
-        c = serve(monkeypatch, PARAMS, b"left", stop_after=3)
-    assert c.ended is None and c.signed is None
-    said = [r.getMessage() for r in caplog.records if r.name == WP.__name__]
-    assert len(said) == 1 and said[0].startswith("the prover left before the wipe ended, so its session stays unsigned: ")
-
-
 def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_path):
     params = sw.WipeParams(1 << 12, 16, 1, 10_000, (("host-dram", (1 << 12) * sw.LABEL_BYTES),))
     r = wipe(params, b"replay", mode="simulated", chunk=1 << 11, state=tmp_path)
@@ -171,10 +158,10 @@ def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_pa
     fills = [e for e in t if e.dir == "out" and e.channel == P and e.kind == "private"]
     assert [(e.elided, len(e.data)) for e in fills] == [(True, 64), (True, 64)]
     assert all(e.kind != "private" for e in t.public())
-    capabilities = {C: challenger_capabilities(b"replay", params)}
+    caps = {C: challenger_caps(b"replay", params)}
     protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.MemoryChallengerParty(1 << 11), P: WPS.Prover})
     again = run({"protocol": WPS.ID, "params": WP.request_of("n0", params)}, [C], "replay", None,
-                protocols={WPS.ID: protocol}, capabilities=capabilities, replay_dir=tmp_path / "runs/1")
+                protocols={WPS.ID: protocol}, capabilities=caps, replay_dir=tmp_path / "runs/1")
     assert (again.status, again.divergence) == ("completed", None)
     assert again.outcomes[C]["outcome"]["signed"] == r.outcomes[C]["outcome"]["signed"]
 
