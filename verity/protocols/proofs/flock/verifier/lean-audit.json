@@ -99,25 +99,25 @@
  ],
  "exempt": {
   "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node, so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/protocols/proofs/flock/prover/tests/test_lean_rec_cap_guards.py instead (the tier for parts whose cold run is over 10 min; a small-shape guard is to go back into the roots)",
-  "FlockFirewall": "the flock-firewall executable's entry point; its commands are Flock.Firewall.cmd, (`contract`) Flock.Firewall.Contract.cmd, (`frame`, `tap`) Flock.Firewall.Frame.cmd and tapCmd, (`coins`) Flock.Firewall.Coins.cmd, (`hello`) Flock.Firewall.Hello.cmd, (`session`) Flock.Firewall.Session.cmd and (`finish`) Flock.Firewall.Finish.cmd, audited under Flock",
+  "FlockZkServerMain": "the flock-zk-server executable's entry point; its commands are Flock.ZkServer.cmd, (`contract`) Flock.ZkServer.Contract.cmd, (`frame`, `tap`) Flock.ZkServer.Frame.cmd and tapCmd, (`coins`) Flock.ZkServer.Coins.cmd, (`hello`) Flock.ZkServer.Hello.cmd, (`session`) Flock.ZkServer.Session.cmd and (`finish`) Flock.ZkServer.Finish.cmd, audited under Flock",
   "FlockRows": "the flock-rows executable's entry point, one line; its command is Flock.Rows.cmd, audited under Flock",
   "FlockWitness": "the flock-witness executable's entry point, one line; its command is Flock.Witness.cmd, audited under Flock",
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
   "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
-  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/protocols/proofs/flock/prover/tests/test_firewall_frame.py knows the pads the frame masks with",
+  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.ZkServer.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/protocols/proofs/flock/prover/tests/test_zk_server_frame.py knows the pads the frame masks with",
   "FlockReadTmpl": "the flock-read-tmpl executable's entry point, one line; its command is Flock.ReadTmplCmd.cmd, audited under Flock"
  },
  "assumptions": {},
  "open": {
-  "Flock.Firewall.Contract.FirewallComputes": {
-   "owner": "@firewall-contract",
+  "Flock.ZkServer.Contract.ZkServerComputes": {
+   "owner": "@zk-server-contract",
    "digest": "10ce3362fd413ab328b12f38b4771422e218144267f0fc7504c5a67821372912",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Flock.Firewall.Contract.Holds": {
-   "owner": "@firewall-contract",
+  "Flock.ZkServer.Contract.Holds": {
+   "owner": "@zk-server-contract",
    "digest": "6611dcca688d4c82e6900626f1697d941b4ed3f32a3537d5292b2e5e220ce974",
    "issue": "LEAN-186",
    "due": "2026-11-30"
@@ -337,13 +337,13 @@
   }
  },
  "unwitnessed": {
-  "Flock.Firewall.Contract.holds_coins": "f611d55ea12c11473bcbfe0f723437d933d8bdfed81b134e1c2427a6961b37df",
-  "Flock.Firewall.Contract.holds_coins_binding": "440fe1557c52cfc039fe7de0f3d2a61a3def418b42dbbc8f710547689f334711",
-  "Flock.Firewall.Contract.holds_commit": "15196dcbfdd621070fec595078f25d91bea5231c788c2420525d8efcbcd5728d",
-  "Flock.Firewall.Contract.holds_computed": "356e6e3e7042c1194d6dbca4fd6b9077d0042bb4dd61b956135b9228641f0e59",
-  "Flock.Firewall.Contract.holds_finish": "517bb4d3fba64c5643d16167bcaff8990f7a66a6902f8f85d1309536ffb66027",
-  "Flock.Firewall.Contract.holds_fixed": "f63a6c36d77ac4ab1cf2b4e5a1d17e2179d85048e48d1b674d5f325483d94dc4",
-  "Flock.Firewall.Contract.holds_masked": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
+  "Flock.ZkServer.Contract.holds_coins": "f611d55ea12c11473bcbfe0f723437d933d8bdfed81b134e1c2427a6961b37df",
+  "Flock.ZkServer.Contract.holds_coins_binding": "440fe1557c52cfc039fe7de0f3d2a61a3def418b42dbbc8f710547689f334711",
+  "Flock.ZkServer.Contract.holds_commit": "15196dcbfdd621070fec595078f25d91bea5231c788c2420525d8efcbcd5728d",
+  "Flock.ZkServer.Contract.holds_computed": "356e6e3e7042c1194d6dbca4fd6b9077d0042bb4dd61b956135b9228641f0e59",
+  "Flock.ZkServer.Contract.holds_finish": "517bb4d3fba64c5643d16167bcaff8990f7a66a6902f8f85d1309536ffb66027",
+  "Flock.ZkServer.Contract.holds_fixed": "f63a6c36d77ac4ab1cf2b4e5a1d17e2179d85048e48d1b674d5f325483d94dc4",
+  "Flock.ZkServer.Contract.holds_masked": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
  },
  "compile_time": {
   "Flock.With.ReturnsWalk": {
@@ -635,8 +635,8 @@
  "shape": {
   "premises": [],
   "properties": {
-   "Flock.Firewall.Contract.holds_coins_binding": {
-    "function": "Flock.Firewall.Contract.run",
+   "Flock.ZkServer.Contract.holds_coins_binding": {
+    "function": "Flock.ZkServer.Contract.run",
     "outcome": "accept"
    },
    "Flock.RecLinks.check_sound": {
@@ -645,30 +645,30 @@
    }
   },
   "frozen": {
-   "Flock.Firewall.Contract.commitLeaf_eq": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_coins": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_commit": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_computed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_finish": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_fixed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
-   "Flock.Firewall.Contract.holds_masked": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement"
+   "Flock.ZkServer.Contract.commitLeaf_eq": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_coins": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_commit": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_computed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_finish": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_fixed": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement",
+   "Flock.ZkServer.Contract.holds_masked": "frozen: not in the shape sweep: needs an entry under shape.properties, or a restatement"
   },
   "inline": {
-   "Flock.Firewall.Contract.holds_coins": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.coins stream k cs relayed opening)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_coins": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.coins stream k cs relayed opening)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Flock.Firewall.Contract.holds_commit": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.commit msg i sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_commit": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.commit msg i sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Flock.Firewall.Contract.holds_computed": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Or (Eq src Flock.Firewall.Contract.By.recheck) (Or (Eq src Flock.Firewall.Contract.By.shadow) (Eq src Flock.Firewall.Contract.By.own))": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_computed": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Or (Eq src Flock.ZkServer.Contract.By.recheck) (Or (Eq src Flock.ZkServer.Contract.By.shadow) (Eq src Flock.ZkServer.Contract.By.own))": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Flock.Firewall.Contract.holds_fixed": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_fixed": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Flock.Firewall.Contract.holds_masked": {
-    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.masked v p sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   "Flock.ZkServer.Contract.holds_masked": {
+    "List.instMembership.mem t.items.toList (Flock.ZkServer.Contract.Item.masked v p sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },

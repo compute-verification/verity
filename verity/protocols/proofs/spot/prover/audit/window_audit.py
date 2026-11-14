@@ -222,8 +222,13 @@ from verity_flock.proof_server import ProofServer, ProofServerError, Session, St
 from verity.commitments import row_table as RT  # noqa: E402
 from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as MB, partition as P, registration as R, \
-    verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    draw as D,
+    members as MB,
+    partition as P,
+    docket as R,
+    verifier as V,
+)  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments.windows import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 from verity.commitments.windows import wiring as WI  # noqa: E402
@@ -863,7 +868,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         else:
             src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
                 ["--input-set", str(sets[m.template][0])]
-            p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
+            compose = Path(__file__).resolve().parents[2] / "verifier" / "one_stage" / "compose_circuit.py"
+            p = a0.run([sys.executable, str(compose), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath},
                        timeout=a.session_timeout)
             if p.returncode != 0:

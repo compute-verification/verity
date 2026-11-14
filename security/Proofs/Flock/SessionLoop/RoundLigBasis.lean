@@ -36,7 +36,7 @@ theorem linkPoints_ptsE {x : Msg} {w : Flock.Wit}
     {ops : List (Msg × Msg)} (hl : ops.length ≤ refK x) (hpos : 0 < ops.length) {s0 : FlockDeploy.Ins}
     {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {k : ℕ}
     (hk : k < 2 * spec.tables.size) :
-    _root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[k / 2]!
+    _root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[k / 2]!
         (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0) = Masked.ptsE (finCoins x ops) spec := by
   have hx : Masked.Live x := Masked.live_of hsc hR
   have hrs : spec.repStreams.size = 2 * spec.tables.size := FlockDeploy.repStreams_size spec
@@ -49,7 +49,7 @@ theorem linkPoints_ptsE {x : Msg} {w : Flock.Wit}
     have e := wordsAt_size x ops (s := ops.length) (p := 0) hpos le_rfl
     rw [List.take_length] at e
     rw [e, hl0, Nat.min_eq_left hpc]
-  unfold _root_.Flock.Firewall.Drive.linkPoints Masked.ptsE
+  unfold _root_.Flock.ZkServer.Drive.linkPoints Masked.ptsE
   rw [hsz, hmp, Nat.mul_div_cancel _ hmp0]
   refine Array.map_congr_left fun p hp => ?_
   have hp' : p < spec.points := by simpa using hp
@@ -85,8 +85,8 @@ theorem basis_lig {x : Msg} {w : Flock.Wit}
     {extras : Array _root_.Flock.Claim}
     (hext : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (Masked.ptsE (finCoins x ops) spec) = .ok extras)
     {xs algC : Array (Array F128)} {base : ℕ} {cs : List (Array F128)}
-    (hxs : xs = _root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[j.val]!
-      (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[j.val]!
+    (hxs : xs = _root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[j.val]!
+      (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[j.val]!
         (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)))
     (hanchor : Masked.repBase x (2 * j.val + r.val) + algC.size = base)
     (halg : ∀ a (ha : a < algC.size),
@@ -98,7 +98,7 @@ theorem basis_lig {x : Msg} {w : Flock.Wit}
     (hpts : FlockComplete.LigLock.Fed.PtsAt st.m st.fold.kLog (FlockComplete.LigLock.Fed.recCoin algC) 0 zc lc) :
     FlockComplete.basisVals
         (FlockComplete.Replay.Rs.sws (_root_.Flock.abcClaims st.m st.kLog zc lc ++
-            _root_.Flock.Firewall.Finish.claimsOf xs)
+            _root_.Flock.ZkServer.Finish.claimsOf xs)
           ⟨fun k i => (cs.getD k #[])[i]!, fun i => (cs.getD (xs.size + 2) #[])[i]!⟩) (st.m - 7) =
       Masked.ligBasis x (finCoins x ops) w t j r extras := by
   have hx := Masked.live_of hsc hR
@@ -216,15 +216,15 @@ theorem basis_lig {x : Msg} {w : Flock.Wit}
     (Masked.trsE x w (Masked.UE.tapeZk t))[j.val]! hptsW h1 h3 h5 hbR hr hg hxe
   beta_reduce at e
   -- the frame's coins from the switch on are the history's words there
-  have hcs : (_root_.Flock.abcClaims st.m st.kLog zc lc ++ _root_.Flock.Firewall.Finish.claimsOf xs).size =
+  have hcs : (_root_.Flock.abcClaims st.m st.kLog zc lc ++ _root_.Flock.ZkServer.Finish.claimsOf xs).size =
       2 + xs.size := by
     rw [Array.size_append, FlockComplete.abcClaims_size]
-    simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
+    simp only [_root_.Flock.ZkServer.Finish.claimsOf, Array.size_map]
   have hfw : FlockComplete.Replay.Rs.sws (_root_.Flock.abcClaims st.m st.kLog zc lc ++
-        _root_.Flock.Firewall.Finish.claimsOf xs)
+        _root_.Flock.ZkServer.Finish.claimsOf xs)
         ⟨fun k i => (cs.getD k #[])[i]!, fun i => (cs.getD (xs.size + 2) #[])[i]!⟩ =
       FlockComplete.Replay.Rs.sws (_root_.Flock.abcClaims st.m st.kLog zc lc ++
-        _root_.Flock.Firewall.Finish.claimsOf xs)
+        _root_.Flock.ZkServer.Finish.claimsOf xs)
         ⟨fun k e => (wordsAt x (ops.map fun q => CoinLayer.rd q.2) (base + k))[e]!,
           fun e => (wordsAt x (ops.map fun q => CoinLayer.rd q.2) (base + (2 + xs.size)))[e]!⟩ := by
     refine FlockComplete.LigLock.Fed.sws_coins_congr _ (fun k hk i _ => ?_) (fun k _ => ?_)

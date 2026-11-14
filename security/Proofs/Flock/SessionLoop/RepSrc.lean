@@ -79,7 +79,7 @@ theorem Loop.RepSrc.size (hS : Loop.RepSrc L₀ src x w)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hlay : Lr.lay x (Loop.frepOf j.val r.val) = Masked.layE x j) :
     (Lr.draws (ν, t) (Loop.frepOf j.val r.val)).size =
-      _root_.Flock.Firewall.Frame.drawBytes (Lr.lay x (Loop.frepOf j.val r.val)) := by
+      _root_.Flock.ZkServer.Frame.drawBytes (Lr.lay x (Loop.frepOf j.val r.val)) := by
   rw [hd, hlay]
   exact (hS ν t j r).1
 
@@ -125,7 +125,7 @@ theorem Loop.RepSrc.innerSalt (hS : Loop.RepSrc L₀ src x w)
     (hd : Lr.draws = L₀.draws) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hlay : Lr.lay x (Loop.frepOf j.val r.val) = Masked.layE x j) (tz : FlockComplete.TapeZk) :
-    ∀ q < _root_.Flock.Firewall.Frame.codeLen (Masked.layE x j),
+    ∀ q < _root_.Flock.ZkServer.Frame.codeLen (Masked.layE x j),
       FlockComplete.fitBytes 192 ((Masked.UE.tapeZk t).innerSalt j.val r.val q) =
         FlockComplete.fitBytes 192 ((tapeOfDraws tz (Lr.lay x) (Lr.draws (ν, t)) Loop.frepOf).innerSalt j.val r.val q) := by
   intro q hq
@@ -139,7 +139,7 @@ theorem LeanRelease.draws_ofLoopLink (src : Msg → Flock.Wit →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) :
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) :
     (LeanRelease.ofLoopLink L₀ src real).draws = L₀.draws := rfl
 
 /-- **The loop lays table `j`'s rep `r` out at the tape's layout** (`Masked.layE`), where its frame starts
@@ -149,16 +149,16 @@ theorem LeanRelease.lay_ofLoopLink (src : Msg → Flock.Wit →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (j : Fin (Masked.jOf x)) (r : Fin 2) {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.Firewall.Frame.MaskSlot}
-    (hs : _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[j.val]! = .ok (lay, mask)) :
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
+    (j : Fin (Masked.jOf x)) (r : Fin 2) {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.ZkServer.Frame.MaskSlot}
+    (hs : _root_.Flock.ZkServer.Drive.start (Masked.stsOf x)[j.val]! = .ok (lay, mask)) :
     (LeanRelease.ofLoopLink L₀ src real).lay x (Loop.frepOf j.val r.val) = Masked.layE x j := by
   have hst : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val (Masked.lt_of_jOf j)
   have hk : Loop.frepOf j.val r.val / 2 = j.val := by
     unfold Loop.frepOf
     omega
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) (Masked.lt_of_jOf j))
-  have e : Loop.startOf x (Loop.frepOf j.val r.val) = _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[j.val]! := by
+  have e : Loop.startOf x (Loop.frepOf j.val r.val) = _root_.Flock.ZkServer.Drive.start (Masked.stsOf x)[j.val]! := by
     unfold Loop.startOf
     rw [hsx]
     dsimp only

@@ -75,7 +75,7 @@ def test_a_levels_tops_are_one_value_the_verifier_rebuilds_from_their_b_c():
     assert t1.first == {0: 0, 1: 2} and t1.own["leaves"] == 4 and t1.own == t1.reg.entry()
     assert [t1.position(q) for q in qs] == [0, 1, 3, 2]
     bad = V.Top(shared.nodes[::-1], shared.salts, shared.bcs)
-    with pytest.raises(ValueError, match="firewall committed"):
+    with pytest.raises(ValueError, match="ZK server committed"):
         O.TopValue.build(PROGRAM, 0, {0: bad, 1: bad})
 
 

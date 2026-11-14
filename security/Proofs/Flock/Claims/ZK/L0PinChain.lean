@@ -55,7 +55,7 @@ its count, a live history's messages are the binding and the bodies at the rep's
 namespace Claims.ZKServer
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot absorbed nLig)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Draws MaskSlot absorbed nLig)
 open FlockSoundness.Refine (Frame encs)
 
 /-! ## The rounds' places -/
@@ -116,7 +116,7 @@ end Claims.ZKServer
 namespace FlockComplete.LigLock
 
 open Flock
-open _root_.Flock.Firewall.Frame (Cfg Draws MaskSlot Masker)
+open _root_.Flock.ZkServer.Frame (Cfg Draws MaskSlot Masker)
 open Claims.ZKServer (absPos zeros_get! l0Off l0N l0K l0Nc absPos_ood_add)
 
 variable {coin : ℕ → ℕ → F128} {p0 : ℕ} {P : List UInt8} {T : F128} {cap : ByteArray} {sch : Schedule}
@@ -165,7 +165,7 @@ end FlockComplete.LigLock
 namespace Claims.ZKServer.LeanRelease
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot absorbed)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Draws MaskSlot absorbed)
 open FlockSoundness.Refine (Frame encs)
 
 /-- **A live history's level-0 messages**: where the frame takes the coins before round `J` outside a masked phase,

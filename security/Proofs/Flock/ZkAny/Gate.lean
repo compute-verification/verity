@@ -7,7 +7,7 @@ public import Proofs.Flock.VBridge.Family.Openings
 /-!
 # The ZK server's check gates each table's file, at any values
 
-`Flock.Firewall.Finish.repFw` releases a rep's inner proof only where no constraint it hands the inner proof fails on
+`Flock.ZkServer.Finish.repFw` releases a rep's inner proof only where no constraint it hands the inner proof fails on
 the rep's own pads (`failingOn`). At a sample's `--zk` table at a worker's clear values (`coinedOf`'s, at `onVals`), that
 check is `Table.Gated`'s: where it passes at both reps, the worker's rows hold at the sample's mask slot and extra lanes
 at every pad (`rowsAt_of_cons`), so at the sampled pads (`Table.HoldsAt`). The triple's three rows need no check: they
@@ -42,7 +42,7 @@ def ConsAt (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Re
       rowsOf Tz st c r ((((coinedOf P Tz st).T c).tab.onVals.view p ω).pre.2.1 r)
         (((coinedOf P Tz st).T c).tab.onVals.view p ω).pre.1
         ((((coinedOf P Tz st).T c).tab.onVals.view p ω).pre.2.2.2.2.2 r).1 (0, 0) (Fin.castAdd 3 k)) ∧
-    Flock.Firewall.Finish.failingOn cons
+    Flock.ZkServer.Finish.failingOn cons
       (arrOf (((coinedOf P Tz st).T c).tab.onVals.hFull (ω.2.2.1 r) ∘
         (padEquiv ((coinedOf P Tz st).T c).tab.onVals.nE).symm)) = #[]
 

@@ -88,7 +88,7 @@ theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ →
     {g : Array F128} {cm0 : Commit} {extras : Array Claim} {pads : PadsZk} {ic : InnerCommit} {vals : Array F128}
     {extra lanePad : ℕ → ℕ → F128} {salt : ℕ → ℕ → ByteArray} {l : Array Claims.Msg} {p : Zk.ZkProof}
     {t : Transcript} {l' : Array Claims.Msg}
-    (h : ((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g
+    (h : ((_root_.Flock.ZkServer.Finish.repFwC (asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g
       cm0 extras pads ic vals extra lanePad salt).run (Transcript.init #[] dom)).go l = (.ok (p, t), l'))
     (h' : ByteArray → ByteArray) (rep' : ℕ) (dom' : ByteArray) (cm0' : Commit) {extras' : Array Claim}
     (hes : extras'.size = extras.size) (ic' : InnerCommit) (src : RepSrc) (prior : Array (List F128))
@@ -102,7 +102,7 @@ theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ →
     ∃ q t₅ L₅, ((repCut (asksCut coin n) (Hashes.ofSha512 h') st sch rep' dom' cm0' extras' ic' src prior words).run
       (Transcript.init #[] dom')).go L = (.ok (q, t₅), L₅) ∧ L₅.size = l'.size := by
   -- the ZK server's rep, in phases
-  dsimp only [_root_.Flock.Firewall.Finish.repFwC] at h
+  dsimp only [_root_.Flock.ZkServer.Finish.repFwC] at h
   obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := run_ok h
   try dsimp only at h
   obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := run_ok h
@@ -112,22 +112,22 @@ theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ →
   obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := run_ok h
   try dsimp only at h
   obtain ⟨tr', t₅, l₅, h₅, hg⟩ := run_ok h
-  rw [_root_.Flock.Firewall.Finish.get_run_go] at h₅
+  rw [_root_.Flock.ZkServer.Finish.get_run_go] at h₅
   simp only [Prod.mk.injEq, Except.ok.injEq] at h₅
   obtain ⟨⟨htr, ht₅⟩, hl₅⟩ := h₅
   subst tr' t₅ l₅
   try dsimp only at hg
   obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hg⟩ := run_ok hg
-  obtain ⟨hrp, ht₆, hl₆⟩ := _root_.Flock.Firewall.Finish.liftV_run_ok h₆
+  obtain ⟨hrp, ht₆, hl₆⟩ := _root_.Flock.ZkServer.Finish.liftV_run_ok h₆
   subst t₆ l₆
   try dsimp only at hg
   obtain ⟨lgc, t₇, l₇, h₇, hg⟩ := run_ok hg
-  obtain ⟨hlgc, ht₇, hl₇⟩ := _root_.Flock.Firewall.Finish.liftV_run_ok h₇
+  obtain ⟨hlgc, ht₇, hl₇⟩ := _root_.Flock.ZkServer.Finish.liftV_run_ok h₇
   subst t₇ l₇
   try dsimp only at hg
   split at hg
   · obtain ⟨_, _, _, h', _⟩ := run_ok hg
-    rw [_root_.Flock.Firewall.Finish.throw_run_go] at h'
+    rw [_root_.Flock.ZkServer.Finish.throw_run_go] at h'
     cases h'
   obtain ⟨inner, t₈, l₈, h₈, h₉⟩ := run_ok hg
   rw [pure_go] at h₉
@@ -174,11 +174,11 @@ theorem repCut_of_repFwC (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ →
   try dsimp only
   rw [bind_go h₄']
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.get_run_go _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.get_run_go _ _)]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.liftV_run_go hq _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.liftV_run_go hq _ _)]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.liftV_run_go hlgc' _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.liftV_run_go hlgc' _ _)]
   try dsimp only
   rw [bind_go h₈']
   exact ⟨_, _, _, pure_go _ _ _, hsz₈⟩

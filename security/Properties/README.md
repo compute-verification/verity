@@ -36,7 +36,7 @@ from the registry, path by path: `research msg owners PATH`.
 | `Attest.lean` | A party's signed period roots and liveness records (`Attest.Period`) |
 | `Challenger.lean` | Coins from the device's log: what a sample's coins are (`Spot.OneStageZk`) |
 | `Composition.lean` | The composition of core protocols (`CoreComposition`) |
-| `Firewall.lean` | The ZK server's record (`Firewall.Record`, `Firewall.Release`) |
+| `ZkServer.lean` | The ZK server's record (`ZkServer.Record`, `ZkServer.Release`) |
 | `NetworkPeriod.lean` | The network period check's bound (`NetworkCheck.Period`) |
 | `NetworkScan.lean` | The rows form's scan fits its layout (`NetworkCheck.Period.scanOf`) |
 | `Remote.lean` | Remote's acceptance and the inference-only policy (`CoreRemote`) |

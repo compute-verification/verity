@@ -66,7 +66,7 @@ deployed setup parses with a reference round: the coin check takes the `Hello`'s
 theorem nextD_link (T : CoinLayer.TableData)
     (L₁ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoop T L₁ real).toSrv.Worker) (w : Flock.Wit) {x : Msg} {s : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (hK : 0 < refK x)
@@ -107,7 +107,7 @@ theorem nextD_link (T : CoinLayer.TableData)
 theorem msgs_link (T : CoinLayer.TableData)
     (L₁ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoop T L₁ real).toSrv.Worker) (w : Flock.Wit) {x : Msg} {s : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (hK : 0 < refK x)
@@ -134,7 +134,7 @@ link shows `Ev` at the one witness and not at the other. -/
 theorem not_zkOut_link (T : CoinLayer.TableData)
     (L₁ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoop T L₁ real).toSrv.Worker) {x : Msg} {s : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (hK : 0 < refK x) {w₁ w₂ : Flock.Wit} (Ev : Msg → Prop)

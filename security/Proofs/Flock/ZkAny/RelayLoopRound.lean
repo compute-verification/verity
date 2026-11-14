@@ -21,11 +21,11 @@ Here its case, given what the loop's frames and the model hold there:
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session
-open _root_.Flock.Firewall hiding State
+open _root_.Flock.ZkServer.Session
+open _root_.Flock.ZkServer hiding State
 open _root_.Flock (SessionSpec Stmt)
-open _root_.Flock.Firewall.Frame (Masker)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frame (Masker)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- **A round's slot is for a stream whose `Open` left.** -/
 theorem slot_round_open {S : State} {P : Placed} {s : String} {n : Nat} (h : slot S P = some (.round s n)) :
@@ -136,7 +136,7 @@ structure RoundFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : Sess
     M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false
   frame : (frameAt σ.R sid i r).isSome
   place : ∃ (m : Masker) (q : Rep) (f : Bool) (nd : Option String), M.L.answered M.x M.ρ (M.hist σ.c) = .ok m ∧
-    _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n =
+    _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n =
       .ok (q, .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
         (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩, f, nd) ∧
     nd.isSome = σ.R.stopped sid ∧ q.cfg = M.L.cfg M.x M.ρ (M.hist σ.c) ∧ unstop q.st.m = unstop m ∧

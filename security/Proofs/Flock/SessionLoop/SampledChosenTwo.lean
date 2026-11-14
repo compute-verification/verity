@@ -11,7 +11,7 @@ session loop: its sampled sessions are `ℓ` sessions of the deployed session lo
 `Flock.Guarantees.SampledAuditAnyRelayDeployed` has them for one stage, and each stream commits its values as hm96
 leaves at the pinned key. The boundary is the registrations on the ZK server's record before the first-stage sample.
 The auditor reads its admitted record and chooses that sample with coins of its own. The interior is the value
-service's interior commits (`Flock.Firewall.Salts.interiorAnswer`): a stream of its own under a key `k₁` uniform and
+service's interior commits (`Flock.ZkServer.Salts.interiorAnswer`): a stream of its own under a key `k₁` uniform and
 independent of the boundary's randomness and of the auditor's coins, whose values, layouts and stack are any functions
 of the boundary's record and those coins. What the audit sees of each session is the held relay's frames
 (`ZKOutRelay`).

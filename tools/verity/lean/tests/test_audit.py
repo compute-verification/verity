@@ -4998,9 +4998,9 @@ def test_a_grandfathered_inline_premise_follows_its_declarations_renames_and_upd
     as the old name's. `--update` keys the entry by the premise as printed, with its reason."""
     cases = [("P.Old.ok g", "P.New.ok g", ["P.New.ok"], {"P.Old.ok": ("def", "ok"), "P.New.ok": ("def", "new")},
               {"P.Old": "P.New"}),
-             ("List.instMembership.mem t.items (Flock.Firewall.Item.coins k)",
+             ("List.instMembership.mem t.items (Flock.ZkServer.Item.coins k)",
               "List.instMembership.mem t.items (Flock.Gate.Item.coins k)", ["List.instMembership", "Flock.Gate.Item.coins"],
-              {"Flock.Gate.Item.coins": "constructor", "List.instMembership": ("def", "mem")}, {"Flock.Firewall": "Flock.Gate"}),
+              {"Flock.Gate.Item.coins": "constructor", "List.instMembership": ("def", "mem")}, {"Flock.ZkServer": "Flock.Gate"}),
              ("Real.instLE.le (P.Old.size s).cast P.Old.δ.cast", "Real.instLE.le (P.New.size s).cast P.New.δ.cast",
               ["Real", "Real.instLE", "P.New.size", "P.New.δ"], {"P.New.size": ("def", "size"), "P.New.δ": ("def", "δ")},
               None),

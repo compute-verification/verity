@@ -7,7 +7,7 @@ import all Init.Data.Nat.Power2.Basic
 /-!
 # The frame's pads root is the masked prover's
 
-At a rep's start the Lean frame commits the pads it drew (`Flock.Firewall.Frame.padsRoot`): `treeRoot` of the leaves
+At a rep's start the Lean frame commits the pads it drew (`Flock.ZkServer.Frame.padsRoot`): `treeRoot` of the leaves
 `H(H(c_h(j) ‖ c_μ(j)), salt j)`, a level at a time. The masked prover commits its tape's pads with `innerCommitP`, whose
 root is `layerOf`'s of the same leaves at its own salts (`FlockComplete.innerCommitP_root_layerOf`). On the tape of the
 frames' samples they are one root:
@@ -23,7 +23,7 @@ frames' samples they are one root:
 
 namespace Claims.ZKServer
 
-open _root_.Flock.Firewall.Frame (Draws drawBytes codeLen SALT treeRoot padsRoot)
+open _root_.Flock.ZkServer.Frame (Draws drawBytes codeLen SALT treeRoot padsRoot)
 
 /-- `treeRoot`'s loop from level `h` of `layerOf`'s tree of depth `d`, with fuel for the `d - h` levels above it, is the
 tree's root. -/
@@ -68,7 +68,7 @@ theorem layerOf_congr (nd : ByteArray → ByteArray → ByteArray) (d : ℕ) {lf
 theorem ofBytes_cols (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
     ((Draws.ofBytes l b).h ++ (Draws.ofBytes l b).padH).size.nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE =
       codeLen l := by
-  simp [Draws.ofBytes, _root_.Flock.Firewall.Frame.words, codeLen]
+  simp [Draws.ofBytes, _root_.Flock.ZkServer.Frame.words, codeLen]
 
 /-- **The frame's pads root is `layerOf`'s root** of its leaves: column `j`'s leaf under the samples' `j`-th salt. -/
 theorem padsRoot_layerOf (l : _root_.Flock.Zk.PadLayout) (d : Draws) :

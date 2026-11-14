@@ -85,7 +85,7 @@ from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.profile import Work, WorkStratum

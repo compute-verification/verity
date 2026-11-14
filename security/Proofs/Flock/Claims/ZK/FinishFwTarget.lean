@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Drive
+public import Flock.ZkServer.Drive
 public import Proofs.Flock.Claims.ZK.FinishFwRep
 public import Proofs.Flock.Claims.ZK.SimLig
 public import Proofs.Flock.Claims.ZK.Worker
@@ -160,7 +160,7 @@ theorem pairs_get {α β γ : Type} [Inhabited α] [Inhabited γ] (g : α → β
 /-- **Extra coordinate `i` at two link points** is region `i / 2`'s point at link point `i % 2`, past its six skip
 coordinates. -/
 theorem driveExtras_get (st : _root_.Flock.Stmt) (p0 p1 : Array _root_.Flock.F128) :
-    ∀ i < 2 * st.regions.size, (_root_.Flock.Firewall.Drive.extras st #[p0, p1])[i]! =
+    ∀ i < 2 * st.regions.size, (_root_.Flock.ZkServer.Drive.extras st #[p0, p1])[i]! =
       (st.regionPoint st.regions[i / 2]! (if i % 2 = 0 then p0 else p1)).extract 6
         (st.regionPoint st.regions[i / 2]! (if i % 2 = 0 then p0 else p1)).size := by
   intro i hi
@@ -168,10 +168,10 @@ theorem driveExtras_get (st : _root_.Flock.Stmt) (p0 p1 : Array _root_.Flock.F12
     (st.regionPoint reg q).size) p0 p1 st.regions.toList i (by rw [Array.length_toList]; exact hi)
   have e : st.regions.toList[i / 2]! = st.regions[i / 2]! := Array.getElem!_toList
   rw [e] at h
-  have hl : (_root_.Flock.Firewall.Drive.extras st #[p0, p1]).toList = st.regions.toList.flatMap fun reg =>
+  have hl : (_root_.Flock.ZkServer.Drive.extras st #[p0, p1]).toList = st.regions.toList.flatMap fun reg =>
       [(st.regionPoint reg p0).extract 6 (st.regionPoint reg p0).size,
         (st.regionPoint reg p1).extract 6 (st.regionPoint reg p1).size] := by
-    unfold _root_.Flock.Firewall.Drive.extras
+    unfold _root_.Flock.ZkServer.Drive.extras
     simp
   rw [← Array.getElem!_toList, hl]
   exact h
@@ -186,7 +186,7 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals)
     (xs : Array _root_.Flock.Claim) (hxsz : xs.size = spec.points * (stAt x j).regions.size)
-    (hxs : xs.map (·.x) = _root_.Flock.Firewall.Drive.extras (stAt x j) (ptsE c spec))
+    (hxs : xs.map (·.x) = _root_.Flock.ZkServer.Drive.extras (stAt x j) (ptsE c spec))
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j))
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
     (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array _root_.Flock.F128)
@@ -199,7 +199,7 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
           (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
           (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂) →
       ((FlockComplete.ringSwitchCut (FlockComplete.asksCut (ligCoin c) n)
-          (fun k => _root_.Flock.Firewall.Finish.switchVec g (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]!)
+          (fun k => _root_.Flock.ZkServer.Finish.switchVec g (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]!)
           (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
       fOf T = Composed.openT (zkTab x j).table (stAt x j) (czExe PE x c j) r
         (((tabC PE x j).T (czExe PE x c j)).tab.onVals.nu (wtOf PE x w j, v j) +
@@ -259,7 +259,7 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
       omega
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
-          _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]! := by
+          _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]! := by
       intro k hk2
       obtain ⟨hzc', hl₁'⟩ := FlockComplete.zerocheckCut_at (ligCoin c) n hm14 _ _ _ _ _ h₁
       obtain ⟨hlc', -⟩ := FlockComplete.lincheckCut_at (ligCoin c) n _ _ _ _ _ h₂
@@ -331,7 +331,7 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
     Composed.coinedOf_reg PE (zkTab x j).table (stAt x j) (zkTab x j).wf.1 (zkTab x j).wf.2 rfl (zkTab x j).whole
       (czExe PE x c j) (wtOf PE x w j) (complete_tabC PE hw j)
   have hregk : ∀ k, 2 ≤ k → ∀ hk : k - 2 < 2 * (stAt x j).regions.size,
-      FlockSoundness.Refine.vecOf 128 (_root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]!) =
+      FlockSoundness.Refine.vecOf 128 (_root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]!) =
         Composed.pubRegOf (stAt x j) ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).link
           ⟨k - 2, hk⟩ := by
     intro k hk2 hkr
@@ -422,10 +422,10 @@ theorem fwTarget_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w
       exact congrArg (fun q => fOf (slotAt c q i.val)) (by omega)
     rw [hrpp]
     refine congrArg (FlockSoundness.Model.recombine FlockSoundness.execArith · _) ?_
-    show FlockSoundness.Refine.vecOf 128 (_root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k.val]!) =
+    show FlockSoundness.Refine.vecOf 128 (_root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k.val]!) =
       Composed.swAt (zkTab x j).table (stAt x j) (czExe PE x c j) r _ k.val
     rcases Nat.lt_or_ge k.val 2 with hk2 | hk2
-    · have hsk : _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k.val]! = ss[k.val]! := by
+    · have hsk : _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j) (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k.val]! = ss[k.val]! := by
         rw [hss, FlockComplete.Replay.pushes_get _ _ k.val hk]
       rw [hsk]
       have hsh : ∀ i, FlockSoundness.Refine.vecOf 128 (Composed.shArr

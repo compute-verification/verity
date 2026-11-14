@@ -31,9 +31,10 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   replay Definition. A commitment made on the replayed rows' device (`DeviceCommit`: a GPU commit's roots, every row's
   b || c and its salts) registers in place of committing the rows on the host (`committed`).
 * `interior_links`: the replay-block parameters the interior registers as values, the verifier's (`Supply`) and the
-  replay's own (`Operand`), the challenger's copies of them and the history tables its reads open, and the parameters
-  and returns round 1's record commits as ports (`Input`, `Return`), read at round 1's rows; `interior` takes them,
-  and this module's `__all__` lists the names its callers take.
+  replay's own (`Operand`), the challenger's copies of them, the history tables its reads open and the registered
+  tables its fused blocks open (each held to the verifier's pin), and the parameters and returns round 1's record
+  commits as ports (`Input`, `Return`), read at round 1's rows; `interior` takes them, and this module's `__all__`
+  lists the names its callers take.
 * `register`: the record on the two-stage stream after its first stage.
 
 A `span` reads one template's units, one member of word rows; a chunked or shared-row template's span is refused by name.
@@ -51,7 +52,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.commitments import history as HT
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
@@ -470,7 +471,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
              tables: Sequence[HT.HistoryTable] = (), served: Mapping[str, Any] | None = None,
              positions: int | None = None, links: Sequence[Link] = (), rows: Sequence[Any] = (),
              window_root: str | None = None, returns: Sequence[tuple[Return, LK.Port]] = (),
-             inputs: Sequence[tuple[Input, LK.Port]] = ()) -> Interior:
+             inputs: Sequence[tuple[Input, LK.Port]] = (), registered: Mapping[str, Any] | None = None,
+             pins: Mapping[str, Mapping[str, Any]] | None = None) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
     `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
@@ -503,7 +505,12 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     that reads it is committed under the serve's salts at the rows its units read (`Input.rows`), read at round 1's
     root as a return is, and a replayed unit that takes there another row than round 1's at its place is refused the
     same way. A sampled span of no units (a request served nothing, whose rows of round 1's ports are zero) is refused by
-    slot: it has no last unit to pad its block with."""
+    slot: it has no last unit to pad its block with. ``registered`` and ``pins``: the registered tables its
+    fused blocks and table reads open (`interior_links.tied`), by parameter: each table with its rows held (core's
+    `Registered`) and the entry the verifier pinned for it (its registration's ``values``). The interior commits and
+    publishes none of them. A fused block left untied, a table that has no pin or is not the pinned one
+    (`_registered`), and a unit that takes another root or does not open the table its place gives it
+    (`interior_links.opened_registered`) are each refused by name before anything is committed."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -515,7 +522,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     if any([_layout(s.member) for s in p] != first for p in per):
         raise ValueError("the spans' units are not the same templates' in one layout and one order")
     members = [s.member for s in per[0]]
-    readers = [(k, vh) for k, m in enumerate(members) if (vh := IL.reader(m)) is not None]
+    tied = IL.tied(members, links)
+    readers = [(k, vh) for k, m in enumerate(members) if k not in tied and (vh := IL.reader(m)) is not None]
     q = len(sample)
     window = interior_window(members, n_rho, boundary, sample, wires, link_values(links, q), rows)
     ports, cells = CS.expected_ports(window), IL.cells(window.members, n_rho)[1]
@@ -533,32 +541,11 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                          "round 1 commits is committed on the host, under the serve's salts")
     back = _returned(window.members, cells, sample, returns)
     took_in = _taken(window.members, cells, sample, inputs, {(x.template, x.port) for x, _k, _at in placed})
-    if tables and (served is None or positions is None):
-        raise ValueError("a replay block of table reads opens the tables round 1 served: give round 1's record (served) "
-                         "and its class's positions")
-    for k, _vh in readers:
-        t = window.members[k].template
-        if not {(t, p) for p in TABLE} <= {(x.template, x.port) for x in links if isinstance(x, Supply)
-                                           and x.index is None}:
-            raise ValueError(f"{t}: a table read's {' and '.join(TABLE)} are the verifier's, the table round 1 served: "
-                             "give the `Supply` of each")
-    tcs = tuple(tables)
-    for k, (V, H) in readers:
-        if any(t.leaves != V or t.words != H for t in tcs):
-            raise ValueError(f"{window.members[k].template} reads a table of {V} rows of {H} words, not the spans' "
-                             f"{[(t.leaves, t.words) for t in tcs]}")
-    roots = {r["port"]: r for r in served["roots"]} if tcs else {}
-    for t in tcs:
-        if len(t.bcs) != positions:
-            raise ValueError(f"table {t.value} holds {len(t.bcs)} strings, not its class's {positions}: rows past its "
-                             "length are filled (`boundary_tables.fill`), so its strings never show it")
-        e, r = t.entry(), roots.get(t.value, {})
-        if [r.get(k) for k in ("root", "leaves", "domain")] != [e[k] for k in ("root", "leaves", "domain")]:
-            raise ValueError(f"table {t.value} is not the one round 1 registered under its name: a drawn span's reads open "
-                             "the table served before the coins")
+    tcs = _served(window.members, readers, links, tables, served, positions)
+    regs = _registered(window.members, tied, registered, pins)
     prog = P.program_digest(window.program)
     schemas = link_schemas(window.members, links)
-    given = {v.value: v for v in supplied(prog, links, q, [t.entry() for t in tcs], schemas)}
+    given = {v.value: v for v in supplied(prog, links, q, [t.entry() for t in tcs], schemas, pins)}
     if device is not None:
         c = committed(window, device)
     else:
@@ -578,6 +565,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                                      f"{window.members[j].template} units that write them, which the interior commits")
         for k, (V, _H) in readers:
             IL.opened(window.members[k], data[k], cells[k], tcs, V)
+        for k, (tie, V, _H, block) in tied.items():
+            IL.opened_registered(window.members[k], data[k], cells[k], tie, regs, V, block)
         for m, d in zip(window.members, data, strict=True):  # after the reads: a read's key may be a wired row
             for p, _o, _ws in m.wired:
                 d["rows"][p] = CS.WIRED
@@ -633,6 +622,53 @@ def _as_served(data: Sequence[Mapping[str, Any]], cells: Sequence[int], held: Se
             raise ValueError(f"{x.template}: unit {u} (sampled span {u // cells[k]}) {does} at its {x.port!r} a row that "
                              f"is not row {at[u]} of {x.value}, {what} round 1 committed: the replay didn't reproduce "
                              "what was served")
+
+
+def _served(ms: Sequence[CS.Member], readers: Sequence[tuple[int, tuple[int, int]]], links: Sequence[Link],
+            tables: Sequence[HT.HistoryTable], served: Mapping[str, Any] | None,
+            positions: int | None) -> tuple[HT.HistoryTable, ...]:
+    """The history tables the reads of round 1's history open (``readers``: each such member of ``ms`` with its table's
+    rows and words), as `interior` takes them with round 1's record and their class's positions. Refused by name where
+    a read's root and domain are not the verifier's, or a table is not of the shape a read opens, holds other than its
+    class's strings or is not the one round 1 registered under its name."""
+    if tables and (served is None or positions is None):
+        raise ValueError("a replay block of table reads opens the tables round 1 served: give round 1's record (served) "
+                         "and its class's positions")
+    for k, _vh in readers:
+        t = ms[k].template
+        if not {(t, p) for p in TABLE} <= {(x.template, x.port) for x in links if isinstance(x, Supply)
+                                           and x.index is None}:
+            raise ValueError(f"{t}: a table read's {' and '.join(TABLE)} are the verifier's, the table round 1 served: "
+                             "give the `Supply` of each")
+    tcs = tuple(tables)
+    for k, (V, H) in readers:
+        if any(t.leaves != V or t.words != H for t in tcs):
+            raise ValueError(f"{ms[k].template} reads a table of {V} rows of {H} words, not the spans' "
+                             f"{[(t.leaves, t.words) for t in tcs]}")
+    roots = {r["port"]: r for r in served["roots"]} if served is not None and tcs else {}
+    for t in tcs:
+        if len(t.bcs) != positions:
+            raise ValueError(f"table {t.value} holds {len(t.bcs)} strings, not its class's {positions}: rows past its "
+                             "length are filled (`boundary_tables.fill`), so its strings never show it")
+        e, r = t.entry(), roots.get(t.value, {})
+        if [r.get(k) for k in ("root", "leaves", "domain")] != [e[k] for k in ("root", "leaves", "domain")]:
+            raise ValueError(f"table {t.value} is not the one round 1 registered under its name: a drawn span's reads open "
+                             "the table served before the coins")
+    return tcs
+
+
+def _registered(ms: Sequence[CS.Member], tied: Mapping[int, tuple[Supply, int, int, bool]],
+                registered: Mapping[str, Any] | None, pins: Mapping[str, Mapping[str, Any]] | None) -> dict[str, Any]:
+    """The registered tables the tied members of ``ms`` open (`interior_links.tied`), by parameter, from the ones held
+    (``registered``). Refused by name where one has no pin, is not held, is not the pinned one (`interior_links.pinned`)
+    or is not of the rows and words its member reads."""
+    regs = dict(registered or {})
+    IL.pinned(list(dict.fromkeys(n for x, *_ in tied.values() for n in x.tables or ())), regs, pins or {})
+    for k, (x, V, H, _block) in tied.items():
+        if off := sorted({n for n in x.tables or () if (regs[n].leaves, regs[n].words) != (V, H)}):
+            raise ValueError(f"{ms[k].template} reads a table of {V} rows of {H} words, not registered table {off[0]}'s "
+                             f"{regs[off[0]].leaves} of {regs[off[0]].words}")
+    return regs
 
 
 def _returned(ms: Sequence[CS.Member], cells: Sequence[int], sample: Sequence[int],

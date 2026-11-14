@@ -81,10 +81,10 @@ request, its pads are the tape's pads of table `j`'s rep `r` at the table's layo
 layout the frame starts at, `lay_ofLoopLink`). -/
 theorem finRepPads_tape (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : finS.Tape} {h : List (Msg × Msg)}
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
-    (j : Fin (Masked.jOf x)) (r : Fin 2) {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
-    {q : _root_.Flock.Firewall.Finish.RepIn} {f : ByteArray}
+    (j : Fin (Masked.jOf x)) (r : Fin 2) {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
+    {q : _root_.Flock.ZkServer.Finish.RepIn} {f : ByteArray}
     (hRep : RepAt L₀.draws src x w (ν, t) h spec (2 * j.val + r.val) tb hi q f) :
-    (_root_.Flock.Firewall.Finish.padsOf q.draws).toC =
+    (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC =
       FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j) := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
     intro α β y f b hb
@@ -97,12 +97,12 @@ theorem finRepPads_tape (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : f
   have hq := hRep.2.1
   unfold repInOf at hq
   obtain ⟨⟨lay, ms⟩, hst0, hq⟩ := bok hq
-  have hqd : q.draws = _root_.Flock.Firewall.Frame.Draws.ofBytes lay (L₀.draws (ν, t) (2 * j.val + r.val)) := by
+  have hqd : q.draws = _root_.Flock.ZkServer.Frame.Draws.ofBytes lay (L₀.draws (ν, t) (2 * j.val + r.val)) := by
     cases hq
     rfl
   have hLk : (LeanRelease.ofLoopLink L₀ src (realOf src)).lay x (2 * j.val + r.val) = lay := by
     have e : Loop.startOf x (2 * j.val + r.val) =
-        _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[(2 * j.val + r.val) / 2]! := by
+        _root_.Flock.ZkServer.Drive.start (Masked.stsOf x)[(2 * j.val + r.val) / 2]! := by
       unfold Loop.startOf
       rw [hsx]
       try dsimp only
@@ -117,7 +117,7 @@ theorem finRepPads_tape (hS : Loop.RepSrc L₀ src x w) {ν : finS.Nonce} {t : f
   have hpads := hS.pads (LeanRelease.ofLoopLink L₀ src (realOf src)) hd ν t j r hlay0 (Masked.UE.tapeZk t)
   have hq' : q.draws = (LeanRelease.ofLoopLink L₀ src (realOf src)).drawsAt x (ν, t) (Loop.frepOf j.val r.val) := by
     rw [hqd]
-    show _ = _root_.Flock.Firewall.Frame.Draws.ofBytes
+    show _ = _root_.Flock.ZkServer.Frame.Draws.ofBytes
       ((LeanRelease.ofLoopLink L₀ src (realOf src)).lay x (2 * j.val + r.val)) (L₀.draws (ν, t) (2 * j.val + r.val))
     rw [hLk]
   exact Masked.pads_frame_eq (LeanRelease.ofLoopLink L₀ src (realOf src)) (ν, t) (Masked.UE.tapeZk t) Loop.frepOf x t

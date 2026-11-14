@@ -143,7 +143,7 @@ from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

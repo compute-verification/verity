@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.ZK.FinishPiop
 /-!
 # The ZK server's Ligerito is the masked prover's
 
-`Flock.Firewall.Finish.ligeritoPZk` is `FlockComplete.ligeritoPZk` word for word on the port's own state, commitment
+`Flock.ZkServer.Finish.ligeritoPZk` is `FlockComplete.ligeritoPZk` word for word on the port's own state, commitment
 and sends (`LigState`, `Commit`, `Asks`, each the analysis's fields), its levels ≥ 1 committed by its argument `commit`
 where the analysis's call `FlockComplete.commitP`. Its actions run on the analysis's state through `ligConj`, which
 reads the port's state as the analysis's and writes it back:
@@ -16,13 +16,13 @@ reads the port's state as the analysis's and writes it back:
   analysis's on the other;
 * `ligConj_sendMsg` to `ligConj_queryP`: each of the prover's actions is the analysis's under `ligConj`.
 * **`ligeritoPZk_eq`**: where `commit` is `FlockComplete.commitP hs ms` through `Commit.toC`, the port's Ligerito is
-  the analysis's; at SHA-512 and `hm96-sha512/v1` with `commitFw` (`ligeritoPZk_fw`), as `flock-firewall finish` runs
+  the analysis's; at SHA-512 and `hm96-sha512/v1` with `commitFw` (`ligeritoPZk_fw`), as `flock-zk-server finish` runs
   it.
 -/
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Transcript
 
@@ -229,7 +229,7 @@ theorem ligeritoPZk_eq (io : Asks M) (commit : Level → Array F128 → (ℕ →
     map_bind, map_pure, stepMap, cmOfC_toC, map_ite']
   rfl
 
-/-- **As `flock-firewall finish` runs it**: levels ≥ 1 committed by the FFT (`commitFw`) at SHA-512 and
+/-- **As `flock-zk-server finish` runs it**: levels ≥ 1 committed by the FFT (`commitFw`) at SHA-512 and
 `hm96-sha512/v1`. -/
 theorem ligeritoPZk_fw (io : Asks M) (sch : Flock.Schedule) (T : F128) (cm0 : Commit) (t b : Array F128)
     (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
@@ -243,4 +243,4 @@ theorem ligeritoPZk_fw (io : Asks M) (sch : Flock.Schedule) (T : F128) (cm0 : Co
 
 end Parts
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

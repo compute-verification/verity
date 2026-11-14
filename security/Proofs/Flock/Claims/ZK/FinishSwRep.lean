@@ -38,7 +38,7 @@ bound), and that no refusal shows by round `n` from the admitted coins (`not_ref
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 open Flock Transcript
 
 /-- **A returned rep ran its PIOP**: where `repFwC` returned from `l`, so did `piopFw` at its arguments from `l`. -/
@@ -67,7 +67,7 @@ theorem repFwC_piopFw {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {sch 
   rw [FlockComplete.Replay.bind_go h₃]
   rfl
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish
 
 namespace FlockComplete.LigLock
 
@@ -161,12 +161,12 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
     (extras : Array _root_.Flock.Claim) (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128)
-    (q : _root_.Flock.Firewall.Finish.RepIn) (hA : A j r = q.vals)
+    (q : _root_.Flock.ZkServer.Finish.RepIn) (hA : A j r = q.vals)
     (hB : B j r = FlockComplete.LigLock.l0Clear (ligCoin c) (ligP0 x j r) (zkTab x j).sch (ligTab x w τ j)
       (ligBasis x c w τ j r extras) (layE x j) ((UE.tapeZk τ).extra j.val) r.val)
     (hq : q.draws = Lr.drawsAt x ρ (frep j.val r.val)) (hlayR : Lr.lay x (frep j.val r.val) = layE x j)
     (hz : (Lr.draws ρ (frep j.val r.val)).size =
-      _root_.Flock.Firewall.Frame.drawBytes (Lr.lay x (frep j.val r.val)))
+      _root_.Flock.ZkServer.Frame.drawBytes (Lr.lay x (frep j.val r.val)))
     (htape : ∀ k < (layE x j).hab, (UE.tapeZk τ).h j.val r.val k =
       (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep).h j.val r.val k)
     (hpads : FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) =
@@ -182,9 +182,9 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     {t₀ : _root_.Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Msg}
     (hl : l.size = repBase x (2 * j.val + r.val)) {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript}
     {l' : Array Msg}
-    (h : ((_root_.Flock.Firewall.Finish.repFwC (FlockComplete.asksCut (ligCoin c) n)
+    (h : ((_root_.Flock.ZkServer.Finish.repFwC (FlockComplete.asksCut (ligCoin c) n)
       (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) st (zkTab x j).sch (zkTab x j).tPad r.val dom g cm0
-      extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals ((UE.tapeZk τ).extra j.val)
+      extras (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC ic q.vals ((UE.tapeZk τ).extra j.val)
       ((UE.tapeZk τ).lanePad j.val) salt).run t₀).go l = (.ok (p, t), l')) :
     ∃ p', ((FlockComplete.repCut (FlockComplete.asksCut (ligCoin c) n)
         (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) st (zkTab x j).sch r.val dom
@@ -241,7 +241,7 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     omega
   -- the ZK server's PIOP returned, so it sent all its bodies before the stop
   have hP0 : ligP0 x j r ≤ n := by
-    obtain ⟨_, _, _, _, _, _, _, hpf⟩ := _root_.Flock.Firewall.Finish.repFwC_piopFw h
+    obtain ⟨_, _, _, _, _, _, _, hpf⟩ := _root_.Flock.ZkServer.Finish.repFwC_piopFw h
     obtain ⟨-, hl₃, hn₃⟩ := FlockComplete.piopFw_at hm14 hpf (trsE x w (UE.tapeZk τ))[j.val]!
     omega
   have hP0' := hP0
@@ -252,21 +252,21 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
   -- the masked values below `zp 64`
   have hmk : ∀ i < (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0).zp 64,
       ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).masked i =
-        q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := fun i hi =>
+        q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]! := fun i hi =>
     swSrcE_hmk_frame Lr ρ tz frep x c w A B τ j r q hA hq hlayR hz htape hrows i (by rw [← hLyE]; exact hi)
   -- the switched vectors at the ZK server's zerocheck and lincheck
   have hsv : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
-          fun i => q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]!).run t₀).go l =
+          fun i => q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]!).run t₀).go l =
         (.ok ((zp, zc), t₁), l₁) →
       ((FlockComplete.lincheckCut (FlockComplete.asksCut (ligCoin c) n) st.fold st.m
           (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
-          (fun i => q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]!) zc).run t₁).go l₁ =
+          (fun i => q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]!) zc).run t₁).go l₁ =
         (.ok ((lp, lc), t₂), l₂) →
       ∀ k < (_root_.Flock.abcClaims st.m st.kLog zc lc ++ extras).size,
         ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).sv k =
-          _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)
+          _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j)
             (_root_.Flock.abcClaims st.m st.kLog zc lc ++ extras)[k]! := by
     intro zp zc t₁ l₁ lp lc t₂ l₂ h₁ h₂ k hk
     obtain ⟨hzc, hl₁⟩ := FlockComplete.zerocheckCut_at (ligCoin c) n hm14 _ _ _ _ _ h₁
@@ -316,23 +316,23 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
   have hpiop : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
-          fun i => q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]!).run t₀).go l =
+          fun i => q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]!).run t₀).go l =
         (.ok ((zp, zc), t₁), l₁) →
       ((FlockComplete.lincheckCut (FlockComplete.asksCut (ligCoin c) n) st.fold st.m
           (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
-          (fun i => q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]!) zc).run t₁).go l₁ =
+          (fun i => q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]!) zc).run t₁).go l₁ =
         (.ok ((lp, lc), t₂), l₂) →
       FlockComplete.MaskRank.maskRankOk
           (priorE c j.val r.val ++ FlockComplete.MaskRank.roundPoints st.m st.kLog t₂.rounds)
           (Composed.maskWordsOf (stsOf x)[j.val]!) = true ∧
         ∀ k < (_root_.Flock.abcClaims st.m st.kLog zc lc ++ extras).size,
           ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).sv k =
-            _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)
+            _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j)
               (_root_.Flock.abcClaims st.m st.kLog zc lc ++ extras)[k]! := fun zp zc t₁ l₁ lp lc t₂ l₂ h₁ h₂ =>
     ⟨rank_at_admits hx hAd hj r.isLt (ligCoin c) n (fun _ _ _ => rfl) st (by rw [hstj, hSm]) (by rw [hstj, hSk]) hkL
       _ _ _ _ ht₀ hl h₁ h₂, hsv zp zc t₁ l₁ lp lc t₂ l₂ h₁ h₂⟩
-  refine _root_.Flock.Firewall.Finish.repCut_fw (ligCoin c) n st hmerk (zkTab x j).sch (zkTab x j).tPad r.val dom
-    (ligTab x w τ j) cm0 extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals
+  refine _root_.Flock.ZkServer.Finish.repCut_fw (ligCoin c) n st hmerk (zkTab x j).sch (zkTab x j).tPad r.val dom
+    (ligTab x w τ j) cm0 extras (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC ic q.vals
     ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) salt
     ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val) (priorE c j.val r.val)
     (Composed.maskWordsOf (stsOf x)[j.val]!) t₀ l hm14 hln hkL hmk hpiop ?_

@@ -239,7 +239,7 @@ def vals : List Frame → List F128
   | _ :: fs => vals fs
 
 /-- **A round's value row as the deployed prover writes it**: the values' bytes, then zero bytes up to whole 128-byte
-blocks (`rec_live.message_rows`, `Firewall.messageRows`: 64 u16 words a block). -/
+blocks (`rec_live.message_rows`, `ZkServer.messageRows`: 64 u16 words a block). -/
 def padRow (l : List UInt8) : List UInt8 := l ++ List.replicate ((128 - l.length % 128) % 128) 0
 
 theorem padRow_length_le (l : List UInt8) : (padRow l).length ≤ l.length + 127 := by

@@ -44,7 +44,7 @@ import numpy as np
 import pytest
 import settings
 
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, docket as R
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
@@ -1254,7 +1254,7 @@ def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry
     `interface.resolve` alone refuses the window ("names no Definition a catalog registers")."""
     got = _io_shell_window(tmp_path / "w")
     audit = _audited(got.dir, tmp_path / "a")
-    p = subprocess.run([sys.executable, str(HERE.parent / "records_audit.py"), "period", "--window", str(got.dir),
+    p = subprocess.run([sys.executable, str(RA.__file__), "period", "--window", str(got.dir),
                         "--audit", str(audit), "--out", str(tmp_path / "p.json")], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     coord, state = (sum(16 * w for _p, w in IF.layout(fn).rows) for fn in (COORD, got.shell))
@@ -1640,7 +1640,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, docket as R
 from verity.protocols.proofs.spot.prover.audit import window_audit as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_design({LAW!r}), None)

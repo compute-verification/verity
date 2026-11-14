@@ -25,8 +25,8 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
-open _root_.Flock.Firewall.Frame (INNER_ROUNDS)
-open _root_.Flock.Firewall.Finish (Tab RepIn)
+open _root_.Flock.ZkServer.Frame (INNER_ROUNDS)
+open _root_.Flock.ZkServer.Finish (Tab RepIn)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`
@@ -159,8 +159,8 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     rw [hQc]
     exact padCoin_extract hk (by omega)
   -- as many extra claims as the statement's regions at each link point, below `2^64`
-  have hxs : (_root_.Flock.Firewall.Finish.claimsOf Q.xs).size = spec.points * (Masked.stAt x j).regions.size := by
-    simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
+  have hxs : (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size = spec.points * (Masked.stAt x j).regions.size := by
+    simp only [_root_.Flock.ZkServer.Finish.claimsOf, Array.size_map]
     rw [hQx]
     exact innerReq_xs hx hSv hpos hs j r hq
   obtain ⟨hpts, -, hregs⟩ := Masked.live_bounds hx hs
@@ -168,17 +168,17 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   have hc65 : 2 + spec.points * (Masked.stAt x j).regions.size ≤ 65536 := by
     rw [hpts]
     omega
-  have hxb : (_root_.Flock.Firewall.Finish.claimsOf Q.xs).size + 2 < 2 ^ 64 :=
+  have hxb : (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size + 2 < 2 ^ 64 :=
     lt_of_le_of_lt (by rw [hxs, hpts]; omega) (by norm_num : (2050 : ℕ) < 2 ^ 64)
   -- the rep's plan: `repCons`'s rounds, `nSched` of them, then the inner proof's four
-  have hPsz : (_root_.Flock.Firewall.Session.repPlan spec (Masked.stAt x j)).size =
+  have hPsz : (_root_.Flock.ZkServer.Session.repPlan spec (Masked.stAt x j)).size =
       ((Masked.stAt x j).m + ((Masked.stAt x j).c.kLog - 6)) +
         ((2 + spec.points * (Masked.stAt x j).regions.size) + 1) +
         (tr.sch.k0 + 7 + 11 * (tr.sch.levels.size - 1)) + 4 := by
     rw [repPlan_size, repRounds_true]
     simp only [hz]
   have hrq : (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 =
-      (_root_.Flock.Firewall.Session.repPlan spec (Masked.stAt x j)).size := by
+      (_root_.Flock.ZkServer.Session.repPlan spec (Masked.stAt x j)).size := by
     rw [repPlan_size, ← Masked.stsOf_half x j r]
     simp only [roundsOf, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hkk, Option.map_some,
       Option.getD_some]
@@ -190,33 +190,33 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     unfold nSched
     rw [hrq, hPsz]
     omega
-  have hP' : (_root_.Flock.Firewall.Session.repPlan spec (Masked.stAt x j)).toList =
-      Count.consCounts tr.st tr.sch (_root_.Flock.Firewall.Finish.claimsOf Q.xs).size ++
-        [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q] := by
+  have hP' : (_root_.Flock.ZkServer.Session.repPlan spec (Masked.stAt x j)).toList =
+      Count.consCounts tr.st tr.sch (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size ++
+        [1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q] := by
     rw [htst, hxs]
     exact repPlan_cons hz
-  have hcl : (Count.consCounts tr.st tr.sch (_root_.Flock.Firewall.Finish.claimsOf Q.xs).size).length =
+  have hcl : (Count.consCounts tr.st tr.sch (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size).length =
       nSched spec (Masked.stsOf x) (2 * j.val + r.val) := by
     have h := congrArg List.length hP'
     rw [Array.length_toList, List.length_append, hPsz] at h
     simp only [List.length_cons, List.length_nil] at h
     omega
   have hsize : ∀ k < nSched spec (Masked.stsOf x) (2 * j.val + r.val) + e,
-      (Q.coins[k]!).size = (_root_.Flock.Firewall.Session.repPlan spec (Masked.stAt x j)).getD k 0 := by
+      (Q.coins[k]!).size = (_root_.Flock.ZkServer.Session.repPlan spec (Masked.stAt x j)).getD k 0 := by
     intro k hk
     rw [hQk k hk, (hcoins k hk).1, Masked.repBase_eq hs, loopNr_rep hs hkk (i := k) (by rw [hrq, hPsz]; omega),
       Masked.stsOf_half x j r]
     exact Nat.min_eq_left (repPlan_le hz hm35 hn6' hq6' hc65 k)
-  have hpre : Count.consCounts tr.st tr.sch (_root_.Flock.Firewall.Finish.claimsOf Q.xs).size <+:
+  have hpre : Count.consCounts tr.st tr.sch (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size <+:
       Q.coins.toList.map Array.size :=
     prefix_of_sizes hP' (by rw [hcl, hQsz]; omega) fun k hk => hsize k (by rw [hcl] at hk; omega)
   -- the pair's coins: the plan's two-coin rounds, the opened coins at the rep's `ρ₀, ρ₁` rounds, independent
-  obtain ⟨L, hL⟩ : ∃ L, L = FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.Firewall.Finish.claimsOf Q.xs) :=
+  obtain ⟨L, hL⟩ : ∃ L, L = FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.ZkServer.Finish.claimsOf Q.xs) :=
     ⟨_, rfl⟩
   have hLig : L = 3 + ((Masked.stAt x j).m - 6) + (3 + ((Masked.stAt x j).c.kLog - 6)) +
       (2 + spec.points * (Masked.stAt x j).regions.size) + 1 := by
     have h : L = 0 + 3 + (tr.st.m - 6) + (3 + (tr.st.fold.kLog - 6)) +
-        (2 + (_root_.Flock.Firewall.Finish.claimsOf Q.xs).size) + 1 := hL
+        (2 + (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size) + 1 := hL
     rw [e7, e6, hxs] at h
     omega
   have eρ : Masked.rhoSlot x j.val r.val = Masked.repBase x (2 * j.val + r.val) + (L + 2 + tr.sch.k0) := by
@@ -228,9 +228,9 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     (Count.piop_list (kLog := (Masked.stAt x j).c.kLog) (by omega : 14 ≤ (Masked.stAt x j).m))
   simp only [List.length_cons, List.length_append, List.length_replicate, List.length_nil] at hfl
   have hρc : ∀ k e', e' < 2 → k = L + 2 + tr.sch.k0 + e' →
-      (_root_.Flock.Firewall.Session.repPlan spec (Masked.stAt x j)).getD k 0 = 2 := by
+      (_root_.Flock.ZkServer.Session.repPlan spec (Masked.stAt x j)).getD k 0 = 2 := by
     intro k e' he' hk
-    rw [show k = ((_root_.Flock.Firewall.Session.replayCoins (Masked.stAt x j).m
+    rw [show k = ((_root_.Flock.ZkServer.Session.replayCoins (Masked.stAt x j).m
         (Masked.stAt x j).c.kLog).toList.filter (· != 0)).length +
         ((2 + spec.points * (Masked.stAt x j).regions.size) + 1 + (tr.sch.k0 + 2 + e')) by omega]
     exact Count.repPlan_rho hz he'
@@ -262,13 +262,13 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     · exact (hnr (.inr ⟨j.val, hjs, r.val, hr2, .inr (.inl ⟨by omega, hb⟩)⟩)).elim
     · rfl
   have hρQ : _root_.Flock.Zk.rhoIndependent
-      ((⟨(Q.coins[FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.Firewall.Finish.claimsOf Q.xs) + 2 +
+      ((⟨(Q.coins[FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.ZkServer.Finish.claimsOf Q.xs) + 2 +
             tr.sch.k0]!)[0]!,
-          (Q.coins[FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.Firewall.Finish.claimsOf Q.xs) + 2 +
+          (Q.coins[FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.ZkServer.Finish.claimsOf Q.xs) + 2 +
             tr.sch.k0]!)[1]!⟩ : _root_.Flock.F256),
-        (⟨(Q.coins[FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.Firewall.Finish.claimsOf Q.xs) + 3 +
+        (⟨(Q.coins[FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.ZkServer.Finish.claimsOf Q.xs) + 3 +
             tr.sch.k0]!)[0]!,
-          (Q.coins[FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.Firewall.Finish.claimsOf Q.xs) + 3 +
+          (Q.coins[FlockComplete.CutEq.ligAt 0 tr.st (_root_.Flock.ZkServer.Finish.claimsOf Q.xs) + 3 +
             tr.sch.k0]!)[1]!⟩ : _root_.Flock.F256)) = true := by
     rw [← hL, hA 0 (by norm_num), hA 1 (by norm_num), hB 0 (by norm_num), hB 1 (by norm_num)]
     exact hρ'
@@ -297,7 +297,7 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   have hNR2 := loopNr_piop_at hx hs j r (jj := 2) (by omega)
   have hpos2 : 0 < (q₀.coins[2]!).size := by
     rw [(hcoins 2 (by omega)).1, hNR2]
-    unfold piopN _root_.Flock.Firewall.Frames.COIN_MAX
+    unfold piopN _root_.Flock.ZkServer.Frames.COIN_MAX
     split_ifs <;> omega
   have hz2 : padCoin Q.coins 2 0 =
       (Masked.zcE (finS.pad (K := refK x) (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) j r).z := by
@@ -310,18 +310,18 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     rw [hLayT, hfa, hR1, hz2]
     exact hC ν (finS.pad (K := refK x) (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) t j hout r
   -- the inner proof's rounds the request holds count the plan's
-  have hpl : ∀ i < 4, (_root_.Flock.Firewall.Session.repPlan spec (Masked.stAt x j)).getD
+  have hpl : ∀ i < 4, (_root_.Flock.ZkServer.Session.repPlan spec (Masked.stAt x j)).getD
       (nSched spec (Masked.stsOf x) (2 * j.val + r.val) + i) 0 =
-      [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].getD i 0 := by
+      [1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].getD i 0 := by
     intro i hi
-    have hle : (Count.consCounts tr.st tr.sch (_root_.Flock.Firewall.Finish.claimsOf Q.xs).size).length ≤
+    have hle : (Count.consCounts tr.st tr.sch (_root_.Flock.ZkServer.Finish.claimsOf Q.xs).size).length ≤
         nSched spec (Masked.stsOf x) (2 * j.val + r.val) + i := by
       rw [hcl]
       omega
     rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, hP', List.getElem?_append_right hle, hcl,
       Nat.add_sub_cancel_left, List.getD_eq_getElem?_getD]
   have hIn : ∀ i < 4, ∀ cs, Q.coins[nSched spec (Masked.stsOf x) (2 * j.val + r.val) + i]? = some cs →
-      cs.size = [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].getD i 0 := by
+      cs.size = [1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].getD i 0 := by
     intro i hi cs hcs
     by_cases hie : i < e
     · have hk : nSched spec (Masked.stsOf x) (2 * j.val + r.val) + i <
@@ -335,7 +335,7 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   have h0 : ∀ cs, Q.coins[nSched spec (Masked.stsOf x) (2 * j.val + r.val)]? = some cs → cs.size = 1 :=
     hIn 0 (by norm_num)
   have h1 : ∀ cs, Q.coins[nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 1]? = some cs →
-      cs.size = _root_.Flock.Firewall.Session.INNER_CONS := hIn 1 (by norm_num)
+      cs.size = _root_.Flock.ZkServer.Session.INNER_CONS := hIn 1 (by norm_num)
   have h2 : ∀ cs, Q.coins[nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 2]? = some cs → cs.size = 1 :=
     hIn 2 (by norm_num)
   have h3 : ∀ cs, Q.coins[nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 3]? = some cs →

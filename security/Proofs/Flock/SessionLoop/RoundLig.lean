@@ -40,7 +40,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace Loop
 
@@ -280,7 +280,7 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
     (Array.replicate (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len 0)
     r.val (Masked.zkTab x j).tPad tb.extra tb.lanePad
-    (fun l => _root_.Flock.Firewall.Finish.saltAt (his.getD (l - 1) ByteArray.empty)) (fun _ _ => 0)
+    (fun l => _root_.Flock.ZkServer.Finish.saltAt (his.getD (l - 1) ByteArray.empty)) (fun _ _ => 0)
     ((Masked.swSrcE x (Loop.finCoins x ops) w (vs x w ν (Loop.finCoins x ops) (Loop.finS.seenOf x t)) t j.val).rep r.val) t₃ tr₂ l₃ l₂
     hsz hk0 hsn hlv
     (fun ha hb => by
