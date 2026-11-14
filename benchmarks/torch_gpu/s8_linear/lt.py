@@ -5,6 +5,7 @@ torch._int_mm's) and times them, and keeps the fastest. Graph-capturable: one 32
 from __future__ import annotations
 
 import ctypes as C
+import sys
 from functools import cache
 
 import torch
@@ -117,14 +118,14 @@ class Plan:
                              WORKSPACE, torch.cuda.current_stream().cuda_stream), "cublasLtMatmul")
 
     def __del__(self) -> None:
-        try:
-            L, _ = lib()
-            L.cublasLtMatmulPreferenceDestroy(self.pref)
-            for lay in (self.a, self.b, self.c):
-                L.cublasLtMatrixLayoutDestroy(lay)
-            L.cublasLtMatmulDescDestroy(self.desc)
-        except Exception:  # noqa: BLE001 - interpreter shutdown
-            pass
+        # at interpreter shutdown the library may be unloaded already; the process's exit frees the handles
+        if sys.is_finalizing():
+            return
+        L, _ = lib()
+        L.cublasLtMatmulPreferenceDestroy(self.pref)
+        for lay in (self.a, self.b, self.c):
+            L.cublasLtMatrixLayoutDestroy(lay)
+        L.cublasLtMatmulDescDestroy(self.desc)
 
 
 def config(h: Heuristic) -> dict:
