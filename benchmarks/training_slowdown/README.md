@@ -115,7 +115,10 @@ n³ MACs a matrix and not as the gates of the algorithm that computes it, the ro
 that count is. Below the rows it prints each statement with what it rests on, each entry's planned run at its
 slowdown (the config's steps times the traced step's gates) as a share of one datacenter's and of the world's compute
 over a window, a week, a month and a year, and which parts are traced, approximated, proved, premises and scaled;
-`--out` writes all of it to `DIR/library.json`. A row has no slowdown, and says why, where the capture
+`--out` writes all of it to `DIR/library.json`, and on a run of every entry at the registered starts also the least
+slowdown of the entries that have one into the run's result, under the metric `metrics.toml` declares (`library.write_metric`:
+partial where an entry has none). Run by its path from the repository's root, as that metric's command does, it is the
+same command. A row has no slowdown, and says why, where the capture
 refuses the step, where the bound can't read it, and where the entry's E keeps less than the trained weights: a
 weight then costs at most E's bits a trained weight, which only a run's record has, so the grade reads that entry.
 
