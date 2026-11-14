@@ -1622,8 +1622,8 @@ elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or 
   # served node's serve dir is what the cases' blobs are rebased from, and the copy holds files, no link out of it
   [[ ${K:-} =~ ^[0-9]+$ ]] \
     || { say "PREFLIGHT: the compose follow-on reads the window's files in the copy, and the hand-off's K, ${K:-(none)}, is not a window's number"; exit 3; }
-  [[ ${SAMPLED_AUDIT:-sampled-proofs-served} =~ ^(sampled-proofs-served|v3c-w[0-9]+-[0-9-]+/audit)$ ]] \
-    || { say "PREFLIGHT: the compose follow-on reads the record's sampled proofs in the copy, and the hand-off's SAMPLED_AUDIT, $SAMPLED_AUDIT, is neither sampled-proofs-served nor v3c-w<K>-<class>/audit"; exit 3; }
+  [[ -z ${SAMPLED_AUDIT:-} || $SAMPLED_AUDIT =~ ^[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$ ]] \
+    || { say "PREFLIGHT: the compose follow-on reads the record's audit in the copy, and the hand-off's SAMPLED_AUDIT, $SAMPLED_AUDIT, is no path inside it (a relative path, no part of it starting with a dot)"; exit 3; }
   [ -n "${SERVED_DIR:-}" ] \
     || { say "PREFLIGHT: the compose follow-on rebases the cases' blobs from the served node's serve dir, which the hand-off doesn't name (SERVED_DIR)"; exit 3; }
   link=$(find "$D" -type l -printf '%P\n' -quit)

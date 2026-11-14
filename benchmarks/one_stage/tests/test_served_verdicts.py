@@ -4616,15 +4616,16 @@ def _forged(tmp_path: Path, f: str, body: str) -> None:
 @pytest.mark.parametrize("setting, value, line", [
     ("K", "7/../..", "PREFLIGHT: the compose follow-on reads the window's files in the copy, and the hand-off's K, "
      "7/../.., is not a window's number"),
-    ("SAMPLED_AUDIT", "../elsewhere", "PREFLIGHT: the compose follow-on reads the record's sampled proofs in the copy, "
-     "and the hand-off's SAMPLED_AUDIT, ../elsewhere, is neither sampled-proofs-served nor v3c-w<K>-<class>/audit"),
+    *(("SAMPLED_AUDIT", a, "PREFLIGHT: the compose follow-on reads the record's audit in the copy, and the hand-off's "
+       f"SAMPLED_AUDIT, {a}, is no path inside it (a relative path, no part of it starting with a dot)")
+      for a in ("../elsewhere", "v3c-x/../../elsewhere", "/elsewhere")),
     ("SERVED_DIR", "''", "PREFLIGHT: the compose follow-on rebases the cases' blobs from the served node's serve dir, "
      "which the hand-off doesn't name (SERVED_DIR)"),
 ])
 def test_a_compose_follow_on_refuses_a_setting_that_would_point_its_reads_outside_the_copy(tmp_path, setting, value,
                                                                                          line):
     """Every path the compose follow-on reads is a file of the copy it received: a window K that isn't a number, a
-    record's audit other than step 3's or V3c's in the serve dir, and no served serve dir to rebase the cases' blobs from
+    record's audit that is no path inside the serve dir, and no served serve dir to rebase the cases' blobs from
     (where they would be read as the prover wrote them) each refuse the hand-off before anything is composed."""
     assert _handed(tmp_path).returncode == 0
     env = "private/compose/compose.env"
@@ -4644,7 +4645,7 @@ def test_a_compose_follow_on_refuses_a_case_blob_that_isnt_a_file_of_the_copy(tm
     the compose once the copy is held to its sums, before the record or the composite reads anything."""
     assert _handed(tmp_path).returncode == 0
     d = tmp_path / "serve"
-    case = "sampled-proofs-served/window/case-v2.json"
+    case = f"{STEP3}/window/case-v2.json"
     _forged(tmp_path, case, json.dumps({"blobs": [str(d / BLOBS[0]), blob.format(d=d)]}) + "\n")
     rc, lines, order = _compose(tmp_path)
     assert (rc, lines[1:], order) == (3, [
