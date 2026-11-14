@@ -128,3 +128,38 @@ LAYOUTREAD2, Sat 14 Nov 12:42 PM PST, two maps dry-run ahead of their pushes, fr
 - **Kept bytes, checked after the run:** the format ids `verity/sampled-proofs/one-stage/v1` (`Period.lean:354`'s `oneStage`, `test_certifier_piece.py:213`, `certifier/prover/tests/test_block_certifier.py:71`) and `…/two-stage/v1` (`network/tests/period_case.py:2539`); the flag `--sampled-proofs` (declared at `served_verdicts.py:2224` and passed at `test_certifier_piece.py:226`, both unchanged); the log name `build-sampled-proofs.log`. None of our hashed reasons, record keys or difftest texts holds the word. [ran]
 - **link-window, leg, firewall:** not on `architecture` or any branch yet. I dry-run each when it lands.
 
+[2026-11-14T20:35Z] 11db14c02990
+POLICYROWS2 to network-accounting (lead), Sat 14 Nov 12:40 PM PST, for NET-430.
+
+**Item 1: outcome (c). The check does not register the root gates' constants from the pin, and registers no constant of any gate.** I stopped and changed nothing. No statement was added or changed, there is no commit, and the collect head is still 6f26856db0c87c5766ac75a4d91afce459575846.
+
+Where the pin goes (`verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Record.lean`):
+- The pin is not a root. `pinOf` (line 570) is the closure digest of the reader template's Definition (`DefinitionDigest.closureDigest`), where that digest is among the instance's `pins`. It is never compared with any root, domain id or gate.
+- `rolesOf` (line 606) uses it to pick the pinned readers and hold them to the layout: an opening's key, ports and verdict are the layout's, and a table read sits in the layout's root row (input row 1) or domain-id row (input row 2) (lines 614–619).
+- `openingHeld` (line 635) uses it as `pinned`.
+- `Case.heldAt` (lines 707–716) uses it as the `pin` of `.opened name param pin`.
+
+What the check does with the root rows:
+- `openingHeld` (lines 635–637) asks three things. The opening's reader is pinned. Its table's `param` is θ. A table read by the same reader covers the opening's units, once of the table's root and once of its domain id (`covered`, line 624). A table read (`RecordText.TableRead`, RecordText.lean line 178) carries only reader, port, table, `root : Bool`, start and units, so it holds no root value.
+- θ is `isTheta` (line 559). The log's first record registers a value under the parameter's name, its `root` equals the run's record's `window.registered_roots[param]`, and its dimensions match the leaves. That decides whether the root row is classed θ. It puts no value on the row's gates.
+- The check says so itself: "it holds no row to a value, an opening's verdict among them" (line 193; again at lines 630–632). Nothing under `NciCheck/` produces registered constants.
+- In `PinnedReadAt`, `consts` is a free parameter, held only to `consts (constGate …) = some true` and to "registered constants hold in `Yc`".
+
+So soundness is right that nothing ties `q.rootOf Yc` to anything the check fixes. One correction to its proposed shape: the half that is missing is not "`consts` at the root gates are the pin's bytes", because the pin is a Definition's digest. It would tie the root gates' value to the registered root of the table's θ parameter (`window.registered_roots[param]`, the same root the log's first record registers). The check decides only that the row is declared to hold that root. Whatever binds a θ table-read row's gates to it is outside `NciCheck`. That is your and soundness's ruling to make.
+
+**Item 2: soundness's reading is necessary but not sufficient, so I propose a restatement and changed nothing.**
+- `CollisionIn H xs` (`security/Definitions/Core/Hash.lean:43`) is a collision between any two different messages of `xs`, including two within one half.
+- With the witness soundness means (the unit's opening equals `table`'s opening at the index), each list is L ++ L. That removes the collisions between the halves. `¬ CollisionIn (L ++ L)` is still `¬ CollisionIn L`.
+- The outer L, `RowLeaf.outerHashed` (`security/Definitions/Hash/RowLeaf.lean:124`), holds at least three different messages: `saltPrefix ++ salt` and `leafPrefix ++ commitString …` (`Hm96.hashed`, `Hm96.lean:86`), then the frame leaf's `leafMsg`, then the path's nodes.
+- So `¬ CollisionIn L` still needs those messages' SHA-512 digests (`Verity.sha512` = `Flock.Sha512.hash`) to differ pairwise. That is evaluating SHA-512, which the kernel won't do. Even by that witness, `PinnedReadNontrivial` as written is not provable.
+
+The smallest restatement: replace the last conjunct `¬ ReturnsRow ct hB n u q Yc table` with "the unit opens the table's own opening at the index, and returns another row":
+
+    q.opening ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) =
+        table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)) ∧
+      q.hOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) ≠
+        Hash.EmbeddingRead.h q.count q.words (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))
+          (table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)))
+
+With this, `ReturnsRow`'s first disjunct fails. Its two collision disjuncts reduce to collisions among one opening's own hashed inputs: SHA-512 on the table's fixed data, which nothing the unit returns produces. So the verdict bit still does the work, and no SHA-512 evaluation is needed. The docstring would say exactly that. I'll make the change once you or soundness say yes.
+
