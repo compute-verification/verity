@@ -1,8 +1,8 @@
-# The registration log's check (`Core.Registration`, `verity/registration/log/v1`) as a core protocol, and the executable
-# its difftest drives. It requires the interface every core protocol implements (`core_protocol`), whose Site it reads,
-# and through it the base packages.
+# The registration log's check (`Core.Registration`, `verity/registration/log/v1`) as a core protocol, the executable
+# its difftest drives, and the Site's port (`site-difftest`). It requires the interface every core protocol implements
+# (`core_protocol`), whose Site it reads, the difftest harness, and through them the base packages.
 name = "core_registration"
-defaultTargets = ["RegistrationLog", "core-registration"]
+defaultTargets = ["RegistrationLog", "core-registration", "site-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -13,9 +13,18 @@ backward.proofsInPublic = true
 name = "core_protocol"
 path = "../../../../interface"
 
+[[require]]
+name = "verity_difftest"
+path = "../../../../../circuits/difftest"
+
 [[lean_lib]]
 name = "RegistrationLog"
 
 [[lean_exe]]
 name = "core-registration"
 root = "RegistrationLog.Main"
+
+# The Site's port (`CoreProtocol.Site`), which `tests/test_site_difftest.py` holds to `verity.device`.
+[[lean_exe]]
+name = "site-difftest"
+root = "RegistrationLog.SiteDifftestMain"

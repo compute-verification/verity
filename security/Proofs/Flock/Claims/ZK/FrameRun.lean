@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.ZK.FrameState
 /-!
 # The frame's fold over its requests
 
-The session loop drives each rep's frame on one schedule of requests (`Flock.Firewall.Drive.reqs`), each a pure step of
+The session loop drives each rep's frame on one schedule of requests (`Flock.ZkServer.Drive.reqs`), each a pure step of
 the rep's state (`Frame.step`), folded by `Frame.run` up to the first answer that ends the rep. These are the fold's and
 the step's equations that the loop's release reads:
 
@@ -19,7 +19,7 @@ the step's equations that the loop's release reads:
 
 @[expose] public section
 
-namespace Flock.Firewall.Frame
+namespace Flock.ZkServer.Frame
 
 /-- **The fold over two lists of requests**: over `qs`, then, where that did not end the rep, over `rs` from its state. -/
 theorem run_append (c : Cfg) : ∀ (st : State) (qs rs : List Req),
@@ -86,4 +86,4 @@ theorem answer_of_step {c : Cfg} {st st' : State} {cs : Array F128} (h : step c 
     cases h
     rfl
 
-end Flock.Firewall.Frame
+end Flock.ZkServer.Frame

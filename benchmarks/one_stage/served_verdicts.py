@@ -683,7 +683,7 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
 
 def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
-    templates, its scope's op path and law), which members it drew, and the row with no length of the advice
+    templates, its scope's op path and sampling design), which members it drew, and the row with no length of the advice
     (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
     scope's ``steps``, the window's engine steps, stay on the node too."""
     row = {k: v for k, v in records.items() if k != "population"}
@@ -1485,7 +1485,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     can't be read; the record holds the verdict to W, `pearlplus_of_record`), and why it credits nothing by itself names
     the Pearl-C period the epoch's live salt session joined (`pearlplus_why_tied`, or `PEARLPLUS_WHY_TIED_IN_PROCESS`)."""
     import served_shares as SS
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
     out.mkdir(parents=True, exist_ok=True)
     reasons = []
@@ -1611,7 +1611,7 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
 
 def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
     """Sampled proofs' row from the records audit kept under ``audit_dir`` (module docstring)."""
-    import served_integrity as SI
+    from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI
 
     reg = audit_dir / WINDOW_REGISTRATION
     try:

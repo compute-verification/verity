@@ -105,7 +105,7 @@ recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints t
    `placement.toml`'s `COMMIT_RUN` names the Commit whose traced Build the endpoint's Build of record is held to.
 2. `verity demo vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
 3. `verity demo vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed execution
-   phase in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
+   phase in the serve dir, for an audit of one later (`verity/protocols/proofs/spot/prover/audit/prove_path.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run

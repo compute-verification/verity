@@ -32,7 +32,7 @@ from verity.protocols.proofs.spot.verifier.profile import (Bernoulli, IntegrityP
                                           WorkStratum)
 
 from .draw import check_draw, check_proved, law_of
-from .registration import PROTOCOL, digest as registration_digest
+from verity.protocols.proofs.spot.verifier.one_stage.docket import PROTOCOL, digest as registration_digest
 
 FORMAT = "verity/one-stage/audit/v0"
 PROFILE = "verity/integrity-profile/v1"
@@ -71,7 +71,7 @@ def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
 
 
 def design(law: Mapping[str, Any]) -> SamplingDesign:
-    """The sampling design of a well-formed law or sample (`check_draw`'s), as the profile writes it (Lean
+    """The sampling design of a well-formed sampling design or sample (`check_draw`'s), as the profile writes it (Lean
     `Core.SamplingDesign.ofFlock`): each stratum named by its template, its size its ranges' total, and a work sampling design's
     `Work` with its works and floors."""
     if law["law"] == "subset":

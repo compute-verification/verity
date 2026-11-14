@@ -123,7 +123,7 @@ difftest only.
 | The round coins | `core_check.rounds` | `roundsCheck` (`rounds`) | `rounds_twin` |
 | The sample | `credit.drawn` | `Credit.drawn` (`drawn`) | `drawn_twin` |
 | A period's presented roots | `credit.period` | `Credit.periodRoots`, a stub that refuses everything | `period_twin` |
-| A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
+| A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCMonitoringPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
 | Passes credited together | `credit.passes_distinct` | Pearl+'s `PearlPlus.passesDistinct` (`passes-distinct`) | `passes_distinct_twin` |
 
 Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
@@ -151,7 +151,7 @@ execution phase:
 How it is run: the difftests run the Lean against the Python on generated cases
 (`uv run tools/verity/check/suites.py verity/protocols/accounting/pouw/verifier/lean/check`, and likewise `lean/window` and
 `lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside SPOT's
-(`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
+(`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
 
 ## Schemes

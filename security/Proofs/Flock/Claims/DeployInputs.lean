@@ -61,7 +61,7 @@ agreement on `--zk` that C's `scope_iff` and `scopeMatches` take.
 `Ins.setup` is `verifyCmd`'s `setupOf` at the statement's sample, with no recursive input and no `--identifier`: the
 session's statement (`Stmt.setupTables`), each table's registered reads (`checkRegistered`) and the identifier's absence
 (`checkIdentifier` without `--identifier`), `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk` under `--zk`,
-`RecCoins.check`, `RecVStar.checkPubRows`, and the sample's law (`ProvedScope.drawLaw`). It refuses a statement without
+`RecCoins.check`, `RecVStar.checkPubRows`, and the sample's sampling design (`ProvedScope.drawLaw`). It refuses a statement without
 hm96-sha512 rows, which `verifyCmd` sets up on its compression circuit and then always refuses (such a session has no
 sample, `drawLaw zk tags false none`); the deployed form does not carry `--comp`.
 -/

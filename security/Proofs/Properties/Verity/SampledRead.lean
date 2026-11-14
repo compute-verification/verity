@@ -36,9 +36,9 @@ digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask 
   `releasedRootsOf_pairsOk`, `treesHeld_records`), so it meets the sample's ask with no premise.
 * **v2's case** (`caseOf_of`): in an accepted composition the case `caseOf` finds under v2's id is the one v2 accepted,
   since the composite's components have distinct ids (`components_nodup`).
-* **The session's law** (`law_of_setsUp`, `coupled_draw_setsUp`, `coupled_draw_coins_setsUp`): v2's parameters in the
+* **The session's sampling design** (`law_of_setsUp`, `coupled_draw_setsUp`, `coupled_draw_coins_setsUp`): v2's parameters in the
   parameters sent are those its case accepted (`paramsAt_case`), so at the session v2 sets up on them (`SetsUp`) the
-  sample's law is the session's wherever its population is (`lawAt_of_lawOf`), and the sample's piece of `CouplingTarget`
+  sample's sampling design is the session's wherever its population is (`lawAt_of_lawOf`), and the sample's piece of `CouplingTarget`
   needs only the population.
 * **The session's population** (`popHeld_of_checkBlobsAt`, `popOk_of_popHeld`, `n_of_popOk`, `n_of_popTied`,
   `coupled_draw_tied`, `coupled_draw_coins_tied`): v2 refuses a record whose population isn't its program's proof
@@ -793,7 +793,7 @@ theorem single_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
     (hone : OneStatement s.params) : p.members = none :=
   hone p (caseOf_params (caseOf_of hS hcase hacc.1 hacc.2.1 hacc.2.2.1))
 
-/-! ## The session's law -/
+/-! ## The session's sampling design -/
 
 /-- **v2's parameters in the parameters sent are the ones its case accepted**, in a composition composite `k`
 accepted. -/
@@ -813,7 +813,7 @@ theorem lawAt_of_lawOf {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneS
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The session's law is the sample's** where the session's population is: at the session `A` v2 sets up on the
+/-- **The session's sampling design is the sample's** where the session's population is: at the session `A` v2 sets up on the
 parameters `θ` (`SetsUp`), a sample v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
 units, ran under `A.design`. -/
 theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
@@ -826,7 +826,7 @@ theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A
   rw [paramsAt_case hS hcase hacc hp', hn, lawAt_of_lawOf hL] at hlaw
   exact (Except.ok.inj hlaw).symm
 
-/-- **The sample's piece of `CouplingTarget` at the session v2 sets up**: `coupled_draw`, with the session's law read
+/-- **The sample's piece of `CouplingTarget` at the session v2 sets up**: `coupled_draw`, with the session's sampling design read
 off `SetsUp` on the play's parameters. -/
 theorem coupled_draw_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))

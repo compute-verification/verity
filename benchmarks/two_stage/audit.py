@@ -44,7 +44,7 @@ those reads (the interior's at the interior record and the links' boundary ports
 (``proofs.json``, and each template's reference statement under ``references/m<k>/``), both windows (``boundary/``,
 ``interior/``, their private files too), a5's records (``audit/``, the run's statement and verdicts in its
 ``case.json``), the challenger session's records (``challenger/``), both stages' coin evidence and the coins each read
-(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, laws
+(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, sampling designs
 and samples, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
 copies it reads them against (``guard/``, `guard.export`).
 
@@ -66,10 +66,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
-import a5_coins as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
-import two_stage as TS  # noqa: E402
+from verity.protocols.proofs.spot.device import two_stage as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
