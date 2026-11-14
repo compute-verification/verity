@@ -63,21 +63,26 @@ lowrisk_lane = true
 lowrisk_per_tick = 20
 # what keeps a change off the low-risk lane: a directory from the root (ending in `/`), one file by its path from the root (a
 # `/` before its end), or a file name glob (no `/`: any directory).
-# Lean, its locks and Lake files, the trusted hashes, the verifiers, and the soundness-path Python (AGENTS.md's soundness
-# path); and the guards that hold everything else to those rules: the Lean check (tools/verity/lean/), the
+# Lean, its locks and Lake files, the trusted hashes, the verifiers and the trusted places of tests/import_order.toml with
+# their tests, and the soundness-path Python (AGENTS.md's soundness path); the auditor's devices (every `device/`: the
+# network certifier, the memory challenger, the challenger service and the verifier's auditor host) and what an auditor
+# host runs as `auditor` from its pinned tree outside them (the certifier and warden rehearsals' programs and the files
+# they load, the checkpoint manifest the challenger's model registry reads); and the guards that hold everything else to
+# those rules: the Lean check (tools/verity/lean/), the
 # whole-tree invariants (root tests/: the import order and its listing, verifier cost), the check and this file
 # (tools/verity/check/), the graph lister that lists the executor's gating tasks (tools/verity/graph/), the merge drivers
-# (.gitattributes), and the landing rules themselves (queue.py; drive.py matches no file); and what
+# (.gitattributes), and the landing rules themselves (queue.py); and what
 # runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
 # the move scripts and maps the loop runs and certifies a move against (tools/move/), the agent guard and its hooks
 # (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
-                    "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/", "verity/ml/crypto/", "verity/ml/randomness/",  # as a branch based below the layout names them: the verified queue reads a PR's own diff
-                    "verity/core/", "verity/claims/", "verity/runtime/", "verity/configuration/wire/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "verity/hardware/site/", "verity/protocols/interface/world/", "record.py", "registration.py", "verity/protocols/accounting/certifier/device/", "verity/protocols/accounting/certifier/verifier/", "verity/protocols/proofs/flock/sigma/", "verity/protocols/proofs/flock/verifier/", "verity/protocols/policy/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/compose/verifier/onsite/", "verity/protocols/accounting/poub/verifier/", "verity/protocols/accounting/pous/device/", "tools/pous_grader/", "verity/protocols/accounting/pous/verifier/", "verity/protocols/accounting/pouw/verifier/", "verity/protocols/proofs/recursion/verifier/", "verity/protocols/compose/verifier/remote/", "verity/protocols/compose/verifier/lean/", "verity/protocols/proofs/spot/", "verity/protocols/tests/", "reporting.py",
-                    "verity/runtime/", "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py",
+                    "verity/claims/", "verity/runtime/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "verity/protocols/interface/world/", "record.py", "registration.py", "verity/protocols/accounting/certifier/device/", "verity/protocols/accounting/certifier/verifier/", "verity/protocols/proofs/flock/sigma/", "verity/protocols/proofs/flock/verifier/", "verity/protocols/policy/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/compose/verifier/onsite/", "verity/protocols/accounting/poub/verifier/", "verity/protocols/accounting/pous/device/", "tools/pous_grader/", "verity/protocols/accounting/pous/verifier/", "verity/protocols/accounting/pouw/verifier/", "verity/protocols/proofs/recursion/verifier/", "verity/protocols/compose/verifier/remote/", "verity/protocols/compose/verifier/lean/", "verity/protocols/proofs/spot/", "verity/protocols/tests/",
+                    "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py", "verity/tests/",
+                    "verity/protocols/compose/device/", "verity/protocols/accounting/poub/device/", "adapters/vllm/manifests/checkpoints-int8.json",
+                    "benchmarks/network_traces/certifier_serve.py", "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/active_replay.py", "benchmarks/network_traces/connection_rows_run.py", "benchmarks/network_traces/covert.py", "benchmarks/network_traces/load_commit.py", "benchmarks/network_traces/record.py", "benchmarks/network_traces/replay.py", "benchmarks/network_traces/stall_probe.py",
                     "__init__.py",
-                    "verity/circuits/", "verity/definitions/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/", "verity/circuits/kernels/", "verity/commitments/", "verity/definitions/commitments/", "adapters/vllm/verity_vllm/commitments/", "adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
-                    "tools/verity/lean/", "tests/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes", "drive.py",
+                    "verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/", "verity/circuits/kernels/", "verity/commitments/", "adapters/vllm/verity_vllm/commitments/", "adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
+                    "tools/verity/lean/", "tests/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes",
                     "queue.py",
                     "infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
 # count a ready mark or land verdict only when its `label_auth` label authenticates it as its author's, a Cursor identity token
