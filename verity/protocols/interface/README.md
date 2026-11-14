@@ -130,7 +130,7 @@ registered compiler and the days' registered circuits, `View.declared?`, at the 
 `core-registration` executable) takes the auditor's parameters (`{"auditor", "composite"}`, the auditor the Site's
 `Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
 evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
-ASCII without DEL as `Core.canonicalJson` does. `verity.hardware.registration` is its Python, held to it by the
+ASCII without DEL as `Core.canonicalJson` does. `verity.protocols.accounting.registration.verifier.registration` is its Python, held to it by the
 composition suite's difftest (`../compose/verifier/lean/tests/test_registration_difftest.py`).
 
 ## What a protocol accounts for (`CoreProtocol/Account.lean`)
