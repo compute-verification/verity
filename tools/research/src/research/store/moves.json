@@ -3203,6 +3203,11 @@
         "adapters/vllm/tests/program/test_train_step.py": "adapters/torch/tests/frontend/test_train_step.py",
         "adapters/vllm/tests/program/train_step_lf.py": "adapters/torch/tests/frontend/train_step_lf.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py": "adapters/torch/verity_torch/dsa_table.circuit-check.py"
+      }
     }
   ]
 }
