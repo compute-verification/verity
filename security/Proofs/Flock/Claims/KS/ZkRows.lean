@@ -158,7 +158,7 @@ local notation "𝔽" => FlockLevel3.GF128
 theorem zk_rep_rows {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (bytes : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
+    (bytes : ByteArray) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
@@ -171,7 +171,7 @@ theorem zk_rep_rows {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T
     (ho : ∀ j, (out.opens.rows r.val 0 j).1 = zp.proof.ligerito.initialProof.rows[j]!.toList.map fOf) :
     (ZkLink.slotOpensZ out r.val 0 (lvOf T.sch 0).queries).map (fun x => (x.1, x.2.1)) =
       Claims.Flock.zkRepRowsOf (shapeZK st sch extras) rounds bytes := by
-  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨-, -, -, -, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨-, h2, -, -⟩ := hdim
   obtain ⟨pend', hp', -, hreqs, R, rest, hR, hl, hpos⟩ :=
     zk_rep_reqs Hs T pts r st sch tPad extras zp rounds dom tr hsch hseam hlen hext hwf hrun hk
@@ -193,7 +193,7 @@ first level-`ℓ` request is the `ℓ`-th after level 0's, at the positions of r
 theorem zk_rep_rowsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (bytes : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
+    (bytes : ByteArray) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
@@ -208,7 +208,7 @@ theorem zk_rep_rowsL {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (
     (ℓ : ℕ) (h1 : 1 ≤ ℓ) :
     (ZkLink.slotOpensZ out r.val ℓ (lvOf T.sch ℓ).queries).map (fun x => (x.1, x.2.1)) =
       FlockDeploy.KS.zkLevelRowsOf (shapeZK st sch extras) rounds bytes ℓ := by
-  obtain ⟨-, -, -, -, -, -, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨-, -, -, -, -, -, hlv, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨pend', hp', -, hreqs, R, rest, hR, hl, -, hlenR, hlatR⟩ :=
     zk_rep_reqsL Hs T pts r st sch tPad extras zp rounds dom tr hsch hseam hlen hext hwf hrun hk
   have he := plays_det hp hp'
@@ -261,7 +261,7 @@ theorem zk_table_rows₀Z {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Re
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (h0 : Zk.verifyRep spec st sch tPad sess i 0 b₀ = .ok c) (h1 : Zk.verifyRep spec st sch tPad sess i 1 b₁ = .ok c)
@@ -317,7 +317,7 @@ theorem zk_table_rowsLZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg 
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (h0 : Zk.verifyRep spec st sch tPad sess i 0 b₀ = .ok c) (h1 : Zk.verifyRep spec st sch tPad sess i 1 b₁ = .ok c)
@@ -382,7 +382,7 @@ theorem zk_table_padsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg �
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (htab : ZkTabLay (T S R) st sch) (hfold : FoldRealizes st.fold (T S R).S)
     (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
@@ -439,7 +439,7 @@ theorem zk_table_capsZ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg �
     (S : Finset (Fin n)) (R : Reg) (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup)
     (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray) (N : ℕ)
     (hN : (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts).length = N)
-    (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
+    (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam (T S R) st sch tPad)
     (hext : ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts))
     (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (h0 : Zk.verifyRep spec st sch tPad sess i 0 b₀ = .ok c) (h1 : Zk.verifyRep spec st sch tPad sess i 1 b₁ = .ok c)
@@ -500,7 +500,7 @@ def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : 
   ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord) (sch : Flock.Schedule) (tPad : ℕ)
     (s₀ s₁ : StreamRec) (h : j < sts.size),
     FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
-    Zk.schedule sts[j].m = .ok (sch, tPad) ∧
+    Zk.schedule sts[j].wideLeaf sts[j].m = .ok (sch, tPad) ∧
     sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
     sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
     (opens₀Z T.sch out).map (fun x => (x.1, x.2.1)) =
@@ -551,7 +551,7 @@ theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Fins
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ _ht j.val
   obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
@@ -725,7 +725,7 @@ theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false)
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, cap, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
   obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
@@ -878,7 +878,7 @@ theorem decodesTableR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT :
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (o₀ : LiveOutJ (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length spec.mPts)
@@ -908,7 +908,7 @@ theorem decodesTableHR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT 
     (dj : Finset (Fin n) → Lean.Json) {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj ∅)) = .ok (spec, sts)) (hshape : sts.forM Flock.Zk.shapeOk = .ok ())
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (o₀ : LiveOutJ (tabsJ sts.size (zkTabs h0 L hz hk hlay)).length spec.mPts)
@@ -943,7 +943,7 @@ theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d)
@@ -980,7 +980,7 @@ theorem decodesTableR_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {d : Lean.Json} (hd : ins.read.draw = some d)

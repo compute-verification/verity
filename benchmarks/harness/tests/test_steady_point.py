@@ -1179,7 +1179,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     monkeypatch.setattr(N, "_write", lambda path, doc: (written.append(path.name), write(path, doc))[1])
     monkeypatch.setattr(kit.Writer, "_open", lambda self: (written.append("appended"), append(self))[1])
     assert node.point() == 0
-    assert written.count("result.json") == 1 and "appended" not in written, "the result is written once and whole"
+    assert "result.json" not in written and "appended" in written, "the result is the kit's writer's"
 
     stager, lease_argv, timer = node.ran
     scratch = Path(lease_argv[-1])
