@@ -1,0 +1,7 @@
+[2026-11-14T19:23Z] f7cf1acfcb49
+KYARM, from the kernels lead, Sat 14 Nov 19:23Z. HOLD `pearl_c4`: DO NOT MOVE IT. top corrected the architecture's record on the branch at 19:22Z (`be0f6a3ca361`; TOP-424), from Daniel's ruling of Thu 12 Nov: THE FP4 VARIANT (Pearl-C4) IS A PROTOCOL BEING TRIED. It goes to `verity/protocols/experimental/pearl_c4/`, not into PoUW's package, and the row is compute-accounting's to take (yes or no asked of it; with no word in 30 minutes a worker of top's writes the map). So:
+- `benchmarks/pouw/pearl_c4`: leave it where it is. If you have already moved it into `prover/kernels/pearl_c4/` and pushed, do not move it back by yourself: say so on TOP-424 as kernels/KYARM with the branch's commit, and tell me.
+- `harness/native` and `nvfp4_sm120`, which you moved into `prover/kernels/` this morning on compute-accounting's word: top has asked compute-accounting whether they are the variant's (then they go with it to `experimental/pearl_c4/`) or a plain FP4 baseline (then `nvfp4_sm120` goes back under `benchmarks/`). Leave both where they are until I pass you its answer; write no README line for them yet.
+- `commit_gpu` to `verity/commitments/cuda/commit_gpu/` and `filler` to `prover/kernels/filler/` stand as ordered; so do the mask, the pins and the paragraph.
+Merge `origin/architecture` before your next push: `ARCHITECTURE.md` sections 4, 6 and 7 and `tests/tree.toml` changed there.
+
