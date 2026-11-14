@@ -52,11 +52,15 @@ cr, n2, LG = _load("chain_record"), _load("n2_zk"), _load("leak_guard")
 
 def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
     """The synthetic network certifier run in the gate's layout, under the network certifier key ``seed`` makes: its
-    files under ``witness/``, and under ``out/`` what the gate publishes of them (`auditor.warden_outcome`)."""
+    files under ``witness/`` with the check the runner writes there, which accepts it, and under ``out/`` what the
+    gate publishes of them (`auditor.warden_outcome`), its lines among them."""
     run = published(d / "flat", seed=seed)
     (d / "gate" / "out").mkdir(parents=True)
     shutil.copytree(run, d / "gate" / "witness")
-    G.warden_outcome(d / "gate" / "out", d / "gate" / "witness")
+    (d / "gate" / "witness" / "check.json").write_text(json.dumps(WC.RC.check(d / "gate" / "witness")))
+    outcome = G.warden_outcome(d / "gate" / "out", d / "gate" / "witness")
+    assert outcome["verdict"]["accepted"] is True, "the gate publishes a run's lines only when its check accepted"
+    assert "unruled" not in outcome, "a run's own lines are in the forms the gate publishes them in"
     return d / "gate"
 
 
@@ -129,9 +133,10 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
 
 def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path)
-    got = WC.certificates(run)
-    assert (got["verdict"], got["why"], got["certified_windows"], got["windows"]) == ("accepted", None, sz.W63.windows,
-                                                                                    sz.W63.windows)
+    got, private = WC.checked(run)
+    assert got == WC.certificates(run) and not set(WC.WITNESS_KEYS) & set(got) and set(private) == set(WC.WITNESS_KEYS)
+    assert (got["verdict"], got["why"], got["windows"]) == ("accepted", None, sz.W63.windows)
+    assert (private["certified_windows"], private["issuer_refused"], private["problems"]) == (sz.W63.windows, [], 0)
     assert got["public_is_the_records"] is True and got["clock_certificates"] == 0 and got["sync_bits"] == 0.0
     assert got["warden_run"] == "00" * 32 and got["warden_check"]["accepted"]
     io = WC.io(run)
@@ -161,35 +166,81 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     path.unlink()
     for b in [RF.pack_record(type(rec)(rec.link, rec.window, tuple(map(tuple, grid)), rec.status)), *blobs[1:]]:
         bf.write_blobs(path, b)
-    got, check = WC.certificates(run), WC.RC.check(run / "witness")
-    assert got["verdict"] == "refused" and got["rows"][0]["certified"] is False
+    (got, private), check = WC.checked(run), WC.RC.check(run / "witness")
+    assert got["verdict"] == "refused" and private["rows"][0]["certified"] is False and "rows" not in got
     assert any("responses window 0 isn't certified" in p for p in check["problems"])
-    assert got["warden_check"]["problems"] == len(check["problems"]) and f"{len(check['problems'])} problems" in got["why"]
+    assert got["warden_check"]["accepted"] is False and "problems" not in got["warden_check"]
+    assert got["why"] == WC.REFUSES and private["problems"] == len(check["problems"])
     assert not [p for p in check["problems"] if p in json.dumps(got)]
 
 
 def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
     """Of the network certifier's own check, the certificates step writes the gate's end's verdict, key for key:
-    whether it accepted, how many problems, and the gate's own list of counts (`auditor.WARDEN_COUNTS`, its
-    `cell_rows` cut to `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not
-    written by the chain: the summary's other keys (a connection's bytes before padding, the requests' tokens, the
-    certifier's clocks) stay in the witness, and so does a key the summary gains later. The record's leak guard reads
+    whether it accepted and the gate's own list of counts (`auditor.WARDEN_COUNTS`, its `cell_rows` cut to
+    `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not written by the
+    chain: the check's problems and their number, the summary's counts of the traffic and its other keys (a
+    connection's bytes before padding, the requests' tokens, the certifier's clocks) stay in the witness, and so
+    does a key the summary gains later. The record's leak guard reads
     pieces of 32 bytes and sees no shorter value, so this is held by name."""
     assert (WC.COUNTS, WC.CELL_ROWS) == (G.WARDEN_COUNTS, G.CELL_ROWS), (
         "warden_chain.COUNTS is the gate's list of published counts: rule a key public in auditor.WARDEN_COUNTS "
         "first, then write it here")
+    assert (WC.ACCEPTED_COUNTS, WC.ACCEPTED_CELL_ROWS) == (G.ACCEPTED_COUNTS, G.ACCEPTED_CELL_ROWS), (
+        "the counts only an accepted check's verdict holds are the gate's (auditor.ACCEPTED_COUNTS)")
     run = gate_run(tmp_path)
     check = WC.RC.check(run / "witness")
     got = WC.certificates(run)["warden_check"]
-    assert set(got) <= {"accepted", "problems", *G.WARDEN_COUNTS} and set(got["cell_rows"]) <= set(G.CELL_ROWS)
-    assert {"data_bytes", "completion_tokens", "prompt_tokens", "finish_reasons", "arrival_lag_ms", "clocks",
+    assert set(got) <= {"accepted", *G.WARDEN_COUNTS} and set(got["cell_rows"]) <= set(G.CELL_ROWS)
+    assert {"requests", "ended", "refused", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
+            "data_bytes", "completion_tokens", "prompt_tokens", "finish_reasons", "arrival_lag_ms", "clocks",
             "ticker_stalls", "withheld_windows"} <= set(check["summary"]) - set(got)
     (run / "witness" / "check.json").write_text(json.dumps(check))
     (tmp_path / "end").mkdir()
     assert got == G.warden_outcome(tmp_path / "end", run / "witness")["verdict"]
     later = {"accepted": True, "problems": ["connection 3: its words"],
              "summary": {"requests": 1, "a_later_key": 2, "cell_rows": {"registered": 1, "of": 2, "cost": {"ms": 3}}}}
-    assert WC.verdict(later) == {"accepted": True, "problems": 1, "requests": 1, "cell_rows": {"registered": 1, "of": 2}}
+    assert WC.verdict(later) == {"accepted": True, "cell_rows": {"registered": 1, "of": 2}}
+    refused = {"accepted": False, "problems": ["egress window 1's cells aren't registered"],
+               "summary": check["summary"] | {"certified_windows": 1, "certificates": 5,
+                                              "cell_rows": {"registered": 3, "of": 4, "rows": [600]}}}
+    (run / "witness" / "check.json").write_text(json.dumps(refused))
+    assert WC.verdict(refused) == G.warden_outcome(tmp_path / "end", run / "witness")["verdict"]
+    assert set(WC.verdict(refused)) == {"accepted", "failed", "windows", "cell_rows"}
+    assert WC.verdict(refused)["cell_rows"] == {"of": 4}
+    assert WC.RC.FAILED == G.FAILED, (
+        "relay_check.FAILED is the gate's list of the words its end's `failed` holds (auditor.FAILED): rule a word "
+        "there first, then write it here")
+    worded = {"accepted": False, "problems": [], "summary": {"failed": ["cut", "OSError: a client's own words"]}}
+    assert WC.verdict(worded)["failed"] == ["cut", "error"] == G.failed_words(worded["summary"]["failed"])
+
+
+def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics_in_the_witness(tmp_path,
+                                                                                               monkeypatch):
+    """``chain_record.py certs`` writes ``certs.json`` with only the keys the list of released_keys.json names, on an
+    accepted run and on one the network certifier's own check refuses, and every count of `verdict` the list names;
+    what the step found of the traffic (`warden_chain.WITNESS_KEYS`: which execution phases the signer refused, how
+    many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
+    held any of it would fail the record."""
+    import released_keys as RK
+
+    listing = RK.load().listing("certs.json")
+    assert listing is not None and not RK.load().waits("certs.json")
+    accepted, refused = gate_run(tmp_path / "ok"), gate_run(tmp_path / "cut")
+    check = WC.RC.check
+    monkeypatch.setattr(WC.RC, "check", lambda wit: check(wit) | (
+        {"accepted": False, "problems": ["its words"]} if refused in Path(wit).parents else {}))
+    for run in (accepted, refused):
+        out, witness = run.parent / "certs.json", run.parent / "witness" / "certs" / "certs.json"
+        rc = cr.main(["certs", "--warden-run", str(run), "--out", str(out), "--witness", str(witness)])
+        doc, private = json.loads(out.read_text()), json.loads(witness.read_text())
+        assert (rc, doc["verdict"]) == ((0, "accepted") if run is accepted else (1, "refused"))
+        assert listing.undeclared(out.read_bytes()) == {} and set(private) == set(WC.WITNESS_KEYS)
+        assert not set(doc) & set(private) and private["issuer_refused"] == []
+        assert set(listing.undeclared(json.dumps(doc | private).encode())) == set(WC.WITNESS_KEYS)
+    full = {"accepted": True, "summary": {"failed": ["cut"], "windows": 2, "certified_windows": 2, "certificates": 6,
+                                          "cell_rows": {"registered": 4, "of": 4},
+                                          "load": {"values": 3, "registered": 3, "relayed": True}}}
+    assert listing.undeclared(json.dumps({"warden_check": WC.verdict(full)}).encode()) == {}
 
 
 def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and_field(tmp_path):
@@ -201,7 +252,8 @@ def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and
     record = WC.own_record(run)
     assert (record["schema"], record["key"], record["session"]) == (WC.RECORD, *map(WC.deployment(run)[0].get,
                                                                                     ("key", "session")))
-    assert WC.deployment_of(run, record) == WC.deployment(run)
+    assert WC.deployment_of(run, record) == (record["deployment"], WC.deployment(run)[1])
+    assert record["deployment"] == {k: v for k, v in WC.deployment(run)[0].items() if k not in WC.RC.DEVICE_KEYS}
     other = gate_run(tmp_path / "other", seed=b"another network certifier")
     with pytest.raises(SystemExit, match="witness/deployment.json names another key than the auditor's record's$"):
         WC.deployment_of(other, record)
@@ -265,7 +317,7 @@ def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_r
     lines = [json.loads(x) for x in (out / "rows.jsonl").read_text().splitlines()]
     assert [sorted(x) for x in lines] == [["cost", G.ROWS_NO_HEAD]] * 2 + [["cost", "registration"]] * 2
     for w, line in enumerate(lines):
-        public = G.row_certificate(line)
+        public = G.row_certificate(line, G.deployment_forms(out / "deployment.json"))
         c = public["certificate"]
         assert sorted(public) == ["certificate"]
         assert sorted(c) == ["digest", "direction", "key_id", "link", "signature", "window"]

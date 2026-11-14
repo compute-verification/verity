@@ -18,7 +18,7 @@ from dataclasses import replace
 from pathlib import Path
 from verity.protocols.accounting.certifier.verifier import blob_files as bf, connection_rows as CR
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.accounting.certifier.verifier.connection_rows_check import FILED, NO_HEAD, ROWS, SALTS
+from verity.protocols.accounting.certifier.verifier.connection_rows_check import FILED, MISSED, NO_HEAD, ROWS, SALTS
 from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, WardenParams
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
@@ -53,20 +53,36 @@ def flags(q: argparse.ArgumentParser) -> None:
                    help="with --lengths 2, --content and --max-tokens-cap: the request words (content_rows' \"A "
                         "request's words\"), a fourth table a class of each released request's max_tokens "
                         "and count of prompt ids as the network certifier reads them (default: none)")
+    head_flags(q)
+
+
+def head_flags(q: argparse.ArgumentParser) -> None:
+    """The head's tick as `q`'s two flags, which a schedule sets together."""
+    q.add_argument("--head-offset", type=int, default=None, metavar="N",
+                   help="with --lengths and --head-wait: each execution phase's line of rows.jsonl leaves at a tick "
+                        "of the schedule, N buckets after the close that hands it (warden's \"The head's tick\"), "
+                        "written by the network certifier's tick, which notes the tick it left at in its own log "
+                        "alone (default: none, the publisher writes it when it has signed)")
+    q.add_argument("--head-wait", type=int, default=None, metavar="W",
+                   help="with --head-offset: a line not back at its tick leaves at the first tick it is back by, "
+                        "at most W ticks later, and never after; 0: a late line never leaves (no default)")
 
 
 def schedule(params: WardenParams, args: argparse.Namespace) -> WardenParams:
     """`params` with the connection rows `args` names (`flags`); the same schedule where it names none."""
     content = getattr(args, "content", None)
     return replace(params, lengths=getattr(args, "lengths", None), content=content and tuple(content),
-                   request_words=True if getattr(args, "request_words", False) else None)
+                   request_words=True if getattr(args, "request_words", False) else None,
+                   head_offset=getattr(args, "head_offset", None), head_wait=getattr(args, "head_wait", None))
 
 
 def flags_of(params: WardenParams) -> list[str]:
     """The flags that give a schedule `params`' connection rows: none for a schedule without them."""
     out = [] if params.lengths is None else ["--lengths", str(params.lengths)]
     out += [] if params.content is None else ["--content", *(",".join(map(str, c)) for c in params.content)]
-    return out + (["--request-words"] if params.request_words else [])
+    out += ["--request-words"] if params.request_words else []
+    return out + ([] if params.head_offset is None else ["--head-offset", str(params.head_offset), "--head-wait",
+                                                         str(params.head_wait)])
 
 
 def hand(window: int, strides: Sequence[Sequence[Released]] | None) -> Iterator[tuple]:
@@ -83,11 +99,25 @@ class Keeper:
     """The publisher's keep of the hands (the module docstring's "The hand"): called with each item of `hand`, less
     its name, it lays, commits and signs an execution phase's tables at its close, or signs the word that it has no
     head. `keep` takes a whole hand, or None, as `Warden(lengths=…)` gives it to a publisher in the network
-    certifier's own process."""
+    certifier's own process. In a schedule with a head offset it writes no line: it hands each one to `back`
+    (execution phase, line), which that schedule and no other has."""
 
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, link: str) -> None:
-        self.out, self.issuer, self.params, self.link = out, issuer, params, link
+    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, link: str, back=None) -> None:
+        if (back is None) != (params.head_offset is None):
+            raise ValueError("in a schedule with a head offset, and in no other, the network certifier's tick writes "
+                             "each execution phase's line, so the keeper hands the line back (`back`)")
+        self.out, self.issuer, self.params, self.link, self.back = out, issuer, params, link, back
         self.open: dict[int, dict[int, Sequence[Released]]] = {}
+
+    def _kept(self, window: int, line: dict, salts: bytes) -> None:
+        """An execution phase's salts to `rows.salts`, and its line to `rows.jsonl` or back to the network
+        certifier."""
+        bf.write_blobs(self.out / SALTS, salts)
+        if self.back is not None:
+            self.back(window, line)
+            return
+        with open(self.out / ROWS, "a") as fh:
+            fh.write(json.dumps(line) + "\n")
 
     def __call__(self, at: tuple[int, int | None], data) -> None:
         window, j = at
@@ -103,9 +133,7 @@ class Keeper:
             cert = CR.attest_no_head(self.issuer, self.link, window, self.params)
             line = ({"refused": [self.link, Direction.EGRESS.value, window]} if cert is None
                     else {NO_HEAD: CR.no_head(cert, self.params)})
-            bf.write_blobs(self.out / SALTS, b"")
-            with open(self.out / ROWS, "a") as fh:
-                fh.write(json.dumps(line | {"cost": {"sign_ms": round((time.perf_counter() - t0) * 1000, 3)}}) + "\n")
+            self._kept(window, line | {"cost": {"sign_ms": round((time.perf_counter() - t0) * 1000, 3)}}, b"")
             self._filed(CR.not_filed(self.link, window))
             return
         t0 = time.perf_counter()
@@ -122,9 +150,7 @@ class Keeper:
                 "sign_ms": round((t3 - t2) * 1000, 3)}
         line = ({"refused": [self.link, Direction.EGRESS.value, window]} if cert is None
                 else {"registration": CR.registration(head, cert, self.params)})
-        bf.write_blobs(self.out / SALTS, rows.witness)
-        with open(self.out / ROWS, "a") as fh:
-            fh.write(json.dumps(line | {"cost": cost}) + "\n")
+        self._kept(window, line | {"cost": cost}, rows.witness)
         self._filed(CR.not_filed(self.link, window) if cert is None else CR.filed_record(head, self.params, strides))
 
     def _filed(self, record: Mapping) -> None:
@@ -133,6 +159,25 @@ class Keeper:
         if self.params.content is not None:
             with open(self.out / FILED, "a") as fh:
                 fh.write(json.dumps(record) + "\n")
+
+
+class Lines:
+    """The network certifier's `leave` in a schedule with a head offset (`connection_rows_run`'s "The hand"): called
+    by its tick with an execution phase, the tick and the line the publisher handed back, it appends the line to
+    `rows.jsonl` as it was handed back; with None for the line, the note that the execution phase's line missed its
+    last tick. It writes nothing of the tick, which the device's own log alone holds (`Warden.heads`). The file is
+    opened once, before the run."""
+
+    def __init__(self, out: Path, link: str) -> None:
+        self.link, self.file = link, open(out / ROWS, "a")
+
+    def __call__(self, window: int, tick: int, line: dict | None) -> None:
+        doc = {MISSED: [self.link, Direction.EGRESS.value, window]} if line is None else line
+        self.file.write(json.dumps(doc) + "\n")
+        self.file.flush()
+
+    def close(self) -> None:
+        self.file.close()
 
 
 def peak_rss_mb() -> float:

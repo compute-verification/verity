@@ -709,17 +709,33 @@ def refusing_commit(*args, **kwargs):
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
          process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
          id_payload: int | None = None, load_heads: Path | None = None, arrive: dict[int, int] | None = None,
-         late: dict[int, float] | None = None) -> Warden:
+         late: dict[int, float] | None = None, back: dict[int, int | None] | None = None) -> Warden:
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
     `process`, which first signs the load's heads `load_heads` when given), the session's start certified at base 0
     before any record, each window committed by `commit`, its connection rows kept as the publisher process keeps
     them when the schedule has lengths rows (its key then a height taller, for their heads), `deployment.json`, and
-    `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at
-    P = `id_payload` when given; `servers` gets the server's side of each connection, in connect order. Returns the
+    `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at P =
+    `id_payload` when given; `servers` gets the server's side of each connection, in connect order. In a schedule
+    with a head offset the publisher hands each execution phase's line of connection rows back and the network
+    certifier's tick writes it, as in `serve`: the line is back at the hand itself when published inline and before
+    the next tick when by the process, or, inline, just before the tick `back` names for its execution phase, never
+    where that is None. The run then ticks on past its last window while a line may still leave. Returns the
     network certifier."""
     tau = params.bucket_ms / 1000
     height = 5 if load_heads or params.lengths else 4
+    timed = params.head_offset is not None
+    assert not back or (timed and not process)
+    lines = rp.Lines(out, ws.LINK) if timed else None
+    held: dict[int, dict] = {}
+    device: list[Warden] = []
+
+    def taken(window: int, line: dict) -> None:
+        if window in (back or {}):
+            held[window] = line
+        else:
+            device[0].head_back(window, line)
+
     if process:
         from benchmarks.network_traces import warden_serve  # by name, so that the spawned process finds its functions
 
@@ -733,8 +749,9 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         signer = ws.ck.signer(key, height)
         issuer = ws.Issuer(signer, SESSION)
         publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
-        hooks, public = {"publish": publisher, "withhold": publisher.withhold,
-                         "lengths": rp.Keeper(out, issuer, params, RC.LINK).keep}, signer.public_key()
+        keeper = rp.Keeper(out, issuer, params, RC.LINK, back=taken if timed else None)
+        hooks, public = {"publish": publisher, "withhold": publisher.withhold, "lengths": keeper.keep}, \
+            signer.public_key()
         start = ws.start_json(ws.certify_start(issuer, 0, 0, params))
     answers = iter(responses)
 
@@ -752,9 +769,35 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
 
     async def main() -> tuple[list[_Writer], Warden]:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+        warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, leave=lines,
+                        **hooks)
+        device.append(warden)
+        over: list[bool] = []
+        if process and timed:
+            loop = asyncio.get_running_loop()
+
+            def on_loop(call, *args) -> None:
+                # the process's last word comes at `close`, when the run is over and its loop closed
+                if not loop.is_closed():
+                    loop.call_soon_threadsafe(call, *args)
+
+            # the process's end wakes a wait for a line that then never comes, and `close` raises its failure
+            publisher.heads(lambda window, line: on_loop(taken, window, line),
+                            ended=lambda: on_loop(lambda: (over.append(True), warden._changed.set())))
         running = asyncio.create_task(warden.run())
+        running.add_done_callback(lambda _: warden._changed.set())
         clients, tasks = [], []
+
+        async def tick(t: int) -> None:
+            # the lines the process was handed are back before tick t runs, and `back`'s are handed back
+            if process and timed:
+                await warden.until(lambda w: over or not w.awaited)
+            for window, at in (back or {}).items():
+                if at == t:
+                    warden.head_back(window, held.pop(window))
+            # tick t runs `late[t]` seconds past its time
+            clock.advance(t * tau + (late or {}).get(t, 0))
+            await warden.until(lambda w: w.ticks > t or running.done())
 
         async def connect_due(t: int) -> None:
             # request j connects before the run's first tick, or just before tick `arrive[j]`: a later request no
@@ -775,9 +818,11 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
                 if t:
                     await connect_due(t)
                 await warden.until(settled)
-                # tick t runs `late[t]` seconds past its time
-                clock.advance(t * tau + (late or {}).get(t, 0))
-                await warden.until(lambda w, t=t: w.ticks > t)
+                await tick(t)
+            t = windows * params.window
+            while timed and not running.done():
+                await tick(t)
+                t += 1
             await running
         finally:
             PROCESS_CLOCK.remove(clock)
@@ -786,6 +831,8 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
 
     clients, warden = asyncio.run(main())
     publisher.close()
+    if lines is not None:
+        lines.close()
     deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows, slack=warden.slack,
                                       run_id=warden.run_id, start=start, origin_raw=0.0)
     (out / "deployment.json").write_text(json.dumps(deployment))
@@ -970,6 +1017,107 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
     assert {p for p in result["problems"] if "window" in p} == \
         {f"{name} window 0 isn't certified" for name in RC.CERTIFIED} | {
             f"{name} window 0's cells aren't registered" for name in ("requests", "responses")}
+
+
+def test_a_phase_with_no_certificate_or_no_registration_is_a_problem_and_one_fewer_in_its_count(tmp_path):
+    """The gate's end holds three of the check's counts only when it is accepted, on the ground that each is then
+    the schedule's (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`): how many records were certified, by
+    how many certificates, and how many of the cells' registrations the check accepted. That stands on the check
+    refusing a run with one missing. A run whose every execution phase is certified and registered is accepted,
+    each count the schedule's. The same run less one record's certificate, for each record and execution phase, or
+    less one cells' registration, is refused on that execution phase by name, with its own count one fewer and the
+    others as they were."""
+    out, windows = tmp_path / "run", 2
+    out.mkdir()
+    _run(out, tmp_path / "key", [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200)],
+         [_response([" a", " b"]), _response([" word"] * 40)], windows=windows)
+
+    def counts(result: dict) -> tuple[int, int, int]:
+        s = result["summary"]
+        return s["certified_windows"], s["certificates"], s["cell_rows"]["registered"]
+
+    whole = ws.check(out)
+    assert whole["accepted"], whole["problems"]
+    assert whole["summary"]["windows"] == windows and whole["summary"]["cell_rows"]["of"] == 2 * windows
+    assert counts(whole) == (3 * windows, 3 * windows, 2 * windows)
+    names = {(link, direction.value): name for name, (link, direction) in ws.CERTIFIED.items()}
+
+    certified = (out / "certified.jsonl").read_text().splitlines()
+    assert len(certified) == 3 * windows
+    for i, line in enumerate(certified):
+        record = RF.certified_from_json(json.loads(line))
+        (out / "certified.jsonl").write_text("".join(x + "\n" for x in certified[:i] + certified[i + 1:]))
+        got = ws.check(out)
+        assert not got["accepted"]
+        assert f"{names[(record.link, record.direction.value)]} window {record.window} isn't certified" in got["problems"]
+        assert counts(got) == (3 * windows - 1, 3 * windows - 1, 2 * windows)
+    (out / "certified.jsonl").write_text("".join(x + "\n" for x in certified))
+
+    cells, salts = (out / "cells.jsonl").read_text().splitlines(), ws.bf.read_blobs(out / "cells.salts")
+    assert len(cells) == len(salts) == 2 * windows
+    for i, line in enumerate(cells):
+        r = json.loads(line)["registration"]
+        (out / "cells.jsonl").write_text("".join(x + "\n" for x in cells[:i] + cells[i + 1:]))
+        (out / "cells.salts").unlink()
+        for blob in salts[:i] + salts[i + 1:]:
+            ws.bf.write_blobs(out / "cells.salts", blob)
+        got = ws.check(out)
+        assert not got["accepted"]
+        assert f"{names[(r['link'], r['direction'])]} window {r['window']}'s cells aren't registered" in got["problems"]
+        assert counts(got) == (3 * windows, 3 * windows, 2 * windows - 1)
+
+
+def test_of_a_deployment_the_gate_gives_out_every_key_but_the_auditors_devices(tmp_path):
+    """`auditor.DEPLOYMENT_PUBLIC` is the deployment's record less the origin on the device's raw clock
+    (`relay_check.DEVICE_KEYS`); where the relay listened and where it reached the endpoint are `endpoints.json`'s,
+    which the gate never publishes: a key the record gains is given out only once the gate names it."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    out = tmp_path / "run"
+    out.mkdir()
+    _run(out, tmp_path / "key", [ws.http_request({"prompt": "x"}, "h:1")], [_response([" a"])])
+    record = set(json.loads((out / "deployment.json").read_text()))
+    assert record - set(A.DEPLOYMENT_PUBLIC) == set(RC.DEVICE_KEYS) == {"origin_raw"}
+    assert set(A.DEPLOYMENT_PUBLIC) <= record and len(set(A.DEPLOYMENT_PUBLIC)) == len(A.DEPLOYMENT_PUBLIC)
+    assert set(A.public_deployment(out / "deployment.json")) == set(A.DEPLOYMENT_PUBLIC)
+    assert A.public_deployment(out / "none.json") is None
+
+
+def test_the_gates_forms_are_the_verifiers_constants_and_hold_a_runs_own_lines(tmp_path):
+    """The gate publishes a certificate and a cells' registration only in forms it states itself, since it loads
+    nothing of the certifier's verifier: its constants are `warden_rows`' and the runner's word for word, and
+    every line a run writes passes them under the run's own deployment, so an honest run publishes all its
+    certificates and registrations. A value changed in a line is out of form, and nothing of its file is
+    published."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    assert (A.ROW_FORMAT, A.ROW_SCHEMA, A.ROW_WORD_BITS) == (WR.REGISTRATION, WR.SCHEMA, WR.WORD_BITS)
+    assert {ws.LINK + follows for follows in A.CERTIFIED_LINKS} == {link for link, _ in ws.CERTIFIED.values()}
+    assert set(A.DIRECTIONS) == {d.value for _, d in ws.CERTIFIED.values()}
+    run, out = tmp_path / "run", tmp_path / "out"
+    run.mkdir()
+    out.mkdir()
+    _run(run, tmp_path / "key", [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200)],
+         [_response([" a", " b"]), _response([" word"] * 40)], windows=2)
+    given = A.deployment_forms(run / "deployment.json")
+    dep = json.loads((run / "deployment.json").read_text())
+    assert given["link"] == (ws.LINK,) and given["parameters"] == (dep["digest"],)
+    assert not list(out.iterdir()) and A.warden_outcome(out, run)["verdict"] is None
+    assert {p.name for p in out.iterdir()} == {"deployment.json"}, "a run with no accepted check publishes no line"
+    check = ws.check(run)
+    (run / "check.json").write_text(json.dumps(check))
+    outcome = A.warden_outcome(out, run)
+    assert check["accepted"] is True and outcome["verdict"]["accepted"] is True and "unruled" not in outcome
+    for name, public in (("certified.jsonl", "certificates.jsonl"), ("cells.jsonl", "cells-certificates.jsonl"),
+                         ("cells.jsonl", "cells-registrations.jsonl")):
+        lines = (run / name).read_text().splitlines()
+        assert lines and len((out / public).read_text().splitlines()) == len(lines), public
+    line = json.loads((run / "cells.jsonl").read_text().splitlines()[0])
+    assert A.row_registration(json.dumps(line), given)
+    for key, value in (("value", "another/egress/0"), ("parameters", "00" * 64), ("row_schema", "cells/v1"),
+                       ("root", line["registration"]["root"][:-2]), ("rows", str(line["registration"]["rows"]))):
+        with pytest.raises(A.Unruled, match=f"registration's {key} isn't in the form ROW_LINE"):
+            A.row_registration(json.dumps(line | {"registration": line["registration"] | {key: value}}), given)
 
 
 def _session(tmp_path: Path, windows: int):
@@ -1275,6 +1423,32 @@ def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_cli
     assert sorted(w["accepted"] for w in audit_["windows"]) == [False, True]
     assert not result["accepted"] and all(w["certified"] for w in result["windows"])
     assert result["problems"] == ["audit: connection 4 failed closed (format) at egress cell 0"]
+
+
+def test_the_summarys_failed_list_holds_the_checks_fixed_words_and_none_of_a_clients(tmp_path):
+    """The summary's `failed` says how the connections that neither ended nor were refused failed, in `FAILED`'s
+    words alone: the gate's end carries the list, and a word in it is a word a key with no name reads. The connection
+    this run's relay failed closed is in it by its client's outcome, `cut`. A client's connection that raised has its
+    exception's words on its own line of `client.json`; the check's problems keep them, and so does the connection's
+    row, and the summary says `error`."""
+    args, p, load = _session(tmp_path, 2)
+    requests, responses = load(4)
+    out = tmp_path / "run"
+    out.mkdir()
+    _run(out, tmp_path / "key", requests, responses[:3] + [_response([" a"])], windows=args.windows, params=p,
+         id_payload=p.payload, arrive=dict(enumerate([0, 0, 1, 2])))
+    assert ws.check(out)["summary"]["failed"] == ["cut"]
+    client = json.loads((out / "client.json").read_text())
+    said = "ConnectionResetError: the endpoint hung up on the first request"
+    index = client["connections"][0]["index"]
+    client["connections"][0] = {"index": index, "error": said}
+    (out / "client.json").write_text(json.dumps(client))
+    result = ws.check(out)
+    assert result["summary"]["failed"] == ["cut", "error"] and said not in json.dumps(result["summary"])
+    assert f"client connection {index}: {said}" in result["problems"]
+    assert {"index": index, "outcome": said} in result["connections"]
+    assert RC.failed_words(["cut", said, "cut", None, 3]) == ["cut", "error"] and RC.failed_words(said) == ["error"]
+    assert RC.failed_words([]) == [] and set(RC.failed_words(RC.FAILED)) == set(RC.FAILED)
 
 
 def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tmp_path, monkeypatch):
