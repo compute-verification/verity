@@ -2461,6 +2461,23 @@ def test_a_suite_whose_key_is_its_bases_is_lent_and_one_the_change_touches_runs(
         assert p.returncode == 2 and "--lend-from takes none of --fresh, --quick and --changed" in p.stderr, p.stderr
 
 
+def test_a_suite_is_lent_by_a_commit_further_below_only_where_no_change_since_gave_it_another_key(tmp_path):
+    """`--lend-from` naming a commit further below than the parent, as the check of `main`'s own tip names an earlier tip:
+    across the two changes since, the suite neither touched has there the key it has here and is lent; each suite one of them
+    touched has another key here and runs, whichever of the two touched it."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"a": _PASSES, "b": _PASSES, "c": _PASSES})
+    earlier = _git(root, "rev-parse", "HEAD")
+    for name in ("b", "c"):
+        (root / name / "tests" / "test_it.py").write_text(_PASSES + "\n\ndef test_more():\n    pass\n")
+        _git(root, "commit", "-q", "-am", f"a landing that changes {name} alone")
+    p = _run_suite(root, tmp_path, "--lend-from", earlier)
+    assert p.returncode == 0, p.stdout
+    assert f"suites: {earlier[:12]}'s check answers for 1 of the 3 suites with no pass here" in p.stdout, p.stdout
+    assert re.search(rf"lent    a +its key in {earlier[:12]}'s tree is its key here", p.stdout), p.stdout
+    assert "passed  b" in p.stdout and "passed  c" in p.stdout and "3 suites: 3 passed (0 cached, 1 lent), 0 failed" in p.stdout
+
+
 def test_a_suite_is_lent_only_with_its_fixtures_and_build_sources_as_they_are(tmp_path, monkeypatch):
     """`lent_by` on what a key holds beside its inputs: a fixture the registry names another artifact for since the base, or a
     Lake build output whose package changed since, is another key, and a build output no Lake package builds is keyed by what

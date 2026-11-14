@@ -120,12 +120,12 @@ from the tree), and names what failed that a cached pass (the suite's or a test'
 that a key misses an input (`check.py --no-cache`, the nightly `audit-main` job, which first imports every pass the commit's
 recorded checks hold). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
 
-`--lend-from COMMIT` is for a check of a commit that can count only after COMMIT's own check (the verified queue's candidate
-built on a candidate still in flight): a suite with no pass here whose inputs, runner, fixtures and Lake build sources read
-the same in COMMIT's tree, every `pyproject.toml`, the lockfile and the check's own code being as they are here, would only
-run again what COMMIT's check is running. It is reported `lent`, a row with `"lent": COMMIT`, and counts as passed for
-whoever holds this check's verdict until COMMIT's is in; it earns no pass, so none is kept or packed for it and a run
-without the flag runs it.
+`--lend-from COMMIT` is for a check that counts only once COMMIT's own check passed its suites (the verified queue's
+candidate built on a candidate still in flight, and its check of `main`'s tip, for an earlier tip): a suite with no pass
+here whose inputs, runner, fixtures and Lake build sources read the same in COMMIT's tree, every `pyproject.toml`, the
+lockfile and the check's own code being as they are here, would only run again what COMMIT's check is running. It is
+reported `lent`, a row with `"lent": COMMIT`, and counts as passed for whoever holds this check's verdict until COMMIT's is
+in; it earns no pass, so none is kept or packed for it and a run without the flag runs it.
 
 Each suite's pytest runs in a process group of its own, and whatever is left in the group when pytest ends (a multiprocessing
 forkserver and its workers, after a kill) is killed with it. A suite whose pytest dies by a signal is reported with it, its peak
@@ -2533,8 +2533,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fresh", action="store_true", help="run even where a pass is cached")
     ap.add_argument("--lend-from", metavar="COMMIT", help="leave out each suite with no pass here whose key in COMMIT's tree is "
                     "its key here (`lent_by`), reported as `lent`: the check of COMMIT answers for it. Only for a check whose "
-                    "verdict counts once COMMIT's own has (the verified queue's check of a candidate built on the candidate "
-                    "COMMIT, which lands after it and is dropped with it)")
+                    "verdict counts once COMMIT's own passed its suites (the verified queue's check of a candidate built on "
+                    "the candidate COMMIT, or of `main`'s tip above an earlier tip COMMIT)")
     ap.add_argument("--synced", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--timeouts", action="store_true",
                     help=f"kill a suite's process group once it has run its [tool.verity.tests] timeout_s (default {SUITE_TIMEOUT_S:.0f}) "

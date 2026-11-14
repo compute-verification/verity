@@ -222,10 +222,12 @@ def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, t
     assert not urls.exists() and ("recorded checks' packs" in capsys.readouterr().out) == sent
 
 
-def test_record_sends_the_commit_its_suites_lend_from_only_when_it_is_the_runs_base(monkeypatch, capsys):
-    """The verified queue names the candidate a launched candidate is built on (`TRAIN_SUITES_FROM`): a `--deferred` run that
-    reuses passes carries it (`LEND_FILE`) when it is the run's own base, the commit whose check gates before this one's
-    counts.  Named for any other run (another base, an uncached run), or not named, nothing is sent and every suite runs."""
+def test_record_sends_the_commit_its_suites_lend_from_only_when_it_is_the_runs_base_or_a_commit_below_it(monkeypatch, capsys):
+    """The verified queue names the commit whose check a launched run leaves suites to (`TRAIN_SUITES_FROM`): a `--deferred`
+    run that reuses passes carries it (`LEND_FILE`) when it is the run's own base, the candidate a candidate is built on, or
+    a commit below that, as an earlier tip of `main` is below the first parent that the check of `main`'s own tip has as its
+    base.  Named for any other run (the commit itself, one not below its base, an uncached run), or not named, nothing is
+    sent and every suite runs."""
     real, sent = subprocess.run, {}
 
     def run(cmd, *a, **k):
@@ -253,9 +255,17 @@ def test_record_sends_the_commit_its_suites_lend_from_only_when_it_is_the_runs_b
     assert "lends no suite: only a --deferred run that reuses passes" in capsys.readouterr().out
     monkeypatch.setenv("TRAIN_SUITES_FROM", head)
     assert launch("--base", "HEAD^", "--deferred", "pytest") is None
-    assert f"TRAIN_SUITES_FROM {head} lends no suite: it is not the run's base HEAD^" in capsys.readouterr().out
+    assert f"TRAIN_SUITES_FROM {head} lends no suite: it is neither the run's base HEAD^ nor a commit below it" in \
+        capsys.readouterr().out
+    assert launch("--base", "HEAD", "--deferred", "pytest") is None             # the commit itself, whatever its base
     monkeypatch.setenv("TRAIN_SUITES_FROM", "no-such-ref")
     assert launch("--base", "HEAD^", "--deferred", "pytest") is None
+    older = CHECK._rev("HEAD^^")
+    monkeypatch.setenv("TRAIN_SUITES_FROM", older)
+    assert launch("--base", "HEAD^", "--deferred", "pytest") == f"{older}\n"    # an earlier tip, below its first parent
+    assert launch("--base", "HEAD^", "--deferred", "pytest", "--no-cache") is None
+    assert launch("--base", "HEAD^^^", "--deferred", "pytest") is None          # above its base
+    assert f"TRAIN_SUITES_FROM {older} lends no suite: it is neither the run's base HEAD^^^ nor" in capsys.readouterr().out
 
 
 def test_a_run_sent_a_lender_hands_it_to_both_suite_steps_unless_uncached(tmp_path):

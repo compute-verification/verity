@@ -1295,20 +1295,28 @@ def nested_record(argv: list[str]) -> str:
 
 def lender(base: str, deferred: str | None, rest: list[str]) -> str | None:
     """The commit a recorded run's suites lend from (`LEND_FILE`): the one `TRAIN_SUITES_FROM` names, which the verified queue
-    sets for the check of a candidate built on a candidate in flight whose check runs the same suites
-    (`research.vqueue_slim.start`'s ``suites_from``), when it is the run's own base ``base`` and the run is a `--deferred`
-    one that reuses passes; None without the setting, and, the reason printed, for any other run: its suites all run."""
+    sets for a check whose suites another check runs (`research.vqueue_slim.start`'s ``suites_from``): for the check of a
+    candidate built on a candidate in flight, that candidate, the run's own base ``base``; for the check of `main`'s own tip,
+    whose base is its first parent, an earlier tip of `main`, that commit or one below it (`_at_or_below`).  Never this
+    commit itself, and only for a `--deferred` run that reuses passes; None without the setting, and, the reason printed,
+    for any other run: its suites all run."""
     if not (named := SETTINGS.TRAIN_SUITES_FROM):
         return None
-    sha = _rev(f"{named}^{{commit}}")
+    sha, on = _rev(f"{named}^{{commit}}"), _rev(f"{base}^{{commit}}")
     if deferred is None or "--no-cache" in rest:
         why = "only a --deferred run that reuses passes leaves a suite to another check"
-    elif sha is None or sha != _rev(f"{base}^{{commit}}"):
-        why = f"it is not the run's base {base}"
+    elif sha is None or on is None or sha == _rev("HEAD") or not _at_or_below(sha, on):
+        why = f"it is neither the run's base {base} nor a commit below it"
     else:
         return sha
     print(f"check: TRAIN_SUITES_FROM {named} lends no suite: {why}", flush=True)
     return None
+
+
+def _at_or_below(sha: str, commit: str) -> bool:
+    """Whether ``sha`` is ``commit`` or a commit below it in its history."""
+    return sha == commit or subprocess.run(["git", "merge-base", "--is-ancestor", sha, commit], cwd=ROOT,
+                                           capture_output=True).returncode == 0
 
 
 def record(argv: list[str]) -> int:
