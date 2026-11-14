@@ -17,9 +17,8 @@ The gap g (`gamma`; an adversary's advantage ε = g/(1 − g)) is one unit's: 1 
 (`Proofs/Pouw/PearlC/DeviceSm120KernelGap.lean`: v1 under rev1, 8192³, FADD 8, the honest cast at 32, 173561/22302500).
 Every term is linear in m, so the gap is a function of (n, k).  No Lean twin states the gap at the H100 record on GLM-5.3's shapes;
 these are its values, not pins.  The FP32 add's price is read two ways (`FADD_READINGS`): the record's 32 (H100_PRICES:
-4,096 dense FP8 MACs to 128 FP32 lanes a SM a clock), and the data sheet's rates, the two clocked differently: the H200
-card's `weight.f64` (`verity.device`), its dense tensor rate at `clock.tensor` over the data sheet's FP64 tensor rate at
-`clock.sm`, rounded down.  The data sheet gives the FP32 add that rate too (an FMA two flops), so the weight prices it.
+4,096 dense FP8 MACs to 128 FP32 lanes a SM a clock), and the data sheet's rates, 1,979 dense FP8 TFLOPS to 67 FP32
+TFLOPS (an FMA two flops), 1979/67, the two clocked differently.
 
   python benchmarks/pouw/pearl_c_sm90/glm53.py [--json]
 """
@@ -33,8 +32,6 @@ from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
 from typing import TYPE_CHECKING
 
-from verity.device import load_card, number
-
 if TYPE_CHECKING:
     from verity.protocols.accounting.pouw.prover.schemes.pearl_c import PearlC
 
@@ -46,8 +43,8 @@ SCHEME = "pearl-c-h100-v1-h3"
 CONFIG = {"H": 6144, "NH": 64, "QL": 2048, "KVL": 512, "DN": 192, "DR": 64, "DV": 256, "IH": 32, "ID": 128, "E": 256, "K": 8,
           "MI": 2048, "NS": 1, "I": 12288, "L": 78, "FD": 3}
 TP = 8
-#: the FP32 add's W1 price, in dense FP8 MACs: the H100 record's, and the data sheet's rates, the H200 card's weight.f64
-FADD_READINGS = {"record": Fraction(32), "sheet": number(load_card("h200-sxm-141gb")["weight"]["f64"])}
+#: the FP32 add's W1 price, in dense FP8 MACs: the H100 record's, and the data sheet's rates
+FADD_READINGS = {"record": Fraction(32), "sheet": Fraction(1979, 67)}
 #: decode's batch and prefill's step tokens, the M a rank's dense linears see
 DECODE_M = (1, 16, 64, 256)
 PREFILL_M = (2048, 8192)

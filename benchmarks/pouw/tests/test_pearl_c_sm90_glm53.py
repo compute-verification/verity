@@ -82,16 +82,6 @@ def test_gamma_is_the_lean_twins():
     assert h.name == G.SCHEME and h.prices.fadd == 32 and G.scheme(Fraction(1979, 67)).prices.fadd == Fraction(1979, 67)
 
 
-def test_the_sheet_reading_is_the_h200_cards_fp64_weight():
-    """The FP32 add's two prices: the record's 32, and the H200 card's `weight.f64` read through `verity.device`, 29.5
-    (pinned, so that a change to the card's entry is deliberate here too)."""
-    from verity.device import load_card, number
-
-    assert {"record": Fraction(32), "sheet": Fraction(59, 2)} == G.FADD_READINGS
-    assert G.FADD_READINGS["sheet"] == number(load_card("h200-sxm-141gb")["weight"]["f64"])
-    assert isinstance(G.FADD_READINGS["sheet"], Fraction)
-
-
 def test_the_profile_gives_each_launch_to_the_step_that_launched_it():
     """glm53_profile's report: a GPU activity is the innermost step's around its launch (the API call's thread and time, not
     when it ran), one launched outside every call is dropped, the GPU span is the calls' first start to their last end over
