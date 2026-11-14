@@ -158,11 +158,6 @@ BENCHMARKS_IMPORTERS = {
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
-    "adapters/vllm/tests/engine/ppl_oracle.py": "circuits (vllm): the int8 step's oracle (`benchmarks/ppl/steps.py`)",
-    "adapters/vllm/tests/engine/fattn_oracle.py": "circuits (vllm): the int8 attention's oracle "
-                                                  "(`verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py`)",
-    "benchmarks/ppl/int8_kscale_gpu.py": "circuits (vllm): the K scales' calibration windows "
-                                                     "(`benchmarks/ppl/methodology.py`, `windows.py`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
