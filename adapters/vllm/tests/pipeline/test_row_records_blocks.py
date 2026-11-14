@@ -885,14 +885,17 @@ def test_a_tp_match_summary_states_its_stages_exits_and_the_blocks_of_each_docum
     assert _read(tmp_path / "match_summary.json") == {
         "pass": False, "level": "collective-level (tp.match check; no TP rank profile)", "capture_rc": 1, "control_rc": 2, "check_rc": 3,
         "fold_rc": None, "fold_profile": None, "tp2_match": {}, "tp2_fold_match": None}
-    _put(m / "tp2_match.json", {"pass": True, "tokens": {"pass": True}, "other": 1})
+    check = {"pass": True, "structure": {"pass": True}, "provenance": {"pass": False}, "tokens": {"pass": True}}
+    _put(m / "tp2_match.json", {**check, "other": 1})
     _put(m / "fold_match" / "tp2_fold_match.json", {"pass": True, "legs": [1], "problems": [], "seconds": 9, "other": 1})
     for fold_rc in (0, 4):
         R.tp_match_summary(str(m), 0, 0, 0, fold_rc, "PASS", "prof")
         assert _read(tmp_path / "match_summary.json") == {
             "pass": True, "level": "fold (D90 per-rank fold Match + collective-level)", "capture_rc": 0, "control_rc": 0, "check_rc": 0,
-            "fold_rc": fold_rc, "fold_profile": "prof", "tp2_match": {"pass": True, "tokens": {"pass": True}},
-            "tp2_fold_match": {"pass": True, "legs": [1], "problems": [], "seconds": 9}}, fold_rc
+            "fold_rc": fold_rc, "fold_profile": "prof", "tp2_match": check, "tp2_fold_match": {"pass": True, "legs": [1], "problems": [], "seconds": 9}}, fold_rc
+    _put(m / "tp2_match.json", {"pass": False, "tokens": {}})
+    R.tp_match_summary(str(m), 0, 0, 0, 0, "FAIL", "prof")
+    assert _read(tmp_path / "match_summary.json")["tp2_match"] == {"pass": False, "tokens": {}}   # a block it does not state is left out
 
 
 def test_a_tp_commit_line_states_its_pairs_delta_roots_and_tokens(tmp_path):
