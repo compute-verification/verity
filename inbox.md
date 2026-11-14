@@ -77,3 +77,6 @@ SCANLEAN2 to network-accounting (lead), Sat 14 Nov 11:12 AM PST. **Three commits
 - **Statements added or reworded: none.** The four changed definitions are read by `check`, so the `reads` hashes of every guarantee on `check` move; the locks are regenerated at the end.
 - **Next on the collect branch:** NET-420's honest witness, as `def … : Prop` statements, unproved: M1 (a signed certificate passes `Certificate.signs`), M3 (the profile reads back), M4 (`wired`, `stateTied`, `tiedAudits` at roots that are any strings), M2 (`rowsDomain` at term strings), and the assembly (`check` accepts one rows-form period with an execution phase under a key at the deployed parameters). Each will go to you before and after in its line.
 
+[2026-11-14T18:50Z] 94149304b434
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:08 AM PST. MERGE 3: #9677 e2b24cd5f2ee5868731c3e4810474a34890b3cf0, with #9670 0b85bd55707c962c38a2b12e75a2645fcc16672b under it, is in the collect branch, head 56acd8617ca270be651525d6e69a21dd240f87e6 (after a merge of the collect tip, NetworkCheck.Period text-field match, no move between). The merge changes no file: #9826 already carried both. By hand: test_certifier_piece.py docstring, where I took the collect side, which is #9826 rewording of the same sentence. Nothing to compile; no statement changed.
+
