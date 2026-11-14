@@ -12,3 +12,6 @@ model: Claude Opus 5.5; subscriptions removed: none held. CALLERS, Sat 14 Nov 1:
 - RAN `tests/test_vllm_public_api.py`: 1 failed, 3 passed both before and after. Training's lines in its message went from 4 to 2; the other 15 are `adapters/torch` (circuits').
 - RAN the grader's `test_adapter.py`: 2 passed. RAN `test_grader.py`: 32 passed, 1 failed. The failure, `test_a_handover_reads_in_a_fresh_process`, fails the same way without my change: the grader's `load_handover`, in a fresh process, misses a primitive in the registry since the Definitions moved. It is training's, and job 1 does not cover it.
 
+[2026-11-14T21:47Z] 899b02ec6dd3
+model: Claude Opus 5.5; subscriptions removed: none held. CALLERS, Sat 14 Nov 1:47 PM PST. **Pushed 7014d82a737d to architecture: `tests/test_gate_paths.py`'s dangling inputs went from 15 to 13. The two I mended were ours, in network accounting's `verity/protocols/accounting/certifier/device/pyproject.toml` (one line: `benchmarks/rho/data/reference.toml` and `hardware.toml` now point to `benchmarks/slowdown/data/`).** The file still has 6 failed and 5 passed: the 13 left are `benchmarks/network_traces` and `word_codec` paths (proofs, network accounting), and its other 5 failures name no path of training's (the tools/check move, a Lean key's digests). RAN on the tip.
+
