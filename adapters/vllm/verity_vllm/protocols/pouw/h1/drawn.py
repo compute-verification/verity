@@ -101,7 +101,6 @@ from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import registered as NR
-from verity_vllm.protocols.pouw.h1 import served as SV
 from verity_vllm.protocols.pouw.h1.drawn_rows import (
     LEAF_NAMES,
     LEAF_OUT_ROWS,
@@ -268,6 +267,12 @@ def _kept(prover: Path, row: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray |
 def a_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
     """Call `call`'s step's ``a/<K>@<s>`` as `Served.commit` registered it: its step's calls of K, each its served codes
     over M slots (`Served.a_words`), at the first one's ``a`` nonce, bound to the window's root."""
+    # `served` loads the live circuit (`pouw.prover.circuit.live`), whose Definitions enter the Definition table as that module
+    # loads, and a reader of the table by id (`windows.interface.resolve`) answers for them from then on.  So it is imported
+    # where a value is rebuilt, here and in `zy_value`, `b_value` and `receipt_table`: importing this module alone leaves the
+    # table as it was.
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
     lay, prefix = win["layout"], win["shape"]["prefix"]
     per, ks = len(lay["linears"]), {name: k for name, k, _n in lay["linears"]}
     s, k = call // per, ks[lay["calls"][call][0]]
@@ -286,6 +291,9 @@ def a_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
 def zy_value(win: dict, prover: Path, key: bytes, call: int) -> G.Registered:
     """Call `call`'s ``zy@<c>`` as `Served.commit` registered it (`zy_words` of its records over M slots, zeros for an
     empty call), at its ``zy`` nonce, bound to the window's root."""
+    # imported here for `a_value`'s reason: `served` loads the live circuit
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
     lay = win["layout"]
     row = next(r for r in win["record"]["calls"] if int(r["index"]) == call)
     n, tile = int(row["n"]), tuple(lay["tile"])
@@ -320,6 +328,9 @@ def b_value(win: dict, k: int, key: bytes, checkpoint: Path | None, weights: Pat
             read: CheckpointWeights | None = None) -> G.Registered:
     """``b/<K>`` as `served.register_weights` registered it: K's linears' rows in turn (`chunk_words`), at ``B_NONCE``
     plus K's place among the window's K's, under `key`, bound to no window."""
+    # imported here for `a_value`'s reason: `served` loads the live circuit
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
     lin = [tuple(x) for x in win["layout"]["linears"]]
     words = np.concatenate([SV.chunk_words(c, s, Wt.chunks(k)) for c, s in linear_weights(lin, k, checkpoint, weights, read)])
     ks = sorted({kk for _n, kk, _x in lin})
@@ -422,8 +433,9 @@ def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: d
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt (`call_receipts` of the unit's A rows, B rows and record at the rows credit's file `reg` reads them, in
     `values`), at ``RECEIPT_NONCE`` + c under the prover's key `key`, bound to the window's root."""
-    from verity_vllm.protocols.pouw.h1 import registered as NR
+    # imported here for `a_value`'s reason: `served` loads the live circuit
     from verity_vllm.protocols.pouw.h1 import served as SV
+
     size = CR.call_work(win["layout"])[call][0]
     u0 = reg["ports"][CR.PUB_PORT][G.READS_FROM]
     units = list(range(u0, u0 + size))
@@ -672,7 +684,7 @@ def stage(a: Any) -> int:
             tabs = statement_tables(z, st.row_ports, out_ports)
             roots = (bytes.fromhex(reg["ports"][f"a_k{k}_0"]["root"]), bytes.fromhex(reg["ports"][f"b_k{k}_0"]["root"]))
             if a.recompose:
-                def lowered(_rows: dict, outs: dict, z: dict = z, roots: tuple = roots) -> None:
+                def lowered(_rows: dict, outs: dict, z: dict = z, roots: tuple = roots, k: int = k) -> None:
                     reference_check(z, outs, win, k, roots)
                     outputs_held(z, outs)
                 st.reference_check = lowered

@@ -11,6 +11,7 @@ import gc
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from verity.circuits.refs import Coll, Refs, concat
 from verity.circuits.types import Array, Type, Value
@@ -37,7 +38,8 @@ def served_class(vllm_class: str) -> str:
     """The class vLLM instantiates for a family (`FAMILY_FACTS[...]["vllm_class"]`): the one its registry maps the architecture to
     ("X (= Y)" is Y), else the named class."""
     alias = re.search(r"\(= (\w+)\)", vllm_class)
-    return alias.group(1) if alias else re.match(r"\w+", vllm_class).group(0)
+    named: Any = re.match(r"\w+", vllm_class)   # as given: a class that begins with no word character is None's AttributeError
+    return alias.group(1) if alias else named.group(0)
 
 
 def _arr(shape: tuple[int, ...], w: int) -> Type:
@@ -67,9 +69,10 @@ def with_checks(model, out: Coll, B=None, stop: dict | None = None, sampled: Seq
     `frontend.stop_rule.check` over `out`), and what `derive`'s provenance says of them: the Program returns the tuple (out,
     checks). Each is refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.circuits.types import Tuple
+
     from verity_vllm.program import inputs
-    from verity_vllm.program.frontend import stop_rule as SR
     from verity_vllm.program.frontend import seed_rule as SEED
+    from verity_vllm.program.frontend import stop_rule as SR
     checks = [*(getattr(model, "checks", None) or ()), *([] if sampled is None else [SEED.check(B, sampled[0], sampled[1:])]),
               *([] if stop is None else [SR.check(B, out, stop)])]
     if not checks:
@@ -114,22 +117,24 @@ def request_passes(wrapper: str, LP: int | None, T: int | None, M: int, C: int, 
     only the last sampling) and its T decodes; or, off the `dense` decoder, one resumed at decode C >= LP, its decodes C..LP+T-1,
     and one whose rows are a Commit window's edge (`edge`, `build.build_program`'s), which may stop inside its prompt at LP + T
     (T < 0), sampling nothing."""
-    E = int(LP) + int(T) if wrapper == "request" else 0
-    if C and not 0 < C < (int(LP) if dense else E):
+    lp: Any = LP   # as given: a step states neither, and where one is read without being stated it is int(None)'s TypeError
+    t: Any = T
+    E = int(lp) + int(t) if wrapper == "request" else 0
+    if C and not 0 < C < (int(lp) if dense else E):
         raise Unexpressible(f"vocabulary cannot express: a history of {C} rows for a prompt of {LP}" +
                             (" (0 < C < LP)" if dense else f" and {T} decodes (0 < C < LP + T)"))
-    if edge and (wrapper != "request" or dense) or wrapper == "request" and not (int(T) >= 0 or edge and E > max(C, 0)):
+    if edge and (wrapper != "request" or dense) or wrapper == "request" and not (int(t) >= 0 or edge and max(C, 0) < E):
         raise Unexpressible(f"vocabulary cannot express: a {wrapper} to position {E} of a {LP}-token prompt" + (
             " with its rows a window's edge (a request's, on the sparse-attention decoder)" if edge else
             " (one that stops inside its prompt samples nothing: only a request a window leaves there has a Program, its rows the edge's)"))
-    resumed = wrapper == "request" and C >= int(LP)
+    resumed = wrapper == "request" and int(lp) <= C
     chunks = tuple(int(c) for c in chunks or ())
-    if chunks and (wrapper != "request" or resumed or min(chunks) < 1 or sum(chunks) != min(int(LP), E) - C):
+    if chunks and (wrapper != "request" or resumed or min(chunks) < 1 or sum(chunks) != min(int(lp), E) - C):
         raise Unexpressible(f"vocabulary cannot express: prefill chunks {list(chunks)} of a {wrapper} (a request's chunks are its "
                             f"{max(min(int(LP or 0), E) - C, 0)} prefill rows in turn, each at least one)")
     chunks = chunks if len(chunks) > 1 else ()
-    passes = [M] if wrapper == "step" else [1] * (E - C) if resumed else [*(chunks or [min(int(LP), E) - C]), *[1] * max(int(T), 0)]
-    if wrapper == "request" and E < int(LP):
+    passes = [M] if wrapper == "step" else [1] * (E - C) if resumed else [*(chunks or [min(int(lp), E) - C]), *[1] * max(int(t), 0)]
+    if wrapper == "request" and int(lp) > E:
         return resumed, chunks, passes, [False] * len(passes)
     return resumed, chunks, passes, [False] * max(len(chunks) - 1, 0) + [True] * (len(passes) - max(len(chunks) - 1, 0))
 
@@ -144,7 +149,8 @@ def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int |
     if wrapper == "step":
         hid = model.forward(rows, pos0)
         return [model.sample(hid[-1], 0, pos0 + M - 1, policy)]
-    LP, T = int(LP), int(T)
+    stated: Any = (LP, T)   # as given: a request that states neither is int(None)'s TypeError
+    LP, T = int(stated[0]), int(stated[1])
     toks: list[Coll] = []
     step = 0
     if C < LP:
@@ -159,7 +165,8 @@ def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int |
     for p in range(max(C, LP), LP + T):
         if batch is not None:
             model.launch.step = step
-        hid = model.forward([Coll(Value(32), (toks[-1] if toks else last).refs)], p)
+        fed: Any = toks[-1] if toks else last   # as given: a resume handed no `last` is None's AttributeError
+        hid = model.forward([Coll(Value(32), fed.refs)], p)
         toks.append(model.sample(hid[-1], len(toks), p, policy))
         step += 1
     return toks
@@ -243,12 +250,13 @@ class _Launch:
         except ValueError as e:
             raise Unexpressible(f"request step {self.step}: {e}") from None
 
-    def keys(self, own: list[int], without: list[tuple[int, int]] = ()) -> list[int]:
+    def keys(self, own: list[int], without: Sequence[tuple[int, int]] = ()) -> list[int]:
         """Every query row's key count in the attention launch (`targets.launch_keys`), `own`'s without a batch; `without`: sequences
         (rows, start) of the step whose rows another kernel runs (`prefills`' dense-MHA prefills), left out.  A FULL graph (a uniform
         decode, so no prefills) captures the attention at the padded batch, its padding rows without keys (their requests' seq_lens
         are 0, so the indexer's top-k leaves them -1); PIECEWISE graphs and an uncaptured step run it on the real batch."""
         from collections import Counter
+
         from verity_vllm.program.frontend import targets as TG
         seqs = TG.launch_sequences(self.step, self.ctx)
         if seqs is None:
@@ -300,7 +308,7 @@ def launch_batch(phi, LP: int, T: int) -> list | None:
     w = {"requests": phi.requests, "engine": {"target": {"batch_invariant": phi.target_profile().batch_invariant}}}
     if not LC.batch_dispatch(w):
         return None
-    batch = LC.shape_contexts(w).get((int(LP), int(T)))
+    batch: Any = LC.shape_contexts(w).get((int(LP), int(T)))   # a shape's batch, or "conflict"
     if batch is None or batch == "conflict":
         raise Unexpressible(f"vocabulary cannot express: the launch batch of request shape LP {LP}, T {T}: "
                             f"{'its requests are co-scheduled differently' if batch else 'no request of the workload has it'}")

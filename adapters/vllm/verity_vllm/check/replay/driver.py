@@ -87,7 +87,11 @@ from verity_vllm.check.replay.linkage import (
     boundary_linkage,
     linkage_horizon,
 )
-from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
+from verity_vllm.check.replay.opening import (
+    CommittedStore,
+    bound_identity,
+    model_weights_provider,
+)
 from verity_vllm.check.replay.population import (
     executed_prefix_of_record,
     moe_plane_alias_check,
@@ -568,9 +572,9 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         indices[rid] = pi
     for rid, pc in (cached_prefixes or {}).items():
         pi = indices.get(rid)
-        kv = pi.kv_prefix if pi is not None else None
-        if pi is None or kv is None or not int(pc.get("cached") or 0) or rid in pi.recomputed:
+        if pi is None or not int(pc.get("cached") or 0) or rid in pi.recomputed:
             continue                                                              # no hit, or one its Program recomputes (`RP.adopt`, above)
+        kv: Any = pi.kv_prefix                                                    # a hit the Program takes: its cached prefix's layout
         if int(kv["C"]) != int(pc["cached"]):
             raise ValueError(f"{rid} is served {pc['cached']} cached prompt rows but its Program of record takes a cached prefix of "
                              f"{kv['C']}")
@@ -642,7 +646,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     t_start = time.perf_counter()
     store = CommittedStore.of_record(bmap, committed, manifest)                 # reads through the manifest's alias table
     arrivals = arrivals or {}
-    ranks = sorted({int((e.get("identity") or {}).get("rank", 0) or 0) for e in (bmap.get("entries") or [])}) or [0]
+    entries = bmap.get("entries")                                               # as the store reads them: a map that states none binds nothing
+    ranks = sorted({int(bound_identity(e).get("rank", 0) or 0) for e in (entries if entries else [])}) or [0]
     all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec = populate(
         programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo,
         cached_prefixes=cached_prefixes)
