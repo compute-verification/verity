@@ -43,7 +43,7 @@ readers = [
 type = "RegisteredWeights"
 today = "the weights registration (`weights_registration.json`, `verity-vllm/weights-registration/v1`)"
 writers = [
-    { lane = "proofs", file = "verity/protocols/proofs/spot/prover/audit/prove_path.py", find = "def weights_docket_of_serve|\\\"weights-registration\\\": weights_docket_of_serve" },
+    { lane = "proofs", file = "verity/protocols/proofs/spot/prover/audit/prove_path.py", find = "def weights_registration_of_serve|\\\"weights-registration\\\": weights_registration_of_serve" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "prove_path\\.py weights-registration --serve-run" },
 ]
 readers = [
