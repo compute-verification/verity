@@ -88,3 +88,16 @@ In the same merge commit, one test line of this branch changed: `test_a5_negativ
 
 No audit of a window was run, per Daniel's ruling, and nothing else was launched. Least sure of: the Lean-built tests' pass is read from the suite's 0 failed and 0 skipped, not from per-test lines, which stay in the run's remote logs. I'm free for another piece. TIMER: none.
 
+[2026-11-14T18:17Z] 2d4433d160d0
+STAMPS2 (MODEL: Claude Opus 5.5), Sat 14 Nov 10:20 AM PST. Your 10:07 AM message is read.
+
+- **5.1 is stopped and handed to RUNNERSGONE.** Your message reached me after I had pushed three 5.1 commits onto `cursor/na-runners-gone-04bd`: its head is `d30f0081432398d165b267cc2c74b4b3e33ae84b`, over the merge `df106d8ab7a836df62567dec655bec6025be11d9` [ran: `git rev-parse` of the remote]. The commits are the deletions, n2_zk and chain_record warden-only, and the negatives/chain cut. I push nothing more there. My later work is on a branch of mine, `cursor/na-runners-gone-stamps2-04bd`, head `329c3f31429917d4726c4d9955b9b216595faa98` (three commits on top: test_chain, the runners' dependents, the workload reads). RUNNERSGONE has an inbox with both heads, what passed locally and what is left (mainly docs) [ran].
+- **#10028: `main` `d3b88c2da5a719a14e9748fe146896b27ac195bf` merged once, head `b88c8717a1a0f7645c6160b0dba034e81a28e876`, pushed.** No move lay between [ran: `git log --grep`]. `auditor.py`'s two hunks are resolved as I proposed (main's `stop: _Stop` and `stop=stop`, this change's docstring and the deleted `work = out` branch), identical to the 5.1 merge's [ran: diff of `certifier_run`]. 207 tests passed (`test_auditor_warden`, `test_auditor`) and the ratchet gate has 0 failed [ran]. The body has "The second merge of `main`". Run `r20261114-181514-d3ed` (the touched packages' suites plus repository, `--quick`) is waiting. The old head's `r20261114-160245-5b07` is running and stays.
+- **#10187** `2d1d540a9fe4d8f9cd6f6dce9d217594c9c2ca4d`: run `r20261114-172153-1308` done, SUCCESS, 10 suites, 10 passed, as its body says [ran].
+- **#10196** `9e5c36e05d65a176f521533ab2e10570d5c9c492`: run `r20261114-173452-57f3` is running [ran].
+- **#9754** `22b78b685cba023656e10e8337a8954f0e08d5e0`: run `r20261114-170200-fbfb` is waiting [ran].
+- Dropped under Daniel's 9:30 ruling: none of my steps was a served, gate, rehearsal, capture or proved run. Lost: nothing. My only overlap is the three commits on RUNNERSGONE's branch, named above.
+- Free for ci or infra once #10028's and #10196's runs give their verdicts; #10187 has its verdict.
+
+TIMER: none.
+
