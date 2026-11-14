@@ -28,6 +28,7 @@ from verity.protocols.accounting.poub.verifier import codec as rcodec  # noqa: E
 import prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+import lean_stands_in  # noqa: E402
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 FIGURES = timing.RTX_PRO_6000_NODE
@@ -207,6 +208,19 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     assert set(lg["terms"]) == set(audit.LEDGER_SOURCES) and lg["gamma"] > 0
     assert all(len(d) == 6 for d in r["draws"].values())
     assert all(w["slack_ns"] >= 0 for w in r["windows_seen"])
+
+
+def test_without_its_lean_an_accepted_sessions_gamma_is_undecided(monkeypatch):
+    """With the real interface (`lean_stands_in.unwritten`), an accepted session's γ terms have no Lean answer, so each
+    reading is undecided, with the goal's id, as a refused one is refused: no γ, no certified bytes, the session
+    declares that alone, and its memory line carries no error."""
+    lean_stands_in.unwritten(monkeypatch)
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), _ = run("honest")
+    lg, why = r["ledger"], coins.undecided("γ terms")
+    assert r["accepted"] and all(lg[n] == {"capacity_bytes_per_s": lg["inputs"][f], "undecided": why}
+                                 for n, f in (("spec", "spec_bytes_per_s"), ("measured", "measured_read_bytes_per_s")))
+    assert lg["declared"] == {"undecided": why} and verifier.memory_error(lg) is None
 
 
 @pytest.mark.parametrize("outcome", ["rejected", None, "error"])

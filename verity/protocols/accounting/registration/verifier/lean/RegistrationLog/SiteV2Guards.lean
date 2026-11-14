@@ -1,7 +1,9 @@
 module
 
 public import CoreProtocol.Site
+public import RegistrationLog.SiteCheck
 meta import CoreProtocol.Site
+meta import RegistrationLog.SiteCheck
 meta import Lean.Data.Json
 
 @[expose] public section

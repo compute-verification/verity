@@ -6,11 +6,13 @@ both read are `verity.protocols.accounting.poub.verifier.p2_parties`'s.
 case to the store's `case`, if it has one. `prove(reader, writer, prover, request)` runs it over a channel and returns
 the answer. It also reads a verifier that sends each challenge as the coin's whole opening and discloses no coins at
 the end, the form before `Released`: the challenge is read as its released part (`released_of`), and `end` never comes.
+The runtime starts it from a configuration and its deploy bindings (`start`, `STARTS`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
 from verity.channel import Message
@@ -84,6 +86,17 @@ class Prover:
         return out
 
 
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path) -> Any:
+    """The prover's start on its node, from the configuration and its deploy bindings (`bound`, its
+    `[prover.bandwidth]`: the verifier's `address` it dials): its params the request `P2.request_of(node, **P2.SESSION)`
+    for the node its store was registered under, and its `store` (a `Peer`) the served C* on the card. Neither has a
+    source the runtime gives a party (the node is setup's, the store the served store's), so it raises
+    `NotImplementedError(P2.GOAL)`."""
+    raise NotImplementedError(P2.GOAL)
+
+
+STARTS = {P2.PROVER: start}
+"""Each party's start (`ProtocolDef.starts`), which `PROTOCOL` takes once `ProtocolDef` has it."""
 PROTOCOL = ProtocolDef(P2.MANIFEST, {P2.PROVER: Prover})
 
 
@@ -95,4 +108,4 @@ def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Peer, request: Mapping[str, A
     return P2.drive(Prover(), dict(request), identity, f_in, f_out, peer=P2.VERIFIER).outcome
 
 
-__all__ = ["PROTOCOL", "Peer", "Prover", "prove", "released_of"]
+__all__ = ["PROTOCOL", "Peer", "Prover", "STARTS", "prove", "released_of", "start"]
