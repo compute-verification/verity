@@ -1034,24 +1034,20 @@ RECORDED = {"audits": [{"circuit": "c0" * 64, "order": {}, "pins": {}, "program"
 
 
 @pytest.mark.parametrize("stands", [True, False])
-def test_a_tied_audit_with_a_circuit_record_has_a_figure_of_record_only_where_its_state_free_charge_stands(
+def test_a_tied_audit_with_a_circuit_record_is_charged_its_state_free_only_where_rows_state_held_stands(
         tmp_path, lock, monkeypatch, stands):
-    """A tied audit whose parameters state its circuit record may be charged its stateFree, less than its free. Where
-    RowsStateHeld stands over the activations entry, that charge is the figure's; where it doesn't, the public doesn't
-    separate the two, so there is no figure of record and no period cells, the bound's K still stated."""
+    """A tied audit whose parameters state its circuit record is charged its stateFree where RowsStateHeld stands over
+    the activations entry, and otherwise its whole free inputs, as the period check charges it, naming each digest
+    the lock gives that isn't pinned. The figure of record and its period cells stand either way."""
     monkeypatch.setattr(OR, "STATE_PINS", STATE_TOY)
     if stands:
         with_state_held(lock, STATE_TOY)
     rec = record(accepted(tmp_path, params=RECORDED))
     of = rec["bound"]["of_record"]
     charge = {"charge": "stateFree" if stands else "free", "is": OR.STATE_CHARGE, "tied": [0], "with_record": [0]} | (
-        {} if stands else {"unpinned": {g: None for g in STATE_TOY}, "missing": OR.STATE_UNCOVERED})
+        {} if stands else {"unpinned": {g: None for g in STATE_TOY}})
     assert of["state_charge"] == charge and rec["bound"]["K"] == K
-    if stands:
-        assert of["K"] == KR and "missing" not in rec["periods"]
-        return
-    assert of == {"missing": OR.STATE_UNCOVERED, "state_charge": charge}
-    assert rec["periods"] == {"missing": f"no figure of record: {OR.STATE_UNCOVERED}"}
+    assert of["K"] == KR and "missing" not in rec["periods"]
 
 
 def test_at_the_trees_locks_the_charge_is_the_whole_free_inputs(monkeypatch):
