@@ -355,6 +355,7 @@
   "Proofs.Properties.Verity.SampledTwo.FormSetup",
   "Proofs.Properties.Verity.SampledTwo.FormCount",
   "Proofs.Properties.Verity.SampledTwo.FormStmts",
+  "Proofs.Properties.Verity.SampledTwo.FormLast",
   "Proofs.Properties.Verity.SampledTwo.FormCircuit"
  ],
  "exempt": {
