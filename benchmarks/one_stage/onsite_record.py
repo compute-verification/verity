@@ -79,7 +79,7 @@ reads of it at that entry's root and domain (`AUDIT_SUMMARY`'s registered.own), 
 sampled member's registered reads (`AUDIT`): one-stage's docket checks read nothing of the window, so the audit's
 driver pins it, and the record checks that it did.
 
-**SPOT's guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
+**SPOT's guarantee** (``spot``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
 its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
 pooled (``pooled``, `POOLED`): at most ⌊ln(1/δ)/q⌋ incorrect proof blocks over any number of windows, each drawing k of
 its n proof blocks (q = k/n), by `Flock.Guarantees.IntegrityHorizon`, and for each monitoring period of
@@ -731,7 +731,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                                 "that audit, is in the lock at the statement `DISCHARGES` pins; SenderDecodes, the "
                                 "decoder, is what K counts (`COUNTS`)",
                           "discharged_by": ("Properties.Certifier.schedulesCoveredAt",)},
-    "sampled-leg-bridge": {"is": "the sampled subprotocol's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
+    "sampled-leg-bridge": {"is": "the sampled subprotocol's bridge, from its guarantee Verity.Vocab.SpotSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KSBy at "
                                  "the wired check at the layout's wires, KS where it has none, from KS_of's hypotheses "
                                  "and the record's check of each session's wired reads, WiredReads; "
@@ -1341,7 +1341,7 @@ def coins(out: Path) -> dict[str, Any]:
     said = [m[1].strip() if (m := re.search(r"sampled proofs: ([^;]*)", x)) else None
             for x in lines(out, "verdicts.txt") if x.startswith(COINS_LINE)]
     live = bool(said) and all(s is not None and LIVE_COINS.fullmatch(s) for s in said)
-    return ({"open": not live, "sampled_proofs": said, "from": f"verdicts.txt {COINS_LINE.strip()}", "is": COINS}
+    return ({"open": not live, "spot": said, "from": f"verdicts.txt {COINS_LINE.strip()}", "is": COINS}
             | ({} if said else {"missing": NO_COINS}))
 
 
@@ -2013,7 +2013,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
                       "verified_compute": NO_VERIFIED_COMPUTE}
                      | ({"uncredited": paid["missing"]} if "missing" in paid else {})
                      | ({"conditional_on": held} if held else {}),
-        "sampled_proofs": sampled(rows.get(ROWS["sampled proofs"]), v["sampled proofs"], *phase_seconds(out), cond),
+        "spot": sampled(rows.get(ROWS["sampled proofs"]), v["sampled proofs"], *phase_seconds(out), cond),
         "placement": profile.get("placement"), "advice_charge": advice,
         "composite_error": composite_error(rows, None, conditional=cond, composite=composite, pouw=with_pouw),
         "reproof": reproof(out, copy, listing, tie)}
@@ -2085,7 +2085,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "connections": (b.get("connections") or {}).get("count"),
             "year_datacenter": None if year is None else {
                 k: year[k] for k in ("bits", "share", "share_served", "share_of_capacity", "delta_net", "how")},
-            "sampled_proofs": guarantee(rec.get("sampled_proofs")),
+            "spot": guarantee(rec.get("spot")),
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}
 
 
@@ -2134,7 +2134,7 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
                      **{k: line[k] for k in ("composite", "verified_compute", "compute")},
                      "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
                      "not_credited": line["not_credited"], "K": line["K"], "open": line["open"],
-                     "periods": cells(rec.get("periods")), "sampled_proofs": line["sampled_proofs"]})
+                     "periods": cells(rec.get("periods")), "spot": line["spot"]})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
 
 

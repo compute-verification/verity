@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Pouw.TS.Drawn
+public import Proofs.Pouw.TS.Sampled
 public import Proofs.Accounting.Lemmas.TS.Fixed
 
 /-!

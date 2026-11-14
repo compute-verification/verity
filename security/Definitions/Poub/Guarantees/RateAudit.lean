@@ -8,7 +8,7 @@ public import Definitions.Poub.RateAuditInteractive
 # The rate audit: what an accepted device held and read (trusted)
 
 The game is `security/Definitions/Poub/RateAudit.lean`, its embedding in the device model
-`security/Definitions/Poub/RateAuditJoint.lean`; proofs are in `Security/Proofs/Poub/RateAudit/`. No named
+`security/Definitions/Poub/RateAuditJoint.lean`; proofs are in `security/Proofs/Poub/RateAudit/`. No named
 assumption: the device's bounds (on-chip state `S`, side link `L`, oracle queries `q`, the compute budget `F` at `c_tag`
 per tag and `c_enc` per rebuilt word) define the class of devices or runs the guarantees quantify over, and the claims
 registry names, for a deployed device, the measurement or conjecture that carries each to it (`bandwidth-s-chip`,

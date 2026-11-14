@@ -729,7 +729,7 @@ def test_coins_no_line_names_live_leave_the_figure_of_record_and_each_cell_condi
     checks are held and every premise discharged, with no tight K beside it."""
     rec, cond = with_coins(tmp_path, said), [OR.COINS_OPEN]
     parts = [x.partition("sampled proofs: ")[2].partition(";")[0] or None for x in said]
-    assert rec["coins"] == {"open": True, "sampled_proofs": parts, "from": "verdicts.txt COINS", "is": OR.COINS,
+    assert rec["coins"] == {"open": True, "spot": parts, "from": "verdicts.txt COINS", "is": OR.COINS,
                             "open_draws": ["sampled proofs' draw"], "draws": ALL_DRAWN} | (
         {} if said else {"missing": OR.NO_COINS})
     of = rec["bound"]["of_record"]
@@ -749,7 +749,7 @@ def test_coins_a_line_names_live_add_no_condition_and_the_tight_K_is_of_record(t
     the coins closed: nothing is conditional on them, and with both checks held and every premise discharged the tight
     K is of record. A record written before the record read the coins is conditional on them in its line."""
     rec = with_coins(tmp_path, [coins_line(GATE, lead)])
-    assert rec["coins"] == {"open": False, "sampled_proofs": [GATE], "from": "verdicts.txt COINS", "is": OR.COINS,
+    assert rec["coins"] == {"open": False, "spot": [GATE], "from": "verdicts.txt COINS", "is": OR.COINS,
                             "open_draws": [], "draws": ALL_DRAWN}
     of = rec["bound"]["of_record"]
     assert not any("conditional_on" in x for x in (rec["verdicts"]["sampled proofs"], rec["of_record"], of,
@@ -1568,7 +1568,7 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
     (None, "accept", OR.NOT_ESTABLISHED),
     (None, None, "missing"),
 ])
-def test_sampled_proofs_verdict_is_its_subprotocol_in_the_composite_of_record_never_the_records_audits_v1_row(
+def test_spot_verdict_is_its_subprotocol_in_the_composite_of_record_never_the_records_audits_v1_row(
         tmp_path, subprotocol, row, verdict):
     """SPOT's verdict is the outcome of remote's SPOT case in the composite of record
     (VStar.Recursive.Sampled on OneStageZk's case), whatever the window report's integrity row, the records audit's
@@ -1598,7 +1598,7 @@ def test_sampled_proofs_verdict_is_its_subprotocol_in_the_composite_of_record_ne
                              "why": f"{OR.V1_UNREAD}, and {unread.get(subprotocol)}", "credit": UNESTABLISHED},
         "missing": {"verdict": "missing", "why": unread[None], "credit": CREDITED}}[verdict]
     assert v == expect
-    assert ("per_window" in rec["sampled_proofs"]) is (verdict == "accept")
+    assert ("per_window" in rec["spot"]) is (verdict == "accept")
     assert ("sampled proofs" in rec["of_record"]["not_established"]) is (verdict == OR.NOT_ESTABLISHED)
     assert OR.summary(rec)["verdicts"]["sampled proofs"] == verdict
 
@@ -2172,7 +2172,7 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
             "protocol": SAMPLED_V1, "verdict": OR.NOT_ESTABLISHED, "answer": "accept",
             "from": "composite/remote-network-no-pouw/composite.json cases", "open": [OR.REGISTERED_FILES],
             "why": OR.FILES_UNMET, "credit": UNESTABLISHED}
-        assert rec["sampled_proofs"]["missing"] == (
+        assert rec["spot"]["missing"] == (
             f"sampled proofs' verdict is {OR.NOT_ESTABLISHED}: only its accepted answer states a bound")
     if why is None:
         assert "K" in rec["bound"] and line["K"] is not None
@@ -2247,7 +2247,7 @@ def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, ho
      OR.NO_COMPLETION),
     (None, [], None, f"the run published no audit record ({OR.AUDIT})"),
 ])
-def test_sampled_proofs_credits_only_members_whose_registered_file_was_completed_and_names_each_other(
+def test_spot_credits_only_members_whose_registered_file_was_completed_and_names_each_other(
         tmp_path, capsys, audit, credited, not_credited, missing):
     """SPOT credits a drawn member only where its audit completed the member's --registered file at the
     window's committed roots and the member's Lean verdict of record accepted it reporting exactly its reads: a member
@@ -2325,7 +2325,7 @@ def test_whether_the_run_is_of_record_reads_no_pouw_verdict_which_stays_listed_a
     assert record(with_onsite(out, sampled="reject"))["of_record"]["holds"] is False
 
 
-def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_pooled_count_over_each_period(
+def test_spot_guarantee_is_its_windows_epsilon_at_delta_beside_its_pooled_count_over_each_period(
         tmp_path, capsys):
     """subset:1 over a window's 16 proof blocks at δ = 2^-40: the window's bound is 15, ε = 15/16, and pooled at most
     ⌊16 · ln 2^40⌋ = 443 incorrect proof blocks over any number of windows (IntegrityHorizon). Each monitoring period
@@ -2334,7 +2334,7 @@ def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_poo
     window's ε beside each pooled cell, never alone."""
     out = accepted(tmp_path)
     assert main([str(out)]) == 0
-    g = json.loads((out / "record" / "onsite.json").read_text())["sampled_proofs"]
+    g = json.loads((out / "record" / "onsite.json").read_text())["spot"]
     assert (g["is"], g["refused"], g["from"], "conditional_on" in g) == (
         OR.SAMPLED, OR.MULTI, "record/verdicts.json protocols.integrity.answer", False)
     assert g["per_window"] == {"units": N, "law": {"subset": 1}, "delta": str(DELTA), "bound": N - 1, "epsilon": "15/16",
@@ -2361,7 +2361,7 @@ def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_poo
     text, line = (out / "record" / "onsite.json").read_text(), capsys.readouterr().out.strip()
     assert SV.public_doc(text) == text and SV.public_line(line) == line
     assert "member" not in g and "open_in_lean" not in json.loads(line[7:])
-    line = json.loads(line[7:])["sampled_proofs"]
+    line = json.loads(line[7:])["spot"]
     assert line["per_window"] == {"epsilon": "15/16", "delta": str(DELTA), "units": N, "law": {"subset": 1}}
     assert line["pooled"] == {"incorrect_at_most": 443, **{
         name: {where: {k: p[name][where][k] for k in ("incorrect_at_most", "share")} for where in links}
@@ -2382,7 +2382,7 @@ def test_the_pooled_count_is_the_floor_of_ln_links_over_delta_over_q_past_a_floa
 
 
 def test_a_run_with_no_certifier_case_states_the_pooled_count_and_no_period_cells(tmp_path):
-    g = record(with_onsite(served_out(tmp_path)))["sampled_proofs"]
+    g = record(with_onsite(served_out(tmp_path)))["spot"]
     assert (g["per_window"]["epsilon"], g["pooled"]["incorrect_at_most"]) == ("15/16", 443)
     assert g["pooled"]["periods"] == {"missing": f"no {OR.CASE}: a window's length is an execution phase's, its params' "
                                                  "schedule (`WINDOW_S`)"}
@@ -2395,7 +2395,7 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
     IntegrityHorizon pools only a uniform k-subset, so it has no pooled figure, and the record names the window of
     several members such a draw needs as one a run of record doesn't have: its case is the per-member one, which Lean
     refuses."""
-    g = record(with_onsite(served_out(tmp_path, draw=STRATIFIED1, bound=14)))["sampled_proofs"]
+    g = record(with_onsite(served_out(tmp_path, draw=STRATIFIED1, bound=14)))["spot"]
     assert g["per_window"]["law"] == {"law": "stratified", "strata": [{"name": "A", "size": 8, "k": 1},
                                                                   {"name": "B", "size": 8, "k": 1}]}
     assert (g["per_window"]["epsilon"], g["pooled"]) == ("7/8", {"missing": OR.NOT_POOLED})
@@ -2404,23 +2404,23 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
 
 
 @pytest.mark.parametrize("coins", [None, "a local development challenger session"])
-def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_answer(tmp_path, coins):
+def test_spot_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_answer(tmp_path, coins):
     """The guarantee reads the records audit's answer's profile and bound only once SPOT's verdict, its subprotocol in
     the composite of record, accepted: rejected there, or not established, it states no bound."""
     out = with_onsite(served_out(tmp_path, coins=coins))
-    g = record(out)["sampled_proofs"]
+    g = record(out)["spot"]
     assert (g["conditional_on"], g["per_window"]["epsilon"]) == ([OR.COINS_OPEN], "15/16")
     f = out / "record" / "verdicts.json"
     report = json.loads(f.read_text())
     report["protocols"]["integrity"]["answer"] = {}
     f.write_text(json.dumps(report))
-    assert record(out)["sampled_proofs"]["error"] == ("its answer's profile or public lacks a field: KeyError: "
+    assert record(out)["spot"]["error"] == ("its answer's profile or public lacks a field: KeyError: "
                                                          "'profile'")
-    g = record(with_onsite(out, sampled="reject"))["sampled_proofs"]
+    g = record(with_onsite(out, sampled="reject"))["spot"]
     assert g["missing"] == "sampled proofs' verdict is reject: only its accepted answer states a bound"
     assert "per_window" not in g and OR.guarantee(g) == {"missing": g["missing"]}
     (out / "composite" / "remote-network" / "composite.json").unlink()
-    assert record(out)["sampled_proofs"]["missing"] == (
+    assert record(out)["spot"]["missing"] == (
         f"sampled proofs' verdict is {OR.NOT_ESTABLISHED}: only its accepted answer states a bound")
 
 
@@ -2436,7 +2436,7 @@ def test_a_chain_draw_that_doesnt_take_everything_is_open_under_live_coins_by_it
     out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), draws=None if n2 is None else chain_report(n2, scan))
     assert main([str(out)]) == 0
     rec, cond = json.loads((out / "record" / "onsite.json").read_text()), [OR.COINS_OPEN]
-    assert (rec["coins"]["open"], rec["coins"]["open_draws"], rec["coins"]["sampled_proofs"]) == (True, named, [GATE])
+    assert (rec["coins"]["open"], rec["coins"]["open_draws"], rec["coins"]["spot"]) == (True, named, [GATE])
     assert rec["coins"]["draws"].get("missing") == (None if n2 else OR.NO_CHAIN_REPORT)
     of = rec["bound"]["of_record"]
     assert (of["open"], of["conditional_on"], of["K"]) == (cond, cond, KR)
@@ -2546,7 +2546,7 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
                                        "per_phase": run["per_phase"]["bits"]}
         assert all(r["periods"][n][w] == {k: rec["periods"][n][w][k] for k in ("bits", "share", "how")}
                    for n in LB.PERIODS for w in ("node", "datacenter", "world"))
-        assert r["sampled_proofs"] == OR.guarantee(rec["sampled_proofs"]) and "year" in r["sampled_proofs"]["pooled"]
+        assert r["spot"] == OR.guarantee(rec["spot"]) and "year" in r["spot"]["pooled"]
         assert "conditional_on" not in r["periods"] and not {"K_tight", "periods_tight"} & set(r)
     assert runs[1]["periods"]["run"]["bits"] - runs[0]["periods"]["run"]["bits"] == 7432 - 1328
     said = (OR.ONSITE, "none", f"no verified compute is credited: {OR.ONSITE}'s verdict is no compute claim")

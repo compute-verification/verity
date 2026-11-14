@@ -789,6 +789,19 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
     srv.src.uninstall()
 
 
+def test_a_gate_window_that_commits_no_session_root_refuses_its_draw_by_name():
+    """A gate window's draw is taken on its gate session's open root: a run that commits no session, or one with no
+    root, is refused by name before any stream reaches `drawn_units`."""
+    arm = SimpleNamespace(sessions=object(), _period_k={"p1": 4})
+    held = {"session": "s/7", "period": "p1"}
+    for commits in ({}, {"session": {"session": "s/7"}}):
+        with pytest.raises(ValueError, match="^session s/7's window commits no gate session's open root"):
+            SH.H1Windows.draw_of(arm, SimpleNamespace(commits=commits), held)
+    root = "ab" * 64
+    assert SH.H1Windows.draw_of(arm, SimpleNamespace(commits={"session": {"root": root}}), held) == (
+        4, root, "period p1's open")
+
+
 class ArmSpy:
     """`serve_h1.H1Windows` as `CommitWindows` drives it: at each open and close, whether the committer's patches of the
     runner are on; ``fail`` the windows whose open raises."""
