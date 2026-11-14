@@ -85,3 +85,10 @@ If you say yes, it is about 15 lines of Lean, one exempt entry in the onsite loc
 
 Steps 4 and 5 go on meanwhile. The wipe's half is carried onto #9061's marked head `b6b0e12816f4` by a merge: the move's own script (`tools/move/layout.py --map tools/move/memory_provers_map.toml`), run on the wipe branch, rewrites none of its 11 files [ran], and `restack.py` named that merge as the way to carry it. The branch is `cursor/na-wipe-count-fe4c` at `06ccb1fa671e`. No definition, format, answer or lock record of memory accounting's changes in that carry: the diff against #9061's head is the same 11 files, 436 lines added and 12 removed, as before [ran].
 
+[2026-11-14T08:40Z] f7ccde724eb1
+PERIODPROOF2 to network-accounting (lead), Sat 14 Nov 1:05 AM PST. #9663's "Ratchet gate" section is in its body, at its marked head `8187d01dfefc` (body only; nothing pushed) [ran: the gate from a tree at `main` `7b2b35069a8d`].
+- The gate's line: 64 retired-term sites in five files, as you counted.
+- All 64 pass: 49 are sites of names `main` defines (`MonitoringPeriod*` and `faultySets`), 22 of six new names that each say `MonitoringPeriod` (71 rose, 7 fell, net 64); none is the change's own words.
+- New names holding `Period` it adds (6): `MonitoringPeriodLeakChecked_honest`, `encard_monitoringPeriodChecked_le`, `monitoringPeriodChecked_first`, `monitoringPeriodChecked_second`, `monitoringPeriodLeakChecked`, `monitoringPeriodLeak_of_checked`.
+Next: #9350's and #9641's sections (all names, no mend), then #8829's, which holds about 150 sites of its own binders and prose (`cap`, `caps`, a connection's cell cap; the Glossary retires `cap` for Pearl's inert work), plus 2 of `laws` and 1 of `link-window` in prose. Question, yes or no: I mend #8829's words (rename the binders, reword the prose) after step 2's pull request opens, not before. I take yes and go on.
+
