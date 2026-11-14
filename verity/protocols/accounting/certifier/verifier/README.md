@@ -60,7 +60,7 @@ Open premises (`open`):
   and `pacer`. Its importers: the prover side, `verity/protocols/accounting/certifier/prover`; `../device`'s vector
   scripts; `adapters/vllm` (`advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
   `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; `verity run`'s served table (`tools/verity/cli`); the tests of
-  `../../pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`,
+  `../../pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`,
   `prove_path`, `one_stage`, `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network
   check's tests (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock` and
   `../../../proofs/recursion` import none.

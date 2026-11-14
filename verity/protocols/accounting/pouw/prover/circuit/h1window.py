@@ -20,7 +20,7 @@ derives the execution phase's units from its own copy of the Program under the `
   (`window_ports`; B row j's ``b_k<K>_<j>``), every K's ports distinct.
 * **K's circuit file** is Flock's statement of K's template on the rows `statement_rows` gives (its A and B rows, the
   record and the public row, each a ``row/v2`` row), which the auditor's lowering builds from this module and Flock's
-  Python alone (numpy, no torch): flat, or templated (``flock-circuit/tmpl``) under a layout mode.
+  Python alone (numpy, no tensor library): flat, or templated (``flock-circuit/tmpl``) under a layout mode.
 * **Linears and calls.** ``linears`` are the execution phase's weights ``(name, K, n)``, each once, and ``calls`` its calls
   ``(linear, block)`` in order: a step's call of a linear reads A block ``block`` of its K and the linear's B rows.
 * **Fixed slots.** The layout is protocol structure, so no token count becomes public. For each K the execution phase's A rows are

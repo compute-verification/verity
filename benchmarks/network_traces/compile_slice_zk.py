@@ -95,9 +95,9 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(REPO))
 
-import zk_drivers  # noqa: E402
+from benchmarks.network_traces import zk_drivers  # noqa: E402
 from verity.protocols.accounting.certifier.prover import leak_scan as LS, warden_zk as WZ  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import charge_chain as CC  # noqa: E402
 from verity_vllm.compiler import compile_slice as CS  # noqa: E402

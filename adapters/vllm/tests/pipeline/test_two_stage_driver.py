@@ -35,12 +35,14 @@ from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
                                   interior_rows as IR, serving_rows as SRW)
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("verity.protocols.proofs.spot.prover.audit.two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("verity.protocols.proofs.spot.device.challenger_session")
+VT = importlib.import_module("test_verdict_record")
+VR, NAMES, _design, _record = VT.VR, VT.NAMES, VT._design, VT._record
 
 XOR8 = PrimitiveDefinition("TwoStageDriverTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -113,7 +115,7 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
     assert _samples_q(got) and got.read
-    handoff = json.loads(json.dumps(got.stage1()))
+    handoff = json.loads(json.dumps(got.first_stage()))
     assert handoff["units"] == list(got.sample.units) and handoff["spec"] == got.stream.spec.digest()
     again = TS.resume(handoff, PAIR, FC.Challenger("second"))
     assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
@@ -130,7 +132,7 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
     c = _class(WRAP, inline=True)
     got = TS.first(c.public(), WRAP, RULE, _placed(c.layout))
     assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
-    again = TS.resume(json.loads(json.dumps(got.stage1())), WRAP, FC.Challenger("second"))
+    again = TS.resume(json.loads(json.dumps(got.first_stage())), WRAP, FC.Challenger("second"))
     assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
     _, second = again.second(*_interior(again.layout, again.registration.digest))
     assert len(second.units) == Q * K and [u // (2 * N_RHO) for u in second.units] == list(range(Q))
@@ -159,7 +161,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 
     got = TS.first(c.public(), BOTH, rule, _placed(c.layout))
     assert got.stream.cells == (2 * N_RHO, N_RHO) and got.stream.counts == (3, 1)
-    handoff = json.loads(json.dumps(got.stage1()))
+    handoff = json.loads(json.dumps(got.first_stage()))
     assert handoff["rule"]["k"] == ks
     again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
@@ -218,16 +220,16 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 def test_resume_refuses_another_rule_registration_or_sample():
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
-    stage1 = json.loads(json.dumps(got.stage1()))
+    first_stage = json.loads(json.dumps(got.first_stage()))
     with pytest.raises(ValueError, match="hand-off"):
-        TS.resume({**stage1, "format": "other"}, PAIR)
+        TS.resume({**first_stage, "format": "other"}, PAIR)
     with pytest.raises(ValueError, match="Spec"):
-        TS.resume({**stage1, "rule": TS.Rule(RULE.replay, K + 1, INTERIOR, 60.0).to_json()}, PAIR)
+        TS.resume({**first_stage, "rule": TS.Rule(RULE.replay, K + 1, INTERIOR, 60.0).to_json()}, PAIR)
     with pytest.raises(ValueError, match="registers to another digest"):
-        TS.resume({**stage1, "registration": "00" * 64}, PAIR)
+        TS.resume({**first_stage, "registration": "00" * 64}, PAIR)
     others = [u for u in range(N) if u not in got.sample.units][:Q]
     with pytest.raises(ValueError, match="other spans"):
-        TS.resume({**stage1, "units": others}, PAIR)
+        TS.resume({**first_stage, "units": others}, PAIR)
 
 
 def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
@@ -240,7 +242,7 @@ def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     c = _class()
     pub, mine, elsewhere = c.public(), TS.family_of(c.layout), "ab" * 64
     got = TS.first(pub, PAIR, RULE, _placed(c.layout), window_root=pub["run"])
-    hand = json.loads(json.dumps(got.stage1()))
+    hand = json.loads(json.dumps(got.first_stage()))
     assert hand["family"] == mine and "window_root" not in hand and TS.first_root(hand) == pub["run"]
     for handoff in (hand, {**hand, "window_root": pub["run"]}, {k: v for k, v in hand.items() if k != "family"}):
         again = TS.resume(handoff, PAIR, window_root=TS.first_root(handoff))
@@ -325,7 +327,7 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
     assert [(r["port"], r["leaves"]) for r in got.record["roots"]][:3] == [("b.ingress", N), ("b.egress", N), (name, N * N_RHO)]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
     assert _samples_q(got)
-    again = TS.resume(json.loads(json.dumps(got.stage1())), SAME, FC.Challenger("second"))
+    again = TS.resume(json.loads(json.dumps(got.first_stage())), SAME, FC.Challenger("second"))
     assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
 
 
@@ -515,8 +517,9 @@ def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
     """`outcome_of` reports ``complete`` beside ``accepted``. The replay block here is a stand-in for the class's
     request Definition (`REQUEST_DEFINITION`) and the two-stage form is off (`second_stage.FORM`), so an outcome whose
     stream accepted on two audit records that accepted and are complete is still not complete; nor is it with either
-    one switched on alone. With both on it is, and then only for an accepted outcome whose records both accepted and
-    are complete. A refused outcome is not."""
+    one switched on alone. Completeness is Lean's (`second_stage.complete`), which no entry answers yet, so with both on
+    it is not either. With Lean's answer (its twin standing in) and both on it is, and then only for an accepted
+    outcome whose records both accepted and are complete. A refused outcome is not."""
     handed = {"sessions": [], "verdicts": {}, "statement": {}, "proved_units": [], "instances": 0, "served": [],
               "session_roots": {}}
     whole = {"accepted": True, "complete": True, "checks": {}}
@@ -526,6 +529,12 @@ def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
 
     assert TS.REQUEST_DEFINITION is False and SS.FORM is False
     assert TS.outcome_of(_Decided(True, whole, whole), None, handed, [None, None], [], {})["accepted"] is True
+    assert said(_Decided(True, whole, whole)) is False
+    with monkeypatch.context() as m:
+        m.setattr(SS, "FORM", True)
+        m.setattr(TS, "REQUEST_DEFINITION", True)
+        assert said(_Decided(True, whole, whole)) is False
+    monkeypatch.setattr(SS, "complete", SS.complete_twin)
     assert said(_Decided(True, whole, whole)) is False
     with monkeypatch.context() as m:
         m.setattr(SS, "FORM", True)
@@ -903,7 +912,7 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
             opened.append({"name": name, "turns": turns})
             return manager, turns, finisher
         monkeypatch.setattr(AC, "start", start)
-        a = _args(out, stage1=str(out / "handoff.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
+        a = _args(out, first_stage=str(out / "handoff.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
                   rids=None, proofs=None, unlinked=False, kept=None, stop=json.dumps(STOP.to_json()), **more)
         assert TS._second(a) == 1
         return json.loads((out / "summary.json").read_text())
@@ -931,3 +940,33 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
     (tmp_path / "empty").mkdir()
     got = second("empty-host", first, challenger="local", challenger_host=str(tmp_path / "empty"))
     assert AC.NO_HOST in got["refused"] and len(opened) == sessions, "no challenger of the second stage's own was started"
+
+
+@pytest.mark.slow
+def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it(tmp_path, monkeypatch):
+    """The verdict record's fixtures (`test_verdict_record.py`) are written in the form the writer expects, so they
+    can't show that the form is the drivers'. This registers a stop class's first stage on a test's challenger as `two_stage.py first --stop` does,
+    builds its stop stream again as the stop audit does, and takes `stop_audit.summary_of`'s own summary: the record
+    names the class's boundary record, the directory the class is filed under and the rate its stop record registers.
+    No session is proved and Lean is not called."""
+    SA = importlib.import_module("verity.protocols.proofs.spot.prover.audit.stop_audit")
+    pubs = [json.loads(json.dumps(_stop_class().public()))]
+    monkeypatch.setattr(AC, "start", _start(OneSession("verdict-record")))
+    (wrote,) = TS._first_all(_args(tmp_path), pubs, PAIR, RULE, None, STOP)
+    first = json.loads(json.dumps(wrote))
+    design = f"rate:{Q}/{N}"
+    r = SA.resume(first, PAIR, STOP, design, proof_deadline=RULE.proof_deadline)
+    audit = {"accepted": True, "complete": False, "verdicts": {}, "checks": {}}
+    summary = json.loads(json.dumps(SA.summary_of(r, STOP, design, {"accepted": True, "audit": audit})))
+    got = VR.record("stop_record", first, summary, **NAMES)
+    layout = r.layout
+    assert got["class"] == f"w{pubs[0]['window']}/p{layout.prompt}-o{layout.outputs}"
+    assert got["registration"] == r.boundary == first["registration"] != r.registration.digest
+    assert got["rate"] == VR.rate({"population": layout.spans, **_design("subset", len(r.sample.units))})
+    assert (got["verdict"], got["verifier"]["module"]) == ("not complete", SA.TOOL)
+    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.registration.digest, True)
+    assert r.registration.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
+    interior = _record(4, 4, previous=r.boundary, interior=True)
+    second = {"first_stage": {"registration": r.first.registration.digest}, "held": True, "outcome": {"accepted": False},
+              "second_stage": {"registration": R.digest(interior)}}
+    assert VR.record("second_stage", first, second, stream=interior, **NAMES)["verdict"] == "withheld"

@@ -56,7 +56,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 ## The demo's load
 
 The H200 demo serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
-(`benchmarks.torch_gpu.p2_stage.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
+(`verity.protocols.accounting.pous.prover.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
 two gate verbs on the auditor's machine:
 
 - `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk

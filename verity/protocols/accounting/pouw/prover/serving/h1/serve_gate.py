@@ -34,11 +34,10 @@ def _expires(reserved: Mapping[str, Any]) -> datetime | None:
 def listening(port: int) -> bool:
     """Whether a socket on this machine listens on TCP `port`, as the kernel's tables say (``/proc/net/tcp``, ``tcp6``;
     state 0A): a probe connect would take the place of the session's one client."""
-    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
-        try:
-            rows = [r.split() for r in Path(table).read_text().splitlines()[1:]]
-        except OSError:
+    for table in map(Path, ("/proc/net/tcp", "/proc/net/tcp6")):
+        if not table.is_file():
             continue
+        rows = [r.split() for r in table.read_text().splitlines()[1:]]
         if any(int(r[1].rsplit(":", 1)[1], 16) == port and r[3] == "0A" for r in rows):
             return True
     return False

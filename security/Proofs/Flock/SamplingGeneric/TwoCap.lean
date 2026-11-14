@@ -306,13 +306,13 @@ theorem FregTwo_eq (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : P
 
 /-- **The committed interior reads no second-stage coin.** -/
 theorem iregVal_forkOn (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r e : Fin (L.V.k x) → Coin) : L.iregVal H P x ω (forkOn (L.stage2 x) r e) = L.iregVal H P x ω r := by
+    (r e : Fin (L.V.k x) → Coin) : L.iregVal H P x ω (forkOn (L.secondStage x) r e) = L.iregVal H P x ω r := by
   funext ρ g
   simp only [iregVal, forkOn_forkOn]
 
 /-- **The committed incorrect set reads no second-stage coin.** -/
 theorem FregTwo_forkOn (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r e : Fin (L.V.k x) → Coin) : L.FregTwo H P x ω (forkOn (L.stage2 x) r e) = L.FregTwo H P x ω r := by
+    (r e : Fin (L.V.k x) → Coin) : L.FregTwo H P x ω (forkOn (L.secondStage x) r e) = L.FregTwo H P x ω r := by
   simp only [FregTwo, iregVal_forkOn]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
