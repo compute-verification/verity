@@ -311,7 +311,7 @@ def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None
 
 
 class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
-    """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
+    """One install's Pearl-C workload on the device, with the NCP runs' interface (`serving.MatmulRun`'s `gemm`, `finish`, `commits`, `details`) and
     the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],

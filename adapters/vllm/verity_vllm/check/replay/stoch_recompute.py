@@ -282,7 +282,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
                                          f"async_scheduling) is unattested: the lag slot cannot be judged"}
     if A is not None and int(A) not in (0, 1):
         return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (LAG in (0, 1)); the recurrence refuses it"}
-    # served[:cap]: the recurrence runs over the C slots (`expected_draw_positions` does the same); samples past C are EXTRA positions for
+    # served[:cap]: the recurrence runs over the C slots (`expected_sample_positions` does the same); samples past C are EXTRA positions for
     # the comparison to name, never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
     # then never reached, so the profile does not matter.
     slots = continuation.recurrence([None if y is None else int(y) for y in served[:cap]], cap=cap, A=int(A) if A is not None else 0, eos=eos_ids)
@@ -368,7 +368,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
             out["requests"][rid] = ent
             continue
         t_eos = info.get("t_eos")
-        # the RULE's positions are those of `expected_draw_positions`: slot t at pos L - 1 + (t - 1), the query position whose
+        # the RULE's positions are those of `expected_sample_positions`: slot t at pos L - 1 + (t - 1), the query position whose
         # logits slot t samples = the record's own `pos` fact (device_facts_match on every checked row; qwen B8 L=1024: first sample 1023);
         # served[:T] and A = 0 without an EOS as in expected_executed_slots (the same recurrence; a disagreement between the two calls is named)
         # continuation loads the core `verity` and registers its Definitions: only for a request the rule is read for
@@ -379,14 +379,14 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
             probs.append(f"draw ledger {rid}: a sampled row without its served token: the rule cannot be read for this request")
             out["requests"][rid] = ent
             continue
-        pad_pos = continuation.expected_draw_positions([int(y) for y in served[:T]], cap=T, A=int(lag) if lag is not None else 0,
+        pad_pos = continuation.expected_sample_positions([int(y) for y in served[:T]], cap=T, A=int(lag) if lag is not None else 0,
                                              eos=eos_ids if eos_ids is not None else set(), prompt_len=L)
         expected = [int(p) for p in pad_pos["positions"]]
         if pad_pos["slots"] != exp_slots:
-            probs.append(f"draw ledger {rid}: expected_draw_positions slots {pad_pos['slots'][:4]}.. != executed_slots {exp_slots[:4]}..: one recurrence, two answers")
+            probs.append(f"draw ledger {rid}: expected_sample_positions slots {pad_pos['slots'][:4]}.. != executed_slots {exp_slots[:4]}..: one recurrence, two answers")
         ent["lag_positions"] = pad_pos["lag_positions"]
         ent["first_forbidden_position"] = pad_pos["first_forbidden_position"]
-        cmp = continuation.compare_draw_positions(expected, drawn)          # the continuation's comparison: extra / missing / repeated / out-of-order BY NAME
+        cmp = continuation.compare_sample_positions(expected, drawn)          # the continuation's comparison: extra / missing / repeated / out-of-order BY NAME
         extra, missing = cmp["extra"], cmp["missing"]
         ent["expected_executed_slots"] = {"n": len(exp_slots), "first": exp_slots[0], "last": exp_slots[-1]}
         ent["expected_positions"] = {"n": len(expected), "first": expected[0], "last": expected[-1]}
@@ -394,7 +394,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         ent["expected_not_drawn"] = missing
         ent["repeated"] = cmp["repeated"]
         ent["ordered_set_equal"] = cmp["ok"]
-        ent["compare"] = "verity_vllm.program.lifting.continuation.compare_draw_positions"
+        ent["compare"] = "verity_vllm.program.lifting.continuation.compare_sample_positions"
         if cmp["ok"] is False and not extra and not missing:      # repeated / out of order: the continuation's names, ours to carry
             probs.extend(f"draw ledger {rid}: {p}" for p in cmp["problems"])
         n_lag = 0                                                 # the lag slots the rule expects: none unless an EOS is served early

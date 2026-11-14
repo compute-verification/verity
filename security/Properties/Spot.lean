@@ -11,13 +11,13 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 
 `AcceptMeans`: what the check accepts is a commitment and evidence for which
 
-* **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
+* **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, sampling design
   and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains,
   a wired port at the root of the port that holds it (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and
   window (`R6`); for a v2 record its registered values, the verifier's own and the ones it holds certified entries for
   (`R7`, `CertifiedHeld`); and under a template query, no run Input its proof blocks don't each read alone (`R8`); and
   in the per-member form each member's one count of link points (`RL`);
-* **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
+* **the sample** is a sample of the registered sampling design over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
   one of the record's own values, less a read named by one of its own ports taken at that port's own root, is of a
@@ -44,7 +44,7 @@ caller's check accepted (`Properties.Remote.StageHeld`), which reads them off th
 (`Properties.Remote.CallerCheckMeans`).
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
-as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
+as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli sampling design is accepted as the code accepts
 it: its sample is checked as any other, its profile's sample is `bernoulli p`, and it publishes the largest `M` of the
 profile's units with `(1 − p)^M ≥ δ` (`BernoulliBounds`, `Bound.bernoulliBound`).
 -/
@@ -70,7 +70,7 @@ def partitionOf (v : Registration.Verifier) : Json :=
 
 /-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered or holds
 certified entries; its format
-is the matching one and its protocol one-stage's; its sampling design is `law`, the verifier's agreed law as `Draw.derive` expands it
+is the matching one and its protocol one-stage's; its sampling design is `law`, the verifier's agreed sampling design as `Draw.derive` expands it
 over the verifier's own program and query; and its window is an object of kind `served` or `stand-in`. -/
 def R1 (rec : Json) (v : Registration.Verifier) (law : Json) : Prop :=
   keys? rec = some (if v.registered.isEmpty && v.certified.isEmpty then Registration.KEYS else Registration.KEYS_V2) ∧
@@ -337,7 +337,7 @@ def RL (v : Registration.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
     LinkPoints.refused law n v.members = .ok #[]
 
-/-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed law as derived; R7, its
+/-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed sampling design as derived; R7, its
 pinned roots (`PinnedHeld`) and its certified roots (`CertifiedHeld`) when the verifier expects values registered or
 holds certified entries; and the per-member form's members' link points (`RL`). The caller's facts are `CallerHeld`'s,
 not these. -/
@@ -359,7 +359,7 @@ def CallerHeld (rec : Json) (v : Registration.Verifier) : Prop :=
   RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
   RunCompiler rec v ∧ (ExpectsV2 v → PoolChained rec v)
 
-/-! ## The sample: the registered law over the registered population -/
+/-! ## The sample: the registered sampling design over the registered population -/
 
 /-- The sampling design a sample names, as a string (empty when it isn't one). -/
 def kindOf (draw : Json) : String :=
@@ -485,7 +485,7 @@ def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDes
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],
     delta := p.delta, drawn := #[(Record.LEVEL, (drawnNats e.draw).size)] }
 
-/-- What the check accepts: the registration keeps R1–R8 with `law` the verifier's agreed law as derived, the sample is a
+/-- What the check accepts: the registration keeps R1–R8 with `law` the verifier's agreed sampling design as derived, the sample is a
 sample of `law` over the registered population, the units were proved and served as sampled under the registered roots and
 values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's sample `d`
 (`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
@@ -503,7 +503,7 @@ def AcceptMeans : Prop :=
 def DigestIsRecord's : Prop :=
   ∀ (b : ByteArray) (c : Commitment), OneStage.commitmentOf b = .ok c → Flock.WindowRecord.digest c.record = .ok c.digest
 
-/-- An acceptance whose profile samples a level by a Bernoulli law at `r` bounds incorrect proof blocks by `Bound.bernoulliBound` over
+/-- An acceptance whose profile samples a level by a Bernoulli sampling design at `r` bounds incorrect proof blocks by `Bound.bernoulliBound` over
 the level's units at δ: the largest `M` of them with `(1 − r)^M ≥ δ`. -/
 def BernoulliBounds : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),

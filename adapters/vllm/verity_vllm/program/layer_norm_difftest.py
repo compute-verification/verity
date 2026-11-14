@@ -1,4 +1,4 @@
-"""difftest adapter for `ln/LayerNormAten@v1`: production = `torch.nn.functional.layer_norm` on one bf16 row with bf16 weight and bias,
+"""difftest adapter for `ln/LayerNormAten@v1`: the served side = `torch.nn.functional.layer_norm` on one bf16 row with bf16 weight and bias,
 which dispatches `aten.layer_norm` -> `vectorized_layer_norm_kernel<c10::BFloat16, float>` for N a multiple of 4 (torch 2.13).
 
     verity-vllm properties-admission produce --adapter verity_vllm.program.layer_norm_difftest --n 60 --seed 7 --out DIR

@@ -12,6 +12,8 @@ untraced = [
     "tests/test_window_audit_outputs.py",
     "tests/test_kept_scan.py",
     "tests/test_prove_path.py",
+    "tests/test_prove_path_sh_keep.py",
+    "tests/test_prove_path_sh_request_values.py",
 ]
 artifacts = [
     "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",

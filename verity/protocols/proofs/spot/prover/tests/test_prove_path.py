@@ -2088,7 +2088,7 @@ def _fused_args(c: dict, **over) -> argparse.Namespace:
 
 def _same_commitment(a: Path, b: Path) -> None:
     """Windows ``a`` and ``b`` commit one thing, as the fixture's own module holds two windows of its layer to one commitment
-    (``tests.pipeline.served_experts --same``): one population program, partition, law, port domains, circuit record and index,
+    (``tests.pipeline.served_experts --same``): one population program, partition, sampling design, port domains, circuit record and index,
     the same registered roots, and the same committed rows in every member, each unit's opening of its table among them."""
     p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_experts", "--same", str(a), str(b)], cwd=VLLM, capture_output=True,
                        text=True)

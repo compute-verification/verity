@@ -3810,7 +3810,7 @@ def test_the_preflight_refuses_a_step_3_partition_that_leaves_out_the_served_com
         tmp_path, given, tie, refusal):
     """Under PEARLPLUS_TIE the served BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of
     which step 3 proves beside the sampled rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
-    one holding them, and the preflight refuses another law or a partition without them, before anything runs. The int8
+    one holding them, and the preflight refuses another sampling design or a partition without them, before anything runs. The int8
     checkpoint's compiler lists none, so its subset:2 partition passes."""
     (pp := tmp_path / "tree" / "benchmarks" / "prove_path").mkdir(parents=True)
     (pp / "llama32_1b_tg_l0_step1.json").write_text(json.dumps(TG_PARTITION))
@@ -4094,7 +4094,7 @@ DEFERRED_LINE = {
 @pytest.mark.parametrize("off", ["1", "0"])
 def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_and_hashing_each_input(tmp_path, off):
     """Step 6's deferral leaves in the serve dir's private/deferred the pieces the record read, the settings the
-    follow-on runs at (the window, the product, V3c's class, law and coins, H1_TIE, the composite, the served node, its
+    follow-on runs at (the window, the product, V3c's class, sampling design and coins, H1_TIE, the composite, the served node, its
     peer, the tree's commit and where the final record is composed), and the follow-on's every input, listed for the
     prover's copy and hashed for the follow-on to hold it to: V3c's window dir whole, H1's log and each record it names,
     the tie's commit answer, the record's and the composite's inputs and its own files, and nothing else of the serve dir.

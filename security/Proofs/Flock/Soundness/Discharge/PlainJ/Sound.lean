@@ -28,7 +28,7 @@ partition, each read at its site in the table it is sampled into (`sitesPJ`, `ta
 It is `Integrate.flock_headline_exec` with the session's tables in place of its one, and two changes the tables force,
 as `Composed.zk_session_soundJ` makes them under `--zk`:
 
-* the sampling design is the live subset sample `Law.execOS src (.subset kd) n` (`--plain-tables` refuses every other law,
+* the sampling design is the live subset sample `Law.execOS src (.subset kd) n` (`--plain-tables` refuses every other sampling design,
   `ProvedScope.lawWhy` at `plainTables`), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` at `K ≤ n`
   (`Law.subset_miss`), under A3 at its one byte source;
 * the tags, the record and the samples are `TagsOkZJ` (public outputs, retained rounds, `hm96-sha512/v1` leaves),

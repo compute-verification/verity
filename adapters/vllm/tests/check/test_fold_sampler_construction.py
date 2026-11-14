@@ -98,7 +98,7 @@ def _fold_select(V: int, pattern: TokenSelectGumbelTopP, target: TargetProfile |
                                   "sparse_grad=False) -> Tensor", [local_argmax, 1, idx], {}, 7, None), DispatchExit(1, out))
     header = RunHeader("verity-capture/log/v1", "2026-09-28T00:00:00Z", "toy", {"target": target.to_json()} if target else {}, {}, {})
     stage2 = {"local_argmax": local_argmax, "bf16": logits, "S": 4, "kernels": (), "specs": [("r0", 5, 7, 0.8, 0.9)]}
-    ctx = StepContext(header, None, None, [], {}, {}, None, scratch={SCRATCH_TOPP_SELECT: {"stage2": {idx.alloc: stage2}}})
+    ctx = StepContext(header, None, None, [], {}, {}, None, scratch={SCRATCH_TOPP_SELECT: {"winning_block": {idx.alloc: stage2}}})
     return pattern._stage3(node, ctx).spec.id
 
 

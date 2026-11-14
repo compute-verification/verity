@@ -390,7 +390,7 @@ def test_v1_kv_cache_arguments_alias_the_previous_position_and_denote_the_same_p
     assert program_digest(d0) != program_digest(desc) and len(json.dumps(d0)) > len(json.dumps(desc))
 
 
-# -- digest stability: the v0 encoding of programs whose reference construction did not change ----------------------
+# -- digest stability: the v0 encoding of programs whose construction did not change ----------------------
 
 V0_DIGESTS = {  # recorded with the codec at vllm-poc e47be70
     "running-example": "d4ab767ce4d2a53369a712b45ab1d534d338a559067eb7f2e737c8b11126ced6877d3402dd2c45c44f511d353d27169440152bcb85d5079c73e76626eb5b5d8d",

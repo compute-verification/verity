@@ -13,10 +13,10 @@ tampered window's member, whose proof must not be accepted.
 * **The bundle held to the window** before anything is proved. The window is the prover's (what ``Window.write`` wrote, its
   private files included), since Flock's statement is a whole member. Checks: the bundle's own check
   (`replay_bundle.check` against the window's registration: every string, path and domain, and each unit's Definition
-  replayed, and the sample's law the registered one); the bundle's run, registration digest and partition are the
+  replayed, and the sample's sampling design the registered one); the bundle's run, registration digest and partition are the
   window's; each sampled member's public body is the one the bundle names (SHA-512); and a live sample (``--live`` requires
   one) is held to the window (`held_draw`): its receipt names the window's registration, and its record is a sample of
-  the bundle's units under the registered law over the registered population (`draw.check_draw`).
+  the bundle's units under the registered sampling design over the registered population (`draw.check_draw`).
 * **Staging** as a5 stages a sampled member. The circuit is composed from the template's Definition, bound to the window's
   partition and program (`records_audit.verifier_window`'s composer). The public file is made under that circuit and
   held to the registration's roots and domains, and the prover's file is made under the same header.

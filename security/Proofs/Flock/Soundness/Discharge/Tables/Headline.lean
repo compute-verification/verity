@@ -166,7 +166,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset
   rw [← Law.subset_miss hkd hK]
   exact execOS_subset_miss_le kd hkd Lb src hA3 K
 
-/-- **`Prog.flock_headline_live_tables_subset` at every `K`**, its count curve the uniform `kd`-subset law's
+/-- **`Prog.flock_headline_live_tables_subset` at every `K`**, its count curve the uniform `kd`-subset sampling design's
 (`Law.subset n kd hkd`), which is `C(n − K, kd) / C(n, kd)` at `K ≤ n` (`Law.subset_miss`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_tables_subset_miss
     (kd : ℕ) (hkd : kd ≤ n)
