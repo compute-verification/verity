@@ -190,7 +190,7 @@ theorem HandStep.keeps {T : Nat} {s s' : Shaper} (h : HandStep T s s') :
   obtain ⟨frame, ready, sync, hh, hand, -, -, -, -, -, rfl⟩ := h
   have hl := lateCert_rel s hh
   refine ⟨rfl, rfl, (enqueue_link _ _).trans hl.link, (enqueue_params _ _).trans hl.params,
-    (enqueue_window _ _).trans hl.window, (enqueue_rows _ _).trans hl.rows, fun r hr => ?_⟩
+    (enqueue_executionPhase _ _).trans hl.window, (enqueue_rows _ _).trans hl.rows, fun r hr => ?_⟩
   dsimp only
   rw [hl.of_fault hr]
   exact enqueue_of_fault hr _

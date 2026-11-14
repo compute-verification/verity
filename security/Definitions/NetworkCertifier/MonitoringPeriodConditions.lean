@@ -44,7 +44,7 @@ Definitions only. A statement over a monitoring period of sampled audits takes t
 * the network certifier's record reads back under a registered parameter (`RecordFormat.ReadsBy`): the client's view
   is a function of the record and of a parameter fixed at registration, in place of the whole schedule, so a count
   over the records pays for the parameters and not for the schedules;
-* a covert sender's channel over registered parameters (`PeriodChannelReg`): each secret's schedule is one the record
+* a covert sender's channel over registered parameters (`MonitoringPeriodChannelReg`): each secret's schedule is one the record
   format holds and a registered parameter allows, and a decoder recovers the secret from the client's view;
 * the windows' count (`windowsCount`): what the windows' audits leave free, the product over the windows of each one's
   free inputs outside the pinned ones, its possible incorrect sets, their committed bits and the timing.
@@ -76,7 +76,7 @@ def RecordFormat.ReadsBy {κ Cell Ob Par : Type} (f : RecordFormat κ Cell Ob)
 decoder `dec` recovers `z` from the cells the client receives on that schedule and the server behavior `srvOf z`
 (`cells`). These are the count's own terms: a hypothesis on the sender's strategy (its secrets, schedules, server
 behaviors and decoder) and on the registered parameters, nothing about the verifier's or the prover's code. -/
-def PeriodChannelReg {Conn Cell Srv Ob Z Par : Type} (f : RecordFormat Conn Cell Ob)
+def MonitoringPeriodChannelReg {Conn Cell Srv Ob Z Par : Type} (f : RecordFormat Conn Cell Ob)
     (allows : Par → CertifierSchedule Conn → Prop) (Θ : Set Par) (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn)
     (srvOf : Z → Srv) (dec : (Conn → List (ℕ × CellView Cell)) → Z)
     (cells : CertifierSchedule Conn × Srv → Conn → List (ℕ × CellView Cell)) : Prop :=

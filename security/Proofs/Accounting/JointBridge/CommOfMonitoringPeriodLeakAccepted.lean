@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfMonitoringPeriodLeakAccepted
-public import Definitions.NetworkCertifier.Guarantees.Period
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriod
 public import Definitions.Accounting.NetWitness
-public import Proofs.NetworkCertifier.Period
+public import Proofs.NetworkCertifier.MonitoringPeriod
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -43,18 +43,18 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The network certifier's per-period guarantee from its period of sampled audits (proof)
 
 `Accounting.SecurityProofs.Bridge.CommOfMonitoringPeriodLeakAccepted`: `comm_of_monitoringPeriodLeak` at network accounting's proof of
-`PeriodLeakAccepted` (`NetTiming.periodLeak`). On a run that realizes the network certifier's period of `n` sampled
+`MonitoringPeriodLeakAccepted` (`NetTiming.monitoringPeriodLeak`). On a run that realizes the network certifier's period of `n` sampled
 audits (`Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
 `n · (δ + ε_ks + ε_bind + ε_tap)`. The network certifier accepting with the claim failing means some window fails
-`WindowGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most the sampled
-verifier's `PrBad` at `RLeakCertifier` (`window_le`), which `PeriodLeakAccepted`'s per-window conjunct bounds by
+`ExecutionPhaseGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most the sampled
+verifier's `PrBad` at `RLeakCertifier` (`period_le`), which `MonitoringPeriodLeakAccepted`'s per-window conjunct bounds by
 `κ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap]`, at most `δ + ε_ks + ε_bind + ε_tap` at each window's prover.
 
-The per-window conjunct of `PeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
+The per-window conjunct of `MonitoringPeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
 so it is read off at the period of no windows (`ksLin_of_monitoringPeriodLeak`). Its count of the secrets is what the claim at
 `K` stands for, and the error doesn't use it. The network certifier's trust (`trusted-host`) is the realization's
-`trusted`, which this proof doesn't read: `window_le` is the per-window bound its records give, and deriving it from
-`PeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
+`trusted`, which this proof doesn't read: `period_le` is the per-window bound its records give, and deriving it from
+`MonitoringPeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
 -/
 
 @[expose] public section
@@ -77,8 +77,8 @@ theorem pr_exists_le {β : Type} [Fintype β] {n : ℕ} (P : Fin n → β → Pr
   convert key using 3
   exact Finset.filter_congr_decidable _ _ _
 
-/-- `PeriodLeakAccepted`'s per-window conjunct, read off at the period of no windows. -/
-theorem ksLin_of_monitoringPeriodLeak (hsrc : Guarantees.PeriodLeakAccepted) {Coin : Type} [Fintype Coin]
+/-- `MonitoringPeriodLeakAccepted`'s per-window conjunct, read off at the period of no windows. -/
+theorem ksLin_of_monitoringPeriodLeak (hsrc : Guarantees.MonitoringPeriodLeakAccepted) {Coin : Type} [Fintype Coin]
     [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg)
     (D : Claims.SamplingGeneric.Compiled Coin A) (hks : D.KS H) (L Kₒ S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
@@ -97,8 +97,8 @@ theorem ksLin_of_monitoringPeriodLeak (hsrc : Guarantees.PeriodLeakAccepted) {Co
     (fun _ h => h.elim) (fun _ h => h.elim) ∅ (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ())
     (fun _ h => h.elim) (fun _ => ()) (fun _ h => h.elim) (fun _ => Fin.elim0) (fun _ => Fin.elim0) tops hb).1
 
-/-- `Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted` from `PeriodLeakAccepted`. -/
-theorem comm_of_monitoringPeriodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d : Device ι} {α : Type}
+/-- `Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted` from `MonitoringPeriodLeakAccepted`. -/
+theorem comm_of_monitoringPeriodLeak (hsrc : Guarantees.MonitoringPeriodLeakAccepted) {ι : Type} {d : Device ι} {α : Type}
     [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)]
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin}
     {r : PeriodRun d α C Ω} (c : Certificates) (p : Price) {H : Msg → Msg}
@@ -119,7 +119,7 @@ theorem comm_of_monitoringPeriodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι 
           ¬ r.Holds c p .network (Function.update ξ (r.own .network) x))
       ≤ Pouw.pr (fun x : Ω (r.own .network) => ∃ i,
           r.accepts .network (Function.update ξ (r.own .network) x) ∧
-            ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops
+            ¬ ExecutionPhaseGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops
               (R.stmt (Function.update ξ (r.own .network) x) i) (R.wit (Function.update ξ (r.own .network) x) i)
               (R.obs (Function.update ξ (r.own .network) x) i)) := by
         refine SecurityProofs.PouwWork.pr_mono fun x ⟨ha, hn⟩ => ?_
@@ -129,11 +129,11 @@ theorem comm_of_monitoringPeriodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι 
         exact ⟨i, ha, hi⟩
     _ ≤ ∑ i, Pouw.pr (fun x : Ω (r.own .network) =>
           r.accepts .network (Function.update ξ (r.own .network) x) ∧
-            ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops
+            ¬ ExecutionPhaseGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops
               (R.stmt (Function.update ξ (r.own .network) x) i) (R.wit (Function.update ξ (r.own .network) x) i)
               (R.obs (Function.update ξ (r.own .network) x) i)) := pr_exists_le _
     _ ≤ ∑ _i : Fin n, (δ + εks + εbind + εtap) := by
-        refine Finset.sum_le_sum fun i _ => (R.window_le ξ i).trans ?_
+        refine Finset.sum_le_sum fun i _ => (R.period_le ξ i).trans ?_
         have h := hlin (R.stmt ξ i) (R.scope ξ i) (R.Tape ξ i) (R.prover ξ i)
         have he := herr ξ i
         have hx := hbind ξ i
@@ -142,10 +142,10 @@ theorem comm_of_monitoringPeriodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι 
     _ = n * (δ + εks + εbind + εtap) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- **The network certifier's per-period guarantee**, at network accounting's proof of `PeriodLeakAccepted`. -/
+/-- **The network certifier's per-period guarantee**, at network accounting's proof of `MonitoringPeriodLeakAccepted`. -/
 theorem CommOfMonitoringPeriodLeakAccepted : Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted := by
   intro ι d α _ C I Ω _ _ Coin _ _ _ A r c p H D L Kₒ S lay k δ reg Dj n R
-  exact comm_of_monitoringPeriodLeak NetTiming.periodLeak c p R
+  exact comm_of_monitoringPeriodLeak NetTiming.monitoringPeriodLeak c p R
 
 open NetWitness in
 /-- **`CommOfMonitoringPeriodLeakAccepted`'s conclusion fails at the verifier that accepts everything** (`acceptAllNet`): the
