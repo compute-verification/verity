@@ -68,6 +68,7 @@ from typing import Any
 import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.protocols.accounting.registration.verifier import registration as REG
 from verity.commitments.periods import interface as IF
+from verity_vllm import messages as M
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
@@ -515,7 +516,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
     final = stopped(run)
     commits: dict[int, dict[str, Any]] = {}
     for name in ("seals.jsonl", "windows.jsonl"):       # a window's line waits for its H1 release; its seal's comes first
-        lines = (run / name).read_text().splitlines() if (run / name).exists() else []
+        lines = M.lines(run / name, "Run") if (run / name).exists() else []
         commits.update({int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
                         for d in (json.loads(line) for line in lines if line.strip())})
     per, still_open = windows_of(recs)
@@ -561,7 +562,7 @@ def stopped(run: Path) -> bool:
     """Whether ``run``'s server has stopped with every Commit record written: its ``summary.json`` says ``final`` (one without
     the key is from a server that wrote each window's records on its engine loop, before any summary)."""
     try:
-        return json.loads((run / "summary.json").read_text()).get("final", True) is True
+        return json.loads(M.read(run / "summary.json", "RunTotals")).get("final", True) is True
     except (OSError, ValueError):
         return False
 
@@ -658,7 +659,7 @@ def main(a: Options) -> int:
         if a.weights_of_record:
             serve = Path(a.run) / "serve.json"
             roots = registered_weights(json.loads(Path(a.weights_of_record).read_text()),
-                                       json.loads(serve.read_text()) if serve.exists() else None)
+                                       json.loads(M.read(serve, "ServingConfiguration")) if serve.exists() else None)
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
                     compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap), registered_roots=roots)
     except ValueError as e:

@@ -12,15 +12,15 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as EMB
-from verity.definitions.numerics import deepgemm_twins as DT
+from verity_vllm.definitions.numerics import deepgemm_twins as DT
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32
-from verity.definitions.registry import boolean_deepgemm as BDG
-from verity.definitions.registry import boolean_fp8_moe as BFM
-from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import fp8_moe as FM
-from verity.definitions.registry import fp8_moe_experts as X
-from verity.definitions.registry.fp8 import FP8_BLOCK
+from verity_vllm.definitions.registry import boolean_deepgemm as BDG
+from verity_vllm.definitions.registry import boolean_fp8_moe as BFM
+from verity_vllm.definitions.registry import deepgemm as DG
+from verity_vllm.definitions.registry import fp8_moe as FM
+from verity_vllm.definitions.registry import fp8_moe_experts as X
+from verity_vllm.definitions.registry.fp8 import FP8_BLOCK
 
 from verity_vllm.pipeline import serving_rows as SRW
 

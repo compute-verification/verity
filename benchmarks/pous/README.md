@@ -165,9 +165,11 @@ window is served on, before its engine loads, with the memory challenger on vy-a
 `WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. Outside the serve's lease it takes a card
 of its own by the node's `gpu-lease`, else by the tree's `gpu_lease.sh`. It refuses a card that isn't idle or a gate
 key that isn't on the node, and kills nothing. Its verdict trusts the one challenger key `WIPE_KEY_SHA512` pins (the
-SHA-512 of the wipe party's public key, by default vy-auditor-2's, `wipe_party.AUDITOR_KEYS`): a session signed under
-another is rejected, and with none pinned, the setting empty, the piece refuses before it asks for a card. A session
-accepted under any other pin is a rehearsal: its record says no bound. Its header lists the challenger's
+SHA-512 of the wipe party's public key, by default the one the run's configuration pins for the memory challenger's wipe,
+`VERITY_PINS`): a session signed under another is rejected, and with none pinned the piece refuses before it asks for a
+card. Its record says `trusted-device` holds only under a committed configuration (`VERITY_CONFIGURATION`, in
+`tools/verity/cli/verity_cli/configurations.toml`) for a key its pins give the wipe; a session accepted under any other is a rehearsal, no
+bound. Its header lists the challenger's
 settings. `tests/test_pous_served_wipe.py` runs it on a CPU, with one segment in host memory.
 
 `served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`), in two parts. On the card, under one lease (the
@@ -181,10 +183,11 @@ for the card; PoUS's must agree with the Python, and a verifier that doesn't bui
 Before the card it also loads `libp2v1.so` once in the sessions' Python: a library that doesn't load ends the piece
 there, and so does a node that refuses `setarch -R`, where the library doesn't build and `P2_LIB` names one built
 elsewhere.
-PoUS's verdict trusts the one challenger key `--trusted-sha512` pins, by default one the tree pins for vy-auditor-2
-(`memory_challenger.AUDITOR_KEYS`). Its record says `trusted-device` holds only for a session signed under a key the
-tree pins for the host it names, whatever the names say; a run that pins its own key has its session accepted, and its
-record says so (`pous.json`'s `key_pin`, `run`) and is a rehearsal's, with no bound.
+PoUS's verdict trusts the one challenger key `--trusted-sha512` pins, by default the one the run's configuration pins
+for the memory challenger's PoUS sessions (`VERITY_PINS`). Its record says `trusted-device` holds only under a
+committed configuration, for a session signed under a key its `[[pin]]` entries give the memory challenger
+(`memory_challenger.trusted_device`), whatever the names say; a run that pins its own key has its session accepted, and
+its record says so (`pous.json`'s `key_pin`, `run`) and is a rehearsal's, with no bound.
 The bandwidth piece collects PoUB-P2's answer. A run that ended while answering, or whose Lean didn't answer, is
 answered again from what the sessions kept (`--answers`), with no new session. Each of the three pieces' summaries (`pous.json`, `bandwidth.json`, the wipe's
 `summary.json`) names the program that decided and the host it ran on under `decided_by`; `pous.json` has the bytes of

@@ -2,7 +2,7 @@
 
 The model's layers are a stand-in linear type (`pous.linear_types`) holding an int8 weight [N, K] and its f32
 ``weight_scale`` [N, 1] as the ``int8_exact`` target's linears do, and P2 runs at the small point's 1,024-bit blocks, 8 a
-segment (`pous._base`), so encoding takes milliseconds.  The layout, the commitment, the salt, the codec, the root, the
+segment (`weight_store.geometry`), so encoding takes milliseconds.  The layout, the commitment, the salt, the codec, the root, the
 period's audit and the memory challenger are `verity.protocols.accounting.pous.verifier`'s and `verity/protocols/accounting/pous/prover/p2/p2_store/store.py`'s own; the
 memory challenger's key is the PoUS tests' test signer, its clock a counter.
 """
@@ -25,10 +25,12 @@ from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period, setup
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
 from verity_vllm import config
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
+from verity.protocols.accounting.pous.prover import weight_store as ws
 from verity_vllm.protocols import pous
 
 P2 = "p2-16448/v4"
@@ -105,7 +107,7 @@ class Model:
 @pytest.fixture
 def toy(monkeypatch):
     monkeypatch.setattr(pous, "linear_types", lambda: (Linear,))
-    monkeypatch.setattr(pous, "_base", lambda scheme: SMALL)
+    monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
     return Model()
 
 
@@ -137,11 +139,11 @@ def test_pous_registers_p2_v4_as_its_default_and_refuses_what_it_cannot_run():
 
 
 def test_the_decode_at_use_on_a_gpu_is_the_stores_own_module():
-    """What `pous._decoder` builds on a GPU comes from the store's package alone, as far as a CPU reaches: the layout of no
+    """What `weight_store.decoder` builds on a GPU comes from the store's package alone, as far as a CPU reaches: the layout of no
     tensors at the registered point, refused at any other, and rows of another shape refused before the library loads."""
-    load = pous._p2("load")
+    load = ws.p2_module("load")
     assert load.__name__ == "p2_store.load" and "p2_stage" not in sys.modules
-    layout = load.StoreLayout(pous._base(P2), (), bytes(128))
+    layout = load.StoreLayout(ws.geometry(P2), (), bytes(128))
     with pytest.raises(ValueError, match="the point libp2v1.so is built for"):
         load.StoreLayout(SMALL, (), bytes(128))
     with pytest.raises(ValueError, match=r"a contiguous \[n, 2056\] uint8 tensor"):
@@ -222,9 +224,9 @@ def test_an_int8_linear_with_its_scales_is_served_not_refused(toy):
 
 
 def _in_process_party(signer, log):
-    """`challenger_session.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    """`challenger_prover.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
     test signer, a counter clock, its own coins each session) and the prover's over a socket pair
-    (`challenger_session.answer`)."""
+    (`challenger_prover.answer`)."""
     calls: list[tuple] = []
 
     def session(party, request, respond):
@@ -239,7 +241,7 @@ def _in_process_party(signer, log):
             served = pool.submit(challenger)
             try:
                 with a, a.makefile("rwb") as f:
-                    rounds = CS.answer(f, request["block_bytes"], respond)
+                    rounds = CR.answer(f, request["block_bytes"], respond)
             finally:
                 sid, served_session = served.result()
         calls.append((party, request))
@@ -280,7 +282,7 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
     was checked by the developer, not the auditor. The Lean's tools are stand-ins that answer as the Python
     (`_judges`)."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
-    monkeypatch.setattr(CS, "session", session)
+    monkeypatch.setattr(CR, "session", session)
     _judges(monkeypatch)
 
     def side_of(doc, node, key, local, what=None):
@@ -312,7 +314,7 @@ def test_a_period_whose_tools_name_no_lean_is_undecided_where_the_python_accepts
     """`PousOption.leg` with no ``pous-run-protocol`` among the period's tools: the Python's accept of an honest period
     decides nothing alone, so the answer is undecided with `period.NO_JUDGE`, no public outputs and no profile."""
     session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
-    monkeypatch.setattr(CS, "session", session)
+    monkeypatch.setattr(CR, "session", session)
     runs = _judges(monkeypatch)
     with PO.install(toy, _ctx(ENTRY)) as comp:
         got = comp.get("pous").leg(_period_dir(tmp_path, 0), NODE, tmp_path / "out", side_of=Side.of,

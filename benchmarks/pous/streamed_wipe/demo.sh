@@ -26,8 +26,9 @@
 #   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
 #                        challenger here signs under a key this run makes, trusted without it. trusted-device holds only
-#                        under the key wipe_party.AUDITOR_KEYS pins for the challenger's host; under any other the
-#                        record reads "rehearsal: key not the auditor's pinned key, no bound"
+#                        under a committed configuration (VERITY_CONFIGURATION, its hash) for a key its pins give the
+#                        wipe (VERITY_PINS, its [[pin]] entries as JSON), which period.json's deployment carries; under
+#                        any other the record reads a rehearsal with no bound
 #   --simulated          the memory challenger here, named the stand-in for one on its own host (placement
 #                        `simulated`, a label; its key in this run's scratch, so a rehearsal all the same)
 #   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
@@ -195,7 +196,7 @@ EOF
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
     "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${READS:-null}" "${CTRL_DEV:-}" \
     "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" "$DRAM_JSON" "$TRUSTED" <<'EOF'
-import json, shlex, sys
+import json, os, shlex, sys
 from fractions import Fraction
 (path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress, reads, dev, src, mbps,
  specs, disk, dram, trusted) = sys.argv[1:]
@@ -213,7 +214,9 @@ doc = {"tools": json.loads(tools),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
                 "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress),
                 "reads": json.loads(reads), "links": links, "disk": json.loads(disk), "dram": json.loads(dram),
-                "trusted_sha512": trusted or None}}
+                "trusted_sha512": trusted or None},
+       "deployment": {"configuration": os.environ.get("VERITY_CONFIGURATION") or None,
+                      "pins": json.loads(os.environ.get("VERITY_PINS") or "[]")}}
 if ch:
     doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))

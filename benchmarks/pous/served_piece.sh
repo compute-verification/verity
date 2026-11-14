@@ -17,7 +17,7 @@
 # /workspace/cp/venv312/bin/python) and the snapshot under HF_HOME (default /workspace/hf): setup, PoUS's session with
 # the memory challenger on vy-auditor-2, and then, in the same process over the store it holds, PoUB-P2's with
 # vy-auditor-2's bandwidth party, for at most BW_PARTY_MIN minutes (default 10, the gate's cap). The session it asks for
-# is the auditor's (p2_party.SESSION), which the party holds every request to: with another value in POUS_ARGS's --bw-*
+# is the auditor's (p2_parties.SESSION), which the party holds every request to: with another value in POUS_ARGS's --bw-*
 # the party refuses it and the bandwidth answer is undecided. What the sessions left stays in SERVE_DIR/private, C*
 # among it, and the lease ends with that process: no answer is waited for on the card.
 #

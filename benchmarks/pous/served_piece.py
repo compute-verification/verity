@@ -31,7 +31,7 @@ same sessions, which no second session replaces. With neither, one process does 
    inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
 3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
-   indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_session.session`). The request names the window's
+   indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_prover.session`). The request names the window's
    binding and setup's published outputs; the challenger refuses it unless they carry the salt it logged and the
    commitment it was sampled after, and runs one session a binding, under the id derived from them
    (`challenger_session.session_id`).
@@ -41,7 +41,7 @@ same sessions, which no second session replaces. With neither, one process does 
    (`served_case.pous_answer`, `period.answer`): the tie, the run's
    check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused;
    ``pous.json``'s ``key_pinned`` says whether it was signed under that pin, and ``key_pin`` whether the pin is the
-   tree's for the challenger's host, ``tree``, or the run's own, ``run``), and what
+   configuration's for the memory challenger's PoUS sessions, ``configuration``, or the run's own, ``run``), and what
    an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
    105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check's cost is the tie, which reads all of
    ``C*``, not the rounds. With ``--case-exe``
@@ -57,8 +57,9 @@ same sessions, which no second session replaces. With neither, one process does 
    ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
    placement and the weights' public properties: their model, count and size. The placement's `trusted-device` holds
-   only for a session signed under a key `memory_challenger.AUDITOR_KEYS` pins for the challenger's host: a run's
-   own ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound. Its ``setup``
+   only under a committed configuration, for a session signed under a key its ``[[pin]]`` entries give the memory
+   challenger (`memory_challenger.trusted_device`, the run's deployment by `from_runner`): a run's own
+   ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound. Its ``setup``
    is `challenger_session.SETUP`: the tie ran on the developer's node, so every verdict rests on setup checked by the
    developer, not the auditor, which the ``POUS`` line prints after the premise.
 
@@ -73,7 +74,7 @@ same sessions, which no second session replaces. With neither, one process does 
    piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``remote-audit-p2-protocol``) the Lean answers the
    case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`).
    ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
-   ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_party.SESSION`: two minutes), which
+   ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
    its party holds every request to: it refuses one with another value before its first coin, naming each, and the
    bandwidth answer is then undecided. ``--no-bandwidth`` runs none.
 
@@ -114,6 +115,7 @@ import torch
 from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
@@ -146,10 +148,6 @@ CHALLENGER_ADDRESS = "10.96.0.36:47610"
 CHALLENGER_COMMAND = ("ssh", "-i", "~/.ssh/vy-auditor2-pous", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
                       "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20", "research@10.96.0.36",
                       "challenger_party")
-#: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`), one of the keys
-#: `memory_challenger.AUDITOR_KEYS` pins for `CHALLENGER_HOST`
-TRUSTED_SHA512 = ("39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
-                  "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb")
 #: the bandwidth party on the auditor's device: the gate's `bw_party` verb under the card's key, its minutes the gate's cap
 BW_PARTY = ("ssh -i ~/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 "
             "research@10.96.0.36 bw_party")
@@ -396,6 +394,13 @@ def _done(out: Path, summary: Mapping[str, Any], answer: dict[str, Any], **more:
     return answer
 
 
+def from_runner(env: Mapping[str, str] = os.environ) -> dict[str, Any]:
+    """The run's deployment as its runner passes it (`period.deployment`): ``VERITY_CONFIGURATION``, the configuration's
+    hash, and ``VERITY_PINS``, its ``[[pin]]`` entries as JSON."""
+    return period.deployment({"deployment": {"configuration": env.get("VERITY_CONFIGURATION") or None,
+                                             "pins": json.loads(env.get("VERITY_PINS") or "[]")}})
+
+
 def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda",
              p2_lib: str | None = None, node: str | None = None, party: Side | None = None,
              private: Path | None = None, pins: Sequence[Path] = PINS, protocol: str = period.PROTOCOL,
@@ -478,7 +483,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
             sid = CS.session_id(bind, s.commitment, s.salt)
             t = time.monotonic()
             try:
-                rep = CS.session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
+                rep = CR.session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
                                  opt.prover(()))
                 key = bytes.fromhex(rep["public_key"])
                 session = R.ChallengePhaseRecord.from_json(rep["session"])
@@ -520,15 +525,18 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
         pous.linear_types = types
 
 
-def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TRUSTED_SHA512,
-            private: Path | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
+def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | None = None,
+            deployment: Mapping[str, Any] | None = None, private: Path | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
             protocol: str = period.PROTOCOL, bw_out: Path | None = None, bw_private: Path | None = None,
             bw_case_exe: str | None = None, case_exe: str | None = None) -> dict[str, Any]:
     """The piece's part that needs no card (module docstring, 4 to 6): the answers to what `sessions` kept, read
     back from ``private``. First PoUB-P2's (`held_bandwidth.decide`, the Lean's with ``bw_case_exe``), to ``bw_out``
     (by default ``out``'s sibling ``bandwidth``) and ``bw_private``, then PoUS's on its case, written with
     ``pous.json`` to ``out`` and returned. ``schemes`` and ``protocol`` are the signatures the verifier accepts and the
-    id it answers under (a test signer's in tests), ``trusted_sha512`` the challenger key it trusts, ``case_exe`` the
+    id it answers under (a test signer's in tests), ``deployment`` what `trusted-device`'s premise reads
+    (`period.deployment`: the configuration's hash, its pins and the committed set), by default `from_runner()`'s,
+    ``trusted_sha512`` the challenger key it trusts, by default the one its pins give the memory challenger for PoUS
+    (none pinned: no session is accepted), ``case_exe`` the
     run protocol's Lean (``pous-run-protocol``), whose answer on the case is then the verdict; without it the Python's
     reject or undecided stands and its accept is undecided (`period.unjudged`). What the sessions kept
     only for this (`STORE`, `HELD`, the P2 case not yet answered) is removed last, once both answers are written and
@@ -553,6 +561,10 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TR
                       f"{serve_dir} and its setup fix (challenger_session.session_id): they are not this window's")
     out.mkdir(parents=True, exist_ok=True)
     session, digests = R.ChallengePhaseRecord.from_json(kept["session"]), (private / "digests.bin").read_bytes()
+    deployed = from_runner() if deployment is None else dict(deployment)
+    pinned = mc.pinned(deployed["pins"], CS.CHALLENGER, "pous")
+    if trusted_sha512 is None:
+        trusted_sha512 = min(pinned, default=None)
     key_sha = hashlib.sha512(key).hexdigest()
     trusted = (key,) if key_sha == trusted_sha512 else ()
     bandwidth = bw = None
@@ -602,14 +614,14 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TR
             "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.commitments.advice)",
                            "rows": 1, "n_bits": 8 * len(row), "binding": bind.hex(),
                            "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
-            "placement": CS.placement(node, host, key_sha) | {
+            "placement": CS.placement(node, host, key_sha, **deployed) | {
                 "salt": f"drawn by the memory challenger on {host} from its OS after the commitment, "
                         "logged under the window's binding, with the session's id derived from both"},
             "weights": summary["weights"] | {"held": "loaded from the served snapshot on the card the window served "
                                                      "on, after its serve ended"},
             "outside": summary["outside"], "window": window}
     _done(out, summary, answer, answer_s=answer_s, case_bytes=case_bytes, key_sha512=key_sha,
-          key_pinned=bool(trusted), key_pin="tree" if trusted_sha512 in mc.AUDITOR_KEYS.get(host, ()) else "run",
+          key_pinned=bool(trusted), key_pin="configuration" if trusted_sha512 in pinned else "run",
           private=str(private), public=inner["public"], bandwidth=bandwidth,
           decided_by=decided, setup=CS.SETUP, **lean)
     # last, and only once each Lean asked for has answered its case: until then the same sessions can be answered again
@@ -621,8 +633,8 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TR
 
 
 def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda", p2_lib: str | None = None,
-        node: str | None = None, party: Side | None = None, trusted_sha512: str = TRUSTED_SHA512,
-        private: Path | None = None, pins: Sequence[Path] = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
+        node: str | None = None, party: Side | None = None, trusted_sha512: str | None = None,
+        deployment: Mapping[str, Any] | None = None, private: Path | None = None, pins: Sequence[Path] = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
         protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
         bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
         bw_private: Path | None = None, bw_case_exe: str | None = None,
@@ -634,7 +646,8 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                      bw_request=bw_request, bw_out=bw_out, bw_private=bw_private)
     if early is not None:
         return early
-    return answers(serve_dir, window, out, trusted_sha512=trusted_sha512, private=private, schemes=schemes,
+    return answers(serve_dir, window, out, trusted_sha512=trusted_sha512, deployment=deployment, private=private,
+                   schemes=schemes,
                    protocol=protocol, bw_out=bw_out, bw_private=bw_private, bw_case_exe=bw_case_exe,
                    case_exe=case_exe)
 
@@ -669,7 +682,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--challenger-host", default=CHALLENGER_HOST)
     ap.add_argument("--challenger-address", default=CHALLENGER_ADDRESS, help="HOST:PORT the prover connects to")
     ap.add_argument("--challenger-command", help="the argv that starts the challenger's side, one shell-split line")
-    ap.add_argument("--trusted-sha512", default=TRUSTED_SHA512, help="the SHA-512 of the challenger key the verifier trusts")
+    ap.add_argument("--trusted-sha512", help="the SHA-512 of the challenger key the verifier trusts (default: the one "
+                                             "VERITY_PINS pins for the memory challenger's PoUS sessions)")
     ap.add_argument("--case-exe", help="pous-run-protocol, whose answer on the case is the verdict and must agree with "
                                        "period.answer (else period.answer's accept is undecided)")
     part = ap.add_mutually_exclusive_group()

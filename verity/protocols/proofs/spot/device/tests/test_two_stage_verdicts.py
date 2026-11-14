@@ -25,7 +25,7 @@ from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import embedding as EMB
-from verity.definitions.registry import boolean_fp8_moe as BM
+from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import interior_links as IL

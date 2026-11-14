@@ -40,9 +40,10 @@ The verifier trusts one memory-challenger key, the one whose SHA-512 `wipe.trust
 key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
 key its session came with. No network certifier counts the session's egress yet, so the check is given no
 count unless `wipe.egress_bits` names one, and an accepted leg certifies nothing either way (`uncounted`): its verdict
-is real and its quantity isn't. The leg's record says `trusted-device` holds only for a session signed under the challenger host's key
-that `wipe_party.AUDITOR_KEYS` pins, never from the hosts' names: a session accepted under a key the run pinned itself
-is a rehearsal with no bound. It names what the bound doesn't cover (`uncertified`): the key custody of any other
+is real and its quantity isn't. The leg's record says `trusted-device` holds only under a committed configuration, for a session signed
+under a key its `[[pin]]` entries give the memory challenger for the wipe (`period.json`'s `deployment`,
+`period.deployment`), never from the hosts' names: a session accepted under a key the run pinned itself is a rehearsal
+with no bound. It names what the bound doesn't cover (`uncertified`): the key custody of any other
 session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
 leave outside the boundary (`disk_gaps`) and each link leaving the node that no network certifier counts
 (`wipe_party.link`).
@@ -73,7 +74,7 @@ from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from . import streamed_wipe as sw
 from . import wipe_party, wipe_store
-from .period import decided_by, serve
+from .period import decided_by, deployment, serve
 from .wipe_party import READS, Side
 
 PROTOCOL = "verity/wipe/v0"
@@ -621,8 +622,8 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side])
     verifier) and must agree with the Python; without it the Python may only refuse: its reject or undecided stands,
     and its accept is undecided (`NO_JUDGE`). It writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`,
     which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
-    Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pin
-    `wipe_party.AUDITOR_KEYS` holds for the challenger's host), what the prover's store leaves out (`store_gaps`), the
+    Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pins of
+    `period.json`'s `deployment`, `period.deployment`), what the prover's store leaves out (`store_gaps`), the
     links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
     (`placement`, `wipe_party.placement`), which names no device; `wipe.json` adds the prover's own record (`prover`:
@@ -676,7 +677,8 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side])
     if party.host != node and not any(e["to"] == party.host for e in c["links"]):
         conn = wipe.report["connection"]
         links.append(wipe_party.link("challenger", node, party.host, f"{conn['local']} to {conn['peer']}"))
-    where = wipe_party.placement(node, party.host, wipe.report["key_sha512"], store_gaps=store_gaps(kept),
+    where = wipe_party.placement(node, party.host, wipe.report["key_sha512"], **deployment(doc),
+                                 store_gaps=store_gaps(kept),
                                  simulated=c["placement"] == "simulated", links=links,
                                  undeclared=undeclared(tier, memory_bits(params) // 8, kept))
     window = {"challenger": wipe.report.get("window"),

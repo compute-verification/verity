@@ -50,13 +50,6 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TR
 # Rewritten though a pattern above matches: the registry of fetched fixtures and the fixtures' READMEs.
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md"]
 
-[rewrite.keep_in]
-# The Lean generator prints a card's path into the comment that opens each generated table
-# (`security/Definitions/Core/Accel/H200.lean`, `Sm120.lean`), and a test holds each table to the generator's output byte
-# for byte. The tables keep their bytes, so the text the generator prints keeps the old path too, until the change that
-# writes the two tables again.
-"verity/hardware/lean.py" = ["verity/hardware/cards", "verity/hardware/cards/*"]
-
 [split]
 # references to a directory this move splits that stay right: "old file: old directory" = why
 "GLOSSARY.md: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
@@ -76,4 +69,3 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "benchmarks/machine_model/verity_machine_model/theta.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
 "benchmarks/pouw/theory/scope_offload.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
 "verity/device.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
-"verity/hardware/tests/test_lean.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
