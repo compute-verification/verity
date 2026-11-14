@@ -173,11 +173,12 @@ def test_rebind_refuses(stage, tmp_path):
 
 def test_main_writes_a_templated_statements_template(stage, monkeypatch, tmp_path, capsys):
     """A census table read (`EmbeddingRead_v1`) is staged as the templated statement at the read layout, as serving stages
-    it, so its template and layout mode go beside the circuit for ``flock-tmpl-unit`` and stage.json names the statement."""
+    it, so its template and layout mode go beside the circuit for ``flock-tmpl-unit`` and stage.json names the statement
+    (under --unbound, which this stand-in stager covers; the template is written either way)."""
     from verity_vllm.pipeline.chunk_rows import READ_LAYOUT
 
     monkeypatch.setattr(stage.CS, "UnitStager", Stager)
-    monkeypatch.setattr(sys, "argv", ["stage.py", "census:EmbeddingRead_v1{V=256,H=4}", "2", str(tmp_path)])
+    monkeypatch.setattr(sys, "argv", ["stage.py", "census:EmbeddingRead_v1{V=256,H=4}", "2", str(tmp_path), "--unbound"])
     stage.main()
     rec = json.loads((tmp_path / "stage.json").read_text())
     assert Stager.seen["stmt"] == {"layout": READ_LAYOUT, "structural": True}

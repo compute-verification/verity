@@ -53,9 +53,11 @@ if sys.argv[1] == "stage":
 
 
 @pytest.fixture
-def job(tmp_path):
+def job(tmp_path, monkeypatch):
     bin_ = tmp_path / "bin"
     bin_.mkdir()
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    monkeypatch.delenv("GPU_LEASE_ALLOWED_FILE", raising=False)
     for name, text in (("nvidia-smi", NVIDIA_SMI), ("gpu-lease", GPU_LEASE), ("lake", LAKE), ("findmnt", FINDMNT)):
         (bin_ / name).write_text(text)
         (bin_ / name).chmod(0o755)
@@ -66,7 +68,7 @@ def job(tmp_path):
     run_dir, calls = tmp_path / "run", tmp_path / "calls"
 
     def run(**extra: str) -> tuple[int, str, list[str]]:
-        env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "HOME": str(tmp_path), "RESEARCH_RUN_DIR": str(run_dir),
+        env = {**os.environ, "HOME": str(tmp_path), "RESEARCH_RUN_DIR": str(run_dir),
                "CALLS": str(calls), "UNITS": str(tmp_path / "units"), "DEV": "gpu", "CARDS": "4,5", "SM": "90",
                "KILL_AT": FAR, "RESEARCH_SOURCE_SHA": TREE, **extra}
         p = subprocess.run(["bash", str(SP)], cwd=tmp_path, capture_output=True, text=True, env=env)

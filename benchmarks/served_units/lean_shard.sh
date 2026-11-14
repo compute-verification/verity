@@ -114,7 +114,7 @@ print(json.dumps({"word": word, "sha512": h.hexdigest()}))
 EOF
   echo ok > "$d/.ok"
 }
-verify() {   # verify NAME SESSION_DIR
+check_session() {   # check_session NAME SESSION_DIR
   local name=$1 sd=$2 sid=$(basename "$2") t=$S/t/$1-$(basename "$2") d=$S/st/$1 o=$O/lean/$1/$(basename "$2")
   rm -rf "$t"; mkdir -p "$t" "$o"
   cp -r "$sd" "$t/session"; ln -s "$d/circuit.txt" "$t/circuit.txt"; ln -s "$d/program-word.json" "$t/program-word.json"
@@ -152,7 +152,7 @@ for pass in 1 2; do
     if [ $pass = 1 ]; then todo=("${ss[-1]}"); else todo=("${ss[@]:0:${#ss[@]}-1}"); fi
     [ ${#todo[@]} -gt 0 ] || continue
     restage "$u" "$n" "$name" || continue
-    for sd in "${todo[@]}"; do verify "$name" "$sd"; done
+    for sd in "${todo[@]}"; do check_session "$name" "$sd"; done
     used=$(du -s --block-size=1G "$S/st" 2>/dev/null | cut -f1)
     { [ $pass = 2 ] || [ "${used:-0}" -gt "${LEAN_DISK_GB:-200}" ]; } && rm -rf "$S/st/$name"
   done
