@@ -45,6 +45,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -70,6 +71,9 @@ SCAN = 64
 ANCESTORS, ANCESTOR_CHECKS = 300, 8
 #: a recorded check that ended
 ENDED = "state IN ('done', 'failed', 'cancelled')"
+#: how long before a commit's committer time a check of it may have started by its run id: the commit's clock and the
+#: check's machine's are not one
+SKEW_S = 3600
 #: how many facts files this gate keeps in its cache, the last used first; how many `declared` sets; how many verdicts (drive
 #: judges each PR of `next` again on every landing)
 KEPT, DECLARED_KEPT, VERDICTS_KEPT = 16, 16, 1024
@@ -336,18 +340,30 @@ def plausible(lo: str, gone: dict[tuple[str, str], list[str]], cache: Path | Non
     return {s: fs for s, fs in gone.items() if could(*s)}
 
 
+#: the store and the start (seconds since the epoch) of the attempts this run refreshed it from, once it has
 _STORE: list = []
 
 
-def evidence_store():
-    """This machine's evidence store, its attempts refreshed once a run: every lookup of one gate's run reads it."""
+def started_by(commits: list[str] | tuple[str, ...]) -> float:
+    """When a recorded check of any of ``commits`` started at the earliest: the oldest one's committer time, less `SKEW_S`
+    (with none, `SKEW_S` before now: the newest checks)."""
+    times = [int(t) for t in git_text("show", "-s", "--format=%ct", *commits).split()] if commits else [int(time.time())]
+    return min(times) - SKEW_S
+
+
+def evidence_store(since: float):
+    """This machine's evidence store, with the attempts started after ``since`` (seconds since the epoch) refreshed from its
+    remote, once a run unless a later lookup asks for older ones. A lookup reads checks of commits (`started_by`) or the
+    newest: the remote holds every attempt ever started, and listing them all and fetching those this machine lacks takes
+    longer than a ready mark's preflight gives the gate."""
     if not _STORE:
         from research.store.local import LocalStore
-        store = LocalStore()
-        if store.remote is not None:
-            store.refresh(attempts_only=True)
-        _STORE.append(store)
-    return _STORE[0]
+        _STORE[:] = [LocalStore(), None]
+    store, done = _STORE
+    if store.remote is not None and (done is None or since < done):
+        store.refresh(attempts_only=True, since=time.strftime("r%Y%m%d-%H%M%S", time.gmtime(since)))
+        _STORE[1] = since
+    return store
 
 
 def checked_commits(line: list[str], recorded: str, store=None) -> tuple[list[str], list[str]]:
@@ -355,8 +371,9 @@ def checked_commits(line: list[str], recorded: str, store=None) -> tuple[list[st
     kept the store from being read, if anything."""
     if not line:
         return [], []
+    since = started_by(line) if store is None else 0.0
     try:
-        store = evidence_store() if store is None else store
+        store = evidence_store(since) if store is None else store
         rows = store.index.sql(f"SELECT DISTINCT source_commit FROM attempts WHERE {recorded} AND {ENDED} "
                                f"AND source_commit IN ({', '.join('?' * len(line))})", tuple(line))
     except Exception as e:  # noqa: BLE001  (no store here: the gate says it can't judge, naming why)
@@ -375,11 +392,9 @@ def stored(keys: dict[str, str], cache: Path, recorded: str, store=None, scan: i
     got: dict[str, Path] = {}
     errors: list[str] = []
     ended = f"{recorded} AND {ENDED}"
+    since = started_by(commits) if store is None else 0.0
     try:
-        if store is None:
-            store = evidence_store()
-        elif store.remote is not None:
-            store.refresh(attempts_only=True)
+        store = evidence_store(since) if store is None else store
         rows = [*(store.index.sql(f"SELECT id FROM attempts WHERE {ended} AND source_commit IN ({', '.join('?' * len(commits))}) "
                                   "ORDER BY start_utc DESC", commits) if commits else []),
                 *store.index.sql(f"SELECT id FROM attempts WHERE {ended} ORDER BY start_utc DESC LIMIT ?", (scan,))]
