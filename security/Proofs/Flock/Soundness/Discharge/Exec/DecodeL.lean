@@ -13,7 +13,9 @@ that same radius of the word it is given (`Claims.GS.listWithin_flockDecodeR`). 
 in order (`colsL`), it lists every message close to the table: `mem_flockDecodeR_of_close`.
 
 A search of the decoder's list therefore finds a close message that packs a satisfying witness whenever one exists,
-and no message is chosen (`Exec.candL`).
+and among the close messages it chooses none (`Exec.candL`). The decoder's own definition still takes by choice the
+novel-basis polynomials (`xP`), the inverse of their coefficient map (`Claims.GS.novelInvEquiv`) and its code's
+`ofRows` (`Claims.Flock.levelZero`).
 -/
 
 @[expose] public section

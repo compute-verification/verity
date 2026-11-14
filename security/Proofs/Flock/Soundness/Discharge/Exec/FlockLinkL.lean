@@ -85,9 +85,12 @@ noncomputable abbrev tabExtL (ω : L.Ω) (u : Fin n) (bs : List (List (OutCL �
 open Classical in
 /-- **The message the extraction settles on for unit `u`'s table**: the first message the radius decoder lists
 (`Claims.GS.flockDecodeR`, at the extracted table's columns written out, `colsL`) that is close to the extracted table
-and packs a satisfying witness. It is a search of the decoder's list, and no message is chosen. The decoder lists every
-close message (`mem_flockDecodeR_of_close`), so there is a candidate exactly when the table is committed
-(`candL_of_committed`, `candL_spec`). The decoder hashes nothing. -/
+and packs a satisfying witness. It is a search of the decoder's list: among the close messages none is chosen. The
+decoder lists every close message (`mem_flockDecodeR_of_close`), so there is a candidate exactly when the table is
+committed (`candL_of_committed`, `candL_spec`). The decoder hashes nothing. Its list is defined and not computed: the
+decoder reads a message off its polynomials by the inverse of the novel-basis coefficient map
+(`Claims.GS.novelInvEquiv`), over the novel-basis polynomials (`xP`), and each of the two is taken by choice, as is
+`ofRows` of its code (`Claims.Flock.levelZero`). -/
 noncomputable def candL (ω : L.Ω) (u : Fin n) (bs : List (List (OutCL 𝔽 D Sl))) :
     Option (Message 𝔽 (Partition.tabOf plan tab (L.draw ω) R u).sch.k0
       (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logCols) :=
@@ -165,9 +168,9 @@ noncomputable def opsTL (c : vb.Pos) (e : TrialOutL L D Sl) : List (vb.Val × vb
 
 /-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOfOps`), from
 the trials its cost charges. It searches the openings those trials found (`opsTL`) and chooses none; the message each
-opening is of is the first the radius decoder lists that fits the extracted table (`candL`), a search too. The
-finder's cost (`cTL`) counts SHA-512 calls: the decoder hashes nothing, and its running time is not bounded by that
-count. -/
+opening is of is the first the radius decoder lists that fits the extracted table (`candL`), a search too, of a list
+whose definition takes its inverses by choice. The finder's cost (`cTL`) counts SHA-512 calls: the decoder hashes
+nothing, and its running time is not bounded by that count. -/
 noncomputable def outCL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl)) :
     Option (List UInt8 × List UInt8) :=
   outOfOps (rdTL P H E Lf plan tab vb R τ c) (opsTL P H E Lf plan tab vb R τ c) vb.collide x
