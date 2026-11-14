@@ -53,9 +53,9 @@ theorem linkSoundE_monoL {decode : DecoderB (C := C) (Reg := Reg) plan tab}
     (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
     (hsub : ∀ R τ S u, u ∈ S → ∀ T, P.LinkEvB plan tab decode S R u (Xc' R τ) T →
       P.LinkEvB plan tab decode S R u (Xc R τ) T)
-    {δlink : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
-    (h : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound δlink) :
-    (analysisBEL P H E Lf plan tab decode Xc' k hk hr hlow).BindSound δlink := by
+    {εbind : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
+    (h : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound εbind) :
+    (analysisBEL P H E Lf plan tab decode Xc' k hk hr hlow).BindSound εbind := by
   classical
   intro R τ tgt
   refine le_trans (avg_mono fun ω => ?_) (h R τ tgt)

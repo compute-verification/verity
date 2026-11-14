@@ -1,6 +1,6 @@
 """Core's `IntegrityProfile` counts what the Lean audit theorem bounds.
 
-`Audit/OneStage.lean`'s `audit_count` bounds Pr[accept and at least K incorrect proof blocks] by `L.miss K + εks + δlink`, and for
+`Audit/OneStage.lean`'s `audit_count` bounds Pr[accept and at least K incorrect proof blocks] by `L.miss K + εks + εbind`, and for
 the uniform k-subset `SamplingDesign.subset_miss` makes the sampling term C(n - K, k)/C(n, k). The profile's `accept(K)` for one
 level sampled `Subset(k)` must be that ratio, and its incorrect-block bound the largest count the curve does not exclude at
 delta. This pins both statements' text, so a change on either side fails here."""
@@ -17,7 +17,7 @@ from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subs
 
 AUDIT = Path(__file__).resolve().parents[6] / "security" / "Proofs" / "Flock" / "Soundness" / "Audit"
 SUBSET_MISS = "(subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞)"
-AUDIT_COUNT = "L.miss K + εks + δlink"
+AUDIT_COUNT = "L.miss K + εks + εbind"
 
 #: The one-stage audits: n units, k sampled, delta, the most incorrect proof blocks admitted.
 RUNS = [(1024, 16, 0.01, 254), (1024, 256, 2.0 ** -20, 46), (344, 128, 2.0 ** -20, 28), (183_680, 256, 2.0 ** -20, 9675)]
