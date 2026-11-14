@@ -56,10 +56,10 @@ first blocks `prf t` gives its uniform coin, the sampler exact on each draw's fi
   a window. On uniform first blocks window `t`'s draw lands on correct receipts with probability at most
   `(g_t/U_t)^(s'_t)` given the earlier windows, those multiply over the session, and by weighted AM–GM their product is
   at most `δ` once the wrong receipts pass the bound. The hybrid over windows trades window `t`'s uniform blocks for
-  `prf t` at the cost of `s_t / 2^256` (every word of some first block rejected) and `adv_t`. `bind` (`Receipts.binding`) is the
-  probability that some opened receipt moved, presented and accepted at its root and rank with a row other than the one
-  its root holds (`Receipts.held`, the plurality of the rows it shows over the window's continuations): off it, every
-  receipt `Refused` lets through is correct.
+  `prf t` at the cost of `s_t / 2^256` (every word of some first block rejected) and `adv_t`. `bind`
+  (`Receipts.binding`) is the probability that some opened receipt moved, presented and accepted at its root and rank
+  with a row other than the one its root holds (`Receipts.held`, the plurality of the rows it shows over the window's
+  continuations): off it, every receipt `Refused` lets through is correct.
 * **LiveCoinsSampled**: `LiveCoins W` at that error for every `W` at least the pooled bound on every accepted outcome.
 * **HeldSampled**, **HeldOverTimeSampled**, **HeldOverTimeLinksSampled**: `Held` and its time-held forms with `LiveCoins`
   replaced by the draw's premises and `W` by the record's own pooled bound at error `δc`, so the line the ledger reads

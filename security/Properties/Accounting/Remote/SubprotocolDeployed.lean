@@ -45,14 +45,14 @@ def AcceptIsVerified : Prop :=
         .ok (rs, s) ∧
       s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (RemoteAudit.Protocol.certify params g sm).1
 
-/-- **The component publishes at least the draw term of `LineHeldAtSubprotocol`'s bound.** Whenever `RemoteAudit.Protocol.check`
-accepts parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
-(`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and events), and either the public
-outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows), or at every node of those
-parameters and g whose δ is the component's `RemoteAudit.Protocol.DELTA` the published `eps` is `δ + Σ_c s/2^64` over
-the node's `⌈W/g⌉` draws (`Node.samples`) at its `samples` s, at least `LineHeldAtSubprotocol`'s draw term
-`δ + Σ_c s/2^256`. It is a
-constant of the session's parameters, not of the draws the session made. -/
+/-- **The component publishes at least the draw term of `LineHeldAtSubprotocol`'s bound.** Whenever
+`RemoteAudit.Protocol.check` accepts parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p`
+and `e` decode to a session (`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and
+events), and either the public outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows),
+or at every node of those parameters and g whose δ is the component's `RemoteAudit.Protocol.DELTA` the published `eps`
+is `δ + Σ_c s/2^64` over the node's `⌈W/g⌉` draws (`Node.samples`) at its `samples` s, at least
+`LineHeldAtSubprotocol`'s draw term `δ + Σ_c s/2^256`. It is a constant of the session's parameters, not of the draws
+the session made. -/
 def PublishedEps : Prop :=
   ∀ (p : RemoteAudit.Protocol.Params) (reg : RemoteAudit.Registration) (e : RemoteAudit.Protocol.Evidence)
     (pub : RemoteAudit.Protocol.Public) (prof : Lean.Json),
