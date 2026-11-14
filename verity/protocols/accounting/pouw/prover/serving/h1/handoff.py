@@ -31,7 +31,6 @@ import contextlib
 import os
 import pickle
 import socket
-import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -44,7 +43,7 @@ from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
-from verity.protocols.accounting.pouw.prover.serving.tensors import tensors
+from verity.protocols.accounting.pouw.prover.serving.tensors import Tensors, tensors
 
 #: a suspended window's hand-off state's schema, which `suspend` writes and `resume` refuses any other than
 SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
@@ -100,13 +99,20 @@ def _draw_of(state: dict[str, Any] | None, client: Any, gate: PHW.Gate | None) -
 
 
 class _HostOnly(pickle.Pickler):
-    """Refuses a tensor in the saved state: one left on the device would need it to resume."""
+    """Refuses one of the workload's buffers in the saved state (`tensors.Tensors.is_buffer`): one left on the device would
+    need it to resume. With no buffers handed in, the state holds none."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        try:
+            self._buffers: Tensors | None = tensors()
+        except NotImplementedError:
+            self._buffers = None
 
     def persistent_id(self, obj: Any) -> None:
-        torch = sys.modules.get("torch")
-        if torch is not None and isinstance(obj, torch.Tensor):
-            raise ValueError(f"a {tuple(obj.shape)} {obj.dtype} tensor on {obj.device} in the window's saved state: "
-                             "suspend saves host copies only")
+        if self._buffers is not None and self._buffers.is_buffer(obj):
+            raise ValueError(f"a {tuple(obj.shape)} {obj.dtype} buffer on {getattr(obj, 'device', 'its device')} in the "
+                             "window's saved state: suspend saves host copies only")
         return None
 
 
