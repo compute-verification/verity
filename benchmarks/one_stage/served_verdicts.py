@@ -39,7 +39,7 @@ appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publ
 is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
-registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
+docket (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
 (`sampled_line`: the partition the sample was over, the members it drew, and no length of the advice or count of the
 scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
@@ -80,7 +80,7 @@ circuit files those of ``--circuits`` (``pouw_h1_circuits --program SERVE_DIR/h1
 held to that digest, T and S (`period_open_argv`). The live template's file is required. A stratum whose ``k<K>`` file
 isn't built yet is left out and named: core's credit refuses a sampled statement at that K (``circuit``), nothing else.
 Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIELD`); its sample K ``--draw-k``, else
-`pouw_h1_challenger.draw_k` over the declared layout; its weights the auditor's registration of ``--model`` under the
+`pouw_h1_challenger.draw_k` over the declared layout; its weights the auditor's docket of ``--model`` under the
 digest, else none (the gate refuses a root its registry lacks, and serve-openai's own is a local key's, so core's credit
 then refuses the window at its weights). The open's answer goes
 to ``SERVE_DIR/period.json``. ``period close`` closes that period and adds its answer there.
@@ -121,7 +121,7 @@ its passes are not the window sampled proofs audited; under PEARLPLUS_TIE, ``--t
 Pearl-C period its live salt session joined, `pearlplus_why_tied`). ``record`` composes an accepted one as PoUW's verdict of record
 only where `pearlplus_of_record` holds it to live coins under ``--key-sha512``, the lane ``--lane``'s own reserve and
 Pearl-C period, a sample session the lane reserved first after that period closed and opened on the run's commitment, the
-window's registration chained after Pearl+'s window record, that period's circuit the window-circuit record V3c held the
+window's docket chained after Pearl+'s window record, that period's circuit the window-circuit record V3c held the
 window's circuit to, and the Lean `PouwCheck.PearlPlus` verdict on the same run; else its row stays missing, naming the
 first condition it fails.
 
@@ -141,7 +141,7 @@ period that closed with its reserves held. ``pearlplus-period rule``, once the c
 sampled (`coin`), ``--run-dir`` naming the run's Attempt as its custody where no put preserves it.
 
 ``record``: sampled proofs' answer from the records audit kept under ``--sampled-proofs`` (`prove_path/run.sh`'s with
-``PP_RECORDS=1``, or V3c's: ``summary.json``, ``window/audit.json``, and ``window/registration.json``, the registration it
+``PP_RECORDS=1``, or V3c's: ``summary.json``, ``window/audit.json``, and ``window/registration.json``, the docket it
 sampled against), read as `served_integrity.answer` reads it (Pearl+'s window tie from the same files under
 ``--window-tie DIR`` where it is given, the window tied to W); each other subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
@@ -315,7 +315,7 @@ RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 #: the Pearl-C period's circuit descriptor in the piece (`pearlplus_period_open`), whose SHA-512 the period's open commits
 PEARLPLUS_DESCRIPTOR = "pearlplus-descriptor.json"
 PEARLPLUS_DESCRIPTOR_SCHEMA = "verity-pouw/pearl-plus-period/v1"
-#: beside the window registration R under ``--window-tie``: the window-circuit record V3c held R's circuit to
+#: beside the window docket R under ``--window-tie``: the window-circuit record V3c held R's circuit to
 #: (served_verdicts.sh's `window_tie`), whose SHA-512 Pearl+'s period must have committed
 CIRCUIT_RECORD = "circuit-record.json"
 #: the seconds `coin` gives each ``research data put`` before naming it unanswered
@@ -364,7 +364,7 @@ PEARLPLUS_PROTOCOL = "verity/pouw/pearl-plus/v1"
 #: Pearl+'s verdict's core answer in its piece (`served_pearlplus.sh`'s step 4), and the Lean `PouwCheck.PearlPlus`
 #: verdict on the same passes and coin record there (`pouw-pearlplus`'s printout)
 PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json"
-#: the window's registration R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
+#: the window's docket R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
 #: audit's summary (`spot_row`)
 WINDOW_REGISTRATION, AUDIT_SUMMARY = "window/registration.json", "summary.json"
 #: why `pearlplus_live_draw` refuses a node's sample source
@@ -666,12 +666,12 @@ def publish(out: Path, private: Path) -> list[str]:
     return held
 
 
-#: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
+#: The advice docket's fields that state the advice's own length, which `public_registration` pads to the cap.
 PADDED = ("binding.advice.bits", "rows")
 
 
 def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
-    """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
+    """What the run publishes of a window's advice docket: the advice's length (`PADDED`) at its compiler's
     ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each), no count or refusal of its requests,
     no window's number (`public_json`), and the rest as registered. ``padded`` names the fields padded."""
     cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
@@ -1625,7 +1625,7 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
                      run: str | None = None) -> dict[str, Any]:
     """Sampled proofs' row from this host's own run of remote's sampled proofs Lean (`served_cases.sampled_case`: the
     records audit's v2 case, its blobs the proofs and public files, in the form ``one-stage``; ``exe`` default built here)
-    on files in a 0700 directory under ``scratch``, its answer tied to the window's registration record (`LEAN_HERE`),
+    on files in a 0700 directory under ``scratch``, its answer tied to the window's docket (`LEAN_HERE`),
     whatever the audit's summary and record say. An audit that wrote no v2 case (a plain run's, or one a5 refused) leaves
     no proofs to recompute from: its row is `spot_row`'s, its ``answer_from`` saying so. A case the Lean
     doesn't make or answer, or an answer about another record, is the row's error."""
@@ -1747,7 +1747,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
        session the lane's first reserve after the period closed (`pearlplus_live_draw` over `pearlplus_draw`'s check),
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
-       window's registration R under `spot` is chained right after W, and its records audit is tied to W
+       window's docket R under `spot` is chained right after W, and its records audit is tied to W
        (``records_audit --tie W``), so the window sampled proofs audited reads the roots Pearl+ credits. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.

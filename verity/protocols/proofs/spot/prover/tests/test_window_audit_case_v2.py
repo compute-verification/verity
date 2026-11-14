@@ -93,7 +93,7 @@ def test_two_sampled_members_statements_make_no_v2_case_and_each_alone_names_its
 def test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other_members(tmp_path):
     """`v2_proof` names the one sampled member's statement, its circuit pin, the public file's digest it was staged
     with and its registered file, read; the window's other members and its registered circuit record add nothing to it:
-    v2 holds that public file's units to the registration's population, so a window of several members is refused
+    v2 holds that public file's units to the docket's population, so a window of several members is refused
     there, never given a form of its own."""
     def member(k: int, base: int, n: int, reads: dict | None = None) -> dict:
         d = tmp_path / f"m{k}"
@@ -313,7 +313,7 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     sample that ends can miss it, its fewest none. Under `subset:2` a sample that ends holds at most 2 of a member, one
     count of link points, and can miss each of the three, so each is recorded refused (one that runs out of coins fails
     the window: `a5.draw_ran_out`). Under `subset:39` a sample that ends misses none and gives each one count, so none
-    is. A sampling design that doesn't apply refuses every member, recorded with why. The registration's check is
+    is. A sampling design that doesn't apply refuses every member, recorded with why. The docket's check is
     handed those members (`a5.link_members`), and refuses the recorded ones, where the audit's case is of the
     per-member form (`a5.per_member`): several members under `--zk` sessions, where `a5.members_proof` writes one."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
@@ -343,7 +343,7 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
 
 
 def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
-    """`a5.link_points` records the registration's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
+    """`a5.link_points` records the docket's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
     which `coins.law_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
     every member."""
     from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP

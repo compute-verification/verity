@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # stop_audit.py end to end on a CPU node, on a stop class at small statics (stop_audit_small.py: no engine):
 # flock-circuit, the Flock verifier's Lean binaries and SPOT's Lean verifier built from this tree as
-# two_stage_small.sh builds them, then `two_stage.py first --stop` (the boundary registration, the stop registration
+# two_stage_small.sh builds them, then `two_stage.py first --stop` (the boundary docket, the stop docket
 # and both samples on a local challenger session) and five audits of the stop population:
 #   accept      the class as served: the audit record accepts on Lean's verdict of record, and is not complete
 #   length      a class registered with stop words that are not the rule's: Lean refuses its session, and the
@@ -54,7 +54,7 @@ field() { "${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys
 CHECK=$(field check); STOP=$(field stop); CLASS=$(field class); WRONG=$(field wrong); WRONG_FILES=$(field wrong_files)
 NAME=$(basename "$CLASS")
 
-first() {  # NAME CLASSDIR: the class's boundary and stop registrations and their samples
+first() {  # NAME CLASSDIR: the class's boundary and stop dockets and their samples
   "${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py first --boundary "$2" --check "$CHECK" --replay "$DESIGN" --k 1 --stop "$STOP" \
     --challenger local --main "$O/main.txt" --out "$W/$1" > "$O/$1.log" 2>&1 || { tail -20 "$O/$1.log"; exit 3; }
   tail -2 "$O/$1.log"

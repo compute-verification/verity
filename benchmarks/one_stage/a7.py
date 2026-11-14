@@ -52,7 +52,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   remote audit's opening unit (`remote_bandwidth.opening`, `verity.protocols.accounting.poub.verifier.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
   at the sampled position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
-  registration's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
+  docket's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
   unit binds the block's payload row to, and the block's sketch receipt the leaf's entry. The units are proved as a
   second statement (`check3_audit`: every unit sampled, --zk, Lean). The verifier sees the units' roots, its own public
   rows (the codec seed, the block, the coin, the pass's prefix and signs, the roots with their domains, ranks and depths)
@@ -290,7 +290,7 @@ def _runs(blocks) -> tuple[tuple[int, int], ...]:
 def check3_inputs(canons: dict, sp, sm, samples: int = SAMPLES) -> SimpleNamespace:
     """What check 3 reads of the canonical commitments: each step's certified plan row (its words, salt and ``b || c``) and
     the canonical payload commitment (`opening.Values`, written block j at row j - NR, the row `bound_row` binds its
-    ``pay`` row to); the unit's codec, P and depths (a receipt tree of a plan of P + 1 blocks, the registration's payload
+    ``pay`` row to); the unit's codec, P and depths (a receipt tree of a plan of P + 1 blocks, the docket's payload
     tree or an append of up to 2 C blocks, the payload commitment); and the samples a window it proves (``samples``), which
     every session of the run draws."""
     c, pay = canons["plan"], canons["payload"]
@@ -948,7 +948,7 @@ def main() -> int:
                            "unit_nnz": m["unit_nnz"], "k_log": m["meta"]["k_log"], "pin": m["pin"], "class": m["class"],
                            "oks": sum(m["oks"]), "stage_s": m["seconds"]} for m in members]
 
-    # one registration, before the sample: the statements' ports and the canonical commitments
+    # one docket, before the sample: the statements' ports and the canonical commitments
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]
@@ -1481,7 +1481,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
         neg["public-file-altered-after-the-proof (Lean roots)"] = {**a0.altered_public(
             a.lean, last, last["n"], sdir, out / "neg-altered-public", dict(rec, leaf_layer=leaf_layer), check, zk=True),
             "member": last["name"], "row": f"instance {last['n'] - 1}, port {last['ports'][-1].name}"}
-    # the sampled-proofs registration and sample, as A6 checks them
+    # the sampled-proofs docket and sample, as A6 checks them
     fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
     v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}

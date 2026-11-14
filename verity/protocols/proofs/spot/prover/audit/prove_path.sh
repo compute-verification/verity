@@ -2,7 +2,7 @@
 # Prove path (prove_path.py) on a CPU machine: a TP Commit's ranks committed over the stand-in compiler's Programs for the run's
 # advice, each rank's window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
 # commitment, sampled through a5's per-rank service.Stream on a challenger's coins, proved by M0 --zk behind the Lean ZK server
-# and verified by Lean, the advice's root then held to the registration the sample followed; then one forged run, a unit whose
+# and verified by Lean, the advice's root then held to the docket the sample followed; then one forged run, a unit whose
 # committed value is changed (committed consistently, the prover's self-check skipped), which the audit must reject with
 # the ZK server releasing no proof of it (with PP_PLAIN=1, which has no ZK server, with Lean refusing the proof it reads).
 # M0's flock-circuit and Lean's verity-verify-proof are built from this tree, in scratch.
@@ -26,14 +26,14 @@
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
 #     registered under that compiler (`verity-vllm advice --compiler-name/--compiler-digest`, the inner name and digest
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
-#     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
+#     audited from its records alone (records_audit.py: circuit.json, the docket and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
 #   PP_LLAMA, PP_SERVE_RUN and PP_SERVE_ROWS name directories on this node, the serve directory's; an art: id is refused,
 #     since a published row dir's sealed bundle and a published run's requests.jsonl hold request values.
 #   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
 #     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
 #     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
-#   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights registration at TINY (verity_vllm.program.predict.weights_tie;
+#   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights docket at TINY (verity_vllm.program.predict.weights_tie;
 #     its inputs tests/program/predict/weights_tie_fixture): the committer registers checkpoint X's weights and records
 #     its tie window, one SHA-512 chain a shard over the registered rows (the embedding table's row-seg rows a chain of
 #     their own), ending at the verifier's own digest; the verifier makes its tie of X from X's public bytes (the circuit's

@@ -2,6 +2,7 @@
 Triton targets the integration patches."""
 from __future__ import annotations
 
+import contextlib
 import importlib
 import sys
 import types
@@ -308,10 +309,8 @@ def test_export_shims_restore_torch_and_vllm() -> None:
 
     fm = pytest.importorskip("vllm.model_executor.layers.fused_moe.fused_moe")   # registers torch.ops.vllm.fused_experts
     ns = torch.ops.vllm
-    try:
-        getattr(ns, "fused_experts")                         # resolving caches the packet on the namespace
-    except (AttributeError, RuntimeError):
-        pass
+    with contextlib.suppress(AttributeError, RuntimeError):
+        _ = ns.fused_experts                                 # resolving caches the packet on the namespace
     fe = vars(ns).get("fused_experts", hooks.ABSENT)
     try:
         from vllm.v1.worker import workspace as ws

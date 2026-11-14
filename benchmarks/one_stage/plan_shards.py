@@ -11,7 +11,7 @@ to the circuit, and one staged by Flock's `UnitStager` for its fit in M0's block
   only where that fixes it: nothing appended or released and a plan of every block below the stale bound, N of N, is every
   block in store order. Any other pass is refused here.
 * **The blocks each step reads.** The session's registered layout (``remote_session.json``'s ``layout``, one region a
-  registration, weights or filler; its registration digest the record's): every weight block, a gathered table (the
+  docket, weights or filler; its docket digest the record's): every weight block, a gathered table (the
   embedding) counted whole. That is each instance's ``regmask`` at every step, a superset of the step's registered reads,
   which is what the one-sided clause needs; the circuit's other reads (its KV) are outside this store.
 * **What it writes.** ``$OUT/plan_shards.json``: the binding, the shards (full, weight, mixed, filler), instances a pass and in

@@ -20,7 +20,7 @@ or at its ``max_tokens``, the check `TokenSelect_v4{V}`'s:
 
 ``unlogged``: a hand-off whose stop record is built on a boundary record the class's boundary stream never logged
 (the class's own, chained after a record that is not there). ``unaccepted``: an outcome record on the class's boundary
-registration that did not accept, as a boundary stream that refused its sample would log it. ``incomplete``: one
+docket that did not accept, as a boundary stream that refused its sample would log it. ``incomplete``: one
 that accepted with an entry that did not run, so its audit record is not complete. Today's two-stage streams reach no
 outcome, so both records are written here and no stream's.
 
@@ -110,8 +110,8 @@ def unlogged(handoff: Mapping[str, Any], check: Any = None) -> dict[str, Any]:
 
 
 def unaccepted(handoff: Mapping[str, Any]) -> dict[str, Any]:
-    """An outcome record on the class's boundary registration that did not accept (module docstring): its audit
-    record names that registration and holds no verdict."""
+    """An outcome record on the class's boundary docket that did not accept (module docstring): its audit
+    record names that docket and holds no verdict."""
     audit = {"format": A.FORMAT, "registration_digest": handoff["registration"], "accepted": False, "complete": True,
              "checks": {}, "verdicts": {}}
     return {"format": S.OUTCOME, "stream": handoff["spec"], "order": 0, "registration": handoff["registration"],
@@ -120,8 +120,8 @@ def unaccepted(handoff: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def incomplete(handoff: Mapping[str, Any]) -> dict[str, Any]:
-    """An outcome record on the class's boundary registration that accepted with an entry that did not run (module
-    docstring): its audit record names that registration, accepted on its verdict of record, and is not complete."""
+    """An outcome record on the class's boundary docket that accepted with an entry that did not run (module
+    docstring): its audit record names that docket, accepted on its verdict of record, and is not complete."""
     got = unaccepted(handoff)
     verdicts = {"lean-verify/boundary": {"accepted": True, "of_record": True}, "not-run": {"accepted": None, "of_record": False}}
     return {**got, "symbol": S.ACCEPT, "audit": {**got["audit"], "accepted": True, "complete": False, "verdicts": verdicts}}

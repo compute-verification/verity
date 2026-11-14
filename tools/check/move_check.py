@@ -17,7 +17,7 @@ Every path git sees changed must be one of:
   (`HERE.parent / "rho"` after `HERE = Path(__file__).resolve().parent`). Each changed line left may only rewrite a
   moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or from the
   name of an import root (`[roots] old` of a map the range ran by) to where `tools/move/layout.py` writes it, or a dotted
-  name (`verity.protocols.proofs.flock.prover.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
+  name (`verity.protocols.proofs.flock.prover.tool:FLOCK_PURE`) from where a renamed module was
   to where it is now; in any of them, the modules a run of import lines binds each name to
   (`from a import m as M` to `from b import m2 as M`, a line split in two, a `from a import (x,` whose names go on
   past the change, or a `from a import x, \\` (`rules`'s `continued`); in a heredoc, or in a string literal
