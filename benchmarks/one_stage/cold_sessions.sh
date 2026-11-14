@@ -120,10 +120,10 @@ OUT=$O/lean bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 PT_WORK="$PT
 wait
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1)
 LEAN=$(sed -n 's/.*BUILD_ONLY: \(\S*\) .*/\1/p' "$O/lean/job.log" 2>/dev/null | tail -1)
-LOOP=${LEAN%/*}/flock-firewall
+LOOP=$(COLD loop --lean "$LEAN")
 if [ -x "$LEAN" ] && [ ! -x "$LOOP" ]; then
   command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$LOOP" ] || (cd "$(readlink -f "${LEAN%/build/bin/*}")/.." && lake build flock-firewall)) \
+  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$LOOP" ] || (cd "$(readlink -f "${LEAN%/build/bin/*}")/.." && lake build "${LOOP##*/}")) \
     > "$O/lake-loop.log" 2>&1
 fi
 for p in "$BIN" "$LEAN" "$LOOP" "$PY"; do

@@ -195,10 +195,6 @@ def stand_in(set_dir: str) -> dict:
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
 
-#: the file an audit keeps a sample in: the window's (`a5.audit`'s ``out``) and each session's (``session-m<k>/``)
-SAMPLE_FILE = "draw.json"
-
-
 def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
     """Whether `session`, given ``env`` and ``zk``, takes its coin tree from a challenger of its own (FLOCK_CHALLENGER=1 on the
     keyed coin tree)."""

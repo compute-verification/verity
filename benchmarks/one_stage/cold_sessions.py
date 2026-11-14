@@ -1,6 +1,8 @@
 """One cold session a member of a kept window, behind the ZK server, on a device or on the CPU: each session's seconds by
 part, its peak memory and its Lean verdict, or the text it was refused with.
 
+    python benchmarks/one_stage/cold_sessions.py loop --lean V
+        # the ZK server's Lean session loop's executable, beside Lean's verifier V in its package
     python benchmarks/one_stage/cold_sessions.py plan --window W --members K,K,...
         # each member's statement from the window's files (``summary.json``'s members, the public file's header), or exit 1
         # naming what is missing
@@ -13,7 +15,7 @@ part, its peak memory and its Lean verdict, or the text it was refused with.
         # O/table.json and O/table.md, a row a member
 
 A window is an audit's ``audit/window`` (`a5.audit`'s): ``m<k>/`` (``circuit.txt``, ``inst-N.bin``, ``pub-N.bin``,
-``registered.json`` where the member reads registered values), each session's sample (``session-m<k>/``, `a0.SAMPLE_FILE`), ``partition.json``,
+``registered.json`` where the member reads registered values), each session's sample (``session-m<k>/``, `A5.SAMPLE_FILE`), ``partition.json``,
 ``program.json`` and ``summary.json``; ``--interface`` is the window's registered circuit record. Each session is the one
 `a5.proof_server` proves an audit's member in, behind the ZK server: a `ProofServer` of its own (so its prover and its
 verifier start cold), ``verify_ahead=0``, its Lean session loop set up as `a0.prover_env` says, on the member's own sample
@@ -46,6 +48,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
+import a5 as A5  # noqa: E402
 import member_seconds as MS  # noqa: E402
 import server_rate as SR  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
@@ -65,6 +68,11 @@ def statement(window: Path, interface: Path, k: int) -> dict:
             **({"registered_file": reg} if reg.exists() else {}), "interface_file": interface, "archived": {}}
 
 
+def loop(a: argparse.Namespace) -> int:
+    print(Path(a.lean).parent / A5.ZK_SERVER_LOOP)
+    return 0
+
+
 def plan(a: argparse.Namespace) -> int:
     window, rows, bad = Path(a.window), members(Path(a.window)), []
     for k in a.members:
@@ -72,7 +80,7 @@ def plan(a: argparse.Namespace) -> int:
         if m is None:
             bad.append(f"m{k}: not in summary.json")
             continue
-        need = [d / "circuit.txt", d / f"inst-{m['n']}.bin", d / f"pub-{m['n']}.bin", window / f"session-m{k}" / a0.SAMPLE_FILE]
+        need = [d / "circuit.txt", d / f"inst-{m['n']}.bin", d / f"pub-{m['n']}.bin", window / f"session-m{k}" / A5.SAMPLE_FILE]
         if missing := [str(f) for f in need if not f.exists()]:
             bad.append(f"m{k}: missing {missing}")
             continue
@@ -164,8 +172,8 @@ def prove(a: argparse.Namespace) -> int:
     st = statement(window, Path(a.interface), k)
     sdir = session_dir(Path(a.out), a.arm, k)
     sdir.mkdir(parents=True, exist_ok=True)
-    sample = json.loads((window / f"session-m{k}" / a0.SAMPLE_FILE).read_text())
-    (sdir / a0.SAMPLE_FILE).write_text(json.dumps(sample))
+    sample = json.loads((window / f"session-m{k}" / A5.SAMPLE_FILE).read_text())
+    (sdir / A5.SAMPLE_FILE).write_text(json.dumps(sample))
     env = {**a0.prover_env(a.zk_server, st), "FC_PHASE_TIMES": "1"}
     devices = [a.device] if a.arm == "gpu" else None
     ps = ProofServer(a.bin, sdir / "proof-server", devices=devices, env=env, verify_ahead=0, verdicts=1,
@@ -290,6 +298,8 @@ def ks(text: str) -> list[int]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("loop")
+    p.add_argument("--lean", required=True)
     p = sub.add_parser("plan")
     p.add_argument("--window", required=True)
     p.add_argument("--members", type=ks, required=True)
@@ -312,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("table")
     p.add_argument("--out", required=True)
     a = ap.parse_args(argv)
-    return {"plan": plan, "prove": prove, "verify": verify, "table": table}[a.cmd](a)
+    return {"loop": loop, "plan": plan, "prove": prove, "verify": verify, "table": table}[a.cmd](a)
 
 
 if __name__ == "__main__":

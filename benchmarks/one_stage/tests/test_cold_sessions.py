@@ -22,7 +22,7 @@ def window(root: Path, ks: list[int]) -> Path:
         (d / "inst-4.bin").write_bytes(b"i")
         (d / "pub-4.bin").write_text(json.dumps({"circuit_sha512": f"pin{k}"}) + "\n")
         (w / f"session-m{k}").mkdir()
-        (w / f"session-m{k}" / C.a0.SAMPLE_FILE).write_text(json.dumps({"k": 1, "population": 4, "units": [2]}))
+        (w / f"session-m{k}" / C.A5.SAMPLE_FILE).write_text(json.dumps({"k": 1, "population": 4, "units": [2]}))
     (w / "summary.json").write_text(json.dumps({"members": [{"k": k, "n": 4, "template": "T_v1{N=1}"} for k in ks]}))
     (w / "partition.json").write_text("{}")
     (w / "program.json").write_text("{}")
