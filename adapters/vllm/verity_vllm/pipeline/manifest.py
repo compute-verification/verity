@@ -37,6 +37,7 @@ from verity.circuits import word as word_query
 
 from verity_vllm.config import option, workload_arg
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.log import init_logger
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
@@ -56,6 +57,8 @@ from verity_vllm.query.required import (
 )
 
 __all__ = ["COMMANDS", "build", "build_global", "cpus", "incomplete_rc", "main", "taps_of"]
+
+logger = init_logger(__name__)
 
 #: `--jobs`'s variable
 JOBS_ENV = "VERITY_MANIFEST_JOBS"
@@ -625,7 +628,7 @@ COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions}
 
 
 def main(a: Any) -> int:
-    log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    log = logger.info
     if a.cmd in ("build", "build-global"):
         # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
         from verity_vllm.gc_tuning import tune as _gc_tune
