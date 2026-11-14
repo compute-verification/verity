@@ -1,13 +1,13 @@
 module
 
-public import Properties.Pouw.Period
+public import Properties.Pouw.MonitoringPeriod
 public import Mathlib.Data.Finset.Sort
 
 /-!
-# The instance `h1CheckedCreditPeriod`'s witnesses are stated at
+# The instance `h1CheckedCreditMonitoringPeriod`'s witnesses are stated at
 
-`Proofs.Pouw.Period.Witnesses` proves `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`'s `honest` and
-`nontrivial` witnesses (`lean-audit.json`'s `witnesses`), and `Proofs.Pouw.Period.Honest` that the instance meets every
+`Proofs.Pouw.MonitoringPeriod.Witnesses` proves `Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod`'s `honest` and
+`nontrivial` witnesses (`lean-audit.json`'s `witnesses`), and `Proofs.Pouw.MonitoringPeriod.Honest` that the instance meets every
 premise (`h1_meets`); the instance they read is here, so their statements read only this tree, the spec and the code.
 
 * The twin's circuit word, scheme and anatomy (`Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest`): one
@@ -60,7 +60,7 @@ noncomputable def anatomy : Anatomy Unit Unit Unit Unit where
 
 end Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest
 
-namespace Properties.Pouw.Period.SecurityProofs.Accept
+namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 
 open PouwCheck
 open Lean (Json)
@@ -128,11 +128,11 @@ def h1Evidence (c : ExecutionPhaseCommitmentRecord) (units : Array Nat) : Eviden
   commitment := some (Flock.hexOf c.digest)
   said := .accept (h1Profile c.program c.partition) { samplingDesign := .subset 24, population := 144, units }
 
-end Properties.Pouw.Period.SecurityProofs.Accept
+end Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 
-namespace Properties.Pouw.Period.SecurityProofs.HonestH1
+namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
-open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs.Accept
+open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 open PouwCheck (Params)
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
@@ -234,4 +234,4 @@ noncomputable def checkedPlay (n : ℕ) : Play Ω1 n Unit Unit Unit Unit :=
 noncomputable def acceptAll (n : ℕ) : Play Ω1 n Unit Unit Unit Unit :=
   { game := (play n).game, accepts := fun _ => True, run := fun _ => { anatomy with fixed := 0 } }
 
-end Properties.Pouw.Period.SecurityProofs.HonestH1
+end Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1

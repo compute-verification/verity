@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Pouw.PeriodJ10R.Honest
+public import Proofs.Pouw.MonitoringPeriodJ10R.Honest
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +35,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.RelativeSecurity
 
 /-!
-# `H1J10RCheckedCreditPeriod`'s conclusion fails at a verifier that accepts everything
+# `H1J10RCheckedCreditMonitoringPeriod`'s conclusion fails at a verifier that accepts everything
 
 The nontrivial twin of `HonestJ10R.j10r_meets`, the honest one. The statement reads its verdict, `Credit.window`'s, in
 its conclusion only through the accepted prefix (`CreditExecutionPhases.prefixLen`) and the prefix's live words (`creditLive`).
@@ -52,9 +52,9 @@ every period of 39 windows or more.
 
 @[expose] public section
 
-namespace Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
+namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
 
-open Properties.Pouw.PeriodJ10R
+open Properties.Pouw.MonitoringPeriodJ10R
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
@@ -80,7 +80,7 @@ noncomputable def creditLiveBy {ι K C B : Type} (Sc : Scheme K) (Cd : Declared 
     (acc : Paths (Paths C Cd.rounds × B) n → Fin n → Prop) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if UpToBy acc x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
 
-/-- **`H1J10RCheckedCreditPeriod`'s conclusion at verdict `acc`**: except with probability `δ`, an accepted period's
+/-- **`H1J10RCheckedCreditMonitoringPeriod`'s conclusion at verdict `acc`**: except with probability `δ`, an accepted period's
 fixed words are at least the credit of `acc`'s accepted prefix, `(1 − ε(j))₊` of its live words. -/
 def CreditBoundBy {ι K T L U C B : Type} [Fintype C] [Fintype B] (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
     (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n)
@@ -147,7 +147,7 @@ theorem prob_true {Ω : Type} [Fintype Ω] (a : Ω) : prob (fun _ : Ω => True) 
   rw [prob_eq_card, Finset.filter_true_of_mem fun _ _ => trivial, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
-/-- **`H1J10RCheckedCreditPeriod`'s conclusion fails at the verifier that accepts everything**: at the honest
+/-- **`H1J10RCheckedCreditMonitoringPeriod`'s conclusion fails at the verifier that accepts everything**: at the honest
 instance's circuit, scheme, period and rate over the tile stratum (`N_p = |stratum σ s_T|`, `1 ≤ k s_T`,
 `Λ = j10rRate (k s_T) 1`), with every window credited, the prover that fixes no word (`idle`) is accepted on every
 path with less than the credit, so the bound fails at every `δ_s + n·(δ_bind + δ_ks) < 1` once
@@ -173,4 +173,4 @@ theorem j10r_nontrivial {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → �
   rw [prob_true (Paths.const (Paths.const true _, (Equiv.refl _, ())) n)] at hall
   linarith
 
-end Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
+end Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R

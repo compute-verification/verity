@@ -13,7 +13,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # A period of two-stage verification phases: one failure probability for the whole period, proved
 
-`PeriodTwoProd` is `monitoringPeriod_union` and `monitoringPeriod_prod` at `twoAtRec`. A run in which every verification phase is accepted
+`MonitoringPeriodTwoProd` is `monitoringPeriod_union` and `monitoringPeriod_prod` at `twoAtRec`. A run in which every verification phase is accepted
 and the escapes multiply below `δ` either has a verification phase accepted with a sampled proof block incorrect at
 its boundary values, at most `Σ_t ε_t` by `monitoringPeriod_union` and the hypothesis on the event, or every sample misses with
 the product of the escapes below `δ`, at most `δ` by `monitoringPeriod_prod`.
@@ -29,13 +29,13 @@ stage's coins.
 * `twoAtRec_accepted_le`: a verification phase is accepted with a sampled proof block incorrect at its boundary values
   at most as often as the hypothesis on the event says in scope, and never out of scope.
 * `twoAtRec_missed_le`: its sample misses with probability at most `escAt`.
-* `periodTwoProd_of`: `PeriodTwoProd` from each verifier's contract.
+* `monitoringPeriodTwoProd_of`: `MonitoringPeriodTwoProd` from each verifier's contract.
 * `period_leadEscape`: the escapes of the verification phases before the first whose sample holds an incorrect proof
   block multiply below `c` with probability at most `c`. It is `period_lead` with the escapes multiplied: a phase
   whose sample misses passes the rest of the run the budget `c / e`, `e` its missProb.
-* `periodTwoLead_of`: `PeriodTwoLead` from each verifier's contract, by `monitoringPeriod_union` and `period_leadEscape`. So
-  **`CompilerPeriodTwoProd` is proved** (`compilerPeriodTwoProd`).
-* `periodTwoProd_regVal`, `periodTwoLead_regVal`: both at the committed boundary trace, where knowledge soundness of
+* `monitoringPeriodTwoLead_of`: `MonitoringPeriodTwoLead` from each verifier's contract, by `monitoringPeriod_union` and `period_leadEscape`. So
+  **`CompilerMonitoringPeriodTwoProd` is proved** (`compilerMonitoringPeriodTwoProd`).
+* `monitoringPeriodTwoProd_regVal`, `monitoringPeriodTwoLead_regVal`: both at the committed boundary trace, where knowledge soundness of
   the argument and binding bound the event by `ε_reg,2` (`CompiledTwo.eventTwo_le`).
 -/
 
@@ -168,10 +168,10 @@ theorem twoAtRec_missed_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Se
     exact hr ⟨u, hu, by rw [CompiledTwo.FregTwoAt_eq H L P hs hPt hd]; exact hF⟩
 
 /-- **The period's one failure probability, from each verifier's contract**: when every verification phase's verifier
-meets the two-stage compiler's contract, `PeriodTwoProd` holds at every boundary traces `val`. -/
-theorem periodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
+meets the two-stage compiler's contract, `MonitoringPeriodTwoProd` holds at every boundary traces `val`. -/
+theorem monitoringPeriodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
-    PeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
+    MonitoringPeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
   intro T ε s hev δ
   have hs := monitoringPeriodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => (Lv t).Scope τ.2.1.1 →
@@ -278,11 +278,11 @@ theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β
           _ ≤ c := ENNReal.mul_div_le
 
 /-- **The period's one failure probability through the first sampled incorrect proof block, from each verifier's
-contract**: when every verification phase's verifier meets the two-stage compiler's contract, `PeriodTwoLead` holds at
+contract**: when every verification phase's verifier meets the two-stage compiler's contract, `MonitoringPeriodTwoLead` holds at
 every boundary traces `val`. -/
-theorem periodTwoLead_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
+theorem monitoringPeriodTwoLead_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
-    PeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
+    MonitoringPeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
   intro T ε s hev δ
   have hs := monitoringPeriodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => (Lv t).Scope τ.2.1.1 →
@@ -311,11 +311,11 @@ theorem periodTwoLead_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
       (twoAtRun H Lv val T s) ≤ _
   exact (Verity.Game.value_or_le _ _ _).trans (add_le_add hA hB)
 
-/-- **The period's one failure probability from the verification phases' verifiers**: `periodTwoLead_of` and
-`periodTwoProd_of`. -/
-theorem compilerPeriodTwoProd : CompilerPeriodTwoProd := by
+/-- **The period's one failure probability from the verification phases' verifiers**: `monitoringPeriodTwoLead_of` and
+`monitoringPeriodTwoProd_of`. -/
+theorem compilerMonitoringPeriodTwoProd : CompilerMonitoringPeriodTwoProd := by
   intro Coin _ _ _ A O V Tick Adv H Lv val hS
-  exact ⟨periodTwoLead_of H Lv val hS, periodTwoProd_of H Lv val hS⟩
+  exact ⟨monitoringPeriodTwoLead_of H Lv val hS, monitoringPeriodTwoProd_of H Lv val hS⟩
 
 /-- **The event at the committed boundary trace**: on a statement in scope, at a prover with no tape, the run accepts
 with a sampled proof block of the committed incorrect set with probability at most `ε_reg,2`
@@ -335,9 +335,9 @@ theorem acceptedSampledAt_regVal_le {H : Msg → Msg} {L : CompiledTwo Coin A} (
 every verification phase's verifier binds and meets the contract, at every strategy whose verification phases'
 committed-form errors (`CompiledTwo.εregTwo` at the statement and prover each sends) are at most `ε_t`, every
 verification phase is accepted and the escapes at the committed boundary traces multiply below `δ` with probability at
-most `δ + Σ_t ε_t`. It is `CompilerPeriodTwoReg`'s premises with the period's one `δ` in place of the least rate of any
+most `δ + Σ_t ε_t`. It is `CompilerMonitoringPeriodTwoReg`'s premises with the period's one `δ` in place of the least rate of any
 cell. -/
-theorem periodTwoProd_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (hA : A.KS H)
+theorem monitoringPeriodTwoProd_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (hA : A.KS H)
     (hS : ∀ t, (Lv t).commit.Binds H ∧ (Lv t).Sessions H) (T : ℕ) (ε : ℕ → ℝ)
     (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
     (herr : ∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
@@ -346,14 +346,14 @@ theorem periodTwoProd_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
         (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.missProb).prod < ENNReal.ofReal δ)
         (twoAtRun H Lv (fun t _ x P => (Lv t).regVal H P x ()) T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) :=
-  periodTwoProd_of H Lv (fun t _ x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s
+  monitoringPeriodTwoProd_of H Lv (fun t _ x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s
     (fun t τ hp hx => (acceptedSampledAt_regVal_le hA (hS t).1 (hS t).2 hx τ.2.1.2).trans (herr t τ hp)) δ
 
 /-- **The period's one failure probability through the first sampled incorrect proof block, at the committed boundary
-trace**: under `periodTwoProd_regVal`'s premises, some verification phase is accepted with a sampled proof block of
+trace**: under `monitoringPeriodTwoProd_regVal`'s premises, some verification phase is accepted with a sampled proof block of
 its committed incorrect set, or the escapes at the committed boundary traces of the verification phases before the
 first such sample multiply below `δ`, with probability at most `δ + Σ_t ε_t`. -/
-theorem periodTwoLead_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (hA : A.KS H)
+theorem monitoringPeriodTwoLead_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (hA : A.KS H)
     (hS : ∀ t, (Lv t).commit.Binds H ∧ (Lv t).Sessions H) (T : ℕ) (ε : ℕ → ℝ)
     (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
     (herr : ∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
@@ -361,7 +361,7 @@ theorem periodTwoLead_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     Verity.Game.value (ServedEsc.UndetectedBelow δ)
         (twoAtRun H Lv (fun t _ x P => (Lv t).regVal H P x ()) T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) :=
-  periodTwoLead_of H Lv (fun t _ x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s
+  monitoringPeriodTwoLead_of H Lv (fun t _ x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s
     (fun t τ hp hx => (acceptedSampledAt_regVal_le hA (hS t).1 (hS t).2 hx τ.2.1.2).trans (herr t τ hp)) δ
 
 end WeightSecurity.SecurityProofs
