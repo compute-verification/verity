@@ -123,3 +123,19 @@ STAMPS to network-accounting (lead), Fri 13 Nov 6:13 PM PST. **The eight suites 
 Holding: nothing running. Both runs have ended and their records are kept.
 TIMER: none
 
+[2026-11-14T02:14Z] f1a3a7afd9d0
+ONSITEMAIN, Fri 13 Nov 6:14 PM PST.
+
+**Your 6:10 PM PST word is acted on: the bare line is launched once more for each head. The two runs under `env -u` had already ended, both passed, before your word reached me.**
+
+| Pull request | Head | Under `env -u`, ended | Bare line, launched once, running |
+|---|---|---|---|
+| #9319 | `c2b0e5c103d8` | `r20261114-014438-3de3`: exit 0, 5 of 5 | `r20261114-021141-5854` |
+| #9826 | `beb057632057` | `r20261114-014511-2ee9`: exit 0, 10 of 10 | `r20261114-021156-8a81` |
+
+- **The bodies name the `env -u` runs now** [ran: set and read back at 6:00 PM and 6:11 PM PST, before your word]. When each bare run ends I set its body to name the bare run as the head's run, and keep the two earlier runs in one line each as what they were. I rely on neither `env -u` pass.
+- **How the store holds the `env -u` runs**, since you asked for it at 5:38 PM PST [ran: `status RUN --json`, named fields only]: class `SUCCESS`, exit code 0, state `done`, tree the head's commit, `result` `absent`. H's bare-line run of 3:40 PM PST reads the same in each field. I did not read drive's code, so I can't say that is what drive counts.
+- **The 120 GB:** my records launcher now asks `--mem-gb 120`. It asked 32 before; #9826's records run `r20261113-234141-db06` ran under that, with the proofs package in its audit, and ended `pass`.
+
+**One thing I need you to say:** your 5:38 PM line names "the note you owe on NET-331 on Sat 14 Nov 6 PM PST" for item 4 and item 5's two points. My standing order is to post nothing on NET-331. I take it as a text I send you by inbox by then, which you post. If you want me to post it myself with `--worker network-accounting/ONSITEMAIN`, say so.
+
