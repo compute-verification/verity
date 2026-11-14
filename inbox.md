@@ -57,3 +57,29 @@ security/Proofs' root errors by owner. Every other failure followed from one of 
 - I expect our part to end about 4:20 PM PST.
 My turn ends now. Resume me when the build ends (about 4:20 PM PST) and I'll send LAYOUTREAD2 any word-map break before the rename. Otherwise resume me at 5:20 PM PST, and I'll read this build and launch the one after the rename (ours first, then the whole tree if a machine has room).
 
+[2026-11-14T23:49Z] 933105b5da6b
+POLICYROWS2 to lead, on ROWSPROTO2's finding about the record difftest. Both new results are right: no regression, nothing changed, no push, no statement changed.
+
+The two cases. The generator is verity/protocols/policy/inference_only/verifier/lean/scripts/record_difftest_vectors.py. In lowered(2, 3) (line 588), the reader LowEmbed_v1 has the six input rows READER (tok, root, domain, row, salt, path) and two outputs, o0 the row and o1 the verdict. Its opening has "verdict": "o1" (line 670-671).
+- Case 703, "an opening whose row is its verdict's output" (ROW_ROLE line 903: ("inputs", "o1"); edit opening(row="o1") at lines 1184-1186), pinned. Its opening text: {"at":0,"key":"tok","ports":["row","salt","path"],"reader":"LowEmbed_v1","row":"o1","table":"table/weights/embed","units":6,"verdict":"o1"}. It is case 702 (the honest "row":"o0", which is still taken) with the row changed to the verdict's own output.
+- Case 707, ROW_UNPINNED (lines 1187-1189, pins=[]): the same opening with no pin.
+
+The refusal. Lean: verity/protocols/proofs/spot/verifier/lean/Spot/RecordText.lean:426, `if row.any fun r => !(t.rows.length == 6 && t.outs.map (·.1) == [r, out]) then throw "inputs"`. Mirror: verity/protocols/policy/inference_only/verifier/lean/scripts/inference_only_record_reference.py:536, `if "row" in o and not (len(t.rows) == 6 and [q for q, _ in t.outs] == [o["row"], o["verdict"]]): raise Malformed("inputs")`. Here r = out = "o1", so the outputs [o0, o1] are not [o1, o1], and the record is refused at inputs.
+
+Verdicts:
+- Case 703 [ran][read]: right. It was wrongly accepted before. The old check held the declared row only to "an output of the reader", so it took an opening that says its returned row is the verdict bit's output. That makes OpenedRowReturned (declared row = the first of the two outputs) false on it: it was a case the statement doesn't cover, and its refusal is the one the statement rests on.
+- Case 707 [ran][read]: right. The same malformed declaration is now refused at parse time, under no pin as under the pin, rather than reaching the check and failing its nci verdict. No pin decides a row's role.
+
+No honest record is refused [read]. Every writer of a record's openings constructs a TableOpening without row: periods/interface.py:709 writes row only when declared, and expert_rows, history_rows, node_window_embed, node_window_sparse and window_lowering all omit it. window_builder.py:289 only carries an existing x.row through.
+
+What I ran, on the collect tip f00bcb5231a: `uv run python …/scripts/record_difftest_vectors.py REPO --out /tmp/rdv`. It wrote 708 cases with cases.jsonl f9e04b6e… and python.jsonl 0a275f9a…, matching ROWSPROTO2. python.jsonl shows 702 complies true, and 703 and 707 {"error": "inputs"} in block_rows and chosen.
+
+The pin, at the close's records run: verity/protocols/policy/inference_only/verifier/lean/lean-audit.json, entry "InferenceOnlyCheck.RecordDifftestMain" (line 79). Its args already say 708 (line 81). The data must become:
+- line 83, "record_difftest/cases.jsonl": "f9e04b6ebd274e69437ab19c4df8661d154b8cd7f228acd8d808df0a0b77e52e"
+- line 84, "record_difftest/python.jsonl": "0a275f9aa8d0a3dd122339a9441cc08676027766c145f469af152fdfe3cfa507"
+(now 01deee7f… and 5adb8c2d…). I did not write them by hand.
+
+Aside, from SCANLEAN2's 15:45 line (b): RecordAligned's `leavesOf P` is shadowed by a `leavesOf (d : Defn)`, one of which is DigestReads.lean:52 in the same namespace. If you want it, the mend is one line in RecordAligned (`Record.leavesOf`) or renaming DigestReads' helper. I haven't touched it.
+
+TIMER: none.
+
