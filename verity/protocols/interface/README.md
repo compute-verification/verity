@@ -154,16 +154,17 @@ answer `rows` is given.
 `Account.rows` reads a Site, the auditor, the period, the answers and their accounts into the accounting rows
 (`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). Which registration the Site is, and
 which answers are the period's, is the composite's: it reads the head once, from each window's record. Each amount gets
-its rows for each device its answers were witnessed by, or for the whole site, and two devices' rows never add. A row's
-capacity is a function of the Site (`Account.Part.capacity`), at each reading the registration can be read at, and is
-never copied from an answer. A flow has one row for the period. Its answers' amounts add only over spans shown disjoint:
-an answer names the steps of its span (`Account.Steps`) and, where its steps are numbered within a session, the series
-they are numbered in; a verified amount is the largest total over answers of one series whose named spans share no step,
-or the largest amount of an answer that names none, and a tick's cover counts once. An amount at a moment has one row
-for each accepted answer and one for the period. The period's error, of a flow and of a moment alike, is its answers'
-errors summed, or the one answer's where the amount's error is stated once for the period, which two answers cannot both
-do. An error of 1 or more prints "no bound at this period", and what no accepted answer covers is "not audited: charged
-at capacity", as is the memory of a device's sheet that none of its leaves holds.
+its rows for each device its answers were witnessed by, or for the whole site, and rows at one place under different
+keys are separate audits of the same hardware and are never added. A row's capacity is a function of the Site
+(`Account.Part.capacity`), at each reading the registration can be read at, and is never copied from an answer. A flow
+has one row for the period. Its answers' amounts add only over spans shown disjoint: an answer names the steps of its
+span (`Account.Steps`) and, where its steps are numbered within a session, the series they are numbered in; a verified
+amount is the largest total over answers of one series whose named spans share no step, or the largest amount of an
+answer that names none, and a tick's cover counts once. An amount at a moment has one row for each accepted answer and
+one for the period. The period's error, of a flow and of a moment alike, is its answers' errors summed, or the one
+answer's where the amount's error is stated once for the period, which two answers cannot both do. An error of 1 or more
+prints "no bound at this period", and what no accepted answer covers is "not audited: charged at capacity", as is the
+memory of a device's sheet that none of its leaves holds.
 `Account.Example.account` is the example protocol's value; every other protocol's is written with that
 protocol. A caller that holds the Site as JSON, as the registration's view does under `site`, decodes it with
 `Core.Site.ofJson`, which reads exactly what `Site.toJson` writes.

@@ -409,7 +409,8 @@ def stepsWithin (ticks : Nat) (seconds : Ratio) (tick : Figure) (drift : Option 
 /-- **Where a series of steps lies in the monitoring period**: step `first` of the series begins at the period's tick
 `tick`, and `device` is the auditor's device that numbers the steps, on the clock of the auditor's host it is in, so
 the drift the Site states for that host is the series' (`Site.drift?`). A series older than the period gives the step
-it was at when the period began, at tick 0; one that began in the period gives its step 0, at the tick it began. -/
+it was at when the period began, at tick 0; one that began in the period gives its step 0, at the tick it began. The
+auditor gives it, independent of the device an answer's key names (`Account.witness`). -/
 structure Origin where
   first : Nat
   tick : Nat
@@ -727,7 +728,9 @@ protocols' `answers` read by their `accounts`: the rows of each amount for each 
 were witnessed by, or for the whole site, then the rows of what none covers and of the device memory no leaf holds.
 `S` is the Site at the period's last head, and `answers` those of the windows whose records name a head of the period,
 both the composite's: the registration only adds, so a device and a key registered at an earlier head of the period
-are in `S` unchanged. `digest` and `A` are the registration's: the sheets' digest and the auditor, whose devices' keys
+are in `S` unchanged. A witness's key is read in `S`, so a key registered later in the period than an answer is still
+found: that the key was registered at the head the answer's window fixed is the composite's to hold, a limit of this
+file. `digest` and `A` are the registration's: the sheets' digest and the auditor, whose devices' keys
 `Site.holder` reads and whose estimate compute's `bound` reading reads. No row where the
 Site states no unit of time. Where a link of the Site says no certifier splits it (`Site.mediated` is false),
 bits leave by a way no answer counts, so every row of a link prints no amount, a certified one too, and says why.
@@ -1365,12 +1368,21 @@ private def heldDram : Account := { held with amounts := held.amounts.map fun m 
 -- audits under a challenger's key: two of one key over overlapping spans count the larger once; two devices' give a
 -- row each, and their amounts never add, though their spans are disjoint
 private def rangedAt : Account := { ranged with witness := some (.profile "key") }
-private def audits (answers : List Answer) : List (String × String × Option Nat) :=
-  ((wideRows [rangedAt] answers 20000).filter (·.metric == "audited")).map fun r => (r.place, r.reading, r.verified)
+private def audits (answers : List Answer) (S : Site := wide) (xs : List Site.Loc := wideLocs) :
+    List (String × String × Option Nat) :=
+  ((rowsOf S digest (keysOf xs) (period 20000) [rangedAt] answers).filter (·.metric == "audited")).map fun r =>
+    (r.place, r.reading, r.verified)
 #guard audits [audit 700 (some (0, 9)) (key := some chalKey), audit 500 (some (5, 14)) (key := some chalKey)] ==
   [("node0, node1", "stated", some 700), ("node0, node1", "bound", some 700)]
 #guard audits [audit 700 (some (0, 9)) (key := some chalKey), audit 500 (some (10, 19)) (key := some "e2")] ==
   [("node0, node1", "stated", some 700), ("node0, node1", "bound", some 700), ("node0", "stated", some 500),
+   ("node0", "bound", some 500)]
+-- two devices that reach one host: two rows at one place, separate audits of the same hardware, never added
+private def pairLocs : List Site.Loc := locs ++ [device "chal1" .challenger "e2"]
+private def pair : Site := ⟨[sheet], pairLocs, links ++ [link "mc2" "chal1" "node0"]⟩
+#guard audits [audit 700 (some (0, 9)) (key := some chalKey), audit 500 (some (10, 19)) (key := some "e2")]
+    pair pairLocs ==
+  [("node0", "stated", some 700), ("node0", "bound", some 700), ("node0", "stated", some 500),
    ("node0", "bound", some 500)]
 
 end Example
