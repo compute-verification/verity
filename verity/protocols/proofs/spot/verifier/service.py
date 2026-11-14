@@ -2488,9 +2488,9 @@ class Stream:
         sources as the registration's check read them (`registration.resolved`: a history table's root and domain
         id as bytes), and those it pinned or holds to an earlier record, and the templates the params record as table
         reads, `template_reads`), and the registration's over the replay sample,
-        each taking the sessions' reads of its own ports at their own roots (`own_reads`), both failing `run` where
-        the whole run isn't the verifier's, the registration's holding each value its certified entries name to have
-        a reported read; and the public outputs."""
+        each taking the sessions' reads of its own ports at their own roots (`audit.less_own_reads`), both failing `run`
+        where the whole run isn't the verifier's, the registration's holding each value its certified entries name to
+        have a reported read; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
         reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
         outputs = self.spec.check.public_outputs
@@ -2505,7 +2505,7 @@ class Stream:
         replayed = D.proved(first.draw)
         rec = V.audit_record(ireg.record, ireg.receipt, second.draw, second.law, proved,
                              len(proved) if instances is None else instances, statement, verdicts, self.delta,
-                             e.sessions, served, session_roots, own_reads=True)
+                             e.sessions, served, session_roots)
         named = template_circuits(proofs, self.spec.check.query)
         own = SS.Own(tuple(replayed), SS.parts(len(replayed), P.strata(e.interior_program, self.spec.check.query)),
                      ireg.record, reg.record, tuple(D.proved(second.draw)),
@@ -2514,13 +2514,14 @@ class Stream:
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
                      wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
                      rows=SS.replay_rows(e.program, descriptor_id(self.replay)),
+                     widths=SS.replay_widths(e.program, descriptor_id(self.replay)),
                      returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record),
                      supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
                      fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
                      reads=template_reads(proofs))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
-                                  verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True,
+                                  verdicts, self.delta, e.sessions, None, replay_session_roots,
                                   certified=sorted(e.certified or ()))
         accepted = rec["accepted"] and boundary["accepted"]
         if e.read is not None and e.second_read is not None and rec["verifiers"]["agree"] and \

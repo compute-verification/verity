@@ -20,8 +20,9 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
-  one of the record's own values is of a registered value, opened against its registered root (`UnitsProved`; a
-  registered value needs no reported read), and the receipt names the commitment's digest (`Receipt`);
+  one of the record's own values, less a read named by one of its own ports taken at that port's own root, is of a
+  registered value, opened against its registered root (`UnitsProved`; a registered value needs no reported read), and
+  the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
@@ -404,11 +405,12 @@ def Receipt (c : Commitment) (e : Evidence) : Prop :=
   jeq (getD e.receipt "registration") (.str (Flock.hexOf c.digest))
 
 /-- The roots the verifiers that accepted report opening the sessions' registered reads against, for the
-record's own values (its roots' ports and its registered values): `{value: root}`, a value reported under two roots mapped
-to null; none when no such verdict reports any (`audit.session_registered`, which `Record.sessionRegistered` and
-`Record.ownRegistered` compute from the verdicts). -/
+record's own values (its roots' ports and its registered values), less the reads of its own ports at their own roots
+(each port's last root, `Record.byPort`): `{value: root}`, a value reported under two roots mapped to null; none when no
+such verdict reports any (`audit.session_registered` and `audit.less_own_reads`, which `Record.sessionRegistered`,
+`Record.ownRegistered` and `Record.lessOwnReads` compute from the verdicts). -/
 def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
-  Record.ownRegistered rec (Record.sessionRegistered vs)
+  Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs))
 
 /-- Each opened read is of a registered value at its registered root: every entry of `opened`, a `{value: root}`, has its
 value and root in `registered`. It asks nothing of a registered value that `opened` lacks. -/
@@ -419,9 +421,10 @@ def OpenedRegistered (opened registered : Array (String × Json)) : Prop :=
 exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
-each port); and each of the record's own values the verifiers report a read of is a value the record registers, the read
-opened against the record's root for it (`Record.registeredRoots`, each value's last entry). A registered value no
-verifier reports a read of is not required to have one. -/
+each port); and each of the record's own values the verifiers report a read of, less those of its own ports at their
+own roots (`openedRoots`), is a value the record registers, the read opened against the record's root for it
+(`Record.registeredRoots`, each value's last entry). A registered value no verifier reports a read of is not required
+to have one. -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧

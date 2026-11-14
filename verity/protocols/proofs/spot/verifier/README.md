@@ -192,7 +192,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   and its `refusal` (`Spot/MembersRefusal.lean`, `one_stage.members.refusal`) why the audit's check refuses it, each as
   its module's docstring says; the refusal accepts nothing and never
   exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
-  (`one_stage.closing`, `challenger.members_tree_reason`).
+  (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
+  (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
+  every wired row of every unit of the sample to its writer's output row in the members' public files
+  (`OneStageZk.wiresHeld`, the `members_wires` piece); `one_stage.members` leaves a wiring `Outside`.
 - **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
   to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
   challenger key, every session of a lane that the ledger opens on a root during a monitoring period, whatever its
@@ -397,7 +400,8 @@ A program's weights, constants and tables are values: committed once, under hidi
   returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
 - **The audit record** holds the roots the verifier opened the reads against (`audit.session_registered`, Lean
-  `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`).
+  `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`), taking a read named by one of its
+  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other.
 
 Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py`.
 

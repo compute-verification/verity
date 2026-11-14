@@ -74,8 +74,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R8 (`Registration.check`), then the
   record's checks (`Record.checks`: the sample, the proved units, the receipt, the served sample, the sessions' roots, and the
   roots the verifiers report opening the sessions' registered reads against, `Record.sessionRegistered`, each
-  the registered one; and `Record.certifiedCheck`: each value the verifier holds a certified entry for has such a
-  read). It rejects when one fails or
+  the registered one, and a read of the record's own port taken at that port's own root, `Record.lessOwnReads`; and
+  `Record.certifiedCheck`: each value the verifier holds a certified entry for has such a read). It rejects when one
+  fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the sampled and proved units with the exact bounds on incorrect proof blocks at δ (`Bound.boundOf`,
@@ -514,11 +515,11 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 /-- `audit_record`'s checks after the sample's (`Record.checks`, then `Record.certifiedCheck` over `certified`, the names
 of the values the verifier holds certified entries for): the names of those that fail. The registered roots the
 sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
-values (`Record.ownRegistered`). -/
+values (`Record.ownRegistered`), less the reads of its own ports at their own roots (`Record.lessOwnReads`). -/
 def recordChecks (rec : Json) (digest : String) (e : Evidence) (certified : Array String) : Array String :=
   let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
   let roots := e.sessionRoots.map entries
-  let opened := Record.ownRegistered rec (Record.sessionRegistered e.verdicts)
+  let opened := Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered e.verdicts))
   let cs := Record.checks rec e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson) (Lean.toJson e.instances)
     digest (e.served.map (·.map fun (n : Nat) => (n : Int))) roots opened ++ Record.certifiedCheck certified opened
   (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)

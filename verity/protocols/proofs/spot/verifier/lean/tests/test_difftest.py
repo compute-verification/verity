@@ -747,7 +747,8 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return "reject", "coins"
     out = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                              e["verdicts"], p["delta"], e["sessions"], e["served"], e["session_roots"],
-                             audit.session_registered(e["verdicts"], rec), sorted(p.get("certified") or ()))
+                             audit.less_own_reads(audit.session_registered(e["verdicts"], rec), rec),
+                             sorted(p.get("certified") or ()))
     if not out["accepted"]:
         if not all(x["ok"] for x in out["checks"].values()):
             return "reject", "checks"
@@ -1447,13 +1448,10 @@ REGISTRATION_KEYS = ("anchors", "law", "partition", "population", "program", "pr
 
 
 def _record_input(j) -> Fraction:
-    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does, `own_reads` a boolean
-    and `certified` a list of strings when given; δ."""
+    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does, `certified` a list of
+    strings when given; δ."""
     ints = lambda x: isinstance(x, list) and all(map(_int, x))  # noqa: E731
-    _exactly(j, RECORD_INPUT_KEYS | ({"certified", "own_reads"} & set(j) if isinstance(j, dict) else set()),
-             "the record's input")
-    if not isinstance(j.get("own_reads", False), bool):
-        raise D.Reject("own_reads is not a boolean")
+    _exactly(j, RECORD_INPUT_KEYS | ({"certified"} & set(j) if isinstance(j, dict) else set()), "the record's input")
     if not (isinstance(j.get("certified", []), list) and all(isinstance(v, str) for v in j.get("certified", []))):
         raise D.Reject("certified is not a list of strings")
     reg, draw_ = j["registration"], j["draw"]
@@ -1482,13 +1480,10 @@ def _record_input(j) -> Fraction:
 
 def audit_record_of(j) -> dict:
     """`audit_record` on the record piece's input, δ the float it names (`Fraction(delta)` is one), and the registered
-    roots the verdicts' own for the registration's values, with `own_reads` less those of its own ports at their own
-    roots (`Record.lessOwnReads`), and with `certified` each of those values held to have a reported read."""
+    roots the verdicts' own for the registration's values less those of its own ports at their own roots
+    (`Record.lessOwnReads`), and with `certified` each of those values held to have a reported read."""
     delta = _record_input(j)
-    opened = audit.session_registered(j["verdicts"], j["registration"])
-    if j.get("own_reads") and opened is not None:
-        roots = {r["port"]: r["root"] for r in j["registration"]["roots"]}
-        opened = {v: r for v, r in opened.items() if not (v in roots and SS._jeq(roots[v], r))}
+    opened = audit.less_own_reads(audit.session_registered(j["verdicts"], j["registration"]), j["registration"])
     return audit.audit_record(j["registration"], j["receipt"], j["draw"], j["law"], j["proved_units"], j["instances"],
                               j["statement"], j["verdicts"], float(delta), j["sessions"], j["served"], j["session_roots"],
                               opened, j.get("certified", ()))
@@ -1629,8 +1624,7 @@ def run(j):
     out = audit_record_of({"delta": j.get("delta"), "draw": drawn["draw"], "instances": instances, "law": derived,
                            "proved_units": proved, "receipt": receipt, "registration": rec, "served": j.get("served"),
                            "session_roots": j.get("session_roots"), "sessions": sessions, "statement": j.get("statement"),
-                           "verdicts": verdicts, "own_reads": inner is not None,
-                           "certified": sorted(p.get("certified") or ())})
+                           "verdicts": verdicts, "certified": sorted(p.get("certified") or ())})
     accepted = out["accepted"] is True
     staged = {}
     if inner is not None:
@@ -1639,7 +1633,7 @@ def run(j):
             "delta": j.get("delta"), "draw": inner["draw"], "law": inner["law"], "proved_units": proved2,
             "instances": len(proved2) if it["instances"] is None else it["instances"], "receipt": inner["receipt"],
             "registration": it["record"], "served": it["served"], "session_roots": it["session_roots"],
-            "sessions": sessions, "statement": j.get("statement"), "verdicts": verdicts, "own_reads": True})
+            "sessions": sessions, "statement": j.get("statement"), "verdicts": verdicts})
         try:
             strata = P.strata(it["decoded"]["program"], it["decoded"]["query"])
         except (P.QueryRefused, ValueError) as e:
@@ -2257,14 +2251,15 @@ REGISTERED_PARAMS = [
 
 def _other_reads(r: dict, x: int) -> dict:
     """The verdict of record's registered reads, changed: one port's root another (so its value's two ports disagree), every
-    root upper case, a value missing or added (one the record names as a root port, or one it doesn't name), only one
-    port's, none."""
+    root upper case, a value missing or added (one the record names as a root port, at that port's root or another, or
+    one it doesn't name), only one port's, none."""
     ports = sorted(r)
     p = ports[x % len(ports)]
     v = r[p]["value"]
     return [{**r, p: {**r[p], "root": "12" * 64}}, {k: e for k, e in r.items() if e["value"] != v}, {},
             {**r, "extra.0": {"root": "ab" * 64, "value": "extra"}}, {**r, "x.0": {"root": ROOTS["x"], "value": "x"}},
-            {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]}][x % 7]
+            {**r, "x.0": {"root": "12" * 64, "value": "x"}},
+            {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]}][x % 8]
 
 
 REGISTERED_EVIDENCE = [
@@ -2854,7 +2849,8 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
     one = {"sessions": [x for st_ in pe["statements"] for x in st_["sessions"]]}
     assert why(e=e2 | {"proofs": one}) == "evidence: the keys of the evidence's proofs are not statements"
     assert why(p=params | {"proofs": {"circuit": ms[0].circuit_sha512, "public": ms[0].public_sha512,
-                                      "registered": None}}) == "params: the keys of proofs are not members"
+                                      "registered": None}}) == ("params: the keys of proofs are not members, or "
+                                                         "members and wiring")
     again = pm["members"] | {"z/c0": {**pm["members"][ms[0].name], "units": [[1, 2]]}}
     assert why(p=params | {"proofs": {"members": again}}) == (
         "params: proofs: unit 1 is in two members' units: a unit is one member's")
@@ -4039,8 +4035,8 @@ def _record_case(a: dict, delta: str) -> dict:
 
 
 def _own_reads_case(a: dict, x: int) -> dict:
-    """`_record_case` with `own_reads` (or one not a boolean), its first verdict also reporting a read of one of the
-    registration's ports, at that port's root or another."""
+    """`_record_case` with its first verdict also reporting a read of one of the registration's ports, at that port's
+    root or another."""
     c = _record_case(a, "1/4")
     reg, vs = c["registration"], c["verdicts"]
     if isinstance(reg, dict) and isinstance(reg.get("roots"), list) and reg["roots"] and isinstance(vs, dict) and vs:
@@ -4049,7 +4045,7 @@ def _own_reads_case(a: dict, x: int) -> dict:
             got = vs[name].get("registered") if isinstance(vs[name].get("registered"), dict) else {}
             read = {"value": r.get("port"), "root": r.get("root") if x % 3 else "cd" * 64}
             c["verdicts"] = {**vs, name: {**vs[name], "registered": {**got, "own": read}}}
-    return {**c, "own_reads": [True, True, False, 1, None][x % 5]}
+    return c
 
 
 def _certified_case(a: dict, x: int) -> dict:
@@ -4634,8 +4630,9 @@ def _second_own(j):
     for none) and the registered reads the params give it, taken as given (`ref_reads`, `{template: registered}`, each
     null for none, null for no template's), and its own copies of the interior registration's values it fills, with
     their sources (`supplied`, `second_stage.supplied_of`), and the names of those it pinned or holds to an earlier
-    record (`fixed`), each null for none, and the templates the auditor's params record as table reads with their
-    tables' rows (`reads`, `{template: V}`, null for none)."""
+    record (`fixed`), each null for none, the templates the auditor's params record as table reads with their
+    tables' rows (`reads`, `{template: V}`, null for none), and the words of the rows each wire joins (`widths`, null
+    for none). The wired key's switch is `second_stage.WIRED_KEY`'s: no input sets it."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("allow"), bool)):
         raise D.Reject("allow is not a boolean")
@@ -4679,10 +4676,13 @@ def _second_own(j):
     reads = j.get("reads")
     if not (reads is None or (isinstance(reads, dict) and all(map(_nat, reads.values())))):
         raise D.Reject("reads is null or an object of naturals")
+    widths = () if j.get("widths") is None else SS.widths_of(j["widths"])
+    if widths is None:
+        raise D.Reject("widths is null or a list of {template, port, reads, writes}, two strings and two naturals")
     own = SS.Own(tuple(j["sample"]), SS.parts(len(j["sample"]), strata), j.get("interior"), j.get("boundary"),
                  tuple(j["drawn"]), links, audit.session_registered(verdicts), SS.verified_of(verdicts),
                  tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows, returns, supplied,
-                 tuple(fixed or ()), tuple((reads or {}).items()))
+                 tuple(fixed or ()), tuple((reads or {}).items()), widths)
     return j["allow"], own, statements
 
 
@@ -5682,6 +5682,25 @@ REPLAY_ROWS = D.Port(PIECES, "replay_rows", replay_rows,
                      st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
 
 
+def replay_widths(j):
+    """`Pieces.replayWidths`: the words of the rows the design's wires join (`second_stage.replay_widths`), from the
+    replay block of descriptor id `replay` in `program`; none for none."""
+    desc = _obj(j.get("program") if isinstance(j, dict) else None, "program")
+    if not isinstance(j.get("replay"), str):
+        raise D.Reject("replay is not a string")
+    if not desc:
+        raise D.Reject("not a program descriptor")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    return [w.to_json() for w in SS.replay_widths(PROGRAMS[sha], j["replay"])]
+
+
+#: The replay_widths piece's input: replay_links' (`replay_link_inputs`), whose boundary record it doesn't read.
+REPLAY_WIDTHS = D.Port(PIECES, "replay_widths", replay_widths,
+                       st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
+
+
 def replay_returns(j):
     """`Pieces.replayReturns`: the names the return of the replay block of descriptor id `replay` in `program` has in
     the `boundary` record (`second_stage.replay_returns`); none for none."""
@@ -6149,7 +6168,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
               (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (SECOND_INTERIOR_READS, 200),
-              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_RETURNS, 200), (REPLAY_RETURNED, 300),
+              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_WIDTHS, 300), (REPLAY_RETURNS, 200), (REPLAY_RETURNED, 300),
               (SECOND_SCHEDULE, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
 
 
@@ -7102,14 +7121,16 @@ def test_every_public_items_code_is_reached(pieces):
 def _reported(a: dict, v: str) -> dict:
     """The reads a v2 audit's verdict of record reports, changed, by name: all of them (`all`); with a value the
     registration doesn't name (`unnamed`); less `v`'s (`unread`); none (`empty`) or no report (`none`); one of `v`'s
-    ports at another root (`one-port`) or all of them (`another-root`); with a root port's value (`root-port`)."""
+    ports at another root (`one-port`) or all of them (`another-root`); with a root port's value at its own root
+    (`root-port`) or at another (`root-port-elsewhere`)."""
     opened = a["evidence"]["verdicts"]["lean"]["registered"]
     p = next(k for k in sorted(opened) if opened[k]["value"] == v)
     return {"all": opened, "unnamed": {**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}},
             "unread": {k: e for k, e in opened.items() if e["value"] != v}, "empty": {}, "none": None,
             "one-port": {**opened, p: {**opened[p], "root": "12" * 64}},
             "another-root": {k: {**e, "root": "12" * 64} if e["value"] == v else e for k, e in opened.items()},
-            "root-port": {**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}}
+            "root-port": {**opened, "x.0": {"root": ROOTS["x"], "value": "x"}},
+            "root-port-elsewhere": {**opened, "x.0": {"root": "12" * 64, "value": "x"}}}
 
 
 def _reporting(a: dict, got) -> dict:
@@ -7118,30 +7139,37 @@ def _reporting(a: dict, got) -> dict:
 
 
 def test_a_v2_audit_reads_the_sessions_registered_roots(server):
-    """A v2 audit of each program accepts when each read the verifier reports of the record's own values is of a
-    registered value, opened against its registered root: every value's reads, a value's reads missing, none reported,
-    and a value the registration doesn't name beside them (not its to read). It rejects a read opened against another
-    root, by one port of a value or by all of them, and a root port's value read as registered."""
+    """A v2 audit of each program accepts when each read the verifier reports of the record's own values, less a root
+    port's read at that port's own root (its own), is of a registered value, opened against its registered root: every
+    value's reads, a value's reads missing, none reported, and a value the registration doesn't name beside them (not
+    its to read). It rejects a read opened against another root, by one port of a value or by all of them, and a root
+    port's read at another root. Where the registration also registers a value under a root port's name, a read at the
+    port's root in place of one of that value's is rejected: the value's reads no longer agree."""
     for s in REGISTERED_SETUPS:
         a = _v2_audit(s, s.values[1])
         v = sorted(e["value"] for e in a["record"]["registered"])[0]
+        own = "reject" if "x" in s.values[1] else "accept"
         for name, want in (("all", "accept"), ("unnamed", "accept"), ("unread", "accept"), ("empty", "accept"),
-                           ("none", "accept"), ("one-port", "reject"), ("another-root", "reject"), ("root-port", "reject")):
+                           ("none", "accept"), ("one-port", "reject"), ("another-root", "reject"), ("root-port", own),
+                           ("root-port-elsewhere", "reject")):
             case = _json(_case(_reporting(a, _reported(a, v)[name])))
             assert D.replay(ONE_STAGE, case, server)[0] == want, (s.program.fn.id, name)
 
 
 def test_the_record_fails_a_read_not_of_a_registered_root_and_no_missing_read(pieces):
     """The record of a v2 audit of each program, Lean's and Python's the same: accepted, with no `registered` check,
-    when a registered value has no reported read, by its reads missing or none reported; and failing `registered`,
-    naming the value read, when all of a value's reads are opened against another root or a root port's value is read as
-    registered."""
+    when a registered value has no reported read, by its reads missing or none reported, or a root port's one read is at
+    that port's own root; and failing `registered`, naming the value read, when all of a value's reads are opened
+    against another root, a root port's read is at another root, or a root port's read at its own root disagrees with
+    the reads of a value registered under its name."""
     for s in REGISTERED_SETUPS:
         a = _v2_audit(s, s.values[1])
         named = sorted(e["value"] for e in a["record"]["registered"])
         v = named[0]
+        own = ["x"] if "x" in s.values[1] else None
         for name, wrong, opened in (("unread", None, None), ("empty", None, None), ("none", None, None),
-                                    ("another-root", [v], named), ("root-port", ["x"], sorted({*named, "x"}))):
+                                    ("another-root", [v], named), ("root-port", own, named),
+                                    ("root-port-elsewhere", ["x"], sorted({*named, "x"}))):
             case = _record_case(_reporting(a, _reported(a, v)[name]), str(Fraction(0.1)))
             kind, line = D.replay(RECORD_PORT, case, pieces)
             assert kind == "output", line

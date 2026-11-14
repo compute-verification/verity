@@ -132,6 +132,23 @@ def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
     return {k: r for k, r in out.items() if k in named}
 
 
+def _jeq(a: Any, b: Any) -> bool:
+    """`jeq`: the same canonical JSON, so `true` is not `1`."""
+    try:
+        return canonical_json(a) == canonical_json(b)
+    except (TypeError, ValueError):
+        return False
+
+
+def less_own_reads(opened: Mapping[str, Any] | None, registration: Mapping[str, Any]) -> dict[str, Any] | None:
+    """`Record.lessOwnReads`: ``opened`` less the reads of the registration's own ports at their own roots (each port's
+    last root). A read named by one of its ports at another root stays, to be held to the registered values."""
+    if opened is None:
+        return None
+    roots = {r["port"]: r["root"] for r in registration["roots"]}
+    return {v: r for v, r in opened.items() if not (v in roots and _jeq(roots[v], r))}
+
+
 #: the public output of an accept that says whether every verdict ran (`answer`), read by `answer_complete`
 COMPLETE = "complete"
 
@@ -172,11 +189,11 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     """`draw` is the verifier's own sample. `served`: the proof blocks the sessions were served, when the sample was handed to them
     (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
-    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); each read it
-    reports must be of a registered value, at that value's registered root, and a registered value needs no reported read.
-    `certified`: the names of the values the verifier holds certified entries for; each of them does need a reported
-    read (the check `certified` names the ones that have none), so a read reported under another value's name does not
-    stand in for it."""
+    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own), less the
+    reads of its own ports at their own roots (`less_own_reads`); each read it reports must be of a registered value, at
+    that value's registered root, and a registered value needs no reported read. `certified`: the names of the values
+    the verifier holds certified entries for; each of them does need a reported read (the check `certified` names the
+    ones that have none), so a read reported under another value's name does not stand in for it."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):

@@ -813,8 +813,9 @@ none) and the registered reads it reads (`ref_reads`, `{template: registered}`, 
 template's), the verifier's own copies of the interior registration's values it fills, with their sources
 (`supplied`, `SecondStage.suppliedOf?`), and the names of those it pinned or holds to an earlier record (`fixed`), each
 null for none, the templates the auditor's params record as table reads with their tables' rows (`reads`, `{template:
-V}`, null for none), and the statements, null for none. -/
-private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) := do
+V}`, null for none), the words of the rows each wire joins (`widths`, `replayWidths`', null for none), and the
+statements, null for none. The wired key's switch is `SecondStage.WIRED_KEY`'s: no input sets it. -/
+def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
   let some sample := ss.mapM nat? | throw "sample is not a list of replay blocks"
@@ -877,10 +878,16 @@ private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array J
       | some rs => pure rs
       | none => throw "reads is null or an object of naturals"
     | _ => throw "reads is null or an object of naturals"
+  let widths ← match getD j "widths" with
+    | .null => pure #[]
+    | ws => match SecondStage.widthsOf? ws with
+      | some ws => pure ws
+      | none => throw "widths is null or a list of {template, port, reads, writes}, two strings and two naturals"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
       boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts,
-      verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns, supplied, fixed, reads }
+      verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns, supplied, fixed, reads,
+      widths }
   return (allow, own, stmts)
 
 /-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.checkAny`). -/
@@ -921,6 +928,14 @@ def replayRows (j : Json) : V Json := do
   let .str key := getD j "replay" | throw "replay is not a string"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
   return Json.arr ((SecondStage.replayRows p.prog key).map SecondStage.Rows.toJson)
+
+/-- `second_stage.replay_widths`' input to the words of the rows the design's wires join (`SecondStage.replayWidths`):
+a program object and the replay block's descriptor id in it (`replay`). -/
+def replayWidths (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .str key := getD j "replay" | throw "replay is not a string"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  return Json.arr ((SecondStage.replayWidths p.prog key).map SecondStage.Width.toJson)
 
 /-- `second_stage.replay_returns`' input to the names the replay block's return has in the boundary registration's
 record (`SecondStage.replayReturns`): a program object, the replay block's descriptor id in it (`replay`) and the
@@ -1002,7 +1017,8 @@ def table : List (String × (Json → V Json)) :=
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements),
    ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),
-   ("replay_wires", replayWires), ("replay_rows", replayRows), ("replay_returns", replayReturns),
+   ("replay_wires", replayWires), ("replay_rows", replayRows), ("replay_widths", replayWidths),
+   ("replay_returns", replayReturns),
    ("replay_returned", replayReturned), ("second_schedule", secondSchedule),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
@@ -1030,6 +1046,7 @@ def table : List (String × (Json → V Json)) :=
    ("period_check_stub", MonitoringPeriod.checkStubPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
+   ("members_wires", OneStageZk.membersWiresPiece),
    ("public_units", PublicUnits.piece),
    ("link_points", LinkPoints.piece),
    ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),
