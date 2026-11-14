@@ -33,3 +33,6 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
+"benchmarks.pous.p2_v1.bandwidth" = "verity.protocols.accounting.poub.prover.p2_stage.bandwidth"
+"benchmarks.torch_gpu.p2_stage.layout" = "verity.protocols.accounting.poub.prover.p2_stage.layout"
+"benchmarks.torch_gpu.p2_stage.stage" = "verity.protocols.accounting.poub.prover.p2_stage.stage"
