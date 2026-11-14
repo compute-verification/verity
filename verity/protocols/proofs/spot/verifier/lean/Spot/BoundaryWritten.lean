@@ -60,15 +60,15 @@ def written (leaves : Nat) (reads : List Read) : Bool :=
 
 /-- A read's leaves, every reader index's row listed. -/
 def leavesRef (base : Int) (digits : List (Nat × Int)) (row : Nat) : List Int :=
-  let srcs := digits.foldl (fun acc (r, s) => acc.flatMap fun x => (List.range r).map fun d => x + (d : Int) * s) [base]
-  srcs.flatMap fun x => (List.range row).map fun k => x + (k : Int)
+  let srcs := digits.foldl (fun acc (r, s) => acc.flatMap fun x => (List.range r).map fun (d : Nat) => x + (d : Int) * s) [base]
+  srcs.flatMap fun x => (List.range row).map fun (k : Nat) => x + (k : Int)
 
 /-- Whether a read is dense, read off its leaves: a leaf, no digit of radix 0 or negative step but at radix 1, and its
 leaves a run from the least, each once. -/
 def denseRef (base : Int) (digits : List (Nat × Int)) (row : Nat) : Bool :=
   let ls := (leavesRef base digits row).mergeSort fun a b => decide (a ≤ b)
   !ls.isEmpty && digits.all (fun (r, s) => r ≥ 1 && (r == 1 || s ≥ 0)) &&
-    ls == (List.range ls.length).map fun k => ls.headD 0 + (k : Int)
+    ls == (List.range ls.length).map fun (k : Nat) => ls.headD 0 + (k : Int)
 
 /-- `extent?`'s reference: a dense read's least leaf and one past its last, read off its leaves. -/
 def extentRef? (base : Int) (digits : List (Nat × Int)) (row : Nat) : Option (Int × Int) :=
