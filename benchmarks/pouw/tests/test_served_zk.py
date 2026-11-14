@@ -284,7 +284,7 @@ def _salt_after(params) -> bytes:
 def _challenger(params, units=None, coins=None, sampler=None, record=None) -> SC.Challenger:
     """The challenger holding the execution phase's coins (the ones that salted the execution phase's pass, by default), its salt coin opened
     after the pass's weights' root as the job opens it; `units` a stand-in for Lean's sample."""
-    sampler = sampler or (SC.python_sampler if units is None else (lambda law, n, src: list(units)[:law["k"]]))
+    sampler = sampler or (SC.python_sampler if units is None else (lambda sampling_design, n, src: list(units)[:sampling_design["k"]]))
     ch = SC.Challenger(params, coins or _coins(), sampler, clock=lambda: 0.0, record=ORL.Record() if record is None else record)
     ch.open("salt", _salt_after(params))
     return ch
@@ -417,7 +417,7 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
 
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    bad = _challenger(params, sampler=lambda law, n, src: list(range(law["k"] + 1)))
+    bad = _challenger(params, sampler=lambda sampling_design, n, src: list(range(sampling_design["k"] + 1)))
     _held(bad, "honest", rec)
     with pytest.raises(S.Refused):
         bad.select("honest")
@@ -1039,19 +1039,19 @@ def test_r1_r6_of_a_window_are_leans(served):
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
-    law, ports = SC.sampling_design_of(params, ell), SC.ports(params, ell)
-    p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
+    sampling_design, ports = SC.sampling_design_of(params, ell), SC.ports(params, ell)
+    p = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports, [], params["delta"])
     record = ORL.Record()
 
     def codes(r) -> list[str]:
-        return record.registration(p, r, lambda: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None, None))
+        return record.registration(p, r, lambda: R.check(r, prog, q, sampling_design, S.SCHEME, ports, None, (), [], None, None, None))
 
     assert codes(rec) == []
     honest = record.witness[0]
     assert honest["lean"] == honest["python"] and honest["lean"]["fanout"] == 1, honest
     root = rec["roots"][0]
     changes = {"protocol": "verity/other/v1", "program": "00" * 64, "partition": "00" * 64, "query": "00" * 64,
-               "population": n + 1, "law": {**law, "k": law["k"] + 1}, "scheme": "frame-v3/hm96", "leaf_layer": "x",
+               "population": n + 1, "law": {**sampling_design, "k": sampling_design["k"] + 1}, "scheme": "frame-v3/hm96", "leaf_layer": "x",
                "anchors": [{"x": 1}], "roots": [{**root, "domain": "00" * 64}, *rec["roots"][1:]]}
     got = {k: codes({**rec, k: v}) for k, v in changes.items()}
     got["leaves"] = codes({**rec, "roots": [{**root, "leaves": root["leaves"] + 1}, *rec["roots"][1:]]})

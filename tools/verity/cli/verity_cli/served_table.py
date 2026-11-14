@@ -87,12 +87,12 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 
 # --- what each component and the workload declare -------------------------------------------------------------------
 
-def _design(law: str, params: Mapping[str, Any]) -> None:
+def _design(sampling_design: str, params: Mapping[str, Any]) -> None:
     """The served window's rule is a rate, which its audit states to its stream (`service.SamplingDesign`): a fixed count is refused
     by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
-    strata = parse_strata_rate(law)
-    if parse_rate(law) is None and (strata is None or strata[0]):
-        raise Refused("law", f"the served window's rule is a rate (rate:NUM/DEN or stratified-rate:NUM/DEN), not {law!r}: its "
+    strata = parse_strata_rate(sampling_design)
+    if parse_rate(sampling_design) is None and (strata is None or strata[0]):
+        raise Refused("law", f"the served window's rule is a rate (rate:NUM/DEN or stratified-rate:NUM/DEN), not {sampling_design!r}: its "
                              "audit states it to its stream, which refuses a fixed count (subset:K, stratified:K, work:K), "
                              "since K of N falls as the prover pads the N it registers. In place of a count K, state K over "
                              "the proof blocks N the window's class registers: rate:K/N, or stratified-rate:K/N")
@@ -149,7 +149,7 @@ def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ..
 _P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), law=_design, default_sampling_design="rate:1/3481648"),
+              needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
     Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),

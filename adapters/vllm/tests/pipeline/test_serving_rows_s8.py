@@ -52,12 +52,12 @@ def test_each_template_is_consecutive_chunks_of_at_most_its_cap():
         SRW.members([coord(K)], rows[:1], [13], {coord(K): 5})
 
 
-@pytest.mark.parametrize("query,law,match", [("Q_word", "stratified:32", r"word partition \(Q_word\) with the stratified law"),
+@pytest.mark.parametrize("query,sampling_design,match", [("Q_word", "stratified:32", r"word partition \(Q_word\) with the stratified law"),
                                              ("Q_word", "subset:32", "never a word partition"),
                                              ("Q_call", "stratified:32", "never a word partition")])
-def test_the_window_is_never_a_word_partition(query, law, match):
+def test_the_window_is_never_a_word_partition(query, sampling_design, match):
     with pytest.raises(ValueError, match=match):
-        SRW.population({}, {"templates": [coord(K)], "law": law, "query": query}, "ab" * 32)
+        SRW.population({}, {"templates": [coord(K)], "law": sampling_design, "query": query}, "ab" * 32)
 
 
 def test_a_coordinate_reads_a6s_rows_off_the_rows_operands(monkeypatch):

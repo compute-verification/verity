@@ -40,7 +40,7 @@ def advice_tp(tmp_path_factory):
     from tests.pipeline import served_tp as ST
 
     root = tmp_path_factory.mktemp("advice-tp")
-    c = ST.commit(root / "tp", world=2, inter=256, law="subset:2", deferred=True)
+    c = ST.commit(root / "tp", world=2, inter=256, sampling_design="subset:2", deferred=True)
     c["compiler"] = AW.Traced.for_commit(c["commit"], c["build"])
     c["bytes"] = {"A": _advice(c), "A'": _advice(c, drop=("r1",))}
     c["advice"], c["reg"], c["opening"] = {}, {}, {}
@@ -322,7 +322,7 @@ def gated_tp(tmp_path_factory):
     from tests.pipeline import served_tp as ST
 
     root = tmp_path_factory.mktemp("gated-tp")
-    c = ST.commit(root / "tp", world=2, inter=256, law="work:2", deferred=True, templates=(ROPE,))
+    c = ST.commit(root / "tp", world=2, inter=256, sampling_design="work:2", deferred=True, templates=(ROPE,))
     data = _advice(c)
     for name, gates in (("gated", (ROPE,)), ("bare", ())):
         comp = AW.Traced.for_commit(c["commit"], c["build"], gates)
@@ -352,12 +352,12 @@ class _Coins:
         return out[:n]
 
 
-def _draw(rec: dict, law: dict) -> dict:
-    """A challenger's sample under the registration's expanded `law` (`service.select_draw` past its rule)."""
+def _draw(rec: dict, sampling_design: dict) -> dict:
+    """A challenger's sample under the registration's expanded `sampling_design` (`service.select_draw` past its rule)."""
     from verity.protocols.proofs.spot.device import coins as T
 
     n = rec["population"]
-    return {**law, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), law, n)["units"])}
+    return {**sampling_design, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), sampling_design, n)["units"])}
 
 
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):

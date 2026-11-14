@@ -733,8 +733,8 @@ def test_a_drawn_tile_proves_its_strip_every_word_and_its_tally():
                        + [("tally", (rs, cs))])
     assert [(s.role, s.work) for s in lay.strata] == [("row_a", 0), ("strip", 0), ("word", 0), ("row_digest", 0),
                                                        ("row_tally", 0), ("tile", 4 * 1000), ("tally", 0)]
-    for law in (plan.CountSamplingDesign(2), plan.WorkSamplingDesign(2)):
-        p = plan.draw(derive(bytes(32), plan.DRAW_DOMAIN, {"test": "cap"}), lay, law)
+    for sampling_design in (plan.CountSamplingDesign(2), plan.WorkSamplingDesign(2)):
+        p = plan.draw(derive(bytes(32), plan.DRAW_DOMAIN, {"test": "cap"}), lay, sampling_design)
         drawn = [u for u in p.drawn if us[u].role == "tile"]
         assert drawn and set(p.proved) == set(p.drawn) | {i for t in drawn for i in lay.closure[t]}
         for t in drawn:

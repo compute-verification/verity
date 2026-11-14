@@ -175,6 +175,10 @@ PUBLIC = {
     "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
                                                 "certifier's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
+    "verity_vllm.compiler.replay_step": "I1: one scheduler step of the compiler's replay (its statics, inputs, state, "
+                                        "outputs and reference), which benchmarks/network_e2e's replay vectors are held to",
+    "verity_vllm.compiler.replay_chain": "I1: the replay chain's rows, windows and units (load, advance, close), which "
+                                         "benchmarks/network_e2e and benchmarks/network_traces run over their windows",
     "verity_vllm.pipeline.advice_code.arith": "I1: the arithmetic coder advice v1's window code runs on",
     "verity_vllm.pipeline.advice_code.by_class": "I1: advice v1's charge by class: each window's bits split by the field "
                                                  "that put them there, and the fields a registration holds at 0 with "
