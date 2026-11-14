@@ -305,6 +305,8 @@ def test_a_rank_told_to_omit_its_partials_binds_none(flags):
     ({"tp_partials_flip_site": {"1": "proj"}}, {"flip_site": "proj"}, (1, None, "proj", "gross")),
     ({"tp_partials_flip_site": {1: "proj:ulp"}}, {"flip_site": "proj:ulp"}, (1, None, "proj", "ulp")),
     ({"tp_partials_flip_site": {"0": "proj"}}, {}, (1, None, None, "gross")),
+    ({"tp_relabel": {"1": 0}, "tp_partials_omit_site": {"1": "proj"}, "tp_partials_flip_site": {1: "gate:ulp"}},      # each off its own table
+     {"relabel_rank": 0, "omit_site": "proj", "flip_site": "gate:ulp"}, (0, "proj", "gate", "ulp")),
 ])
 def test_a_negative_on_the_partials_reaches_the_source_of_the_rank_it_names(flags, block, read):
     answer, _, com = _made(**flags)
