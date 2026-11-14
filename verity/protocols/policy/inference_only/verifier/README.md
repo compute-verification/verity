@@ -127,7 +127,8 @@ literature index and the training algorithms' traits.
 
 ## Names
 
-The directory, the namespaces `InferenceOnly` and `InferenceOnlyCheck`, the `inference-only-*` executables, `benchmarks/nci` and the Lean's
-docstrings keep the older names until they are renamed: "NCI" and "novel communication intensity" for the policy,
-"isolation unit" and "IU" for an inference block, "novel information" and `novelReads` for fresh input, and
-"baseline" for the registered information (`GLOSSARY.md`, Older names).
+A few older names stay here until a change of their own renames each (`GLOSSARY.md`, Older names): `benchmarks/nci`;
+a verdict's failure rule `"nci"`; the toy Definitions the vector generators build (`NciHandBlk`, `NciDecl…`) and the
+directory `baseline_difftest/` their vectors go to, whose bytes the lock pins; in the lock's reasons and a few
+docstrings, "IU" and "isolation unit" for an inference block; and `novel`, a variable and a mode of the liveness
+difftest, for fresh input.
