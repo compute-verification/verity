@@ -1970,6 +1970,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": {
+   "owner": "@proofs",
+   "digest": "b09998481c1a5702334e2a9dab0008074ab5104aaedd4f18df87bcf1d646ecfe",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "FlockSoundness.Assumptions.Zk.RecordCustodyZK": {
    "owner": "@lean",
    "digest": "2e0bf4d9d5faf00058b89619d736c802946990d5c49f4b3c3d8f6603544c9eb1",
@@ -4366,7 +4372,8 @@
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   },
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
-   "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"]
+   "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
+   "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_unCausal"
   },
   "Flock.SecurityProofs.SampledAuditAnyDeployed": {
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
@@ -5281,11 +5288,6 @@
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
-  "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
-   "type_hash": "4d6d8061ad0a9fe83ea3607ece52829df0c7b55b4c9c4a9e61e89316cad1756f",
-   "missing": "nontrivial",
-   "why": "the lemma on main shows the conclusion failing at a session without tables, not at the deployed session the guarantee's domain hypothesis fixes, so the guarantee is not witnessed as nontrivial at its own instance until the lemma is restated there"
-  },
   "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
   "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
   "Flock.SecurityProofs.SpotExfilTwo": {
@@ -5555,7 +5557,8 @@
  },
  "witnesses_assumed": {
   "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands.",
-  "Accounting.ReadUnit.ExpertReadAccepted": "not an assumption about the world but an unproved fact about code: the Lean check `Flock.ReadNet.check 256 3072` accepts the read template at H = 3072 as its text reads back (`flock-read-tmpl 256 3072` exits 0 on it); until Lean proves it, the honest witness takes it."
+  "Accounting.ReadUnit.ExpertReadAccepted": "not an assumption about the world but an unproved fact about code: the Lean check `Flock.ReadNet.check 256 3072` accepts the read template at H = 3072 as its text reads back (`flock-read-tmpl 256 3072` exits 0 on it); until Lean proves it, the honest witness takes it.",
+  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, which no theorem concludes: by definition it is `Claims.Hm96Hiding` at the deployed instance (hm96's mask `ZkView.My` and salt hash `ZkView.saltHash` at δ₁ = 2^-193) and adds no assumption, and only a zero-knowledge guarantee's witness takes it, as the trust base's extra premise is trusted for the zero-knowledge guarantees only."
  },
  "layers": {
   "Definitions.Core": {
@@ -16417,6 +16420,28 @@
     "reads": []
    },
    "type_hash": "b1b8da0e8ecbf5e4890926e53f753248e83ae2e68cc8f323b6675fa1e54aed47"
+  },
+  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_unCausal": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_unCausal",
+    "  (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :",
+    "  Exists fun vs =>",
+    "    Exists fun x =>",
+    "      Not",
+    "        (Claims.ZKServer.Loop.ZkAnyAt Claims.ZKMal.Masked.dataE vs",
+    "          (((Claims.ZKServer.Loop.constRel Claims.ZKServer.Loop.Tp).withLink Claims.ZKServer.Loop.leakSrc).withFiles",
+    "            Claims.ZKServer.Loop.leakSrc)",
+    "          (Claims.ZKServer.Loop.realOf Claims.ZKServer.Loop.leakSrc) Claims.ZKServer.Loop.leakWk (fun x x_1 => True) 2)"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
+    "reads": ["FlockSoundness.Assumptions.HashDerivedKey"]
+   },
+   "type_hash": "8aaa6aee24f06bbf5e1f005f689690b3e5b74d6ab694be39c27197da70dab255"
   },
   "Flock.SecurityProofs.SessionLoopZKDeployed": {
    "owner": "@proofs",
@@ -51062,6 +51087,14 @@
     "Claims.ZKServer.Loop.tapeWk": "e10ebd23253fc1e3b3e6a9c40b58f4eed799a5aa8c801a51e23f6edf9042532a"
    }
   },
+  "Proofs.Flock.SessionLoop.ZkAnyNontrivial": {
+   "digest": "7441e9b35420c1e4990158843f18f33548615f45a2e9cbf36a4455a8542fc1cf",
+   "definitions": {
+    "Claims.ZKServer.Loop.constRel": "99d08792904a28e4834c36dd1a91cfa076776209d0ad41c2f020b39a2a0714a4",
+    "Claims.ZKServer.Loop.leakSrc": "b4f871e1abc3819c127541ea977197c890dc924df7fa88f6c4ec2e3e4fa38719",
+    "Claims.ZKServer.Loop.leakWk": "8c7ffc763e2fc0ad836e59d8c3be87117f2de24cf5e817eb5de109571545918d"
+   }
+  },
   "Proofs.Flock.SoundAtBridge.Served": {
    "digest": "762283783f92afeb221edce17615ea5ee56a1e8f8026475135cbf11b35166bc4",
    "definitions": {
@@ -51144,8 +51177,9 @@
    }
   },
   "Proofs.Flock.Soundness.Assumptions": {
-   "digest": "02d429016eff90b55a5091a78bfb9e5af537509d480983fd77bd9a6d2815ce4b",
+   "digest": "2548841c87763e8e664dff26af5013516ad7385f262942ab3f42186b015f90c0",
    "definitions": {
+    "FlockSoundness.Assumptions.HashDerivedKey": "07ae188fdda3bc525d04385d4483e326ac8c100376bd6dc8078f0bd42fc59dd2",
     "FlockSoundness.Assumptions.HmRowComputes": "0b64a2e9af86b5a7be94d3229fdcb5b8fe890a71414e0ec3d840ad7b6134ebae"
    }
   },
@@ -51175,8 +51209,9 @@
    }
   },
   "Proofs.Flock.Soundness.Assumptions.Zk": {
-   "digest": "3e1eb090e7da917bf4a995401e56ae51421e2e3dd1df2280b68ccdf616d66239",
+   "digest": "1b4c6684e285c45826c33378d7990a4d83390c001c7175403f80411e9472123a",
    "definitions": {
+    "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "b09998481c1a5702334e2a9dab0008074ab5104aaedd4f18df87bcf1d646ecfe",
     "FlockSoundness.Assumptions.Zk.RecordCustodyZK": "2e0bf4d9d5faf00058b89619d736c802946990d5c49f4b3c3d8f6603544c9eb1",
     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJS": "50b4fd854ccb4067fdf7057ab1a4629ec2a00ca5fe2d12ce7a15083d1894cddc"
    }
