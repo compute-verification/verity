@@ -19,7 +19,7 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions.boolean import boolean_version
+from verity.circuits.ops.boolean.versions import boolean_version
 from verity_vllm.definitions.registry import cuda_rmsnorm as C
 from verity_vllm.definitions.registry import cuda_rmsnorm_split as NS
 from verity.commitments.periods import interface as IF

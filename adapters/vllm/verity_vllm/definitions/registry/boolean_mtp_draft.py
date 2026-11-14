@@ -22,7 +22,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
-from verity_vllm.definitions.boolean import boolean_version
+from verity.circuits.ops.boolean.versions import boolean_version
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BitAnd, SelectBf16

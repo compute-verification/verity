@@ -1,4 +1,4 @@
-"""`registry.tp_combine`'s combine units as Boolean Definitions by σ (`verity_vllm.definitions.boolean.sigma_lift`): the next version of
+"""`registry.tp_combine`'s combine units as Boolean Definitions by σ (`verity.circuits.ops.boolean.versions.sigma_lift`): the next version of
 each, its word body with each Call the Boolean version of its Definition (`boolean_tp_allreduce`'s coordinates and vectors,
 `boolean_sigma`'s `AllReduceResidualMnnvl`, `Bf16AddF2fp`'s), over the bits each word operand occupies, so its word view is that
 Definition at the same bindings.
@@ -11,7 +11,7 @@ Definition at the same bindings.
 """
 from __future__ import annotations
 
-from verity_vllm.definitions.boolean import sigma_lift
+from verity.circuits.ops.boolean.versions import sigma_lift
 from verity_vllm.definitions.registry import tp_combine as TC
 
 __all__ = ["AllReduceCustomRow", "AllReduceMultimemRow", "AllReduceResidualMnnvlAt", "AllReduceResidualMnnvlCoordinate",

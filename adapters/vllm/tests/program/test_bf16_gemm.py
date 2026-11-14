@@ -27,7 +27,7 @@ from verity.circuits.evaluation.reference import evaluate, standalone_call
 from verity.circuits.ops import fp32 as W
 from verity.circuits.ops import prims as P
 from verity.circuits.ops.boolean import gemm as BG
-from verity_vllm.definitions.boolean import boolean_version
+from verity.circuits.ops.boolean.versions import boolean_version
 from verity_vllm.definitions.registry import bf16_gemm_check as C
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import cublas_gemv as GV
