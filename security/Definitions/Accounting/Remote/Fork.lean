@@ -117,13 +117,23 @@ def Finds (D : Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest
           uv.2 ∈ Hash.RowLeaf.innerHashed R.hash (R.verifier t ω p) (R.opened t ω p) ++
             Hash.RowLeaf.innerHashed R.hash (R.verifier t (cont t ω ζ) p) (R.opened t (cont t ω ζ) p)))
 
-open Classical in
-/-- **Window `t`'s fork finder** at `q` SHA-512 calls: on coins `(ω, ζ)` it outputs what it finds (`Finds`), if
-anything. -/
+/-- **Window `t`'s fork finder** at `q` SHA-512 calls: on coins `(ω, ζ)` it searches the receipts window `t` opens on
+`ω` in order, and at the first one it also opens on `cont t ω ζ` where `Claims.findColl` finds two messages of one
+digest among what the two openings' leaf and path checks hashed, or else among what their row digests hashed, it
+outputs them. Its output is what it finds (`Finds`). -/
 noncomputable def finder [Fintype X] [Nonempty X] (D : Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (q : ℕ) : Claims.Finder where
   S := DrawCoins n κ X × DrawCoins n κ X
-  out y := if h : ∃ uv, R.Finds D prf rest t y.1 y.2 uv then some h.choose else none
+  out y := ((D.opened prf rest t y.1).sort (· ≤ ·)).findSome? fun p =>
+    if p ∈ D.opened prf rest t (cont t y.1 y.2) then
+      (Claims.findColl ((Hash.RowLeaf.outerHashed R.hash R.hash (R.verifier t y.1 p) (R.rank t y.1 p)
+            (R.opened t y.1 p) ++
+          Hash.RowLeaf.outerHashed R.hash R.hash (R.verifier t (cont t y.1 y.2) p) (R.rank t (cont t y.1 y.2) p)
+            (R.opened t (cont t y.1 y.2) p)).map fun u => (u, (R.hash u).bytes))).orElse fun _ =>
+        Claims.findColl ((Hash.RowLeaf.innerHashed R.hash (R.verifier t y.1 p) (R.opened t y.1 p) ++
+          Hash.RowLeaf.innerHashed R.hash (R.verifier t (cont t y.1 y.2) p) (R.opened t (cont t y.1 y.2) p)).map
+            fun u => (u, (R.hash u).bytes))
+    else none
   cost _ := q
 
 end Receipts

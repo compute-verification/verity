@@ -722,30 +722,36 @@ theorem le_loopCost (op : Ω → P → Option V) (c : Ω → ℕ) (p : P) :
       rw [← hj0]
       exact Nat.le_add_right _ _
 
-open Classical in
 /-- **The pair the finder outputs**, from `coll`, which reads two runs' tapes: `coll` at the first run and a further
-run that is the first to open some node the first run opened, where that is a pair. Every run it reads is one the loop
-charges (`le_loopCost`). -/
-noncomputable def outOf (op : Ω → P → Option V) (coll : Ω → Ω → Option (Msg × Msg)) (K : ℕ) (ω : Ω)
+run that is the first to open some node the first run opened, where that is a pair. It searches the further runs'
+indices in order, and outputs the first pair it finds. Every run it reads is one the loop charges (`le_loopCost`). -/
+noncomputable def outOf [Fintype P] (op : Ω → P → Option V) (coll : Ω → Ω → Option (Msg × Msg)) (K : ℕ) (ω : Ω)
     (ρ : Fin K → Ω) : Option (Msg × Msg) :=
-  if h : ∃ j : Fin K, (∃ p, (op ω p).isSome ∧ firstIdx op p K ρ = some j) ∧ (coll ω (ρ j)).isSome then
-    coll ω (ρ h.choose)
-  else none
+  (List.finRange K).findSome? fun j =>
+    if ∃ p, (op ω p).isSome ∧ firstIdx op p K ρ = some j then coll ω (ρ j) else none
 
 /-- When `coll` outputs a pair at two runs that open a node to two values, and only collisions of `H`, the finder
 outputs a collision of `H` whenever it finds a pair. -/
-theorem outOf_collision (H : Msg → Msg) (op : Ω → P → Option V) (coll : Ω → Ω → Option (Msg × Msg))
+theorem outOf_collision [Fintype P] (H : Msg → Msg) (op : Ω → P → Option V) (coll : Ω → Ω → Option (Msg × Msg))
     (hc : ∀ (ω ω' : Ω) (p : P), ConflictAt op (ω, ω') p → (coll ω ω').isSome)
     (hs : ∀ (ω ω' : Ω) (u v : Msg), coll ω ω' = some (u, v) → Collision H u v) {K : ℕ} {ω : Ω} {ρ : Fin K → Ω}
     (h : Found op K ω ρ) : ∃ u v, outOf op coll K ω ρ = some (u, v) ∧ Collision H u v := by
   obtain ⟨p, v, w, hv, hw, hne⟩ := h
   obtain ⟨j, hj, hjw⟩ := firstIdx_of_firstHit op p K ρ hw
-  have hex : ∃ j : Fin K, (∃ p, (op ω p).isSome ∧ firstIdx op p K ρ = some j) ∧ (coll ω (ρ j)).isSome :=
-    ⟨j, ⟨p, by simp [hv], hj⟩, hc ω (ρ j) p ⟨by simp [hv], by simp [hjw], by simp [hv, hjw, hne]⟩⟩
-  obtain ⟨⟨u, v'⟩, huv⟩ := Option.isSome_iff_exists.1 hex.choose_spec.2
-  refine ⟨u, v', ?_, hs _ _ u v' huv⟩
-  rw [outOf, dite_eq_left hex]
-  exact huv
+  have hp : ∃ p, (op ω p).isSome ∧ firstIdx op p K ρ = some j := ⟨p, by simp [hv], hj⟩
+  have hsome : (if ∃ p, (op ω p).isSome ∧ firstIdx op p K ρ = some j then coll ω (ρ j) else none).isSome := by
+    rw [if_pos hp]
+    exact hc ω (ρ j) p ⟨by simp [hv], by simp [hjw], by simp [hv, hjw, hne]⟩
+  have hfs : (outOf op coll K ω ρ).isSome := by
+    unfold outOf
+    exact List.findSome?_isSome_iff.2 ⟨j, List.mem_finRange j, hsome⟩
+  obtain ⟨⟨u, v'⟩, huv⟩ := Option.isSome_iff_exists.1 hfs
+  refine ⟨u, v', huv, ?_⟩
+  have huv' := huv
+  unfold outOf at huv'
+  obtain ⟨j', -, hj'⟩ := List.exists_of_findSome?_eq_some huv'
+  split_ifs at hj'
+  exact hs _ _ u v' hj'
 
 /-! ## The prover's tape, outside the resamples
 
@@ -1473,19 +1479,29 @@ theorem ex_cost_sampleFinderAt_le {T : Type} [Fintype T] [Nonempty T] [Fintype �
 
 /-- When `coll` outputs a pair at two runs and a node they open to two values, and only collisions of `H`, the
 by-position finder outputs a collision of `H` whenever it finds a pair. -/
-theorem outOfAt_collision (H : Msg → Msg) (op : Ω → P → Option V) (coll : Ω → Ω → P → Option (Msg × Msg))
+theorem outOfAt_collision [Fintype P] (H : Msg → Msg) (op : Ω → P → Option V)
+    (coll : Ω → Ω → P → Option (Msg × Msg))
     (hc : ∀ (ω ω' : Ω) (p : P), ConflictAt op (ω, ω') p → (coll ω ω' p).isSome)
     (hs : ∀ (ω ω' : Ω) (p : P) (u v : Msg), coll ω ω' p = some (u, v) → Collision H u v) {K : ℕ} {ω : Ω}
     {ρ : Fin K → Ω} (h : Found op K ω ρ) : ∃ u v, outOfAt op coll K ω ρ = some (u, v) ∧ Collision H u v := by
   obtain ⟨p, v, w, hv, hw, hne⟩ := h
   obtain ⟨j, hj, hjw⟩ := firstIdx_of_firstHit op p K ρ hw
-  have hex : ∃ jp : Fin K × P, ((op ω jp.2).isSome ∧ firstIdx op jp.2 K ρ = some jp.1) ∧
-      (coll ω (ρ jp.1) jp.2).isSome :=
-    ⟨(j, p), ⟨by simp [hv], hj⟩, hc ω (ρ j) p ⟨by simp [hv], by simp [hjw], by simp [hv, hjw, hne]⟩⟩
-  obtain ⟨⟨u, v'⟩, huv⟩ := Option.isSome_iff_exists.1 hex.choose_spec.2
-  refine ⟨u, v', ?_, hs _ _ _ u v' huv⟩
-  rw [outOfAt, dite_eq_left hex]
-  exact huv
+  have hmem : (j, p) ∈ List.finRange K ×ˢ (univ : Finset P).toList :=
+    List.mem_product.2 ⟨List.mem_finRange j, Finset.mem_toList.2 (mem_univ p)⟩
+  have hsome : (if (op (ω : Ω) (j, p).2).isSome ∧ firstIdx op (j, p).2 K ρ = some (j, p).1 then
+      coll ω (ρ (j, p).1) (j, p).2 else none).isSome := by
+    rw [if_pos ⟨by simp [hv], hj⟩]
+    exact hc ω (ρ j) p ⟨by simp [hv], by simp [hjw], by simp [hv, hjw, hne]⟩
+  have hfs : (outOfAt op coll K ω ρ).isSome := by
+    unfold outOfAt
+    exact List.findSome?_isSome_iff.2 ⟨(j, p), hmem, hsome⟩
+  obtain ⟨⟨u, v'⟩, huv⟩ := Option.isSome_iff_exists.1 hfs
+  refine ⟨u, v', huv, ?_⟩
+  have huv' := huv
+  unfold outOfAt at huv'
+  obtain ⟨jp, -, hjp⟩ := List.exists_of_findSome?_eq_some huv'
+  split_ifs at hjp
+  exact hs _ _ _ u v' hjp
 
 /-- **The off-plurality mass by the by-position finder's success, with no premise**:
 `Pr[a run opens a node off the plurality] ≤ 2·Pr[the finder outputs a collision of H] + N/(K + 1)`, `N` the number of
