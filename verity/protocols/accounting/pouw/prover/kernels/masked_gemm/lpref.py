@@ -1,6 +1,7 @@
 """CPU reference for lpgemm.cu's gate dump: U and F from hashlib, every operand, digit, product and receipt bit for bit.
 
-python3 lpref.py DIR [--no-receipts] prints one JSON line of checks and exits 0 only if every check passes.
+PYTHONPATH=. python3 verity/protocols/accounting/pouw/prover/kernels/masked_gemm/lpref.py DIR [--no-receipts], from the repository root,
+prints one JSON line of checks and exits 0 only if every check passes.
 
 From the dumped A and B (stacked over the batch) and the seed alone: sigma (sref.py's), U (m x 32, shared by the batch)
 from SHA-512 blocks with tag 6 (block j = rows 4j..4j+3, entry e = (row % 4) 32 + l digest nibble e, the low nibble
@@ -21,10 +22,15 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from mref import duo_receipts, words
-from sref import fold, noise, sigma
+from verity.protocols.accounting.pouw.prover.kernels.masked_gemm.mref import (
+    duo_receipts,
+    words,
+)
+from verity.protocols.accounting.pouw.prover.kernels.masked_gemm.sref import (
+    fold,
+    noise,
+    sigma,
+)
 
 U_TAG = 6
 

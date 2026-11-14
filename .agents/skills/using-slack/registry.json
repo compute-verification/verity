@@ -500,7 +500,7 @@
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "benchmarks/demo_minutes/onsite_minutes.py", "benchmarks/demo_minutes/tests/test_onsite_minutes.py", "tools/verity/cli/verity_cli/served_table.py",
-        "tests/configurations.toml",
+        "tools/verity/cli/verity_cli/configurations.toml",
         "adapters/vllm/verity_vllm/protocols/pous.py",
         "verity/protocols/accounting/pous/device/",
         "verity/protocols/accounting/pous/",

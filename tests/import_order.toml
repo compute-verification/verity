@@ -194,6 +194,7 @@ loaded_by = [
     "verity/protocols/accounting/certifier/prover/workload.py",
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
+    "verity/protocols/accounting/pous/prover/challenger_prover.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/pous/prover/workload.py",
     "verity/protocols/accounting/pouw/prover/workload.py",
@@ -520,10 +521,10 @@ loads = [
     "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
-    "verity/commitments/crypto",
-    "verity/commitments/periods",
     "verity/protocols/accounting/pous/verifier",
     "verity/runtime",
+    "verity/commitments/periods",
+    "verity/commitments/crypto",
 ]
 
 [[place]]
@@ -550,6 +551,7 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
+    "verity/protocols/accounting/pous/prover/challenger_prover.py",
     "verity/protocols/accounting/poub/prover/p2_prover.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/load.py",
@@ -823,6 +825,7 @@ loaded_by = [
     "verity/protocols/accounting/certifier/prover/workload.py",
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
+    "verity/protocols/accounting/pous/prover/challenger_prover.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/pous/prover/workload.py",
     "verity/protocols/accounting/pouw/prover/workload.py",
