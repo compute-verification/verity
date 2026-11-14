@@ -2413,6 +2413,11 @@
     },
     {
       "paths": {
+        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
+      }
+    },
+    {
+      "paths": {
         "fixtures/typed-obligation-v0/": "benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/"
       }
     }
