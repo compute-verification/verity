@@ -56,7 +56,7 @@ def _unit(N: int, cases: list[tuple[bytes, int, bytes, int]]) -> list[int]:
     """The unit's bit for each (block, j, row, slot)."""
     fn = bind(S.PousP2SetupCheck, W=PARAMS.w, C0=PARAMS.c0, L=L, N=N)
     out = EB.evaluate_bits(fn, _bits([c[0] for c in cases]), _bits([_base(c[1]) for c in cases]),
-                           _bits([c[2] for c in cases]), _slots([c[3] for c in cases], S.slot_bits(N, PB)))
+                           _bits([c[2] for c in cases]), _slots([c[3] for c in cases], S.SLOT_BITS))
     return [int(r[0]) for r in out]
 
 
@@ -65,7 +65,7 @@ def _reference(block: bytes, j: int, row: bytes, slot: int) -> int:
     return int(payload is not None and payload == S.slot_payload(row, slot, PB))
 
 
-@pytest.mark.parametrize("N", [4, 12, 15])
+@pytest.mark.parametrize("N", [4, 12, 16])
 def test_honest_blocks_give_1(N):
     """Each slot of a row shorter than a payload (one slot, zero tail), an exact fit (two) and three slots with a zero
     tail: its block of C, under its own base, gives 1 at its slot."""
@@ -75,9 +75,10 @@ def test_honest_blocks_give_1(N):
 
 
 def test_each_wrong_input_gives_0():
-    """A wrong block, a wrong byte of W in the slot, a wrong slot, a slot past the row's last, a wrong base and a nonzero
-    tail past the row's end each give 0; a changed byte of W in another slot does not."""
-    N = 15
+    """A wrong block, a wrong byte of W in the slot, a wrong slot, a slot past the row's last, a slot whose low bits are
+    the right one's, a wrong base and a nonzero tail past the row's end each give 0; a changed byte of W in another slot
+    does not."""
+    N = 16
     row = bytes(RNG.getrandbits(8) for _ in range(N))
     blocks = _store(row)
     flip = lambda b, i: b[:i] + bytes([b[i] ^ 1]) + b[i + 1:]  # noqa: E731
@@ -91,6 +92,7 @@ def test_each_wrong_input_gives_0():
         "other slot's byte": ((blocks[1], 1, flip(row, 2), 1), 1),
         "wrong slot": ((blocks[1], 1, row, 0), 0),
         "slot past the row": ((blocks[1], 1, row, 3), 0),
+        "slot's high bit": ((blocks[1], 1, row, 1 | 1 << 15), 0),
         "wrong base": ((blocks[1], 2, row, 1), 0),
         "nonzero tail": ((bad_tail, 2, row, 2), 0),
     }
@@ -111,8 +113,8 @@ def test_a_decode_that_is_not_ok_gives_0():
 
 
 def test_unit_is_the_reference_on_random_inputs():
-    """Random blocks, rows and slots beside honest ones, over every slot value the slot's bits hold."""
-    N = 15
+    """Random blocks, rows and slots beside honest ones, over every slot value the selection's bits hold."""
+    N = 16
     rows = [bytes(RNG.getrandbits(8) for _ in range(N)) for _ in range(4)]
     cases = [(b, k, row, k) for row in rows for k, b in enumerate(_store(row))]
     cases += [(RNG.getrandbits(PARAMS.w).to_bytes(PARAMS.block_bytes, "big"), RNG.randrange(3), RNG.choice(rows),
@@ -124,27 +126,28 @@ def test_unit_is_the_reference_on_random_inputs():
 @pytest.mark.parametrize(("P", "N"), [(6, 4), (6, 6), (6, 13), (6, 24), (6, 31)])
 def test_slot_match_is_slot_payload(P, N):
     """The slot's selection and compare alone, on payloads equal to a slot's (ok set or not) and payloads one bit off,
-    over every slot value: 1 iff ok, the slot is the row's and the payload is `slot_payload`'s."""
+    over every slot value the selection's bits hold and slots past them whose low bits are a row's: 1 iff ok, the slot is
+    the row's and the payload is `slot_payload`'s."""
     fn = bind(S.PousP2SlotMatch, P=P, N=N)
     width = S.slot_bits(N, P)
     row = bytes(RNG.getrandbits(8) for _ in range(N))
     cases = []
-    for k in range(1 << width):
-        want = S.slot_payload(row, k, P) or bytes(RNG.getrandbits(8) for _ in range(P))
+    for k in [*range(1 << width), 1 << width, 1 << 8, 1 << 15, (1 << 16) - 1]:
+        want = S.slot_payload(row, k % (1 << width), P) or bytes(RNG.getrandbits(8) for _ in range(P))
         for payload in (want, want[:-1] + bytes([want[-1] ^ 0x80])):
             cases += [(payload, ok, k) for ok in (0, 1)]
     decoded = np.concatenate([_bits([c[0] for c in cases]), np.array([[c[1]] for c in cases], dtype=np.uint8)], axis=1)
-    out = EB.evaluate_bits(fn, decoded, _bits([row] * len(cases)), _slots([c[2] for c in cases], width))
+    out = EB.evaluate_bits(fn, decoded, _bits([row] * len(cases)), _slots([c[2] for c in cases], S.SLOT_BITS))
     assert [int(r[0]) for r in out] == [int(ok == 1 and payload == S.slot_payload(row, k, P)) for payload, ok, k in cases]
 
 
 def test_slot_match_counts_at_p2():
     """The unit's ANDs beyond the decode at P2's payload, per row width served: int8 rows of 2,048 and 8,192 bytes, bf16
     rows of 4,096 and 16,384 (one, four, two and eight slots); a multiplexer merge per slot past the first, the compare
-    and the slot's bound."""
+    and the slot's bound over its 16 bits."""
     pb = (P2.POINT[0] - 16) // 8
     got = {N: EB.compile(bind(S.PousP2SlotMatch, P=pb, N=N)).counts["and"] for N in (2048, 4096, 8192, 16384)}
-    assert got == {2048: 16433, 4096: 32864, 8192: 65728, 16384: 131456}
+    assert got == {2048: 16448, 4096: 32879, 8192: 65742, 16384: 131469}
 
 
 def test_refuses_what_the_decode_refuses():
@@ -154,6 +157,10 @@ def test_refuses_what_the_decode_refuses():
         bind(S.PousP2SetupCheck, W=64, C0=189, L=128 + D.MAX_REST + 1, N=15).signature()
     with pytest.raises(ValueError, match="N is an int"):
         bind(S.PousP2SetupCheck, W=64, C0=189, L=L, N=0).signature()
+    with pytest.raises(ValueError, match="u16 words"):
+        bind(S.PousP2SetupCheck, W=64, C0=189, L=L, N=15).signature()
+    with pytest.raises(ValueError, match="at most 65536 slots"):
+        bind(S.PousP2SlotMatch, P=1, N=(1 << 16) + 1).signature()
 
 
 SLOW = pytest.mark.skipif(not settings.SLOW, reason="minutes at P2's width: VERITY_POUS_SLOW=1")
@@ -164,4 +171,4 @@ def test_counts_at_p2():
     """The unit at P2's point over a bf16 row of 16,384 bytes is the decode's ANDs and the slot match's, nothing more:
     the composition adds no gate, which the slot match's own count can't show."""
     at = dict(W=P2.POINT[0], C0=P2.POINT[1], L=D.P2_BASE_BYTES)
-    assert EB.compile(bind(S.PousP2SetupCheck, N=16384, **at)).counts["and"] == 31960530 + 131456
+    assert EB.compile(bind(S.PousP2SetupCheck, N=16384, **at)).counts["and"] == 31960530 + 131469
