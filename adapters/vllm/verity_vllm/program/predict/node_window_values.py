@@ -199,14 +199,21 @@ class Values:
         return np.concatenate([p.astype(dt) for p in parts])
 
     def evaluate(self) -> Values:
-        for j, node in enumerate(self.fn.body.nodes):
-            t0 = time.perf_counter()
-            self.nodes.append(np.ascontiguousarray(self._node(node)).reshape(-1))
-            fam = _family(node)
-            self.times[fam] = self.times.get(fam, 0.0) + time.perf_counter() - t0
-            if node.out_leaves != self.nodes[-1].size:
-                raise ValueError(f"node {j} ({node.fn.id}): {self.nodes[-1].size} leaves, not {node.out_leaves}")
+        for j in range(len(self.fn.body.nodes)):
+            self.step(j)
         return self
+
+    def step(self, j: int) -> None:
+        """Node ``j``, the next one, evaluated."""
+        node = self.fn.body.nodes[j]
+        if j != len(self.nodes):
+            raise ValueError(f"node {j}: the next node is {len(self.nodes)}")
+        t0 = time.perf_counter()
+        self.nodes.append(np.ascontiguousarray(self._node(node)).reshape(-1))
+        fam = _family(node)
+        self.times[fam] = self.times.get(fam, 0.0) + time.perf_counter() - t0
+        if node.out_leaves != self.nodes[-1].size:
+            raise ValueError(f"node {j} ({node.fn.id}): {self.nodes[-1].size} leaves, not {node.out_leaves}")
 
     def _node(self, node: Any) -> np.ndarray:
         fam = _family(node)
@@ -668,6 +675,68 @@ def run(ck: Check, seed: int, log: Callable[[str], None] = print, most: int = SA
     return out
 
 
+# ---- the ranks together
+
+def joint(values: Sequence[Values]) -> list[Values]:
+    """The W ranks' Programs (``values[r]`` rank r's, its ``peers_*`` inputs made up) evaluated together, node by node:
+    before node j, each ``peers_*`` run that rank r's node j reads takes, at the same places of the same argument, the
+    leaves of its writer rank's node j (input ``peers_<k(W-1)+j'>`` is rank j's partial, j' its place among the others),
+    so every rank's peers are the other ranks' partials. Refused where the Programs' nodes differ in number or the writer
+    rank's leaves there aren't its nodes'."""
+    W = len(values)
+    if len({len(v.fn.body.nodes) for v in values}) != 1 or any(v.nodes for v in values):
+        raise ValueError(f"{W} ranks' Programs of {sorted({len(v.fn.body.nodes) for v in values})} nodes, none evaluated")
+    for j in range(len(values[0].fn.body.nodes)):
+        for r, v in enumerate(values):
+            for k, arg in enumerate(v.fn.body.nodes[j].args):
+                pos = 0
+                for space, idx, lo, hi in runs(arg.refs):
+                    name = v.names[idx] if space == "p" else ""
+                    if name.startswith(PEERS):
+                        q = int(name[len(PEERS):]) % (W - 1)
+                        src = values[q + (q >= r)]
+                        refs = src.fn.body.nodes[j].args[k].refs.slice(pos, pos + hi - lo)
+                        if any(s != "n" for s, *_ in runs(refs)):
+                            raise ValueError(f"rank {r} node {j} argument {k}: {name}'s writer rank {q + (q >= r)} holds "
+                                             f"{list(runs(refs))[:3]} there, not its own partial")
+                        v.inputs[name][lo:hi] = src.leaves(refs).astype(np.uint16)
+                    pos += hi - lo
+        for v in values:
+            v.step(j)
+    return list(values)
+
+
+def check_join(joined: Any, checks: Sequence[Check], seed: int, most: int = SAMPLE) -> dict[str, Any]:
+    """Each peer input `node_window.join` wired (``joined.wired``), up to ``most`` of its units sampled under ``seed``: each
+    of its rows as the joined circuit's wire reads it, the writer rank's row (its Check's `Check.row`, the rank's own
+    units), against the reader rank's Program's words there (its stood peer rows, `joint`'s). ``checks[r]`` is rank r's
+    Check, its frame built with ``stand_ins``. Counts by template and port, and the first mismatch."""
+    c, first = joined.circuit, joined.first
+    by: dict[tuple[str, str], list[IF.Wire]] = {}
+    for x in c.wires:
+        by.setdefault((x.reader, x.port), []).append(x)
+    key = sample_key(seed)
+    out: dict[str, Any] = {}
+    for r, tid, port, at, count, (i, n, k) in dict.fromkeys((r, f.tid, f.port, f.at, f.count, f.rows) for r, f in joined.wired):
+        ck = checks[r]
+        rw = dict(ck.lay[tid].rows)[port] // k
+        (grid,) = [s[5] for s in ck.stood.get((tid, port), ()) if s[2:5] == (at, count, (i, n, k))]
+        rec = out.setdefault(f"{tid.split('{')[0]} {port}", {"checked": 0, "mismatches": 0, "first": None})
+        for u in (at + s for s in sample(count, key, f"{r}/{tid}/{port}/{at}/{i}", most)):
+            have = np.concatenate([ck._stand(x) for x in grid[u - at]])
+            U = first[r][tid] + u
+            for row in range(i, i + n):
+                (x,) = [x for x in by[(tid, port)] if x.at <= U < x.at + x.reader_units and x.cut[0] <= row < x.cut[0] + x.cut[1]]
+                s = int(x.source(np.asarray([(U - x.at) * x.cut[1] + row - x.cut[0]]))[0])
+                jr = max(q for q in first if first[q][x.writer] <= s)
+                got = checks[jr].row(x.writer, x.out, s - first[jr][x.writer])
+                rec["checked"] += 1
+                if not np.array_equal(got, have[(row - i) * rw:(row - i + 1) * rw]):
+                    rec["mismatches"] += 1
+                    rec["first"] = rec["first"] or {"rank": r, "unit": u, "row": row, "writer": [jr, x.writer, x.out, s]}
+    return out
+
+
 # ---- planted errors
 
 def plant_wire_row(c: IF.Circuit, family: str, port: str, row: int, keep: bool = False) -> tuple[IF.Circuit, str, dict[str, Any]]:
@@ -702,5 +771,5 @@ def plant_read_shift(c: IF.Circuit, family: str, port: str | None = None) -> tup
     raise ValueError(f"no registered read into {family} {port}")
 
 
-__all__ = ["Check", "NATIVE", "SAMPLE", "Tables", "Values", "made_up", "native_selftest", "plant_read_shift",
-           "plant_wire_row", "run", "sample", "sample_key"]
+__all__ = ["Check", "NATIVE", "SAMPLE", "Tables", "Values", "check_join", "joint", "made_up", "native_selftest",
+           "plant_read_shift", "plant_wire_row", "run", "sample", "sample_key"]
