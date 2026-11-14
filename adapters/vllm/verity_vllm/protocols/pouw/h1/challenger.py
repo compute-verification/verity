@@ -1,7 +1,7 @@
-"""H1's coins from the proof system's challenger on its auditor host (`verity.protocols.proofs.spot.device.remote`), and the
+"""H1's coins from the proof system's challenger on its auditor device (`verity.protocols.proofs.spot.device.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
-* **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor host's
+* **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor device's
   challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (its ``out/``, fetched whole), never from the prover's bundle, under its own challenger key (`pinned_key`),
@@ -148,7 +148,7 @@ def address(raw: Any) -> str | None:
         return None
     host, sep, port = raw.rpartition(":") if isinstance(raw, str) else ("", "", "")
     if not (sep and host and port.isdigit()):
-        raise ValueError(f"pouw setting 'challenger' is the auditor host's challenger as HOST:PORT, not {raw!r}")
+        raise ValueError(f"pouw setting 'challenger' is the auditor device's challenger as HOST:PORT, not {raw!r}")
     return raw
 
 
@@ -426,7 +426,7 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     holds it, which the window's must be. A Pearl-C pass's (``scheme`` one of `pouw_pearl_c_device.SCHEMES`) session
     is held to its salt session instead (`salt_session_reason`). Fails closed."""
     if commits.get("coin_source") != "challenger":
-        return ("the window's coins were held in the serving process, not drawn by the auditor host's challenger (the pouw "
+        return ("the window's coins were held in the serving process, not drawn by the auditor device's challenger (the pouw "
                 "setting 'challenger'), so no session binds them")
     if commits.get("scheme") in PPD.SCHEMES:
         return salt_session_reason(commits, ledger, fetch, registered, commit, verify)

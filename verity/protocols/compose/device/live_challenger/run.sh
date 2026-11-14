@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# The proof system's challenger on its auditor host (cwd = the source tree): `serve.py`, one session a run, its record,
+# The proof system's challenger on its auditor device (cwd = the source tree): `serve.py`, one session a run, its record,
 # key, release log, its signed close and address in $RESEARCH_RUN_DIR/out, which the run publishes from this machine. It runs on a
 # machine the developer doesn't control (AGENTS.md's auditor-trusted devices), never on PEER: once it listens it opens
 # `ssh -R PORT` to PEER (a name in /etc/vy/peers), as benchmarks/remote_session/run.sh's verifier does, so the prover's
-# client (`remote.RemoteChallenger.connect("127.0.0.1:PORT")`) connects to PEER's own 127.0.0.1:PORT. The auditor host
+# client (`remote.RemoteChallenger.connect("127.0.0.1:PORT")`) connects to PEER's own 127.0.0.1:PORT. The auditor device
 # runs no such script: there a session is `vy-challenger-gate reserve ...` then `open --session S --root R` (auditor.py), as the auditor user
 # from the pinned tree, recorded in its ledger. This script runs a session elsewhere, for development, from the source tree:
 #
