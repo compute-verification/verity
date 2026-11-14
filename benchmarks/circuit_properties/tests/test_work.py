@@ -28,9 +28,10 @@ from circuit_properties.ops import flatten
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import compile as compile_bits
 from verity.circuits.program import Program, is_input
-from verity.circuits.refs import Coll, Strided, concat, tuple_of
+from verity.circuits.refs import Coll, Strided, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.boolean import NoBooleanVersion, boolean_version
+from verity.circuits.ops import scalar as SC
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import F32Neg
 from verity.definitions.registry import prims as P
@@ -1431,6 +1432,101 @@ def test_a_chain_deeper_than_the_recursion_limit_is_read_as_a_short_one(depth):
     assert (w.N, w.keep, w.left_out) == (plain.N, plain.keep, plain.left_out)
     assert [(g.product, g.weight, g.macs, g.reason) for g in w.groups] == \
         [(g.product, g.weight, g.macs, g.reason) for g in plain.groups]
+
+
+#: the guarded attention's variants, each with the nodes it reads from runs and those it reads word by word: its form,
+#: and each off it by one word or reaching a branch a causal mask never does. A condition that is not a constant stops
+#: the reading at the select, before the softmax's rows, and so does a compare with a word of a node whose words
+#: differ.
+GUARDED = {"form": ({"softmax", "select"}, set()), "split": ({"softmax", "select"}, set()),
+           "input-word": ({"select"}, set()), "repeated-base": ({"softmax"}, {"select"}),
+           "masked-row": ({"select"}, set()), "finite": ({"softmax", "select"}, set()),
+           "unguarded-input-word": (set(), {"softmax"}), "first-masked": ({"softmax", "select"}, set()),
+           "computed-mask": (set(), {"softmax", "select"})}
+
+
+def _guarded_attention(kind: str) -> Program:
+    """`_attention_loop`'s softmax under a causal mask behind the guard a training step's softmax has: P where some
+    word of the row's scores is not −inf, else 0, the condition an and, one node a word, of the row's compares with −inf.
+    ``kind`` "split" writes both rows' constants 0, row 1's from two constants of one value; "input-word" reads row
+    1's first mask word from an input, and "unguarded-input-word" too without the guard; "repeated-base" has one and
+    read a word of the row twice and another not at all; "masked-row" masks row 1 wholly; "finite" gives row 1 row 0's
+    constants plus 1.0, which a softmax doesn't tell from row 0's; "first-masked" masks row 1 at its first word alone,
+    so that the and's first member is not its last one's; "computed-mask" computes row 1's constants, each plus a
+    stated 0 in one batch, and compares with −inf read from that batch's last word, a word of a node whose words
+    differ."""
+    neg = 0xFF800000
+
+    def mask_word(B, zn, zeros, p: int, j: int):
+        if kind.endswith("input-word") and (p, j) == (1, 0):
+            return zn[0].refs
+        if kind == "masked-row" and p == 1:
+            return B.call(const(32, neg)).refs
+        if kind == "finite" and p == 1:
+            return B.call(const(32, 0x3F800000 if j == 0 else neg)).refs
+        if kind == "split" and p == 1:
+            return zeros[j < D // 2].refs
+        if kind == "first-masked" and p == 1:
+            return B.call(const(32, neg if j == 0 else 0)).refs
+        return B.call(const(32, 0 if j <= p or (kind == "split" and p == 0) else neg)).refs
+
+    def step(B, c, tok, z, zn):
+        table, g, w1 = c[:3]
+        zeros = (B.call(const(32, 0)), B.call(const(32, 0)))
+        assert zeros[0].refs[0] != zeros[1].refs[0]
+        rows = _mul(B, Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)])), g)
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        flat = Array(PN * D, F32)
+        mask = concat([mask_word(B, zn, zeros, p, j) for p in range(PN) for j in range(D)])
+        inf = None
+        if kind == "computed-mask":
+            row = B.batch(P.F32Add, Coll(S_T, mask.slice(D, 2 * D)), zeros[0], axes=(0, None))
+            mask, inf = concat([mask.slice(0, D), row.refs]), row[D - 1]
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0))
+        p_ = B.batch(SOFTMAX, h.reshape(Array(PN, S_T)), axes=(0,))
+        if kind.startswith("unguarded"):
+            return finish(B, c, z, zn, p_)
+        e = B.batch(SC.F32Eq, h, B.call(const(32, neg)) if inf is None else inf, axes=(0, None))
+        bases = list(range(D))
+        if kind == "repeated-base":
+            bases[2] = 1
+        col = lambda b: Coll(Array(PN, SC.BIT), strided_view(e, b, 1, D, 0, PN))  # noqa: E731
+        acc = B.batch(SC.BitAnd, col(bases[0]), col(bases[1]), axes=(0, 0))
+        for b in bases[2:]:
+            acc = B.batch(SC.BitAnd, acc, col(b), axes=(0, 0))
+        cond = Coll(Array(PN * D, SC.BIT), strided_view(acc, 0, D, 1, 0, PN * D))
+        p_ = B.batch(SC.SelectF32, cond, B.call(const(32, 0)), Coll(flat, p_.refs), axes=(0, None, 0))
+        return finish(B, c, z, zn, p_.reshape(Array(PN, S_T)))
+
+    def finish(B, c, z, zn, p_):
+        table, g, w1, v1, v2, wo = c
+        o1, o2 = (B.batch(LIN_P, p_, v, axes=(0, None)) for v in (v1, v2))
+        y = concat([B.batch(LIN, o1, wo, axes=(0, None)).refs, B.batch(LIN_A, o1, o2, axes=(0, None)).refs])
+        new = (_add(B, table, z), _add(B, g, z), _add(B, w1, z), _add(B, v1, zn), _add(B, v2, zn),
+               _add(B, wo, _add(B, o1[0], o1[1])))
+        return new, Coll(Array(PN * (N + PN), F32), y)
+
+    carry = (("table", TABLE_T), ("g", X_T), ("w1", Array(D, X_T)), ("v1", V_T), ("v2", V_T), ("wo", W_T))
+    return _loop("Guarded", carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN * (N + PN), F32), step)
+
+
+@pytest.mark.parametrize("kind", sorted(GUARDED))
+def test_a_guarded_softmax_reads_the_same_from_its_runs_as_word_by_word(kind):
+    """The reading from runs (`Reader(structure=True)`) is the word-by-word one, whole, on the guarded attention and on
+    each variant: equal constants written as other parts, a mask word or an and off the form by one word, a row wholly
+    masked, a finite nonzero constant; and each node reads from runs or falls back as `GUARDED` says."""
+    prog = _guarded_attention(kind)
+    assert _reading(WK.read(prog, KB)) == _reading(WK.read(prog, KB, structure=False))
+    R = WK.Reader(prog, KB)
+    R.root()
+    assert tuple({n for (n, how) in R.read_by if how == h} for h in ("runs", "words")) == GUARDED[kind]
+
+
+def test_the_guarded_softmax_charges_what_the_unguarded_one_does():
+    """The guard changes nothing the reading charges: P's rows are the mask's through the select whose condition is
+    false, as without it."""
+    w, plain = WK.read(_guarded_attention("form"), KB), WK.read(_attention_loop(), KB)
+    assert (w.N, w.keep, w.left_out) == (plain.N, plain.keep, plain.left_out)
 
 
 #: the suite's Programs built by name, each held to its reading in `READINGS`
