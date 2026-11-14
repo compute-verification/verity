@@ -392,9 +392,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   it is that site's registered hardware, the auditor's devices at it among them; "of the Site" because a commitment tree
   has subtrees too. A place is a registered location or the outside (`Site.places`), and the actual circuit's leaf where
   the Site is read as its hardware model: a gate is placed at one, a device or a memory leaf as much as a host. A link
-  ends only at a host, a certifier, a challenger or the outside: the place a link may end at for a place is its host,
-  or itself where it is in none (`Site.linkEnd`). The egress limit of a subtree that holds each host whole
-  (`Site.HostsWhole`) is the capacity of the registered links with exactly one end in it
+  ends only at a host, a certifier, a challenger or the outside: the place a link may end at is its host for a device
+  or a memory leaf, and itself for any other place (`Site.linkEnd`). The egress limit of a subtree that holds each
+  host whole (`Site.HostsWhole`) is the capacity of the registered links with exactly one end in it
   (`Accounting.Guarantees.EgressRegistered`); a subtree at a device or a memory leaf has none.
 - **Record limit** and **sealed sink** (`Accounting.Guarantees.LeakParts`, `LeakPartsRegistered`): a device's record
   limit `K` is a cap on the values its record takes over a window, whatever the developer's hardware sends
