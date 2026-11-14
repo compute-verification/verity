@@ -81,7 +81,7 @@ import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from verity_bench import exfiltration as E
 from verity_bench import jobs, kit, overhead_records, settings, steady
@@ -212,7 +212,7 @@ def _read(store: Any, art: str, path: str | None = None) -> dict:
 
     if store.get_manifest(art).payload.type == "file":
         return json.loads(Path(store.fetch(art)).read_text())
-    if not store.listing(art, [path]):
+    if path is None or not store.listing(art, [path]):
         raise ValueError(f"{art} holds no `{path}`")
     return json.loads((Path(store.fetch(art, paths=[path])) / path).read_text())
 
@@ -259,7 +259,7 @@ def _field(row: Mapping[str, Any], name: str) -> Any:
 _ABSENT = object()
 
 
-def _count(x: Any) -> bool:
+def _count(x: Any) -> TypeGuard[int]:
     return isinstance(x, int) and not isinstance(x, bool) and x > 0
 
 
@@ -321,7 +321,7 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
     name = f"`{row.get('type')}` at {row.get('provers')} provers"
     definition = _field(row, "stage.definition")
     if not isinstance(definition, str):
-        why = (f"failed: {row['error']}" if "error" in row else f"skipped: {row['skipped']}" if "skipped" in row else
+        why: str | None = (f"failed: {row['error']}" if "error" in row else f"skipped: {row['skipped']}" if "skipped" in row else
                "it lacks `stage.definition`")
         return f"its row {name}: {why}"
     why = row_why(row)
@@ -565,7 +565,8 @@ def at_record(store: Any) -> dict:
         scopes, plans, _, _ = E.rows_of_record(store)
         if DESIGN_SCOPE not in scopes:
             return out | {"why": f"no run of record holds the {DESIGN_SCOPE}'s rows (they hold {', '.join(sorted(scopes))})"}
-        p = E.at_share(DESIGN_SCOPE, *scopes[DESIGN_SCOPE], E.SHARE, plans.get(DESIGN_SCOPE))
+        run, rows = scopes[DESIGN_SCOPE]
+        p = E.at_share(DESIGN_SCOPE, run, rows, E.SHARE, plans.get(DESIGN_SCOPE))
     except ValueError as e:
         return out | {"why": str(e)}
     if "prove" not in p["parts"]:
@@ -620,11 +621,12 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
     inputs += more + its
     refused += unread
     sampled = None
+    priced: P.ProofSystem = prover
     if system == "spot":
-        sampled, its = plan(store, w, sampling)
-        inputs.append(its)
-        prover = P.Spot(prover, sampled, rate)
-    doc = P.report(prover.table(blocks), seconds)
+        sampled, planned = plan(store, w, sampling)
+        inputs.append(planned)
+        priced = P.Spot(prover, sampled, rate)
+    doc = P.report(priced.table(blocks), seconds)
     return {"schema": P.SCHEMA, "workload": w.name, "model": w.model, "cut": blocks.cut, "provers": provers, "cores": cores,
             "macs_in_blocks": blocks.macs_in_blocks, "inputs": inputs,
             "refused": refused, "serving": {"gpu_seconds_per_token": seconds, "status": "modeled", "basis": rate.basis},
@@ -642,7 +644,8 @@ def _periods(root: Path, rate: P.Serving, ratio: float, sampled: P.SamplingPlan 
     year = O.PERIODS_H["year"] * 3600
     if sampled is not None:
         fleets = {sampled.scope: sampled.serving_gpu_seconds / sampled.period_s}
-        spans = {name: hours * 3600 for name, hours in O.PERIODS_H.items() if hours * 3600 == sampled.period_s} or {
+        spans: dict[str, float] = {name: hours * 3600 for name, hours in O.PERIODS_H.items()
+                                   if hours * 3600 == sampled.period_s} or {
             f"{sampled.period_s:g} s": sampled.period_s}
     else:
         fleets = {f"datacenter ({c['datacenter']})": float(c["gpus"]),
@@ -722,7 +725,7 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     if AT_RECORD in metrics.values() and "at_record" not in doc:
         raise ValueError(f"`{AT_RECORD}` is SPOT's: only a table at a sampling plan holds it")
     targets = list(dict.fromkeys(t for i in doc["inputs"] for t in i["targets"]))
-    s, out = doc["serving"], []
+    s, out = doc["serving"], list[dict[str, Any]]()
     for name, figure in metrics.items():
         value, mark, said = _mark(doc, figure)
         if figure == AT_RECORD:

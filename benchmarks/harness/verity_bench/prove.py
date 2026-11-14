@@ -274,7 +274,8 @@ class Table:
 class ProofSystem(Protocol):
     """A proof system's prover on a workload: the blocks it proves a served token and what each costs."""
 
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def table(self, census: Census) -> Table: ...
 
