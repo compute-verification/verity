@@ -45,6 +45,9 @@ theorem ofOwner_owner (o : Core.Site.Owner) : ofOwner (owner o) = o := by cases 
 /-- The spec's remote is the code's. -/
 @[simp] theorem remote_eq : Verity.Registration.Composite.remote = Composite.remote := rfl
 
+/-- The spec's plain sibling of remote is the code's. -/
+@[simp] theorem plain_eq : Verity.Registration.Composite.plain = Composite.plain := rfl
+
 @[simp] theorem ofOperandClass_operandClass (c : Core.Site.OperandClass) : ofOperandClass (operandClass c) = c := by
   cases c <;> rfl
 
