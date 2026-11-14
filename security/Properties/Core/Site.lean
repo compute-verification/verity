@@ -143,16 +143,6 @@ holds only site entries, so an information entry or a declaration, which no code
 site entry following the same head. -/
 def ofRegEntry (e : Verity.Registration.Entry) : Core.Site.Registration.Entry := .site e.previous (ofEntry e.added)
 
-/-- The spec's composite of a code composite. -/
-def composite : Core.Site.Registration.Composite → Verity.Registration.Composite
-  | .onsite => .onsite
-  | .remote => .remote
-
-/-- The code's composite of a spec composite. -/
-def ofComposite : Verity.Registration.Composite → Core.Site.Registration.Composite
-  | .onsite => .onsite
-  | .remote => .remote
-
 /-- The spec's refusal of a code refusal. -/
 def refusal : Core.Site.Registration.Refusal → Verity.Registration.Refusal
   | .previous => .previous
@@ -168,7 +158,7 @@ def refusal : Core.Site.Registration.Refusal → Verity.Registration.Refusal
 
 /-- **The digests code digests denote**: each of a spec value, the code's of the code value it denotes. -/
 def digests (D : Core.Site.Registration.Digests) : Verity.Registration.Digests :=
-  ⟨fun k => D.sheet (ofSheet k), fun e => D.entry (ofRegEntry e), fun c => D.genesis (ofComposite c)⟩
+  ⟨fun k => D.sheet (ofSheet k), fun e => D.entry (ofRegEntry e), D.genesis⟩
 
 /-- **The auditor a code auditor denotes**: the same sheets, as the spec's, the same tolerance and the same keys. -/
 def auditor (A : Core.Site.Registration.Auditor) : Verity.Registration.Auditor :=
@@ -183,7 +173,7 @@ def Refuses : Prop :=
   ∀ (D : Core.Site.Registration.Digests) (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
     (S : Core.Site) (head : String) (e : Core.Site.Registration.Entry),
     (e.refusal D A c S head).map refusal =
-      Verity.Registration.Entry.refusal (digests D) (auditor A) (composite c) (site S) head (regEntry e)
+      Verity.Registration.Entry.refusal (digests D) (auditor A) c (site S) head (regEntry e)
 
 /-- **The code accepts exactly the valid entries**: an entry has no refusal against a Site and a head exactly when the
 entry it denotes is valid against them. -/
@@ -191,7 +181,7 @@ def EntryValid : Prop :=
   ∀ (D : Core.Site.Registration.Digests) (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
     (S : Core.Site) (head : String) (e : Core.Site.Registration.Entry),
     e.refusal D A c S head = none ↔
-      Verity.Registration.Entry.Valid (digests D) (auditor A) (composite c) (site S) head (regEntry e)
+      Verity.Registration.Entry.Valid (digests D) (auditor A) c (site S) head (regEntry e)
 
 /-- **The check of a log is the spec's**: it accepts a log exactly when the log it denotes is valid, and then with the
 spec's Site of that log. -/
@@ -199,7 +189,7 @@ def Checks : Prop :=
   ∀ (D : Core.Site.Registration.Digests) (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
     (l : Core.Site.Registration),
     (Core.Site.Registration.check D A c l).toOption.map site =
-      if Verity.Registration.Valid (digests D) (auditor A) (composite c) (log l) then
+      if Verity.Registration.Valid (digests D) (auditor A) c (log l) then
         some (Verity.Site.ofLog (log l))
       else none
 
@@ -210,9 +200,9 @@ def RefusedAt : Prop :=
     (l : Core.Site.Registration) (i : Nat) (r : Core.Site.Registration.Refusal),
     Core.Site.Registration.check D A c l = .error (i, r) →
       ∃ hi : i < l.length,
-        Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (l.take i)) ∧
-          Verity.Registration.Entry.refusal (digests D) (auditor A) (composite c)
-              (Verity.Site.ofLog (log (l.take i))) (Verity.Registration.head (digests D) (composite c) (log (l.take i)))
+        Verity.Registration.Valid (digests D) (auditor A) c (log (l.take i)) ∧
+          Verity.Registration.Entry.refusal (digests D) (auditor A) c
+              (Verity.Site.ofLog (log (l.take i))) (Verity.Registration.head (digests D) c (log (l.take i)))
               (regEntry l[i]) = some (refusal r)
 
 /-! ## The witnesses' instances

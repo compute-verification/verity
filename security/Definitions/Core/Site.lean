@@ -346,12 +346,22 @@ namespace Registration
 
 open Site (Sheet)
 
-/-- The composite a site's log is registered for: onsite, whose boundary links the auditor's certifiers split and whose
-memory its challengers reach, or remote, where neither need hold. -/
-inductive Composite
-  | onsite
-  | remote
-  deriving DecidableEq, Repr
+/-- **A composite**: the ids of the protocols it composes, in the order of their ids. Any list is one; onsite and remote
+are two (`Composite.onsite`, `Composite.remote`). A site's log is registered for a composite. The code's
+`Core.Site.Registration.Composite` is this type, `List String`, and its two lists are these two. -/
+abbrev Composite : Type := List String
+
+/-- **Onsite**, the composite of an auditor with devices at the datacenter: network certification, the inference-only
+policy, PoUS, PoUW, PoUB, SPOT and the wipe. Its log's boundary links the auditor's certifiers split and its
+memory the auditor's challengers reach (`Site.Entry.Covered`, `Site.Entry.Reached`). -/
+def Composite.onsite : Composite :=
+  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+    "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
+
+/-- **Remote**, the composite of an auditor with no devices at the datacenter: the inference-only policy, PoUW by
+Pearl+'s run verdict, and SPOT. -/
+def Composite.remote : Composite :=
+  ["verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
 
 /-- The digests the log names things by, SHA-512 in the deployed check: a sheet's, an entry's, and the head of a
 composite's empty log. -/

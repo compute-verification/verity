@@ -39,11 +39,11 @@ theorem ofTier_tier (t : Core.Site.Tier) : ofTier (tier t) = t := by cases t <;>
 
 theorem ofOwner_owner (o : Core.Site.Owner) : ofOwner (owner o) = o := by cases o <;> rfl
 
-theorem composite_eq_iff {c : Composite} {c' : Verity.Registration.Composite} :
-    composite c = c' ↔ c = ofComposite c' := by
-  cases c <;> cases c' <;> decide
+/-- The spec's onsite is the code's: a composite is a list of protocol ids in both, and the two name one list. -/
+@[simp] theorem onsite_eq : Verity.Registration.Composite.onsite = Composite.onsite := rfl
 
-theorem ofComposite_composite (c : Composite) : ofComposite (composite c) = c := by cases c <;> rfl
+/-- The spec's remote is the code's. -/
+@[simp] theorem remote_eq : Verity.Registration.Composite.remote = Composite.remote := rfl
 
 @[simp] theorem ofOperandClass_operandClass (c : Core.Site.OperandClass) : ofOperandClass (operandClass c) = c := by
   cases c <;> rfl
@@ -124,8 +124,7 @@ theorem refusal_injective : Function.Injective refusal := by
     (digests D).entry (regEntry e) = D.entry e := by
   simp only [digests, ofRegEntry_regEntry]
 
-@[simp] theorem digests_genesis (D : Digests) (c : Composite) : (digests D).genesis (composite c) = D.genesis c := by
-  simp only [digests, ofComposite_composite]
+@[simp] theorem digests_genesis (D : Digests) (c : Composite) : (digests D).genesis c = D.genesis c := rfl
 
 @[simp] theorem auditor_key (A : Auditor) : (auditor A).key = A.key := rfl
 
@@ -291,20 +290,20 @@ theorem owners_iff : Verity.Site.Entry.Owners (auditor A) (entry e) ↔ Core.Sit
   simp [owner_eq_iff, ofOwner]
 
 theorem covered_iff :
-    Verity.Site.Entry.Covered (composite c) (site S) (entry e) ↔ Core.Site.Entry.Covered c S e := by
+    Verity.Site.Entry.Covered c (site S) (entry e) ↔ Core.Site.Entry.Covered c S e := by
   unfold Verity.Site.Entry.Covered Core.Site.Entry.Covered
   rw [← site_add]
-  simp [composite_eq_iff, ofComposite, boundary_site, certified_site]
+  simp [boundary_site, certified_site]
 
 theorem reached_iff :
-    Verity.Site.Entry.Reached (composite c) (site S) (entry e) ↔ Core.Site.Entry.Reached c S e := by
+    Verity.Site.Entry.Reached c (site S) (entry e) ↔ Core.Site.Entry.Reached c S e := by
   unfold Verity.Site.Entry.Reached Core.Site.Entry.Reached
   rw [← site_add]
-  simp [composite_eq_iff, ofComposite, kind_eq_iff, ofKind, host?_site, reached_site]
+  simp [kind_eq_iff, ofKind, host?_site, reached_site]
 
 /-- A site entry's refusal in code is the spec's. -/
 theorem siteRefusal : (Core.Site.Entry.refusal D A c S e).map refusal =
-    Verity.Site.Entry.refusal (digests D) (auditor A) (composite c) (site S) (entry e) := by
+    Verity.Site.Entry.refusal (digests D) (auditor A) c (site S) (entry e) := by
   unfold Core.Site.Entry.refusal Verity.Site.Entry.refusal
   simp only [fresh_iff, refs_iff, kinds_iff, sheets_iff, figures_iff, capacity_iff, owners_iff, covered_iff,
     reached_iff]
@@ -358,20 +357,20 @@ theorem once_regEntry (l : Core.Site.Registration) (e : Core.Site.Registration.E
 at `i` follows a valid prefix of `i` entries, and is the spec's refusal of the next. -/
 def Says (D : Digests) (A : Auditor) (c : Composite) (l : Core.Site.Registration) :
     Except (Nat × Core.Site.Registration.Refusal) Core.Site → Prop
-  | .ok S => Verity.Registration.Valid (digests D) (auditor A) (composite c) (log l) ∧
+  | .ok S => Verity.Registration.Valid (digests D) (auditor A) c (log l) ∧
       site S = Verity.Site.ofLog (log l)
   | .error (i, r) => ∃ hi : i < l.length,
-      Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (l.take i)) ∧
-        Verity.Registration.Entry.refusal (digests D) (auditor A) (composite c)
-            (Verity.Site.ofLog (log (l.take i))) (Verity.Registration.head (digests D) (composite c) (log (l.take i)))
+      Verity.Registration.Valid (digests D) (auditor A) c (log (l.take i)) ∧
+        Verity.Registration.Entry.refusal (digests D) (auditor A) c
+            (Verity.Site.ofLog (log (l.take i))) (Verity.Registration.head (digests D) c (log (l.take i)))
             (regEntry l[i]) = some (refusal r)
 
 /-- **The check follows the spec one entry at a time**: from a valid prefix `p`, with its Site and head, the check of
 the rest says what the spec says of the whole log. -/
 theorem go_says (D : Digests) (A : Auditor) (c : Composite) :
     ∀ (rest p : Core.Site.Registration) (S : Core.Site) (h : String),
-      site S = Verity.Site.ofLog (log p) → h = Verity.Registration.head (digests D) (composite c) (log p) →
-      Verity.Registration.Valid (digests D) (auditor A) (composite c) (log p) →
+      site S = Verity.Site.ofLog (log p) → h = Verity.Registration.head (digests D) c (log p) →
+      Verity.Registration.Valid (digests D) (auditor A) c (log p) →
       Says D A c (p ++ rest) (Core.Site.Registration.check.go D A c p.length S h rest) := by
   intro rest
   induction rest with
@@ -393,10 +392,10 @@ theorem go_says (D : Digests) (A : Auditor) (c : Composite) :
         rw [← hS, ← hh, ← hr]; rfl
     · next hre =>
       rw [hre] at hr
-      have hev : Verity.Registration.Entry.Valid (digests D) (auditor A) (composite c)
-          (Verity.Site.ofLog (log p)) (Verity.Registration.head (digests D) (composite c) (log p)) (regEntry e) := by
+      have hev : Verity.Registration.Entry.Valid (digests D) (auditor A) c
+          (Verity.Site.ofLog (log p)) (Verity.Registration.head (digests D) c (log p)) (regEntry e) := by
         rw [← hS, ← hh, ← Verity.Registration.Entry.refusal_eq_none_iff, ← hr]; rfl
-      have hv' : Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (p ++ [e])) := by
+      have hv' : Verity.Registration.Valid (digests D) (auditor A) c (log (p ++ [e])) := by
         rw [log_append]; exact Verity.Registration.valid_append_singleton.mpr ⟨hv, hev, once_regEntry p e⟩
       have := ih (p ++ [e]) (S.add e.added) (D.entry e)
         (by
@@ -417,9 +416,9 @@ theorem checks : Checks := by
   | error ir =>
     obtain ⟨i, r⟩ := ir
     rintro ⟨hi, _, hr⟩
-    have hnot : ¬Verity.Registration.Valid (digests D) (auditor A) (composite c) (log l) := by
+    have hnot : ¬Verity.Registration.Valid (digests D) (auditor A) c (log l) := by
       intro hv
-      have hp : Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (l.take (i + 1))) :=
+      have hp : Verity.Registration.Valid (digests D) (auditor A) c (log (l.take (i + 1))) :=
         Verity.Registration.Valid.of_prefix (by rw [log_take]; exact List.take_prefix _ _) hv
       rw [List.take_succ_eq_append_getElem hi, log_append] at hp
       have he := (Verity.Registration.valid_append_singleton.mp hp).2.1
@@ -456,14 +455,14 @@ theorem check_staleLog :
     Core.Site.Registration.check witnessDigests witnessAuditor .remote staleLog = .error (1, .previous) := by rfl
 
 theorem valid_honestLog :
-    Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (log honestLog) := by
+    Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) Composite.remote (log honestLog) := by
   have h := checks witnessDigests witnessAuditor .remote honestLog
   rw [check_honestLog] at h
   by_contra hv
   simp [Except.toOption, hv] at h
 
 theorem not_valid_staleLog :
-    ¬Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (log staleLog) := by
+    ¬Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) Composite.remote (log staleLog) := by
   intro hv
   have h := checks witnessDigests witnessAuditor .remote staleLog
   rw [check_staleLog] at h
@@ -473,7 +472,7 @@ theorem not_valid_staleLog :
 spec. -/
 theorem refuses_honest :
     honestEntry.refusal witnessDigests witnessAuditor .remote emptySite "genesis" = none ∧
-      Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+      Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) Composite.remote
         (site emptySite) "genesis" (regEntry honestEntry) = none := by
   refine ⟨honestEntry_refusal, ?_⟩
   rw [← refuses, honestEntry_refusal]
@@ -483,7 +482,7 @@ theorem refuses_honest :
 does. -/
 theorem refuses_nontrivial :
     ¬(acceptAllRefusal staleEntry).map refusal =
-      Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+      Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) Composite.remote
         (site emptySite) "genesis" (regEntry staleEntry) := by
   rw [← refuses, staleEntry_refusal]
   simp [acceptAllRefusal]
@@ -492,7 +491,7 @@ theorem refuses_nontrivial :
 valid there. -/
 theorem entryValid_honest :
     honestEntry.refusal witnessDigests witnessAuditor .remote emptySite "genesis" = none ∧
-      Verity.Registration.Entry.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+      Verity.Registration.Entry.Valid (digests witnessDigests) (auditor witnessAuditor) Composite.remote
         (site emptySite) "genesis" (regEntry honestEntry) :=
   ⟨honestEntry_refusal, (entryValid _ _ _ _ _ _).mp honestEntry_refusal⟩
 
@@ -500,7 +499,7 @@ theorem entryValid_honest :
 valid. -/
 theorem entryValid_nontrivial :
     ¬(acceptAllRefusal staleEntry = none ↔
-      Verity.Registration.Entry.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+      Verity.Registration.Entry.Valid (digests witnessDigests) (auditor witnessAuditor) Composite.remote
         (site emptySite) "genesis" (regEntry staleEntry)) := by
   intro h
   have hr := (entryValid _ _ _ _ _ _).mpr (h.mp rfl)
@@ -510,13 +509,13 @@ theorem entryValid_nontrivial :
 /-- `Checks`' honest witness: the code's check accepts `honestLog`, with its Site, and the log is valid. -/
 theorem checks_honest :
     Core.Site.Registration.check witnessDigests witnessAuditor .remote honestLog = .ok (Core.Site.ofLog honestLog) ∧
-      Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (log honestLog) :=
+      Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) Composite.remote (log honestLog) :=
   ⟨check_honestLog, valid_honestLog⟩
 
 /-- `Checks`' nontrivial witness: a log check that accepts everything accepts `staleLog`, which is not valid. -/
 theorem checks_nontrivial :
     ¬(acceptAllCheck staleLog).toOption.map site =
-      if Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (log staleLog)
+      if Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) Composite.remote (log staleLog)
       then some (Verity.Site.ofLog (log staleLog)) else none := by
   simp [not_valid_staleLog, acceptAllCheck, Except.toOption]
 
@@ -531,15 +530,15 @@ theorem refusedAt_honest :
 head, refuses `honestLog` with a refusal the spec doesn't give that entry, at every index of `honestLog` it may name. -/
 theorem refusedAt_nontrivial :
     ∀ i : Fin honestLog.length,
-      ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+      ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) Composite.remote
           (Verity.Site.ofLog (log (honestLog.take i)))
-          (Verity.Registration.head (digests witnessDigests) (composite .remote) (log (honestLog.take i)))
+          (Verity.Registration.head (digests witnessDigests) Composite.remote (log (honestLog.take i)))
           (regEntry honestLog[i]) = some (refusal .previous) := by
   rintro ⟨i, hi⟩
   obtain rfl : i = 0 := by simp only [honestLog, List.length_singleton] at hi; omega
   have h := refuses witnessDigests witnessAuditor .remote emptySite "genesis" honestEntry
   rw [honestEntry_refusal] at h
-  show ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+  show ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) Composite.remote
     (site emptySite) "genesis" (regEntry honestEntry) = _
   rw [← h]
   simp
