@@ -208,7 +208,9 @@ benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher
 (`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec, the commit, `uv.lock`, the
 vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it as the run's key param,
 and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation passed, exit code 0 and a
-clean source tree. A requeued point first deletes its run's old `result.json`. The lookup asks the machine's catalog of
+clean source tree. A requeued point first deletes its run's old `result.json`. A passed point's result holds its
+numbers as measurements, appended by the kit's writer (`verity_bench.vllm.result.record`): each arm's mean of each
+metric, `ARM.METRIC`, with its 95% interval, and each arm's paired ratio over the baseline's reps, `ARM.METRIC.ratio`. The lookup asks the machine's catalog of
 the evidence store for an attempt of the tool `verity_bench.tool:VLLM_BENCH_POINT` with the point's `identity` param, at
 the commit's source tree (git must know the commit), and when a point isn't there, the store's remote: once per commit it fetches and indexes the
 attempts this store lacks among those started since a day before the commit's committer date (a point's runs can't start
