@@ -74,21 +74,20 @@ open FlockSoundness.Discharge.Composed (outJ repJ)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **`Zk.schedule` accepts every `m` from 25 to 35**, at `zkSched m`. -/
+variable {wideLeaf : Bool}
+
+/-- **`Zk.schedule` accepts every `m` from 25 to 35** at either statement version, at `zkSched`. -/
 theorem zk_schedule_ok {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) :
-    Zk.schedule m = .ok (Claims.Flock.zkSched m) := by
-  have h := (Claims.Flock.zkShape_table ⟨m - 25, by omega⟩).1
-  have hi : Claims.Flock.ZkIdx.m ⟨m - 25, by omega⟩ = m := by
-    simp only [Claims.Flock.ZkIdx.m]
-    omega
-  rw [hi] at h
+    Zk.schedule wideLeaf m = .ok (Claims.Flock.zkSched wideLeaf m) := by
+  have h := (Claims.Flock.zkShape_table (Claims.Flock.ZkIdx.of wideLeaf m)).1
+  rw [(Claims.Flock.ZkIdx.of_at wideLeaf h25 h35).schedule] at h
   unfold Claims.Flock.zkSched
-  cases hs : Zk.schedule m with
+  cases hs : Zk.schedule wideLeaf m with
   | ok p => rfl
   | error e => rw [hs] at h; simp [Except.toBool] at h
 
-theorem zkSched_of {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule m = .ok (sch, tPad)) :
-    Claims.Flock.zkSched m = (sch, tPad) := by
+theorem zkSched_of {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
+    Claims.Flock.zkSched wideLeaf m = (sch, tPad) := by
   unfold Claims.Flock.zkSched
   rw [hz]
 
@@ -104,7 +103,7 @@ def innerDomOf (N : ℕ) (hN : N < 2 ^ 64) : Fin N ↪ 𝔽 :=
     exact Fin.ext (by omega)⟩
 
 /-- The inner code's length at a statement `Zk.schedule` accepts, of `k_log ≤ 27`: a power of two, at most `2^13`. -/
-theorem innerN_pow_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad))
+theorem innerN_pow_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hk : st.c.kLog ≤ 27) : ∃ b, Discharge.ZkExec.innerN (layOf st sch) = 2 ^ b ∧ b ≤ 13 := by
   obtain ⟨hshape, hmsch, -⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
@@ -114,13 +113,13 @@ theorem innerN_pow_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.s
     omega
   exact innerN_pow _ (layLen_le hm35 hk h0)
 
-theorem innerN_lt_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad))
+theorem innerN_lt_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hk : st.c.kLog ≤ 27) : Discharge.ZkExec.innerN (layOf st sch) < 2 ^ 64 := by
   obtain ⟨b, hb, hb13⟩ := innerN_pow_zk hz hk
   rw [hb]
   exact Nat.pow_lt_pow_right (by norm_num) (by omega)
 
-theorem innerN_dvd_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad))
+theorem innerN_dvd_zk {st : Stmt} {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hk : st.c.kLog ≤ 27) : Discharge.ZkExec.innerN (layOf st sch) ∣ 2 ^ 64 := by
   obtain ⟨b, hb, hb13⟩ := innerN_pow_zk hz hk
   rw [hb]
@@ -132,7 +131,7 @@ layout `PT_LOCAL`, the pads at `PadLayout.new m kLog k0`'s positions, and the in
 columns, column `j` at `j + 1`, `K_PAD` padding symbols, `Q` queries at `w.lo mod innerN`, the unique-decoding
 radius). -/
 noncomputable def zkTab {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) {mPts : ℕ}
+    (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) {mPts : ℕ}
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL mPts) : TabZK 𝔽 mPts where
   S := L.model (Refine.regionsOf st)
   sch := Refine.schedOf sch
@@ -168,13 +167,13 @@ noncomputable def zkTab {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad
 /-- **`zkTab` is at Flock ZK's parameters**: `m1Schedule` and `m1Pad` at `m`, two extra lanes, the shape `acct`,
 at most `2^13` inner columns, 168 queries, a radius of at least `7/16`, and the deployed pads domain. -/
 theorem zkTab_m1 {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) (spec : SessionSpec)
+    (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) (spec : SessionSpec)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) :
-    (zkTab L hz hk hlay).sch = Accounting.m1Schedule st.m ∧ (zkTab L hz hk hlay).t = Accounting.m1Pad st.m ∧
+    (zkTab L hz hk hlay).sch = Accounting.m1Schedule st.wideLeaf st.m ∧ (zkTab L hz hk hlay).t = Accounting.m1Pad st.wideLeaf st.m ∧
       (zkTab L hz hk hlay).e = 2 ∧ (zkTab L hz hk hlay).S.shape spec.mPts = acct spec st ∧
       (zkTab L hz hk hlay).N ≤ 2 ^ 13 ∧ (zkTab L hz hk hlay).q = 168 ∧ 7 / 16 ≤ (zkTab L hz hk hlay).δ ∧
       (zkTab L hz hk hlay).N ≤
-        Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0) := by
+        Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0) := by
   obtain ⟨hsch, hpad⟩ := schedule_m1 hz
   obtain ⟨b, hb, hb13⟩ := innerN_pow_zk hz hk
   have h8 : 8 * ((layOf st sch).len + Zk.K_PAD) ≤ Discharge.ZkExec.innerN (layOf st sch) := by
@@ -192,11 +191,11 @@ theorem zkTab_m1 {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
 /-- **`zkTab` commits to what `zk_not_committed` speaks of**: table 0's model statement, `zkSched`'s schedule and
 padding, and `PAD_C`. -/
 theorem zkTab_committed {st : Stmt} (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) {mPts : ℕ}
+    (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27) {mPts : ℕ}
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL mPts) (C : Model.Oracle 𝔽) :
     (zkTab L hz hk hlay).Committed execArith C ↔
-      CommittedPad execArith (L.model (Refine.regionsOf st)) (Refine.schedOf (Claims.Flock.zkSched st.m).1)
-        (Claims.Flock.zkSched st.m).2 padC C := by
+      CommittedPad execArith (L.model (Refine.regionsOf st)) (Refine.schedOf (Claims.Flock.zkSched st.wideLeaf st.m).1)
+        (Claims.Flock.zkSched st.wideLeaf st.m).2 padC C := by
   rw [zkSched_of hz]
   rfl
 
@@ -205,7 +204,7 @@ full-width columns, at `zkTab`, wherever the setup has the one table `st`, at it
 `PT_LOCAL`, and `Zk.schedule`'s schedule. -/
 def ZkLive (x : Claims.Msg) : Prop :=
   ∀ (spec : SessionSpec) (st : Stmt) (_ : tables true x = [(spec, st)]) (L : Layout st) (sch : Flock.Schedule)
-    (tPad : ℕ) (hz : Zk.schedule st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27)
+    (tPad : ℕ) (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hk : st.c.kLog ≤ 27)
     (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
     ZkLiveAt execArith Discharge.ZkExec.hs512 (wide true) x (zkTab L hz hk hlay)
 
@@ -267,7 +266,7 @@ theorem zk_tableBoundθAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
   have h35 : (sts[0]'h0).m ≤ 35 := by have := hin.2.1; omega
   have hk : (sts[0]'h0).c.kLog ≤ 27 := by have := hin.2.2.2.1; omega
   obtain ⟨L, hlay⟩ := zk_table0 hs hin hset h0
-  obtain ⟨sch, tPad, hz⟩ : ∃ sch tPad, Zk.schedule (sts[0]'h0).m = .ok (sch, tPad) :=
+  obtain ⟨sch, tPad, hz⟩ : ∃ sch tPad, Zk.schedule (sts[0]'h0).wideLeaf (sts[0]'h0).m = .ok (sch, tPad) :=
     ⟨_, _, zk_schedule_ok h25 h35⟩
   have ht := tables_of_one hset h1
   obtain ⟨hsch, hpad, he, hS, hN, hq, hδ, hNp⟩ := zkTab_m1 L hz hk spec hlay

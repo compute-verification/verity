@@ -71,7 +71,7 @@ theorem setupZJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   obtain ⟨-, _, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, _, hz0, -⟩ := hall j.val (by simpa using hj)
   simp only [Array.getElem_map] at hz0
-  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨-, -, _, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
   obtain ⟨_, -, hdr⟩ := Layout.setupH_drawn hst

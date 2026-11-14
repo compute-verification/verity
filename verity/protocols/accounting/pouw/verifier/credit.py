@@ -151,7 +151,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   ``req``), when it registers one, is round 0's: its root is ``request_table`` and its domain binds the session alike.
   That the Commit's values are the model's computation is the Commit's sample's, not credit's.
 * **The window serves its period's fixed length** (`committed_length`, `_length`): correct
-  tokens served past the honest run's end of sequence are not useful work, so a row of record serves each request's
+  tokens served past the honest run's end of sequence are not useful work, so a workload of record serves each request's
   public max_tokens whatever it samples (ignore_eos, circuits' ``public-cap`` done source). The period's open commits
   them before any window (`LENGTH_FIELD`, ``{max_tokens, stop}``, stop `window.STOP_FIXED`), so they are the verifier's
   own; an open with none (``no-fixed-length``) or an EOS-keyed stop mode (``eos-keyed-row``) credits nothing. Every
@@ -3224,11 +3224,27 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     return _period_of(key, ledger, pins, main, name, windows, verify, None)
 
 
+def _once(verify: Ch.Verify) -> Ch.Verify:
+    """`verify`, each answer held by its key, message and signature: a period's check reads its ledger 5W + 1 times
+    (`period`, then each window's two `credited_session`s, `_credited`, the rounds and `_period_weights`), all at the
+    verifier's one key, so each entry's signature is verified once. Lean's `PouwCheck.Credit.Once.periodCreditOnce`
+    replays the ledger once."""
+    held: dict[tuple[Ch.ChallengerKey, bytes, bytes], bool] = {}
+
+    def once(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+        at = (key, message, signature)
+        if at not in held:
+            held[at] = verify(key, message, signature)
+        return held[at]
+    return once
+
+
 def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
                run: Run | None, kept: list[_Outcomes] | None = None, files_of: Any = None
                ) -> tuple[dict | None, tuple[str, str] | None]:
     """`_period_outcomes`, or with `run` `period_credit`'s Python twin, each window's statement runs appended to `kept`
     and the committed circuit files' refusal set on `files_of` (``.refused``)."""
+    verify = _once(verify)
     keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
     if not _formed(windows, keys):
         return None, ("period", form)

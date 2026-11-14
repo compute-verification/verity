@@ -29,7 +29,7 @@ namespace Pouw.Dimension.H100
 `h100Floor` with `tc = 8`, m8n8k4's price per register at the `wgmma` per-MAC rate. -/
 def h100PeakTc : Prices100 := { h100Floor with tc := 8 }
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Guarantees (draft semantics, pending review) -/
 
 /-- **The distinct-writes bound with no measurement at `tc`** (draft semantics, pending review): at
 `h100PeakTc`, if every tensor-core instruction below 32 per register writes only functions in `K`, then for targets
