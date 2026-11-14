@@ -17,7 +17,7 @@ is added for sharding. Weights keep `b1.py`'s unsharded types, so the program ha
 checkpoint scalar (one-producer rule): a rank's weight shard is a projection of those gates, and a weight
 both ranks hold (norms, cos/sin) is one value with two authentication locations.
 
-Every body node that production materialises carries `name=<capture op suffix>`; with the rank as the batch
+Every body node that serving materialises carries `name=<capture op suffix>`; with the rank as the batch
 member this *is* the identity <-> FunctionCall mapping (`profiles/b1-tp2/capture_mapping.py` reads it).
 """
 
@@ -129,7 +129,7 @@ def allreduce_order(world: int) -> tuple[int, ...]:
     """The hop order of the WORLD-rank all-reduce, `(WORLD-1, .., 1, 0)`: vLLM's batch-invariant mode pins `NCCL_ALGO=allreduce:tree`
     `NCCL_PROTO=Simple`, and NCCL's tree inside one node is a chain rooted at rank 0 that the reduce climbs from the leaf -- `acc =
     parts[WORLD-1]; acc = Bf16Add(acc, parts[r])` for r = WORLD-2..0.  The ONE statement of the order: the Definition body, the traced
-    op, the Match value leg and the Commit's cross-rank pass all read it here."""
+    op, the Match's value check and the Commit's cross-rank pass all read it here."""
     return tuple(range(int(world) - 1, -1, -1))
 
 

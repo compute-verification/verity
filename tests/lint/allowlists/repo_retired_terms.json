@@ -2713,7 +2713,6 @@
     {"file": "benchmarks/verifier_cost/qcall.sh", "count": 5},
     {"file": "benchmarks/verifier_cost/registration.sh", "count": 1},
     {"file": "benchmarks/verifier_cost/run.py", "count": 14},
-    {"file": "benchmarks/vllm_encoded/paged.cu", "count": 12},
     {"file": "verity/protocols/accounting/poub/prover/word_codec/paged.py", "count": 6},
     {"file": "benchmarks/vllm_encoded/paged_gate.py", "count": 4},
     {"file": "benchmarks/vllm_encoded/rekey_gate.py", "count": 5},
@@ -2734,9 +2733,6 @@
     {"file": "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py", "count": 92},
     {"file": "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py", "count": 63},
     {"file": "benchmarks/one_stage/interfaces/verity_e2e_demo/report.py", "count": 92},
-    {"file": "demos/lifecycle/pyproject.toml", "count": 2},
-    {"file": "demos/onsite_served/README.md", "count": 10},
-    {"file": "demos/vllm/demo.toml", "count": 2},
     {"file": "infra/cluster/src/cluster/model.py", "count": 1},
     {"file": "infra/cluster/tests/test_policy.py", "count": 1},
     {"file": "infra/cluster/tests/test_policy_apply.py", "count": 2},
@@ -4668,6 +4664,7 @@
     {"file": "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py", "count": 9},
     {"file": "adapters/vllm/verity_vllm/definitions/tests/test_fp8_twins.py", "count": 6},
-    {"file": "adapters/vllm/verity_vllm/definitions/tests/test_stop_check.py", "count": 1}
+    {"file": "adapters/vllm/verity_vllm/definitions/tests/test_stop_check.py", "count": 1},
+    {"file": "verity/protocols/accounting/poub/prover/word_codec/paged.cu", "count": 12}
   ]
 }

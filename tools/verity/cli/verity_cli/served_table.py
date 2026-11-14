@@ -1,6 +1,7 @@
-"""The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's components as a configuration declares
-them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each party's piece (`PARTIES`), and the run of the pieces
-placed on a machine (`live`).
+"""The served window's table for `verity run` (`verity_cli.run.Registry`): onsite's and remote's components as a
+configuration declares them (`MANIFESTS`), the ``served-window`` workload (`SERVED`), each demo's subprotocols and the
+configuration its file holds (`DEMOS`, `configuration`), each party's piece (`PARTIES`), and the run of the pieces placed
+on a machine (`live`). Pearl+ has no piece yet, so `verity run` refuses remote by name (``no-party``).
 
 A piece is what one party does in the run (`Piece`), in one of four ways (``runs``):
 
@@ -134,6 +135,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
+    Component("pearl-plus", SP.IDS["pearl-plus"], parties=(_VERIFIER,), needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(_MEMORY_CHALLENGER, _PROVER, _VERIFIER),
               channels=(Channel(PROVER, MEMORY_CHALLENGER, ("Setup", "Response")),
@@ -160,29 +162,62 @@ SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receip
 #: onsite's subprotocols, the seven `Core.Composites.composites` holds for it
 ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
 PROTOCOLS = ONSITE_COMPONENTS
+#: each demo's subprotocols, the file `demos/NAME.toml` that `verity demo NAME` runs: onsite's seven, its two smaller
+#: sets (`verity.config.UNACCEPTED`) and remote's
+DEMOS = {"onsite_full": ONSITE_COMPONENTS,
+         "onsite_compute": ("sampled-proofs", "pouw", "inference-only", "certifier", "wipe"),
+         "onsite_network": ("sampled-proofs", "certifier", "wipe"),
+         "remote": ("sampled-proofs", "pearl-plus", "inference-only")}
 PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host"
+#: remote's auditor parties' machine, which isn't at the site: remote puts no auditor's device there
+AUDITOR_REMOTE = "auditor-remote"
 #: each party's machine: the developer's on the prover node, the auditor's devices on machines it doesn't control
 PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
 #: the configuration this table's demo runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
 CONFIG = ROOT / "demos" / "onsite_full.toml"
-HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
-          "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
-          "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
-          "`verity run THIS --dry-run` resolves it all.")
+_NOT_YET = "`verity run` stops on it with NotImplementedError until goal demos/onsite-demo brings it."
+#: each demo file's header
+HEADERS = {
+    "onsite_full": (
+        "The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
+        "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
+        "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
+        "`verity run THIS --dry-run` resolves it all."),
+    "onsite_compute": (
+        "The served window under SPOT, PoUW, the inference-only policy, the network certifier and the memory",
+        "wipe (verity/onsite-compute/v0, a deployment of its own, never onsite): onsite without PoUS and PoUB,",
+        "each party on its machine, and the key the auditor pinned for its memory challenger.", _NOT_YET),
+    "onsite_network": (
+        "The served window under the network certifier, SPOT and the memory wipe (verity/onsite-network/v0, a",
+        "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
+        "its memory challenger.", _NOT_YET),
+    "remote": (
+        "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
+        "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
+        "and the auditor's on its own machine. `verity run` refuses it by name until each party has its piece."),
+}
+HEADER = HEADERS["onsite_full"]
 
 
-def configuration(commit: str, pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
-    """The configuration `demos/onsite_full.toml` holds, at program ``commit``: `config new`'s over
-    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated, and ``pins``, the keys the
-    auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]` entries: no code states a key)."""
-    cfg = K.new(SERVED_WINDOW, list(PROTOCOLS), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
+def configuration(commit: str, demo: str = "onsite_full",
+                  pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
+    """The configuration `demos/<demo>.toml` holds, at program ``commit``: `config new`'s over the demo's subprotocols
+    (`DEMOS`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
+    parameters stated, and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
+    entries for the subprotocols the demo lists: no code states a key)."""
+    protocols = DEMOS[demo]
+    cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
-    cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
+    if "pous" in protocols:
+        cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
     for p in cfg["party"]:
-        p["machine"] = PLACEMENT[p["name"]]
-    cfg["pin"] = [dict(p) for p in (tomllib.loads(CONFIG.read_text()).get("pin", []) if pins is None else pins)]
+        remote = demo == "remote" and p["principal"] == "auditor"
+        p["machine"] = AUDITOR_REMOTE if remote else PLACEMENT[p["name"]]
+    if pins is None:
+        pins = [p for p in tomllib.loads(CONFIG.read_text()).get("pin", []) if p["protocol"] in protocols]
+    cfg["pin"] = [dict(p) for p in pins]
     K.check(cfg, MANIFESTS, {SERVED_WINDOW: SERVED})
     return cfg
 
@@ -343,7 +378,8 @@ WIPE = Session(("verity.protocols.accounting.pous.device.wipe_challenger:PROTOCO
                MEMORY_CHALLENGER, before=True)
 #: PoUS's timed rounds (`challenger_session`'s parties), beside the served window: the challenger's header names the
 #: monotonic clock
-POUS = Session(("verity.protocols.accounting.pous.device.challenger_party:PROTOCOL",),
+POUS = Session(("verity.protocols.accounting.pous.device.challenger_party:PROTOCOL",
+                "verity.protocols.accounting.pous.prover.challenger_prover:PROTOCOL"),
                {MEMORY_CHALLENGER: CS.CHALLENGER, PROVER: CS.PROVER}, {CS.CHALLENGER: (time.monotonic_ns, MONOTONIC)},
                MEMORY_CHALLENGER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
@@ -625,5 +661,6 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     return Result(out)
 
 
-__all__ = ["MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "SERVED", "WORKLOADS", "Held", "Piece", "Result",
-           "Session", "held", "live", "onsite_check", "pieces", "prepare", "served_window", "unbound", "variables"]
+__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "SERVED", "WORKLOADS", "Held",
+           "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "prepare", "served_window", "unbound",
+           "variables"]
