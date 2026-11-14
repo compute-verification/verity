@@ -6,7 +6,7 @@ to apply (all of them unless it lists some). Every choice is a registry key (`sc
 can vary a choice like any number.
 
 `evaluate` gives, for each family, the overhead under each bound alone and under every bound it meets at once (`lo`,
-the lower bound: each block gets the least of the caps whose premises aren't refuted at its bits, under the union of
+the lower bound: each block gets the least of the yields whose premises aren't refuted at its bits, under the union of
 those bounds' premises), and under each attack (`best_attack`: the best known construction, reported beside the bound,
 not as an end of it). The lower bound takes only the bounds a lock states (`bounds.lock_only`): a bound one of whose own
 citations is a `draft:` statement sets it at no block size, and is still reported alone, labeled draft. The cuts'
@@ -20,8 +20,8 @@ at least 1: Lean's `hardwareMultiple`, and for a remote regime the slowdown `Inf
 the bound gives (`Slowdown.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
 beside the overhead: at least the overhead times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
 
-A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary uncertified
-cap's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or unregistered
+A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary free-compute
+yield's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or unregistered
 gates at more than one gate an operation cites its straddling premise, and the runs that measured `s_×`.
 """
 
@@ -66,7 +66,7 @@ class Scenario:
     families: tuple[Family, ...]
     bounds: tuple[Argument, ...]
     attacks: tuple[Argument, ...]
-    #: the elementary uncertified cap a bound counts uncertified and unregistered gates at
+    #: the elementary free-compute yield a bound counts uncertified and unregistered gates at
     structure: Structure
     #: `data/premises.toml` by cited name (`classes.premises`), read from the scenario's registry
     premises: Mapping[str, Mapping] = field(default_factory=dict)
@@ -257,7 +257,7 @@ def _refuted(cites: tuple[str, ...], k: float, table: Mapping[str, Mapping]) -> 
 
 
 def _admitted(cap: Cap, cites: tuple[str, ...], table: Mapping[str, Mapping]) -> Cap:
-    """`cap` at a block where the premises among `cites` aren't refuted at its bits, and no cap where they are."""
+    """`cap` at a block where the premises among `cites` aren't refuted at its bits, and no bound where they are."""
     return lambda b: math.inf if _refuted(cites, b.inputs, table) else cap(b)
 
 
@@ -269,7 +269,7 @@ def draft(cites: tuple[str, ...]) -> bool:
 def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None]], p: Profile, ctx: Context,
              partition: Partition, block: Budget, table: Mapping[str, Mapping], st: Structure, mfu: float,
              ref: bool, lock_only: bool) -> Estimate:
-    """Every bound met at once, the lower bound: each block gets the least of the caps whose premises aren't refuted at
+    """Every bound met at once, the lower bound: each block gets the least of the yields whose premises aren't refuted at
     its bits (a bound refuted there doesn't bound it, and is still reported alone, tagged refuted), under the union of
     the citations of the bounds admitted at a block that binds. `excluded` names the bounds refuted at one. Under
     `lock_only` a bound one of whose own citations is a `draft:` statement bounds no block (it is still reported alone,

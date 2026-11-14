@@ -1,15 +1,15 @@
 """The exclusion bound: the server-block bound with its local minima (the working draft's §8, which states it).
 
 Everything here is in gates and counted weight. A **block** has a budget `(c, k)` (`Budget`): its gates and its
-unregistered input bits. A training class gives a per-block cap `q_T(c, k)` (`Cap`), the most counted weight a block
+fresh input bits. A pricing argument gives an inference-block yield `q(c, k)` (`Cap`), the most counted weight a block
 with that budget holds; an attack gives a construction's count instead. A **server block** (`ServerBlock`) is one
 server between two consecutive wipes, padded to `c_S` gates; each `Cut` of it is one valid partition, its blocks plus
-its uncertified gates `U` by route, and an argument of the bound's minimum:
+its free compute `U` by route, and an argument of the bound's minimum:
 
-* `serving`, one block `(c_S, k_S)`, its cap `q_T(c_S, k_S)` and the boundary term `ω_max μ k_S` (`Cut.boundary`);
-* `inference`, its `n_S` inference blocks `(c, k)` and `U_S`, so `n_S q_T(c, k) + q_U(U_S)`.
+* `serving`, one block `(c_S, k_S)`, its yield `q(c_S, k_S)` and the boundary term `ω_max μ k_S` (`Cut.boundary`);
+* `inference`, its `n_S` inference blocks `(c, k)` and `U_S`, so `n_S q(c, k) + q_U(U_S)`.
 
-`q_U(U) = ω_max U / s_×` is the elementary uncertified cap, `u U` with `u` the most weight a gate can hold (`ω_max /
+`q_U(U) = ω_max U / s_×` is the elementary free-compute yield, `u U` with `u` the most weight a gate can hold (`ω_max /
 s_×`, `classes.Structure`), and no block holds more than `u c`. Under a bound each server block contributes the least
 of its cuts (the local minimum), and the unregistered leaves `q_U(|A[L_unreg]|)`
 (`Accounting.Guarantees.ServingBlocks.ServingBlockBound`; `ServingBlockBoundRemote`, the inference cut alone, for a
@@ -45,7 +45,7 @@ The time to the target, wall-clock, is then at least the overhead times `T_0 / (
 (`scenario.Scenario.seconds`).
 
 This module knows no GPU, protocol or training class: `envelopes` builds the server blocks from the physical model,
-`classes` and `attacks` give the caps, and `families` the algorithm's profile.
+`classes` and `attacks` give the yields, and `families` the algorithm's profile.
 """
 
 from __future__ import annotations
@@ -67,8 +67,8 @@ class Budget:
     cut: float = math.inf
 
 
-#: `q_T(c, k)`: the most counted weight one block with this budget holds, a cap for a bound and a construction for an
-#: attack. `math.inf` is no cap (a class whose premises fail at this budget).
+#: `q(c, k)`: the inference-block yield, the most counted weight one block with this budget holds, an upper bound for a
+#: bound and a construction for an attack. `math.inf` is no bound (a class whose premises fail at this budget).
 Cap = Callable[[Budget], float]
 
 
@@ -191,7 +191,7 @@ def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None,
 
 @dataclass(frozen=True)
 class Slowdown:
-    """The overhead for one algorithm under one cap, `value` (the hardware multiple at `mfu`), from the padded size ratio
+    """The overhead for one algorithm under one yield, `value` (the hardware multiple at `mfu`), from the padded size ratio
     `padded = efficiency / (unregistered + (1 − ε_unreg) g)`, with each server block's share and `g`'s terms summed over server
     blocks (each a share of the reference's weight in the monitored fleet at capacity). `unregistered` is the unregistered leaves'
     weight over the reference's in the whole inventory: `(u/w) ε_unreg` under a bound (`q_U(unregistered)`), and `ε_unreg` times
@@ -286,6 +286,6 @@ def multiple_bound(mfu: float, s: float, x: float, reference_efficiency: bool = 
 
 
 def least(*caps: Cap) -> Cap:
-    """Several bounds on the same block at once: each caps the same counted weight, so the least of them does, under
+    """Several bounds on the same block at once: each bounds the same counted weight, so the least of them does, under
     the union of their premises."""
     return lambda budget: min((a(budget) for a in caps), default=math.inf)

@@ -156,6 +156,6 @@ def test_with_no_unregistered_leaves_the_overhead_is_the_inverse_of_the_counted_
         assert s.unregistered == 0.0 and math.isclose(s.padded, efficiency / s.g)
 
 
-def test_least_takes_the_smallest_cap():
+def test_least_takes_the_smallest_yield():
     a = least(lambda b: 5.0, lambda b: 3.0, lambda b: math.inf)
     assert a(Budget(1, 1)) == 3.0 and least()(Budget(1, 1)) == math.inf
