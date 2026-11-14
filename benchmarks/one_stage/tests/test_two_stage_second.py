@@ -120,9 +120,9 @@ def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_
     K proof blocks in each sampled span."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
     sample = [int(u) for u in again.sample.units]
-    assert r.record == json.loads((tmp / "interior" / "registration.json").read_text()) == r.registration.record
-    assert r.record["previous"] == again.registration.digest and r.record["window"]["replay_sample"] == sample
-    assert r.record["window"]["run"] == IR.interior_run(again.registration.digest, sample)
+    assert r.record == json.loads((tmp / "interior" / "registration.json").read_text()) == r.docket.record
+    assert r.record["previous"] == again.docket.digest and r.record["window"]["replay_sample"] == sample
+    assert r.record["window"]["run"] == IR.interior_run(again.docket.digest, sample)
     earlier = {x["port"] for x in again.record["roots"]} | {e["value"] for e in again.record.get("registered", ())}
     assert earlier == {*BR.PORTS, "o0"}
     assert [e["value"] for e in r.record["registered"]] == ["logits"]
@@ -156,9 +156,9 @@ def test_the_replay_side_refuses_a_capture_that_is_not_the_sampled_spans_or_a_re
     rows[sample[1] * O + 2, 0] ^= 1
     with pytest.raises(ValueError, match=f"unit {O + 2} \\(sampled span 1\\) returns at its 'o0' a row that is not row "
                                          f"{sample[1] * O + 2} of o0, the return round 1 committed"):
-        IR.interior(per, d.cells, again.registration.digest, sample, row=0, links=d.links, returns=[(x, replace(port, rows=rows))])
+        IR.interior(per, d.cells, again.docket.digest, sample, row=0, links=d.links, returns=[(x, replace(port, rows=rows))])
     with pytest.raises(ValueError, match="which round 1's record doesn't commit"):
-        IR.interior(per, d.cells, again.registration.digest, sample, row=0, links=d.links,
+        IR.interior(per, d.cells, again.docket.digest, sample, row=0, links=d.links,
                     returns=[(replace(x, held=False), port)])
     assert not (tmp / "never").exists()
 
@@ -209,7 +209,7 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
     either (``second-values``). Slow (about 15 s): it lowers the template for the references and the sessions' files."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
-    mine, w = d.window(again.registration.digest, sample), r.interior.committed.window
+    mine, w = d.window(again.docket.digest, sample), r.interior.committed.window
     assert (mine.partition_digest, mine.run, mine.population) == (w.partition_digest, w.run, w.population)
     assert CS.expected_ports(mine) == r.interior.ports
     check = R.check(r.record, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), r.interior.leaf_layer,
@@ -333,7 +333,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     assert d.cells == (chunks, O) and "registered" not in r.record and r.tie == {}
     assert sorted(u // chunks for u in drawn if u < Q * chunks) == list(range(Q))
     assert sorted((u - Q * chunks) // O for u in drawn if u >= Q * chunks) == list(range(Q))
-    mine = d.window(again.registration.digest, sample)
+    mine = d.window(again.docket.digest, sample)
     assert CS.expected_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, again.record, sample)
     assert all(e["value"] == f"{m.template}/{p}" for m in mine.members for p, e in reads[m.key]["ports"].items())
@@ -384,7 +384,7 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert [x.value for x, _v in r.interior.returns] == [ret]
     assert sorted(u // O for u in drawn) == sorted(t * Q + s for t in range(k) for s in range(Q))
 
-    mine = d.window(again.registration.digest, sample)
+    mine = d.window(again.docket.digest, sample)
     assert CS.expected_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, brec, sample)
     assert [x["port"] for x in brec["roots"]] == [*BR.PORTS, ret, *names]
@@ -454,7 +454,7 @@ def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_
         (m.template, "logits", name, k * O, tuple(j * k + t for j in range(O)), v // k) for t, m in enumerate(d.members)]
     assert [x.value for x, _v in r.interior.inputs] == [name] * k and [x.value for x, _v in r.interior.returns] == [ret]
 
-    mine = d.window(again.registration.digest, sample)
+    mine = d.window(again.docket.digest, sample)
     assert CS.expected_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, brec, sample)
     served, = (x for x in brec["roots"] if x["port"] == name)
@@ -654,8 +654,8 @@ def test_under_a_stop_rule_the_serves_hook_gives_a_stop_class_of_the_greedy_sele
     assert rule_of.span_values == (("logits", outputs * k, (v // k, 16)),)
 
     got = TS.first(pub, BR.check_template(check), rule_of, FC.Challenger("first", label=TS.family_of(L)), stop=rule)
-    assert [r["port"] for r in got.registration.record["roots"]] == [*BR.PARTS, "o0"]
+    assert [r["port"] for r in got.docket.record["roots"]] == [*BR.PARTS, "o0"]
     s = TS.stop_first(pub, BR.check_template(check), rule, f"rate:{Q}/{spans}",
                       FC.Challenger("stop", label=TS.family_of(L, blocks=True)), got.record)
-    assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == spans
+    assert s["record"]["previous"] == got.docket.digest and s["record"]["population"] == spans
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP] and len(s["units"]) == Q

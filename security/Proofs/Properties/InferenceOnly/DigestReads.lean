@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.InferenceOnly.DigestPins
 import Batteries.Tactic.OpenPrivate
-import all Circuits.Program
+import Circuits.Program
 
 /-!
 # What the decoder reads of an entry, and `EntriesPin` by induction

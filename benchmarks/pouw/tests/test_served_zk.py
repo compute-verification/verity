@@ -475,13 +475,13 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
     *_, words = served
     params, public, _, _ = _window(words)
     bare = {k: v for k, v in params.items() if k != "registration_deadline"}
-    for refuse in (lambda: SC.Challenger(bare, _coins()), lambda: SC.spec_of(bare, public["level"]),
-                   lambda: _register(bare, public)):
+    for refuse in (lambda: SC.Challenger(bare, _coins(), record=ORL.Record(lean=False)),
+                   lambda: SC.spec_of(bare, public["level"]), lambda: _register(bare, public)):
         with pytest.raises(ValueError, match="no registration_deadline"):
             refuse()
     with pytest.raises(ValueError, match="carry a registration_deadline"):
-        SC.Challenger(params, _coins(), predates_deadline=True)
-    assert SC.Challenger(bare, _coins(), predates_deadline=True).predates_deadline
+        SC.Challenger(params, _coins(), record=ORL.Record(lean=False), predates_deadline=True)
+    assert SC.Challenger(bare, _coins(), record=ORL.Record(lean=False), predates_deadline=True).predates_deadline
     assert SC.spec_of(bare, public["level"], predates_deadline=True).check.registration_deadline is None
     assert SC.spec_of(params, public["level"]).check.registration_deadline == SC.REGISTRATION_DEADLINE
 
@@ -790,7 +790,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
                        ({**params, "context": _params(run, raw)["context"]}, base, "names its PoUW window"),
                        (params, {}, "so it is certified")):
         with pytest.raises(ValueError, match=why):
-            SC.Challenger(p, live, **kw)
+            SC.Challenger(p, live, record=ORL.Record(lean=False), **kw)
     for edit in ({"challenger_key": _coins().commitment}, {"challenger_key": ck.to_json()}, {"run_id": RUN_ID[:16]},
                  {"run_id": RUN_ID.hex()}, {"certifier_key": CS.KEY_ID}, {"certifier_key": object()}):
         with pytest.raises(ValueError, match=re.escape(SC.DEPLOYMENT_FORM)):
@@ -1068,6 +1068,54 @@ def test_the_record_follows_the_switch(monkeypatch):
     assert ORL.Record().lean is False and ORL.Record(lean=True).lean is True
     monkeypatch.setattr(OR.V, "RECORD_VERDICT", "lean")
     assert ORL.Record().lean is True and ORL.Record(lean=False).lean is False
+
+
+@pytest.mark.parametrize("call", [lambda: SC.check({}, {}, {}, 0, b"", {}), lambda: SC.Challenger({}, None),
+                                  lambda: SC.replay({}, Path("log"), Path("out"))], ids=["check", "Challenger", "replay"])
+def test_the_checks_of_record_are_a_required_argument(call):
+    """`check`, `Challenger` and `replay` take the checks of record from their caller: none has a default to fall back
+    to, so a call without `record` is refused before it runs."""
+    with pytest.raises(TypeError, match="required keyword-only argument: 'record'"):
+        call()
+
+
+@pytest.mark.parametrize("argv", [["challenger", "p.json", "log"], ["replay", "p.json", "log", "out"],
+                                  ["check", "p.json", "r.json", "d.json", "0", "pub.bin", "op.json"]],
+                         ids=lambda a: a[0])
+def test_without_the_lean_side_the_commands_that_check_refuse_before_any_work(argv, tmp_path):
+    """`main`'s default checks of record (`lean_record`) refuse a command that checks before it reads or writes
+    anything, naming the runner that passes the Lean side; no input it names exists, and nothing appears under the
+    root."""
+    with pytest.raises(NotImplementedError, match="benchmarks/pouw/served_zk/served_commit_run.py") as e:
+        SC.main([argv[0], *(str(tmp_path / x) if not x.isdigit() else x for x in argv[1:])])
+    assert "compute-accounting/pouw-package-holds-kernels" in str(e.value)
+    assert list(tmp_path.iterdir()) == []
+
+
+def _stub_calls():
+    from verity.protocols.accounting.pouw.prover.kernels.served_zk import stage_tile as STG
+    from verity.protocols.accounting.pouw.prover.kernels.served_zk import statement as ST
+    st = object.__new__(ST.Statement)
+    record = OR.Record(lean=False)
+    torch = "benchmarks/pouw/served_zk/statement_torch.py"
+    calls = [("Stager.stage", lambda: STG.Stager().stage(*[None] * 9), "benchmarks/pouw/hidden_zk/served_stage.py"),
+             ("Statement.zeros", lambda: st.zeros(1), torch), ("Statement.empty", lambda: st.empty(1, 1), torch),
+             ("Statement.fill_stages", lambda: st.fill_stages(0), torch), ("Statement.check", lambda: st.check({}), torch),
+             ("Record.canonical", lambda: record.canonical({}), "benchmarks/pouw/served_zk/of_record_lean.py"),
+             ("Record.start", lambda: record.start("x", Path(".")), "benchmarks/pouw/served_zk/of_record_lean.py"),
+             ("fast_tile.install", lambda: SC.install_tiles(None), "benchmarks/pouw/served_zk/served_commit_run.py")]
+    return [pytest.param(*c, id=c[0]) for c in calls]
+
+
+@pytest.mark.parametrize("name, call, supplier", _stub_calls())
+def test_each_interface_verity_leaves_to_the_benchmark_side_names_its_supplier(name, call, supplier):
+    """Each method verity's served_zk leaves raising (verity imports neither `verity_flock`, `verity_difftest`, torch
+    nor `fast_tile`) refuses with `NotImplementedError` naming its issue and the benchmark-side file that supplies it,
+    which the tree holds."""
+    with pytest.raises(NotImplementedError) as e:
+        call()
+    assert name in str(e.value) and "compute-accounting/pouw-package-holds-kernels" in str(e.value)
+    assert supplier in str(e.value) and (Path(__file__).resolve().parents[3] / supplier).is_file()
 
 
 @LEAN

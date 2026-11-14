@@ -33,15 +33,15 @@ def test_every_range_holds_its_value():
 
 def test_a_blocks_output_bits_are_veritys_and_no_file_restates_them(tmp_path):
     """A proof block's outputs fit its Definition's public size class, and the bits an incorrect block injects are the
-    widest (`partition_v2.UNIT_CLASS_MAX`), read from `verity` (`params.sourced`): every `step_bits` of the registry is
+    widest (`partition_v2.SIZE_CLASS_MAX`), read from `verity` (`params.sourced`): every `step_bits` of the registry is
     one of `BLOCK_OUTPUT_BITS`, none set under `data/`, and a file that sets one is refused."""
     keys = sorted(p.key for p in REG.params() if p.key.rpartition(".")[2] == "step_bits")
     assert keys == sorted(params.BLOCK_OUTPUT_BITS), "name the key in params.BLOCK_OUTPUT_BITS; don't set it in data/"
-    widest, smallest = partition_v2.UNIT_CLASS_MAX, partition_v2.UNIT_CLASSES[0]
+    widest, smallest = partition_v2.SIZE_CLASS_MAX, partition_v2.SIZE_CLASSES[0]
     for key in keys:
         p = REG.param(key)
         assert (p.value, p.low, p.high, p.unit, p.status) == (widest, smallest, widest, "bit", "derived"), key
-        assert "partition_v2 UNIT_CLASS_MAX" in p.source and "ruled" not in p.source
+        assert "partition_v2 SIZE_CLASS_MAX" in p.source and "ruled" not in p.source
         table, _, leaf = key.rpartition(".")
         restated = tmp_path / f"{table}.toml"
         restated.write_text(f'[{table}]\n{leaf} = {{ value = {widest}, unit = "bit" }}\n')
@@ -64,7 +64,7 @@ def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_pa
     calibrations = entries(params.CALIBRATIONS)
     raw, ks = calibrations["kimi-k2-1m-raw"], [c["K"] for c in calibrations.values()]
     k = (raw["K"], min(ks), max(ks))
-    widest, smallest = partition_v2.UNIT_CLASS_MAX, partition_v2.UNIT_CLASSES[0]
+    widest, smallest = partition_v2.SIZE_CLASS_MAX, partition_v2.SIZE_CLASSES[0]
     want = {f"horizon.{name}.seconds": (seconds, None, None) for name, seconds in protocol.MONITORING_PERIODS}
     want |= {key: (widest, smallest, widest) for key in params.BLOCK_OUTPUT_BITS}
     want |= {

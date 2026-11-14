@@ -66,7 +66,7 @@ checked that opening with its own calls (`Compiled.passes_found`, `Compiled.ownL
 `CommitmentScheme.Binds` its calls and those that check
 the registration's opening collide, and `B_reg` finds the collision (`regColl_of_disagree`, `Pr_regColl_le_Breg`).
 `sampledLeak_registered` is the bound: `Pr[acc ∧ ¬RLeak] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the leak relation at the
-registration's values, and the count `2^#(freeInputs \ reg) · #faultySets · 2^β · Dj^k` there.
+registration's values, and the count `2^#(freeInputs \ reg) · #incorrectSets · 2^β · Dj^k` there.
 -/
 
 @[expose] public section
@@ -137,7 +137,7 @@ theorem rLeak_reg_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse 
     (h : RAcc H Cm parse partition L K S lay k δ x w) :
     RLeak H Cm parse partition L K S lay k δ (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (ρ s)) Dj x w := by
   obtain ⟨s, P, hs, hP, hRel, hdisj, free, hfree, hheld, hacc⟩ := h
-  have hF := faulty_mem_faultySets hRel hdisj
+  have hF := faulty_mem_incorrectSets hRel hdisj
   have hPart := hpart s P hs hP
   set tv := traceVal s.prog (w.val H Cm s) with htv
   set G := freeInputs s.prog (lay s) (k s) with hG

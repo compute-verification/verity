@@ -153,7 +153,7 @@ def Shared.diff (s t : Shared) : String :=
     one "inner_partition" "the inner statement's partition, --rec-inner-partition" s.innerPartition t.innerPartition <|>
     one "inner_coins" "a record of check 5's coins, --rec-inner-coins" s.innerCoins t.innerCoins <|>
     one "inner_session" "the inner session's record, --rec-inner-session" s.innerSession t.innerSession <|>
-    one "inner_transcript" "the coin server's transcript, --rec-inner-transcript" s.transcript t.transcript <|>
+    one "inner_transcript" "the challenger's live-coin part's transcript, --rec-inner-transcript" s.transcript t.transcript <|>
     one "inner_registration" "the circuit registration, --rec-inner-registration" s.registration t.registration <|>
     one "inner_statement" "how the inner statement is proved, --rec-inner-statement" s.innerStatement t.innerStatement <|>
     one "inner_tables" "the inner statement's lookup tables, --rec-inner-tables"
@@ -258,7 +258,7 @@ def checkForm (name inner : String) (links : Option (String × Nat)) (s : Shared
     else if s.innerCoins.isSome then
       .error s!"{name}: it read a record of check 5's coins (--rec-inner-coins), which no part of the compiled verifier reads"
     else if s.innerSession.isNone then .error (held name "inner session's record (--rec-inner-session)")
-    else if s.transcript.isNone then .error (held name "coin server's transcript (--rec-inner-transcript)")
+    else if s.transcript.isNone then .error (held name "live-coin part's transcript (--rec-inner-transcript)")
     else if s.innerStatement.isNone then .error (held name "word on how the inner statement is proved (--rec-inner-statement)")
     else if s.innerTables.isNone then .error (held name "inner statement's lookup tables (--rec-inner-statement)")
     else if s.links ≠ links then

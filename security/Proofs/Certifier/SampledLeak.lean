@@ -39,13 +39,13 @@ import Proofs.Flock.Claims.Prob
 /-!
 # The leak bound under a sampled audit: `SampledAuditAccepted` composed with the count
 
-On `RAcc δ` the incorrect set is one of `faultySets d P δ` (`faulty_mem_faultySets`), and every observation sequence the
+On `RAcc δ` the incorrect set is one of `incorrectSets d P δ` (`faulty_mem_incorrectSets`), and every observation sequence the
 trace's transfer gates carry with every status complete is `Accepted` with advice held only at that set's committed
 gates and the trace's committed values as the inputs besides the ingress. With those inputs moved into `As`
 (`AdviceIn`), it is then among the sequences `AccSeqsSampled` counts, so
 `RAcc δ` implies the leak relation `RLeak` (`rLeak_of_rAcc`), and `KSLinOn`'s bound moves from one to the other
 (`ksLinOn_rLeak`). At any deployment where `KS` and `SampledAuditAccepted` hold, the run's observations are then among
-at most `2^c · #faultySets · 2^β · D^n` public sequences, `c + log2 #faultySets + β + n·log2 D` bits, except with
+at most `2^c · #incorrectSets · 2^β · D^n` public sequences, `c + log2 #incorrectSets + β + n·log2 D` bits, except with
 `KSAccepted`'s probability (`sampledLeak`).
 
 `AdviceIn` is a hypothesis on the circuit and `As`. It holds, for every circuit, at the inputs pinned to the trace at a
@@ -62,11 +62,11 @@ open Claims Claims.Sampling
 
 /-! ### `RAcc δ` implies the leak relation -/
 
-theorem faulty_mem_faultySets {H : Msg → Msg} {Cm : CommitmentScheme Bool} {δ : ℝ} {s : AuditStatement} {P : Partition} {w : Wit}
+theorem faulty_mem_incorrectSets {H : Msg → Msg} {Cm : CommitmentScheme Bool} {δ : ℝ} {s : AuditStatement} {P : Partition} {w : Wit}
     (hRel : RelS H Cm δ s P w) (hdisj : Disjoint (faulty H Cm s P w) (allSlots s.design P)) :
-    faulty H Cm s P w ∈ faultySets s.design P δ := by
+    faulty H Cm s P w ∈ incorrectSets s.design P δ := by
   classical
-  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
+  simp only [incorrectSets, Finset.mem_filter, Finset.mem_powerset]
   exact ⟨fun _ hv => (Finset.mem_filter.mp hv).1, hRel, hdisj⟩
 
 theorem rLeak_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Msg → Option AuditStatement}
@@ -75,7 +75,7 @@ theorem rLeak_of_rAcc {H : Msg → Msg} {Cm : CommitmentScheme Bool} {parse : Ms
     (hin : ∀ s P, partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ) (x : Msg)
     (w : Wit) (h : RAcc H Cm parse partition L K S lay k δ x w) : RLeak H Cm parse partition L K S lay k δ As Dj x w := by
   obtain ⟨s, P, hs, hP, hRel, hdisj, free, hfree, -, hacc⟩ := h
-  have hF := faulty_mem_faultySets hRel hdisj
+  have hF := faulty_mem_incorrectSets hRel hdisj
   exact ⟨s, P, hs, hP, fun op o hC hCov hl hD =>
     ⟨hl, hD, _, hF, hin s P hP (traceVal s.prog (w.val H Cm s)) _ hF op o
       ⟨_, Set.mem_singleton _, free, hfree, hacc op o hC hCov⟩⟩⟩
@@ -188,20 +188,20 @@ scope:
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`, `KSAccepted`'s bound: except with that probability, every observation
   sequence of length `k` with jitter below `Dj` that the trace's transfer gates carry with every status complete is among
   the sequences `AccSeqsSampled` counts at `As s ρ`, `ρ` the trace's committed values;
-* at every `ρ`, those sequences number at most `2^c · #faultySets(δ) · 2^β · Dj^k`, which the statement, `δ`, `As`, `ρ`,
-  the operator and `Dj` fix: the leak is at most `c + log2 #faultySets(δ) + β + k·log2 Dj` bits. -/
+* at every `ρ`, those sequences number at most `2^c · #incorrectSets(δ) · 2^β · Dj^k`, which the statement, `δ`, `As`, `ρ`,
+  the operator and `Dj` fix: the leak is at most `c + log2 #incorrectSets(δ) + β + k·log2 Dj` bits. -/
 theorem sampledLeak (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Compiled Coin A) (hks : D.KS H)
     (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (c β : AuditStatement → ℕ) (Dj : ℕ)
     (hAs : ∀ s ρ, (As s ρ).encard ≤ ((2 ^ c s : ℕ) : ℕ∞))
-    (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s)
+    (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ incorrectSets s.design P δ, faultyBits s.prog P F ≤ β s)
     (hin : ∀ s P, D.partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ) :
     KSLinOn H D.V (ScopeAcc D lay k) (RLeak H D.commit D.parse D.partition L K S lay k δ As Dj) D.E
         (D.κ δ) D.γ (fun _ => 1) (Bext H D.V D.E) ∧
       ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
         ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool),
           (AccSeqsSampled s.prog P s.design (lay s) (k s) (As s ρ) δ op Dj).encard ≤
-            ((2 ^ c s * (faultySets s.design P δ).card * 2 ^ β s * Dj ^ k s : ℕ) : ℕ∞) := by
+            ((2 ^ c s * (incorrectSets s.design P δ).card * 2 ^ β s * Dj ^ k s : ℕ) : ℕ∞) := by
   refine ⟨ksLinOn_rLeak H D.commit D.parse D.partition L K S lay k δ As Dj D.V _ _ _ _ _ _ hin
     (hSA H D L K S lay k hks δ hδ), fun x hx s P hs hP op ρ => ?_⟩
   obtain ⟨s', hs', hfits⟩ := hx.2
@@ -214,14 +214,14 @@ is the number of free inputs not in `reg` (`freeInputs`). -/
 theorem sampledLeak_reg (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Compiled Coin A)
     (hks : D.KS H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (hδ : 0 ≤ δ) (reg : AuditStatement → Finset ℕ) (β : AuditStatement → ℕ) (Dj : ℕ)
-    (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s) :
+    (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ incorrectSets s.design P δ, faultyBits s.prog P F ≤ β s) :
     KSLinOn H D.V (ScopeAcc D lay k)
         (RLeak H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj)
         D.E (D.κ δ) D.γ (fun _ => 1) (Bext H D.V D.E) ∧
       ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
         ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool),
           (AccSeqsSampled s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) δ op Dj).encard ≤
-            ((2 ^ (freeInputs s.prog (lay s) (k s) \ reg s).card * (faultySets s.design P δ).card * 2 ^ β s *
+            ((2 ^ (freeInputs s.prog (lay s) (k s) \ reg s).card * (incorrectSets s.design P δ).card * 2 ^ β s *
               Dj ^ k s : ℕ) : ℕ∞) :=
   sampledLeak hSA H D hks L K S lay k δ hδ _ (fun s => (freeInputs s.prog (lay s) (k s) \ reg s).card) β
     Dj (fun _ _ => encard_asReg_le _ _ _ _ _) hβ fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _

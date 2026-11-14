@@ -111,7 +111,7 @@ theorem verifier_own {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnly
   · rw [ha, hn']
   · rw [hb, hd']
 
-/-- An expansion of the policy's instance, and what it parses to, carry the declared circuit's text. -/
+/-- An expansion of the policy's instance, and what it parses to, carry the registered circuit's text. -/
 theorem expands_program {p : InferenceOnlyCheck.Protocol.Params} {e : InferenceOnlyCheck.Protocol.Evidence} {j' : Json}
     {i : InferenceOnlyCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : i.program = p.program := by
   obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
@@ -170,7 +170,7 @@ theorem digestOf_sampled (bs : Blobs) (b : ByteArray) :
     Properties.Composition.digestOf (VStar.Recursive.Sampled.protocol.onBlobs bs) b =
       Properties.Composition.digestOf Spot.OneStage.protocol b := rfl
 
-/-- What the policy's check accepts: a record naming the declared circuit, and a verdict of compliance of the check of
+/-- What the policy's check accepts: a record naming the registered circuit, and a verdict of compliance of the check of
 record. -/
 theorem policy_accept {p : InferenceOnlyCheck.Protocol.Params} {c : InferenceOnlyCheck.Protocol.Commitment}
     {e : InferenceOnlyCheck.Protocol.Evidence} {pub : Unit} {prof : Json}

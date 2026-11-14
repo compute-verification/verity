@@ -314,7 +314,6 @@
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "union-attr", "symbol": "attention_impls", "detail": ""},
     {"file": "verity_vllm/program/predict/template_counts.py", "kind": "override", "symbol": "TemplateCounts._attention", "detail": "", "count": 3},
     {"file": "verity/protocols/accounting/pouw/prover/serving/h1/prover.py", "kind": "index", "symbol": "Writer.keep", "detail": ""},
-    {"file": "adapters/torch/verity_torch/pouw/h1/registered_device.py", "kind": "union-attr", "symbol": "device_hash", "detail": "", "count": 2},
     {"file": "tests/engine/test_int8_wgmma.py", "kind": "func-returns-value", "symbol": "test_product_takes_the_row_and_keeps_the_values", "detail": ""},
     {"file": "tests/engine/test_int8_wgmma.py", "kind": "func-returns-value", "symbol": "test_product_zy_takes_the_row_and_keeps_the_values", "detail": ""},
     {"file": "tests/pipeline/test_boundary_rows.py", "kind": "var-annotated", "symbol": "test_the_hook_commits_the_return_of_a_serve_whose_check_returns_verdicts", "detail": ""},
@@ -345,6 +344,7 @@
     {"file": "verity/protocols/accounting/pouw/prover/serving/h1/served.py", "kind": "arg-type", "symbol": "Served._tree", "detail": ""},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "bounded_admission", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "match_record_compare", "detail": ""},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "weights_of_record_digests", "detail": "", "count": 8}
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "arg-type", "symbol": "weights_of_record_digests", "detail": "", "count": 8},
+    {"file": "adapters/torch/verity_torch/pouw/h1/registered_device.py", "kind": "union-attr", "symbol": "device_hash", "detail": "", "count": 2}
   ]
 }

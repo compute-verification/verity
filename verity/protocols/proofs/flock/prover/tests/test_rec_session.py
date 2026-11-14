@@ -465,7 +465,7 @@ def test_the_stacked_stream_is_held_to_the_schedule_the_opening_only_prover_runs
     roots = {"circuit": random.Random(1).randbytes(64 << 7)}
     binds = {**roots, "stacked": random.Random(2).randbytes(64 << 7)}
     registration, bound, reg = _registered_top(_toy_circuit(tmp_path, 8)[0].parent, binds["stacked"], 6)
-    coins = RL.CoinServer(random.Random(3).randbytes)
+    coins = RL.LiveCoinPart(random.Random(3).randbytes)
     salts = random.Random(4)
     proxy = RL.Proxy(coins, lambda: salts.randbytes(192), schedule=sch, registration=registration, registered={RL.STACKED: reg},
                      bound=bound)
@@ -507,7 +507,7 @@ def test_the_stacked_stream_is_held_to_the_schedule_the_opening_only_prover_runs
                      "circuit/rep1: the binding round's statement digest is not the other reps'"),
                     ({"binds": binds, "order": ("circuit/rep0", "stacked/rep0", "circuit/rep1")}, "ZK-SERVER-REFUSED: round "),
                     ({"roots": binds}, "ZK-SERVER-REFUSED: Hello")]:
-        proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration,
+        proxy = RL.Proxy(RL.LiveCoinPart(random.Random(3).randbytes), schedule=sch, registration=registration,
                          registered={RL.STACKED: reg}, bound=bound)
         _stacked_session(proxy, **{"roots": roots, "sh": sh, "m_r": m_r, **kw})
         assert why in (proxy.stopped or ""), (why, proxy.stopped)
@@ -569,18 +569,18 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
             read(stage)
     (stage / IR.REGISTRATION).write_text(json.dumps(registration))
 
-    proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch)
+    proxy = RL.Proxy(RL.LiveCoinPart(random.Random(3).randbytes), schedule=sch)
     _stacked_session(proxy, roots, sh, m_r, binds=binds)
     assert proxy.stopped == "rec proxy: ZK-SERVER-REFUSED: stacked/rep0: stacked has no root at Commit and no registered top"
 
-    proxy = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration, bound=bound)
+    proxy = RL.Proxy(RL.LiveCoinPart(random.Random(3).randbytes), schedule=sch, registration=registration, bound=bound)
     proxy.register(RL.STACKED, reg)
     with pytest.raises(ValueError, match="registered twice"):
         proxy.register(RL.STACKED, reg)
     with pytest.raises(ValueError, match="registered twice, or a table whose root is committed at Commit"):
-        RL.Proxy(RL.CoinServer(), schedule=sch, registration=registration, registered={"circuit": reg}, bound=bound)
+        RL.Proxy(RL.LiveCoinPart(), schedule=sch, registration=registration, registered={"circuit": reg}, bound=bound)
     with pytest.raises(ValueError, match="does not open it"):
-        RL.Proxy(RL.CoinServer(), schedule=sch, registration=registration, bound=bound,
+        RL.Proxy(RL.LiveCoinPart(), schedule=sch, registration=registration, bound=bound,
                  registered={RL.STACKED: {**reg, "salts": reg["salts"][::-1]}})
     other = RL.register_top(registration["program"], RL.STACKED, binds["stacked"], lambda g=random.Random(8): g.randbytes(192))
     forged = IR.registration_record(program, part, [desc.entry(), other["entry"]])
@@ -590,17 +590,17 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
                          (v1, R.digest(v1), "names no stacked"), (None, bound, not_meta), (registration, None, not_meta),
                          (forged, bound, not_meta), (forged, R.digest(forged), "the registered top is not the registration's stacked")]:
         with pytest.raises(ValueError, match=re.escape(why)):
-            RL.Proxy(RL.CoinServer(), schedule=sch, registration=bad, registered={RL.STACKED: reg}, bound=dg)
-    late = RL.Proxy(RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration, bound=bound)
+            RL.Proxy(RL.LiveCoinPart(), schedule=sch, registration=bad, registered={RL.STACKED: reg}, bound=dg)
+    late = RL.Proxy(RL.LiveCoinPart(random.Random(3).randbytes), schedule=sch, registration=registration, bound=bound)
     _stacked_session(late, roots, sh, m_r, binds=binds, order=())
     with pytest.raises(ValueError, match="registered before the session, never after Hello or a coin"):
         late.register(RL.STACKED, reg)
-    early = RL.CoinServer(random.Random(3).randbytes)
+    early = RL.LiveCoinPart(random.Random(3).randbytes)
     early.commit_coins(sch, lambda: bytes(192))
     with pytest.raises(ValueError, match="never after Hello or a coin"):
         RL.Proxy(early, schedule=sch, registration=registration, registered={RL.STACKED: reg}, bound=bound)
 
-    proxy = RL.Proxy(coins := RL.CoinServer(random.Random(3).randbytes), schedule=sch, registration=registration,
+    proxy = RL.Proxy(coins := RL.LiveCoinPart(random.Random(3).randbytes), schedule=sch, registration=registration,
                      registered={RL.STACKED: reg}, bound=bound)
     _stacked_session(proxy, roots, sh, m_r, binds=binds)
     assert proxy.stopped is None
@@ -722,7 +722,7 @@ def _sparse_relay(circuit: Path, phase_of=lambda ph: ph, stacked: dict | None = 
         draws.append(dict(registered))
         return coin_rng.randbytes(n)
 
-    proxy = RL.Proxy(RL.CoinServer(rand), lambda: salts.randbytes(192), schedule=sch, registration=registration,
+    proxy = RL.Proxy(RL.LiveCoinPart(rand), lambda: salts.randbytes(192), schedule=sch, registration=registration,
                      registered=registered, bound=bound)
     proxy.draws = draws
     relay = RS.Relay(proxy, 22, 10, lambda p: RS.hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, 2, st)
@@ -742,7 +742,7 @@ def sparse_session(tmp_path_factory):
     return SimpleNamespace(d=d, circuit=circuit, rng=rng, relay=relay, sch=sch, resp=resp, public=public, private=private, vf=vf)
 
 
-def test_the_relay_runs_each_reps_sparse_phase_after_both_reps_on_the_coin_servers_coins(sparse_session):
+def test_the_relay_runs_each_reps_sparse_phase_after_both_reps_on_the_live_coin_parts_coins(sparse_session):
     """At the prover's Finish the relay opens each rep's sparse stream as its child at its end and runs `rec_sparse.prove`
     there (h the rep's, entries the hidden circuit's), each message a round of its own on the challenger's coins: the
     record is `schedule_for(..., sparse=)`'s, both reps' rounds before either sparse stream's; `rec_vstage.sparse_reps`

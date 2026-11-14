@@ -164,7 +164,7 @@ theorem rsZG_computes {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
 
 /-- **One hidden-output `--zk` sampled session is sound, at the general form.** `ZkHidden.zk_session_soundH` at the
 template instance's program `instProg c n`: for any live prover `τ`,
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + ε_bind`. Its circuit condition is
+`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`. Its circuit condition is
 `scopeGenH`; `RunsZC` at the sampling design's samples is `runsZC_liveHI`'s. -/
 theorem zk_session_soundH_gen
     (I : Inputs) (ht : I.tags.typed = false)

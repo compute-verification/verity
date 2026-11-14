@@ -24,7 +24,7 @@ timeout_s = 10800
 parts = 3
 # Test-only: `lake` builds the registration log's check (`core-registration`, registration's own package) and the onsite and
 # remote packages beside this one (each product's executable, whose `serve` the
-# harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
+# harness drives) and, through their path requires, the core interface, Flock's verifier, and the ported components'
 # Lean: SPOT (`core_vstar_recursive`: its form's dispatch and the recursive audit) over its one-stage audit
 # (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
 # its window, commitments, and core's identity and randomness), the network certifier's period check (with the

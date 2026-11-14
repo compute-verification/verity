@@ -22,7 +22,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 
 `zk_session_soundJ`: `zk_session_sound` at any number of tables. For any live prover `τ` of a public-output `--zk`
 session of `J ≥ 1` tables (`verity-verify-proof verify --zk --session-tables J`, `J = nTab I`),
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
+`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
 partition, each read at its site in the table it is sampled into (`sitesZJ`, `tabZJ`) and bound to the rows it commits
 (`rsZJ`), at the simulated prover `simZJ … τ` in the compiled batched session of the `J` tables `planZJ`.
 

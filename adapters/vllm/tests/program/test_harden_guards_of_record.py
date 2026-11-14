@@ -10,18 +10,18 @@ import os
 import re
 
 import pytest
-
-from tests.program.test_harden_guards import (
-    INTEGRATION,
-    _dump_results,  # noqa: F401  (`HARDEN_OUT`'s dump, autouse)
-    _record,
-)
 from verity_vllm.program.frontend.target_profile import (
     ApplicabilityError,
     ArtifactIdentity,
     TargetProfile,
     check_reuse,
     reuse_mismatches,
+)
+
+from tests.program.test_harden_guards import (
+    INTEGRATION,
+    _dump_results,  # noqa: F401  (`HARDEN_OUT`'s dump, autouse)
+    _record,
 )
 
 EVIDENCE = os.path.join(INTEGRATION, "out", "gen", "r10", "cb-fix", "evidence", "fix")

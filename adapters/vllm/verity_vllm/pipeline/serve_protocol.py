@@ -11,8 +11,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.accounting.certifier.prover.workload import FRAME_HEADER, id_request
-from verity.protocols.accounting.certifier.verifier import io_tie as IT, release as REL
+from verity.protocols.accounting.certifier.prover.workload import FRAME_HEADER, id_event, id_request
+from verity.protocols.accounting.certifier.verifier import release as REL
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 
@@ -247,10 +247,10 @@ class IdsProtocol:
     so that clients straight to the endpoint (the network certifier's shim and probes, the load) get vLLM's HTTP and JSON.
     The network certifier relays bytes: what the server sends goes into its egress cells unchanged, and the scan's egress reads
     each cell as one id event. So a streamed response here has no HTTP head and no chunked body:
-    - each token id its own `io_tie.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id right-
-      aligned in 10 characters, spaces before the blank line), whatever the delta carries;
+    - each token id its own `workload.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id
+      right-aligned in 10 characters, spaces before the blank line), whatever the delta carries;
     - no usage chunk, whatever ``force_include_usage``;
-    - then exactly `io_tie.TRAILER`, ``data: [DONE]`` and the blank line, whose position the network certifier checks
+    - then exactly `workload.TRAILER`, ``data: [DONE]`` and the blank line, whose position the network certifier checks
       against the stop rule; a stream the engine fails sends neither it nor any text, only its ids so far before the
       connection closes (`error_end`).
 
@@ -261,7 +261,7 @@ class IdsProtocol:
     http = False
 
     def __init__(self, force_include_usage: bool = False, *, payload: int = ID_PAYLOAD, base: PlainProtocol | None = None) -> None:
-        IT.id_event(0, payload)
+        id_event(0, payload)
         self.payload = payload
         self.base = VllmProtocol(force_include_usage) if base is None else base
 
@@ -289,10 +289,10 @@ class IdsProtocol:
         return self.base.max_tokens(req, max_model_len, prompt_len, defaults)
 
     def events(self, *, token_ids: list[int] | None, **_: Any) -> bytes:
-        return b"".join(IT.id_event(int(t), self.payload) for t in token_ids or ())
+        return b"".join(id_event(int(t), self.payload) for t in token_ids or ())
 
     def error_end(self, error: str) -> None:
-        """None, whatever ``error`` says: a failed stream stops after its ids so far, without `io_tie.TRAILER`, so the
+        """None, whatever ``error`` says: a failed stream stops after its ids so far, without `workload.TRAILER`, so the
         network certifier sees it unterminated rather than ended early, and no server-chosen text leaves; the reason stays
         in the server's record."""
         return None
