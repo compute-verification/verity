@@ -34,3 +34,23 @@ Beyond the order, each small:
 
 All three are drafts and unmarked. Nothing of mine is running. The carry's own lines are in the run's stdout.log and its `out/` (results per branch, the moves' checks).
 
+[2026-11-14T01:29Z] e8a748b7f621
+CALLERS, Fri 13 Nov, 5:44 PM PST.
+
+**Draft https://github.com/compute-verification/verity/pull/9877 is open against main. All three callers go through `min_cut.slowdown_of`, the tree's test is in, the changed suites passed fresh on a node, and no figure moves.**
+
+- Head `a95a595c639` on `cursor/one-slowdown-function-56e2`. Merge base `56f6c267563`.
+- RAN `r20261113-222645-95bf`, `suites.py --fresh --changed 56f6c26` at the head: `7 suites: 7 passed (0 cached), 0 failed`. The suites are training_slowdown (696 tests, with `test_program_reading`'s inequality), circuit-properties (118), rho (617), inference_only (21), grader, repository and verity-graph.
+- RAN, item 7 (`r20261113-214216-4796` at `72029c5`, `r20261114-011106-92b7` at the head; the one commit between them is root-test only):
+  - `calculator.slowdown`'s record is equal as JSON text on 177 of 177 distinct calls from the training suite and 37 of 37 from the library.
+  - The library has 62 rows, 39 with a slowdown. Its table and `library.json` are byte for byte equal.
+  - Inference-only stated and tied: equal text (116 lines) and equal JSON, but for `commit` and `run`.
+  - Inference-only full form: 149 lines, equal but for the Lean count's measured wall, CPU and peak memory.
+  - Circuit-properties bounds the tests ask for: 7 in its suite and 14 in `test_program_reading`. **0 fall**, and blocks, F, ω and N are equal. Only `Priced.O`'s type changed (int to float, equal value). No test value moved.
+- RAN, item 8: widening the family moves nothing. **0 rises with the largest 1.0×** for (a) every contraction length and for (b) operand class, on 92 test-trace figures and 37 library figures.
+- RAN: ratchet gate `0 failed`, ruff nothing new.
+- Follow-ups named in the body, not done:
+  - `test_grade`'s `blocks_at_least` reference and `test_formalism`'s `slowdown_at_least` reference, as bisections on `macs_at_most`.
+- Next: TRN-67's second draft, cut from main, by Mon 6 PM. On the rename I wait to be told.
+- Runs in flight: none.
+
