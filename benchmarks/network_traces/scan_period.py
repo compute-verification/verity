@@ -7,7 +7,7 @@ and its Lean.
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule, its integer fields and its response cap when it has one: the period check reads the id egress
-  form, and a run in another is refused; its cell limits over the one execution phase are the cells,
+  form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
   `WardenParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
   the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),

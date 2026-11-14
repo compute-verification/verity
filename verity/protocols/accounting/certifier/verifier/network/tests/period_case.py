@@ -1164,8 +1164,8 @@ UNPINNED = "the scan's state's row 0 is not the empty state"
 
 
 def _state_refusal(p: Params, audits: list[dict], reg: dict) -> str | None:
-    """`stateCheck`'s refusal of an execution phase's scan: none when its state is tied (`_state_tied`) and its row 0
-    opened to the empty state (`_state_empty`)."""
+    """`stateCheck`'s refusal of the scan of an execution phase's transfer blocks: none when its state is tied
+    (`_state_tied`) and its row 0 opened to the empty state (`_state_empty`)."""
     if not _state_tied(p, audits, reg):
         return UNSTATED if _state_read(p, reg) else MISREAD
     return None if _state_empty(p, reg) else UNPINNED
@@ -1665,12 +1665,12 @@ WINDOW_PROGRAM = "stand-in/window"
 #: execution phase's tied audit registered under a Program of one more unit, its answer and population that Program's
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
 UNHOLDS = ("audit", "params")
-#: How `rows-state-misindexed` puts its execution phase's scan's state reads off the chain while its state stays tied by
-#: root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the state
-#: before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
+#: How `rows-state-misindexed` puts the state reads of its transfer blocks' scan off the chain while its state stays
+#: tied by root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the
+#: state before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
 #: another name, or a field no natural
 MISREADS = ("sin-leaf", "o1-leaf", "units", "swapped", "missing", "untyped")
-#: How `rows-state-unpinned` leaves its execution phase's scan's row 0 unopened while its reads and its tie hold: a
+#: How `rows-state-unpinned` leaves row 0 of its transfer blocks' scan unopened while its reads and its tie hold: a
 #: state tree whose row 0 is a state the prover chose, opened as committed; the opening missing or under another name,
 #: its salt or its path another, its words another count, leaf 1's opening in its place, or a field of another type
 UNPINS = ("row", "missing", "salt", "path", "words", "leaf", "untyped")
@@ -1992,7 +1992,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
     unpin = rp.choice(UNPINS) if m == "state-unpinned" else None
     unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
-    # each audit's `SCAN_STATE`, the state tree of the execution phase tied to it, whose leaf 0 the scan opens
+    # each audit's `SCAN_STATE`, the state tree of the transfer blocks tied to it, whose leaf 0 the scan opens
     trees = {i: _state_tree(rp, sched.window, not (unpin == "row" and i == ties[first + t]["audit"]))
              for i in range(n_audits)} if rows else {}
     states = {i: {"root": x.root.hex(), "domain": ADV.domain(x.binding, len(x.rows)).domain_id.hex()}
