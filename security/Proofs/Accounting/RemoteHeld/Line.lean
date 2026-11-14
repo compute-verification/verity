@@ -489,11 +489,10 @@ theorem receipts_of_line {node : Node} {r : Record} {sm : RemoteAudit.Session.Su
       rw [← hat]
       exact (min_eq_left hle).symm
 
-/-- `m < 2^448`: each draw's sampler word lies in its stream's first SHA-512 block. -/
-theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
+/-- `m < 2^64`: the first SHA-512 block of each draw's stream holds at least four of its sampler words. -/
+theorem receiptMax_lt : receiptMax < 2 ^ 64 := by
   unfold receiptMax RemoteAudit.Session.RECEIPT_LIMIT
-  exact Nat.lt_of_lt_of_le (Nat.sub_lt (Nat.two_pow_pos 64) Nat.one_pos)
-    (Nat.pow_le_pow_right (by norm_num) (by norm_num))
+  exact Nat.sub_lt (Nat.two_pow_pos 64) Nat.one_pos
 
 /-- On an accepted record, the trace's wrong receipts below the record's draw's pooled bound at the line's `δ` are
 below the W every line of the record reads (`LineCoversRun`): the line reads each draw's receipts and draws off

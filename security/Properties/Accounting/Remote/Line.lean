@@ -64,14 +64,14 @@ g = 1 is `Session.run`):
   certifiers sign nothing but the verifier's messages entering the node over the credited passes (`Quiet` at
   `Ingress.counted`), and the line it reads off the Lean verifier's record (`lineOf`: its groups, draws and registered
   blocks the record's) credits more bits read than the trace's passes read (`ReadAt`) is at most
-  `δs + δ_net + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the one the line reads its pooled bound at
+  `δs + δ_net + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the one the line reads its pooled bound at
   (`Node.delta`, a nonnegative rational; the line computes at none outside `(0, 1)`), `adv_c` the advantage on `prf c`
   of draw `c`'s distinguisher at that `δ` (`Session.distinguisher`) with openings coin `c`'s commitment leaf committing
   zeros (`Committed.junk`), `hide_c` draw `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191` over the
   session's `n` draws in all), and `bind` the receipts' binding term over the session's draws (`Receipts.binding`:
   some opened receipt presented with an accepted row other than the one its root holds). The openings are the
   deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf c` gives draw `c`'s coin, at most
-  `receiptMax = 2^64 − 1 < 2^448` receipts a draw, the verifier's `RECEIPT_LIMIT` less one, the sampler's fallbacks
+  `receiptMax = 2^64 − 1 < 2^64` receipts a draw, the verifier's `RECEIPT_LIMIT` less one, the sampler's fallbacks
   `rest` free), at the error `Accounting.Guarantees.Remote.PooledSample` states.
 
 It takes no device model: bits read need none. The memory the line's stretches credit, `span · (N − lost)` registered
@@ -205,7 +205,7 @@ verifier's on the record) meets the line's premises at the record's groups, the 
 node's uplinks (`Covered`) and count of what enters (`IngressCounted` at `δnet`), the probability that the Lean
 verifier accepts the record's session, the certifiers sign nothing but the verifier's messages entering the
 node over the credited passes, and the record's line credits more bits read than the passes read is at most
-`δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the line's, `adv_c` the advantage on `prf c` of
+`δs + δnet + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the line's, `adv_c` the advantage on `prf c` of
 draw `c`'s distinguisher at it with leaf `c` of the coin commitment committing zeros, `hide_c` draw `c`'s hiding term
 and `bind` the receipts' binding term at `R`, over the session's draws. -/
 def LineHeld : Prop :=
@@ -222,7 +222,7 @@ def LineHeld : Prop :=
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
     Pouw.pr (fun ω => Verified node (r ω) ∧
         ¬ (Quiet (ofRecord T node r) I.counted ω → ReadAt (ofRecord T node r) ω node (r ω))) ≤
-      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)

@@ -11,8 +11,8 @@ verifier there at the deployed one, `AcceptIsVerifiedFor` and `PublishedEpsFor` 
 
 * **AcceptIsVerified**: what the component's check accepts is a session the parameters and the log decode to, which
   `Shared.run g` runs to an accepted state with a record `sm`, and the public outputs are `certify params g sm`'s.
-* **PublishedEps**: what the component publishes as `eps` on acceptance is the sample's term of
-  `LineHeldAtSubprotocol`'s bound, `δ + Σ_c s/2^64`, or nothing certified at all.
+* **PublishedEps**: what the component publishes as `eps` on acceptance is `δ + Σ_c s/2^64`, at least the sample's
+  term of `LineHeldAtSubprotocol`'s bound, `δ + Σ_c s/2^256`, or nothing certified at all.
 * **LineHeldAtSubprotocol**: `Properties.RemoteAudit.Line.LineHeld` with the component's acceptance in the event in
   place of `Verified`, at `LineHeld`'s bound.
 
@@ -45,13 +45,14 @@ def AcceptIsVerified : Prop :=
         .ok (rs, s) ∧
       s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (RemoteAudit.Protocol.certify params g sm).1
 
-/-- **The component publishes the draw term of `LineHeldAtSubprotocol`'s bound.** Whenever `RemoteAudit.Protocol.check`
-accepts parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
-(`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and events), and either the public
-outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows), or at every node of those
-parameters and g whose δ is the component's `RemoteAudit.Protocol.DELTA` the published `eps` is `δ + Σ_c s/2^64` over
-the node's `⌈W/g⌉` draws (`Node.samples`) at its `samples` s, the draw term of `LineHeldAtSubprotocol`'s bound. It is a
-constant of the session's parameters, not of the draws the session made. -/
+/-- **The component publishes at least the draw term of `LineHeldAtSubprotocol`'s bound.** Whenever
+`RemoteAudit.Protocol.check` accepts parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p`
+and `e` decode to a session (`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and
+events), and either the public outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows),
+or at every node of those parameters and g whose δ is the component's `RemoteAudit.Protocol.DELTA` the published `eps`
+is `δ + Σ_c s/2^64` over the node's `⌈W/g⌉` draws (`Node.samples`) at its `samples` s, at least
+`LineHeldAtSubprotocol`'s draw term `δ + Σ_c s/2^256`. It is a constant of the session's parameters, not of the draws
+the session made. -/
 def PublishedEps : Prop :=
   ∀ (p : RemoteAudit.Protocol.Params) (reg : RemoteAudit.Registration) (e : RemoteAudit.Protocol.Evidence)
     (pub : RemoteAudit.Protocol.Public) (prof : Lean.Json),
@@ -70,7 +71,7 @@ premises verbatim, one coin for each of the session's draws (`Node.samples`), an
 each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the probability that the component
 accepts bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the
 verifier's messages entering the node over the credited passes and the record's line credits more bits read than the
-passes read is at most `δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `LineHeld`'s bound. -/
+passes read is at most `δs + δnet + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `LineHeld`'s bound. -/
 def LineHeldAtSubprotocol : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
     (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
@@ -86,7 +87,7 @@ def LineHeldAtSubprotocol : Prop :=
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
     Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧
         ¬ (Quiet (ofRecord T node r) I.counted ω → ReadAt (ofRecord T node r) ω node (r ω))) ≤
-      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
