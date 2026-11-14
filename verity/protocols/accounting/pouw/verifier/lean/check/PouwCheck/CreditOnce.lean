@@ -105,7 +105,7 @@ theorem creditedChallengePhase_eq (ledger window : Json) (key : ChallengerKey) (
 def sameKey (a b : ChallengerKey) : Prop :=
   a.params.N = b.params.N ∧ a.params.W = b.params.W ∧ a.params.H = b.params.H ∧ a.pub.data = b.pub.data
 
-instance (a b : ChallengerKey) : Decidable (sameKey a b) := inferInstanceAs (Decidable (_ ∧ _ ∧ _ ∧ _))
+instance instDecidableSameKey (a b : ChallengerKey) : Decidable (sameKey a b) := inferInstanceAs (Decidable (_ ∧ _ ∧ _ ∧ _))
 
 theorem eq_of_sameKey {a b : ChallengerKey} (h : sameKey a b) : a = b := by
   obtain ⟨⟨N, W, H⟩, ⟨d⟩⟩ := a
