@@ -18,11 +18,11 @@ or a local), others' (a name another owner declares, `[code] keep`), or by type 
 (any other). In a comment or a docstring: prose, or a quoted name in backticks.
 
 A file takes a word by `code` only when nothing else can own the word there: in Lean, no other owner's module that
-declares it is reachable through the file's imports, and no file outside ours that reaches the file spells it; in Python,
-the file imports no module outside ours that declares it, no file outside ours imports the file and spells it, and the
-file serializes no record by its fields' names. A word one of our files takes by hand is by hand in every file of ours
-linked to it by an import, either way, where either file declares it. It reads source text and elaborates nothing, so
-the build is the authority. Run from the repository's root.
+declares it is reachable through the file's imports, and no file outside ours that reaches the file spells it; in
+Python, the file imports no module outside ours that declares it, no file outside ours imports the file and spells it,
+and the file serializes no record by its fields' names. A word one of our files takes by hand is by hand in every file
+of ours linked to it by an import, either way, where either file declares it. It reads source text and elaborates
+nothing, so the build is the authority. Run from the repository's root.
 """
 from __future__ import annotations
 
@@ -44,8 +44,11 @@ import rename  # noqa: E402
 
 MAP = HERE / "draw_bare_map.toml"
 SCOPE = [f"security/{t}/{a}{s}" for t in ("Definitions", "Proofs", "Properties", "Proofs/Properties")
-         for a in ("Accounting", "Pous") for s in ("/*.lean", ".lean")]
+         for a in ("Accounting", "Pous", "Poub") for s in ("/*.lean", ".lean")]
 SCOPE += [f"verity/protocols/accounting/{p}/*.{e}" for p in ("pous", "poub") for e in ("lean", "py")]
+#: PoUW's files in the accounting area, its lane's own
+POUW = re.compile(r"^security/(?:Definitions|Properties|Proofs|Proofs/Properties)/Accounting/"
+                  r"(?:(?:Assumptions|Guarantees|Lemmas)/)?(?:TS|Headline|Compose|HMu|Pouw)(?:[./]|[A-Z])")
 WORDS = frozenset(("draw", "drawn", "draws", "Draw", "Drawn"))
 WORD = re.compile(r"(?<![\w'])(draw|drawn|draws|Draw|Drawn)(?![\w'!?])")
 TOKEN = re.compile(r"(?<![\w'.!?])((?:[A-Za-z_][\w'!?]*\.)*[A-Za-z_][\w'!?]*)")
@@ -69,7 +72,7 @@ def tracked() -> list[str]:
 
 
 def ours(f: str) -> bool:
-    return any(fnmatch.fnmatchcase(f, g) for g in SCOPE)
+    return any(fnmatch.fnmatchcase(f, g) for g in SCOPE) and not POUW.match(f)
 
 
 def keeps(data: dict) -> list[re.Pattern[str]]:
