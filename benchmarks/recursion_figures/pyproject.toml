@@ -2,6 +2,8 @@
 # the monitoring periods. Not a package: a script, and the suite that tests it.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# the suite imports the scripts beside it by their module names, as they import each other
+pythonpath = ["."]
 addopts = "-q -p no:cacheprovider"
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
