@@ -20,6 +20,7 @@ import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -85,7 +86,7 @@ def _members(nodes, family: str) -> int:
     return sum(n.n if n.form == "batch" else 1 for n in nodes if n.fn.id.startswith(family + "{"))
 
 
-def _calls(r, family: str) -> list[tuple[int, object]]:
+def _calls(r, family: str) -> list[tuple[int, Any]]:
     return [(i, n) for i, n in enumerate(r.program.fn.body.nodes) if n.fn.id.startswith(family + "{")]
 
 
@@ -232,12 +233,12 @@ def test_a_decode_row_at_the_served_index_topk_selects_its_top_k_at_its_class(se
         assert [fam[f] for f in LONG] == [0] * len(LONG) and fam["DsaTopKShortRow_v1"] == 3
         return
     N = long_row_keys(n, 2048)
-    assert [fam[f] for f in LONG] == ([3, 3, 0, 4] if N > n else [3, 3, 4, 0]) and fam["DsaTopKShortRow_v1"] == 0
-    rows = f"DsaButterflyRowsPad_v1{{T={n},N={N},K=2048,W=576,E=16}}" if N > n else f"DsaButterflyRows_v1{{N={N},K=2048,W=576,E=16}}"
+    assert [fam[f] for f in LONG] == ([3, 3, 0, 4] if n < N else [3, 3, 4, 0]) and fam["DsaTopKShortRow_v1"] == 0
+    rows = f"DsaButterflyRowsPad_v1{{T={n},N={N},K=2048,W=576,E=16}}" if n < N else f"DsaButterflyRows_v1{{N={N},K=2048,W=576,E=16}}"
     assert {m.fn.id for f in LONG for _, m in _calls(r, f)} == {f"DsaTopKMask_v1{{N={N},TOPK=2048}}", f"DsaButterflySettings_v1{{N={N},K=2048}}", rows}
     for _, m in _calls(r, "DsaTopKMask_v1"):
         lg, *pad = _logits_and_pad(nodes, m)
-        assert nodes[lg].fn.id.startswith("DsaMqaLogits_") and nodes[lg].fn.bindings["N"] == n and len(pad) == (N > n)
+        assert nodes[lg].fn.id.startswith("DsaMqaLogits_") and nodes[lg].fn.bindings["N"] == n and len(pad) == (n < N)
 
 
 def _batched(phi: Phi, LP: int, T: int, table_reads: bool):
@@ -285,8 +286,13 @@ def test_a_registration_with_table_reads_builds_and_traces_its_request_programs_
     """`Registered.dsa_table_reads`: class G's registration builds a request Program past INDEX_TOPK in the table form
     (`request_program`) and traces it with `--dsa-table-reads` after `--batched`; off (the default), neither.  A registration
     with no batched form (a batch-invariant target), or with the prefix cache on, refuses it by name."""
-    from verity_vllm.program.predict.steps import Registered, plan_steps, request_program, trace_commands
     from tests.program.predict.test_steps import _registered
+    from verity_vllm.program.predict.steps import (
+        Registered,
+        plan_steps,
+        request_program,
+        trace_commands,
+    )
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, model={"hf_config": hf})
     off = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
@@ -463,6 +469,7 @@ def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path
     prompt's shape, spans window edges in the compiler, which `engine.class_admission` refuses only because the served Commit
     doesn't commit the edge."""
     from verity.circuits.types import field_types
+
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps
@@ -511,7 +518,12 @@ def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_p
     can: that the Build's `vllm_dsa` rule, on vLLM's own graph, traces the mask form the predictor writes past INDEX_TOPK.  It
     needs the pinned vLLM (a pod's venv), so it skips without it."""
     pytest.importorskip("vllm")
-    from verity_vllm.program.predict.steps import Registered, compare, compile_steps, trace_commands
+    from verity_vllm.program.predict.steps import (
+        Registered,
+        compare,
+        compile_steps,
+        trace_commands,
+    )
     hub = tmp_path / "hub"
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(hub, model={"hf_config": hf})
@@ -563,11 +575,11 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     (prog,) = c.programs.values()
     assert (unit.LP, unit.T) == (LP, 0) and "run" not in dict(prog.fn.signature()[0])
     assert prog.fn.signature()[1] == TupleT(Array(1, I32), Array(1, BIT)), "its sample, then its length rule"
-    masks = Counter()
+    masks: Counter[int] = Counter()
     for n in prog.fn.body.nodes:
         if n.fn.id.startswith(COUNTED + "{"):
             masks[n.fn.bindings["N"]] += n.n if n.form == "batch" else 1
     long, last = max(LP - topk, 0), LP - CH * ((LP - 1) // CH)
     dead = long - min(last, long) if hf["indexer_types"][int(layers) - 1] == "full" else 0
     assert sum(masks.values()) == full * long - dead
-    assert set(masks) == set(range(2 * topk, long_row_keys(LP, topk) + 1, topk)) if LP > topk else not masks
+    assert set(masks) == set(range(2 * topk, long_row_keys(LP, topk) + 1, topk)) if topk < LP else not masks

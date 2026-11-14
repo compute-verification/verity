@@ -112,7 +112,8 @@ def _manifest_facts(path: str | Path) -> dict[str, dict]:
 
 def _lane() -> tuple[Any, Any]:
     """The interpreter and the module of the lane evaluator's Definition, imported on a call since they load the core `verity`,
-    which importing this module does not; `_evaluate_all` calls this before it forks, so that a worker starts with both loaded."""
+    which importing this module does not; `recompute_run` calls this at its opening, so that a worker it forks starts with both
+    loaded."""
     from verity.definitions.registry import sampling_topp_difftest
 
     from verity_vllm.properties.admission import evaluate_spec
@@ -177,7 +178,6 @@ def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane"
     n = int(n_jobs) if n_jobs else min(32, _cpu_quota())
     if len(jobs) <= 1 or n <= 1:
         return [fn(j) for j in jobs]
-    _lane()                                                        # loaded before the fork: a worker starts with both
     with fork_pool(min(n, len(jobs))) as pool:
         return list(pool.imap(fn, jobs, chunksize=1))
 
@@ -311,9 +311,6 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
 
     Returns the ledger + the list of PROBLEMS (each a FAIL reason by name) and whether the lag slot was EXERCISED on this record at all
     (when it was not, the record half of 'RNG advances iff r_t' stays 'stated, not measured on this record', said so)."""
-    # continuation loads the core `verity`, which importing this module does not
-    from verity_vllm.program.lifting import continuation
-
     out: dict = {"convention": "draw k of a request = its k-th sampled row (k from 0) = slot t = k + 1 at pos = prompt_len - 1 + k, keyed Philox(seed, pos); "
                                "expected draws = {pos of slot t : r_t = 1} under the Program's stop rule (EOS at slot t < C -> min(A, C - t) lag slot(s))",
                  "requests": {}, "problems": [], "lag_slot_exercised": False, "requests_with_eos_before_cap": 0, "requests_at_cap": 0,
@@ -374,6 +371,8 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         # the RULE's positions are those of `expected_draw_positions`: slot t at pos L - 1 + (t - 1), the query position whose
         # logits slot t samples = the record's own `pos` fact (device_facts_match on every checked row; qwen B8 L=1024: first sample 1023);
         # served[:T] and A = 0 without an EOS as in expected_executed_slots (the same recurrence; a disagreement between the two calls is named)
+        # continuation loads the core `verity` and registers its Definitions: only for a request the rule is read for
+        from verity_vllm.program.lifting import continuation
         if any(y is None for y in served[:T]):
             ent["finish"] = "unjudged"
             out["requests_unjudged"] += 1
@@ -405,18 +404,17 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
                                f"not scheduled: the EOS is served at the cap slot {t_eos} (no slot after it)")
             out["requests_at_cap"] += 1
         else:
-            if lag is None:                                       # the rule leaves an early EOS unjudged without the profile
-                raise TypeError(f"sample ledger {rid}: an EOS at slot {t_eos} of {T} was judged without the scheduler profile")
+            profile: Any = lag                                    # the rule leaves an early EOS unjudged without the profile: never None here
             ent["finish"] = "eos"
             out["requests_with_eos_before_cap"] += 1
             out["lag_slot_exercised"] = True
-            n_lag = min(int(lag), T - t_eos)
+            n_lag = min(int(profile), T - t_eos)
             k_eos = t_eos - 1
             ent["served_eos"] = {"draw_k": k_eos, "slot": t_eos, "step": dr[k_eos]["step"], "pos": dr[k_eos]["pos"], "token": dr[k_eos]["served"]}
             after = dr[k_eos + 1:]
             ent["draws_after_served_eos"] = len(after)
-            ent["lag_slot"] = {"profile_A": int(lag), "lag_slots_expected": n_lag,
-                               "bounded_by_cap": n_lag < int(lag),
+            ent["lag_slot"] = {"profile_A": int(profile), "lag_slots_expected": n_lag,
+                               "bounded_by_cap": n_lag < int(profile),
                                "draws": [{"slot": t_eos + 1 + j, "pos_expected": L + k_eos + j, "pos": x["pos"], "step": x["step"],
                                           "pos_ok": x["pos"] == L + k_eos + j} for j, x in enumerate(after)],
                                "measured": drawn == expected}
@@ -518,21 +516,21 @@ def _sampled_rows(per_step: dict[int, dict], store, facts: dict[str, dict], prog
             reasons.append(f"step {step}: {n_rows_step} sampled row(s) not value-checked (the logits row fed to the sampler was not snapshotted)")
             continue
         bf_words = np.asarray(store.extract(bsnap, bf)).reshape(bf.shape)
-        masked_obs = launch_args._as_f32(np.asarray(store.extract(msnap, lv)), lv.dtype).reshape(lv.shape) if msnap is not None else None
+        masked_obs = launch_args.as_f32(np.asarray(store.extract(msnap, lv)), lv.dtype).reshape(lv.shape) if msnap is not None else None
         R_, V = bf.shape
         cx = dict(g.constexprs or {})
         S = None
         if d["mask"] is not None:
             S = (d["mask"].constexprs or {}).get("S")
-        seeds_snap = launch_args._small_int_arg(store, g, "seeds_ptr")
-        pos_snap = launch_args._small_int_arg(store, g, "pos_ptr")
-        temp_snap = launch_args._small_arg(store, g, "temp_ptr", np.float32)
-        map_snap = launch_args._small_int_arg(store, g, "expanded_idx_mapping_ptr")
+        seeds_snap = launch_args.small_int_arg(store, g, "seeds_ptr")
+        pos_snap = launch_args.small_int_arg(store, g, "pos_ptr")
+        temp_snap = launch_args.small_arg(store, g, "temp_ptr", np.float32)
+        map_snap = launch_args.small_int_arg(store, g, "expanded_idx_mapping_ptr")
         p_snap = None
         if d["mask"] is not None:                                   # the split kernels' signature names the top-p buffer `P`
-            p_snap = launch_args._small_arg(store, d["mask"], "P", np.float32)
+            p_snap = launch_args.small_arg(store, d["mask"], "P", np.float32)
             if p_snap is None:
-                p_snap = launch_args._small_arg(store, d["mask"], "p_ptr", np.float32)
+                p_snap = launch_args.small_arg(store, d["mask"], "p_ptr", np.float32)
         served = list(se.sampled_token_ids)
         for row, (rid, pos_fact) in enumerate(ss.logits_rows):
             f = facts.get(rid)
@@ -668,6 +666,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
     # fold_compare imports torch, which only this function needs
     from verity_vllm.check.fold_compare import SnapshotStore
 
+    _lane()                                                # loaded before a row is read: a worker `_evaluate_all` forks starts with both
     t0 = time.time()
     events = list(read_log(log_path))
     header: Any = events[0]                                # the log's first event, whatever it is

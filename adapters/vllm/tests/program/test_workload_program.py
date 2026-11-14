@@ -212,8 +212,8 @@ def _registered_component(LP: int, values_n: int = 2, registered=("values",)):
 def test_registered_values_are_shared_once_and_registered_at_the_root():
     """A registered_values component's `values` are the program's (bound once, at registration), not the request's: the workload
     Program holds them once as `shared.values`, a registered root parameter, beside `shared.weights` bound per run."""
-    from verity.circuits.ports import facts
     from verity.circuits.constants import REGISTRATION, RUN, inputs
+    from verity.circuits.ports import facts
     ca, cb = _registered_component(2), _registered_component(5)
     assert ca.bindings == (RUN, REGISTRATION, RUN)
     wl = W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca), W.WorkloadRequest("b", 1, 5, 1, 0, cb)], lag=0)
@@ -242,9 +242,9 @@ def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_w
     """The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
     weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
     their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
+    from verity.circuits.constants import REGISTRATION, RUN
     from verity.circuits.ports import facts
     from verity.circuits.program import INPUT_ID, REGISTERED_ID
-    from verity.circuits.constants import REGISTRATION, RUN
     off, on = _wl([(3, 2), (5, 0)]), _wl([(3, 2), (5, 0)], theta_registered=True)
     assert off.digest == _wl([(3, 2), (5, 0)], theta_registered=False).digest
     assert on.registered == on.theta == ("shared.weights",) and on.digest != off.digest
