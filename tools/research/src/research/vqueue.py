@@ -1,4 +1,6 @@
 """The verified queue: `main` moves only to a candidate tree with no new failure: each gating task passed or fails on its base.
+Where the land verdicts gate (the loop's `--gate verdict`), a plain candidate's gating task is the quick tier on its own merge,
+and `main`'s whole check follows its landing (`culprit`).
 
 A candidate is `main`'s tip, or the candidate below it, with one `Queue: #N` merge per member on top (built by `Queue._merge`,
 as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.  Its verdict decides what happens:
@@ -967,6 +969,26 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
     acts.append(Drop(c1.sha, why, Outcome(c1.members, c1.heads, FAIL if own or tree else INFRA_SPLIT, suspects, c1.base,
                                           tuple(f for f in v.failed if _inherited(f)) if red else ())))
     return set() if eject is None else {eject.number}, set(suspects)
+
+
+def culprit(failed: Iterable[Failed], files: dict[int, frozenset[str]]) -> tuple[int | None, str]:
+    """The one PR a red of `main`'s own check names among those landed since it last passed (``files``: each one's change as it
+    landed), and why; None and why not unless every failure is a change's own (`Failed.kind` none or `own`) and bounded in what
+    it read (`Failed.reads`), and that PR's change meets what each one read while no other's meets any: nothing is reverted on
+    a guess."""
+    if not (failed := list(failed)):
+        return None, "it names no failure"
+    if odd := [f for f in failed if f.kind not in (None, "own")]:
+        return None, f"{', '.join(f'{f.task} failed as {f.kind}' for f in odd)}, not by a change"
+    if unbounded := [f.task for f in failed if f.reads is None]:
+        return None, f"nothing bounds what {', '.join(unbounded)} read"
+    hit = sorted({n for n, fs in files.items() for f in failed if meets(fs, f.reads)})
+    if len(hit) != 1:
+        return None, (f"{', '.join(f'#{n}' for n in hit)} each meet what they read" if hit else
+                      "no PR landed since meets what they read")
+    if missed := [f.task for f in failed if not meets(files[hit[0]], f.reads)]:
+        return None, f"#{hit[0]} meets what some read, not what {', '.join(missed)} read"
+    return hit[0], f"#{hit[0]}'s change meets what {', '.join(f.task for f in failed)} read, and no other's landed since"
 
 
 def _said(c: Candidate, under: list[Ready], built: dict[int, Ready]) -> Candidate | None:

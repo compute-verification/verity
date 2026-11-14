@@ -249,12 +249,17 @@ A pass of a test suite, a circuit-check target or a Lean package's Lean check is
 unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
-docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only fully checked commits: the verified queue's loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
+docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. Every commit of
+`main` is checked whole, before it lands or, for a plain candidate under `--gate verdict`, right after: the verified queue's
+loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
 verdict, are low-risk or are certified moves onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
 ratchet-gate run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
 no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
-fails on its base too. A failure the candidate's base shares blames none of its PRs;
+fails on its base too. Under `--gate verdict` a plain candidate lands on its members' land verdicts and the quick tier,
+`main`'s whole check follows each landing, and a red check reverts the one culprit or, with no culprit, sends plain
+candidates back to the whole check until `main` is green; a candidate is plain when each member has a land verdict of its
+own, is no move and touches nothing drive.toml's `verdict_excludes` names, so every other candidate (Lean, a lock, a move,
+the landing code itself) keeps the whole check before landing. A failure the candidate's base shares blames none of its PRs;
 any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
 names), every PR when none does: a lone suspect is ejected, several are bisected, and in the same tick the candidate and
 those above it are rebuilt without them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the

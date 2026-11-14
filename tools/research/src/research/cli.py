@@ -59,7 +59,8 @@
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research queue status|ready|judge|review|eject|vqueue|... [--shadow]  # the verified queue: candidates of ready PRs merged on `main`,
-                                                 # `main` fast-forwarded only to one with no new failure (research/queue.py, vqueue.py)
+                                                 # `main` fast-forwarded only to one with no new failure, or under --gate verdict to
+                                                 # a plain one on its land verdicts and the quick tier (research/queue.py, vqueue.py)
   research goals show|set|confirm|done|remove|replace|priority|audit ...   # the Goals page, written with this agent's Cursor identity
                                                  # (research/goals.py)
   research velocity [--since TIME] [--until TIME] [--line|--json] ...    # the velocity score, read from records: goals moved,
