@@ -41,7 +41,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
-import a5  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as a5  # noqa: E402
 import a5_sparse_mla as SM  # noqa: E402
 from tests.pipeline import test_serving_rows_stages as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402

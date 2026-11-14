@@ -26,7 +26,7 @@ import re
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from verity.circuits.kernels import ROW_COMMIT, SHA512
+from verity.commitments.cuda import ROW_COMMIT, SHA512
 
 from verity_vllm.log import init_logger
 

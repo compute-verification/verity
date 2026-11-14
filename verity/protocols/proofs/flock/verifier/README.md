@@ -1,6 +1,6 @@
 # Flock
 
-Flock's executable verifier, `flock-verify` (run as `verity verify proof`) and the other executables `lakefile.toml`
+Flock's executable verifier, `verity-verify-proof` (run as `verity verify proof`) and the other executables `lakefile.toml`
 builds, in Lean 4 at the toolchain `lean-toolchain` pins. What it checks, its commands
 and its agreement with upstream's Rust verifier are in `verity/protocols/proofs/flock/prover/agreement/README.md`; its guarantees are in
 `security/Definitions/Flock/Guarantees/` and `security/Proofs/Flock/`.

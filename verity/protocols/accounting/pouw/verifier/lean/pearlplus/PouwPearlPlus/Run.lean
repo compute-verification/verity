@@ -6,7 +6,7 @@ public import PouwPearlPlus.Records
 # The run: its commitment, the verifier's coin record, and the tiles it opens (`verify_passes`)
 
 * **A pass** (`Pass`) is what the verifier holds once a retained pass's manifest is read and held to what it published
-  (`Load`): its epoch's salt and weights' roots, its records, and the roots it published (activations, transcript, records,
+  (`Load`): its epoch's salt and fixed operands' roots, its records, and the roots it published (activations, transcript, records,
   each call's y).
 * **The run's commitment** (`runCommitment`) binds the retained passes and their records, before the coin:
   `tagged("verity/pouw/pearl-plus/run/v1", per pass: transcript root, records root, salt, each call's y root or empty)`.
@@ -19,7 +19,7 @@ public import PouwPearlPlus.Records
   cells' share of `wref` at |K| (`clear_work.ticket_cell`, the scheme's own `wref` on the H100), scaled to integers by the
   lcm of the denominators.
 * **The exclusion tiles**: each pass opens one tile per excluded row, an A row's in its first column block and a B row's in
-  the first row block of its weight's first unit (`clear_work.exclusion_tiles`).
+  the first row block of its fixed operand's first unit (`clear_work.exclusion_tiles`).
 -/
 
 @[expose] public section
@@ -33,7 +33,8 @@ def RUN_TAG : String := "verity/pouw/pearl-plus/run/v1"
 def RUN_DRAW_DOMAIN : String := "verity/pouw/pearl-plus-run-draw/v1"
 def COIN_SCHEMA : String := "verity-pouw/pearl-plus-coin/v2"
 def COIN_SCHEMA_V1 : String := "verity-pouw/pearl-plus-coin/v1"
-def ASSUMPTION : String := "Pearl's Assumption 1 (pearl_kw)"
+/-- The named assumption a run of the H100's scheme is credited at (`verify_run.ASSUMPTION_H100`). -/
+def ASSUMPTION : String := "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1"
 
 /-- One retained pass as the verifier holds it once its manifest is read and checked (`Load.load`). -/
 structure Pass where

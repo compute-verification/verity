@@ -509,7 +509,7 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
     `check_draw` holds it to the registration and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` samples it from
     the same bytes: `subset` and `bernoulli` on one stream (`bernoulli` at the sampling design's NUM/DEN as written), `stratified`
     and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's proof blocks.  With the
-    verifier's closure map (a work sampling design only, as `flock-verify draw --closure`), the sample carries its `closure`
+    verifier's closure map (a work sampling design only, as `verity-verify-proof draw --closure`), the sample carries its `closure`
     (`closure_of`) when that is not empty."""
     problem = law_problem(law, population)
     if problem:

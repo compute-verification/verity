@@ -86,7 +86,7 @@ def test_the_claim_is_in_both_files(virtual):
     for text in [e2e.CLAIM["statement"], *e2e.CLAIM["not_covered"], *e2e.CLAIM["zero_knowledge_gaps"]]:
         assert text in md
     assert "N3 (content)" in md and "| honest | 0 | accept |" in md and "**tampered**: refused" in md
-    assert doc["upstream"].startswith("http://127.0.0.1:") and doc["where"].endswith("not an auditor host")
+    assert doc["upstream"].startswith("http://127.0.0.1:") and doc["where"].endswith("not an auditor device")
     assert doc["where"] in md and doc["tokens"] == 4 and "Late's head checks are not proved" in md
 
 
@@ -247,7 +247,7 @@ def test_a_gate_runs_directory_and_a_tarball_are_read_as_the_rehearsal(tmp_path)
     assert got["honest"]["gate"]["run"] == "r1" and got["honest"]["gate"]["verdict"] == "accepted"
     assert got["late"]["dir"].parent.name == "planned-40" and got["late"]["check"]["verdict"] == "refused"
     at = e2e.where(got)
-    assert at["where"] == ("gate: the certifier on vy-challenger-1, the auditor's host, through its gate (vy-challenger-gate "
+    assert at["where"] == ("gate: the certifier on vy-challenger-1, the auditor's device, through its gate (vy-challenger-gate "
                            "certifier-rehearse), tunnelled to vy-nebius-1:18080; gate runs honest r1; pinned to main abc; "
                            "extra, late off the gate")
     assert at["upstream"] == "vy-nebius-1:18080"

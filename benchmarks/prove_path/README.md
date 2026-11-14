@@ -7,7 +7,7 @@ units on live coins, proves them with Flock `--zk` behind the Lean ZK server, an
 Commit period of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on a challenger's coins (`--challenger local` by default in
-`run.sh`, `benchmarks/one_stage/a5.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
+`run.sh`, `verity/protocols/proofs/spot/prover/audit/window_audit.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
 deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`) or on a served window
 (`PP_SERVE_RUN`), with one forged run that must be refused. Row dirs and serve runs are the node's own, never fetched from the
 store, since their bundles and requests hold request values. The docstrings say how.
@@ -80,7 +80,7 @@ Each guarantee below is listed in the lock (`security/lean-audit.json`), which r
 reads and its named assumptions.
 
 **A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV3`
-(`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `flock-verify verify --zk` accepts the transcript and the
+(`security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `verity-verify-proof verify --zk` accepts the transcript and the
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
@@ -156,9 +156,9 @@ guarantee above.
   `security/Proofs/Flock/Soundness/Premises.lean`) and `Zk.RecordCustodyZKLaw` and its forms
   (`security/Proofs/Flock/Soundness/Assumptions/CustodyZk.lean`); in plain, `FlockSoundness.Assumptions.RecordCustodyExec`
   and `RecordCustodyExecH` (`security/Proofs/Flock/Soundness/Assumptions/Custody.lean`).
-- `Verity.Assumptions.TrustedHost` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
+- `Verity.Assumptions.TrustedDevice` (`security/Definitions/Core/Assumptions.lean`), which is why `Carries` holds of the
   real run.
-- The certifier's wire (`security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
+- The certifier's wire (`security/Definitions/Certifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`security/Definitions/Core/Hm96.lean`).

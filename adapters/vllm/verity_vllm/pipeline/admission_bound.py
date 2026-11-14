@@ -3,9 +3,8 @@ envelope.
 
 `step_bound_bytes` (native_host) bounds ONE step by the envelope -- every request at the longest prompt, B rows at every decode step,
 the FA2/FA3 M1 stream of a max-length prefill packed B-wide -- and `retained_bytes_bound` multiplies that envelope over the horizon.
-That is the right bound for the DEVICE staging block (one step at a time) and 10-13x loose for the whole run's HOST retention: a
-llama B16 1024/128 mixed-arrivals Commit was told 559,384 MiB against a 359,535 MiB cgroup and committed 42.5 GiB (rc pinned at
-~99 GB RSS); the phi3 B8 1024/128 Commit beside it (582,111 MiB) died of the host SUM, not of its own bytes.  A bound
+That is the right bound for the DEVICE staging block (one step at a time) and too loose for the whole run's HOST retention, which
+it charges the envelope's step at every step, whatever the schedule declares.  A bound
 that loose cannot gate a launch, and a launch predicted to exceed the cgroup is not made.
 
 This module sums the bytes the collector binds per ENGINE STEP under the declared schedule (verity-sweep/workload/v1 `requests[]`:
@@ -17,9 +16,9 @@ This module sums the bytes the collector binds per ENGINE STEP under the declare
 where NB_s = ceil(K_s / kBlockN) and K_s = the longest context any request live at s can reach (prompt + cap + lag) -- the geometry the
 record shows: one `fa2.m1/L<k>/s<i>/g<heads>x<prompt_i>x<NB>` stream per arriving prompt, one `g<live x kv_heads>x<g>x<NB>` (GQA swapped
 kernel) or `g<live x heads>x1x<NB>` stream for the decode rows, NB shared step-wide (vLLM passes the batch's max_seqlen_k to every
-launch of the step).  Validated against the per-step `n_bytes` of three Commit records (llama B16 1024/128 mixed-arrivals: 181/181 steps
->= observed, total +5.8 %; llama B4 1024/128: 4 concurrent prefills; phi3 B8 256/32: hd 96, no GQA) in
-tests/pipeline/test_admission_commit.py.
+launch of the step).  Held against the per-step `n_bytes` of three Commit records (mixed arrivals; concurrent prefills; a head
+dimension of 96 with no GQA) in tests/pipeline/test_admission_commit.py: at or over every observed step, and within the test's
+ratio of the run's total.
 
 Soundness assumptions (named on the record): every request runs to its cap plus `lag` post-EOS rows (an EOS stop before the cap only
 removes bytes; the LAG is declared -- pass the Program's lag); a prompt longer than the step's token budget is chunked by the engine
@@ -185,7 +184,7 @@ def predicted_pool_bytes(raw: int, hidden: int, *, retain: str, levels_factor: f
 def committer_resident(workload: dict[str, Any], host_cap_bytes: int | None, *, pairs: int = 1, replay_workers: int | None = None) -> dict[str, Any]:
     """What the Commit holds beside the pinned pool at its peak, from the row planner's commit stage (`telemetry.admission.predict`):
     the C2 Programs and match oracle, the leaf digests, the binding index, the forked replay workers, the serving base and the margins.
-    #23 B64 Llama: pool 183,694 MiB + resident 122,745 MiB; the pool alone fit the 239,372 MiB limit and the run OOM'd at it."""
+    A pool that fits the limit alone can exceed it with this beside it, so the admission adds the two."""
     cfg = plan.row_config_from_workload(workload, pairs=max(1, int(pairs)), replay_workers=replay_workers, host_limit_bytes=host_cap_bytes)
     cfg.host_cpus = os.cpu_count() or cfg.host_cpus
     commit = plan.predict(cfg)["commit"]
@@ -201,8 +200,8 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
               retain_exclude: set[str] | frozenset[str] | None = None, resident: dict[str, Any] | None = None) -> dict[str, Any]:
     """The admission verdict for one Commit launch: predicted = the pinned pool the run allocates (`predicted_pool_bytes`, by staging path
     and retention) + what the Commit holds beside it at its peak (`resident`, from `committer_resident`) against the container limit.  The REFUSAL domain is `--retain host`, unbounded;
-    under another retention the pool is PREDICTED and named (a non-host retention on the windowed path allocates it anyway: a
-    `--retain none` run allocates the 112 GiB pool), recorded as `would_exceed_by_bytes`, never refused here.  `admitted` False names the excess; the
+    under another retention the pool is PREDICTED and named (a non-host retention on the windowed path allocates it anyway),
+    recorded as `would_exceed_by_bytes`, never refused here.  `admitted` False names the excess; the
     envelope bound is carried beside it for the record."""
     sched = scheduled_step_bytes(sizing, requests, max_num_batched_tokens=max_num_batched_tokens, lag=lag)
     raw = int(sched["total_bytes"])

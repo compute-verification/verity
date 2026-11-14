@@ -25,12 +25,12 @@ from verity_config.settings import of
 
 import dither_a as DA
 import dither_one as DO
-from h1r import H1R
+from benchmarks.hash.dither.h1r import H1R
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from h1r import Call, Plan
+    from benchmarks.hash.dither.h1r import Call, Plan
 
 settings = of(__file__)
 J10R_SHA = "559bc0aa69"

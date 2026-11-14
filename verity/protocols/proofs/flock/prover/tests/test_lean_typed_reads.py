@@ -13,7 +13,7 @@ import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: typed attention (4 instances) staged by `typed_statement.stage` with its `rows/`, and the ex2 and rcp tables it reads
 FIXTURE = "art:e1673794"
 

@@ -1,7 +1,7 @@
-"""Execution profile (CONTRACT.md §2 / §2.1) shared by production and replay.
+"""Execution profile (CONTRACT.md §2 / §2.1) of the engines the adapter builds.
 
-Everything that decides *what vLLM runs* lives here so that production and replay
-construct the engine from one place.  The declared flags are ``engine.env.ENGINE``, each with
+Everything that decides *what vLLM runs* lives here so that every engine is
+constructed from one place.  The declared flags are ``engine.env.ENGINE``, each with
 its reason in ``engine.env.REASONS``; batch invariance is the row's execution label's
 (``engine.served``), and a served Commit reads every switch back (``engine.served.require``).
 
@@ -28,8 +28,6 @@ from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
 __all__ = ["ENGINE_SEED", "apply_env", "checkpoint_for", "engine_kwargs", "profile_id_of", "verify_local_weights"]
 
 logger = init_logger(__name__)
-
-DECLARED_ENV = env.ENGINE
 
 MAX_MODEL_LEN = 4096
 GPU_MEMORY_UTILIZATION = 0.80
@@ -60,7 +58,15 @@ def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
 
 def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
     if case in CASES:
-        cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
+        repo = CASES[case]["repo"]
+        cp = load_checkpoints(checkpoints_path)[repo]
+        # read by repo, the later of two pins wins: a second revision of the case's repo would be served without a word.
+        # Pins at one revision (a repo under two roles) are one checkpoint and pass.
+        revisions = [str(c.get("revision")) for c in checkpoint_entries(checkpoints_path) if c.get("repo") == repo]
+        if len(set(revisions)) > 1:
+            raise SystemExit(f"case {case!r}: {len(revisions)} pins of {repo} differ in revision "
+                             f"({', '.join(r[:12] for r in revisions)}); a fixed case reads its checkpoint by repo, "
+                             "so the manifest pins one revision of that repo")
     else:
         # a role of the manifest (an entry added to `manifests/checkpoints.json` by hand, or by `fp8-checkpoint pin` or
         # `int8-checkpoint pin` for a recipe pin) carries `role == case`
@@ -92,32 +98,27 @@ def verify_local_weights(cp: dict[str, Any]) -> None:
             raise SystemExit(f"{fname}: sha256 {h.hexdigest()} != frozen {sha}")
 
 
-REPLAY_EXECS = ("eager", "compiled-nograph")
-
-
-TP_WORKER_EXTENSION = "verity_vllm.tp.poc_tp_worker.VerityTPWorkerExtension"
-
 #: vLLM's engine seed (`LLM(seed=...)`) for every profile; the manifest records it in `engine_kwargs`.
 ENGINE_SEED = 0
 
 
 def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager: bool = False, custom_ops: str | None = None,
-                  replay_exec: str = "eager", max_num_batched_tokens: int | None = None,
+                  max_num_batched_tokens: int | None = None,
                   tensor_parallel_size: int | None = 1, quantization: str | None = None) -> dict[str, Any]:
-    """LLM(...) kwargs. Production: stock defaults (``enforce_eager`` is a declared flag for the
+    """LLM(...) kwargs: stock defaults (``enforce_eager`` is a declared flag for the
     eager-production profile row, §15.5; ``custom_ops`` = ``"all"`` keeps vLLM's CUDA custom ops
     inside the compiled forward instead of inductor-generated kernels, another declared flag / new
     profile row; ``max_num_batched_tokens`` is a declared scheduler flag, used by the varied-batch
-    cases (M2) to change batch composition; replay must use the production's value so the recorded
-    schedule is reproducible). Replay: + trace replay; ``replay_exec`` = ``eager`` (dispatch-mode
-    interception, ``enforce_eager=True``) or ``compiled-nograph`` (the production compilation
-    with CUDA graphs off in replay only, ``compilation_config.cudagraph_mode = NONE``).
+    cases (M2) to change batch composition).
     ``tensor_parallel_size`` > 1 (a profile port's
     ``parallelism.tensor_parallel_size``) is a declared production flag: the model is sharded over that
     many GPUs (vLLM's multiprocess executor; the engine core stays in-process). The key is absent at 1 so
-    earlier profile ids are unchanged. In replay with TP > 1 the model lives in worker processes, so the
-    capture is installed there through vLLM's ``worker_extension_cls`` seam (``tp_worker.py``);
-    production never loads the extension."""
+    earlier profile ids are unchanged.
+    ``replay`` is False at every call and True is refused: there is no replay engine, the replay
+    evaluates a Build (``check/replay``)."""
+    if replay:
+        raise ValueError("engine_kwargs(replay=True): there is no replay engine; the replay evaluates a Build (check/replay), "
+                         "so an engine is built with replay=False")
     kw: dict[str, Any] = {
         "model": cp["local_path"],
         "tokenizer": cp["local_path"],
@@ -129,38 +130,16 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
     }
     if tensor_parallel_size is not None and int(tensor_parallel_size) > 1:
         kw["tensor_parallel_size"] = int(tensor_parallel_size)
-        if replay:
-            kw["worker_extension_cls"] = TP_WORKER_EXTENSION
     if quantization:
         # `--quantization fp8` (the b1-fp8 port) is a declared
         # production flag (LLM(quantization=...)); the key is absent when unset so earlier profile ids are unchanged.
-        # Replay reads it from the manifest's `quantization` field (replay.py) so the same online-quantised weights
-        # and the same FP8 kernels run under the capture.
         kw["quantization"] = str(quantization)
     if max_num_batched_tokens is not None:
         kw["max_num_batched_tokens"] = int(max_num_batched_tokens)
     if enforce_eager:
         kw["enforce_eager"] = True
-    if custom_ops and not replay:
+    if custom_ops:
         kw["compilation_config"] = {"custom_ops": [custom_ops]}
-    if replay and replay_exec not in REPLAY_EXECS:
-        raise ValueError(f"replay_exec must be one of {REPLAY_EXECS}")
-    if replay and replay_exec == "compiled-nograph":
-        if enforce_eager:
-            raise ValueError("compiled-nograph replay of an eager production profile makes no sense (the production ran no compiled kernels)")
-        kw["enable_trace_replay"] = True
-        kw["compilation_config"] = {"cudagraph_mode": "NONE"}
-        kw["enable_prefix_caching"] = False  # same replay restriction as below
-        return kw
-    if replay:
-        kw["enable_trace_replay"] = True
-        kw["enforce_eager"] = True  # replay restriction: dispatch-mode interception is eager-only
-        # Replay restriction: with prefix caching a request whose first block(s) match another
-        # request's never computes those positions itself (its KV reads there are the other request's
-        # values, its boundary has no step for them). Stock production keeps caching; the B0/B1 rows
-        # bind every position of a request to that request's own steps. Cross-request KV identity
-        # is a prefix-cache workload's rule.
-        kw["enable_prefix_caching"] = False
     return kw
 
 
@@ -176,12 +155,13 @@ def gpu_info() -> dict[str, Any]:
 
     props = torch.cuda.get_device_properties(0)
     drv = _run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"])
+    pod = settings.raw("RUNPOD_POD_ID")
     return {
         "name": props.name,
         "count": torch.cuda.device_count(),
         "driver": drv,
         "compute_capability": f"{props.major}.{props.minor}",
-        "pod": os.environ.get("RUNPOD_POD_ID", os.uname().nodename),
+        "pod": os.uname().nodename if pod is None else pod,
         "total_memory_gb": round(props.total_memory / 2**30, 2),
         # W1cF F7/F10: the batch-invariant GEMM specialises on the SM count (NUM_SMS); a verifier on a
         # different device reports `specialised: NUM_SMS` for its PTX rather than a mismatch.
@@ -347,8 +327,8 @@ def _backends_probe(worker: Any) -> dict[str, Any]:
             "quick_allreduce": getattr(comm, "qr_comm", None) is not None and not getattr(getattr(comm, "qr_comm", None), "disabled", True),
             "flashinfer_allreduce": getattr(comm, "fi_allreduce_fusion", None) is not None,
             "pynccl": getattr(comm, "pynccl_comm", None) is not None and not getattr(getattr(comm, "pynccl_comm", None), "disabled", True),
-            "nccl_env": {k: os.environ.get(k) for k in ("NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS", "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS",
-                                                      "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE") if os.environ.get(k) is not None},
+            "nccl_env": {k: held for k in ("NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS", "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS",
+                                           "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE") if (held := settings.raw(k)) is not None},
         }
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)

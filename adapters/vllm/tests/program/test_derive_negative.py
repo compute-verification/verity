@@ -934,9 +934,9 @@ def test_corrupted_captured_value_fails():
     P, truth, call = _tiny_program_with_truth()
     gates = call.returns
     inputs_only = {g: v for g, v in truth.items() if any(lo <= g < hi for lo, hi in _input_gate_ranges(P))}
-    cap = np.array([truth[g] for g in gates], dtype=np.uint16)
-    cap[3] ^= 0x0001  # one flipped mantissa bit in one word
-    r = _check(call, gates, inputs_only, cap)
+    captured = np.array([truth[g] for g in gates], dtype=np.uint16)
+    captured[3] ^= 0x0001  # one flipped mantissa bit in one word
+    r = _check(call, gates, inputs_only, captured)
     assert r["status"] == "mismatch" and r["mismatches"] == 1 and r["first_mismatches"][0]["word"] == 3, r
 
 

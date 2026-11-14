@@ -364,7 +364,7 @@ def _eager(m: nn.Module, inputs):
 
 def _alloc_view_rules():
     """`DEFAULT_RULES` + `AllocView` (the vLLM-bindings rule that lets `output = torch.empty(...); output.view(...)` be written by a
-    kernel — vLLM's `Attention.forward` pattern). It lives in `rules/vllm_bindings.py`, i.e. only the vLLM ruleset has it."""
+    kernel — vLLM's `Attention.forward` pattern). It lives in `rules/vllm_bindings/views.py`, i.e. only the vLLM ruleset has it."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.vllm_bindings import AllocViewRule
     return DEFAULT_RULES.extended("default+AllocView", [AllocViewRule()])
@@ -722,7 +722,7 @@ def _test_Y(cls):
 
 # ---------------------------------------------------------------------------------------------------------
 # T: Bet A's PRODUCTION carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
-# tensor argument as mutated (over-declared). The vLLM binding rules (`rules/vllm_bindings.py`) decide from the pinned kernel
+# tensor argument as mutated (over-declared). The vLLM binding rules (`rules/vllm_bindings/triton_launches.py`) decide from the pinned kernel
 # (name + source sha256 + constexprs + geometry) which operand the kernel actually writes: input_ptr /
 # weight_ptr must stay readable after a launch; a kernel that is not the pinned one (another body, another name) must refuse.
 # ---------------------------------------------------------------------------------------------------------

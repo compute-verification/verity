@@ -11,11 +11,11 @@ import json
 
 import numpy as np
 import pytest
+from verity.circuits import library
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.circuits import library
-from verity_vllm.definitions.numerics import dsv4_moe_twin as T
 from verity.circuits.ops import mufu as MU
+from verity_vllm.definitions.numerics import dsv4_moe_twin as T
 from verity_vllm.definitions.registry import dsv4_moe as D
 from verity_vllm.definitions.registry import prims as P
 

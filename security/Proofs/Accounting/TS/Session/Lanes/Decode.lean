@@ -59,7 +59,7 @@ reads them at lane 0's ports.
 
 `decL_congr` and `decC_congr`: a decode reads only the ports' row bits, so two sessions or layer values that agree on
 them decode alike. The leaf `LeafLanesSound` opens is the one the data ports' rows decode to (`Lanes.Committed`); the
-known values' content is flock-verify's to check (`Lanes.KnownRead`).
+known values' content is verity-verify-proof's to check (`Lanes.KnownRead`).
 -/
 
 @[expose] public section

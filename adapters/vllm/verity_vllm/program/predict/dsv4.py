@@ -76,7 +76,7 @@ class Net:
         except (KeyError, ValueError, TypeError) as e:
             raise Unexpressible(f"config.json: {e}") from None
         self.C, self.tp, self.NL, self.capture_sizes, self.max_num_seqs = C, phi.target_profile(), C["NL"], (), 0
-        self.G = FLASHMLA_GEOMETRY.get((D, DR))
+        self.G = FLASHMLA_GEOMETRY.get((D, DR), {})   # none registered: no geometry, refused below
         facts = []
         if self.tp.compute_capability != (9, 0):
             facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
@@ -102,7 +102,7 @@ class Net:
             facts.append(f"{C['O_GROUPS']} o-projection groups over {self.world} ranks of {NH} heads")
         block = 1 << (max(QL, D) - 1).bit_length()
         self.norm = {"BLOCK": block, "WARPS": 8 if block >= 2048 else 4, "EPS": C["EPS"]}
-        if self.G is None:
+        if not self.G:
             facts.append(f"no FlashMLA sparse geometry at head {D}, rope {DR} (registered: {sorted(FLASHMLA_GEOMETRY)})")
         else:
             try:
@@ -194,13 +194,14 @@ class Net:
         return _Model(self, B, W, peers)
 
 
-class _Model(dsa._Model):
+class _Model(dsa._Calls):
     """The forward over one call's rows, emitted into `B`: the HC residual streams and their (post, comb) mixes carried from sublayer
     to sublayer, and each layer's window, compressor state and compressed rows carried across calls as `vllm_dsv4` keeps them (its
-    history opens at the layer's first call); the collectives, linears, router GEMM and sampler are `dsa._Model`'s.  Its mHC split
+    history opens at the layer's first call); the collectives, linears, router GEMM and sampler are `dsa._Calls`'s.  Its mHC split
     counts, FlashMLA planner and Marlin configs read the call's own rows, so it is never given a launch batch."""
 
     reads_launch = False
+    net: Net
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
         super().__init__(net, B, W, peers)

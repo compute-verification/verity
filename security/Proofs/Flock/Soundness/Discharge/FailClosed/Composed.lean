@@ -27,10 +27,10 @@ import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 
 /-!
-# The public-output `--zk` headlines, over what flock-verify accepts
+# The public-output `--zk` headlines, over what verity-verify-proof accepts
 
 Each theorem here is the `Composed` headline of the same name over `VerifiesZK` (`LiveVerifiesZK`), what
-`flock-verify verify --zk` accepts, in place of `AcceptsZK`, with no hypothesis on the statement's form: the verifier
+`verity-verify-proof verify --zk` accepts, in place of `AcceptsZK`, with no hypothesis on the statement's form: the verifier
 refuses every statement whose form the soundness proof does not cover (`Flock.ProvedScope.check`), so the circuit, the
 public file and the facts the `Composed` headline took about them (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`, `hTags`)
 come from the check at each statement it passes (`hs : ScopeZ I`, `FailClosed.Scope`). The units are those of the
@@ -66,7 +66,7 @@ section
 
 variable (P : LigProver)
 
-/-- **One public-output `--zk` sampled session that flock-verify accepts, sound and zero knowledge.** `Composed.zk_session_composed` over `VerifiesZK`; zero knowledge, a property of the honest prover, at every statement the check passes. -/
+/-- **One public-output `--zk` sampled session that verity-verify-proof accepts, sound and zero knowledge.** `Composed.zk_session_composed` over `VerifiesZK`; zero knowledge, a property of the honest prover, at every statement the check passes. -/
 theorem zk_session_composed
     (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
@@ -117,7 +117,7 @@ theorem zk_session_composed
 
 end
 
-/-- **One public-output `--zk` sampled session that flock-verify accepts is sound.** `Composed.zk_session_sound` over `VerifiesZK`. -/
+/-- **One public-output `--zk` sampled session that verity-verify-proof accepts is sound.** `Composed.zk_session_sound` over `VerifiesZK`. -/
 theorem zk_session_sound
     (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
@@ -160,7 +160,7 @@ theorem zk_session_sound
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.Composed.zk_session_sound I hs.typed dj y₀ wr dg N (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh) σs ks hks St hS Kd pop Lb src hA3 hDraw (hs.tagsOk hh hn) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 
-/-- **One public-output `--zk` sampled session that flock-verify accepts is sound, under `live-verifier`.** `Composed.zk_session_sound_custody` over `VerifiesZK`. -/
+/-- **One public-output `--zk` sampled session that verity-verify-proof accepts is sound, under `live-verifier`.** `Composed.zk_session_sound_custody` over `VerifiesZK`. -/
 theorem zk_session_sound_custody
     (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1)
     -- the sampling design and A3
@@ -210,7 +210,7 @@ theorem zk_session_sound_custody
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.Composed.zk_session_sound_custody I hs.typed (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh) σs ks hks St hS Kd pop Lb src hA3 dj y₀ wr dg N (hs.tagsOk hh hn) hCust hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 
-/-- **One public-output `--zk` sampled session of `J` tables that flock-verify accepts is sound.** `Composed.zk_session_soundJ` over `VerifiesZK`, at every number of tables. -/
+/-- **One public-output `--zk` sampled session of `J` tables that verity-verify-proof accepts is sound.** `Composed.zk_session_soundJ` over `VerifiesZK`, at every number of tables. -/
 theorem zk_session_soundJ
     (I : Inputs) (hh : I.tags.hiddenOutputs = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -256,7 +256,7 @@ theorem zk_session_soundJ
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.Composed.zk_session_soundJ I hs.typed dj y₀ wr dg N (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh) kd hkd Lb src hA3 hDraw (hs.tagsOkZJ hh) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 
-/-- **One public-output `--zk` sampled session of `J` tables that flock-verify accepts is sound, at the challenger's live-coin part's custody.** `Composed.zk_session_soundJ_custody` over `VerifiesZK`. -/
+/-- **One public-output `--zk` sampled session of `J` tables that verity-verify-proof accepts is sound, at the challenger's live-coin part's custody.** `Composed.zk_session_soundJ_custody` over `VerifiesZK`. -/
 theorem zk_session_soundJ_custody
     (I : Inputs) (hh : I.tags.hiddenOutputs = false)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
@@ -302,7 +302,7 @@ theorem zk_session_soundJ_custody
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
   exact FlockSoundness.Discharge.Composed.zk_session_soundJ_custody I hs.typed (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh) kd hkd hdiv dj y₀ wr dg N Lb src hA3 (hs.tagsOkZJ hh) hCust hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 
-/-- **One public-output `--zk` sampled session of `J` tables that flock-verify accepts is sound, at the record's custody and the printed sample file.** `Composed.zk_session_soundJ_custody_json` over `VerifiesZK`. -/
+/-- **One public-output `--zk` sampled session of `J` tables that verity-verify-proof accepts is sound, at the record's custody and the printed sample file.** `Composed.zk_session_soundJ_custody_json` over `VerifiesZK`. -/
 theorem zk_session_soundJ_custody_json
     (I : Inputs) (hh : I.tags.hiddenOutputs = false)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
@@ -313,7 +313,7 @@ theorem zk_session_soundJ_custody_json
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, the challenger's live-coin part's custody of the record, and its sample file as `flock-verify draw`
+    -- the verify command's tags, the challenger's live-coin part's custody of the record, and its sample file as `verity-verify-proof draw`
     -- printed the verifier's sample
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr)
     (hdj : ∀ S, dj S = (drawOf (.subset kd) n S).toJson)

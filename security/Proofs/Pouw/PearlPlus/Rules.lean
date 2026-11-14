@@ -3,6 +3,7 @@ module
 public import PouwPearlPlus.Rule
 public import Proofs.Pouw.PearlC.CoreOps
 public import Proofs.Pouw.PearlPlus.Words
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl+'s bridge, part (c): the check's per-row rules and inert-work replay are the game's

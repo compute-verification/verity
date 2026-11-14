@@ -103,7 +103,7 @@ theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
         ((swSrcE x c w v τ j.val).rep r.val) l₄.size := by
   intro zp lp ss T sws t₃ l₃ lg zl rec t₄ l₄ rp tt lgc hP h₄ hrp hlgc hbat
   obtain ⟨zc, t₁, l₁, lc, t₂, l₂, h₁, h₂, h₃⟩ := _root_.Flock.Firewall.Finish.piopFw_split hP
-  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hk6' : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
   -- the setup is the statement's
   have hm14 : 14 ≤ st.m := by
@@ -199,7 +199,7 @@ theorem swSrcE_hinner_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
     (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
     (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h r.val tPad extra lanePad salt (fun _ _ => 0) (by omega) hk0 h2
     (fun i hi => (hlv i hi).q_ne_zero) hS4).1
-  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz
@@ -335,7 +335,7 @@ theorem swSrcE_hinner_sv_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (
   refine swSrcE_hinner_v Lr ρ tz frep x hx w τ c n hnr s spec hs j r v q hq hlayR hz hpads hrows hmkV st hst tPad
     dom g cm0 extras he ic extra lanePad salt ht₀ hl ?_
   intro zp zc t₁ l₁ lp lc t₂ l₂ ss T sws t₃ l₃ h₁ h₂ h₃
-  obtain ⟨h25, -, -, -, -, -, -, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, -, -, -, -, -, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   have hk6 : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
   have hSm : st.m = (stAt x j).m := by
     subst hst
@@ -438,7 +438,7 @@ theorem swSrcE_ligHyp_E_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : R
       (ligBasis x c w τ j r extras) (layE x j) (_root_.Flock.Firewall.Finish.padsOf q.draws).h r.val (zkTab x j).tPad
       ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) ((UE.tapeZk τ).salt j.val r.val)
       ((swSrcE x c w v τ j.val).rep r.val) := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨h25, -, hsm, hk0, -, hdim, -⟩ := ZkExec.zk_schedule_seams _ _ _ _ (zkTab x j).hz
   obtain ⟨hn7, h2, -⟩ := hdim
   obtain ⟨ey1, eybar, esalt⟩ := swSrcE_restart x c w v τ j.val r.val
   have hy1 := ligY1E x hx w hw τ c n hn s spec hs j r extras he
@@ -547,7 +547,7 @@ theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ 
     simp [hpts]
   have hesz : extras.size = spec.points * (stAt x j).regions.size := by
     rw [FlockDeploy.extraClaims_size heS, hpsz, hpts, Nat.mul_comm]
-  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [stsOf_half]
     exact (zkTab x j).hz

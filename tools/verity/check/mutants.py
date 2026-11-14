@@ -7,7 +7,7 @@ A check here is a statement of a `do` block that is a bare call of a function na
 `∧` or `→` is part of a declaration (a theorem's statement, a field's type), not a call, and a block comment holds no
 call; a call is deleted with the lines that continue it (closing its brackets, or indented deeper). Each mutant replaces
 one such line of FILE with `pure ()` at its indentation, runs `--build` (the verifier's incremental build, e.g. `lake
-build flock-verify` from its package), then `--test`; a mutant whose test still exits 0 survived, which says no test
+build verity-verify-proof` from its package), then `--test`; a mutant whose test still exits 0 survived, which says no test
 refuses an input that only that check refuses. `--only` keeps the checks whose line holds TEXT, `--line` those that start on line N. FILE is restored after
 each mutant, and `--build` runs once more at the end, so the build matches the source again; a stop (SIGINT) restores it
 too.

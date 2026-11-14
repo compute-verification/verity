@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 # The live `--zk` runs with the sample at accepted outcomes, and the challenger's live-coin part's samples at V*'s law
 
 `ZkExec.runsZC_live` and `ZkHidden.runsZCJH_live` take their sample hypothesis (`DrawOkZK`, `DrawOkZKHJ`) at every sample of
-the sampling design, and read it only at the sample of an outcome flock-verify `--zk` accepts. `runsZC_liveA` and `runsZCJH_liveA` take
+the sampling design, and read it only at the sample of an outcome verity-verify-proof `--zk` accepts. `runsZC_liveA` and `runsZCJH_liveA` take
 it there alone: each is the old theorem at the sampling design with the one coin that samples that sample.
 
 The samples come from the record's custody (`DrawFileZK`):
@@ -41,7 +41,7 @@ The samples come from the record's custody (`DrawFileZK`):
   holds at every sample of the live law;
 * `DrawFileZK.size_execOS`, `Composed.drawOkZKJ_of_exec`, `drawOkZKHJ_of_exec`: at every sample of the live stratified
   sampling design, custody's sample file has `Σ_s k_s` units, so where the session's `J` tables divide it, `DrawOkZKJ` (`DrawOkZKHJ`)
-  holds at `(Σ_s k_s) / J` units a table: flock-verify splits one stratified sample over several tables as it splits a
+  holds at `(Σ_s k_s) / J` units a table: verity-verify-proof splits one stratified sample over several tables as it splits a
   subset sample (`Draw.tablesWhy`);
 * `drawOkZKHJ_of_accepts`, at any count: several tables split the sample's units evenly (`setupTables_units`), so at an
   accepted outcome the tables divide `Σ_s k_s` and `drawOkZKHJ_of_exec` holds. `runsZCJH_live_execOS` is
@@ -61,7 +61,7 @@ open Flock Refine Exec Game Model DecodeZL ZkSession
 local notation "𝕂" => FlockLevel3.GF256
 
 /-- **`RunsZCLive` with the sample hypothesis at accepted outcomes**: `RunsZCLive` with `DrawOkZK` at the sample `L.draw ω`
-only where flock-verify `--zk` accepts what `wr` writes at it. -/
+only where verity-verify-proof `--zk` accepts what `wr` writes at it. -/
 def RunsZCLiveA : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (y₀ : ZkLink.DrawSetupZK I mPts S₀ (dj S₀))
@@ -236,7 +236,7 @@ theorem drawOkZKHJ_of_exec (I : Inputs) (ht : I.tags.typed = false) {c : Flock.C
   drawOkZKHJ_of_size I ht hc _ _ pop hdiv dj hdj _ (DrawFileZK.size_execOS σs ks hks St hS Kd pop Lb src hdj ω)
 
 /-- **`DrawOkZKHJ` at an accepted outcome of the live law, at any count**: `drawOkZKHJ_of_exec` at `(Σ_s k_s) / nTab I`
-units a table. At one table `nTab I = 1`; at several, flock-verify `--zk` accepts the record's sample (the challenger's live-coin part's,
+units a table. At one table `nTab I = 1`; at several, verity-verify-proof `--zk` accepts the record's sample (the challenger's live-coin part's,
 `RecordsLiveZKJ`) only when its units are a multiple of the count (`setupTables_units`), and custody's sample has
 `Σ_s k_s` units (`DrawFileZK.size_execOS`), so the tables divide `Σ_s k_s`. -/
 theorem drawOkZKHJ_of_accepts (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
@@ -265,7 +265,7 @@ theorem drawOkZKHJ_of_accepts (I : Inputs) (ht : I.tags.typed = false) {c : Floc
 
 /-- **`DrawOkZKHJ` from `RecordCustodyZKJS`**, the custody `JointStratifiedMT` and `JointStratifiedHorizonMT` take: at
 a sample of the live stratified sampling design `stratified Kd (Array.ofFn St)` that `verify --zk --session-tables J` accepts, at any
-`J`, several tables included (flock-verify takes one stratified sample over the sampling block there when `J` divides its
+`J`, several tables included (verity-verify-proof takes one stratified sample over the sampling block there when `J` divides its
 units, and gives table `j` its `j`-th part), `DrawOkZKHJ` holds at `(Σ_s k_s) / nTab I` units a table:
 `drawOkZKHJ_of_accepts` at the custody's two parts. -/
 theorem drawOkZKHJ_of_custodyJS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
@@ -303,7 +303,7 @@ theorem runsZCJH_live_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock
     (drawOkZKHJ_of_accepts I ht hc σs ks hks St hS Kd pop Lb src dj hdj hRec)
 
 /-- **`DrawOkZKHJ` at an accepted outcome of a subset sampling design, at any count**: `drawOkZKHJ_of_file` at `kd / nTab I` units a
-table. At one table `nTab I = 1`; at several, flock-verify `--zk` accepts the record's sample (the challenger's live-coin part's,
+table. At one table `nTab I = 1`; at several, verity-verify-proof `--zk` accepts the record's sample (the challenger's live-coin part's,
 `RecordsLiveZKJ`) only when its units are a multiple of the count (`setupTables_units`), and custody's sample has `kd`
 units (`DrawFileZK`, `ofJson_shape`), so `kd % nTab I = 0`. -/
 theorem drawOkZKHJ_of_accepts_subset (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}

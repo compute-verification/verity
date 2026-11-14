@@ -6,7 +6,7 @@ same step stream and run root as the module's other values.  Attached whenever t
 The sites are the manifest's `scale_products` identities.  A forward pre-hook marks the site module that runs; inside it, during a
 committed step, the wrapper of `torch.ops._C.cutlass_scaled_mm` reads the launch's `a_scales` (the [M, K/G] group scales
 `per_token_group_fp8_quant` wrote, x_s) and `b_scales` (the transposed view of the module's [N/G, K/G] `weight_scale_inv`, w_s), computes
-`F32Mul_v1(x_s[m][kb], w_s[nb][kb])` on the host through the circuit (`kernels.fp8_twins.scale_products`), acquires the words on the launch's
+`F32Mul_v1(x_s[m][kb], w_s[nb][kb])` on the host through the circuit (`numerics.fp8_twins.scale_products`), acquires the words on the launch's
 device, then runs the installed kernel unchanged.  No kernel changes.  A launch whose scale shapes are not the manifest's block geometry
 is a collector error.
 """
@@ -129,7 +129,7 @@ class ScaleProductsSource:
         return [{"class": SP.FAMILY, "how": "bound-as-leaf", "rule": None, "count": self.stats["tensors"], "bytes": self.stats["bytes"],
                  "tensors": self.stats["tensors"], "rows": self.stats["rows"], "errors": self.stats["errors"],
                  "evidence": (f"scale-products source: `<linear module>/{SP.MEMBER}` of {len(self.sites)} sites, F32Mul_v1 of the launch's "
-                              "activation scales and the module's weight_scale_inv through the IR (kernels.fp8_twins.scale_products; no kernel change)")}]
+                              "activation scales and the module's weight_scale_inv through the IR (numerics.fp8_twins.scale_products; no kernel change)")}]
 
 
 def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,

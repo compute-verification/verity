@@ -59,7 +59,7 @@ def _design(check: SpecializedDefinition, tokens: int, q: int) -> tuple[list[Spe
 
 
 def _codes(own: SS.Own) -> set[str]:
-    return set(SS.check(True, own, None).codes)
+    return set(SS.check_twin(True, own, None).codes)
 
 
 def _held(own: SS.Own, template: SpecializedDefinition) -> list[str]:

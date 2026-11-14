@@ -1,9 +1,9 @@
-"""The Commit's coins from the auditor host's challenger: one challenge phase a Commit, which samples its openings
+"""The Commit's coins from the auditor device's challenger: one challenge phase a Commit, which samples its openings
 and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
   the Commit reserves a challenge phase on the auditor's challenger gate (`ChallengerGate`: ``reserve --peer NAME --scheme SCHEME --families
-  families(runs)``, `verity/protocols/compose/device/live_challenger/auditor.py` on the auditor host, under the caller's own gate key). Once its
+  families(runs)``, `verity/protocols/compose/device/live_challenger/auditor.py` on the auditor device, under the caller's own gate key). Once its
   first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
   root v2, `tp.run_root`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
   binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
@@ -39,10 +39,14 @@ from typing import Any
 
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.device import remote
-from verity.protocols.proofs.spot.device.challenger import CoinError, LiveOpening, live_reason
+from verity.protocols.proofs.spot.device.challenger import (
+    CoinError,
+    LiveOpening,
+    live_reason,
+)
 
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
 SCHEME_TAG = "verity/vllm/commit-coins/v1"
 POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
@@ -101,7 +105,7 @@ class ChallengerGate:
 
 
 class ChallengePhase:
-    """The Commit's challenge phase on the auditor host's challenger: reserved for `runs` runs (`reserve`), opened on the first
+    """The Commit's challenge phase on the auditor device's challenger: reserved for `runs` runs (`reserve`), opened on the first
     run's root of record (`draw` of run 0), a coin of each family a run, closed after the last (`close`)."""
 
     def __init__(self, gate: ChallengerGate, reserved: Mapping[str, Any], runs: int, address: Callable[[int], str] | None = None) -> None:
@@ -168,7 +172,7 @@ def of_options(args: Any, runs: int, gate_run: Run | None = None) -> ChallengePh
     gate, peer = getattr(args, "challenger_gate", None), getattr(args, "challenger_peer", None)
     if bool(gate) != bool(peer):
         raise SystemExit("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in "
-                         "the auditor host's peers, where its challenger reaches the Commit")
+                         "the auditor device's peers, where its challenger reaches the Commit")
     if not gate or not peer:
         return None
     if getattr(args, "replay_challenge", None):
@@ -236,7 +240,7 @@ def tp_keys(rec: Mapping[str, Any]) -> tuple[bytes, bytes]:
 def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Sequence[Any], directory: Any,
            key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify, *, pins: Sequence[Any] | None,
            main: Sequence[str] | None) -> str | None:
-    """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor host's
+    """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor device's
     challenger's, sampled after `roots` (each run's root of record as the verifier holds it); None when they are. The
     challenge phase is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head
     published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins, the host's pins log
@@ -245,7 +249,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     if not runs or len(runs) != len(roots):
         return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"
     if any(r.get("source") != CHALLENGER for r in runs):
-        return ("the Commit's coins were drawn in its own process, not by the auditor host's challenger: a measurement, "
+        return ("the Commit's coins were drawn in its own process, not by the auditor device's challenger: a measurement, "
                 "which credits nothing")
     roots = [bytes(r) for r in roots]
     if any(len(r) != ROOT_BYTES for r in roots):

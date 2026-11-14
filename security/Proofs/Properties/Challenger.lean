@@ -178,7 +178,7 @@ theorem oneStageZk_drawn (hd : DrawnByDevice) (bs : Array ByteArray) (dev : Hist
     (h : ((Spot.OneStageZk.protocol.on bs).answer a b e).verdict = .accept) :
     ∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment)
       (ev : Spot.OneStageZk.Evidence) (ξ : ByteArray) (d : Draws),
-      (Core.canonicalJson a >>= Spot.OneStageZk.paramsOfJson) = .ok p ∧
+      (Core.canonicalJson a >>= Spot.OneStageZk.paramsEitherOfJson) = .ok p ∧
       Spot.OneStageZk.protocol.commitment b = .ok c ∧ Spot.OneStageZk.protocol.evidence e = .ok ev ∧
       ((Spot.OneStageZk.protocol.on bs).answerAt (Spot.OneStageZk.live bs) a b ξ e).verdict =
         .accept ∧

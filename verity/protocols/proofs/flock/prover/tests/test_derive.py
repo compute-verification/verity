@@ -299,7 +299,7 @@ def vector_cases():
 
 
 def vectors() -> dict:
-    return {"about": "derive vectors: each archive (flock-verify layout's format) with the SHA-512 of the rows the "
+    return {"about": "derive vectors: each archive (verity-verify-proof layout's format) with the SHA-512 of the rows the "
                      "prover's derive (verity_flock.derive) gives it: each inner layout's physical rows and the unit's own "
                      "region as flock-ir-unit/v2 text with READ lines (derive.netlist), the unit's parts and Δ "
                      "(derive.delta_text), and the logical list (derive.logical_text). Written by test_derive.py --write.",

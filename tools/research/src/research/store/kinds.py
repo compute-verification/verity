@@ -138,23 +138,23 @@ KINDS: dict[str, str] = {
                                     "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
                                     "COMPARE.md: whether every request's output ids match the honest trace's, bits per "
                                     "request, the first divergence)",
-    "challenger-ledger/v1": "the auditor host's challenger ledger (verity/protocols/compose/device/live_challenger/auditor.py, publish.sh): payload "
+    "challenger-ledger/v1": "the auditor device's challenger ledger (verity/protocols/compose/device/live_challenger/auditor.py, publish.sh): payload "
                             "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
                             "key_sha512}",
-    "challenger-ledger/v2": "the auditor host's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
+    "challenger-ledger/v2": "the auditor device's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
                             "the opener's gate key, end entries counting each family's released coins, leaves increasing); "
                             "payload windows.jsonl, the v1 entries first; meta as v1's; label challenger-ledger head by infra",
-    "challenger-session/v1": "one session of the auditor host's challenger: payload tree = request.json + out/ (record.json, key.json, "
+    "challenger-session/v1": "one session of the auditor device's challenger: payload tree = request.json + out/ (record.json, key.json, "
                              "releases.jsonl, challenger.json, ...); meta {session, host}; refs.ledger, the challenger-ledger/v1|v2 "
                              "whose end entry seals out/",
-    "challenger-pins/v1": "the auditor host's challenger pins log (/opt/vy-challenger/pins.jsonl, auditor.py record_pin, publish.sh): "
+    "challenger-pins/v1": "the auditor device's challenger pins log (/opt/vy-challenger/pins.jsonl, auditor.py record_pin, publish.sh): "
                           "payload pins.jsonl, one challenger.pin_line {commit, main, pinned_utc} a pin, append-only, each put an "
                           "extension of the last; meta {host, lines, sha512}; label challenger-pins head by infra",
-    "challenger-models/v1": "the auditor host's model registry (/var/lib/vy-challenger/models.jsonl, live_challenger/models.py, "
+    "challenger-models/v1": "the auditor device's model registry (/var/lib/vy-challenger/models.jsonl, live_challenger/models.py, "
                             "publish.sh): payload models.jsonl, one registration a line {model, circuit, prefix, checkpoint, "
                             "roots, entries, weights_root, key_sha512, ...}, append-only, each put an extension of the last; "
                             "meta {host, lines, sha512}; label challenger-models head by infra",
-    "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
+    "challenger-key/v1": "the auditor device's challenger signing key, published by infra apart from the ledger so that a verifier pins "
                          "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
                          "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
     "verifier-run/v1": "one run of the verifier host's PoUB verifier (verity/protocols/accounting/poub/device/live_verifier/host.py, vy-auditor-1): "

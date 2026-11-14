@@ -49,6 +49,8 @@ def CommittedPad (A : Arith F K) (S : Statement) (sch : Schedule) (t : ℕ) (c�
     (C : Oracle F) : Prop :=
   ∃ P ∈ padWits A sch t c₀ C, S.Satisfies (wit A S sch P)
 
+variable {wideLeaf : Bool}
+
 open Classical in
 theorem padWits_card_le (A : Arith F K) (hA : A.Correct) (sch : Schedule) (t : ℕ)
     (hpad : PadOK sch.level₀ t) (c₀ : F) (C : Oracle F) :
@@ -316,28 +318,29 @@ theorem table_sound_pad (A : Arith F K) (hA : A.Correct)
 
 /-- Flock ZK's schedules have the `fast100` shape. -/
 theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 35 →
-    2 ≤ (m1Schedule m).levels.length ∧
-      ((m1Schedule m).levels.headD default).lanes = (m1Schedule m).k0 ∧
-      (m1Schedule m).m - 7 = (m1Schedule m).k0 + ((m1Schedule m).levels.headD default).logCols ∧
-      levelsChained (m1Schedule m).levels (m1Schedule m).ext = true := by
+    2 ≤ (m1Schedule wideLeaf m).levels.length ∧
+      ((m1Schedule wideLeaf m).levels.headD default).lanes = (m1Schedule wideLeaf m).k0 ∧
+      (m1Schedule wideLeaf m).m - 7 = (m1Schedule wideLeaf m).k0 + ((m1Schedule wideLeaf m).levels.headD default).logCols ∧
+      levelsChained (m1Schedule wideLeaf m).levels (m1Schedule wideLeaf m).ext = true := by
   intro m h1 h2
-  interval_cases m <;> decide +kernel
+  cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- **The table theorem at Flock ZK's values** (`verity/ml/flock/live/PROTOCOL.md` §7 item 6): every `m`
 the verifier serves, `25 ≤ m ≤ 35`, level-0 query counts `277, 242, 229` at `m = 25, 26, 27`, 219 at
-`m = 28..31` and 218 at `m = 32..35`, padding `t = 2q₀`, a pair of extra lanes per rep. For every prover
+`m = 28..31` and 218 at `m = 32..35` (219 there at the wide-leaf statement version), padding `t = 2q₀`, a pair of
+extra lanes per rep, at either statement version. For every prover
 strategy, the verifier accepts a table while the committed values do not satisfy the statement with
 probability at most `2^-205`, for every statement shape in range. -/
 theorem table_sound_pad_m1 (A : Arith F K) (hA : A.Correct)
     (S : Statement) (hm1 : 25 ≤ S.m) (hm2 : S.m ≤ 35) (c₀ : F) (ptLocal mPts : ℕ)
     (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)
-    (σ : Strategy (tablePad A S (m1Schedule S.m) (by omega) (m1Pad S.m) c₀ 2 ptLocal mPts)) :
-    prob (fun out => out.1 = true ∧ ¬ CommittedPad A S (m1Schedule S.m) (m1Pad S.m) c₀ out.2)
-      (tablePad A S (m1Schedule S.m) (by omega) (m1Pad S.m) c₀ 2 ptLocal mPts) σ ≤
+    (σ : Strategy (tablePad A S (m1Schedule wideLeaf S.m) (by omega) (m1Pad wideLeaf S.m) c₀ 2 ptLocal mPts)) :
+    prob (fun out => out.1 = true ∧ ¬ CommittedPad A S (m1Schedule wideLeaf S.m) (m1Pad wideLeaf S.m) c₀ out.2)
+      (tablePad A S (m1Schedule wideLeaf S.m) (by omega) (m1Pad wideLeaf S.m) c₀ 2 ptLocal mPts) σ ≤
       ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
-  (table_sound_pad A hA S (m1Schedule S.m) (m1_shape S.m hm1 hm2) (m1Schedule_m S.m hm1 hm2)
-    (by omega) (m1Pad S.m) (m1_padOK S.m hm1 hm2) c₀ 2 ptLocal mPts hlay
-    (m1_rep_nonneg S.m hm1 hm2 _) σ).trans
-    (ENNReal.ofReal_le_ofReal (padTableError_le_m1 S.m hm1 hm2 _ hshape))
+  (table_sound_pad A hA S (m1Schedule wideLeaf S.m) (m1_shape S.m hm1 hm2) (m1Schedule_m (wide := wideLeaf) S.m hm1 hm2)
+    (by omega) (m1Pad wideLeaf S.m) (m1_padOK (wide := wideLeaf) S.m hm1 hm2) c₀ 2 ptLocal mPts hlay
+    (m1_rep_nonneg (wide := wideLeaf) S.m hm1 hm2 _) σ).trans
+    (ENNReal.ofReal_le_ofReal (padTableError_le_m1 (wide := wideLeaf) S.m hm1 hm2 _ hshape))
 
 end FlockSoundness

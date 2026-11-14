@@ -16,20 +16,20 @@ GATES = (0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0xC2B1, 0xC2B2, 0xC2C8, 0x0001,
 UPS = (0x0000, 0x8000, 0x3F80, 0xBF80, 0x7F80, 0xFF80, 0x7FC0)
 
 
-def _words(I: int, i: int) -> list[int]:
+def _words(width: int, i: int) -> list[int]:
     n = len(GATES) * len(UPS)
-    pairs = [divmod((i + k) % n, len(UPS)) for k in range(I)]
+    pairs = [divmod((i + k) % n, len(UPS)) for k in range(width)]
     pairs = [(GATES[a], UPS[b]) for a, b in pairs]
     return [g for g, _ in pairs] + [u for _, u in pairs]
 
 
 def cases(rng, i: int) -> dict:
-    I = SHAPES[(i // len(KINDS)) % len(SHAPES)]
+    width = SHAPES[(i // len(KINDS)) % len(SHAPES)]
     if i % 6 == 5:
-        row = {"shape": [2 * I], "dtype": "bfloat16", "words": _words(I, i * I)}
-        return {"statics": {"I": I}, "inputs": [row], "edge": True}
+        row = {"shape": [2 * width], "dtype": "bfloat16", "words": _words(width, i * width)}
+        return {"statics": {"I": width}, "inputs": [row], "edge": True}
     kind = KINDS[i % len(KINDS)]
-    return {"statics": {"I": I}, "inputs": [{"shape": [2 * I], "dtype": "bfloat16", "kind": kind}], "edge": kind != "random"}
+    return {"statics": {"I": width}, "inputs": [{"shape": [2 * width], "dtype": "bfloat16", "kind": kind}], "edge": kind != "random"}
 
 
 def production(statics: dict, inputs: list) -> list:

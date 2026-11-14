@@ -26,7 +26,7 @@ from verity_vllm.check.c2_rules import (
     _form_b_selector_coverage,
 )
 from verity_vllm.check.commit_pass import commit_verdict
-from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
+from verity_vllm.records.replay_codes import NOT_YET, why_class
 
 
 def _bnd(n_req):

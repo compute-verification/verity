@@ -25,7 +25,7 @@ from verity.protocol import place, site_of
 from verity.party import Identity, Received
 from verity.runtime.runner import run
 from verity.protocols.proofs.spot.verifier import parties as P
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.channel import Message, Refused
 
 ROLES = [P.CHALLENGER, P.INFERENCE_SERVER, P.PROOF_SERVER, P.VERIFIER]

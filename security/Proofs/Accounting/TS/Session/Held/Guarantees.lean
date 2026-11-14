@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 `Accounting.Guarantees.TS.HeldSessionSound`: `Accounting.Guarantees.TS.CheckedSessionSound`'s window, with the layer
 `Accounting.TS.Held.heldLayer` in place of `checkedLayer`. Its relation concludes the served checks:
 
-* (a) the `ok` rows are the verifier's, proved from flock-verify's known-content refusal (`Registered.checkKnownAll`)
+* (a) the `ok` rows are the verifier's, proved from verity-verify-proof's known-content refusal (`Registered.checkKnownAll`)
   and `FlockC3.RegLevels.knownColl_spec`, not a premise. The service names the `ok` port's known content in the
   registered file, each row the word `1` (`okRow`) under its salt;
 * (b) every sampled proof block's checks hold in the declared circuit (`Accounting.Served.Held`), under
@@ -62,11 +62,11 @@ open scoped ENNReal
 
 /-- **A checked unit's proof layer, with its served checks, is sound at `δ` through its Flock sessions, fully
 checked.** `CheckedSessionSound`'s window and premises, at the held layer `heldLayer sess out ok known Cd cls unitOf dec
-right` (accepted where flock-verify `--zk --registered` accepts, at the registered file's known content `known x w i`;
+right` (accepted where verity-verify-proof `--zk --registered` accepts, at the registered file's known content `known x w i`;
 opening the committed rows at the registered reads; its relation `HeldRel`), and in addition at every session: the known
 content names the port `ok` with rows each the word `1` (`okRow`), and its key program's `ok` wires carry the checks of
 round `w`'s declared circuit `Cd w` (`Accounting.Assumptions.TS.OkRealizes`). Then the layer accepts only where
-flock-verify accepts (`AcceptedLive`), and each proof is accepted with committed rows that fail `HeldRel` on the path
+verity-verify-proof accepts (`AcceptedLive`), and each proof is accepted with committed rows that fail `HeldRel` on the path
 with probability at most `δ`: outside `δ` the rows are one assignment the circuit's evaluation agrees with on every
 sampled proof block, at which every sampled proof block's checks of `Cd` hold, or the registrant's `ok` openings exhibit an explicit
 SHA-512 collision (`OkColl`). -/

@@ -145,8 +145,8 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
           within_step: str = DEFAULT_WITHIN_STEP, record_alternate: bool = True,
           _loaded: dict | None = None, tokens_optional: bool = False) -> dict:
     """`_loaded` = {"oracle": SEQ.RootView, "components": {dir: SEQ.RootView}} decoded once by this process and shared with the X-09 run and
-    the alternate-criterion run (the fold RootView is read-only after load; decoding it three times per
-    invocation -- check, X-09, alternate -- put GM-01's peak RSS at 87 GB on the B16 1024/128 record). The criteria are unchanged.
+    the alternate-criterion run (the fold RootView is read-only after load, so the three readers of one
+    invocation -- check, X-09, alternate -- hold one decode of it and not three). The criteria are unchanged.
 
     MATCH_IMPL=fast: the same body over global_match_fast's compute-once operations (`match_ops`); the outermost
     call releases their caches when it returns or raises, the nested alternate-criterion call keeps them."""
@@ -315,9 +315,9 @@ def impl_module(name: str | None = None):
     both on the same artifacts and compares verdict, per-check outcomes, populations and mismatch locations.  An unknown name is an
     error, never a silent fallback to either implementation.
 
-    The default moved from `record` to `fast`: a `global_match.py` invoked outside `row_pod.sh` (a by-hand rerun,
-    another launcher) used to get the audit checker silently -- on the B64 llama32-1b row that is 8+ h single-core at 40-50 GB against
-    ~4 min on 8 cores at 13.5 GB for the same verdict.  `MATCH_IMPL=record` still selects the audit checker explicitly."""
+    The default is `fast`, so that a `global_match.py` invoked outside `row_pod.sh` (a by-hand rerun, another launcher) runs the
+    implementation the rows run and never the un-memoised single-process audit checker unasked.  `MATCH_IMPL=record` selects the
+    audit checker explicitly."""
     name = (name if name is not None else settings.get(IMPL_ENV) or IMPL_DEFAULT).strip().lower() or IMPL_DEFAULT
     if name == "record":
         return sys.modules[__name__]

@@ -326,6 +326,7 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     from verity_vllm.check.match import global_match as gm
     from verity_vllm.check.match import global_match_fast as GMF
     from verity_vllm.check.match import program_compare as C
+    from verity_vllm.check.match import program_loaders as PL
     from verity_vllm.pipeline import match_fold as MF
     gp, oracle = T.assemble([T.R0, T.R1_LATE], tmp_path)
     assert not [f for f in os.listdir(oracle) if ".compact." in f], os.listdir(oracle)   # the fold emits no sidecar
@@ -345,13 +346,13 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     ref = gm.check(gp, oracle)
     assert ref["verdict"] == "PASS"
     for compact in (False, True):
-        C.LOAD_NOTES.clear()
+        PL.LOAD_NOTES.clear()
         P = C.load_oracle(oracle, "o", compact=compact)
-        assert {k: C.LOAD_NOTES[oracle][k] for k in ("source", "instances_schema", "operand_refs_form")} == {"source": "record files", "instances_schema": MF.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
+        assert {k: PL.LOAD_NOTES[oracle][k] for k in ("source", "instances_schema", "operand_refs_form")} == {"source": "record files", "instances_schema": MF.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
         # [n2] the two record files are named by content too (sha256 as read)
         from tests.program.instances_forms import sha256_file as _sf
-        assert C.LOAD_NOTES[oracle]["instances_sha256"] == _sf(os.path.join(oracle, "instances.jsonl"))[0]
-        assert C.LOAD_NOTES[oracle]["program_sha256"] == _sf(os.path.join(oracle, "program.json"))[0]
+        assert PL.LOAD_NOTES[oracle]["instances_sha256"] == _sf(os.path.join(oracle, "instances.jsonl"))[0]
+        assert PL.LOAD_NOTES[oracle]["program_sha256"] == _sf(os.path.join(oracle, "program.json"))[0]
         assert {r["step"] for r in P.oracle_rows} != {99} and P.compact == compact
     monkeypatch.setenv(GMF.FLAG, "fast")
     fast = gm.check(gp, oracle)
@@ -459,6 +460,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     from tests.program import instances_forms as IF
     from verity_vllm.check.match import global_match as gm
     from verity_vllm.check.match import program_compare as C
+    from verity_vllm.check.match import program_loaders as PL
     from verity_vllm.pipeline import match_fold as MF
     monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
     gp1, o1 = T.assemble([T.R0, T.R1_LATE, T.R2_LATE], tmp_path / "v1")
@@ -482,15 +484,15 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     assert json.loads(_first_line(c21))["operand_refs_form"] == "runs" and json.loads(_first_line(c12))["schema"] == MF.INSTANCES_SCHEMA_V2
     # (2) the same RootView (record form and compact form) and the same GM-01 document
     for compact in (False, True):
-        C.LOAD_NOTES.clear()
+        PL.LOAD_NOTES.clear()
         assert _prog_facts(C.load_oracle(o1, "o", compact=compact)) == _prog_facts(C.load_oracle(o2, "o", compact=compact))
         # (4) the form READ is named per fold dir (-> impl.config.fold_load): the two documents are distinguishable by content
         _form_keys = ("source", "instances_schema", "operand_refs_form")
-        assert {k: C.LOAD_NOTES[o1][k] for k in _form_keys} == {"source": "record files", "instances_schema": MF.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
-        assert {k: C.LOAD_NOTES[o2][k] for k in _form_keys} == {"source": "record files", "instances_schema": MF.INSTANCES_SCHEMA_V2, "operand_refs_form": "progressions"}
+        assert {k: PL.LOAD_NOTES[o1][k] for k in _form_keys} == {"source": "record files", "instances_schema": MF.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
+        assert {k: PL.LOAD_NOTES[o2][k] for k in _form_keys} == {"source": "record files", "instances_schema": MF.INSTANCES_SCHEMA_V2, "operand_refs_form": "progressions"}
         # [n2] and by content: the instances.jsonl digests differ between the two stores (the program.json ones are equal -- same descriptor)
-        assert C.LOAD_NOTES[o1]["instances_sha256"] == IF.sha256_file(i1)[0] != C.LOAD_NOTES[o2]["instances_sha256"] == IF.sha256_file(i2)[0]
-        assert C.LOAD_NOTES[o1]["program_sha256"] == C.LOAD_NOTES[o2]["program_sha256"] == IF.sha256_file(os.path.join(o1, "program.json"))[0]
+        assert PL.LOAD_NOTES[o1]["instances_sha256"] == IF.sha256_file(i1)[0] != PL.LOAD_NOTES[o2]["instances_sha256"] == IF.sha256_file(i2)[0]
+        assert PL.LOAD_NOTES[o1]["program_sha256"] == PL.LOAD_NOTES[o2]["program_sha256"] == IF.sha256_file(os.path.join(o1, "program.json"))[0]
 
     def strip(o):   # the two folds live in two directories: every path key is volatile, nothing else is
         if isinstance(o, dict):

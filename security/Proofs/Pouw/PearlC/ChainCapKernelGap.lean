@@ -3,11 +3,11 @@ module
 public import Proofs.Pouw.PearlC.DeviceChainCapGap
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCapKernel
 public import Proofs.Pouw.PearlC.KernelWrefGap
-public import Definitions.Pouw.PearlC.DevicePricesLoop
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.KernelWrefGap
 import Proofs.Pouw.PearlC.TileGap
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # v2 at the chain cap 1/1,000 against the honest kernel's `W_ref`: the exact in-loop values (staged)

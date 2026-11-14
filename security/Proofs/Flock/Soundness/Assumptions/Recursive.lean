@@ -58,7 +58,7 @@ sessions read that the history does not fix, its running sums `rec-acc` and its 
   recursive guarantees answer with a registrant fork, `regFinder`), at all strategies of V*'s sessions there and at
   every record that is a genuine session-game outcome (each session's record is one its game reaches against its
   strategy, `Game.Outcome`; an accepted record is always such an outcome, since the audit only ever accepts what its
-  sessions play), when every session's outcome `flock-verify verify --zk --registered` accepts and every session's
+  sessions play), when every session's outcome `verity-verify-proof verify --zk --registered` accepts and every session's
   value layer is `Good` (no incorrect proof block, and at every unit each registered read carries the registrant's value: the
   hidden circuit's rows as registered, `R₂`'s values, and the values V* registers itself, the coins and the comb
   `coef`), the messages `wmsg` reads from the layers hold an inner transcript the inner verifier accepts on the hidden
@@ -143,27 +143,33 @@ theorem vbridgeC_of_vbridge {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm :
 /-- Obligation, as `VBridgeC`, off one more bad event `Bad`.
 
 **`v-bridge` at the committed rounds, off `RegColl` and `Bad`**: `VBridgeC` field for field, its first read only where
-neither two sessions' registrant records clash (`RegColl`, `regFinder`'s) nor `Bad` holds. At candidate 3, `Bad` is
-`Recursion.ValueColl` at the verifier's rows (`valueSrcAll`): a registrant's row off a value the verifier registers itself
+neither two sessions' registrant records clash (`RegColl`, `regFinder`'s) nor `Bad` holds. `Bad` reads the history, the
+registration and the record of the sessions' outcomes the bridge is asked at (`VBridgeOffOut`), so that an event one
+outcome's own registration and transcript state, as `Recursion.LeafColl`, is one of its disjuncts. At candidate 3,
+`Bad` is `Recursion.ValueColl` at the verifier's rows (`valueSrcAll`): a registrant's row off a value the verifier registers itself
 (`coef`, `dirs`, `v`), by a SHA-512 collision `valueFinder` outputs, the case `FlockC3.RegLevels.value_tie` leaves. This
 module cannot name it (its module imports this one), so `Bad` is a parameter; RegColl is not widened. `VBridgeC` gives it at
 every `Bad` (`vbridgeCOff_of_vbridgeC`). -/
 def VBridgeCOff {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
-    {Reg' Reg₂ : Type} (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop)
+    {Reg' Reg₂ : Type}
+    (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
+      ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × FlockSoundness.Discharge.Exec.Transcript) → Prop)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
     (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
     (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg) : Prop :=
-  VBridgeOff (fun R ω t R₂ => RegColl zs R ω t R₂ ∨ Bad R ω t R₂) zs dg N k Rw x wmsg ∧
+  VBridgeOffOut (fun R ω t R₂ o => RegColl zs R ω t R₂ ∨ Bad R ω t R₂ o) zs dg N k Rw x wmsg ∧
     VCommits zs (fun i j => if i + 1 < I.r then Sk i j else ∅) cmt ∧
     VDecodesR wmsg (fun i _ a b => i + 1 < I.r → a = b) (fun i j => if i + 1 < I.r then Sk i j else ∅) msg ∧
     VFullR I.r (fun i j => if i + 1 < I.r then Sk i j else ∅)
 
 /-- **`VBridgeC` gives `VBridgeCOff` at every `Bad`**: off more, the bridge asks less. -/
 theorem vbridgeCOff_of_vbridgeC {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ}
-    {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop)
+    {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
+      ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × FlockSoundness.Discharge.Exec.Transcript) → Prop)
     {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {x : Reg → L.Ω → I.Stmt}
     {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
@@ -171,6 +177,6 @@ theorem vbridgeCOff_of_vbridgeC {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {
     {cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg}
     {msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg}
     (hb : VBridgeC zs dg N k Rw x wmsg Sk cmt msg) : VBridgeCOff Bad zs dg N k Rw x wmsg Sk cmt msg :=
-  ⟨fun R ω t R₂ hn => hb.1 R ω t R₂ fun h => hn (Or.inl h), hb.2⟩
+  ⟨fun R ω t R₂ τ o hout hn => hb.1 R ω t R₂ (fun h => hn (Or.inl h)) τ o hout, hb.2⟩
 
 end Flock.Assumptions

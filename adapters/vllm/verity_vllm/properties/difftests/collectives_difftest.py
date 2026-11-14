@@ -7,7 +7,7 @@ communicator calls, with no rank processes to spawn):
     verity-vllm properties-admission produce --adapter verity_vllm.properties.difftests.collectives_difftest --n 30 --seed 5 --out DIR
     verity-vllm properties-admission check   --adapter verity_vllm.properties.difftests.collectives_difftest --dir DIR --out RUN/tp2.json
 
-Rank r contributes operand r; every rank must receive the same words (asserted), and rank 0's are the production output."""
+Rank r contributes operand r; every rank must receive the same words (asserted), and rank 0's are the served output."""
 from __future__ import annotations
 
 from verity.circuits.defs import CompositeDefinition, bind

@@ -99,7 +99,7 @@ inputs = [
     # tree to RecVStar's
     "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
-    # the flock-verify artifact
+    # the verity-verify-proof artifact
     "verity/protocols/proofs/flock/verifier/Flock/Test/RecCap.lean",
     # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/protocols/proofs/flock/prover/live/PROTOCOL.md",
@@ -115,7 +115,7 @@ worker_gb = 16
 # 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
-artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify",
+artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-frame-tape",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-rec-sparse",
@@ -262,7 +262,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/accounting/certifier",
     "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions/__init__.py", "adapters/vllm/verity_vllm/definitions/numerics/sparse_mla_split_twins.py", "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa.circuit-check.py", "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa.py", "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.py", "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.py", "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.circuit-check.json", "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.circuit-check.py", "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.py", "adapters/vllm/verity_vllm/definitions/registry/dsa.circuit-check.py", "adapters/vllm/verity_vllm/definitions/registry/dsa.py", "adapters/vllm/verity_vllm/definitions/registry/fp8_moe.circuit-check.py", "adapters/vllm/verity_vllm/definitions/registry/fp8_moe.py", "adapters/vllm/verity_vllm/definitions/registry/ref_prims.circuit-check.py", "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py", "adapters/vllm/verity_vllm/definitions/registry/sparse_mla.circuit-check.py", "adapters/vllm/verity_vllm/definitions/registry/sparse_mla.py", "adapters/vllm/verity_vllm/definitions/registry/sparse_mla_split.py", "adapters/vllm/verity_vllm/definitions/tests/catalog_ids.json", "adapters/vllm/verity_vllm/definitions/tests/test_catalog.py", "adapters/vllm/verity_vllm/definitions/tests/test_sparse_mla_head_units.py", "adapters/vllm/verity_vllm/definitions/tests/test_sparse_mla_key_rows.py", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]
@@ -284,7 +284,7 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["tests/test_sha512_leaves.py"]
 # nvcc's build of sha512_leaves.cu includes cuda/sha512.cuh, which includes the GPU's one SHA-512
-paths = ["verity/circuits/kernels/sha512.cuh"]
+paths = ["verity/commitments/cuda/sha512.cuh"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_security_inputs.py"]

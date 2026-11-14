@@ -245,11 +245,11 @@ for impl in ("eager", "sdpa"):
              variant="cache_position = arange built in forward (static structure)"),
     ]
     CASES.append(Case(f"llama-{impl}-f32-tie1-fwd-mask_input", "llama", impl, "f32", True, "forward",
-                      (lambda impl=impl: (lambda: (LogitsWithMaskInput(make_model("llama", impl, "f32", True)),
+                      (lambda kind=impl: (lambda: (LogitsWithMaskInput(make_model("llama", kind, "f32", True)),
                                                     (PROMPT.clone(), torch.ones(LP, dtype=torch.int64)))))(),
                       variant="attention_mask is a prescribed INPUT value"))
     CASES.append(Case(f"llama-{impl}-f32-tie1-fwd-position_input", "llama", impl, "f32", True, "forward",
-                      (lambda impl=impl: (lambda: (LogitsWithPositionInput(make_model("llama", impl, "f32", True)),
+                      (lambda kind=impl: (lambda: (LogitsWithPositionInput(make_model("llama", kind, "f32", True)),
                                                     (PROMPT.clone(), torch.arange(LP)))))(),
                       variant="position_ids is a prescribed INPUT value"))
 # Mistral with a sliding window smaller than the prompt (the default 4096 never bites at T=8)
@@ -620,7 +620,8 @@ def test_realhf_summary_written():
     """Prints the compressed outcome table from the JSONL rows of this run (for the report)."""
     if not os.path.exists(OUT_PATH):
         pytest.skip("no rows")
-    rows = [json.loads(line) for line in open(OUT_PATH)]
+    with open(OUT_PATH) as f:
+        rows = [json.loads(line) for line in f]
     rows = [r for r in rows if r.get("importer_head") == GIT_HEAD and r.get("probe", 0) == PROBE]
     print(f"\n{len(rows)} rows @ {GIT_HEAD} probe={PROBE} {PROBE_APPLIED}")
     for r in rows:

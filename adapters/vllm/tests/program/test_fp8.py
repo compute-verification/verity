@@ -4,7 +4,7 @@ Data (`tests/program/data/`, recorded on an H100):
 * `fp8_saved_operands.npz` — `_C.cutlass_scaled_mm` on random e4m3 operands at three B1 shapes (K=1536/N=2048 with bias,
   K=1536/N=1536, K=8960/N=1536): the sampled weight rows, the activation rows + scales, the kernel's bf16 outputs
   (`gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm`);
-* `fp8_production_row_l0_qkv.npz` — three real rows of the production run (profile 0ca394ec17b9, request 10ae824e…,
+* `fp8_production_row_l0_qkv.npz` — three real rows of the served run (profile 0ca394ec17b9, request 10ae824e…,
   positions 0, 63, 130; layer 0 qkv_proj): the bf16 norm output `x`, the captured `x_q` and `s_x` (fp8_quant ports 0/1),
   the captured output row, plus eight committed e4m3 weight rows, the committed f32 weight scale and the bf16 bias.
 
@@ -117,12 +117,12 @@ def test_scaled_mm_fp8_matches_cutlass(group: str) -> None:
 
 
 # ------------------------------------------------------------------------------------------------------------
-# the whole linear on real production rows (computed x_q and s_x, then eight output coordinates)
+# the whole linear on real served rows (computed x_q and s_x, then eight output coordinates)
 # ------------------------------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("t", [0, 63, 130])
-def test_quant_linear_fp8_on_production_row(t: int) -> None:
+def test_quant_linear_fp8_on_served_row(t: int) -> None:
     d = np.load(DATA / "fp8_production_row_l0_qkv.npz")
     x, xq, sx, y = d[f"t{t}_x"], d[f"t{t}_xq"], d[f"t{t}_sx"], d[f"t{t}_y"]
     cols, w_rows, sw, b = d["cols"], d["w_rows"], d["sw"], d["b"]
@@ -136,7 +136,7 @@ def test_quant_linear_fp8_on_production_row(t: int) -> None:
     assert np.array_equal(got_y, y[cols])  # the scaled GEMM output at the eight sampled coordinates
 
 
-def test_numpy_twin_of_the_quant_kernel_on_production_rows() -> None:
+def test_numpy_twin_of_the_quant_kernel_on_served_rows() -> None:
     d = np.load(DATA / "fp8_production_row_l0_qkv.npz")
     for t in (0, 63, 130):
         xq, sx = fp8_twins.np_dynamic_per_token_quant(d[f"t{t}_x"][None, :])

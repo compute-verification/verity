@@ -2,8 +2,8 @@
 
 What Pearl-C costs when it serves: a vLLM model on one GPU with every linear call computed and committed on the device
 by the adapter's Pearl-C run, timed against stock vLLM's FP8 on the same card, rep by rep, and the reference replay of
-the passes that run retained. The cards are the RTX PRO 6000 (`../pearl_c_sm120/`'s kernels) and the H100 and H200
-(`../pearl_c_sm90/`'s).
+the passes that run retained. The cards are the RTX PRO 6000 (`../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/`'s kernels) and the H100 and H200
+(`../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/`'s).
 
 `e2e.py` is the measurement. Before any timing it gates every distinct linear shape in the arm's own process: the
 served output against the float product, the commitment twice bit for bit, and a control with its tile leaves omitted
@@ -22,7 +22,7 @@ before.
 | --- | --- | --- | --- |
 | `setup` | the node's CPUs | the environment a window needs: the pinned vLLM in a venv, the model at its pinned revision and FlashInfer's sampling kernels | under `$WORK` |
 | `window` | 8 leased GPUs, timing on the first | the timed window: the card's identity, the shipped kernel tree against its manifest, the device check, then `e2e.py`; `MODE=smoke`, `profile` and `perplexity` are its untimed forms | `e2e.json` (or `smoke.json`, `profile.json`, `quality.json`); the retained passes under `$WORK/passes/<run id>` |
-| `verify` | CPUs, after the window | `verify_run.py` on each retained pass; exits non-zero unless prefill and decode are accepted and every control is rejected | `<pass>-verify.json` and `<pass>-manifest.json` |
+| `verify` | CPUs, after the window | Pearl+'s verdict on each retained pass in Lean (`served_passes.py lean`), beside the Python twin it is held to (`served_passes.py verify`); exits non-zero unless the Lean accepts prefill and decode and rejects every control | `<pass>-lean-check.json`, `<pass>-lean.json`, `<pass>-verify.json` and `<pass>-manifest.json` |
 | `served_passes serve`, `verify` | one leased GPU, then CPUs | one served run through `verity_vllm.LLM` with every pass retained, then each replayed (`served_passes.py`) | `served.json`, `verify.json` |
 | `served_inputs` | CPUs, after a pass | a retained pass's inert work per input against the scheme's bound, by census or sample, or by fresh trials | a directory of `inputs.json` and the tiles' lines, which `served_table.py` reads |
 | `served_step` | one leased GPU, then CPUs | where a served decode step's time goes, one engine process an arm, under Nsight Systems or not (`served_step.py`) | a directory an arm and `breakdown.md` |
@@ -50,7 +50,7 @@ it is not a job.
 
 ## Who reads it
 
-`../pearl_c_sm90/` and `../served_zk/` load this directory's Python by path, and `../served_zk/`'s jobs start
+`../pearl_c_sm90/` and `../../../verity/protocols/accounting/pouw/prover/kernels/served_zk/` load this directory's Python by path, and `../../../verity/protocols/accounting/pouw/prover/kernels/served_zk/`'s jobs start
 `window.sh`; `benchmarks/vllm_encoded/stack.sh` sources `flashinfer_env.sh`; the harness loads `bench_arm.py` by its
 module name, `pearl_c_vllm.bench_arm` with `benchmarks/pouw` on `PYTHONPATH` and
 `benchmarks.pouw.pearl_c_vllm.bench_arm` from the repository's root (its two Pearl-C specs under

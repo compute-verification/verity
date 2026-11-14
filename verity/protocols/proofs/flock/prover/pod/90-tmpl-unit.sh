@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A templated statement end to end: RoPE d64 staged as verity/flock-circuit/tmpl (tests/tmpl_statement.py), its
 # unit read at layout LAYOUT by Lean's `flock-tmpl-unit` (tests/lean/TmplUnit.lean: the rows at Tmpl.posMap, an ORDER
-# line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `flock-verify verify` on each. The verifier
+# line), proved by the CPU flock-circuit (--tmpl-unit) in one loopback session per mode, then Lean's `verity-verify-proof verify` on each. The verifier
 # covers a templated statement only under --zk (`ProvedScope.scopeOkT`): the zk session, sampled (--draw subset:N, every
 # unit) and verified with the statement's partition and program (tmpl_statement.py's partition.json and program.json),
 # must be accepted, and the m0 one refused as a templated statement without --zk, by Lean and by the live server (its
@@ -41,10 +41,10 @@ unset CARGO_TARGET_DIR
 trap 'rm -rf $S' EXIT
 { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "pinned=$TU_PINNED rayon=$RAYON_NUM_THREADS slices=${SLICES:-}"; } > $O/host.txt 2>&1
 
-# Lean's flock-verify, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
+# Lean's verity-verify-proof, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
 # is no part of the verifier), built once per source, while the prover builds
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean)
-LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-firewall
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-firewall
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
@@ -53,8 +53,8 @@ LEAN_BIN=$L/lean-$LSHA/flock-verify; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
       && cp verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean $LEAN_SRC/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $LEAN_SRC/lakefile.toml \
-      && (cd $LEAN_SRC && lake build flock-verify flock-tmpl-unit flock-firewall) && mkdir -p $L/lean-$LSHA \
-      && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN && cp $LEAN_SRC/.lake/build/bin/flock-tmpl-unit $UNIT_BIN \
+      && (cd $LEAN_SRC && lake build verity-verify-proof flock-tmpl-unit flock-firewall) && mkdir -p $L/lean-$LSHA \
+      && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN && cp $LEAN_SRC/.lake/build/bin/flock-tmpl-unit $UNIT_BIN \
       && cp $LEAN_SRC/.lake/build/bin/flock-firewall $FW_BIN
   fi
 ) > $O/build-lean.log 2>&1 &

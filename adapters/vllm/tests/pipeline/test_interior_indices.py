@@ -26,7 +26,7 @@ from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from verity_vllm.pipeline import boundary_rows as BR
 from verity_vllm.pipeline import boundary_tables as BT

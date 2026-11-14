@@ -1,10 +1,3 @@
-/-
-`JsonParse.parse` against `Lean.Json.parse`, the parser it replaces: on every case below and on 20,000 seeded texts, the
-two give the same value (compared as `Json.compress` prints it, with each number's mantissa and exponent) or the same
-refusal string, byte for byte. The cases cover each refusal of the source (its reason and offset), escapes and surrogate
-pairs, numbers, nesting, whitespace, multi-byte characters (offsets are bytes) and trailing input. The kernel evaluates
-`parseList` (`decide +kernel`), on a value and on a refusal.
--/
 module
 
 public import Flock.JsonParse
@@ -17,6 +10,14 @@ meta import Flock.JsonParse
 meta import Lean.Data.Json
 import all Lean.Data.Json.Basic
 import all Init.Data.String.Defs
+
+/-!
+`JsonParse.parse` against `Lean.Json.parse`, the parser it replaces: on every case below and on 20,000 seeded texts, the
+two give the same value (compared as `Json.compress` prints it, with each number's mantissa and exponent) or the same
+refusal string, byte for byte. The cases cover each refusal of the source (its reason and offset), escapes and surrogate
+pairs, numbers, nesting, whitespace, multi-byte characters (offsets are bytes) and trailing input. The kernel evaluates
+`parseList` (`decide +kernel`), on a value and on a refusal.
+-/
 
 @[expose] public section
 

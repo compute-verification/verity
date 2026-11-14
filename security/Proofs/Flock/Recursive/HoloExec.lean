@@ -3,6 +3,7 @@ module
 public import Flock.RecCoins
 public import Definitions.Flock.Recursive.Holo
 public import Proofs.Flock.Recursive.ExecClass
+public import Proofs.Flock.Recursive.Replay
 public import Definitions.Flock.HoloCompiled
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -49,8 +50,8 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   and R's opening at the unique-decoding radius (`regOpenError`: the two claims' ring
   switches, `γ` and the out-of-domain batching coin, level 0's queries at `(1 + ρ)/2 + η`, and Ligerito's levels).
 * `ClashRunHL`, `clashPickHL`: two runs that clash on the reps (`ClashCL`) or on R's stream (`ClashCL` at R's
-  schedule), each a collision of `H` (`ClashRunHL.collision`). `ClashHL` adds a run opening R's level 0 to a row other
-  than `w`'s (`RegClash`), a collision only beside a registrant's openings (`ClashHL.collision`).
+  schedule), each a collision of `H` (`clashCandsHL_spec`, `clashPickHL_isColl`). `ClashHL` adds a run opening R's
+  level 0 to a row other than `w`'s (`RegClash`), which is no collision by itself.
 * `vstarCount ish`: the length of V*'s statement list as the verifier builds it (`RecVStar.statements`), zero where it
   refuses.
 -/
@@ -165,7 +166,7 @@ it registered. The registered `stacked` entry is the one computed from `bcs` (th
 salts, behind the ZK server. That is reasonable because an honest registrant registers the entry of the rows it
 committed and holds them. A prover that registers strings it can't open is outside the guarantee. The first two
 conjuncts are the verifier's checks only at a transcript's own top.
-At the held `bcs` they are part of the premise: `TopColl.collision` reads them to turn a held top other than `bcs` into
+At the held `bcs` they are part of the premise: `TopColl.cand` reads them to turn a held top other than `bcs` into
 a SHA-512 collision, so the premise doesn't narrow to `TopOf`. No hash premise. -/
 def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (bcs : Array ByteArray) : Prop :=
@@ -306,31 +307,12 @@ def RegClash (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Lea
   ∃ y ∈ slotOpensL (o.reg x.cap) 0 0 lv.queries, y.1 < 2 ^ lv.logLen ∧
     VerifiedL H E Lf x.cap lv.lanes (pathLen lv) y ∧ y.2.1 ≠ x.column lv.lanes y.1
 
-omit [Field F] [Fintype F] [DecidableEq F] in
-theorem RegClash.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {lv : Level} {x : HoloReg F D} {o : OutHL F D Sl} (hx : x.Opens H E Lf lv) (h : RegClash H E Lf lv x o) :
-    Merkle.Collision H := by
-  obtain ⟨y, -, hlt, hv, hne⟩ := h
-  obtain ⟨s, sibs, hs⟩ := hx y.1 hlt
-  exact Merkle.opening_bindingL H E Lf x.cap (pathLen lv) y.1 _ _ _ _ _ _ hne hv.2 hs
-
 /-- **Two runs of candidate 3's table clash**: on the reps (`ClashCL` at the reps' schedule), on R's stream (`ClashCL`
 at R's), or either opens R's level 0 off the registered word (`RegClash`). -/
 def ClashHL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (sch rsch : Schedule)
     (x : HoloReg F D) (o o' : OutHL F D Sl) : Prop :=
   ClashCL H E Lf sch o.circ o'.circ ∨ ClashCL H E Lf rsch (o.reg x.cap) (o'.reg x.cap) ∨
     RegClash H E Lf rsch.level₀ x o ∨ RegClash H E Lf rsch.level₀ x o'
-
-omit [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision**, given the registrant's openings. -/
-theorem ClashHL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {sch rsch : Schedule} {x : HoloReg F D} {o o' : OutHL F D Sl} (hx : x.Opens H E Lf rsch.level₀)
-    (h : ClashHL H E Lf sch rsch x o o') : Merkle.Collision H := by
-  rcases h with h | h | h | h
-  · exact h.collision
-  · exact h.collision
-  · exact h.collision hx
-  · exact h.collision hx
 
 /-- **Two runs of candidate 3's table clash against each other**: on the reps (`ClashCL` at the reps' schedule) or on
 R's stream (`ClashCL` at R's, at the registered cap `cap`: a level-0 conflict there is two openings of one position of
@@ -340,33 +322,62 @@ def ClashRunHL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.L
     (sch rsch : Schedule) (cap : Cap D) (o o' : OutHL F D Sl) : Prop :=
   ClashCL H E Lf sch o.circ o'.circ ∨ ClashCL H E Lf rsch (o.reg cap) (o'.reg cap)
 
-omit [Fintype F] [DecidableEq F] in
-/-- **A clash of two runs is a collision.** -/
-theorem ClashRunHL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {sch rsch : Schedule} {cap : Cap D} {o o' : OutHL F D Sl} (h : ClashRunHL H E Lf sch rsch cap o o') :
-    Merkle.Collision H := by
-  rcases h with h | h
-  · exact h.collision
-  · exact h.collision
+/-- **Two runs' candidates at candidate 3's table**: the reps' (`clashCandsCL` at the reps' schedule), then R's
+stream's (`clashCandsCL` at R's schedule and the registered cap `cap`). -/
+noncomputable def clashCandsHL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+    (sch rsch : Schedule) (cap : Cap D) (o o' : OutHL F D Sl) : List (Prop × (List UInt8 × List UInt8)) :=
+  clashCandsCL H E Lf sch o.circ o'.circ ++ clashCandsCL H E Lf rsch (o.reg cap) (o'.reg cap)
 
-open Classical in
+omit [Fintype F] [DecidableEq F] in
+/-- **A clash of two runs is a collision**: a candidate whose test passes is one. -/
+theorem clashCandsHL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {sch rsch : Schedule} {cap : Cap D} {o o' : OutHL F D Sl} {c : Prop × (List UInt8 × List UInt8)}
+    (hc : c ∈ clashCandsHL H E Lf sch rsch cap o o') (h : c.1) : Hash.Collision H c.2.1 c.2.2 := by
+  rcases List.mem_append.1 hc with hc | hc
+  · exact clashCandsCL_spec hc h
+  · exact clashCandsCL_spec hc h
+
+omit [Fintype F] [DecidableEq F] in
+/-- Two runs that clash against each other have a candidate whose test passes. -/
+theorem ClashRunHL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {sch rsch : Schedule} {cap : Cap D} {o o' : OutHL F D Sl} (h : ClashRunHL H E Lf sch rsch cap o o') :
+    ∃ c ∈ clashCandsHL H E Lf sch rsch cap o o', c.1 := by
+  rcases h with h | h
+  · obtain ⟨c, hc, hp⟩ := h.cand
+    exact ⟨c, List.mem_append_left _ hc, hp⟩
+  · obtain ⟨c, hc, hp⟩ := h.cand
+    exact ⟨c, List.mem_append_right _ hc, hp⟩
+
 /-- **Candidate 3's table's outcome on an inner transcript**: the outcome the transcript's steps play `holoTableCL` to
-at the statement `x`, when they play it to one. -/
+at the statement `x`, when they play it to one. It is the replay of those steps (`Game.playT`): none is chosen.
+Outside proofs, two tests under it are decided classically: the replay's, that a step's type is the node's, and the
+table's opening check (`OpensOKL`, in `Model.holoTableCL`). -/
 noncomputable def outHL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : HoloReg F D)
     (t : List (List (SMsg T) × ((k : Fin r) → CT k))) : Option (OutHL F D Sl) :=
-  if h : ∃ out, PlaysT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts
-      e.cls.shape e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) (schedSteps T CT 0 t) out
-  then some h.choose else none
+  playT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts
+    e.cls.shape e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) (schedSteps T CT 0 t)
 
-/-- **The inner fork's output at candidate 3's table**: on two inner transcripts whose steps play it to outcomes that
-clash against each other (`ClashRunHL`, at the statement's cap), a collision of `H`, else nothing. -/
+/-- **The inner fork's output at candidate 3's table**: on two inner transcripts whose steps play it to outcomes `o`
+and `o'`, the pair of the first of the two outcomes' candidates (`clashCandsHL`, at the statement's cap) whose test
+passes, a collision of `H` when the outcomes clash against each other (`ClashRunHL`); else nothing. The picker
+searches the outcomes' own lists and positions. The outcomes are `outHL`'s. -/
 noncomputable def clashPickHL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : HoloReg F D)
     (t t' : List (List (SMsg T) × ((k : Fin r) → CT k))) : Pair :=
-  collOf H (∃ o o', outHL T CT A H E Lf e x t = some o ∧ outHL T CT A H E Lf e x t' = some o' ∧
-      ClashRunHL H E Lf e.sch e.rsch.sch x.cap o o')
-    fun ⟨_, _, _, _, hc⟩ => hc.collision
+  (outHL T CT A H E Lf e x t).bind fun o => (outHL T CT A H E Lf e x t').bind fun o' =>
+    collOf (clashCandsHL H E Lf e.sch e.rsch.sch x.cap o o') (fun c => c.1) fun c => c.2
+
+omit [Fintype K] [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)] in
+/-- **`clashPickHL` at two transcripts with outcomes that clash against each other is a collision.** -/
+theorem clashPickHL_isColl {A : Arith F K} {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
+    {Lf : Merkle.Leaf (List F) Sl D H} {e : ExecHolo} {x : HoloReg F D}
+    {t t' : List (List (SMsg T) × ((k : Fin r) → CT k))} {o o' : OutHL F D Sl}
+    (ho : outHL T CT A H E Lf e x t = some o) (ho' : outHL T CT A H E Lf e x t' = some o')
+    (hc : ClashRunHL H E Lf e.sch e.rsch.sch x.cap o o') : IsColl H (clashPickHL T CT A H E Lf e x t t') := by
+  unfold clashPickHL
+  rw [ho, ho', Option.bind_some, Option.bind_some]
+  exact collOf_isColl H (fun _ hc hp => clashCandsHL_spec hc hp) hc.cand
 
 /-! ### V*'s statement list -/
 

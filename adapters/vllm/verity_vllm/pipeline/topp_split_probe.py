@@ -269,14 +269,14 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     F, R = TT._SPLIT_FANOUT, TT._SPLIT_ROUNDS
     record = None
     if record_npz:
-        record = (np.load(record_npz), json.load(open(record_npz + ".json")))
+        record = (np.load(record_npz), json.loads(Path(record_npz + ".json").read_text()))
     cases = build_manifest(seed, with_record=record is not None)
     o = Path(out)
     o.mkdir(parents=True, exist_ok=True)
-    arrays: dict[str, np.ndarray] = {}
+    arrays: dict[str, Any] = {}
     summary = []
 
-    def run_pipeline(x_dev: "torch.Tensor", p_dev: "torch.Tensor", S: int, V: int):
+    def run_pipeline(x_dev: torch.Tensor, p_dev: torch.Tensor, S: int, V: int):
         """stats -> 5 steps -> (instrumented mask on a copy | real mask kernel in place); returns (keep_real, keep_probe, zlane, stats, sc)."""
         stats = x_dev.new_empty((S, 4))
         parts = x_dev.new_empty((1, R, S, F, 3))
