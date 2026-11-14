@@ -58381,7 +58381,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "50b0e622851823e1b99ae786f44819644be8ab7c6d5b74b5181a4aab1916f5ca",
+   "digest": "54e3f234ea8b65b37f7bf63631fb8f5191f52406cfb1d08d51a9d31e4e84b71f",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -58469,7 +58469,7 @@
     "Verity.Subprotocol.poub": "f39baa1de1e7b5e73c21ae5bfa75eaa62c8efb0b5e6199da54e6b3074f5d90ef",
     "Verity.Subprotocol.pous": "c631ac0f593e9df91d62e8ca2837ec81a1970e1e8c64c8da6f8ca64efd917af6",
     "Verity.Subprotocol.pouw": "80ccd495d963f37b56bfde82ac4f8bf195ae91d3208d9296dc9f228db0fcf565",
-    "Verity.Subprotocol.protocolAt": "78c28221198a9f9041c4517b6c744bd944e44ab867cd846cde01e3cc585e1cda",
+    "Verity.Subprotocol.protocolAt": "12735597d38365388b55257c161f3a46139191c53e22f5117196e0af507a1e38",
     "Verity.Subprotocol.rec": "93e91d92b8a5c8ea230e34c3719be18c64082aee7b60900da55021eacd3e5c86",
     "Verity.Subprotocol.sampled": "69d73672cf8533483ecca485114db9a5a632d33f7520a8a8d2f92d3030013496",
     "Verity.Subprotocol.wipe": "cc4050252c3fe7821a1b748b71c068867616e91d64091e6426cb946f8b8cfa3e",
@@ -58566,6 +58566,9 @@
     "Verity.play": "b187f6b62030777141ef88fafd554b2a3e447a027da49376df0d0d14feda91c2",
     "Verity.releases": "8869b0edf60abb125cfaa3d452dc6dafba8bc54a8d3d355ea88108b1972b476e",
     "Verity.requestThen": "b70d7a5e2bcc5092f4bee27d3538e501e3c1ae4f47c74d9bec8d615eecf9b496",
+    "Verity.rowsCheck": "540fa2df0442c172cfd8fb6d4c7cae416316cf886dfbc12ae2f84a9b65baf097",
+    "Verity.rowsId": "1ffb9b0bd5ed1218b5f514b4ea2fca836c3c9b8895ee1d39400893f6fa11e8eb",
+    "Verity.rowsUnbuilt": "d531de0f2444180cb4d7bb34acbce9422e971f094847e517288110a483be97f4",
     "Verity.sha512Msg": "3fb17014d068a5ee9446e95057ecee922f7236ff6db8a8a8167135c2f044a07b",
     "Verity.subprotocols": "166b3e753488aa75de4e0365502275fa91b6a6ee7697a77723db7610f6bfe09b",
     "Verity.takeCoin": "5193fdb4beb57e000e16d5feab7919fb8585ac4950f6701c8eae9bd8102edc79",
