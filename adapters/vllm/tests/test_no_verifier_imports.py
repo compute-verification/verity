@@ -24,6 +24,9 @@ LANES = {
 
 KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
     "proofs": {
+        # Needs, outside spot's verifier/ and device/: the registered rows' record (`Registered`, its schemas, domains and
+        # widths), the docket's and partition's digests and template ids, the draw design's parsers, the second stage's
+        # row links, registration's `Declaration`, and the challenger's client types (`CoinError`, `LiveOpening`, `LiveRecord`).
         "verity_vllm/commit/registered_rows.py": ("proofs.spot.verifier.one_stage.registered",),
         "verity_vllm/pipeline/advice.py": ("accounting.registration.verifier.registration",),
         "verity_vllm/pipeline/boundary_rows.py": (
@@ -68,6 +71,9 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/protocols/pouw/h1_settings.py": ("proofs.spot.device.challenger.LiveRecord",),
     },
     "network-accounting": {
+        # Needs: the certifier's advice format (`Advice`, `RequestAdvice`, `Row`, `Source`, `SCHEMA`), which moves out of
+        # `verity/` to the adapter by the integrations rule, its release and io-tie headers and ids, the replay step's
+        # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
         "verity_vllm/pipeline/advice.py": ("accounting.certifier.verifier.advice",),
         "verity_vllm/pipeline/advice_code/codec.py": ("accounting.certifier.verifier.advice",),
         "verity_vllm/pipeline/advice_code/derived.py": (
@@ -123,6 +129,9 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
     },
     "compute-accounting": {
+        # Needs, outside pouw's verifier/: the audit's types and weight commitment (`Workload`, `Epoch`, `HM96`,
+        # `weights_root`, `weight_binding`), the matmul types (`Matmul`, `Shape`, `DomainError`), and a coins client in
+        # place of the verifier's own `Challenger` and the window's draw and live challengers.
         "verity_vllm/check/replay/pouw_circuit.py": ("accounting.pouw.verifier.protocol.DomainError",),
         "verity_vllm/pipeline/serve_h1.py": ("accounting.pouw.verifier.credit", "accounting.pouw.verifier.verifier"),
         "verity_vllm/pipeline/serve_pearl.py": (
@@ -149,6 +158,8 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
     },
     "memory-accounting": {
+        # `protocols/pous.py` runs a whole period (setup, serve, audit, certify, the memory challenger's session): it
+        # needs a prover entry in pous's prover/ that takes the layout and serves, the period's audit left to the verifier.
         "verity_vllm/protocols/pous.py": (
             "accounting.pous.device.challenger_session", "accounting.pous.device.memory_challenger",
             "accounting.pous.verifier.layout.TensorLayout", "accounting.pous.verifier.period",
