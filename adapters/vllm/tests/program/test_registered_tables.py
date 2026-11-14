@@ -12,7 +12,7 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
-from verity.definitions.circuits.constants import REGISTRATION, inputs
+from verity.circuits.constants import REGISTRATION, inputs
 from verity.definitions.registry import dense as D
 from verity.definitions.registry import tables as T
 
