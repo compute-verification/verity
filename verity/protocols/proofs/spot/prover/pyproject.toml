@@ -66,7 +66,7 @@ inputs = [
     "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-    "verity/protocols/policy/inference_only/verifier/inference_only/lean/lakefile.toml",
+    "verity/protocols/policy/inference_only/verifier/lean/lakefile.toml",
     "adapters/vllm/verity_vllm",
     "benchmarks/pous/p2_v1",
     "benchmarks/pous/onsite_pieces.sh",
