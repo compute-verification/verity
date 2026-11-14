@@ -185,7 +185,7 @@ def test_the_gates_host_is_the_address_the_environment_holds_and_unset_it_is_ref
     assert SS.main(["session", "--out", str(tmp_path / "out"), "--keep", str(tmp_path / "keep")]) == 2
     assert why in capsys.readouterr().err and list(tmp_path.iterdir()) == [tmp_path / "out"]
     assert list((tmp_path / "out").iterdir()) == []
-    assert SS.main(["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate", "--draw", "8"]) == 2
+    assert SS.main(["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate"]) == 2
     assert why in capsys.readouterr().err
     assert SS.main(["chain", "--run", RUN, "--keep", str(tmp_path / "keep")]) == 2
     assert "no kept fetch" in capsys.readouterr().err
