@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from pathlib import Path
 from typing import Sequence
-from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, registration as RG
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, docket as RG
 
 #: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
 #: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
@@ -26,8 +26,8 @@ def _found(run: Path, name: str) -> Path:
 def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, rests: Sequence[str] = ()) -> dict:
     """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
-    `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
-    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0), and the tied values
+    `audit`'s ``audit.json``), one-stage's answer of it at ``delta`` (`audit.answer`: its sample and proved units,
+    every unit sampled, the bound 0, and whether every verdict ran), and the tied values
     its registration's R8 let through when there are any (``rests``, the registration verdict's
     ``rests_on_period_check``), on whose period check the acceptance rests; else a reject naming ``reason``."""
     commitment = RG.digest(reg)
@@ -36,12 +36,7 @@ def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, 
                 "verdict": "reject"}
     if record.get("accepted") is not True or RG.digest(record["registration"]) != commitment:
         raise SystemExit("an accepted scan's audit record is for another registration, or not accepted")
-    draw = record["draw"]
-    profile = AU.profile(reg, draw, delta).to_json()
-    profile["delta"] = str(delta)
-    wrong = AU.wrong_units(reg, draw, delta)
-    return {"commitment": commitment, "profile": profile, "protocol": RG.PROTOCOL,
-            "public": {"bound": wrong["bound"], "drawn": sorted(draw["units"]),
-                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"]),
-                       **({"rests_on_period_check": list(rests)} if rests else {})},
-            "reason": None, "verdict": "accept"}
+    answer = AU.answer(record, delta)
+    if rests:
+        answer["public"]["rests_on_period_check"] = list(rests)
+    return answer
