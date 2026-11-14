@@ -244,4 +244,12 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.SessionLive", "Proofs.Properties.Verity.SampledTwo.FormDraw",
   "Proofs.Properties.Verity.SampledTwo.FormCircuit", "Proofs.Properties.Verity.SampledTwo.FormBytes",
   "Proofs.Properties.Verity.SampledTwo.FirstEarly", "Proofs.Properties.Verity.SampledTwo.FormMember",
-  "Proofs.Properties.Verity.SampledTwo.StmtBytes", "Proofs.Properties.Verity.SampledTwo.SessionSent"]
+  "Proofs.Properties.Verity.SampledTwo.StmtBytes", "Proofs.Properties.Verity.SampledTwo.SessionSent",
+  "Proofs.Compose.Additive", "Proofs.Compose.Compose", "Proofs.Compose.ComposeMonitoringPeriod", "Proofs.Compose.Joint",
+  "Proofs.Compose.JointLive", "Proofs.Compose.Remote", "Proofs.Compose.RemoteHeld", "Proofs.Compose.Stacking",
+  "Proofs.Poub.Bandwidth", "Proofs.Poub.BandwidthAudit", "Proofs.Poub.RateAudit", "Proofs.Poub.ReadUnit",
+  "Proofs.Properties.Verity.SampledTwo.Claim", "Proofs.Properties.Verity.SampledTwo.DevAgrees",
+  "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.Projection",
+  "Proofs.Properties.Verity.SampledTwo.Reading", "Proofs.Properties.Verity.SampledTwo.SecondRead",
+  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol",
+  "Proofs.Registration.Capacity", "Proofs.Registration.Device"]
