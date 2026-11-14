@@ -81,7 +81,7 @@ def components : List BlobProtocol :=
   [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
-def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
+def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
 /-- The record the policy's case commits to: its commitment's digest, as the policy decodes it. -/
 def policyRecord (k : Case) : Option (List ByteArray) :=
@@ -459,7 +459,7 @@ def components : List BlobProtocol :=
   [InferenceOnlyCheck.Protocol.protocol, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT, as in v0. -/
-def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
+def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
 /-- The record Pearl+'s case names: its commitment's `record`, as Pearl+ decodes it. -/
 def runRecord (k : Case) : Option (List ByteArray) :=

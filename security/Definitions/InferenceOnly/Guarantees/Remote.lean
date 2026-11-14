@@ -8,8 +8,8 @@ public import Definitions.Assumptions
 /-!
 # The slowdown, remote protocol: the guarantees
 
-The remote dampener `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and
-T2: `residual_share`, `fit.residual_with_lag` and `fit.dampener`, and `benchmarks/rho`'s
+The remote slowdown `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and
+T2: `residual_share`, `fit.residual_with_lag` and `fit.dampener`, and `benchmarks/slowdown`'s
 `theorem.multiple_bound`), with its two terms that `SlowdownThreaded` takes inside its residual's hypothesis derived,
 and the two that SPOT and PoUW's deficit add:
 

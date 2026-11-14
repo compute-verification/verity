@@ -65,7 +65,7 @@ def components : List BlobProtocol :=
     RemoteAudit.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryChallenger.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
-def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
+def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
 /-- PoUS and PoUB on one store: the root of `C*` PoUS's setup published (its commitment's `root`)
 and the store the P2 session audits, the root its registration names (its commitment's `reg.root`, the case's

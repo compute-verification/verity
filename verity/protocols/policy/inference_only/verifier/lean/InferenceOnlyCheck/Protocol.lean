@@ -28,7 +28,7 @@ Its case splits the check's instance and trusted input as SPOT's one-stage audit
   `verity-ir/descriptor/v1` Program, as text);
 * **commitment**: the run's own registration record, canonical JSON, an object, fixed before the run: the record whose
   digest SPOT's one-stage audit commits to. Its digest is `SHA-512(format || 0 || canon(record))`
-  (`NciCheck.Baseline.digest`, as one-stage's). Its `program` must be the declared circuit's SHA-512 (`names`), and
+  (`InferenceOnlyCheck.Theta.digest`, as one-stage's). Its `program` must be the declared circuit's SHA-512 (`names`), and
   θ's provenance reads the roots its `registered` entries give the program function's parameters;
 * **evidence**: canonical JSON with exactly the keys `owner` (the declared division: per root node of the declared
   circuit, its inference block or `"input"`), `provenance` (per `theta` entry, the registration record, value and root

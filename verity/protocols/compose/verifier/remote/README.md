@@ -99,7 +99,7 @@ product's rule and its difftest are the composition's ([README](composition/READ
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
    (`Flock.Guarantees.IntegrityHorizon` for SPOT, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`
-   for PoUW), and the overhead calculator turns them into overhead (see Results).
+   for PoUW), and the slowdown calculator turns them into the slowdown bound (see Results).
 
 ## The security argument, end to end
 
@@ -146,10 +146,10 @@ else is a theorem or a named gap.
 | The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `SlowdownRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
-| Enforcement | SPOT catches each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Nci.Assumptions.SampledDetection`, `Nci.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
-| The baseline | The data the registration names was public, not computed off the books before. | `Nci.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
-| Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Nci.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
-| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Nci.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
+| Enforcement | SPOT catches each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `InferenceOnly.Assumptions.SampledDetection`, `InferenceOnly.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
+| The baseline | The data the registration names was public, not computed off the books before. | `InferenceOnly.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
+| Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `InferenceOnly.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
+| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `InferenceOnly.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
 For the counted uses with an upstream certificate, a block must import the specified context or perform the certified
 upstream computation. The certificate is a checkable wiring property of the training circuit: every gate a use requires
@@ -425,7 +425,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
   with a rule tying its registration to the one SPOT and PoUW bind; the policy's check accepting as a
-  property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
+  property (`theta_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
   verdict's rate.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
@@ -505,7 +505,7 @@ The slowdown, `SlowdownRemote`:
 - In `security/Definitions/InferenceOnly/Assumptions/Remote.lean`, three:
   - `InferenceOnly.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
     the time credit `CircuitCredit`, which reads the data sheet; no PoUW guarantee instantiates it yet.
-  - `Nci.Assumptions.SampledDetection`: SPOT catches each incorrect proof block with probability at least q,
+  - `InferenceOnly.Assumptions.SampledDetection`: SPOT catches each incorrect proof block with probability at least q,
     whatever came before.
   - `InferenceOnly.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
 - (H) and (E), `InferenceOnly.Cut.Assumptions.Hardness` and `Exports` (`security/Definitions/Assumptions.lean`), on the declared

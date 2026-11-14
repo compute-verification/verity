@@ -971,7 +971,7 @@ def policy(n: int, gamma: int, alpha: tuple[int, int]) -> dict[str, Any]:
 
 
 def inference_only(d: Declaration, blk: Block) -> dict[str, Any]:
-    """The inference-only policy's answer for the declaration (`verity/inference-only/v0`, `NciCheck.Protocol`): the
+    """The inference-only policy's answer for the declaration (`verity/inference-only/v0`, `InferenceOnlyCheck.Protocol`): the
     record, the one SPOT's answer commits to, names the block's Program, and the policy's check finds that the
     block's division into inference blocks complies. It has no rounds and reads no coins. Theta's provenance is the
     registration's check (`check_baseline`: theta committed under the registered builder)."""

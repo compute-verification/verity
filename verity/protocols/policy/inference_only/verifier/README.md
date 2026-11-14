@@ -26,7 +26,7 @@ deployment configuration's table declares the policy's party from, with its test
   - the difftests: the other executables `lean/lakefile.toml` declares, each printing its arguments as its `usage:`.
     The Lean check runs each one's main on the data `lean/lean-audit.json` pins (`runs`), which the tests named
     under "Not here" hold to its generator. No other code runs them.
-- **Scripts**: `lean/scripts/nci_reference.py`, the check's Python reference, loaded by path by the tests of
+- **Scripts**: `lean/scripts/inference_only_reference.py`, the check's Python reference, loaded by path by the tests of
   `adapters/vllm`, by `verity run`'s lifecycle workload (`tools/verity/cli/tests/lifecycle`) and by `benchmarks/verifier_cost`; and the difftests' generators,
   `python scripts/NAME.py CHECKOUT --out DIR`, as `lean/lean-audit.json` runs them (`runs`). The tests of
   `verity/protocols/proofs/flock/prover` load `desc_difftest_vectors.py` by path. `lean/scripts/served_record_case.py`

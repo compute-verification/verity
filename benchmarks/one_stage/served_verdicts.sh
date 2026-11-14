@@ -112,8 +112,8 @@
 #     (the class, REPO at REV, LEASE_MIN; under PEARLPLUS_TIE in serve(), under the lease before serve-openai starts, from
 #     PEARLPLUS-CIRCUIT's statement of φ on the card, serve-phi.json, its circuit cut at Pearl+'s linears, as a BF16
 #     checkpoint's needs), $OUT/inference-only-policy.json and its INFERENCE-ONLY POLICY line; once the
-#     build is done, step 3's window circuit record at the class is judged by `NciCheck.Count`'s rule beside SPOT,
-#     with `nci-check --count` where the build built it, into $OUT/record/inference-only.json (the judgment against n and
+#     build is done, step 3's window circuit record at the class is judged by `InferenceOnlyCheck.Count`'s rule beside SPOT,
+#     with `inference-only-check --count` where the build built it, into $OUT/record/inference-only.json (the judgment against n and
 #     no count, n judged on the exact count) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's
 #     private/inference-only.json. It gates nothing.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,

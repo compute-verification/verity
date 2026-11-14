@@ -62,7 +62,7 @@ def shape(model) -> dict:
 def configs() -> dict[str, tuple[dict, str]]:
     """name -> (b1 configuration, where its shape comes from)."""
     from verity_vllm.definitions.registry import b1
-    models = rho_models()
+    models = slowdown_models()
     qwen7 = b1.B1_CONFIG | shape(models["qwen25-7b"]) | {"model": "Qwen/Qwen2.5-7B"}
     llama = b1.B1_CONFIG | shape(models["llama3-405b"]) | {"model": "meta-llama/Llama-3.1-405B", "EPS": 1e-5,
                                                             "BIAS": False}
