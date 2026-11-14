@@ -27,9 +27,11 @@ differing requests (each one's lengths and first differing position), the replay
 arm's meta.json has its server's: `serve_tax.value_settings`); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
 later replay's with, to tell a replay that differs from serving from one that differs from itself. ``--capture`` takes the
 named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
-token-select span each, and replay.json says whether each one's ids are the ones served. ``--capture-moe``, in an
-``--eager`` replay, also takes those requests' rows of each launch of the named MoE modules at every rank
-(`verity_vllm.engine.moe_capture`) into OUT/capture/moe.
+token-select span each, and replay.json says whether each one's ids are the ones served. ``--capture-moe`` also takes
+those requests' rows of each launch of the named MoE modules at every rank (`verity_vllm.engine.moe_capture`) into
+OUT/capture/moe, in a compiled replay too: a vLLM general plugin, declared under OUT/.site, arms each rank's worker
+before it captures its graphs, and replay.json counts each request's steps by the graph mode they ran at (``NONE``:
+its launches ran in Python).
 """
 from __future__ import annotations
 
@@ -39,6 +41,7 @@ import json
 import os
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -208,7 +211,7 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False, tp: i
         eng.collective_rpc(SC.install, args=(capture[0],))
     if capture and moe:
         from verity_vllm.engine import moe_capture as MC
-        eng.collective_rpc(MC.install, args=(capture[0], moe))
+        eng.collective_rpc(MC.on)       # the plugin `main` declares armed every rank's worker before it warmed up
     ready = time.monotonic() - t0
     trace = StepTrace().install(eng)
     limit, served = trace.records[0]["config"].get("max_model_len"), w["header"]["config"].get("max_model_len")
@@ -363,8 +366,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--capture", help="engine ids: take their logits rows and ids at the sampler (`sampler_capture`) into "
                                       "OUT/capture, each a span of --capture-template's units")
     ap.add_argument("--capture-template", default="TokenSelect_v4{V=154880}")
-    ap.add_argument("--capture-moe", help="MoE modules, by their names in the model: with --capture and --eager, take those "
-                                          "requests' rows of each of their launches (`moe_capture`) into OUT/capture/moe")
+    ap.add_argument("--capture-moe", help="MoE modules, by their names in the model: with --capture, take those requests' "
+                                          "rows of each of their launches (`moe_capture`) into OUT/capture/moe")
     ap.add_argument("--private", type=Path, help="a directory outside every run's, for what the served arm's other "
                                                  "plugins keep on the node (the canonical top-k's counters)")
     ap.add_argument("--out", type=Path, required=True)
@@ -373,9 +376,8 @@ def main(argv: list[str] | None = None) -> int:
         if a.private and a.private.resolve().is_relative_to(public.resolve()):
             raise SystemExit(f"the private directory {a.private} is inside {public}, which leaves the node: --private DIR, "
                              "outside every run's directory")
-    if a.capture_moe and not (a.capture and a.eager):
-        raise SystemExit("--capture-moe takes the launches of --capture's requests at their Python launch sites, which a "
-                         "compiled engine's steps don't run: give it with --capture and --eager")
+    if a.capture_moe and not a.capture:
+        raise SystemExit("--capture-moe takes the launches of --capture's requests: give it with --capture")
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     meta = json.loads((a.arm_dir / "meta.json").read_text())
@@ -387,6 +389,13 @@ def main(argv: list[str] | None = None) -> int:
         os.environ.update(under)
         sys.path[:0] = [p for p in under["PYTHONPATH"].split(os.pathsep) if p and p not in sys.path]
     os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
+    if a.capture_moe:   # before vLLM is imported too: every rank's process loads the plugin before it builds its worker
+        sys.path.insert(0, str(ROOT / "adapters/vllm"))
+        from verity_vllm.engine import moe_capture as MC
+        site = str((a.out / ".site").resolve())
+        os.environ.update(MC.declare(site, a.capture.split(","), a.capture_moe.split(",")))
+        os.environ["PYTHONPATH"] = os.pathsep.join([site, *(p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p)])
+        sys.path.insert(0, site)
     settings = S.value_settings()       # the environment the engine and every process it starts are given
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
@@ -414,10 +423,11 @@ def main(argv: list[str] | None = None) -> int:
                           for rid, s in spans.items()}
         out["capture_missing"] = sorted(set(capture[0]) - set(spans))
     if a.capture_moe:
-        from verity_vllm.engine import moe_capture as MC
         moe = MC.spans(got["moe_takes"], got["steps"])
         MC.write(a.out / "capture" / "moe", moe)
-        out["capture_moe"] = {rid: {"pieces": len(s["pieces"]), "ranks": sorted(s["ranks"], key=int)} for rid, s in moe.items()}
+        out["capture_moe"] = {rid: {"pieces": len(s["pieces"]), "ranks": sorted(s["ranks"], key=int),
+                                    "dispatch": dict(sorted(Counter(mode for mode, _ in s["dispatch"]).items()))}
+                              for rid, s in moe.items()}
         out["capture_moe_missing"] = sorted(set(a.capture.split(",")) - set(moe))
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "replay.json").write_text(json.dumps(out, indent=1))
