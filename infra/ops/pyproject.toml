@@ -61,6 +61,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           # its watchers supervisor, VM stops and top's loops, with their configs, and the dead-man's switch that reads its heartbeat
           "infra/control/watchers.py", "infra/control/watchers.toml", "infra/control/vm_stop.py", "infra/control/vm_stop.toml",
           "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json",
+          # the sweep puts each copy of the Goals page in the store with `research velocity`'s save
+          "tools/research/src/research/velocity.py", "tools/research/src/research/goals_audit.py",
           # drive's loop, whose checkout per verb is tested here
           "infra/control/drive.sh",
           "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py",

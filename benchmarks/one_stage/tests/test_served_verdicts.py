@@ -964,7 +964,7 @@ def _recorded(tmp_path: Path, argv: list[str], capsys) -> tuple[int, dict, dict]
     {"summary.json": "{}", "window/audit.json": json.dumps({"accepted": False, "checks": {"proved": {"ok": False}}})},
     {"summary.json": None},
 ])
-def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomputed_here_unchanged(
+def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_unchanged(
         tmp_path, monkeypatch, capsys, edit):
     """Off the served node, `record --sampled-lean` takes sampled proofs' row from this host's own run of its Lean on the
     hand-off's v2 case in the form ``one-stage``, handed the case's files and its proof blob, the answer tied to the
@@ -1015,7 +1015,7 @@ def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomp
     ("no-blob", "error", "blob(s) that aren't files"),
     ("no-line", "error", "answered no line"),
 ])
-def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
+def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
         tmp_path, monkeypatch, capsys, change, verdict, said):
     """With no v2 case the hand-off holds no proofs to recompute from, so the row is the served node's, its answer_from
     saying so; a v2 case naming a missing blob, a Lean answer about another record, or one that answers no line is the
@@ -1744,7 +1744,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert (row["protocol"], row["verdict"], row["commitment"], row["delta"]) == (S.PEARLPLUS_PROTOCOL, "accept",
                                                                                   "c1" * 64, "1/100")
     assert row["quantity"]["work"] == PEARL_LEAN_WORK and row["quantity"]["tie"]["record"] == PEARL_W
@@ -1841,7 +1841,7 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
     document, its ``why`` the development verdict and the condition, in `pearlplus_of_record`'s order, so remote's record
     composes pending and names it."""
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, case)
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert (row["verdict"], row["development"]["piece"]) == ("missing", "pearlplus"), row
     assert row["why"].startswith(f"{S.DEV_VERDICT}: {why}"), row["why"]
     _report, rec, line = S.record({"integrity": _accepted(), "work": row}, window=1, steps=(0, 4), node="vy-dc-h200",
@@ -3400,9 +3400,10 @@ PEARL_ROW = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager
 def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and_w(tmp_path, case):
     """`served_verdicts.sh served-compare K`, the run's step under PEARLPLUS_TIE once Pearl+'s piece wrote W and before the
     record, runs served_compare.py with no GPU on the serve dir, the row of record, V3C's class, Pearl+'s scheme, PRED and
-    the row's Build of record, against W in pearlplus/w<k>/: its verdicts in the serve dir's served-compare/, copied to
-    $OUT, its lines published (W's path naming no window) and its exit the step's. One that dies before a verdict says
-    NOT EQUAL with its exit and error, and no earlier compare's verdict stands for it; without PEARLPLUS_TIE it isn't run."""
+    the row's Build of record, against W in pearlplus/w<k>/, at the run's REV: its verdicts in the serve dir's
+    served-compare/, copied to $OUT, its lines published (W's path naming no window) and its exit the step's. One that
+    dies before a verdict says NOT EQUAL with its exit and error, and no earlier compare's verdict stands for it; without
+    PEARLPLUS_TIE it isn't run."""
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     (tree / "benchmarks").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
@@ -3415,7 +3416,7 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
     rc = {"unequal": 1, "died": 2}.get(case, 0)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
            "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, "FAKE_COMPARE_RC": str(rc),
-           **({"PEARLPLUS_TIE": ""} if case == "untied" else {})}
+           "REV": "ccf98f3652864935e2973dd22fe15fffd514f865", **({"PEARLPLUS_TIE": ""} if case == "untied" else {})}
     run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "served-compare", "7"], cwd=tree, env=env,
                          check=False, capture_output=True, text=True)
     lines = run.stdout.splitlines()
@@ -3429,7 +3430,8 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
     assert re.fullmatch("[0-9a-f]{128}:[0-9a-f]{128}", at.pop("--of-record"))
     assert (called["cuda"], at) == ("", {
         "--serve": str(d), "--row": PEARL_ROW, "--class": W63K4, "--pearl-tables": "pearl-c-h100-v1-h3",
-        "--pred": f"{d}/predicted", "--window-record": f"{d}/pearlplus/w7/registration.json", "--out": f"{d}/served-compare"})
+        "--pred": f"{d}/predicted", "--window-record": f"{d}/pearlplus/w7/registration.json", "--out": f"{d}/served-compare",
+        "--revision": "ccf98f3652864935e2973dd22fe15fffd514f865"})
     published = tmp_path / "out" / "served-compare" / "served_compare.json"
     if case == "died":
         assert (run.returncode, lines) == (2, ["SERVED-COMPARE: NOT EQUAL (served_compare.py exit 2: served_compare.py: died "

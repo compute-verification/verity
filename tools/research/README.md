@@ -31,6 +31,7 @@ src/research/
 ├── checkview.py    `research status RUN` on a check run; tools/verity/check's live view reads its targets
 ├── goals.py        `research goals`: the Goals page (the writing-goals skill)
 ├── linear.py       asks as Linear issues, and the audit the control pod's top watch runs
+├── response.py     `research msg linear response`: the minutes each lane takes to answer a Linear comment that rings it
 ├── flags.py        renamed(): an old flag kept as a hidden alias of its new name; infra/ops uses it
 ├── store/          the evidence store (`research data`); README.md there is the contract and names its modules
 ├── telemetry/      the recorded-attempt harness (below)
@@ -93,7 +94,7 @@ research data custody RUN [--publish] | --triage                 # a run's custo
 research run-preserve PATH [--kind K] [--meta JSON]              # in an --on run's workload: its runner preserves one file of $OUT now (§10.1)
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
-                                         # current, peak, cap, growth from its own samples, NEAR CAP within 10%; remote: with RUN or --refresh
+                                         # current, peak, limit, growth from its own samples, NEAR LIMIT within 10%; remote: with RUN or --refresh
 research inspect RUN [--json|--py-spy]   # fetch, status RUN and inspect take a run another VM launched (a full id): found on
                                          # --on NAME, else on each ssh machine but the auditor hosts, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
@@ -140,7 +141,7 @@ and fast-forwards to the longest prefix that passed.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
-refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the markdown caps
+refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the Markdown size limits
 among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
 `tools/verity/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
 `check.py --slots` picks), and `research merge BRANCH` lands it.
@@ -473,9 +474,9 @@ campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verif
 is written for it, and a sidecar wins.
 
 A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires 7 days after the run
-directory's last write, so the collector takes it (`UNPRESERVED_RUN_EXPIRY`). The whole directory goes: it is the only copy.
-One running, queued or in a slot line stays, and one whose clone stands waits (`scratch/<run id>` goes first).
-To keep one: `research keep RUNDIR ...` before the 7 days are over, or `research data custody RUN --publish`.
+directory's last write, so the collector takes it, its only copy (`UNPRESERVED_RUN_EXPIRY`). So does a refused launch.
+One running, queued or in a slot line stays; one whose clone stands waits (`scratch/<run id>` goes first).
+To keep one: `research keep RUNDIR ...` before the 7 days are over, or `research data custody RUN --publish` if it ran.
 gc takes them only with `--unpreserved-runs`; it and the report list them apart.
 
 A launcher's copy of a run on another machine (a directory named as the run's id that holds the launcher's `remote.json`) has no
