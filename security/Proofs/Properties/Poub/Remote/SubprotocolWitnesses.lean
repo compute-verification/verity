@@ -40,9 +40,10 @@ Each of `Properties.Poub.Subprotocol`'s three properties, and the memory line
   claim holds of a trace with the store in memory and fails of the same trace with memory emptied at tick 10
   (`lineHeldAtSubprotocol_bites`). The guarantees `Line.SecurityProofs.lineHeld` and
   `Subprotocol.SecurityProofs.lineHeldAtSubprotocol` carry their own witnesses under their namespaces: the nontrivial
-  ones closed at the toy summary (`Toy.sm`, in the properties tree, which their statements read), and the honest ones at
-  the honest one-window log, taking that the deployed check accepts it (`HonestLogAccepted`): its session decodes and
-  `Shared.run` accepts it (`lineHeld_honest`), and the check accepts it (`lineHeldAtSubprotocol_honest`).
+  ones closed at the toy summary (`Toy.sm`, in the properties tree, which their statements read). `lineHeld`'s honest
+  one is `RecordAccepts`' accepted play, with no premise; `lineHeldAtSubprotocol`'s is at the honest one-window log,
+  taking that the deployed check accepts it (`HonestLogAccepted`): the check accepts it and `Shared.run` accepts the
+  session it decodes (`lineHeldAtSubprotocol_honest`).
 * **QBytesAtSubprotocol** (`QBytesAtSubprotocolBy`, `qBytesAtSubprotocolBy_iff`), which takes the samples' three of those
   premises. Honest: at the same honest node and schedule they hold, and at `Poub.Protocol.DELTA` the
   distinguishers' advantage and the hiding terms are 0 (`qBytesAtSubprotocolBy_honest`). Nontrivial: at a verifier that
@@ -804,24 +805,6 @@ theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨�
     norm_num at h0
 
 /-! ## The honest one-window log -/
-
-/-- **`LineHeld`'s honest witness**: the honest one-window log's registration decodes, and its parameters and log
-decode to a session that `Shared.run` runs to an accepted state, given that the deployed check accepts it
-(`HonestLogAccepted`, witnessed outside Lean). -/
-theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_honest (h : HonestLogAccepted) :
-    ∃ (reg : Poub.Registration) (params : Poub.Session.Params) (g : ℕ) (coins appendCoins : Array ByteArray)
-      (notBeforeNs : ℕ) (events : Array Poub.Session.Event) (rs : Array Poub.Session.Result)
-      (s : Poub.Session.State),
-      Poub.Difftest.registrationOf HonestLog.registration = .ok reg ∧
-      Poub.Protocol.sessionOf HonestLog.params HonestLog.evidence =
-        .ok (params, g, coins, appendCoins, notBeforeNs, events) ∧
-      Poub.Shared.run g (Poub.Session.State.init params reg coins appendCoins notBeforeNs) events =
-        .ok (rs, s) ∧
-      s.outcome = some "accepted" := by
-  obtain ⟨reg, pub, prof, hreg, hc⟩ := h
-  obtain ⟨params, g, coins, appendCoins, notBeforeNs, events, rs, s, -, hs, hr, ho, -⟩ :=
-    acceptIsVerified _ _ _ _ _ hc
-  exact ⟨reg, params, g, coins, appendCoins, notBeforeNs, events, rs, s, hreg, hs, hr, ho⟩
 
 /-- **`LineHeldAtSubprotocol`'s honest witness**: the deployed check accepts the honest one-window log
 (`HonestLogAccepted`, witnessed outside Lean), whose parameters and log decode to a session that `Shared.run` runs to
