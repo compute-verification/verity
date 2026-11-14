@@ -12,6 +12,8 @@ deployment configuration's table declares the policy's party from, with its test
 - **Commands** (`lake exe`, in `lean/`):
   - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
     which both composites compose;
+  - `inference-only-rows id | check PARAMS COMMITMENT EVIDENCE [CIRCUIT FILE ...] | serve`: the core protocol
+    `verity/inference-only/rows/v1`, which no system lists;
   - `inference-only-check [--unrolled] INSTANCE TRUSTED`, or with `--policy [--unrolled] INSTANCE` or
     `--count [--detail] INSTANCE`: the verdict on one instance, as JSON on stdout. `benchmarks/verifier_cost` builds
     and runs it;
@@ -37,7 +39,8 @@ deployment configuration's table declares the policy's party from, with its test
   composite's case, as `benchmarks/one_stage/composite.py` reads them.
 - **Loads from**: the packages at `verity/protocols/proofs/flock/verifier` and `verity/protocols/interface`, and nothing of
   the certifier.
-- **Not here**: its tests, `test_inference_only_*.py` and `test_inference_only_protocol.py`. They are in
+- **Not here**: its tests, `test_inference_only_*.py`, `test_inference_only_protocol.py` and
+  `test_inference_only_rows_protocol.py`, which loads `lean/scripts/inference_only_record_reference.py` by path. They are in
   `../../../accounting/certifier/verifier/network/tests`, in the suite `verity/protocols/accounting/certifier/verifier/network`, with the
   tests of the certifier's Lean check. The tests of `verity/protocols/compose/verifier/lean` load the second by
   path.
@@ -89,11 +92,11 @@ scenarios register a policy as if it were a subprotocol.
 - **The guarantees**, `security/Definitions/InferenceOnly/Guarantees/`, each proved in `security/Proofs/InferenceOnly/` as
   `InferenceOnly.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
-  `InferenceOnly.Guarantees.SlowdownRemote` and its relatives state the remote composition's overhead at (c, k).
+  `Slowdown.Guarantees.SlowdownRemote` and its relatives state the remote composition's overhead at (c, k).
 - **The count of (c, k)-inference blocks**, `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`): D's
   computed gates divide into at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`,
   `security/Definitions/Core/Formalism.lean`). It is the day's bound's only premise on the circuit
-  (`InferenceOnly.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `SlowdownRemote` and `SlowdownRemoteMonitoringPeriod` take
+  (`Slowdown.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `SlowdownRemote` and `SlowdownRemoteMonitoringPeriod` take
   it for each declared day.
 - **The registered information's provenance**, `InferenceOnly.Assumptions.ThetaRegistered`: every θ entry is registered
   public data, never an earlier run's output.
@@ -101,8 +104,9 @@ scenarios register a policy as if it were a subprotocol.
 ## The check
 
 `lean/` is the Lake package `inference_only_check`, code that reads Programs with the circuit format's decoder (`Circuits.Program`,
-in the package `core_circuits`) and imports nothing else but Lean core and the core interface (`core_protocol`): nothing
-of Flock's verifier.
+in the package `core_circuits`) and imports nothing else but Lean core, the core interface (`core_protocol`) and SPOT's
+verifier (`core_spot`, with Flock's under it), whose readers of a circuit record and a circuit file the record form and
+the rows protocol read them with.
 
 - `inference-only-check` runs `InferenceOnlyCheck.Theta.check`: `InferenceOnlyCheck.Desc.check`, which decides `InferenceOnly.CompliesRate c α` for a declared
   division aligned to the root's Calls at the cost of the descriptor (one summary per Definition), then each θ entry's
@@ -124,6 +128,12 @@ of Flock's verifier.
   is what `benchmarks/verifier_cost` measures.
 - `inference-only id | check | serve` runs `InferenceOnlyCheck.Theta.check` as the core protocol `verity/inference-only/v0`,
   the subprotocol of onsite and remote.
+- `inference-only-rows id | check | serve` runs `InferenceOnly.RowsProtocol.protocol`, the core protocol
+  `verity/inference-only/rows/v1`: the check of an execution phase's circuit record, each block counted in the rows of
+  its templates' circuit files, the files its blobs, each read as SPOT's one-stage check reads a circuit file. Its
+  module docstring has its parts, its refusals and what it does not hold.
+  `../../../accounting/certifier/verifier/network/tests/test_inference_only_rows_protocol.py` holds it to the record
+  form's reference, `lean/scripts/inference_only_record_reference.py`, behind the protocol's decoders.
 - `inference-only-difftest`, `inference-only-desc-difftest`, `inference-only-desc-liveness`, `inference-only-desc-fuzz` and `inference-only-theta-difftest` hold them to
   each other and to the Python reference `lean/scripts/inference_only_reference.py`, run by the `test_inference_only_*.py` of `../../../accounting/certifier/verifier/network/tests/`;
   `../../../accounting/certifier/verifier/network/tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's

@@ -1,4 +1,4 @@
-"""`TargetProfile.ir = "boolean"` (`verity_vllm.definitions.boolean`): a derived Program on bits.
+"""`TargetProfile.ir = "boolean"` (`verity.circuits.ops.boolean.versions`): a derived Program on bits.
 
 * the table: each word Definition's Boolean version is the registered Boolean Definition whose `word` names it, a function-valued
   static bound to its own Boolean version (`DotBf16_v2{K, DOT}` -> `DotBf16_v3{K, DOT=HopperBF16WgmmaDot16_v2}`), and a static
@@ -35,7 +35,7 @@ from verity.circuits.refs import (
 )
 from verity.circuits.types import Array, RecordType, Value
 from verity.circuits.types import Tuple as TupleT
-from verity_vllm.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.replay import replayer
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
@@ -241,7 +241,7 @@ def test_derive_refuses_a_call_with_no_boolean_version_by_name():
     import torch
 
     from verity_torch.frontend.boolean import derived
-    from verity_torch.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
 
     class M(torch.nn.Module):
         def forward(self, x, y):

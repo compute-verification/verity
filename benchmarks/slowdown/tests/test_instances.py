@@ -20,8 +20,8 @@ def test_the_matrices_add_up_to_the_stated_sizes(model):
 
 
 @pytest.mark.parametrize("m", shaped(), ids=lambda m: m.name)
-def test_legs_and_fanout_are_derived_from_the_matrices(m):
-    assert m.legs == instances.derived_legs(m)
+def test_fanin_and_fanout_are_derived_from_the_matrices(m):
+    assert m.fanin == instances.derived_fanin(m)
     assert m.fanout == instances.derived_fanout(m)
 
 
@@ -67,10 +67,10 @@ def test_the_per_layer_shape_at_hand():
 def test_the_derivation_at_hand():
     kimi = instances.model(REG, "kimi-k2")
     assert instances.derived_fanout(kimi) == 384 + 2 * 2048 * (8 + 1) == 37248
-    assert instances.derived_legs(kimi) == 512
+    assert instances.derived_fanin(kimi) == 512
     v4 = instances.model(REG, "deepseek-v4-pro")
     # wq_b's 128 x 512 query outputs beat the MoE input's 384 + 2 x 3072 x 7 = 43,392; q's latent is the narrowest input
-    assert instances.derived_fanout(v4) == 128 * 512 and instances.derived_legs(v4) == 1536
+    assert instances.derived_fanout(v4) == 128 * 512 and instances.derived_fanin(v4) == 1536
     assert kimi.params(["experts"]) == 23040 * 3 * 7168 * 2048
 
 

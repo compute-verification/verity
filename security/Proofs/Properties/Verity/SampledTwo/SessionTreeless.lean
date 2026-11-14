@@ -72,10 +72,10 @@ theorem firstTreeless_of_check (C : CaseOf)
   have hpce : (p, c, e) = (p', c', e') := Except.ok.inj (h1.symm.trans hcase)
   obtain ⟨rfl, hce⟩ := Prod.mk.inj hpce
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj hce
-  obtain ⟨bp, hb, hw₁, -⟩ := firstSamples_window h3
+  obtain ⟨bp, hb, hw₁, -⟩ := firstSamples_executionPhase h3
   have hbp : bp = p.boundary := (Except.ok.inj hb).symm
   rw [hbp] at hw₁
-  have hw₂ := source_window (secondSamples_eq h5 h6)
+  have hw₂ := source_executionPhase (secondSamples_eq h5 h6)
   exact VStar.Recursive.SampledTwo.firstTreeless_lines (VStar.Recursive.SampledTwo.accepted_treeless hchk) hw₁ hw₂ hw
     (formLines_of hs hls)
 

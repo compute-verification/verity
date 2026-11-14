@@ -6,7 +6,7 @@ public import Proofs.Properties.Accounting.Remote.Bisect
 /-!
 # A sampled window's record is kept (`RecordKeptAfterSample`)
 
-Each event keeps every window's `KeepW`: once sampled, its draws, challenge, roots, plans and heads stay as they are;
+Each event keeps every window's `KeepW`: once sampled, its samples, challenge, roots, plans and heads stay as they are;
 once final, it stays final; and it is sampled only if it was, or is final. No event changes the digest, and the appends
 only grow (`Frz`, `frz_step`). An event that adds a pass adds it to an unsampled window: the window it fills is not
 final (so unsampled, `DF`), or is the one after it, which has no root yet (`Inv.beyond`), and a sampled window has
@@ -20,13 +20,13 @@ every append after starts at that extent or above (`firsts_big`), so `appendOf` 
 
 @[expose] public section
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-! ## Each window -/
 
-/-- What a window's record reads of it, and its draw, unchanged. -/
+/-- What a window's record reads of it, and its sample, unchanged. -/
 def Fixed (w w' : Win) : Prop :=
   w'.drawn = w.drawn ∧ w'.challenge = w.challenge ∧ w'.roots = w.roots ∧ w'.plans = w.plans ∧ w'.heads = w.heads
 
@@ -95,7 +95,7 @@ theorem keepsF_push (ws : Array Win) (w : Win) (hw : w.drawn = none) : KeepsF ws
     · rw [getElem!_neg (ws.push w) t (by simp; omega)] at h
       cases h
 
-/-- A change of fields a record and a draw don't read. -/
+/-- A change of fields a record and a sample don't read. -/
 theorem keepW_of {w w' : Win} (h : Fixed w w') (hf : w.final → w'.final) : KeepW w w' :=
   ⟨fun _ => h, hf, fun hd => Or.inl (h.1 ▸ hd)⟩
 
@@ -104,7 +104,7 @@ theorem keepW_undrawn {w w' : Win} (hd : w.drawn = none) (hd' : w'.drawn = w.dra
     KeepW w w' :=
   ⟨fun h => (by rw [hd] at h; cases h), fun h => (by rw [hf]; exact h), fun h => (by rw [hd', hd] at h; cases h)⟩
 
-/-- The draw of an unsampled window, which makes it final. -/
+/-- The sample of an unsampled window, which makes it final. -/
 theorem keepW_sample {w w' : Win} (hd : w.drawn = none) (hf : w'.final = true) : KeepW w w' :=
   ⟨fun h => (by rw [hd] at h; cases h), fun _ => hf, fun _ => Or.inr hf⟩
 
@@ -542,4 +542,4 @@ theorem recordKeptAfterSample : RecordKeptAfterSample := by
   · rintro ⟨i, p, o, hi, hp, hu, hc⟩; exact ⟨i, p, o, hi, hp, hu, (key i p o hi hp) ▸ hc⟩
   · rintro ⟨i, p, o, hi, hp, hu, hc⟩; exact ⟨i, p, o, hi, hp, hu, (key i p o hi hp).symm ▸ hc⟩
 
-end Properties.RemoteAudit
+end Properties.Poub

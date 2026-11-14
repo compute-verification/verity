@@ -16,7 +16,7 @@ are the challenger's, the setup's salt and the session's:
 
 - **The salt.** Before setup encodes `C*`, the prover's side sends `{"salt": {"audit", "commitment"}}`: the audit's
   64-byte binding and the commitment to `W` that setup will publish. The challenger samples the salt's source from its
-  host's OS after it (`give_salt`), logs the audit, the commitment and the salt (`setup.draw_salt` of that source) in its
+  host's OS after it (`give_salt`), logs the audit, the commitment and the salt (`setup.sample_salt` of that source) in its
   salt log (`memory_challenger.SaltLog`, which holds one salt an audit), and prints `{"source": HEX}`, which setup takes
   as its salt source (`challenger_session.salt`).
 - **The session.** A request naming its audit (`audit`, and `published`, setup's published outputs) runs under
@@ -117,7 +117,7 @@ def field_bytes(request: Any, field: str, n: int) -> bytes:
 
 def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], entropy: Callable[[int], bytes] = os.urandom) -> bytes:
     """The challenger's answer to a salt request `{"audit", "commitment"}`: a source sampled from `entropy` after the
-    commitment, its salt (`setup.draw_salt`) logged under the audit in `salts` before the source is returned. Refused
+    commitment, its salt (`setup.sample_salt`) logged under the audit in `salts` before the source is returned. Refused
     (`Refusal`) when the audit has a salt already."""
     audit, commitment = field_bytes(request, "audit", 64), field_bytes(request, "commitment", 64)
     once = "the memory challenger draws one salt an audit, and a retry never redraws it"
@@ -125,7 +125,7 @@ def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], entropy: Callable[[
         raise Refusal(f"the request's `audit` has its salt: {once}")
     source = entropy(SOURCE_BYTES)
     try:
-        salts.record(audit, commitment, pous_setup.draw_salt(source, commitment))
+        salts.record(audit, commitment, pous_setup.sample_salt(source, commitment))
     except mc.SessionLogError:
         raise Refusal(f"the salt log refused the request's `audit`: {once}") from None
     return source

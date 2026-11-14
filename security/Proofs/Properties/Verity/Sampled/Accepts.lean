@@ -420,7 +420,7 @@ theorem filesOn_of {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F B : A
   · obtain ⟨circuitB, hg, hl⟩ := hheld
     have h : A.I.tables = pinnedTables T A.I.circuitFile := by
       rw [hA.circuit]
-      exact (congrArg (fun r : Verity.WindowFiles => r.first.tables) hA.read).symm.trans (hD.tables F)
+      exact (congrArg (fun r : Verity.ExecutionPhaseFiles => r.first.tables) hA.read).symm.trans (hD.tables F)
     rw [h, ← hc p₀ hp₀ circuitB hg]
     exact pinnedTables_extend hl rfl ht
 

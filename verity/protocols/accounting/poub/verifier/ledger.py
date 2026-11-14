@@ -217,7 +217,7 @@ def rejection(record: audit.Record) -> Fraction:
     that opens all its receipts): the statement's error is a constant, and a sample's U_t is the prover's.  Refused for a
     record that states no `samples`.  Exact: the samples are an integer."""
     if record.samples is None:
-        raise ValueError("the record states no samples, the receipts every draw requested, at which the memory line's "
+        raise ValueError("the record states no samples, the receipts every sample requested, at which the memory line's "
                          "δ charges the draw's rejection (Σ_t k_t/2^64): give the record its session's Params.samples")
     return Fraction(coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples,
                     2 ** REJECTION_LOG2)
@@ -257,7 +257,7 @@ BINDING_ROOT_BITS = 64
 def binding_over(draws: int, receipts: int, samples: int, queries: int) -> Fraction:
     """`binding` over a session of `draws` samples, at most `receipts` receipts a sample (`window_receipts` times the
     windows a sample covers) and a sample cap of `samples`, its prover making at most `queries` SHA-512 compressions over
-    the session: draws·√(receipts·s)·q/2^256.5, its √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`, so the exact
+    the session: samples·√(receipts·s)·q/2^256.5, its √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`, so the exact
     value is at least the term."""
     s = min(samples, receipts)
     m = receipts * s << (2 * BINDING_ROOT_BITS - 1)

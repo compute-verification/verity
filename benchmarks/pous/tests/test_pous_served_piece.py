@@ -181,7 +181,7 @@ def _in_process_party(signer, log, keep=None, record=lambda request: request):
 
 class Auditor:
     """The memory challenger's side in this process, as `challenger_party.main` serves it, on one device (a salt log and
-    a session log) across a test's runs: a salt request answered by `challenger_party.give_salt` from ``draw``, a
+    a session log) across a test's runs: a salt request answered by `challenger_party.give_salt` from ``sample``, a
     session refused before it listens as `designate` refuses it (the `RuntimeError` `Side.talk` raises), then served by
     `_in_process_party` with the device's salt log, which `_run` binds into `challenger_party.serve`, and kept in
     ``keep`` as ``record`` has it. With ``forget``, it serves the request without its audit, under an id of its coins;
@@ -387,7 +387,7 @@ def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(serve
     assert len(bytes.fromhex(setup["evidence"])) == 4 + 4 * 10 + 80 * (4 + SMALL.block_bytes)
 
 
-def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(served, tmp_path, monkeypatch):
+def test_the_challenger_samples_the_salt_and_the_verdict_derives_the_session_id(served, tmp_path, monkeypatch):
     """Setup's salt is the one the memory challenger drew after the commitment and logged under the window's binding, and
     the session runs under the id derived from that binding, the commitment and the salt, which the verdict computes
     itself: the request names the binding and setup's published outputs, and the private record carries the id."""
@@ -399,7 +399,7 @@ def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(se
     bind = SP.binding(REPO, REV, 3, None)
     commitment, salt = bytes.fromhex(published["commitment"]), bytes.fromhex(published["salt"])
     assert len(auditor.sources) == 1 and auditor.salts.get(bind) == (commitment, salt)
-    assert salt == pous_setup.draw_salt(auditor.sources[0], commitment)
+    assert salt == pous_setup.sample_salt(auditor.sources[0], commitment)
     sid = CS.session_id(bind, commitment, salt)
     assert run["session_id"] == sid.hex() == run["session"]["commitment"]["session"] and sid in auditor.log
     request = calls[0][1]
@@ -710,7 +710,7 @@ def _built(package: Path, exe: str) -> Path:
 
 @pytest.fixture(scope="module")
 def case_exe() -> Path:
-    """`remote-audit-p2-protocol`, built in PoUB's package."""
+    """`poub-p2-protocol`, built in PoUB's package."""
     return _built(p2_lean.PACKAGE, p2_case.EXE)
 
 
@@ -808,7 +808,7 @@ def registered(served, monkeypatch) -> Served:
 
 
 #: the PoUB-P2 Lean `_bandwidth_judge` stands in for
-BW_JUDGE = "remote-audit-p2-protocol-stand-in"
+BW_JUDGE = "poub-p2-protocol-stand-in"
 
 
 def _bandwidth_judge(monkeypatch) -> str:
@@ -855,7 +855,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, the bandwidth party's
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
     PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, by
-    the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `remote-audit-p2-protocol` refuses
+    the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `poub-p2-protocol` refuses
     it, a toy party's session, naming each value off the auditor's (`p2_parties.SESSION`). The public answer, which the composed run reads as the bandwidth
     piece's, names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the only point
     a P2 registration names."""
@@ -962,7 +962,7 @@ def _bandwidth_files(s: Served) -> tuple[Path, dict, dict]:
 @pytest.mark.slow
 def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_it(registered, tmp_path, monkeypatch,
                                                                                   case_exe):
-    """With ``--bw-case-exe``, `remote-audit-p2-protocol` answers the case of the session over the held store, and its
+    """With ``--bw-case-exe``, `poub-p2-protocol` answers the case of the session over the held store, and its
     answer is the one written, privately and under the hiding commitment publicly, whatever the session's own party
     said of it: the summary names the program and this host under ``decided_by``, with the Lean's seconds, where a run
     without it names the Python. PoUS's answer is its own. Run in the piece's two parts: both sessions leave only what
@@ -992,7 +992,7 @@ def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_i
 
 @pytest.mark.slow
 def test_a_bandwidth_lean_that_does_not_answer_leaves_the_bandwidth_undecided(registered, tmp_path, monkeypatch):
-    """A `remote-audit-p2-protocol` that fails on the case (`p2_case.serve` stood in for): the session's own answer is
+    """A `poub-p2-protocol` that fails on the case (`p2_case.serve` stood in for): the session's own answer is
     not taken in its place. The bandwidth answer is undecided naming the failure, no case is written, the summary names
     the Python, whose answer this is, and PoUS's answer stands."""
     exe = tmp_path / p2_case.EXE
@@ -1012,7 +1012,7 @@ def test_a_bandwidth_lean_that_does_not_answer_leaves_the_bandwidth_undecided(re
 
 @pytest.mark.slow
 def test_a_bandwidth_lean_that_refuses_the_case_undecoded_is_the_answer(registered, tmp_path, monkeypatch):
-    """A `remote-audit-p2-protocol` that decodes no commitment of the case refuses it with none, as `Protocol.answer`
+    """A `poub-p2-protocol` that decodes no commitment of the case refuses it with none, as `Protocol.answer`
     does (`p2_case.serve` stood in for): that refusal is the bandwidth answer, with no commitment to hide, and the
     summary names the Lean."""
     refusal = {"commitment": None, "profile": None, "protocol": p2_case.PROTOCOL, "public": None,

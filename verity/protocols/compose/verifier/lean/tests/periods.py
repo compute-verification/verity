@@ -1,11 +1,11 @@
 """Onsite's real subprotocols' cases for the composition's difftest, each with the answer its Python verifier gives it
 (`reference.Recorded`), all on one store: the committed 9-block `C*` of PoUB's fixture
-(`remote_bandwidth/tests/fixtures/p2-store.json`), registered for PoUB-P2 on its PoUS setup. Space's
+(`poub/tests/fixtures/p2-store.json`), registered for PoUB-P2 on its PoUS setup. Space's
 (`pous.period_prover.audit` of that `C*` on node `n0`, signed by a key at S1's deployed parameters, `mc_cases.deployed_signer`)
 honest, under a prover that answers every other round with zeros, the honest audit's case committed to a setup with
 another salt (refused by the setup tie), and an honest run on another store (`OTHER_STORE`, accepted, which onsite's
 store tie refuses beside PoUB-P2's case); PoUB-P2's (`p2_case`, its sessions over a socket pair against
-`remote-audit-verifier`, as `remote_bandwidth/lean/tests/test_p2_party.py` runs them, held to the auditor's session
+`poub-verifier`, as `poub/lean/tests/test_p2_party.py` runs them, held to the auditor's session
 `p2_parties.SESSION`, the only one whose case the replay takes) honest, under a prover whose receipts skip a unit's reads,
 and the honest session's log stopped before its last window is verified; and of each, its honest case with params or
 evidence that don't decode. A P2 case is recorded as the composition hands it, without its `store_root`: onsite reads

@@ -23,20 +23,20 @@ export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/ada
 setup
 (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-  > "$OUT/build-firewall.log" 2>&1
-[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "wzk: no firewall frame"; exit 7; }
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+  > "$OUT/build-zk-server.log" 2>&1
+[ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "wzk: no ZK server frame"; exit 7; }
 
 RUN=$W/run
 log "wzk: warden-serve rehearsal (fake endpoint, requests ${WZ_REQUESTS:-6})"
-(cd benchmarks/network_traces && "$PY" warden_serve.py rehearse --fake --out "$RUN" --requests "${WZ_REQUESTS:-6}" \
+(cd benchmarks/network_traces && "$PY" -m verity.protocols.accounting.certifier.device.warden_serve rehearse --fake --out "$RUN" --requests "${WZ_REQUESTS:-6}" \
   --rate 1 --tail 5 --max-tokens 64 --prompt-max 64 --start-in 2) 2>&1 | tee -a "$OUT/wzk.log" | tail -3
 [ -f "$RUN/check.json" ] || { log "wzk: rehearsal FAILED"; exit 7; }
 mkdir -p "$OUT/run"
 for f in deployment.json certified.jsonl cells.jsonl check.json warden.json; do [ -f "$RUN/$f" ] && cp "$RUN/$f" "$OUT/run/"; done
 log "wzk: proving, units ${WZ_UNITS:-16}${WZ_DRY:+, dry}"
-"$PY" benchmarks/network_traces/warden_zk.py prove --run "$RUN" --bin "$BIN" --lean "$LEAN" --out "$W/wzk" \
+"$PY" benchmarks/network_traces/zk_drivers.py warden_zk prove --run "$RUN" --bin "$BIN" --lean "$LEAN" --out "$W/wzk" \
   --units "${WZ_UNITS:-16}" ${WZ_DRY:+--dry} 2>&1 | tee -a "$OUT/wzk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/wzk"

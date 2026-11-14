@@ -11,7 +11,7 @@ import struct
 from pathlib import Path
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
 from verity.protocols.accounting.poub.prover import p2_prover
@@ -115,7 +115,7 @@ def test_the_codec_is_pous_registered_point(fixture) -> None:
 
 def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
     reg = store.registration
-    assert reg.salt == setup.draw_salt(SOURCE, reg.commitment) == bytes.fromhex(fixture["salt"])
+    assert reg.salt == setup.sample_salt(SOURCE, reg.commitment) == bytes.fromhex(fixture["salt"])
     assert reg.root == vk.root == bytes.fromhex(fixture["root"]) and reg.blocks == 2 and reg.rows == 16
     c = reg.codec
     assert reg.digest == hashlib.sha512(
@@ -123,7 +123,7 @@ def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
         + reg.commitment + reg.salt + reg.root + frame("p2-unit4/v0") + frame("sketch-sha512")
         + (16).to_bytes(4, "big")).digest()
     assert len({reg.digest, dataclasses.replace(reg, rows=64).digest, dataclasses.replace(reg, node=b"x").digest}) == 3
-    other = setup.draw_salt(b"another secret", reg.commitment)
+    other = setup.sample_salt(b"another secret", reg.commitment)
     with pytest.raises(ValueError, match="under the salt"):
         p2.register(b"another secret", NODE, reg.commitment, vk)
     assert other != reg.salt

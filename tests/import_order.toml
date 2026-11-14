@@ -285,15 +285,6 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/claims",
-]
-trusted = true
-loaded_by = [
-    "verity/commitments/tests/test_hm96.py",
-]
-
-[[place]]
-paths = [
     "verity/commitments",
     "verity/commitments/gates/attest.py",
     "verity/commitments/gates/block_key.py",
@@ -405,7 +396,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -447,7 +437,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -485,7 +474,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -508,7 +496,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -538,7 +525,6 @@ paths = [
 ]
 loads = [
     "verity/channel.py",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -547,7 +533,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -599,7 +584,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -619,7 +603,7 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/circuit/h1zy.py",
     "verity/protocols/accounting/pouw/prover/circuit/live.py",
     "verity/protocols/accounting/pouw/prover/circuit/ncp2.py",
-    "verity/protocols/accounting/pouw/prover/circuit/pc4.py",
+    "verity/protocols/experimental/pearl_c4/prover/pc4.py",
     "verity/protocols/accounting/pouw/prover/circuit/pc8.py",
     "verity/protocols/accounting/pouw/prover/circuit/plan.py",
     "verity/protocols/accounting/pouw/prover/circuit/rowk.py",
@@ -629,7 +613,7 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/schemes/__init__.py",
     "verity/protocols/accounting/pouw/prover/schemes/ncp.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c.py",
-    "verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py",
+    "verity/protocols/experimental/pearl_c4/prover/pearl_c4.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c_work.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_kw.py",
     "verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py",
@@ -699,6 +683,29 @@ trusted = true
 
 [[place]]
 paths = [
+    "verity/protocols/proofs/spot/prover/audit",
+    "verity/protocols/proofs/spot/prover/cost",
+]
+loads = [
+    "adapters/vllm",
+    "benchmarks/network_traces",
+    "benchmarks/one_stage",
+    "verity/circuits",
+    "verity/circuits/ops",
+    "verity/commitments",
+    "verity/commitments/periods",
+    "verity/device.py",
+    "verity/protocols/accounting/pouw/prover",
+    "verity/protocols/accounting/pouw/verifier",
+    "verity/protocols/accounting/registration/verifier/registration.py",
+    "verity/protocols/proofs/flock/prover",
+    "verity/protocols/proofs/spot/verifier",
+    "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/runtime",
+]
+
+[[place]]
+paths = [
     "verity/protocols/proofs/spot/prover/workload.py",
 ]
 loads = [
@@ -720,7 +727,6 @@ paths = [
 loads = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/verifier/profile.py",
@@ -729,7 +735,6 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
-    "verity/claims",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",

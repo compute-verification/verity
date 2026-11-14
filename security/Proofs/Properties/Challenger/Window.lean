@@ -123,7 +123,7 @@ theorem ledgerMessage_eq_spec (I : ByteArray) (j : Json) :
 -- `mvcgen` splits `verifyLedger`'s loop body into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
 /-- **`verifyLedger` checked every entry's signature** over its message under the key. -/
-theorem verifyLedger_sig {es : Array LedgerEntry} {r : Array Win × Array MonitoringPeriod}
+theorem verifyLedger_sig {es : Array LedgerEntry} {r : Array Win × Array PeriodRecord}
     (h : verifyLedger es key = .ok r) : SigInv key es.toList := by
   unfold verifyLedger at h
   rw [bind_ok] at h

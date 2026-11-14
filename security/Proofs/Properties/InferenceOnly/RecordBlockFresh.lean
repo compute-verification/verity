@@ -41,7 +41,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.RecordText (Row outerOf)
+open Spot.RecordText (Row outerOf)
 open InferenceOnlyCheck.Record (Case read Kind)
 open InferenceOnlyCheck.Record.SecurityProofs (form read_front front_text finish_text mem_of_lookup rowBits rowBits_eq FreshRows
   tmplOf_spec bitsOf_eq program_of_read)

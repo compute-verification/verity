@@ -1,6 +1,6 @@
 module
 
-public import Definitions.InferenceOnly.Dark
+public import Definitions.Slowdown.Dark
 
 /-!
 # The inference-only policy's θ rule: the named premise
@@ -10,6 +10,8 @@ through a containment, total or partial (`PartialContainment`), rests on it.
 -/
 
 @[expose] public section
+
+open Slowdown
 
 namespace InferenceOnly.Assumptions
 

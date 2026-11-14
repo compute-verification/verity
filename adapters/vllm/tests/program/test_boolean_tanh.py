@@ -84,7 +84,7 @@ def test_the_ands_are_the_builders_live_ands(d) -> None:
 def test_the_word_views_and_the_boolean_versions() -> None:
     """Each names its word Definition, is the newest Boolean version of it (`program.boolean.boolean_version`), and holds no
     data (`operations.program_data`)."""
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
 
     assert TR.word_of(bind(BT.TanhF32Rn)) is D.TanhF32Rn
     assert TR.word_of(bind(BT.GeluTanhMulBf16)) is D.GeluTanhMulBf16

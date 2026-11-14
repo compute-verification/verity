@@ -29,7 +29,7 @@ row).  Three things the block computes again, which one trace of it doesn't (cir
 warning): a chain starts from the zero accumulator's bits, and each member of its first step computes the step's gates on
 those constants; the first visited block's partial step (NVIS not a multiple of 16) is an `AttnDotStep{DOT,NV,FROM_ZERO}`, P's
 zero words folded in, on its keys' words and zero rows, so it decodes those keys' kv_c words a second time; and the softmax's
-per-key callees repeat what they repeat in the attention blocks.  It is ``opt_in`` (`verity_vllm.definitions.boolean`):
+per-key callees repeat what they repeat in the attention blocks.  It is ``opt_in`` (`verity.circuits.ops.boolean.versions`):
 `boolean_version` keeps `_v2`, and `_v3` serves only a caller that binds it.
 
 `SparseMlaHeadScores_v2` and `SparseMlaHeadValues_v2` are `SparseMlaHeadBlock_v3` cut at P, over the same Calls: the scores

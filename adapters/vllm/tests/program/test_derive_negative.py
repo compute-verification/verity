@@ -21,7 +21,7 @@ from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry.prims import BF16, I32
 
 from tests.program.capture_check import LazyTranscript, Segments, check_call
-from verity_torch.frontend import derive as _D
+from verity_vllm.program.frontend import vllm_derive as _D
 from verity_torch.frontend.provenance import registry_version
 
 

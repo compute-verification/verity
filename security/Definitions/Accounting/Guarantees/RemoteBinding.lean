@@ -51,8 +51,8 @@ can open (`L_t`) gives its share. The statement has no premise beyond `L_t` hold
   the fork form `ReceiptsBindingOfFork` (`Σ_t √(|L_t|·s_t·(fork_t + split_t))`), is a lemma:
   `Security/Proofs/Accounting/Lemmas/RemoteBinding.lean`.
 
-`L_t` and `s_t` are the session's: a set holding every receipt window `t` opens at every outcome, and its draw cap, so
-the code charges at the session's bounds on a window's receipts and draws, not at one record's `U_t` and `s'_t`. Where
+`L_t` and `s_t` are the session's: a set holding every receipt window `t` opens at every outcome, and its sample cap, so
+the code charges at the session's bounds on a window's receipts and samples, not at one record's `U_t` and `s'_t`. Where
 every window's roots, ranks and verifiers are fixed by its cut, `split_t = 0` and the bound is
 `Σ_t √(|L_t|·s_t)·q_t/2^256.5` (`Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed`), `ledger.binding`'s
 charge. The deployed challenger sends the prover no commitment to window `t`'s coin before window `t`'s roots are in

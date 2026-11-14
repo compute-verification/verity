@@ -207,7 +207,7 @@ statement is over the declared circuit; these are the checks that make its `comm
 A checked record asks nothing more of this statement: `Tie`, `ValueChecked` and `CreditTie` take no premise on it. What
 a proof layer (`Accounting.TS.ProofLayer`) realizing a value-checked `zTree` window must supply at a unit's record port
 is that realization's to prove, at the premises `Accounting.Guarantees.TS.SessionSoundAt` takes
-(`Proofs.Accounting.TS.Session.Assumptions`):
+(`Proofs.Pouw.TS.Session.Assumptions`):
 * `pf.accepted` holds of a proof only where its unit's check words are `1`: verity-verify-proof `--zk --registered` reads the
   `ok` row at its known content (`AcceptedLive`);
 * `pf.rel` holds its record to the product and its `dq`, as `Held` reads them, and the layer pins each committed value's

@@ -49,8 +49,8 @@ verity_vllm.program.predict.inference_blocks      # B's partition of a window ci
 verity_vllm.program.predict.step_needs      # one served engine step's needs: a library entry point (`StepNeeds`, `workload_phi`), for benchmarks/route_capture's gap
 verity_vllm.program.moe_difftest      # the MoE source's evidence names it as the check of the bf16 Triton experts (acquire/sources/moe_source.py)
 verity_vllm.acquire.h1_commit      # pouw_h1_ranks.COMMIT_EXTENSION: vLLM's workers import it by name (worker_extension_cls)
-verity_vllm.pipeline.boundary_rows      # a served window's boundary commitment: a library entry point, read by verity/protocols/proofs/spot/device/two_stage.py
-verity_vllm.pipeline.boundary_stop      # a serve's stop rule and a stop class's stop record: a library entry point, read by verity/protocols/proofs/spot/device/two_stage.py
+verity_vllm.pipeline.boundary_rows      # a served window's boundary commitment: a library entry point, read by verity/protocols/proofs/spot/prover/audit/two_stage.py
+verity_vllm.pipeline.boundary_stop      # a serve's stop rule and a stop class's stop record: a library entry point, read by verity/protocols/proofs/spot/prover/audit/two_stage.py
 verity_vllm.pipeline.boundary_windows      # the boundary commitment's hook on the scheduler: a library entry point, installed by benchmarks/serve_tax's plugin
 verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vLLM imports its general plugin (register) and its middleware (TickFeed) by name
 verity_vllm.pipeline.cut_plugin       # the carried pool's cut at each window edge under vLLM's own server: vLLM imports its general plugin (register) by name

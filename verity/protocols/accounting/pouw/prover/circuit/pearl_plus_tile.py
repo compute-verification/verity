@@ -13,7 +13,7 @@ auditor reads only the verifier's own registered rows and the proof, never a row
         (x: u8[64], y: u8[192], root, domain: u8[64], pos: Array<D, bit>, path: Array<D, u8[64]>) -> bit
         1 iff the hm96-sha512 leaf of digest x under salt y opens at pos to root (`Hm96Sha512Leaf_v1`, `FrameV3Read_v1`)
 
-The core, from the registry's call Definitions (`verity_vllm.definitions.registry.pearl_c_call`) and PoUW's cap (`cap`):
+The core, from the registry's call Definitions (`verity.protocols.accounting.pouw.prover.circuit.pearl_c_call`) and PoUW's cap (`cap`):
 
   - **rows.** Row i of A (``a[i]``, the tile's row ``rows[i]`` of unit ``unit``) by `PearlCRowA_v1`: its line E_A from the
     salt, the row's own digest and B's root (``root``), its codes A′_i, its peel factors P_A,i and its statistics; row j
@@ -72,11 +72,11 @@ from verity.commitments.gates import frame_v3 as F3
 from verity.commitments.gates.hm96 import Hm96Sha512Leaf
 from verity.commitments.gates.hm96 import reference as hm96_reference
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
-from verity_vllm.definitions.boolean import boolean_version, lift_body
-from verity_vllm.definitions.registry.pearl_c_call import PearlCRowA, PearlCRowB
-from verity_vllm.definitions.registry.pearl_c_forming import LINE
-from verity_vllm.definitions.registry.pearl_c_noise import BYTES32, BYTES64, PearlCRowDigest
-from verity_vllm.definitions.registry.pearl_c_tile import PearlCUnscale
+from verity.circuits.ops.boolean.versions import boolean_version, lift_body
+from verity.protocols.accounting.pouw.prover.circuit.pearl_c_call import PearlCRowA, PearlCRowB
+from verity.protocols.accounting.pouw.prover.circuit.pearl_c_forming import LINE
+from verity.protocols.accounting.pouw.prover.circuit.pearl_c_noise import BYTES32, BYTES64, PearlCRowDigest
+from verity.protocols.accounting.pouw.prover.circuit.pearl_c_tile import PearlCUnscale
 
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Shape
 from ..schemes import pearl_c as C
@@ -85,7 +85,8 @@ from ..schemes import pearl_c_u as CU
 from ..schemes import pearl_kw as P
 from ..schemes.pearl_c_device import DEVICES
 from . import boolean as _boolean
-from . import cap, pc4, pc8
+from . import cap, pc8
+from . import tile_units as U
 from . import leaves as L
 from . import words as W
 
@@ -113,7 +114,7 @@ def _bits_of(fn: Any) -> Any:
 
 
 def _on_bits(word: CompositeDefinition, version: int, register: bool = True) -> CompositeDefinition:
-    """σ of ``word`` (`verity_vllm.definitions.boolean.sigma_lift`'s, whose statics here are integers and names), each Call the
+    """σ of ``word`` (`verity.circuits.ops.boolean.versions.sigma_lift`'s, whose statics here are integers and names), each Call the
     Boolean version of its Definition or `_bits_of`'s."""
     statics = tuple(word.statics)
 
@@ -148,7 +149,7 @@ def _refuse_k(b: dict) -> str | None:
 
 
 def _admit_body(B, S, x, s, rho, alpha):
-    e, k = pc4._Emit(B), S.K
+    e, k = U._Emit(B), S.K
     positions = range(0, k, C.S5_STRIDE)
     total = 0
     for p in positions:
@@ -167,7 +168,7 @@ PearlPlusAdmitV2 = _on_bits(PearlPlusAdmit, 2)
 
 
 def _salt_dead_body(B, S, x, alpha, beta):
-    e, k = pc4._Emit(B), S.K
+    e, k = U._Emit(B), S.K
     dead = cap.SALT_DEAD[DEVICES[S.DEV].atom.name]
     cb = e.call(F32ToE4m3Sat, e.call(F32MulV2, beta, cap.FLAT_E))
     bits = [e.call(dead, e.call(F32MulV2, alpha, x[t]), cb) for t in range(k)]
@@ -207,7 +208,7 @@ def _core_params(S) -> tuple:
             ("eb", Array(tn, LINE)), ("fa", Array(k, LINE)), ("fb", Array(k, LINE)), ("g", pc8.GRAM))
 
 
-def _y_ok(e: pc4._Emit, yrow, served, col, tn: int, n: int):
+def _y_ok(e: U._Emit, yrow, served, col, tn: int, n: int):
     """1 iff the committed row ``yrow``'s words col·TN .. col·TN + TN − 1 are the served BF16 words widened, and col < N/TN."""
     widened = [e.call(Bf16ToF32, served[j]) for j in range(tn)]
     hit = 0
@@ -220,7 +221,7 @@ def _y_ok(e: pc4._Emit, yrow, served, col, tn: int, n: int):
 
 
 def _core_body(B, S, a, b, y, cert, salt, root, unit, rows, col, eb, fa, fb, g):
-    e, k, tm, tn, dev = pc4._Emit(B), S.K, S.TM, S.TN, S.DEV
+    e, k, tm, tn, dev = U._Emit(B), S.K, S.TM, S.TN, S.DEV
     d = DEVICES[dev]
     at = dict(K=k, R=R, DOT=pc8.ATOMS[d.atom.name], G=d.g)
     admit = bind(PearlPlusAdmit, K=k)
@@ -231,7 +232,7 @@ def _core_body(B, S, a, b, y, cert, salt, root, unit, rows, col, eb, fa, fb, g):
     sd = [B.call(bind(PearlPlusSaltDead, K=k, DEV=dev), a[i], ra[i][4], ra[i][5]) for i in range(tm)]
     tile_cap = bind(cap.Pc8TileCapDefV2, K=k, TM=tm, TN=tn, N=S.N, RHO=S.RHO, RHOR=S.RHOR, DEV=dev)
     capped = B.call(tile_cap, array_of([r[0] for r in ra]), array_of([r[0] for r in rb]), array_of([r[1] for r in ra]),
-                    array_of([r[1] for r in rb]), array_of([pc4.ok_word(e, o) for o in ok_a]), array_of(sd), cert)
+                    array_of([r[1] for r in rb]), array_of([U.ok_word(e, o) for o in ok_a]), array_of(sd), cert)
     c, u, verdict = capped[0], capped[1], capped[2]
     digest = B.call(bind(PearlCRowDigest, K=2 * tm * tn), L.tile_messages(c, u, tm, tn))
     served = B.call(bind(PearlCUnscale, TM=tm, TN=tn, BIAS=False), u, array_of([r[4] for r in ra]),

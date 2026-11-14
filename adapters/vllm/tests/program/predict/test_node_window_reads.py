@@ -1,7 +1,8 @@
 """verity_vllm.program.predict.node_window_reads: a node window's boundary reads, the two the class's Definition reads first,
 in GLM-5.3's window at TP8 at a 32-id prompt, 2 outputs and one decoder layer: the prefill's embedding reads take the prompt's
 ids (block b of token t at unit ``32 b + t``, id t at its leaves ``2 t`` and ``2 t + 1``), and rank 0's select combines
-write the served ids, output k at leaves ``2 k`` and ``2 k + 1``. Another rank's window reads the prompt and writes none."""
+write the served ids, output k at leaves ``2 k`` and ``2 k + 1``. Another rank's window reads the prompt and writes none.
+Built on them (`rank_window`), each rank's window with every family lowered leaves only its peer inputs free."""
 from __future__ import annotations
 
 import dataclasses
@@ -13,6 +14,7 @@ from verity_vllm.program.predict import node_window_reads as NR
 from verity_vllm.program.predict.build import Unexpressible
 
 from tests.program.predict.test_node_window import LP, glm_request
+from tests.program.predict.test_node_window_ranks import FAMILIES as LOWERED
 from tests.program.predict.test_node_window_select import FAMILIES as SELECT
 from verity.commitments.periods import interface as IF
 
@@ -77,17 +79,27 @@ def test_rank_0_alone_writes_the_served_ids(rank0, rank1):
         NR.written_once(reads, 2 * OUTPUTS - 1)
 
 
-def test_the_window_declares_them(rank0):
-    """Rank 0's circuit with its boundary reads (PRF-618: the window declares no ingress on the prompt's rows) passes
-    `interface.Circuit`'s checks (`check_inputs`: each on its template's port and units, no row declared twice) and records
-    them as its ``boundary_reads``; with the served ids twice, it doesn't."""
-    circuit, w = rank0
-    reads = tuple(NR.boundary_reads(w, 0))
-    assert circuit.ingress == ()
-    read = dataclasses.replace(circuit, boundary_reads=reads)
-    assert read.description()["boundary_reads"] == [r.doc() for r in reads]
+@pytest.fixture(scope="module")
+def ranks():
+    return [NR.rank_window(r, glm_request(LP, 1, rank=r).program.fn, LOWERED) for r in (0, 1)]
+
+
+def test_the_window_declares_them(ranks):
+    """Each rank's window built on its boundary reads (`rank_window`; PRF-618: no ingress on the prompt's rows) refuses
+    none: rank 0's takes the prompt's read and the served ids together as its ``boundary_reads``, rank 1's the prompt's
+    alone, and over the two each leaf of the return is written once. At one layer with every family lowered, all either
+    leaves free is the peer inputs, which `node_window_join.join` wires (`test_node_window_ranks`). With the served ids
+    twice, rank 0's circuit is refused (`check_inputs`: no row declared twice)."""
+    x0, x1 = ranks
+    assert x0.circuit.ingress == x1.circuit.ingress == ()
+    params = [[r.param for r in x.circuit.boundary_reads] for x in ranks]
+    assert sorted(params[0]) == [NR.PROMPT, NR.EGRESS] and params[1] == [NR.PROMPT]
+    assert x0.circuit.description()["boundary_reads"] == [r.doc() for r in x0.circuit.boundary_reads]
+    assert x0.free and {f.kind for x in ranks for f in x.free} == {"peer"}
+    NR.written_once([(x.circuit, x.circuit.boundary_reads) for x in ranks], 2 * OUTPUTS)
+    served = [r for r in x0.circuit.boundary_reads if r.param == NR.EGRESS]
     with pytest.raises(ValueError, match="both fill rows"):
-        dataclasses.replace(circuit, boundary_reads=(*reads, *NR.served_reads(w, 0)))
+        dataclasses.replace(x0.circuit, boundary_reads=(*x0.circuit.boundary_reads, *served))
 
 
 def test_refused_by_name():

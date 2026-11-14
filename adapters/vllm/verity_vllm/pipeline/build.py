@@ -23,7 +23,7 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.definitions.boolean import write_word
+from verity.circuits.ops.boolean.versions import write_word
 
 from verity_vllm.config import RowConfig, option, workload_arg
 from verity_vllm.engine import env as engine_env
@@ -93,7 +93,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
                          "verity_vllm/program/frontend/rules/vllm_dsa.py", "verity_vllm/program/frontend/rules/vllm_dsa_dense.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
-                         "verity_vllm/definitions/boolean.py",
+                         "verity/circuits/ops/boolean/versions.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py",
                          # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
@@ -308,7 +308,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
-        from verity_torch.frontend.derive import derive_report
+        from verity_vllm.program.frontend.vllm_derive import derive_report
         from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts, observe_batched_form,
                                                             observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
         clear_observations()

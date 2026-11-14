@@ -7,6 +7,7 @@ reject that says both. ``collect``, the composed run's piece, reads the answer t
 `pieces` has run first; it names the audit missing where there is none, and refuses another window's or protocol's."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -28,6 +29,7 @@ from p2_v1 import bandwidth as B  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 from verity.protocols.accounting.poub.verifier import ledger, p2, p2_parties  # noqa: E402
+from verity.protocols.accounting.pous.device import memory_challenger as mc  # noqa: E402
 
 CMD = 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 
@@ -41,7 +43,7 @@ def _serve_dir(path: Path) -> Path:
     return path
 
 
-#: a stand-in for `remote-audit-p2-protocol serve`, so the toy builds no Lean: one undecided answer per case
+#: a stand-in for `poub-p2-protocol serve`, so the toy builds no Lean: one undecided answer per case
 CASE_EXE = f"""#!{sys.executable}
 import json, sys
 from verity.protocols.accounting.poub.verifier import p2_case
@@ -51,13 +53,37 @@ for line in sys.stdin:
                       "verdict": "undecided"}}))
 """
 
+SIGNER = ROOT / "verity/protocols/accounting/pous/verifier/tests/pous_test_signer.py"
+
+#: `p2_parties` as the gate starts it, its memory challenger's key the test signer at S1's deployed parameters
+#: (`pous_test_signer.AtLeaf`) in place of `onsite.device_key`'s, which a 2^20-leaf keygen makes
+PARTY_EXE = f"""import importlib.util, sys
+sys.path.insert(0, {str(ROOT)!r})
+spec = importlib.util.spec_from_file_location("pous_test_signer", {str(SIGNER)!r})
+ts = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ts)
+from verity.protocols.accounting.poub.verifier import p2_parties
+from verity.protocols.accounting.pous.device import onsite
+onsite.device_key = lambda _directory: ts.AtLeaf(b"served-bandwidth-test/memory-challenger")
+sys.exit(p2_parties.main(sys.argv[1:]))
+"""
+
 
 def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
+    """The piece's environment; its party signs the session's close as the memory challenger, under a session id of
+    its own (`cheat`'s), since the challenger's session log refuses an id twice."""
     toy = tmp / "toy"
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_parties "
+    challenger = tmp / f"challenger-{cheat or 'honest'}"
+    challenger.mkdir()
+    mc.SessionLog.create(challenger / "sessions")
+    sid = hashlib.sha512(b"served-bandwidth-test/session/" + cheat.encode()).hexdigest()[:64]
+    wrapper = tmp / "p2_party.py"
+    wrapper.write_text(PARTY_EXE)
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E {wrapper} "
              f"--device {tmp / 'party'} --listen 127.0.0.1:0 --registration {toy / 'registration.json'} "
-             "--windows 1 --passes 2 --samples 64 --window-ns 1000000 --deadline-ns 1000000")
-    exe = tmp / "remote-audit-p2-protocol"
+             "--windows 1 --passes 2 --samples 64 --window-ns 1000000 --deadline-ns 1000000 "
+             f"--challenger {challenger} --session {sid}")
+    exe = tmp / "poub-p2-protocol"
     exe.write_text(CASE_EXE)
     exe.chmod(0o755)
     return dict(os.environ) | {"BANDWIDTH_CMD": CMD, "PY": sys.executable, "BW_STORE": str(toy / "store"),
@@ -95,6 +121,7 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
     assert not (tmp_path / "honest" / "bandwidth" / "lake-build.log").exists()
     case = json.loads((serve / "private" / "bandwidth" / "answer.json").read_text())
     assert (case["verdict"], case["reason"]) == ("undecided", "stand-in")
+    assert len((tmp_path / "party" / "private" / p2_parties.CASE_DIGESTS).read_text().split()) == 1
 
     got = S.pieces(serve, 0, tmp_path / "cheat", env=_env(tmp_path, "cache"))
     row = S.piece_row("bandwidth", tmp_path / "cheat")
