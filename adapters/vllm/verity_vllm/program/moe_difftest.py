@@ -5,7 +5,7 @@ weight -> `_moe_C.moe_sum`), bf16, unquantized, routing given:
     # pod, torch venv:  verity-vllm properties-admission produce --adapter verity_vllm.program.moe_difftest --n 20 --seed 17 --out DIR
     # verity venv:      verity-vllm properties-admission check   --adapter verity_vllm.program.moe_difftest --dir DIR --out RUN/moe.json
 
-`production` runs vLLM's own entry and records what each `fused_moe_kernel` launch wrote, by wrapping the module's
+The served side runs vLLM's own entry and records what each `fused_moe_kernel` launch wrote, by wrapping the module's
 `dispatch_fused_moe_kernel`: the w13 launch's output (`MoeExpertGemm{E,K=H,N=2I}` per (token, slot) pair), the w2 launch's input
 (`SiluMul_v1{I}`) and output (`MoeExpertGemmW{E,K=I,N=H}`), then the block's output (`MoeSum_v1{TOPK,H}` per token).  The expert
 GEMMs are the ones a config run binds on the capture's device (`frontend.targets.moe_expert_gemm_spec`: `_v1`, or `_v2{DOT}` with the
@@ -132,7 +132,7 @@ FusedMoEDifftestDot = CompositeDefinition("FusedMoEDifftestDot", 1, ("E", "TOPK"
 
 def spec(statics: dict):
     """The block as a config run on the capture's device binds it (`frontend.targets.moe_expert_dot` of its compute capability,
-    recorded by `production`; none recorded = the default target's `_v1` Definitions)."""
+    recorded by the served side; none recorded = the default target's `_v1` Definitions)."""
     from verity_vllm.program.frontend import targets as T
     from verity_vllm.program.frontend.target_profile import TargetProfile
     st = {k: int(statics[k]) for k in ("E", "TOPK", "H", "I", "M")}

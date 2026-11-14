@@ -1,6 +1,6 @@
 """The C2 oracle resolves a PROMOTED member through the Value's producer, not the module prefix of the fold's hint.
 
-Row #57 leg 3: over a Match that snapshotted every step, the 432 promoted `model`/`out` identities (the
+Row #57 part 3: over a Match that snapshotted every step, the 432 promoted `model`/`out` identities (the
 embedding scale's output crossing into layer 0) were "no fold instance of this op at this step" -- the fold hints that instance by
 the producing Call's own site, the manifest names it by the Program row's module.  Same Value, two names.  The oracle now answers
 from the dataflow: the fold instance of the producer family whose OUTPUT storage range contains an OPERAND view of a consumer
@@ -102,7 +102,7 @@ def test_promoted_member_resolves_through_the_producer_and_compares(tmp_path):
     assert res["result"] is True and res["complete"] is True and res["mismatch_n"] == 0, res
     assert res["compared"] == 2 * len(vals) + 2 + 2                              # + the two requests' promoted identities
     assert not any(k.startswith("no fold instance") for k in res["not_compared"]), res["not_compared"]
-    # the same key WITHOUT the dataflow rule is exactly the leg-3 symptom: the hint prefix `top.scale` is not the identity's `top`
+    # the same key WITHOUT the dataflow rule is exactly the part-3 symptom: the hint prefix `top.scale` is not the identity's `top`
     o = OC.MatchOracle(d)
     b, why, n = o.member_bytes(0, PRODUCER_OP, "out", "r0", producer={"spec": "ScaleRow_v1", "ordinal": None, "operand": None})
     assert b is None and why == "no fold instance of this op at this step" and n == 0

@@ -1,7 +1,7 @@
 """Match's record of a PoUW call: the executor's own op under the real observer, folded by `observe.fold.patterns.pouw`.
 
 A model's two linear layers, qkv with its bias and o without, have the shapes of `test_pouw_lowering`'s. They run PoUW's
-`ncp-v2` executor installed as a Match capture installs it (`protocol_options.at_capture`: the target's executors, sampled proofs
+`ncp-v2` executor installed as a Match capture installs it (`protocol_options.at_capture`: the target's executors, SPOT
 left out, nothing committed).
 
 - Under the real `Observer` each call is one `verity_pouw.ncp_linear` dispatch, with x, W, b and y as views and nothing of the

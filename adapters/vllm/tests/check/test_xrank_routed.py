@@ -290,7 +290,7 @@ def test_a_routed_family_no_phase_stratum_drew_gets_its_own_stratum() -> None:
     assert extra
 
 
-def test_the_rank_dump_binds_each_request_call_and_draws_every_routed_family(tmp_path) -> None:
+def test_the_rank_dump_binds_each_request_call_and_samples_every_routed_family(tmp_path) -> None:
     N, site = 6144, "model.layers.0.input_layernorm"
     s = TA.settings_of(False, {})
     sizes = {0: 256, 1: 100, 2: 90, 3: 80, 4: 3}

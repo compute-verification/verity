@@ -21,8 +21,8 @@ def _triton():
         import triton  # noqa: F401
 
         from verity_vllm.engine import int8_attention_triton as T
-        for cap in S.ARCHES:
-            S.tool("ptxas", cap)
+        for arch in S.ARCHES:
+            S.tool("ptxas", arch)
         S.tool("nvdisasm")
     except (ImportError, AttributeError, S.ToolMissing) as e:
         return f"Triton with its bundled ptxas and nvdisasm required ({type(e).__name__}: {e})"
@@ -37,15 +37,15 @@ def _kernels():
 
 
 @functools.cache
-def _compiled(variant: str, cap: int, fusion: bool = False):
-    return S.compile_variant(_kernels(), variant, cap, enable_fp_fusion=fusion)
+def _compiled(variant: str, arch: int, fusion: bool = False):
+    return S.compile_variant(_kernels(), variant, arch, enable_fp_fusion=fusion)
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("cap", S.ARCHES)
+@pytest.mark.parametrize("arch", S.ARCHES)
 @pytest.mark.parametrize("variant", ["kv_rows/paged", "kv_rows/packed", "lut_rows/d128", "lut_rows/d64"])
-def test_each_kernel_as_launched_passes(variant, cap):
-    r = S.gate_compiled(_compiled(variant, cap))
+def test_each_kernel_as_launched_passes(variant, arch):
+    r = S.gate_compiled(_compiled(variant, arch))
     assert r["ok"], r["refused"]
     assert r["fmad"]["same"] and not r["ptx"]["fma"] and not r["ptx"]["unrounded"]
     if variant.startswith("lut_rows"):
@@ -54,19 +54,19 @@ def test_each_kernel_as_launched_passes(variant, cap):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("cap", S.ARCHES)
-def test_lut_rows_compiled_with_contraction_allowed_is_refused(cap):
-    r = S.gate_compiled(_compiled("lut_rows/d128", cap, True))
+@pytest.mark.parametrize("arch", S.ARCHES)
+def test_lut_rows_compiled_with_contraction_allowed_is_refused(arch):
+    r = S.gate_compiled(_compiled("lut_rows/d128", arch, True))
     assert not r["ok"]
     assert r["ptx"]["fma"].get("fma.rn.f32", 0) > 0
     assert any(x.startswith("SASS:") and "a product contracted into its add" in x for x in r["refused"]), r["refused"]
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("cap", S.ARCHES)
-def test_lut_rows_ptx_without_rounding_modes_is_contracted_by_ptxas_and_refused(cap):
-    ptx = S.unrounded(_compiled("lut_rows/d128", cap).asm["ptx"])
-    r = S.gate("lut_rows", ptx, S.ptxas(ptx, cap, True), cap)
+@pytest.mark.parametrize("arch", S.ARCHES)
+def test_lut_rows_ptx_without_rounding_modes_is_contracted_by_ptxas_and_refused(arch):
+    ptx = S.unrounded(_compiled("lut_rows/d128", arch).asm["ptx"])
+    r = S.gate("lut_rows", ptx, S.ptxas(ptx, arch, True), arch)
     assert not r["ok"] and not r["fmad"]["same"]
     assert r["fmad"]["ffma_contraction_allowed"] > r["fmad"]["ffma_fmad_false"]
     assert any(x.startswith("SASS:") and "a product contracted into its add" in x for x in r["refused"]), r["refused"]
@@ -82,9 +82,9 @@ def test_kv_rows_dividing_with_tritons_slash_is_refused(tmp_path):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("cap", S.ARCHES)
-def test_contraction_cannot_change_kv_rows(cap):
-    on, off = _compiled("kv_rows/paged", cap, True), _compiled("kv_rows/paged", cap)
+@pytest.mark.parametrize("arch", S.ARCHES)
+def test_contraction_cannot_change_kv_rows(arch):
+    on, off = _compiled("kv_rows/paged", arch, True), _compiled("kv_rows/paged", arch)
     assert S.instructions(S.listing(on.asm["cubin"])) == S.instructions(S.listing(off.asm["cubin"]))
     assert S.gate_compiled(on)["ok"]
 

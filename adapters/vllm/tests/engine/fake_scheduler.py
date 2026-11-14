@@ -2,7 +2,7 @@
 vLLM or a GPU.
 
 It schedules like the V1 scheduler does in outline: running requests first (a decode is one token, a partial prefill continues),
-then waiting ones in arrival order, within a token budget and a cap on running requests; a prompt longer than the budget left is
+then waiting ones in arrival order, within a token budget and a limit on running requests; a prompt longer than the budget left is
 chunked.  A request emits one token at the step that completes its prompt and at every decode, and finishes at its EOS (the
 scripted output reaches `eos`) or at `max_tokens`.  `preempt_at` = {step: request} preempts a running request at that schedule:
 its computed tokens are dropped and it waits again, resumed from position 0.  The model runner's order is Model Runner V2's

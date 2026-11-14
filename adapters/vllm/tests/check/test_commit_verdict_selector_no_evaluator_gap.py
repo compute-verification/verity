@@ -3,7 +3,7 @@ replay excludes its output VUs from the population under the text `no registered
 why-class ('no-evaluator') as the ruled applicability domain (RoPE_v1, sampled_replay.NOT_YET), which `_complete_replay_population_gap`
 did not gate (it gated plane-fed + interior-composed-v2 only).  The selector's output is THE value a stochastic row adds and is
 reproducible from the committed logits only with the seed AND the top-p split count S (REQ-03), so until REQ-03 lands and a
-derived_rows evaluator exists, form (A) cannot replay it.  On the first stochastic row of record form (B)
+derived_rows evaluator exists, form (A) cannot replay it.  On the first stochastic workload of record form (B)
 value-checked the 32 sampled ids (compared_by_family.sampled_token_ids 32 == 32 (step, request) pairs, 0 mismatch, attribution complete),
 so C2 held through (B) + Match.  On a stochastic COMMIT-ONLY rerun WITHOUT --match-dir the same Commit PASSed with the 32 ids value-checked by
 NEITHER form: C1 / C3 bind them, nothing computes them -- a vacuous pass path (not exercised live).
@@ -42,7 +42,7 @@ K_ROPE = "no derived_rows evaluator for RoPE_v1 yet (v2)"
 K_ATTN = "consumes the request's K/V history across steps (state-linked replay, v2)"
 K_SEL = "no registered evaluator for GumbelTopPTokenSelect_v1"
 
-# the first stochastic row of record's sampled_replay_p0.json population (llama32-1b L40S B1 256/32 stoch-t0.8-p0.95):
+# the first stochastic workload of record's sampled_replay_p0.json population (llama32-1b L40S B1 256/32 stoch-t0.8-p0.95):
 # the NOT_YET domain (RoPE 9184, Attention 4592) + the 32 selector outputs (one per step) with no evaluator; the Const* structure rows are
 # counted by family only (no identity) and are not in not_evaluable
 SR_STOCH: dict[str, Any] = {"result": True, "grade": "complete", "why": None,
@@ -79,7 +79,7 @@ def test_stochastic_commit_only_rerun_without_form_b_fails_by_name():
     assert "form (B) absent" in why and "value-checked by NEITHER form" in why and "REQ-03" in why
 
 
-def test_the_first_stochastic_row_of_record_passes_carrying_the_note():
+def test_the_first_stochastic_workload_of_record_passes_carrying_the_note():
     """C2 holds through (B) + Match; the PASS text says so instead of a bare PASS."""
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": SR_STOCH, "oracle_compare": OC_STOCH}, True, min_openings=64)
     assert ok, why
