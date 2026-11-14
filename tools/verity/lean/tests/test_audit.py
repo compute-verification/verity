@@ -6586,7 +6586,7 @@ def test_a_sample_with_no_room_beside_its_replay_runs_after_it(tmp_path, monkeyp
 @pytest.mark.parametrize("matches", [False, True, None], ids=["differs", "matches", "not-in-the-run"])
 def test_a_spec_whose_prover_s_sample_differs_fails_once_it_ends_and_stores_no_facts(tmp_path, monkeypatch, matches):
     """A spec reads its prover's facts from the prover's seal while the prover's sample still runs; its verdict waits for
-    that sample (`prover_matched`), and fails if it differs, and then its facts, which hold the prover's, are not stored.
+    that sample (`sample_matched`), and fails if it differs, and then its facts, which hold the prover's, are not stored.
     A prover outside the run (None) has no sample to wait for."""
     pkg = tmp_path / "spec"
     pkg.mkdir()
@@ -6614,7 +6614,7 @@ def test_a_spec_whose_prover_s_sample_differs_fails_once_it_ends_and_stores_no_f
                         ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     rep = A.audit(pkg, tmp_path / "out", runs=False, replay=False, log=lambda *_: None, ready=lambda p: True,
-                  prover_matched=lambda p: asked.append(p) or matches, facts_cache=tmp_path / "cache", facts_reuse=True)
+                  sample_matched=lambda p: asked.append(p) or matches, facts_cache=tmp_path / "cache", facts_reuse=True)
     assert asked == [q]
     assert rep["failure_codes"] == (["proved_in.sampled"] if matches is False else [])
     assert wrote == ([] if matches is False else ["key"])
@@ -6622,9 +6622,44 @@ def test_a_spec_whose_prover_s_sample_differs_fails_once_it_ends_and_stores_no_f
         assert rep["failures"][0].startswith("proved_in: ../proofs's sampled recompile failed")
 
 
+@pytest.mark.parametrize("matches", [False, True, None], ids=["differs", "matches", "not-in-the-run"])
+def test_a_package_whose_path_dependency_s_sample_differs_fails_once_it_ends_and_stores_no_facts(
+        tmp_path, monkeypatch, matches):
+    """A package's build reads the modules of each package it requires by path, which that package's audit restored and
+    sampled; its own sample draws only a share of them, so a module that failed the dependency's sample may pass its own.
+    Its verdict waits for each such dependency's sample (`sample_matched`) and fails if it differed or ended without
+    saying (`requires.sampled`), and its facts are then not stored. A dependency outside the run (None) has none."""
+    pkg, dep = tmp_path / "pkg", tmp_path / "dep"
+    for d in (pkg, dep):
+        d.mkdir()
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
+    (pkg / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "dep", "dir": "../dep"}]}))
+    A.dump(pkg, {"roots": ["P"], "dependencies": {}})
+    asked, wrote = [], []
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: {
+        "lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": [], "pins": {}})
+    monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
+    monkeypatch.setattr(A, "dependency_digests", lambda *a: {})
+    monkeypatch.setattr(A, "facts_key", lambda *a: "key")
+    monkeypatch.setattr(A, "facts_document", lambda *a: {})
+    monkeypatch.setattr(A, "store_cached_facts", lambda cache, key, doc: wrote.append(key))
+    for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("source_graph_failures", []),
+                        ("heartbeats", []),
+                        ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+    rep = A.audit(pkg, tmp_path / "out", runs=False, replay=False, log=lambda *_: None,
+                  sample_matched=lambda p: asked.append(p) or matches, facts_cache=tmp_path / "cache", facts_reuse=True)
+    assert asked == [dep.resolve()]
+    assert rep["failure_codes"] == (["requires.sampled"] if matches is False else [])
+    assert wrote == ([] if matches is False else ["key"])
+    if matches is False:
+        assert rep["failure_entries"] == ["../dep"] and rep["failures"][0].startswith("requires: ../dep, which this package")
+
+
 @pytest.mark.parametrize("prover", ["differs", "matches", "fails-before"])
 def test_a_spec_s_audit_hears_whether_its_prover_s_sample_matched_once_it_has_ended(tmp_path, monkeypatch, prover):
-    """`main` gives a spec's audit `prover_matched`, which waits for the prover's sample: True only if the prover's audit
+    """`main` gives a spec's audit `sample_matched`, which waits for the prover's sample: True only if the prover's audit
     said its sample matched (`matched`), False if it said otherwise or ended without saying (a build that failed)."""
     s, p = tmp_path / "s", tmp_path / "p"
     for d in (s, p):
@@ -6635,11 +6670,11 @@ def test_a_spec_s_audit_hears_whether_its_prover_s_sample_matched_once_it_has_en
     seen = {}
 
     def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None, ready=lambda q: None,
-             matched=lambda ok: None, prover_matched=lambda q: None, **kw):
+             matched=lambda ok: None, sample_matched=lambda q: None, **kw):
         built()
         if pkg.name == "s":
             matched(True)
-            seen["ready"], seen["matched"] = ready(p.resolve()), prover_matched(p.resolve())
+            seen["ready"], seen["matched"] = ready(p.resolve()), sample_matched(p.resolve())
         elif prover != "fails-before":
             matched(prover == "matches")
         return {"package": str(pkg), "seconds": {}, "failures": []}

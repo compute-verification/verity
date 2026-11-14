@@ -197,10 +197,11 @@ def _module(path: Path, name: str):
 LA = _module(ROOT / "tools" / "verity" / "lean" / "lean_audit.py", "lean_audit_for_lean_changed")
 #: `tools/verity/lean/check.py`, the audit tool, loaded as this file's own copy
 AUDIT = _module(ROOT / "tools" / "verity" / "lean" / "check.py", "lean_audit_tool_for_lean_changed")
-#: the failure codes a report's sampled mismatch alone explains (`mismatched`): the package's own (`sampled`), and a
+#: the failure codes a report's sampled mismatch alone explains (`mismatched`): the package's own (`sampled`), a
 #: spec's whose `proved_in` package it failed, `proved_in.unpassed` where it kept that package's build from passing and
-#: `proved_in.sampled` where the sample ran on that package's seal, after its build passed
-SAMPLED_ONLY = ("sampled", "proved_in.unpassed", "proved_in.sampled")
+#: `proved_in.sampled` where the sample ran on that package's seal, after its build passed, and a requirer's whose path
+#: dependency it failed in the same check.py (`requires.sampled`)
+SAMPLED_ONLY = ("sampled", "proved_in.unpassed", "proved_in.sampled", "requires.sampled")
 SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given

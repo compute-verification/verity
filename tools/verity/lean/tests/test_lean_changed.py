@@ -1642,7 +1642,8 @@ def test_a_spec_failing_only_because_its_provers_sampled_recompile_did_is_audite
              "sampled": {"mismatched": {"P.M": str(real / "Proofs")}}}]}))
         return LC.mismatched(tmp_path, tree)
 
-    assert found(["proved_in.unpassed"]) == found(["proved_in.sampled"]) == found([]) == {"P.M": (real / "Proofs").resolve()}
+    assert found(["proved_in.unpassed"]) == found(["proved_in.sampled"]) == found(["requires.sampled"]) == found([]) == \
+        {"P.M": (real / "Proofs").resolve()}
     assert found(["proved_in.unpassed", "lean"]) == {}
     (tmp_path / "audit.json").write_text("{")
     said: list[str] = []

@@ -5985,14 +5985,16 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
           store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False,
-          matched=lambda ok: None, prover_matched=lambda q: None) -> dict:
+          matched=lambda ok: None, sample_matched=lambda q: None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
     modules the build didn't compile is compiled again from their sources against the seal and compared with the seal's
     copies (`sampled_recompile`; the report's `sampled`), in `background` beside the replay, and the verdict waits for it
     as it does for the replay: a failure there fails the package, and its facts document is then neither written nor
-    stored. ``matched`` hears once whether the sample matched (True where nothing was sampled); ``prover_matched`` (a
-    package whose facts `proved` read) returns once that package's sample has, False when it didn't match, and the
-    package then fails (`proved_in.sampled`). Without the sandbox nothing is recompiled, and the sample's check runs
+    stored. ``matched`` hears once whether the sample matched (True where nothing was sampled); ``sample_matched`` (a
+    package whose facts `proved` read, or one this package requires by path) returns once that package's sample has
+    ended, False when it didn't match or its audit ended before saying, and None for a package this run doesn't audit.
+    The package then fails: `proved_in.sampled` for a prover, and `requires.sampled` for a path dependency, whose modules
+    this build read and its own sample draws only a share of. Without the sandbox nothing is recompiled, and the sample's check runs
     before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
     package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -6303,12 +6305,18 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             peaked(rep, "replay", pkg, rep["replay"]["peak_gib"], log)
     unsampled, w = sampled(), time.monotonic()
     for q in read:
-        if prover_matched(q) is False:
+        if sample_matched(q) is False:
             entry = os.path.relpath(q, pkg.resolve())
             unsampled.append(Failure("proved_in.sampled", entry, f"proved_in: {entry}'s sampled recompile failed (its "
                                      f"report says which module), so the facts read from its seal may not be of its sources"))
     if read:
         rep["seconds"]["proved-in-sample-wait"] = round(time.monotonic() - w, 1)
+    for q in (d for d in path_deps(pkg) if d != pkg.resolve() and d not in read):
+        if sample_matched(q) is False:
+            entry = os.path.relpath(q, pkg.resolve())
+            unsampled.append(Failure("requires.sampled", entry, f"requires: {entry}, which this package requires by path, "
+                                     f"did not match its sampled recompile or ended before it did (its report says why), "
+                                     f"so this build read modules of it that may not be of its sources"))
     if unsampled:
         fails += unsampled
         if facts_cache is not None or facts_out is not None:
@@ -6876,7 +6884,7 @@ def main(argv: list[str]) -> int:
                             if (a.facts_only or a.facts_cache) and mine else None,
                             facts_reuse=a.facts_cache is not None,
                             matched=lambda ok: (ok and matching.add(pkg), sample_done[pkg].set()),
-                            prover_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None)
+                            sample_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None)
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
