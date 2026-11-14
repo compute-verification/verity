@@ -21,7 +21,7 @@ from collections import defaultdict
 import pytest
 
 from verity.protocols.accounting.certifier.verifier.active import VirtualClock
-from verity.protocols.accounting.certifier.verifier.coin_link import (COIN, COINS, COUNTED, REQUESTS, CoinLink, CoinLinkParams,
+from verity.protocols.accounting.certifier.device.coin_link import (COIN, COINS, COUNTED, REQUESTS, CoinLink, CoinLinkParams,
                                                        canonical, recut)
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.pacer import raw_clock

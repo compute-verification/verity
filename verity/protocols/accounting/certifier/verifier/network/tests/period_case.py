@@ -38,8 +38,10 @@ out of order or with one start, one session twice, two keys under one key identi
 identifier twice), a period that starts before the first entry, or the earlier forms `"key"`, `"session"` and
 `"sessions"`. A rows-form period's evidence shows each listed entry's session's signed start, its base on its key's life
 sampled for a key's first listed entry and, for a later one, as many of the schedule's execution phases on as its start
-is. `restart` lists the signer's key in two sessions, each stretch holding some of the period, and is accepted. Refused:
-that list with the second session's base another (`start-not-signed`); a shown start that is not its session's certified
+is, and its ordinal among its key's sessions, sampled for a key's first listed entry and the next for each later one.
+`restart` lists the signer's key in two sessions, each stretch holding some of the period, and is accepted. Refused:
+that list with the second session's base another (`start-not-signed`), or its ordinal not the first's next
+(`start-skipped`); a shown start that is not its session's certified
 start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); evidence that shows a start too
 few or too many, or none (`start-count`); and a clock-form period whose evidence shows one (`start-shown`). In the clock
 form: the execution phases of one link from the execution phase
@@ -175,13 +177,15 @@ OUTSIDE = "a listed key outside its stretch"
 NO_STRETCH = "no listed entry's stretch holds execution phase"
 #: What a refusal says, as Lean's does (`startCheck`, `startChecks`), of a listed entry's start in the rows form: a
 #: start shown for it that is not its session's certified start, then why, by `CertifiedStart.refusal`'s code; an
-#: entry that does not start where its key's first listed entry and their sessions' signed bases put it; evidence
+#: entry that does not start where its key's first listed entry and their sessions' signed bases put it; an entry whose
+#: session's ordinal is not the next after that of its key's entry listed before it (`follows`); evidence
 #: that does not show a start for each listed entry; and, in the clock form, evidence that shows one
 UNCERTIFIED = "a start its session did not certify"
 NOT_SIGNED = "a start that is not the one its session signed"
+SKIPPED = "a session that is not the one after its key's entry listed before it"
 STARTS_COUNT = "listed entries: show each listed entry's session's signed start"
 STARTS_CLOCK = "starts: the clock form reads no session's signed start"
-START_KEYS = ["base_ms", "certificate", "schedule"]
+START_KEYS = ["base_ms", "certificate", "ordinal", "schedule"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 CAPPED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
@@ -897,7 +901,7 @@ def _window(j, ctx: str) -> Window:
 def _start(j, ctx: str) -> CertifiedStart:
     """`startOf`: a session's signed start, as the run's `deployment.json` holds it (`"start"`)."""
     _exactly(j, START_KEYS, ctx)
-    return CertifiedStart(_nat(j["base_ms"], ctx), P.unhex(_of(j["schedule"], str, ctx)),
+    return CertifiedStart(_nat(j["base_ms"], ctx), _nat(j["ordinal"], ctx), P.unhex(_of(j["schedule"], str, ctx)),
                           _certificate(j["certificate"], f"{ctx}.certificate"))
 
 
@@ -962,11 +966,18 @@ def _held_to(L: int, a: Entry, xa: CertifiedStart, e: Entry, x: CertifiedStart) 
     return a.start * L + x.base_ms == e.start * L + xa.base_ms
 
 
+def _follows(xb: CertifiedStart, x: CertifiedStart) -> bool:
+    """`follows`: the session whose signed start is `x` is the one right after the session whose signed start is `xb`
+    among their key's sessions, its ordinal the next."""
+    return xb.ordinal + 1 == x.ordinal
+
+
 def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: CertifiedStart) -> Finding | None:
     """`startCheck`: listed entry `i`'s start's finding in the rows form. The start shown for it is its session's
     certified start, read as the network certifier's own verifier reads it (`CertifiedStart.refusal`: under the
-    entry's key, in its session, for the link, under the period's schedule's parameters digest); and the entry starts
-    where its key's first listed entry puts it (`_held_to`), a key's first listed entry being held to itself."""
+    entry's key, in its session, for the link, under the period's schedule's parameters digest); the entry starts
+    where its key's first listed entry puts it (`_held_to`), a key's first listed entry being held to itself; and its
+    session is the one right after that of its key's entry listed before it (`_follows`)."""
     why = x.refusal(e.key, e.session, p.link, p.schedule.digest)
     if why is not None:
         return Finding(REJECT, f"entry {i}: {UNCERTIFIED} ({why})")
@@ -975,6 +986,11 @@ def _start_check(p: Params, starts: list[CertifiedStart], i: int, e: Entry, x: C
         return Finding(REJECT, f"entry {i}: {NOT_SIGNED}: it starts at execution phase {e.start} and its session at "
                                f"{x.base_ms} ms of its key's life, and its key's entry that starts at {a.start} at "
                                f"{xa.base_ms} ms")
+    before = [z for y, z in zip(p.entries[:i], starts[:i]) if y.key.key_id == e.key.key_id]
+    if before and not _follows(before[-1], x):
+        return Finding(REJECT, f"entry {i}: {SKIPPED}: its session is its key's number {x.ordinal} and that entry's "
+                               f"{before[-1].ordinal}; its key's device state numbers its sessions one after another, "
+                               f"so a gap is a session no entry lists")
     return None
 
 
@@ -1559,7 +1575,7 @@ EXPECT = {
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
     "rows-honest": ACCEPT, "rows-second-key": ACCEPT, "rows-two-stretches": ACCEPT, "rows-two-signers": REJECT,
     "rows-restart": ACCEPT, "rows-start-not-signed": REJECT, "rows-start-uncertified": REJECT,
-    "rows-start-count": REJECT,
+    "rows-start-count": REJECT, "rows-start-skipped": REJECT,
     "rows-tied-partial": ACCEPT, "rows-tied-sampled": ACCEPT,
     "rows-tied-entries-sampled": ACCEPT, "rows-tied-slots-sampled": ACCEPT, "rows-answer-tied-held": ACCEPT,
     "rows-program": REJECT,
@@ -1597,18 +1613,19 @@ MUTATIONS = list(EXPECT)
 #: outside its stretch, and at the period's number where the session's belongs. In the rows form, which reads each
 #: session's signed start: accepted, one key listed in two sessions whose stretches each hold some of the period, the
 #: second starting where the two sessions' signed bases put it (`restart`); refused, that list with the second session's
-#: base another (`start-not-signed`). `case` aims at none (`AIMS`), so its period lists the one entry that signs it.
+#: base another (`start-not-signed`), or its ordinal not the first's next (`start-skipped`). `case` aims at none
+#: (`AIMS`), so its period lists the one entry that signs it.
 LISTS = ("second-key", "two-stretches", "two-signers", "cert-unlisted", "reg-unlisted", "cert-other-session",
          "reg-other-session", "cert-outside-stretch", "reg-outside-stretch", "cert-period-number", "reg-period-number",
-         "restart", "start-not-signed")
+         "restart", "start-not-signed", "start-skipped")
 #: The changes whose parameters list one key in two sessions, each stretch holding some of the period
-RESTARTS = ("restart", "start-not-signed")
+RESTARTS = ("restart", "start-not-signed", "start-skipped")
 #: How a shown start fails to be its session's certified start (`start-uncertified`), by `CertifiedStart.refusal`'s
 #: code: signed under the link's own name, as an ingress certificate or for window 1; by a key that isn't listed;
 #: under another schedule's digest; shown with another base than the one signed, or naming the period's schedule over
 #: a digest signed for another; and with a signature changed, or signed in another session
 UNCERTIFIED_BY = {"start": ("link", "direction", "window"), "key": ("key",), "schedule": ("schedule",),
-                  "opening": ("base", "digest"), "signature": ("forged", "session")}
+                  "opening": ("base", "ordinal", "digest"), "signature": ("forged", "session")}
 #: The changes whose parameters list two entries, the period's execution phases all in the second's stretch, the
 #: signer's: its start is at least 1, so the session's numbers are not the period's
 SECOND = ("second-key", "two-signers", "cert-other-session", "reg-other-session", "cert-outside-stretch",
@@ -2736,23 +2753,31 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     c_json = {"audits": audit_regs, "windows": window_regs}
     # each listed entry's session's signed start, which the rows form's evidence shows: its base on its key's life, a
     # key's first listed entry's sampled and each later one's as many of the period's schedule's execution phases on
-    # as its start is (`_held_to`), signed under the entry's key in its session; the clock form's evidence shows none
+    # as its start is (`_held_to`), and its ordinal among its key's sessions, a key's first listed entry's sampled and
+    # each later one's the next, signed under the entry's key in its session; the clock form's evidence shows none
     rs = random.Random(f"network-period starts {m} {seed}")
     L = bound.window * bound.bucket_ms if rows else 1
     anchors: dict[bytes, tuple[int, int]] = {}
-    bases = []
+    bases, ordinals, last = [], [], {}
     for entry in listed:
         sampled = rs.choice([0, rs.randrange(1 << 20), rs.randrange(1 << 62)])
         anchor, base = anchors.setdefault(entry.key.I, (entry.start, sampled))
         bases.append(base + (entry.start - anchor) * L)
+        last[entry.key.I] = last[entry.key.I] + 1 if entry.key.I in last else rs.choice([0, rs.randrange(1 << 62)])
+        ordinals.append(last[entry.key.I])
     if m == "start-not-signed":
         # the second session's base is not the one its start is read off: an execution phase on or back, a
         # millisecond on, or the first session's own
         bases[1] = rs.choice([bases[1] + L, bases[1] - L, bases[1] + 1, bases[0]])
+    if m == "start-skipped":
+        # the second session is not the one after the first: one or many of the key's sessions between them, which the
+        # list leaves out, or the first's own ordinal or one before it
+        ordinals[1] = rs.choice([ordinals[1] + 1, ordinals[1] + rs.randrange(2, 1 << 40), ordinals[0],
+                                 ordinals[0] - 1 if ordinals[0] else ordinals[1] + 2])
 
     def signed_start(i: int, how: str | None = None) -> dict:
-        """Listed entry `i`'s session's signed start, as a run's `deployment.json` holds it: its base and the
-        period's schedule's digest (a stand-in's in the clock form, which has none), signed for the link's start
+        """Listed entry `i`'s session's signed start, as a run's `deployment.json` holds it: its base, its ordinal and
+        the period's schedule's digest (a stand-in's in the clock form, which has none), signed for the link's start
         name, egress, window 0; or one that is not its session's certified start, as `how` says (`UNCERTIFIED_BY`)."""
         e = listed[i]
         named = bound.digest if rows else hashlib.sha512(b"no schedule").digest()
@@ -2760,13 +2785,14 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         k = _key(ki, 1) if how == "key" else e.key
         c = Certificate(k.I, link if how == "link" else start_link(link), INGRESS if how == "direction" else EGRESS,
                         1 if how == "window" else 0,
-                        start_digest(bases[i], _flip(named, seed + 1) if how == "digest" else named), b"")
+                        start_digest(bases[i], ordinals[i], _flip(named, seed + 1) if how == "digest" else named),
+                        b"")
         ses = _flip(e.session, seed) if how == "session" else e.session
         sig = lms.sign_at(k, i % 2 ** k.params.H, c.message(ses)).encode()
         if how == "forged":
             sig = rs.choice([_flip(sig, seed), sig[:-1], b""])
         return {"base_ms": bases[i] + (how == "base"), "certificate": _cert_json(dataclasses.replace(c, signature=sig)),
-                "schedule": named.hex()}
+                "ordinal": ordinals[i] + (how == "ordinal"), "schedule": named.hex()}
 
     shown_starts = []
     if rows:
@@ -3148,7 +3174,8 @@ def _bad_evidence(e: dict, b: bytes) -> list[bytes]:
         s, later = e["starts"][0], e["starts"][1:]
         bad_starts = [[], "x", [1], *([y, *later] for y in (
             {k: v for k, v in s.items() if k != "schedule"}, s | {"x": 0}, s | {"base_ms": -1}, s | {"base_ms": True},
-            s | {"base_ms": str(s["base_ms"])}, s | {"schedule": s["schedule"][:-1]}, s | {"schedule": 0},
+            s | {"base_ms": str(s["base_ms"])}, {k: v for k, v in s.items() if k != "ordinal"}, s | {"ordinal": -1},
+            s | {"ordinal": True}, s | {"schedule": s["schedule"][:-1]}, s | {"schedule": 0},
             s | {"certificate": s["certificate"] | {"x": 0}}, s | {"certificate": "x"},
             s | {"certificate": {k: v for k, v in s["certificate"].items() if k != "signature"}}))]
     return [b[:-1], b"\xff" + b, json.dumps(e).encode(), enc(e | {"x": 1}), enc({"windows": e["windows"]}),

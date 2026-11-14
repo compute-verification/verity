@@ -71,9 +71,10 @@ two gate verbs on the auditor's machine:
   `warden-rehearse`'s flags) is `warden-rehearse` with the load first. The store goes over 4 TCP streams, an SSH
   tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
   reading program's domain as it crosses. The certifier's one signer on that link then signs the load's heads before
-  its first execution phase, so one LMS key and one attachment carry the load and the execution phases. `load.json` (the
-  registrations the server block's record pins) is public in the run's `out/`; `load-relay.json` (the relay's counts
-  and the sink's acknowledgements) is witness.
+  its first execution phase, so one LMS key and one attachment carry the load and the execution phases. `load.json`
+  (the registrations the server block's record pins) and `load-relay.json` (the relay's counts and the sink's
+  acknowledgements) are in the run's `witness/`, which `fetch` gives the run's own lane key; of the load, `out/` holds
+  nothing.
 - The witness, every row's salts, is the sink's `--witness` file (0600) on the developer's host. The certifier's host
   never writes a salt.
 
@@ -140,7 +141,7 @@ which refuses cells cut, clocked or ordered otherwise than the schedule), the ch
 audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
 `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window), is witness, as every
 case's evidence and params are: it is kept in the serve dir's `private/pieces/certifier` (0700, the file 0600) and is
-never in the piece's directory, which the run publishes. The certificates of its evidence, the link-window's three
+never in the piece's directory, which the run publishes. The certificates of its evidence, the execution phase's three
 records' and its two row registrations', which the network certifier signed where the check accepts them, are
 published beside the answer as `certificates.json`, each certificate with its own fields alone. Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request

@@ -454,12 +454,37 @@ def test_a_key_listed_in_two_sessions_is_held_to_its_signed_starts(server, monke
         refused_by_lean_alone(build("rows-start-not-signed", n, small=True), server, PC.NOT_SIGNED)
 
 
+def test_a_keys_later_session_is_the_one_after_its_entry_listed_before_it(server, monkeypatch):
+    """A key listed in two sessions has the second's ordinal the first's next (`restart`, accepted above): its device
+    state gives each session it starts the next ordinal, so a session of the key between the two, which the list
+    leaves out, leaves a gap. The same list with the second session's ordinal another, its start still certified and
+    its base where the first puts it (`start-skipped`), is refused by Lean and by the mirror, by name (`PC.SKIPPED`);
+    and a mirror that reads the ordinals' signatures and not their order accepts what Lean refuses by that name."""
+    for n in range(6):
+        case = build("rows-start-skipped", n, small=n % 2 == 0)
+        p = PC.params(case["params"])
+        first, second = p.entries
+        starts = shown_starts(case)
+        assert first.key == second.key and first.session != second.session, n
+        assert [x.refusal(e.key, e.session, p.link, p.schedule.digest) for e, x in zip(p.entries, starts)] == \
+            [None, None], n
+        assert PC._held_to(p.schedule.window * p.schedule.bucket_ms, first, starts[0], second, starts[1]), n
+        assert starts[1].ordinal != starts[0].ordinal + 1, n
+        out = reference(case)
+        verdict, got = D.replay(PORT, case, server)
+        assert out["verdict"] == verdict == REJECT, (n, out, got)
+        assert PC.SKIPPED in out["reason"] and PC.SKIPPED in json.loads(got)["reason"], (n, out, got)
+    monkeypatch.setattr(PC, "_follows", lambda xb, x: True)
+    for n in range(3):
+        refused_by_lean_alone(build("rows-start-skipped", n, small=True), server, PC.SKIPPED)
+
+
 def test_a_start_its_session_did_not_certify_is_refused_by_name(server, monkeypatch):
     """A rows-form period shows one signed start for each listed entry, each its session's certified start as the
-    network certifier's own verifier reads it. A shown start that is no egress certificate of window 0 under the
-    link's start name, that names a key other than its entry's, that names another schedule's digest than the
-    period's, whose base and schedule do not open the digest it signs, or whose signature does not verify under its
-    entry's key in its entry's session is refused by Lean and by the mirror, by name (`PC.UNCERTIFIED`) and by the
+    network certifier's own verifier reads it. A shown start that is no egress certificate of window 0 under the link's
+    start name, that names a key other than its entry's, that names another schedule's digest than the period's, whose
+    base, ordinal and schedule do not open the digest it signs, or whose signature does not verify under its entry's key
+    in its entry's session is refused by Lean and by the mirror, by name (`PC.UNCERTIFIED`) and by the
     same code. So is evidence that shows a start too few or too many, or none (`PC.STARTS_COUNT`): parameters that
     list a key again in a session whose start the evidence does not show read, and the period is refused there. So is
     a clock-form period whose evidence shows a start (`PC.STARTS_CLOCK`): its certifier signs none. A mirror that
