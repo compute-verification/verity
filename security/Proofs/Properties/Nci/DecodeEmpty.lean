@@ -2,13 +2,23 @@ module
 
 public import Circuits.Program
 import Proofs.Flock.SessionLoop.Concrete.Fwd
-import Batteries.Tactic.OpenPrivate
 import Std.Data.HashMap.Lemmas
 import Std.Data.HashSet.Lemmas
+import Std.Data.String.ToNat
 import all Circuits.Program
 import all Base.Canon
 import all Base.JsonParse
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.String.Defs
+import all Init.Data.String.Basic
 import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.List.Control
+import all Init.Data.Range.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.Repr
 import all Lean.Data.Json.FromToJson.Basic
 import all Std.Data.TreeMap.Raw.Basic
 import all Std.Data.DTreeMap.Raw.Basic
@@ -16,286 +26,186 @@ import all Std.Data.DTreeMap.Internal.Operations
 import all Std.Data.DTreeMap.Internal.Queries
 import all Std.Data.DTreeMap.Internal.Balancing
 import all Std.Data.DTreeMap.Internal.Def
-import all Init.Data.Ord.String
 import all Init.Data.Ord.Basic
 import all Init.Data.String.TakeDrop
 import all Init.Data.String.Slice
 import all Init.Data.String.Pattern.Basic
 import all Init.Data.String.Pattern.String
 import all Init.Data.String.Pattern.Char
+import all Init.Data.String.Pattern.Pred
+import all Init.Data.String.Subslice
 import all Init.Data.String.Search
 import all Init.Data.String.Iterate
 import all Init.Data.String.Decode
+import all Init.Data.String.PosRaw
+import all Init.Data.String.FindPos
 import all Init.Data.String.Termination
-import all Init.Data.String.Defs
-import all Init.Data.String.Basic
+import all Init.Data.String.ToSlice
+import all Init.Data.String.Bootstrap
+import all Init.Data.String.Iter
+import all Init.Data.String.Iterator
+import all Init.Data.String.Substring
+import all Init.Data.String.Modify
 import all Init.Data.String.Extra
-import all Init.Data.Array.QSort.Basic
-import all Init.Data.Array.Basic
-import all Init.Data.Array.DecidableEq
-import all Init.Data.List.Control
-import all Init.Data.Range.Basic
-import all Init.Data.Int.Repr
-import all Init.Data.Repr
-import all Init.Data.Nat.Fold
-import all Init.Data.Array.Attach
-import all Init.WF
+import all Init.Data.String.Legacy
 
 /-!
 # The decoder's answer on the Program of no node
 
 `decode_empty`: `Flock.Program.decode` reads `programEmpty`, a descriptor whose root has no node, as the Program
-`progEmpty`, a term, with no hypothesis. `decode` keeps its definitions and its state in hash maps keyed by strings,
-and the kernel computes no such lookup; everything else of it the kernel runs. So the answer is reached in three moves.
+`progEmpty`, a term, with no hypothesis. `fwd_def` (`Concrete/Fwd.lean`) walks `decode` on its bytes and adds both.
 
-* **`decode`'s own lines, with its lookups named.** `decodeT`, `decodeTail`, `walk`, `walkRest` and `getDefRest` are
-  the lines of `decode` and of its `getDef`, cut at the walk of the definitions and at `getDef`'s three lookups; each
-  cut is an equation the kernel checks by unfolding both sides (`decode_eq`, `walk_eq`, `getDef_eq`), for every input.
-* **The three lookups, by the library's lemmas.** In a state whose index does not hold `fid` and whose busy set does
-  not, over a descriptor that defines `fid` as `d`, `getDef` is `getDefRest` at `d` (`getDef_fresh`).
-* **The rest, by the kernel.** On `programEmpty` the lines before the walk run to the descriptor of one definition
-  (`decodeT_empty`, for every walk), and the lines after the lookups run to a Program (`answerEmpty_isOk`).
+The kernel runs most of `decode` on a closed text, and the walk's rules are the steps it does not:
+* the descriptor's parse, through `JsonParse.parseList` on its characters (`parse_empty`);
+* the definitions by well-founded recursion on `Json` or `Ty` (`domainError`, by the fuelled check `cleanF`;
+  `Ty.ofJson` and `Ty.leaves`, by one unfolding each);
+* the lookups in hash maps keyed by strings, whose hash the kernel does not compute (`ddefs_rule`, `index_rule`,
+  `busy_rule`);
+* the string calls `contains`, `all`, `splitOn` and `toNat!`;
+* the decoder's state monad applied to its state (`st_bind` and the rest).
 -/
 
 namespace Flock.Program.Closed
 
 open Lean (Json JsonNumber)
-open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
-  Desc.ddefs liftV at_ paramsOf buildNode natJ? from Circuits.Program
+
+/-- The characters of `programEmpty`. -/
+@[expose] public def emptyChars : List Char :=
+  ['{', '"', 'a', 'n', 'n', 'o', 't', 'a', 't', 'i', 'o', 'n', 's', '"', ':', '{', '}', ',', '"', 'c', 'a', 'l', 'l',
+   'e', 'e', 's', '"', ':', '[', ']', ',', '"', 'd', 'e', 'f', 'i', 'n', 'i', 't', 'i', 'o', 'n', 's', '"', ':', '{',
+   '"', 'R', 'o', 'o', 't', '_', 'v', '1', '"', ':', '{', '"', 'b', 'i', 'n', 'd', 'i', 'n', 'g', 's', '"', ':', '{',
+   '}', ',', '"', 'b', 'o', 'd', 'y', '"', ':', '{', '"', 'n', 'o', 'd', 'e', 's', '"', ':', '[', ']', ',', '"', 'p',
+   'a', 'r', 'a', 'm', 's', '"', ':', '[', ']', ',', '"', 'r', 'e', 't', '"', ':', '{', '"', 'c', 'o', 'n', 'c', 'a',
+   't', '"', ':', '[', ']', '}', ',', '"', 'r', 'e', 't', '_', 't', 'y', 'p', 'e', '"', ':', '[', '"', 'T', 'u', 'p',
+   'l', 'e', '"', ',', '[', ']', ']', '}', ',', '"', 'f', 'o', 'r', 'm', '"', ':', '"', 'c', 'o', 'm', 'p', 'o', 's',
+   'i', 't', 'e', '"', ',', '"', 'i', 'd', '"', ':', '"', 'R', 'o', 'o', 't', '_', 'v', '1', '"', '}', '}', ',', '"',
+   'p', 'r', 'o', 'g', 'r', 'a', 'm', '_', 'f', 'n', '"', ':', '"', 'R', 'o', 'o', 't', '_', 'v', '1', '"', ',', '"',
+   'r', 'o', 'o', 't', '"', ':', '"', 'R', 'o', 'o', 't', '_', 'v', '1', '"', ',', '"', 's', 'c', 'h', 'e', 'm', 'a',
+   '"', ':', '"', 'v', 'e', 'r', 'i', 't', 'y', '-', 'i', 'r', '/', 'd', 'e', 's', 'c', 'r', 'i', 'p', 't', 'o', 'r',
+   '/', 'v', '1', '"', ',', '"', 't', 'y', 'p', 'e', 's', '"', ':', '[', ']', '}']
 
 /-- A descriptor whose root has no node. -/
-@[expose] public def programEmpty : String :=
-  "{\"annotations\":{},\"callees\":[],\"definitions\":{\"Root_v1\":{\"bindings\":{},\"body\":{\"nodes\"" ++
-  ":[],\"params\":[],\"ret\":{\"concat\":[]},\"ret_type\":[\"Tuple\",[]]},\"form\":\"composite\",\"id\"" ++
-  ":\"Root_v1\"}},\"program_fn\":\"Root_v1\",\"root\":\"Root_v1\",\"schema\":\"verity-ir/descriptor/v1" ++
-  "\",\"types\":[]}"
+@[expose] public def programEmpty : String := String.ofList emptyChars
+
+/-- The parse of `programEmpty`. -/
+def jE : Json := (JsonParse.parseList emptyChars).toOption.getD .null
+
+theorem parseList_empty : JsonParse.parseList emptyChars = .ok jE := by kernel_rfl'
+
+theorem parse_empty : JsonParse.parse programEmpty = .ok jE := by
+  rw [JsonParse.parse_eq, programEmpty, String.toList_ofList]; exact parseList_empty
+
+theorem fromUTF8?_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
+  simp only [String.fromUTF8?, String.toUTF8_eq_toByteArray, s.isValidUTF8, ↓reduceDIte]; rfl
+
+theorem contains_root : "Root_v1".contains '{' = false := by
+  rw [String.contains_char_eq]; decide +kernel
+
+theorem toNat_one : "1".toNat! = 1 := by
+  have r : Nat.repr 1 = "1" := by apply String.toList_inj.1; rw [Nat.toList_repr]; decide +kernel
+  have h : "1".toNat? = some 1 := r ▸ Nat.toNat?_repr 1
+  simp only [String.toNat!, String.Slice.toNat!, String.toNat?, String.Slice.toNat?] at h ⊢
+  split at h <;> simp_all
+
+theorem splitOnAux_eq (s sep : String) (b i j : String.Pos.Raw) (r : List String) :
+    s.splitOnAux sep b i j r =
+      if i.atEnd s = true then (b.extract s i :: r).reverse
+      else if (i.get s == j.get sep) = true then
+        if (j.next sep).atEnd sep = true then
+          s.splitOnAux sep (i.next s) (i.next s) 0 (b.extract s ((i.next s).unoffsetBy (j.next sep)) :: r)
+        else s.splitOnAux sep b (i.next s) (j.next sep) r
+      else s.splitOnAux sep b ((i.unoffsetBy j).next s) 0 r := String.splitOnAux.eq_1 s sep b i j r
+
+theorem split_root : "Root_v1".splitOn "_v" = ["Root", "1"] := by
+  unfold String.splitOn
+  simp (config := {decide := true}) only [ite_false]
+  repeat (rw [splitOnAux_eq]; simp (config := {decide := true}) only [ite_false, ite_true])
+
+/-- Where `domainError` finds nothing, read with fuel: a check the kernel runs. -/
+def cleanF : Nat → Json → Bool
+  | 0, _ => false
+  | n + 1, j => match j with
+    | .null | .bool _ => true
+    | .num m => m.exponent == 0 && !(m.mantissa.natAbs > MAX_SAFE_INT)
+    | .str s => s.toList.all (fun c : Char => c.toNat < 0x7f)
+    | .arr a => a.toList.all (cleanF n)
+    | .obj kvs => kvs.toArray.toList.all fun x => x.1.toList.all (fun c : Char => c.toNat < 0x7f) && cleanF n x.2
+
+theorem cleanF_sound : ∀ (n : Nat) (j : Json) (p : String), cleanF n j = true → domainError j p = none
+  | 0, _, _, h => by simp [cleanF] at h
+  | n + 1, j, p, h => by
+    cases j with
+    | null => rw [domainError]
+    | bool b => rw [domainError]
+    | num m =>
+      simp only [cleanF, Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true', decide_eq_false_iff_not] at h
+      rw [domainError]; simp [h.1, h.2]
+    | str s =>
+      simp only [cleanF] at h
+      rw [domainError]; simp [h]
+    | arr a =>
+      simp only [cleanF, List.all_eq_true] at h
+      rw [domainError, Array.findSome?_eq_none_iff]
+      intro i _
+      exact cleanF_sound n _ _ (h _ (Array.getElem_mem_toList _))
+    | obj kvs =>
+      simp only [cleanF, List.all_eq_true, Bool.and_eq_true] at h
+      rw [domainError, Array.findSome?_eq_none_iff]
+      intro x _
+      have hx := h x.1 (Array.mem_toList_iff.2 x.2)
+      simp only [List.all_eq_true.2 hx.1, ↓reduceIte]
+      exact cleanF_sound n _ _ hx.2
+
+theorem ofJson_tuple0 (j : Json) (h : j = .arr #[.str "Tuple", .arr #[]]) : Ty.ofJson j = .ok (.tuple #[]) := by
+  subst h; rw [Ty.ofJson]; kernel_rfl'
+
+theorem leaves_rule (t : Ty) (h : t = .tuple #[]) : t.leaves = 0 := by subst h; rw [Ty.leaves]; rfl
+
+theorem domain_none (j : Json) (p : String) (h : cleanF 64 j = true) : domainError j p = none := cleanF_sound 64 j p h
+
+theorem split_rule (s : String) (h : s = "Root_v1") : s.splitOn "_v" = ["Root", "1"] := h ▸ split_root
+
+theorem toNat_rule (s : String) (h : s = "1") : s.toNat! = 1 := h ▸ toNat_one
+
+theorem rfi_rule (s : String) (h : s = "Root_v1") : recordFunctionIds s = #[] := by
+  subst h; unfold recordFunctionIds recordPairs; rw [contains_root]; rfl
+
+/-- The root's definition in `programEmpty`. -/
+def rootE : Json :=
+  ((jE.getObjVal? "definitions").toOption.bind fun d => (d.getObjVal? "Root_v1").toOption).getD .null
+
+theorem ddefs_rule (m : Std.HashMap String Json) (hm : m = (∅ : Std.HashMap String Json).insert "Root_v1" rootE)
+    (k : String) (hk : k = "Root_v1") : m[k]? = some rootE := by
+  subst hm hk; exact Std.HashMap.getElem?_insert_self
+
+theorem index_rule (k : String) : (∅ : Std.HashMap String Nat)[k]? = none := Std.HashMap.getElem?_empty
+
+theorem busy_rule (k : String) : (∅ : Std.HashSet String).contains k = false := Std.HashSet.contains_empty
 
 /-- The decoder's monad: its state over its refusals. -/
 abbrev DM := StateT DecState (Except String)
 
-/-- What an accepted answer holds, the default where it refuses. -/
-def getOk {ε α : Type} [Inhabited α] (x : Except ε α) : α :=
-  match x with
-  | .ok a => a
-  | .error _ => default
+theorem st_run {α} (x : DM α) (s : DecState) : StateT.run x s = x s := rfl
+theorem st_bind {α β} (x : DM α) (f : α → DM β) (s : DecState) : (x >>= f) s = (x s >>= fun p => f p.1 p.2) := rfl
+theorem st_get (s : DecState) : (get : DM DecState) s = .ok (s, s) := rfl
+theorem st_set (s s' : DecState) : (set s' : DM PUnit) s = .ok (⟨⟩, s') := rfl
+theorem st_modify (f : DecState → DecState) (s : DecState) : (modify f : DM PUnit) s = .ok (⟨⟩, f s) := rfl
+theorem st_pure {α} (a : α) (s : DecState) : (pure a : DM α) s = .ok (a, s) := rfl
+theorem st_ite {α} (c : Prop) [Decidable c] (t e : DM α) (s : DecState) :
+    (if c then t else e) s = if c then t s else e s := by split <;> rfl
+theorem st_forIn_nil {α β} (xs : Array α) (h : xs = #[]) (b : β) (f : α → β → DM (ForInStep β)) (s : DecState) :
+    (forIn xs b f : DM β) s = .ok (b, s) := by subst h; rfl
+theorem st_forIn_range0 {β} (m : Nat) (h : m = 0) (b : β) (f : Nat → β → DM (ForInStep β)) (s : DecState) :
+    (forIn [0:m] b f : DM β) s = .ok (b, s) := by
+  subst h; rw [Std.Legacy.Range.forIn_eq_forIn_range']; rfl
 
-theorem ok_get {ε α : Type} [Inhabited α] {x : Except ε α} (h : x.toOption.isSome = true) : x = .ok (getOk x) := by
-  cases x with
-  | ok a => rfl
-  | error e => simp [Except.toOption] at h
-
-/-- A text's bytes read back as the text. -/
-theorem fromUTF8?_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
-  have h : s.toUTF8.IsValidUTF8 := s.isValidUTF8
-  first
-    | (unfold String.fromUTF8?; rw [dif_pos h]; rfl)
-    | (simp only [String.fromUTF8?, dif_pos h]; rfl)
-    | simp [String.fromUTF8?, String.fromUTF8, h]
-
-/-! ### `decode`'s lines -/
-
-/-- `decode`'s walk of the definitions: the root, then the functions the program's name binds. -/
-def walk (desc : Desc) (rootId programFn : String) : DM Nat := do
-  let r ← getDef Steps.FUEL desc rootId
-  for f in recordFunctionIds programFn do
-    if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
-  return r
-
-/-- `decode`'s lines after its walk of the definitions. -/
-def decodeTail (top : Std.TreeMap.Raw String Json) (rootId programFn : String)
-    (r : Except String (Nat × DecState)) : V Prog := do
-  let (root, st) ← r
-  let rd := st.defs[root]!
-  if rd.prim || !rd.params.isEmpty then throw s!"root '{rootId}': the root is a composite without parameters"
-  for d in st.defs do
-    if d.prim || d.key == rootId then continue
-    for k in [0:d.body.nodes.size] do
-      let c := st.defs[d.body.nodes[k]!.fn]!
-      if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
-        throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
-  let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
-
-/-- `decode` once its bytes are read as a text, its walk of the definitions left to `walkOf`. -/
-def decodeT (walkOf : Desc → String → String → DM Nat) (text : String) : V Prog := do
-  let j ← match JsonParse.parse text with
-    | .ok j => pure j
-    | .error e => throw s!"program: not JSON: {e}"
-  let .obj top := j | throw "program: not an object"
-  match (j.getObjValAs? String "schema").toOption with
-  | some s => if s != SCHEMA then throw s!"unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
-  | none => throw s!"unexpected descriptor schema (this verifier reads {SCHEMA})"
-  let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
-  for (fid, d) in dkv.toArray do
-    let .obj _ := d | throw s!"definition '{fid}': not an object"
-  let freeDefs := dkv.toArray.map fun (fid, d) => (fid, match d with
-    | .obj kvs => Json.mkObj ((kvs.toArray.filter (·.1 != "body")).toList ++
-        ((d.getObjVal? "body").toOption.map (fun b => ["params", "ret_type"].filterMap fun k =>
-          (b.getObjVal? k).toOption.map (k, ·))).getD [])
-    | x => x)
-  let free := Json.mkObj ((top.toArray.filter (fun (k, _) => k != "definitions" && k != "annotations")).toList ++
-    [("definitions", Json.mkObj freeDefs.toList)])
-  if let some e := domainError free then throw s!"descriptor outside the canonical JSON domain (PROTOCOL.md §1): {e}"
-  let .ok (.arr callees) := j.getObjVal? "callees" | throw "program: callees"
-  let .ok (.arr tys) := j.getObjVal? "types" | throw "program: types"
-  let types ← tys.mapM Ty.ofJson
-  let desc : Desc := { ddefs := dkv.toArray.foldl (fun m (k, v) => m.insert k v) {}, callees, types }
-  let some rootId := (j.getObjValAs? String "root").toOption | throw "program: root"
-  let some programFn := (j.getObjValAs? String "program_fn").toOption | throw "program: program_fn"
-  decodeTail top rootId programFn ((walkOf desc rootId programFn).run {})
-
-/-- `decode` is its lines. -/
-theorem decode_eq (bytes : ByteArray) :
-    decode bytes = match String.fromUTF8? bytes with
-      | some text => decodeT walk text
-      | none => throw "program: not UTF-8" := by
-  kernel_rfl'
-
-/-- The walk after its first `getDef`. -/
-def walkRest (desc : Desc) (programFn : String) (r : Except String (Nat × DecState)) :
-    Except String (Nat × DecState) :=
-  r >>= fun (a, s) => (do
-    for f in recordFunctionIds programFn do
-      if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
-    return a : DM Nat) s
-
-theorem walk_eq (desc : Desc) (rootId programFn : String) (s : DecState) :
-    walk desc rootId programFn s = walkRest desc programFn (getDef Steps.FUEL desc rootId s) := by
-  kernel_rfl'
-
-/-! ### `getDef`'s lines, cut at its three lookups -/
-
-/-- `getDef` after its three lookups, at the definition `d` it found. -/
-def getDefRest (n : Nat) (desc : Desc) (fid : String) (d : Json) : DM Nat := do
-  let form := (d.getObjValAs? String "form").toOption.getD ""
-  let id := (d.getObjValAs? String "id").toOption.getD ""
-  let defn ← if form == "primitive" then do
-      if id != fid then throw s!"definition '{fid}': a primitive is keyed by its id, not '{id}'"
-      let params ← liftV (paramsOf ((d.getObjVal? "params").toOption.getD Json.null) s!"primitive {fid}")
-      let ret ← liftV (Ty.ofJson ((d.getObjVal? "ret").toOption.getD Json.null))
-      let .value w := ret | throw s!"a primitive returns exactly one Value<w>; {fid} declares {ret.render}"
-      let input := inputId? fid
-      if let some (_, iw) := input then
-        if !(params.isEmpty && w == iw) then throw s!"primitive {fid} signature differs from the registry"
-      pure ({ key := fid, id, prim := true, params, ret, binding := input.map (·.1), gates := 1,
-              paramLeaves := params.foldl (· + ·.2.leaves) 0, outLeaves := 1 } : Defn)
-    else composite n desc fid d form id
-  let s ← get
-  set { s with defs := s.defs.push defn, index := s.index.insert fid s.defs.size, busy := s.busy.erase fid }
-  return s.defs.size
-
-/-- `getDef` at what the descriptor holds for `fid`. -/
-def getDefK3 (n : Nat) (desc : Desc) (fid : String) : Option Json → DM Nat
-  | some d => getDefRest n desc fid d
-  | none => throw s!"KeyError: no definition {fid}"
-
-/-- `getDef` at whether `fid` is being decoded. -/
-def getDefK2 (n : Nat) (desc : Desc) (fid : String) (od : Option Json) (busy : Bool) : DM Nat :=
-  if busy then throw s!"definition '{fid}' depends on itself" else getDefK3 n desc fid od
-
-/-- `getDef` at what the index holds for `fid`. -/
-def getDefK1 (n : Nat) (desc : Desc) (fid : String) (od : Option Json) : Option Nat → DM Nat
-  | some i => pure i
-  | none => do
-    let s ← get
-    getDefK2 n desc fid od (s.busy.contains fid)
-
-/-- `getDef` is its lines: the index's lookup, then the busy set's, then the descriptor's. -/
-theorem getDef_eq (n : Nat) (desc : Desc) (fid : String) :
-    getDef (n + 1) desc fid = (do
-      let s ← get
-      getDefK1 n desc fid desc.ddefs[fid]? s.index[fid]? : DM Nat) := by
-  unfold getDef
-  kernel_rfl'
-
-/-- **`getDef` given its three lookups.** In a state whose index does not hold `fid` and whose busy set does not,
-over a descriptor that defines `fid` as `d`, `getDef` runs its lines after the lookups at `d`. -/
-theorem getDef_fresh (n : Nat) (desc : Desc) (fid : String) (s : DecState) (d : Json)
-    (hi : s.index[fid]? = none) (hb : s.busy.contains fid = false) (hd : desc.ddefs[fid]? = some d) :
-    getDef (n + 1) desc fid s = getDefRest n desc fid d s := by
-  have h1 : getDef (n + 1) desc fid s = getDefK1 n desc fid desc.ddefs[fid]? s.index[fid]? s := by
-    rw [getDef_eq]
-    first
-      | kernel_rfl'
-      | skip
-  have h2 : getDefK1 n desc fid desc.ddefs[fid]? none s
-      = getDefK2 n desc fid desc.ddefs[fid]? (s.busy.contains fid) s := by
-    kernel_rfl'
-  have h3 : getDefK2 n desc fid (some d) false s = getDefRest n desc fid d s := by
-    kernel_rfl'
-  rw [h1, hi, h2, hb, hd, h3]
-
-/-! ### The Program of no node -/
-
-/-- The parsed text of `programEmpty`, null where the parse refuses. -/
-def docEmpty : Json := (JsonParse.parse programEmpty).toOption.getD .null
-
-/-- Its pairs. -/
-def topEmpty : Std.TreeMap.Raw String Json :=
-  match docEmpty with
-  | .obj top => top
-  | _ => ∅
-
-/-- Its root's definition. -/
-def rootEmpty : Json :=
-  ((docEmpty.getObjVal? "definitions").toOption.bind fun d => (d.getObjVal? "Root_v1").toOption).getD .null
-
-/-- The descriptor `decode` hands its walk. -/
-def descEmpty : Desc :=
-  { ddefs := (∅ : Std.HashMap String Json).insert "Root_v1" rootEmpty, callees := #[], types := #[] }
-
-/-- The fold `decode` builds its definitions with, on one definition. -/
-theorem fold_one (d : Json) :
-    (#[("Root_v1", d)] : Array (String × Json)).foldl (fun m (k, v) => m.insert k v) {}
-      = (∅ : Std.HashMap String Json).insert "Root_v1" d := by
-  kernel_rfl'
-
-/-- `decode`'s lines before the walk, on `programEmpty`: the descriptor of the one definition, for every walk. -/
-theorem decodeT_empty (walkOf : Desc → String → String → DM Nat) :
-    decodeT walkOf programEmpty
-      = decodeTail topEmpty "Root_v1" "Root_v1" (walkOf descEmpty "Root_v1" "Root_v1" {}) := by
-  kernel_rfl'
-
-theorem index_start (fid : String) : (({} : DecState).index)[fid]? = none := by
-  first
-    | exact Std.HashMap.getElem?_empty
-    | exact Std.HashMap.getElem?_emptyWithCapacity
-    | simp
-
-theorem busy_start (fid : String) : ({} : DecState).busy.contains fid = false := by
-  first
-    | exact Std.HashSet.contains_empty
-    | exact Std.HashSet.contains_emptyWithCapacity
-    | simp
-
-theorem ddefs_root : descEmpty.ddefs["Root_v1"]? = some rootEmpty := by
-  show ((∅ : Std.HashMap String Json).insert "Root_v1" rootEmpty)["Root_v1"]? = some rootEmpty
-  exact Std.HashMap.getElem?_insert_self
-
-theorem fuel_succ : Steps.FUEL - 1 + 1 = Steps.FUEL := by decide +kernel
-
-/-- `getDef` on the root of `programEmpty`, from the start: its lines after the lookups. -/
-theorem getDef_empty :
-    getDef Steps.FUEL descEmpty "Root_v1" {} = getDefRest (Steps.FUEL - 1) descEmpty "Root_v1" rootEmpty {} := by
-  have h := getDef_fresh (Steps.FUEL - 1) descEmpty "Root_v1" {} rootEmpty (index_start _) (busy_start _) ddefs_root
-  rw [fuel_succ] at h
-  exact h
-
-/-- What `decode` answers on `programEmpty`, no lookup by a hash left in what decides it. -/
-def answerEmpty : V Prog :=
-  decodeTail topEmpty "Root_v1" "Root_v1"
-    (walkRest descEmpty "Root_v1" (getDefRest (Steps.FUEL - 1) descEmpty "Root_v1" rootEmpty {}))
-
-/-- The Program of no node. -/
-public def progEmpty : Prog := getOk answerEmpty
-
-theorem answerEmpty_isOk : answerEmpty.toOption.isSome = true := by decide +kernel
-
-/-- **The decoder reads `programEmpty`**, with no hypothesis. -/
-public theorem decode_empty : decode programEmpty.toUTF8 = .ok progEmpty := by
-  rw [decode_eq, fromUTF8?_toUTF8]
-  show decodeT walk programEmpty = .ok progEmpty
-  rw [decodeT_empty walk, walk_eq, getDef_empty]
-  exact ok_get answerEmpty_isOk
+set_option maxHeartbeats 0 in -- the walk steps through `decode` and leaves closed checks to the kernel
+fwd_def progEmpty decode_empty : decode programEmpty.toUTF8 by
+  [fromUTF8?_toUTF8, parse_empty, domain_none, ofJson_tuple0, split_rule, toNat_rule, rfi_rule, ddefs_rule,
+    index_rule, busy_rule, String.contains_char_eq, String.all_bool_eq, Array.mapM_empty,
+    st_run, st_bind, st_get, st_set, st_modify, st_pure, st_ite,
+    st_forIn_nil, st_forIn_range0, leaves_rule]
+  block [domainError, Ty.ofJson]
+  shallow [programEmpty]
 
 end Flock.Program.Closed
