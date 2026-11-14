@@ -2545,6 +2545,14 @@
     },
     {
       "paths": {
+        "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_outside.py": "adapters/vllm/tests/protocols/test_credit_gate_outside.py",
+        "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records.py": "adapters/vllm/tests/protocols/test_pouw_h1_records.py",
+        "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records_device.py": "adapters/vllm/tests/protocols/test_pouw_h1_records_device.py",
+        "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_weight_roots.py": "adapters/vllm/tests/protocols/test_pouw_h1_weight_roots.py"
+      }
+    },
+    {
+      "paths": {
         "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
         "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
         "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",

@@ -37,10 +37,10 @@ sys.path.insert(0, str(ROOT))
 
 from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC  # noqa: E402
 
-from h1r import H1R, Call, words  # noqa: E402
+from benchmarks.hash.dither.h1r import H1R, Call, words  # noqa: E402
 
 if TYPE_CHECKING:
-    from h1r import Plan
+    from benchmarks.hash.dither.h1r import Plan
 
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
 LAYERS = 32

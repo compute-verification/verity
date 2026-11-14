@@ -59,8 +59,6 @@ ON_DISK = {
     "ORACLE_COMPARE_SCHEMA": "verity-sweep/oracle-compare/v1",
     "PHI_SCHEMA": "verity-predict/phi/v1",
     "POUW_CIRCUIT_REPLAY_SCHEMA": "verity-vllm/pouw-ncp-v2-replay/v3",
-    "POUW_H1_CALLS_SCHEMA": "verity-vllm/pouw-h1-calls/v2",
-    "POUW_H1_HANDOFF_SCHEMA": "verity-vllm/pouw-h1-handoff/v1",
     "PREDICT_NODE_SCHEMA": "verity-predict/node/v1",
     "PROFILE_FALLBACK_SCHEMA": "verity-capture/profile-fallback/v1",
     "PROGRAM_CACHE_ENTRY_SCHEMA": "verity-vllm/program-cache-entry/v1",
