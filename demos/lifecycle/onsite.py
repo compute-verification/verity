@@ -26,7 +26,7 @@ from lifecycle import (CERTIFIER, CHALLENGER, D, DEVELOPER, IDS, LATER, NODE, OU
                        VERIFIER, Developer, Layout, Link, Loc, Tape, Verifier, answer, body, digest, frame,
                        frame_commitment, label, load_of, msg, opens, products, schema, theta_of)
 from verity.runtime import runner as runtime
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message
 from verity.circuits import codec
@@ -256,8 +256,8 @@ MANIFEST = Manifest(
               Channel(CHALLENGER, DEVELOPER, ("Fill", "Challenge"), MS, carries_coins=True),
               Channel(DEVELOPER, CHALLENGER, ("Answer",), MS)),
     messages=SHARED + ONSITE)
-PROTOCOL = runtime.ProtocolDef(MANIFEST, {DEVELOPER: Developer, VERIFIER: OnsiteVerifier, CERTIFIER: Certifier,
-                                          CHALLENGER: Challenger})
+PROTOCOL = ProtocolDef(MANIFEST, {DEVELOPER: Developer, VERIFIER: OnsiteVerifier, CERTIFIER: Certifier,
+                                  CHALLENGER: Challenger})
 
 
 def run(cheat: str | None = None, seed: bytes = b"lifecycle/onsite") -> dict[str, Any]:
