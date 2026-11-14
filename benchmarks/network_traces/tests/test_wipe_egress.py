@@ -23,10 +23,11 @@ from verity.commitments.crypto import lms
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
+sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
-import certifier_serve as cs  # noqa: E402
-import warden_serve as ws  # noqa: E402
-import wipe_egress as E  # noqa: E402
+from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
+from benchmarks.network_traces import warden_serve as ws  # noqa: E402
+from benchmarks.network_traces import wipe_egress as E  # noqa: E402
 
 SCAN = WardenParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
 #: the origin of the rehearsal the record was first read off

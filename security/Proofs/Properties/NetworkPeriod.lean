@@ -164,9 +164,9 @@ accepts a rows-form period of one link-window with no audit, whose scan's `prog`
 theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
+    ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hw : wired #[] slotSchedule #[] tiedExecutionPhase = true :=
-    h p ⟨#[], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
+    h p ⟨#[], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
   rw [tiedExecutionPhase_unwired] at hw
   cases hw
 
@@ -184,10 +184,10 @@ lemma at the pin): such a check accepts a rows-form period whose scan's `prog` i
 `SlotEntry_v1` template's entries port, one member a slot, whose body is none of the pinned Definitions'. -/
 theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
-  let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
+  let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, #[], "",
     .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedExecutionPhase = true :=
-    h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
+    h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
   rw [renamedAudit_unwired] at hw
   cases hw
 
@@ -335,9 +335,9 @@ that audit's `SCAN_STATE`, which skips or alters a transition of the scan's. -/
 theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateExecutionPhase = true :=
-    h p ⟨#[stateReg "t"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+    h p ⟨#[stateReg "t"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
       stateExecutionPhase rfl
   rw [stateExecutionPhase_skipped] at hs
   cases hs
@@ -425,10 +425,10 @@ answer names a second tied Input, which no check wires. -/
 theorem rowsTiedInputWired_nontrivial : ¬ RowsTiedInputWiredOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   let x : ExecutionPhase := ⟨tiedAnswer #[.str "prog0", .str "state"], #[], #[]⟩
   have hw : tiedInputWired slotSchedule (tiedAnswer #[.str "prog0", .str "state"]) = true :=
-    (h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[x]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase x
+    (h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[x], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase x
       rfl rfl).1
   cases tiedAnswer_unwired.1.symm.trans hw
 
@@ -443,9 +443,9 @@ the prover chose. -/
 theorem rowsStateEmpty_nontrivial : ¬ RowsStateEmptyOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hs : stateEmpty slotSchedule stateExecutionPhase = true :=
-    h p ⟨#[stateReg "s"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+    h p ⟨#[stateReg "s"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
       stateExecutionPhase rfl
   rw [stateExecutionPhase_unopened] at hs
   cases hs
@@ -500,10 +500,10 @@ the class circuit `c`. -/
 theorem rowsCircuitHeld_nontrivial : ¬ RowsCircuitHeldOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1,
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1,
       some "c"⟩
   have hh : held (some "c") #[heldReg "d"] tiedExecutionPhase = true :=
-    h p ⟨#[heldReg "d"], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+    h p ⟨#[heldReg "d"], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
       tiedExecutionPhase rfl
   rw [tiedExecutionPhase_swapped] at hh
   cases hh
@@ -513,8 +513,8 @@ class circuit, `heldMonitoringPeriod` with nothing registered. A period with an 
 LMS signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
 tied audit registered under the class circuit; `tiedExecutionPhase_held` is `held` of such a phase's registrations. -/
 theorem rowsCircuitHeld_honest :
-    ∃ (pub : Public) (prof : Profile), check heldMonitoringPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
-  have hb : (match check heldMonitoringPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+    ∃ (pub : Public) (prof : Profile), check heldMonitoringPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ = .accept pub prof := by
+  have hb : (match check heldMonitoringPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ with
       | .accept _ _ => true
       | _ => false) = true := by
     decide +kernel
@@ -590,7 +590,8 @@ theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {
     refine ⟨by omega, by omega, by omega, ?_, ?_, ?_⟩
     · intro y hy
       exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
-        (List.mem_append_left _ (List.mem_append_left _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))))
+        (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
+          (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))))))
     · intro y hy
       exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
         (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))))
@@ -780,7 +781,7 @@ def otherAnswer : Core.Answer :=
 
 /-- The parameters of one compute audit, the slot audit, under `slotSchedule` and a scan of 7 slot entry bits. -/
 def chargedParams : Params :=
-  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1, none⟩
+  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1, none⟩
 
 /-- Its commitment: the slot audit's registration and the link-window whose scan's `prog` is its entries port. -/
 def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩
@@ -801,8 +802,8 @@ charge. -/
 theorem rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
-  obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl slotSchedule .empty
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
+  obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[otherAnswer], #[], #[]⟩ _ _ rfl slotSchedule .empty
     ⟨0, 0, 0, 0, 0⟩ rfl
   obtain ⟨x, f, -, -, hf, -⟩ := h1 0 slotReg rfl rowsProgWired_honest.2
   simp [rowsTerms] at hf
@@ -826,8 +827,8 @@ theorem rowsCapPublished : RowsCapPublished := by
 `cappedPeriod` with nothing registered. A period with link-windows needs the network certifier's LMS signatures and
 one-stage's answers, which the period's difftest builds and checks against the mirror. -/
 theorem rowsCapPublished_honest :
-    ∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
-  have hb : (match check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+    ∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ = .accept pub prof := by
+  have hb : (match check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ with
       | .accept _ _ => true
       | _ => false) = true := by
     decide +kernel
@@ -845,7 +846,7 @@ theorem rowsCapPublished_nontrivial :
 
 /-- **No period check that accepts every period has `RowsCapPublished`'s property.** -/
 theorem rowsCapPublished_acceptAll : ¬ RowsCapPublishedOf acceptAllRows :=
-  fun h => rowsCapPublished_nontrivial (h cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl)
+  fun h => rowsCapPublished_nontrivial (h cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ _ _ rfl)
 
 /-! ## The rows form's scan's ok bits are at the constants of its schedule -/
 
@@ -1037,8 +1038,8 @@ ticks, `pairParams 0` with nothing registered. A period with an execution phase 
 signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
 scans' registrations at the constants. -/
 theorem rowsOkHeld_honest :
-    ∃ (pub : Public) (prof : Profile), check (pairParams 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
-  have hb : (match check (pairParams 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+    ∃ (pub : Public) (prof : Profile), check (pairParams 0) ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ = .accept pub prof := by
+  have hb : (match check (pairParams 0) ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ with
       | .accept _ _ => true
       | _ => false) = true := by
     decide +kernel
@@ -1063,7 +1064,7 @@ theorem rowsOkHeld_nontrivial : ¬ RowsOkHeldAt (pairParams 1) unnamedCommitment
 
 /-- **No period check that accepts every period has `RowsOkHeld`'s property.** -/
 theorem rowsOkHeld_acceptAll : ¬ RowsOkHeldOf acceptAllRows :=
-  fun h => rowsOkHeld_nontrivial (h (pairParams 1) unnamedCommitment ⟨#[], #[]⟩ _ _ rfl)
+  fun h => rowsOkHeld_nontrivial (h (pairParams 1) unnamedCommitment ⟨#[], #[], #[]⟩ _ _ rfl)
 
 end Ok
 

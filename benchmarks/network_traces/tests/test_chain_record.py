@@ -47,6 +47,7 @@ BLOCK_SCHEMA = Path(__file__).resolve().parents[3] / "benchmarks/one_stage/inter
 
 def _load(name: str):
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location(f"network_traces_{name}", HERE / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

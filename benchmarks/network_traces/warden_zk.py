@@ -64,9 +64,10 @@ from types import SimpleNamespace
 HERE = Path(__file__).resolve().parent
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import leak_scan as LS  # noqa: E402
-import warden_serve as ws  # noqa: E402
+from benchmarks.network_traces import warden_serve as ws  # noqa: E402
 from verity.circuits import boolean as BL  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.types import Array  # noqa: E402

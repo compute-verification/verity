@@ -79,8 +79,9 @@ from types import SimpleNamespace
 HERE = Path(__file__).resolve().parent
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs  # noqa: E402
+from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import head_check as HC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import service as SVC  # noqa: E402
@@ -143,7 +144,7 @@ def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
     """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
     the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
 
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)

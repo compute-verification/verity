@@ -29,8 +29,8 @@ the names, by the one map from a Definition's parameters to a file's gates, `Spo
 
 **What they do not say.** `rowGate` reads no row of the file: that an input port's gate holds the bit the registered
 row commits is the proof block's. `portsOf` reads `rowGate` and `outRowGate` alone, so its gates are a unit's ports
-only where `laidOutAs` holds. Which output row a reader returns is no role of `Roles`: `portsOf` takes its name, and
-the table's count and its row's words, which the reader's template fixes. A table's leaves sit each at its own rank.
+only where `laidOutAs` holds. Which output row a reader returns is no role of `Roles`: `portsOf` takes its name, which
+an opening declares (`Form.openedRow`), and the table's count and its row's words, which the reader's template fixes. A table's leaves sit each at its own rank.
 -/
 
 @[expose] public section

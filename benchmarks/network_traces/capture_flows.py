@@ -100,6 +100,8 @@ from collections import defaultdict
 from collections.abc import Iterator
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
 #: a capture file's first four bytes, and the byte order of what follows
 MAGICS = {b"\xa1\xb2\xc3\xd4": ">", b"\xd4\xc3\xb2\xa1": "<", b"\xa1\xb2\x3c\x4d": ">", b"\x4d\x3c\xb2\xa1": "<"}
 PCAPNG = b"\x0a\x0d\x0d\x0a"
@@ -437,7 +439,7 @@ def record_counts(run: Path) -> dict:
     they are `exact`, and `why` not (then the first is a ceiling and the second a floor); the watermark stream's where
     `warden.json` has one, its `release` and `from_server` None; and how many of the records it read, each execution
     phase's ingress, egress and reasons, are certified under the deployment's key."""
-    import warden_serve as ws
+    from benchmarks.network_traces import warden_serve as ws
     from verity.protocols.accounting.certifier.verifier.active import DATA
     from verity.protocols.accounting.certifier.verifier.certificate import record_head
     from verity.protocols.accounting.certifier.verifier.grid import row_count

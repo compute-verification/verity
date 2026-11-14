@@ -609,7 +609,7 @@ def certified_io(fetch: Path) -> tuple[dict, dict]:
     """The kept network certifier run's deployment.json and certified I/O (`warden_chain.io`), read in a scratch
     directory beside the fetch."""
     sys.path[:0] = [str(TREE), str(HERE)]
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
     with tempfile.TemporaryDirectory(dir=fetch.parent) as d:
         with tarfile.open(fetch, "r:gz") as tar:
             tar.extractall(d, filter="data")

@@ -122,11 +122,12 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs  # noqa: E402
+from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import negatives as N  # noqa: E402
-import warden_serve as ws  # noqa: E402
+from benchmarks.network_traces import warden_serve as ws  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import release as REL  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, id_request  # noqa: E402

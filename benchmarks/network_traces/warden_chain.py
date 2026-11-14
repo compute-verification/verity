@@ -51,9 +51,10 @@ from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs
-import warden_serve as WS
+from benchmarks.network_traces import certifier_serve as cs
+from benchmarks.network_traces import warden_serve as WS
 
 PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through active.Proxy in front of the endpoint): "
          "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")

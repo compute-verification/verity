@@ -67,8 +67,9 @@ from typing import NamedTuple
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs  # noqa: E402
+from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC  # noqa: E402
@@ -183,7 +184,7 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
     certifier's run"): each window's rows under the network certifier's salts, held to the head the verifier read off
     its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
     doesn't hold."""
-    import warden_serve as WS
+    from benchmarks.network_traces import warden_serve as WS
 
     dep = json.loads(_found(run, "deployment.json").read_text())
     params = W.WardenParams(**dep["params"])

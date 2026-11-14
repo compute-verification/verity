@@ -52,12 +52,13 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "benchmarks" / "one_stage")]
+sys.path.append(str(ROOT))  # for benchmarks.network_traces
 
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
-import scan_period as SP  # noqa: E402
+from benchmarks.network_traces import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
-import warden_serve as WS  # noqa: E402
+from benchmarks.network_traces import warden_serve as WS  # noqa: E402
 from test_scan_zk import published, sz  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402

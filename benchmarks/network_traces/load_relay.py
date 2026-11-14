@@ -91,6 +91,7 @@ from typing import Any, BinaryIO
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 from verity.commitments import hm96  # noqa: E402
 from verity.commitments.hm96 import batch as HB  # noqa: E402
@@ -1311,7 +1312,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--format p2 needs the store's --salt, and takes the whole load")
     if a.bytes:
         values = first_values(values, a.bytes)
-    import certifier_serve as CS
+    from benchmarks.network_traces import certifier_serve as CS
     key_dir = Path(a.key) if a.key else out / "certifier"
     signer = CS.signer(key_dir, a.height)
     session = bytes.fromhex(a.session) if a.session else os.urandom(32)

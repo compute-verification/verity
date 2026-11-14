@@ -188,6 +188,7 @@ from typing import Mapping, NamedTuple, Sequence
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import leak_scan as LS  # noqa: E402
 import warden_zk as WZ  # noqa: E402
@@ -665,7 +666,7 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     ``failed`` the reasons its ``fails`` record has in the execution phases, ``fail_buckets`` the buckets they're in,
     and ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
     re-signed execution phase is signed by a key of the driver's own (``out``), under which the verifier reads it."""
-    import warden_serve as WS
+    from benchmarks.network_traces import warden_serve as WS
 
     dep = json.loads(_found(run, "deployment.json").read_text())
     params = W.WardenParams(**dep["params"])

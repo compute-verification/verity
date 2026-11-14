@@ -1481,6 +1481,7 @@ def network_traces() -> Iterator[None]:
     its ``replay``, which its ``active_replay`` imports, isn't one_stage's, which ``a5`` imports."""
     path, replay = list(sys.path), sys.modules.pop("replay", None)
     sys.path.insert(0, str(HERE.parent / "network_traces"))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     try:
         yield
     finally:
@@ -1503,8 +1504,8 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
 
     with network_traces():
         import certifier_piece as CP
-        import warden_chain as WCH
-        import warden_serve as WSV
+        from benchmarks.network_traces import warden_chain as WCH
+        from benchmarks.network_traces import warden_serve as WSV
 
     if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
         return None

@@ -313,7 +313,9 @@ def test_the_check_writes_what_it_was_checked_under_then_each_registration_as_th
         verified, _ = CR.check_registration(json.loads(line), key, session, ROWS, ws.LINK, w)
         assert SV.head_of(json.loads(line)) == verified and verified.window == w
     held = answer(tmp_path / "read", file, [json.loads(line) for line in lines])
-    assert held.held == 3 and TSV.names_under("a run", under=names) in held.why, held.why
+    # the reader is handed no schedule, so it holds no class below one, but it reads each head the file holds
+    assert held.held == 0 and f"{TSV.CC.NOT_HANDED} for 9 of the 9 class(es)" in held.why[0], held.why
+    assert TSV.names_under("a run", under=names) in held.why, held.why
     by_command = tmp_path / "out" / "by-command.jsonl"
     assert ws.main(command(out, under, by_command)) == 0 and by_command.read_text() == written
     assert ws.main(command(out)) == ws.main(command(out, under)) == 0
@@ -349,7 +351,8 @@ def test_a_run_under_another_key_gets_no_file_under_the_keys_hash_and_one_under_
     first, *lines = earlier.splitlines()
     assert SV.checked_under(first) == (own.hex(), session.hex()) and len(lines) == 3
     held = answer(tmp_path / "read", file, [json.loads(line) for line in lines])
-    assert held.held == 3 and TSV.names_under("a run", under=(own.hex(), session.hex())) in held.why
+    assert held.held == 0 and f"{TSV.CC.NOT_HANDED} for 9 of the 9 class(es)" in held.why[0]
+    assert TSV.names_under("a run", under=(own.hex(), session.hex())) in held.why
 
 
 def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file(tmp_path):
@@ -472,10 +475,10 @@ def test_a_registration_with_a_wrong_signature_gives_no_file_and_the_reader_hold
     assert not file.exists()
     left = answer(tmp_path / "left", file, signed)
     assert left.held == 0 and "verdict record(s) were read and no registration" in left.why[0]
-    # the reader alone holds a head nobody signed, under a first line anybody wrote: only the check's file keeps it
-    # from one
+    # the reader alone reads a head nobody signed, under a first line anybody wrote, and would hold its class under
+    # the schedule it names: only the check's file keeps it from one
     file.write_text(TSV.checked(*forged))
-    assert answer(tmp_path / "forged", file, forged).held == 1
+    assert f"{TSV.CC.NOT_HANDED} for 3 of the 3 class(es)" in answer(tmp_path / "forged", file, forged).why[0]
     assert ws.check(out, file, under)["accepted"] and file.read_text() == written
 
 
@@ -632,6 +635,54 @@ def test_under_form_2_every_execution_phase_has_one_line_and_the_runs_last_its_h
     assert s["sign_ms"]["n"] == 4 and result["summary"]["certified_windows"] == 12
 
 
+def test_a_run_with_content_rows_keeps_each_execution_phases_filed_releases_and_the_check_holds_them(tmp_path):
+    """Beside each line of `rows.jsonl` a run with content rows keeps a line of `filed.jsonl`: the releases the hand
+    filed in each class, by their place in the release order and in row order, under the digest of the head the
+    line's registration signs. Each class's list is as long as the head's count of the class, the lists are the
+    records' own filing, and over the run they hold each release once. The check holds a kept line to that: a
+    release listed in another class, a list under another head, and a list for an execution phase the records file
+    otherwise are problems naming the execution phase. A run without the file is checked as it was."""
+    out = tmp_path / "run"
+    served(out, tmp_path / "key", params=ENDS)
+    lines = [json.loads(x) for x in (out / crr.FILED).read_text().splitlines()]
+    records = ws.read_records(out, ENDS)
+    held = CR.of_records(ENDS, records["requests"], records["responses"])
+    assert [doc["window"] for doc in lines] == [0, 1, 2, 3]
+    for doc, (kept, _) in zip(lines, crr.read(out, ENDS)):
+        assert sorted(doc) == ["classes", "format", "head", "link", "window"]
+        assert (doc["format"], doc["link"]) == (CR.FILED, ws.LINK)
+        assert doc["head"] == kept["registration"]["certificate"]["digest"]
+        assert doc["classes"] == [list(c) for c in CR.filed(ENDS, held[doc["window"]])]
+        assert [len(c) for c in doc["classes"]] == [t["rows"] for t in kept["registration"]["tables"][2::3]]
+    assert sorted(n for doc in lines for c in doc["classes"] for n in c) == list(range(len(PROMPTS)))
+    assert lines[2]["classes"] == lines[3]["classes"] == [[], [], []]
+    assert ws.check(out)["accepted"]
+
+    def edited(change) -> list[str]:
+        def edit() -> None:
+            changed = [json.loads(x) for x in (out / crr.FILED).read_text().splitlines()]
+            change(changed)
+            (out / crr.FILED).write_text("".join(json.dumps(x) + "\n" for x in changed))
+        return refused(out, edit)
+
+    def moved(changed) -> None:
+        classes = changed[0]["classes"]
+        i = next(i for i, c in enumerate(classes) if c)
+        classes[(i + 1) % 3].append(classes[i].pop())
+
+    def other_head(changed) -> None:
+        changed[1]["head"] = changed[0]["head"]
+
+    def listed(changed) -> None:
+        changed[3]["classes"][0].append(0)
+
+    for change, w in ((moved, 0), (other_head, 1), (listed, 3)):
+        assert edited(change) == [f"execution phase {w}'s line of {crr.FILED} is not its records' filing under "
+                                  "its head"]
+    assert any(f"{crr.FILED} doesn't read" in p for p in refused(out, lambda: (out / crr.FILED).write_text("{\n")))
+    assert refused(out, (out / crr.FILED).unlink) == []
+
+
 @pytest.mark.parametrize("process", [False, True])
 def test_a_run_with_request_words_keeps_each_classes_words_table_and_the_check_holds_it_to_the_records(tmp_path, process):
     """The six connections at a schedule with request words, inline and in the publisher process: each execution
@@ -694,6 +745,9 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
         with pytest.raises(ValueError, match="the word's window"):
             CR.check_no_head(doc[crr.NO_HEAD], key, session, params, ws.LINK, 1 - w)
     assert ws.ar.read_blobs(out / crr.SALTS)[:2] == [b"", b""]
+    filed = [json.loads(x) for x in (out / crr.FILED).read_text().splitlines()]
+    assert filed[:2] == [CR.not_filed(ws.LINK, 0), CR.not_filed(ws.LINK, 1)]
+    assert [sum(map(len, doc["classes"])) for doc in filed[2:]] == [1, 0]
     records = ws.read_records(out, params)
     held = CR.of_records(params, records["requests"], records["responses"])
     assert [sum(map(len, held[w])) for w in range(4)] == [5, 1, 1, 0]
@@ -875,7 +929,7 @@ def test_a_run_without_lengths_rows_writes_and_checks_what_it_did(tmp_path):
     has no entry for them; rows found beside it are no part of its check."""
     out = tmp_path / "run"
     served(out, tmp_path / "key", windows=2, params=PLAIN)
-    assert not (out / crr.ROWS).exists() and not (out / crr.SALTS).exists()
+    assert not (out / crr.ROWS).exists() and not (out / crr.SALTS).exists() and not (out / crr.FILED).exists()
     result = ws.check(out)
     assert result["accepted"], result["problems"]
     assert "connection_rows" not in result["summary"]

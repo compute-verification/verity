@@ -92,7 +92,11 @@ Open premises (`open`):
   no egress cell to the id egress form (the io tie's, `IoTieCell` on every cell) and no response to a `max_tokens_cap`
   (`network-rows` refuses such a schedule).
 - **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
-  runs the check and writes it as the certifier's piece, which `benchmarks/one_stage` reads.
+  runs the check and writes it as the certifier's piece, which `benchmarks/one_stage` reads. It also writes the
+  check's parameters, whose `"keys"` list the link's network certifier's entries, each a key, its session and the
+  start of its stretch of execution phases (`scan_period.py`: the deployment's one key and session, from execution
+  phase 0), and its evidence, whose `"starts"` show each listed entry's session's signed start (the deployment's
+  `start`).
 - **Files others load by path**: `tests/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
   tests of `adapters/vllm`); `tests/egress_traffic.py` (`benchmarks/network_traces`); in `tests/fixtures`,
   `compile_slice_smallkv.json` (`benchmarks/network_traces`, `benchmarks/prove_path`) and the vectors
@@ -314,8 +318,8 @@ A spec-level reference for network accounting's timing channel:
   `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
   that an execution phase has no head (`check_no_head`);
 - how an execution phase's class is charged (`class_charge.charge`): below its schedule only with a count above 0
-  in that head and its four verdicts, each accepted, complete and on the head, all of one serve and registration;
-  else its whole schedule;
+  in that head, its four verdicts, each accepted, complete and on the head, all of one serve and registration,
+  and the head's schedule handed, one that can be tied; else its whole schedule;
 - its deployment manifest (`parties`): no party of it runs under the runtime;
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides

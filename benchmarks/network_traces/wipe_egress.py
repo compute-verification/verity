@@ -37,7 +37,9 @@ import tarfile
 from fractions import Fraction
 from pathlib import Path
 
-import certifier_serve as cs
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
+from benchmarks.network_traces import certifier_serve as cs
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw

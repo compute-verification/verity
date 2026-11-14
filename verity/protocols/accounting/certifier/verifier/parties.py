@@ -1,7 +1,6 @@
 """The network certifier's manifest on the deployment layer (`verity.runtime`): its parties and the two
 channels that carry what the device hands another party, which a deployment configuration's table declares from
-here. It is the manifest alone.
-No party of it runs under the layer's runtime, so this module holds no party and no `ProtocolDef`.
+here. It is the manifest alone: the device's party and the `ProtocolDef` are `device_party`'s.
 
 ~~~text
 network-certifier -> workers    out-opening {link, window}, the output value's witness its body (private)
