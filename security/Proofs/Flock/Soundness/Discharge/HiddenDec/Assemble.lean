@@ -126,7 +126,7 @@ theorem tableAtH_ptLocal {n mPts : ℕ} {I : Inputs} (dj : Finset (Fin n) → Le
 hypothesis on the circuit: `tableAtH_of_acceptsU`). -/
 theorem decodesOn_execHU {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
+    (L : SamplingDesign n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (hT : TagsOkHL I) (hwr : RecordsLive I dj wr) (hdraw : ∀ ω, SampleOkH I dj mPts (L.draw ω)) :
     DecodesOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH (Reg := Reg) dj x₀) I wr
       (opnAtH (tablesAtH dj x₀) I dj)
@@ -193,7 +193,7 @@ set_option linter.unusedVariables false in
 theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
+    (L : SamplingDesign n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (hT : TagsOkHL I) (hwr : RecordsLive I dj wr) (hdraw : ∀ ω, SampleOkH I dj mPts (L.draw ω)) :
     DecodesOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH (Reg := Reg) dj x₀) I wr
       (opnAtH (tablesAtH dj x₀) I dj)
@@ -205,7 +205,7 @@ set_option linter.unusedVariables false in
 theorem decodesOn_execHISt {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
+    (L : SamplingDesign n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (hT : TagsOkHL I) (hwr : RecordsLive I dj wr) (hdraw : ∀ ω, SampleOkH I dj mPts (L.draw ω)) :
     DecodesOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH (Reg := Reg) dj x₀) I wr
       (opnAtH (tablesAtH dj x₀) I dj)

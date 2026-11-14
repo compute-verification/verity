@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Bridge.CustodyZkP
 public import Proofs.Flock.Bridge.Draw
-public import Proofs.Flock.Bridge.SampledLaw
+public import Proofs.Flock.Bridge.SampledDesign
 public import Proofs.Properties.Verity.SampledCoins
 
 /-!
@@ -13,8 +13,8 @@ decodes (`Live.hCust`, `RecordCustodyZKJPLaw` at the sample file's sampling desi
 `hsz`, `Live.hsz`), and carries a third as a field, A3 at the device's bytes the sample reads (`Live.hA3`), which the
 session as deployed takes from here (`Live.deployed`). This file proves the three at the deployment's session:
 
-* **The sample file** (`printedSample law`): at each sample `S`, the one `verity-verify-proof draw` prints for the verifier's own sample
-  of `S` under `law` over the `n` proof blocks (`UnitSample.toJson` of `ZkLink.drawOf`); at a subset sampling design it is
+* **The sample file** (`printedSample samplingDesign`): at each sample `S`, the one `verity-verify-proof draw` prints for the verifier's own sample
+  of `S` under `samplingDesign` over the `n` proof blocks (`UnitSample.toJson` of `ZkLink.drawOf`); at a subset sampling design it is
   `Claims.Bridge.CustodyZkP.djPrinted` (`printedSample_subset`). The session's sample file is the `.subset` print of the
   member's share of the window's sample under the verifier's sampling design `L`, its `kd` units (`Live.dj`), and the bound comes
   from v1's window check (`Spot.OneStage.checkAt`); the print decodes to the sample it printed
@@ -25,7 +25,7 @@ session as deployed takes from here (`Live.deployed`). This file proves the thre
   (`recordCustodyZKJPLaw_part`), whose sample file at its part `S` is printed under `subset |S|` (`printedPart`). At a
   sample of `kd` units the two sampling designs are one. At the writer and the sample file printed under any sampling design but a
   Bernoulli sampling design (`recordCustodyZKJPLaw_printed`), and so at V5's, `designAt` (`recordCustodyZKJPLaw_designAt`).
-* **The sample's size** (`sampleSize_deployed`): V5's `hsz` at the printed subset sample file (`Flock.Bridge.lawOn_size`).
+* **The sample's size** (`sampleSize_deployed`): V5's `hsz` at the printed subset sample file (`Flock.Bridge.samplingDesignOn_size`).
 * **A3 at the device's bytes** (`uniformRandomBytes_deployed`): the session's sample is the device's one-stage rounds,
   `MAX_COINS` coins of `8 * COIN_BYTES` raw bits (`DeployedCoins`, `Properties.Challenger.oneStageRounds`), and the sample's
   one byte stream is their bytes in order (`deployedSrc`, `coinBytes`), so A3 holds there
@@ -40,9 +40,9 @@ open FlockSoundness FlockSoundness.Discharge
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **The sample file `verity-verify-proof draw` prints** for the verifier's own sample of `S` under the sampling design `law` over the `n`
+/-- **The sample file `verity-verify-proof draw` prints** for the verifier's own sample of `S` under the sampling design `samplingDesign` over the `n`
 proof blocks (`UnitSample.toJson` of `ZkLink.drawOf`). -/
-def printedSample (law : Flock.Draw.Law) (S : Finset (Fin n)) : Lean.Json := (ZkLink.drawOf law n S).toJson
+def printedSample (samplingDesign : Flock.Draw.SamplingDesign) (S : Finset (Fin n)) : Lean.Json := (ZkLink.drawOf samplingDesign n S).toJson
 
 theorem printedSample_subset (kd : ℕ) :
     printedSample (n := n) (.subset kd) = Claims.Bridge.CustodyZkP.djPrinted kd :=
@@ -64,20 +64,20 @@ theorem recordCustodyZKJPLaw_deployed (I : Exec.Inputs) (own : Option ByteArray)
   ⟨Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP I own _ Jf, sampleFileZK_printedSample kd⟩
 
 /-- **The printed sample file decodes to the sample it printed** under any sampling design but a Bernoulli sampling design
-(`ZkLink.sampleFileZK_of_toJson_law`). -/
-theorem sampleFileZK_printedSample_law (law : Flock.Draw.Law) (hb : Flock.Bridge.NotBernoulli law) :
-    ZkLink.SampleFileZK (printedSample (n := n) law) law n :=
-  ZkLink.sampleFileZK_of_toJson_law _ law hb n fun _ => rfl
+(`ZkLink.sampleFileZK_of_toJson_samplingDesign`). -/
+theorem sampleFileZK_printedSample_samplingDesign (samplingDesign : Flock.Draw.SamplingDesign) (hb : Flock.Bridge.NotBernoulli samplingDesign) :
+    ZkLink.SampleFileZK (printedSample (n := n) samplingDesign) samplingDesign n :=
+  ZkLink.sampleFileZK_of_toJson_samplingDesign _ samplingDesign hb n fun _ => rfl
 
 /-- **`live-verifier` at the deployment's writer and sample file, under any sampling design but a Bernoulli sampling design**:
-`RecordCustodyZKJPLaw` at the writer that keeps an accepted record (`wrZP`) and the sample file printed under `law`, its
+`RecordCustodyZKJPLaw` at the writer that keeps an accepted record (`wrZP`) and the sample file printed under `samplingDesign`, its
 record half with no premise (`Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP`) and its sample file half the round trip at
-`law` (`sampleFileZK_printedSample_law`). -/
-theorem recordCustodyZKJPLaw_printed (I : Exec.Inputs) (own : Option ByteArray) (law : Flock.Draw.Law)
-    (hb : Flock.Bridge.NotBernoulli law) (Jf : Finset (Fin n) → Reg → ℕ) :
-    Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts) I own (printedSample law) Jf
-      (Claims.Bridge.CustodyZkP.wrZP I own (printedSample law) Jf) fun _ => law :=
-  ⟨Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP I own _ Jf, sampleFileZK_printedSample_law law hb⟩
+`samplingDesign` (`sampleFileZK_printedSample_samplingDesign`). -/
+theorem recordCustodyZKJPLaw_printed (I : Exec.Inputs) (own : Option ByteArray) (samplingDesign : Flock.Draw.SamplingDesign)
+    (hb : Flock.Bridge.NotBernoulli samplingDesign) (Jf : Finset (Fin n) → Reg → ℕ) :
+    Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPts) I own (printedSample samplingDesign) Jf
+      (Claims.Bridge.CustodyZkP.wrZP I own (printedSample samplingDesign) Jf) fun _ => samplingDesign :=
+  ⟨Claims.Bridge.CustodyZkP.recordsLiveZKJA_wrZP I own _ Jf, sampleFileZK_printedSample_samplingDesign samplingDesign hb⟩
 
 /-- **V5's `live-verifier` at the deployment's writer and sample file** (`Flock.Guarantees.SampledKSLiveV5`'s `hCust`):
 `RecordCustodyZKJPLaw` at `wrZP` and the sample file printed under the sampling design V5 reads, `designAt`, which is
@@ -104,10 +104,10 @@ theorem recordCustodyZKJPLaw_part (I : Exec.Inputs) (own : Option ByteArray) (Jf
     ZkLink.sampleFileZK_of_toJson_subset (fun T => printedSample (.subset S.card) T) S.card n (fun _ => rfl) S⟩
 
 /-- **The printed subset sample file's size** (V5's `hsz`): a printed sample file of `kd` units that `UnitSample.ofJson`
-decodes samples `kd` units (`Flock.Bridge.lawOn_size`). -/
+decodes samples `kd` units (`Flock.Bridge.samplingDesignOn_size`). -/
 theorem sampleSize_deployed (kd : ℕ) :
     ∀ S ud, Flock.Draw.UnitSample.ofJson (printedSample (n := n) (.subset kd) S) = .ok ud → ud.units.size = kd :=
-  Flock.Bridge.lawOn_size (law := .subset kd) (ns := [kd]) (kd := kd) ⟨rfl, by simp⟩ (sampleFileZK_printedSample kd)
+  Flock.Bridge.samplingDesignOn_size (samplingDesign := .subset kd) (ns := [kd]) (kd := kd) ⟨rfl, by simp⟩ (sampleFileZK_printedSample kd)
 
 /-- **The deployed session's sample**: the device's one-stage rounds (`Properties.Challenger.oneStageRounds`),
 `MAX_COINS` coins of `8 * COIN_BYTES` raw bits each. -/

@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.SoundAtBridge
-import Proofs.Flock.Soundness.Discharge.Exec.LawSample
+import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
 import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 import Proofs.Flock.Soundness.Game
 
