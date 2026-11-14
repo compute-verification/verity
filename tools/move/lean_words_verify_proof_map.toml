@@ -1,0 +1,65 @@
+# The Lean names of the binary `flock-verify`, `verity verify proof` in the Glossary's words: what
+# `tools/move/rename.py --map tools/move/lean_words_verify_proof_map.toml` renames. The binary's root module and its
+# namespace `FlockVerify` take the binary's new name, `VerityVerifyProof`; the theorems and definitions about what it
+# accepts take its verb, `verify_proof` (`flock_verify_sound` -> `verify_proof_sound`, `FlockVerifyAccepts` ->
+# `VerifyProofAccepts`), since their namespace (`FlockSoundness.Discharge.FailClosed`) already says whose. Each name is
+# written whole, so upstream's Rust `FlockVerifyError` keeps its name ([keep]), and the module `FlockVerify` only as a
+# whole word, in the files that spell it ([[words_in]]), so that it renames no longer name. It runs after the law map,
+# on the commit that map makes. Declarations keep their place in the locks' records: `rename.py --moves` prints the
+# renames that `check.py --update --moved` takes.
+
+[words]
+"FlockVerifySound205PerTest" = "VerifyProofSound205PerTest"
+"FlockVerifySoundPerTest" = "VerifyProofSoundPerTest"
+"flock_verify_public_ties" = "verify_proof_public_ties"
+"FlockVerifyAcceptsR" = "VerifyProofAcceptsR"
+"FlockVerifyAccepts" = "VerifyProofAccepts"
+"flock_verify_sound" = "verify_proof_sound"
+
+# the whole name, so that it renames no longer name that begins with it
+[[words_in]]
+files = [
+    "benchmarks/one_stage/a0.py",
+    "benchmarks/prove/lean_verify.sh",
+    "benchmarks/prove_path/records_audit.py",
+    "security/Proofs/Accounting/TS/Session/Held/Known.lean",
+    "security/Proofs/Flock/C3/PubRows/Honest.lean",
+    "security/Proofs/Flock/C3/VStarList/Accepts.lean",
+    "security/Proofs/Flock/Claims/Recursion/ComposeShared.lean",
+    "security/Proofs/Flock/Recursive/AuditC3.lean",
+    "security/Proofs/Flock/Recursive/HoloExec.lean",
+    "security/Proofs/Flock/Recursive/VStarCheck.lean",
+    "security/Proofs/Flock/VBridge/Family/Rounds.lean",
+    "tests/lint/allowlists/lean_bar.json",
+    "tests/lint/allowlists/repo_retired_terms.json",
+    "tools/research/tests/test_landing.py",
+    "tools/verity/check/mutants.py",
+    "tools/verity/check/tests/test_check.py",
+    "tools/verity/check/tests/test_lean_audit.py",
+    "verity/protocols/proofs/flock/prover/agreement/agree.py",
+    "verity/protocols/proofs/flock/prover/pod/lean_verdicts.py",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_compose.py",
+    "verity/protocols/proofs/flock/prover/tests/test_lean_layers.py",
+    "verity/protocols/proofs/flock/prover/tests/test_pod_lean_verdicts.py",
+    "verity/protocols/proofs/flock/verifier/Flock/JsonKeys.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RegBound.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/RegKnown.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/Deployed.lean",
+    "verity/protocols/proofs/flock/verifier/Flock/With/ReturnsWalk.lean",
+    "verity/protocols/proofs/flock/verifier/FlockVerify.lean",
+    "verity/protocols/proofs/flock/verifier/lakefile.toml",
+    "verity/protocols/proofs/flock/verifier/lean-audit.json",
+]
+words = { "FlockVerify" = "VerityVerifyProof" }
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "GLOSSARY.md", ".agents/skills/friction/SKILL.md"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',
+            'note:[\w./-]+',
+            'art:[0-9a-f]+',
+            'cursor/[\w./-]+',
+            'lanes/[\w.-]+',
+            '_@\.[\w.]+',
+            'FlockVerifyError']
