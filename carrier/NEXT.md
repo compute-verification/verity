@@ -1,4 +1,4 @@
-# What is next, for CARRIER on a new machine (written Sat 14 Nov 05:05Z)
+# What is next, for CARRIER on a new machine (written Sat 14 Nov 05:02Z)
 
 The one open task: #9513's retired-terms debt in `security/Proofs/Flock/Claims/ChargeOnce.lean`, entry 5 to 2. The
 lane's notes `20261114T0422Z-report-carrier-checkpoint-...` and `20261114T0501Z-report-carrier-chargeonce-change-tried-...`
