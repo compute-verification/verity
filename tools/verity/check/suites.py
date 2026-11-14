@@ -6,6 +6,8 @@
     uv run tools/verity/check/suites.py --changed REV       only the suites the change from REV touches (`touched`); under
                                                             --quick, the test modules it reaches keep their slow tests (`taken_whole`)
     uv run tools/verity/check/suites.py --fresh             run even where a pass is cached
+    uv run tools/verity/check/suites.py --lend-from COMMIT  leave out each suite with no pass here whose key in COMMIT's tree
+                                                            is its key here: the check of COMMIT answers for it (`lent_by`)
     uv run tools/verity/check/suites.py --list              each suite, its inputs, and whether a pass is cached
     uv run tools/verity/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
     uv run tools/verity/check/suites.py vllm --files 1/8    part 1 of 8 of a suite's test files (also `vllm:1/8`, `vllm:1,3/8`)
@@ -117,6 +119,12 @@ artifact cache off (`UNCACHED_ENV`: in the verifier's `lake build` and in every 
 from the tree), and names what failed that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal
 that a key misses an input (`check.py --no-cache`, the nightly `audit-main` job, which first imports every pass the commit's
 recorded checks hold). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
+
+`--lend-from COMMIT` is for a check of a commit that can count only after COMMIT's own check (the verified queue's candidate
+built on a candidate still in flight): a suite with no pass here whose inputs, runner, fixtures and Lake build sources read
+the same in COMMIT's tree, every `pyproject.toml` and the lockfile being as they are here, would only run again what COMMIT's
+check is running. It is reported `lent`, a row with `"lent": COMMIT`, and counts as passed for whoever holds this check's
+verdict until COMMIT's is in; it earns no pass, so none is kept or packed for it and a run without the flag runs it.
 
 Each suite's pytest runs in a process group of its own, and whatever is left in the group when pytest ends (a multiprocessing
 forkserver and its workers, after a kill) is killed with it. A suite whose pytest dies by a signal is reported with it, its peak
