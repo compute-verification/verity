@@ -35,8 +35,8 @@ from verity.definitions.circuits.requirement import (
     from_census,
     upper_bound,
 )
-from verity.definitions.ops import prims as P
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import gemm as BG
 from verity.definitions.registry import b1, b1_tp2
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import tp_allreduce as TA
