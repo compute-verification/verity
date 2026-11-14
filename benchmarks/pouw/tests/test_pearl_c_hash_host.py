@@ -368,7 +368,7 @@ def test_a_caller_without_the_scratch_runs_the_reference_kernels(host, monkeypat
 def y_trees(host, monkeypatch):
     """served_y's `DeviceTrees` over the host build, for a run of the sm120 variant whose salt and salt key are fixed."""
     torch = pytest.importorskip("torch")
-    from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
     salt_key = bytes(range(100, 132))
     const = host.put(salt_key.ljust(256, b"\0") + audit.hm96_kernel_constants())
     run = SimpleNamespace(kernel=SimpleNamespace(run=R, dev=host), device=torch.device("cpu"), variant="sm120",

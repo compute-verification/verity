@@ -454,13 +454,13 @@ def test_the_records_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes
 
 
 def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
-    """Each part of a candidate's check and its records run ask for their check slot at `POSTLAND_SLOT_RANK`
+    """Each part of a candidate's check and its records run ask for their check slot at `AFTER_LANDING_SLOT_RANK`
     (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever the loop's own environment says: a ranked
     priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a slot for a `train.sh`
     launched by hand."""
     import types
 
-    from research.landing import POSTLAND_SLOT_RANK, launched
+    from research.landing import AFTER_LANDING_SLOT_RANK, launched
 
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setenv("CHECK_SLOT_RANK", "7")
@@ -475,7 +475,7 @@ def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unran
             os.waitpid(job["pid"], 0)
         return launched(job)[1]
 
-    ranked = f"rank=[{POSTLAND_SLOT_RANK}]"
+    ranked = f"rank=[{AFTER_LANDING_SLOT_RANK}]"
     assert f"{ranked} argv=[{'c' * 40} m1 --deferred pytest --shard 1/3]" in tail(
         d.launch_after_landing(repo, "c" * 40, "m1", "pytest", shard="1/3"))
     assert f"{ranked} argv=[{'c' * 40} m1 --deferred lean-audit]" in tail(d.launch_locks(repo, "c" * 40, "m1"))

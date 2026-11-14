@@ -280,10 +280,11 @@ class Writer:
                     why: str | None = None, *, mark: str | None = None, period: str | None = None,
                     over: str | None = None, member: str | None = None,
                     extra: Mapping[str, Any] | None = None) -> dict:
-        """Appends one measurement to `out/result.json` and returns it: the one `entry` makes of the same arguments. It
-        also refuses a name, period, `over` and member the result already holds, and a result of another run."""
+        """Appends one measurement to `out/result.json` and returns it, the one way a benchmark writes a number (what it
+        holds and refuses: `_entry`). It also refuses a name, period, `over` and member the result already holds, and a
+        result of another run."""
 
-        entry = self.entry(name, value, unit, interval, target, verdict, inputs, why, mark=mark, period=period, over=over,
+        entry = self._entry(name, value, unit, interval, target, verdict, inputs, why, mark=mark, period=period, over=over,
                            member=member, extra=extra)
         with self._open() as (path, doc):
             key = (name, period, over, member)
@@ -294,14 +295,13 @@ class Writer:
             doc["measurements"].append(entry)
         return entry
 
-    def entry(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
-              target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
-              why: str | None = None, *, mark: str | None = None, period: str | None = None,
-              over: str | None = None, member: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
-        """One measurement as `measurement` appends it, written nowhere, for a benchmark that writes its result whole:
-        `value` in `unit` (None where the benchmark has no finite value to give, and then `why`, in words, where
-        given), its `mark`, its 95% `interval` (low, high),
-        which the result holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
+    def _entry(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
+               target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
+               why: str | None = None, *, mark: str | None = None, period: str | None = None,
+               over: str | None = None, member: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
+        """One measurement as `measurement` appends it: `value` in `unit` (None where the benchmark has no finite value
+        to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high), which the result
+        holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
         against that target, and the `inputs` it was computed from, with this run, its commit and the host stamp, and
         beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
         is required, a value of None's too, which takes the mark its value would have had. It is also the first of

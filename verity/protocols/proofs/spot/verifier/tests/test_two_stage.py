@@ -8,11 +8,13 @@ refusals; its profile at the footprint; and its replay grain's fan-out."""
 from __future__ import annotations
 
 import dataclasses
+import os
 import random
 from collections import Counter
 from collections.abc import Mapping
 from fractions import Fraction
 from math import comb
+from pathlib import Path
 
 import pytest
 
@@ -880,6 +882,90 @@ def test_a_read_at_a_key_the_block_computes_is_refused_and_says_so():
     unkeyed = _holding(READ_VALUES[1:], READ_LINKS[1:])
     assert dict(SS._interior_failures(unkeyed))["second-inputs"] == {"value": "row", "why": SS.INPUTS_WHY}
     assert SS.KEY_WHY != SS.INPUTS_WHY and "no statement covers it" in SS.KEY_WHY
+
+
+#: One MoE layer's read of its expert's row: the router (`ROUTER_T`), the window's first member, writes each token's
+#: expert index at its output `o0`, a row of two u16 words, and the read's key, of two words too, is wired to it, each
+#: of the read's three units a block reading its router unit's row.
+ROUTER_T = "Router_v1"
+KEY_WIRE = SS.Wire(READ_T, "tok", ROUTER_T, "o0")
+KEY_ROWS = SS.Rows(READ_T, "tok", 3, (SS.Run(0, 3, 0, 1),))
+KEY_WIDTH = SS.Width(READ_T, "tok", 2, 2)
+
+
+def _keyed(on: bool = True, **change) -> SS.Own:
+    """What round 2 holds of the MoE layer's read, its row registered and its key wired (`KEY_WIRE`), with the wired
+    key's switch `on`, and `change` made."""
+    own = _holding(READ_VALUES[1:], READ_LINKS[1:], wires=[KEY_WIRE], rows=(*READ_ROWS, KEY_ROWS))
+    return dataclasses.replace(own, **{"parts": (SS.Part(ROUTER_T, 0, 3), SS.Part(READ_T, 3, 3)),
+                                       "widths": (KEY_WIDTH,), "wired_key": on, **change})
+
+
+def test_the_wired_keys_switch_is_off_and_refuses_as_before():
+    """The switch is a constant of the code, off (`second_stage.WIRED_KEY`): round 2's `Own` holds it by default, so
+    the service's run, which never sets it, refuses the MoE layer's wired key exactly as before, with `KEY_WHY`."""
+    assert SS.WIRED_KEY is False
+    own = dataclasses.replace(_keyed(), wired_key=SS.Own((), None, None, None, ()).wired_key)
+    assert own.wired_key is False
+    assert SS.inputs_failure(own) == "row"
+    assert dict(SS._interior_failures(own))["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}
+
+
+@pytest.mark.parametrize("change,why", [
+    ({}, None),
+    ({"wires": (KEY_WIRE, SS.Wire(READ_T, "tok", ROUTER_T, "o1"))}, SS.KEY_WIRES_WHY),
+    ({"links": (*READ_LINKS[1:], SS.Link(READ_T, "tok", "b.ingress"))}, SS.KEY_LINKED_WHY),
+    ({"widths": (SS.Width(READ_T, "tok", 2, 1),)}, SS.KEY_WIDTH_WHY),
+    ({"widths": ()}, SS.KEY_WIDTH_WHY),
+    ({"parts": (SS.Part(READ_T, 0, 3), SS.Part(ROUTER_T, 3, 3))}, SS.KEY_ORDER_WHY),
+    ({"parts": (SS.Part(READ_T, 0, 3),)}, SS.KEY_ORDER_WHY),
+    ({"rows": (*READ_ROWS, SS.Rows(READ_T, "tok", 3, (SS.Run(0, 3, 1, 1),)))}, SS.KEY_BOUNDS_WHY),
+    ({"rows": READ_ROWS}, SS.KEY_BOUNDS_WHY),
+    ({"parts": (SS.Part(ROUTER_T, 0, 2), SS.Part(READ_T, 2, 3))}, SS.KEY_BOUNDS_WHY),
+])
+def test_with_the_switch_on_a_wired_key_passes_only_whole(change, why):
+    """With the wired key's switch on, the MoE layer's read, its key one wire from the router's output, passes
+    (`second_stage._key_failure`); and its row is refused (`second-inputs`), each with a reason of its own, where its key
+    has two wires, is linked too, is wired to a row of other words or of no width the design derives, to a writer not
+    before it in the window or of no part, or where its rows give a unit a writer row past the writer's units, or give
+    the key no rows. Switched off, each is refused for the one reason, `KEY_WHY`."""
+    own = _keyed(**change)
+    assert SS.inputs_failure(own) == (None if why is None else "row")
+    assert dict(SS._interior_failures(own)).get("second-inputs") == (None if why is None else {"value": "row",
+                                                                                               "why": why})
+    assert len({SS.KEY_WIRES_WHY, SS.KEY_LINKED_WHY, SS.KEY_WIDTH_WHY, SS.KEY_ORDER_WHY, SS.KEY_BOUNDS_WHY,
+                SS.KEY_WHY, SS.INPUTS_WHY}) == 7
+    off = dataclasses.replace(own, wired_key=False)
+    assert dict(SS._interior_failures(off))["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}
+
+
+def test_nothing_of_record_turns_the_wired_key_on():
+    """No file under `verity/` sets the wired key's switch but round 2's own code and the development executable
+    `sampled-proofs-wired-key-dev` (`Spot.WiredKeyDevMain`), and none but that executable's lakefile entry and its
+    difftest names it: the service's run, the verifier of record and every script take the switch as the code holds it,
+    off."""
+    root = next(p for p in Path(__file__).resolve().parents if (p / "verity" / "__init__.py").is_file())
+    spot = root / "verity/protocols/proofs/spot/verifier"
+    difftest = spot / "lean/tests/test_wired_key_difftest.py"
+    allowed_set = {spot / "second_stage.py", spot / "lean/Spot/SecondStage.lean",
+                   spot / "lean/Spot/SecondStageExamples.lean", spot / "lean/Spot/WiredKeyDevMain.lean", difftest,
+                   Path(__file__).resolve()}
+    allowed_name = {spot / "lean/lakefile.toml", spot / "lean/Spot/SecondStage.lean",
+                    spot / "lean/Spot/WiredKeyDevMain.lean", difftest, Path(__file__).resolve()}
+    sets, names = [], []
+    skip = {".lake", ".git", "__pycache__", "target", "node_modules", ".venv", "fixtures"}
+    for top, dirs, files in os.walk(root / "verity"):
+        dirs[:] = [d for d in dirs if d not in skip]
+        for f in files:
+            path = Path(top) / f
+            if path.suffix not in {".py", ".lean", ".sh", ".toml"}:
+                continue
+            text = path.read_text(errors="replace")
+            if any(s in text for s in ("wired_key=", "wired_key = ", "wiredKey :=")) and path not in allowed_set:
+                sets.append(path)
+            if "sampled-proofs-wired-key-dev" in text and path not in allowed_name:
+                names.append(path)
+    assert sets == [] and names == [], (sets, names)
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():

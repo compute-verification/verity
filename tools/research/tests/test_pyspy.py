@@ -200,7 +200,7 @@ def test_custody_keeps_the_dumps_and_compare_does_not_read_them(tmp_path):
     (tmp_path / "logs").mkdir()
     (tmp_path / "logs" / "stall-20261007T030000Z.txt").write_text(STACK)
     (tmp_path / "big.bin").write_bytes(b"x" * 10)
-    kept, trimmed = custody.select(tmp_path, cap=0)
+    kept, trimmed = custody.select(tmp_path, limit=0)
     assert kept == ["logs/stall-20261007T030000Z.txt"] and [t["path"] for t in trimmed] == ["big.bin"]
     assert custody.is_run_file("logs/stall-20261007T030000Z.txt") and not custody.is_run_file("logs/train.txt")
 

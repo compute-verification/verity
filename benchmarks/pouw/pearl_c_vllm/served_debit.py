@@ -89,7 +89,7 @@ from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment  # no
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape  # noqa: E402
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)

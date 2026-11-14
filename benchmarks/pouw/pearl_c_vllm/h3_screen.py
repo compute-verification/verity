@@ -46,7 +46,7 @@ def capture(args) -> int:
     from verity.protocols.accounting.pouw.verifier.audit import weights_root
     from verity.protocols.accounting.pouw.verifier import verifier
     from verity.protocols.accounting.pouw.verifier.coins import Challenger
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
     out, dev = Path(args.out), torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261006)
@@ -91,7 +91,7 @@ def capture(args) -> int:
 
 
 def _scheme(man: dict):
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
     return PPD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
 
 
@@ -141,7 +141,7 @@ def _tiles(d: Path, jobs: int) -> dict:
     from clear_audit import Transcript, Verifier
     from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
     import clear_work as CW
-    from verity_vllm.protocols.pouw.pearl_c import manifest as PM
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import manifest as PM
 
     man = json.loads((d / "manifest.json").read_text())
     s = _scheme(man)

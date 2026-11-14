@@ -45,9 +45,8 @@ check the stream ran on it, in the stream's order.
   program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
   `SecondStage.replayReturns`), as its `statements` check
   (`SecondStage.checkAny`, the two-stage form allowed only when `run`'s `form` is, by default `SecondStage.FORM`); the
-  symbol accepts when every audit
-  record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
-  their own roots (`own_reads`), whose rows round 2 holds.
+  symbol accepts when every audit record does. Each audit record takes the sessions' reads of its registration's own
+  ports at their own roots (`Record.lessOwnReads`); under a two-stage rule round 2 holds their rows.
 
 A step's refusal is `{"step", "codes"}`; a decided run is `{"receipt", "draw", "read", "symbol", "public", "audit"}`, the
 audit record as the text of Python's `canonical_json`, and under a two-stage rule `interior`, the interior registration's
@@ -213,15 +212,13 @@ def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json)
       if why == Challenger.FAMILY_ROOT then "family" else "coins"
   | _, _, _, _ => some "coins"
 
-/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, taking reads of
-the registration's own ports at their own roots under a two-stage rule. -/
+/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions. -/
 def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
     (served sessionRoots : Json) : V Json :=
   do Record.record (← Record.inputOf (Json.mkObj [("registration", record), ("receipt", receipt),
     ("draw", draw), ("law", law), ("proved_units", Json.arr (proved.map Lean.toJson)),
     ("instances", Lean.toJson instances), ("statement", i.statement), ("verdicts", Json.mkObj i.verdicts.toList),
-    ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots),
-    ("own_reads", Json.bool (i.rule matches .twoStage ..))]))
+    ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots)]))
 
 /-- Under a two-stage rule, the check's query is the rule's `grain`. -/
 private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
@@ -290,6 +287,7 @@ private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
         refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
         rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
+        widths := SecondStage.replayWidths i.params.verifier.program.prog it.replay.prog.programFn,
         returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
         supplied := it.params.verifier.supplied,
         fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),

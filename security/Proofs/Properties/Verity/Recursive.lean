@@ -538,8 +538,9 @@ theorem recVerdict_verdict (V : Vocab d α) (k : Verity.Registration.Composite) 
     (h : RecVerdict V k o) : V.Verdict k .sampled o := by
   obtain ⟨hreg, hrec, a, cb, eb, ⟨ps, b, ev, hdec, x, hx, h1, ha, hc, he⟩, hda, -⟩ := h
   subst ha hc he
-  refine ⟨hreg, hrec, VStar.Recursive.Sampled.protocol, ?_, ps, b, ev, hdec, x, hx, h1, by rw [h1]; exact hda⟩
-  cases k <;> rfl
+  exact ⟨hreg, hrec, VStar.Recursive.Sampled.protocol,
+    Verity.component_of_onBlobs (a := .sampled) (List.of_mem_zip hx).1 h1, ps, b, ev, hdec, x, hx, h1,
+    by rw [h1]; exact hda⟩
 
 /-- **The deployment** `RecursiveKSAt` is stated at (the weights, the brings and the challenger's live-coin part's record), with the
 inner decoder `decI` and the outer decoder `decO` that fix its extractor. -/

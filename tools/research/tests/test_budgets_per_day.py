@@ -1,4 +1,4 @@
-"""`cap_usd_per_day` on a budget line (the CI pool: $65 a day on `vy-coord-`): spend over a rolling 24 hours, not a calendar day,
+"""`limit_usd_per_day` on a budget line (the CI pool: $65 a day on `vy-coord-`): spend over a rolling 24 hours, not a calendar day,
 trips the line and clears by itself as the window moves; `pods create` refuses meanwhile.  Fake clocks only."""
 from __future__ import annotations
 
@@ -16,20 +16,20 @@ POOL = """
 project = ["vy"]
 
 [budgets]
-"vy-coord-" = { cap_usd_per_day = 10, expires = "2026-10-30T00:00Z", max_pod_hours = 168, by = "Daniel: CI pool, $65/day" }
-"vy-both-" = { cap_usd = 100, cap_usd_per_day = 10, expires = "2026-10-30T00:00Z", max_pod_hours = 168 }
+"vy-coord-" = { limit_usd_per_day = 10, expires = "2026-10-30T00:00Z", max_pod_hours = 168, by = "Daniel: CI pool, $65/day" }
+"vy-both-" = { limit_usd = 100, limit_usd_per_day = 10, expires = "2026-10-30T00:00Z", max_pod_hours = 168 }
 """
 H = 3600
 
 
 def test_a_line_takes_a_daily_limit_a_total_limit_or_both_and_needs_one():
     b = B.parse(POOL)
-    assert (b.lines["vy-coord-"].cap_usd, b.lines["vy-coord-"].cap_usd_per_day) == (None, 10.0)
-    assert (b.lines["vy-both-"].cap_usd, b.lines["vy-both-"].cap_usd_per_day) == (100.0, 10.0)
-    with pytest.raises(B.BudgetError, match="missing cap_usd or cap_usd_per_day"):
+    assert (b.lines["vy-coord-"].limit_usd, b.lines["vy-coord-"].limit_usd_per_day) == (None, 10.0)
+    assert (b.lines["vy-both-"].limit_usd, b.lines["vy-both-"].limit_usd_per_day) == (100.0, 10.0)
+    with pytest.raises(B.BudgetError, match="missing limit_usd or limit_usd_per_day"):
         B.parse('[budgets]\n"vy-x-" = { expires = "2026-10-30T00:00Z", max_pod_hours = 1 }')
-    with pytest.raises(B.BudgetError, match="cap_usd_per_day is not a number of dollars"):
-        B.parse('[budgets]\n"vy-x-" = { cap_usd_per_day = -1, expires = "2026-10-30T00:00Z", max_pod_hours = 1 }')
+    with pytest.raises(B.BudgetError, match="limit_usd_per_day is not a number of dollars"):
+        B.parse('[budgets]\n"vy-x-" = { limit_usd_per_day = -1, expires = "2026-10-30T00:00Z", max_pod_hours = 1 }')
 
 
 def test_the_rolling_window_trips_the_line_and_clears_by_itself_as_it_moves():
@@ -72,9 +72,9 @@ def test_a_line_with_both_limits_trips_on_either_and_clears_only_when_both_allow
     step(api, POOL, state, T0, lines)
     step(api, POOL, state, T0 + 2 * H, lines)
     assert state["lines"]["vy-both-"]["tripped"]["kind"] == "per_day" and api.deleted == ["a"]
-    raised_day = POOL.replace('cap_usd = 100, cap_usd_per_day = 10', 'cap_usd = 5, cap_usd_per_day = 100')
+    raised_day = POOL.replace('limit_usd = 100, limit_usd_per_day = 10', 'limit_usd = 5, limit_usd_per_day = 100')
     step(api, raised_day, state, T0 + 2 * H + 60, lines)
-    assert state["lines"]["vy-both-"]["tripped"]["kind"] == "cap", "under the new daily limit, over the total: tripped on the total"
+    assert state["lines"]["vy-both-"]["tripped"]["kind"] == "limit", "under the new daily limit, over the total: tripped on the total"
 
 
 def test_the_window_survives_a_restart(tmp_path, monkeypatch):

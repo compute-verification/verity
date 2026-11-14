@@ -814,7 +814,7 @@ def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None 
     `root`, the run root a session of this run opens on, also refused once an open in the ledger names it: the gate opens
     a root once, ever."""
     from verity.protocols.proofs.spot.device import challenger as CH
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     ledger = _gate_out(gate, "ledger").decode().splitlines()
     pins = [json.loads(x) for x in _gate_out(gate, "pins").decode().splitlines() if x.strip()]
@@ -842,8 +842,8 @@ def program(out: Path, model: str, rows: int, steps: int, like: Path | None = No
     (``protocols.program``), else ValueError."""
     from verity_vllm.pipeline import serve_h1 as SH
     from verity_vllm.protocols import pouw as PW
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
     want, cfg = None, SH.config_of(config)
     if like is not None:
@@ -876,7 +876,7 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     strata with no ``k<K>`` file yet. ValueError naming what to build or rerun when the serve dir or `circuits` doesn't
     hold the period's Program, T and S. Before serve-openai starts (no ``serve.json`` yet) the Program is ``program``'s,
     and `period_served` holds the one it then declares to it."""
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
     served = serve_dir / "serve.json"
     proto = (json.loads(served.read_text()).get("protocols") or {}) if served.is_file() else None
@@ -1081,7 +1081,7 @@ def pearlplus_period_rule(piece_dir: Path, gate: str, lane: str, record: Path) -
     closed (`pouw_h1_window.after_close`, which `bench_arm.LiveDraw` held it to before asking its coin, and
     `pearlplus_live_draw` holds the record to). Whether it held, and its ``RULE`` line; kept as the PERIOD document's
     ``rule``."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     doc = json.loads((piece_dir / PERIOD).read_text())
     name = doc["name"]
@@ -1235,7 +1235,7 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
     from verity.protocols.accounting.pouw.verifier import core_check as CC
     from verity.protocols.proofs.spot.device import remote
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
     coins = served.get("coins") or {}
     sid = (coins.get("session") or {}).get("session")
@@ -1289,7 +1289,7 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     from verity.protocols.accounting.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.device import challenger as Ch
     from verity.protocols.proofs.spot.device import remote
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
     got: dict[str, Any] = {"from": None, "session": None, "reason": None}
     try:
@@ -1678,8 +1678,8 @@ def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str, la
     from verity.protocols.accounting.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.device import challenger as Ch
     from verity.protocols.proofs.spot.device import remote
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     if record.get("schema") != COIN_KIND:
         return f"the verifier's coin record is {record.get('schema')!r}, not {COIN_KIND}, which carries its draw"
@@ -1759,7 +1759,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
     from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.device import remote
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
         return None, f"its epoch's coins come from {doc.get('coin_source')!r}, not a live session on the auditor device's challenger"

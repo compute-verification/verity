@@ -3,7 +3,7 @@
 H1 receipts beside vLLM's int8-exact GEMM on one GPU: what the receipts cost a served Llama-3.1-8B int8 window, and
 whether the GPU's receipts are the reference's bit for bit. The window here (`serve.py`) is a padded H1 + fx1 window in
 the static form, with in-process coins or a development session's; it is not useful-work credit, and the gated served
-window of record is vLLM's H1 path (`adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py`). `serve.py`'s docstring
+window of record is vLLM's H1 path (`verity/protocols/accounting/pouw/prover/serving/h1/__init__.py`). `serve.py`'s docstring
 states the window's tables, units, coins and credit rule.
 
 **Hardware:** an RTX PRO 6000 node (sm_120). `arch.sh`, which the GPU jobs source, builds the kernels for the node's

@@ -22,4 +22,5 @@ if [ ! -x $NEW ]; then
   ) > $OUT/build-lean.log 2>&1 || { tail -20 $OUT/build-lean.log; exit 1; }
 fi
 echo "run's Lean verifier $OLD; this tree's $NEW (lean-$LSHA)"
+export PYTHONPATH=${PYTHONPATH:+$PYTHONPATH:}$(pwd)/tools/config:$(pwd)
 python3 benchmarks/recursion_e2e/forge_after.py --work $FLOCK_WORK --tag $TAG --run-out $RUN_OUT --bin run=$OLD --bin main=$NEW

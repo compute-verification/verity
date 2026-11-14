@@ -42,7 +42,7 @@ def linears(c: dict = CONFIG) -> list[Linear]:
 def table(name: str = SCHEME) -> list[dict]:
     """Every linear (`linears`) with its domain verdict (`pouw_pearl_c_device.refusals`, the kernels' grain with the
     record's) and, in the domain, γ at each FADD reading."""
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
     rows = []
     for i, lin in enumerate(linears()):

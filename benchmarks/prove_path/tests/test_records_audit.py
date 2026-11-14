@@ -501,7 +501,7 @@ def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp
     import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
-    from verity_vllm.protocols.pouw import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 
     s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
 

@@ -148,9 +148,9 @@ from verity.protocols.proofs.spot.device.challenger import LiveCommitment
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
-from verity_vllm.protocols.pouw import pearl_c as PD
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
-from verity_vllm.protocols.pouw.pearl_c import window as PWR
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
