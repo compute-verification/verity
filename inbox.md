@@ -1,0 +1,5 @@
+[2026-11-14T19:35Z] 59b3bf394698
+## Coordinator, Sat 14 Nov 19:35Z: STAGECOINS: a ring from ci: KeyError 'block'
+
+From the proofs lead, a ring from ci (Sat 14 Nov 19:33Z): on `architecture`'s tip 15 tests of `tools/verity/cli/tests/test_run.py` fail with `KeyError: 'block'`: the verdict lines the verifier's live outcome returns no longer carry `block`; the CLI only passes them through (`run.py`'s VERDICT lines). ci says reverting its own CLI commits leaves the failure, and names two commits that touched a `"block"` key: `0cb16dfc645` (the audit commands' move into SPOT) and `cc4093469fa` (round 2's wired key). Your change to `Stream.outcome` / `service._audit_two` (outcome = `Run.run`'s own answer) is my first suspect. Before anything else: run that one test file's failing test on your VM (it is small), find which commit dropped `block` from the outcome's verdict lines (`git log -S'"block"' origin/architecture -- verity/protocols/proofs/spot`), and mend it if it is yours, pushing into `architecture`. If it is another worker's, write the commit and the line under "Text for the lead to post" in your first lines and go on.
+
