@@ -23,15 +23,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import replace
 from math import ceil, log
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
-
-from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,
-                    observations, s8_coord_ands, serve_rows, tree_chain)
+from verity.protocols.proofs.spot.prover.cost.inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,
+                                                             observations, s8_coord_ands, serve_rows, tree_chain)
 
 from verity.protocols.proofs.spot.prover.candidates import Shape, cuts, pressure
 from verity.protocols.proofs.spot.prover.costfit import Fitted, fit
