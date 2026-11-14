@@ -17,7 +17,7 @@ period's circuit.
 
 **The commitment** is the auditor's ledger, its signed lines. **The evidence** (`Evidence`) is the host's pins log
 and, for each window in the ledger's order, its challenger session's files and one case for each registration that
-session sampled: the registration's record, its public file's digest, and one-stage v2's evidence for it, whose
+session's log shows: the registration's record, its public file's digest, and one-stage v2's evidence for it, whose
 `coins` name only the sample's segment. The ledger, main's history, the pins log and the session's files that
 one-stage v2 reads a sample's coins from are the period's own (`evidenceAt`), never a case's.
 
@@ -31,14 +31,21 @@ one-stage v2 reads a sample's coins from are the period's own (`evidenceAt`), ne
 3. the evidence holds as many windows' sessions as the ledger lists windows (`evidence`);
 4. then each window, in the ledger's order (`executionPhaseAt`): its session's files are the ones the ledger sealed, run from
    a commit the pins log records on main's first-parent line, and its open withheld its coins (`coin`);
-5. its session's signed log shows coins of the family released after exactly one registration, the coin after the
-   window's own root aside (`sampledOn`): none is a root committed and never sampled (`missing`), and several are
-   refused (`members`): only a window of one registration is covered, so a second registration on a session, another
-   rank's or the same one registered again, is never passed over;
+5. its session's signed log shows exactly one registration (`sampledOn`): the roots the session received in every
+   family it reserved, the window's own root aside wherever it shows. None is a root committed and never sampled
+   (`missing`), and several are refused (`members`): only a window of one registration is covered. A session whose
+   log shows a second commitment in any family (another rank's in that rank's own family, a second stage's or a stop
+   audit's in its own, or the family's second) is refused until the check audits each, so a commitment the
+   session's log shows is never passed over;
 6. the evidence holds one case, of that registration (`evidence`);
 7. the parameters at the window are one-stage v2's, and the case's public file shares no rows (`names`);
 8. one-stage v2 accepts the case at those parameters (`audit`). A reject refuses the period; an undecided leaves the
-   period undecided unless a later window refuses it.
+   period undecided unless a later window refuses it. Step 5 reads no family's name, and one-stage v2 reads the
+   sample's coins from the period's family alone (`AuditParams.ledger`'s `label`), every coin of it, each released
+   after the registration (`Challenger.drawCoins`, `Challenger.FAMILY_ROOT`). So a window whose own root shows in
+   the period's family is rejected here with one-stage v2's reason, a coin of the family released after a root other
+   than the registration; and so is a window whose one registration shows only in another family, whenever its
+   sample reads a coin: the period's family released none after it.
 
 On acceptance it publishes the lane, the monitoring period and this registration's circuit, each window with the
 registration audited and what one-stage v2 published for it, and each session of the lane that is another
@@ -198,12 +205,13 @@ def evidenceAt (p : AuditParams) (ledger pins session e : Json) : V Json := do
 
 /-! ## The check -/
 
-/-- The registrations a session's roots show a coin of family `label` released after, as lowercase hex in the order
-the session received them, each once: the window's own root `root` aside, which a coin is released after before any
-registration. -/
-def sampledOn (label root : String) (roots : Challenger.Roots) : Array String :=
-  (((roots.find? (·.1 == label)).map (·.2)).getD []).foldl
-    (fun acc r => let h := Flock.hexOf r; if h == root || acc.contains h then acc else acc.push h) #[]
+/-- The registrations a session's roots show, as lowercase hex, each once: every root the session received in any
+family it reserved, family by family and in a family in the order received, the window's own root `root` aside
+wherever it shows, which a coin is released after before any registration. One walk over the session's families and
+their roots. -/
+def sampledOn (root : String) (roots : Challenger.Roots) : Array String :=
+  roots.foldl (fun acc family => family.2.foldl
+    (fun acc r => let h := Flock.hexOf r; if h == root || acc.contains h then acc else acc.push h) acc) #[]
 
 /-- An accepted audit: the registration's digest and what one-stage v2 published and profiled for it. -/
 structure Audit where
@@ -246,8 +254,8 @@ def coinOf {α : Type} (x : V α) : Except (Code × String) α :=
   | .error why => .error (Code.coin, why)
 
 def ONE_MEMBER : String :=
-  "only a window of one registration is covered, and a session that sampled several (several ranks', or one " ++
-  "registered again) is refused"
+  "only a window of one registration is covered, and a session whose log shows a second commitment in any family " ++
+  "(another rank's, a second stage's, or the family's second) is refused"
 
 def SHARED_ROWS : String :=
   "the public file's header names shared_rows: a registration whose members share row tables is not covered"
@@ -271,7 +279,7 @@ def caseAt (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : W
   let got := Flock.hexOf c.digest
   unless got == want do
     throw (Code.evidence, s!"session {w.session}: the case is of registration {got.take 16}, and the session's " ++
-      s!"log shows its {p.ledger.label} coins released after {want.take 16}")
+      s!"log shows registration {want.take 16}")
   let params ← match OneStageZk.paramsOfJson (paramsAt p w.root k.pub before) with
     | .ok q => pure q
     | .error why => throw (Code.names, s!"session {w.session}: {why}")
@@ -286,7 +294,7 @@ def caseAt (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : W
   return (c.record, inner params c e bs)
 
 /-- One window (module docstring, **The check**): its session is the one the ledger sealed, run from a commit the pins
-log records on main's first-parent line, and withheld (`coin`); it sampled one registration (`missing`, `members`);
+log records on main's first-parent line, and withheld (`coin`); its log shows one registration (`missing`, `members`);
 the evidence holds one case (`evidence`); and the audit answers the case (`caseAt`): an accept adds the window, a
 reject refuses the period (`audit`), and an undecided is kept as the period's, the first one, while later windows are
 still checked. The sampled registrations and the cases are matched as lists: a property of the check splits a list's
@@ -298,12 +306,12 @@ def executionPhaseAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins :
   if let some why := Challenger.firstParentReason a.session a.pinned p.main then throw (Code.coin, why)
   let (_, roots) ← coinOf (Challenger.challengePhaseNamed a p.ledger.key ev.session)
   unless Challenger.withheldOn ledger w.root do throw (Code.coin, Challenger.WITHHELD)
-  let sampled := sampledOn p.ledger.label w.root roots
+  let sampled := sampledOn w.root roots
   let want ← match sampled.toList with
-    | [] => throw (Code.missing, s!"session {w.session} released no {p.ledger.label} coin after a registration: " ++
-        "its root was committed and never sampled")
+    | [] => throw (Code.missing, s!"session {w.session} received no registration in any family: its root was " ++
+        "committed and never sampled")
     | [d] => pure d
-    | _ => throw (Code.members, s!"session {w.session} sampled {sampled.size} registrations: {ONE_MEMBER}")
+    | _ => throw (Code.members, s!"session {w.session}'s log shows {sampled.size} registrations: {ONE_MEMBER}")
   let [k] := ev.audits.toList
     | throw (Code.evidence, s!"session {w.session}: {ev.audits.size} cases for the one registration its log " ++
         "shows sampled")
@@ -360,7 +368,7 @@ def run (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : 
 
 /-- The period's check with the audit `inner`: a refusal of `run` rejects under its code; an audit left undecided
 leaves the period undecided; otherwise every window of the lane in the monitoring period has one accepted audit of
-the one registration its session sampled, and the period is accepted, publishing them with the lane's sessions that
+the one registration its session's log shows, and the period is accepted, publishing them with the lane's sessions that
 are other registrations', its profile each audit's in order. -/
 def checkWith (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome Public (Array Core.Integrity) :=

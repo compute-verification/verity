@@ -12,11 +12,15 @@ the difftest. The references live here alone: there is no Python verifier of the
   (`sampled-proofs-one-stage-zk`) on what `asked` composes.
 
 The cases are a week of one lane under the deployed key, written as the auditor's gate writes it (`Week`): each window
-reserved, opened on a commit the host's pins log records and main's first-parent line holds, its challenger's session
-signed, logged and closed between its open and its end, which seals it; in its log sometimes one coin after the
-window's own root, then the sample's coins after its registration's digest; its case the registration's record, its
-public file's digest and one-stage v2's evidence. Then one change each (`NAMES`): a case the stand-in leaves undecided
-or rejects, a session that sampled no registration or two, no case or two for the one registration, a case of another
+reserved with a family for each commitment (`ONE`), opened on a commit the host's pins log records and main's
+first-parent line holds, its challenger's session signed, logged and closed between its open and its end, which seals
+it; in its log sometimes the `WINDOW` family's coin after the window's own root, then the sample's coins after its
+registration's digest in the sample's family; its case the registration's record, its public file's digest and
+one-stage v2's evidence. Then one change each (`NAMES`): a case the stand-in leaves undecided or rejects, a session
+whose log shows no registration, a session whose log shows two (`SEVERAL_SHOWN`: two ranks' or two stages', a family
+each, and one family's two, which the client refuses to write and the challenger takes), the window's own root or the
+one registration in another family than its own (`ELSEWHERE_SHOWN`, which step 5 passes and one-stage v2 itself
+refuses), no case or two for the one registration, a case of another
 registration, a public file that shares rows or is in no blob, evidence that names its own ledger or verdicts, an open
 on a commit the pins log does not record or main's first-parent line does not hold, a session not withheld, a release
 log other than the sealed one, two windows' sessions swapped, an end that seals nothing, the ledger's half's own
@@ -78,11 +82,27 @@ EVIDENCE_FORM = ("a period's evidence is {pins, windows}: the host's pins log an
                  "{evidence, public, registration}")
 CASE_COINS = ("a case's evidence names its coins as {segment} alone: the ledger, main's history, the pins log and the "
               "session's files are the period's own")
-ONE_MEMBER = ("only a window of one registration is covered, and a session that sampled several (several ranks', or one "
-              "registered again) is refused")
+ONE_MEMBER = ("only a window of one registration is covered, and a session whose log shows a second commitment in any "
+              "family (another rank's, a second stage's, or the family's second) is refused")
 SHARED_ROWS = "the public file's header names shared_rows: a registration whose members share row tables is not covered"
 VERDICTS = "the evidence names verdicts: this audit's verdicts are its own run of the verifier on the proofs"
 NO_SESSIONS = "proofs: the evidence names 0 sessions: the drawn units are proved in one session"
+
+#: the family of the coin after a window's own root and a second commitment's own family, as the one-stage drivers
+#: lay a session out: a family for each commitment
+WINDOW, SECOND = "window", f"{LABEL}/1"
+#: a window's session's layout for one registration, and for two
+ONE = [[WINDOW, 1], [LABEL, 17]]
+TWO = [*ONE, [SECOND, 17]]
+#: the cases whose session's log shows two registrations: the sample's family's two, which the client refuses to
+#: write and the challenger takes; two ranks', a family each, in either order; and two stages', a family each, the
+#: second's after the first's sample
+SEVERAL_SHOWN = ("two-members", "two-ranks", "two-stages")
+#: the cases whose session reserves the second commitment's family
+TWO_FAMILIES = ("two-ranks", "two-stages", "other-family")
+#: the cases step 5 passes and one-stage v2 itself refuses: the window's own root's coin in the sample's family, ahead
+#: of the sample's, and the one registration in another family than the sample's
+ELSEWHERE_SHOWN = {"root-in-family": T.FAMILY_ROOT, "other-family": f"coins are not the challenger's {LABEL} family's"}
 HEX = re.compile(r"(?:[0-9a-f]{2})*")
 DIGEST = re.compile(r"[0-9a-f]{128}")
 
@@ -247,14 +267,15 @@ def check(j: Any, inner=stand_in) -> Any:
         if not Ch.withheld_on(ledger, root):
             return _reject("coin", Ch.WITHHELD)
         sampled: list[str] = []
-        for r in roots.get(label, ()):
-            if (h := r.hex()) != root and h not in sampled:
-                sampled.append(h)
+        for family in roots.values():
+            for r in family:
+                if (h := r.hex()) != root and h not in sampled:
+                    sampled.append(h)
         if not sampled:
-            return _reject("missing", f"session {sid} released no {label} coin after a registration: its root was "
+            return _reject("missing", f"session {sid} received no registration in any family: its root was "
                                       "committed and never sampled")
         if len(sampled) > 1:
-            return _reject("members", f"session {sid} sampled {len(sampled)} registrations: {ONE_MEMBER}")
+            return _reject("members", f"session {sid}'s log shows {len(sampled)} registrations: {ONE_MEMBER}")
         want = sampled[0]
         if len(ev["audits"]) != 1:
             return _reject("evidence", f"session {sid}: {len(ev['audits'])} cases for the one registration its log "
@@ -266,7 +287,7 @@ def check(j: Any, inner=stand_in) -> Any:
         got = R.digest(record)
         if got != want:
             return _reject("evidence", f"session {sid}: the case is of registration {got[:16]}, and the session's log "
-                                       f"shows its {label} coins released after {want[:16]}")
+                                       f"shows registration {want[:16]}")
         assert DIGEST.fullmatch(k["public"]), "the reference reads only a case whose public file's digest is one"
         if k["public"] not in blobs:
             return _reject("names", f"session {sid}: public file: no blob has the SHA-512 {k['public']}")
@@ -328,7 +349,7 @@ class Week:
         id. The case's evidence tells the stand-in `stub`, or with `real` is a sample one-stage v2 reads from the
         session's coins, proved in no session."""
         b, rng = self.b, self.rng
-        sid = b.reserve(LANE, t, DRAW, withheld=name != "not-withheld")
+        sid = b.reserve(LANE, t, TWO if name in TWO_FAMILIES else ONE, withheld=name != "not-withheld")
         root = b.open(sid, t + 60)
         opened = b.events[b.sessions[sid]["open"]][2]
         self.pins.append(Ch.pin_line(opened["pinned"], rng.randbytes(20).hex(), at(t)))
@@ -346,29 +367,48 @@ class Week:
         q = b.skip(2)
         ch.sign_record(opened["host"], PUBLIC, lambda m: lms.sign_at(KEY, q, m).encode())
         lines = [canonical_json_text({"event": "commitment", "root": ch.commitment.root.hex()})]
-        record = Ch.LiveRecord(ch, LABEL, itertools.count(rng.choice([0, 10 ** 12])).__next__)
+        clock = itertools.count(rng.choice([0, 10 ** 12])).__next__
+        records = {label: Ch.LiveRecord(ch, label, clock) for label, _ in ch.commitment.families}
 
-        def logged(f):
-            n = len(record.log)
+        def logged(label, f):
+            n = len(records[label].log)
             out = f()
-            lines.extend(_pairs(record.log[n:]))
+            lines.extend(_pairs(records[label].log[n:]))
             return out
 
-        if real or rng.random() < 0.7:
-            logged(lambda: record.record(bytes.fromhex(root)))
-        recs = [_record(next(self.rows)) for _ in range({"unsampled": 0, "two-members": 2}.get(name, 1))]
+        own = bytes.fromhex(root)
+        if name != "root-in-family" and (real or rng.random() < 0.7):
+            window = T.ChallengerCoins(records[WINDOW])
+            window.commit(own)
+            logged(WINDOW, lambda: window(Ch.COIN_BYTES))
+        shown = 0 if name == "unsampled" else 2 if name in SEVERAL_SHOWN else 1
+        recs = [_record(next(self.rows)) for _ in range(shown)]
+        families = [SECOND if name == "other-family" else LABEL, SECOND if name in TWO_FAMILIES else LABEL]
+        if name == "two-ranks" and rng.random() < 0.5:
+            families.reverse()
         cases = []
-        for rec in recs:
+        for rec, family in zip(recs, families):
+            record = records[family]
+            digest = bytes.fromhex(R.digest(rec))
             coins = T.ChallengerCoins(record)
-            segment = logged(lambda: coins.commit(bytes.fromhex(R.digest(rec))))
+            if record.roots:
+                # the family's second commitment, which the client refuses to write and the challenger takes
+                with pytest.raises(T.CoinError, match="a family's coins follow one commitment"):
+                    coins.commit(digest)
+                logged(family, lambda: record.record(digest))
+                continue
+            segment = coins.commit(digest)
+            if name == "root-in-family":
+                logged(family, lambda: record.record(own))
+                segment.start = 1
             if real:
-                d = logged(lambda: T.draw_first(T.OwnRandomness(coins), DR.derive(S.program, S.query, LAW, None),
-                                                S.population))
+                d = logged(family, lambda: T.draw_first(T.OwnRandomness(coins),
+                                                        DR.derive(S.program, S.query, LAW, None), S.population))
                 proved = DR.proved(d)
                 e = {"draw": d, "instances": len(proved), "proved_units": proved,
                      "receipt": R.receipt(rec, "v", received=RECEIVED), "statement": {}}
             else:
-                logged(lambda: coins(rng.randint(1, 64)))
+                logged(family, lambda: coins(rng.randint(1, 64)))
                 e = {"draw": {}, "instances": 0, "proved_units": [], "receipt": {}, "statement": {"stub": stub}}
             e.update(coins={"segment": segment.to_json()}, proofs={"sessions": []}, served=None, session_roots=None,
                      sessions=[])
@@ -379,7 +419,7 @@ class Week:
                 self.blobs.append(public)
             cases.append({"evidence": e, "public": _sha(public), "registration": rec})
         if name == "twice":
-            logged(lambda: record.record(bytes.fromhex(R.digest(recs[0]))))
+            logged(LABEL, lambda: records[LABEL].record(bytes.fromhex(R.digest(recs[0]))))
 
         hellos = ["x"] * rng.choice([0, 0, 1])
         chain = Ch.log_chain(lines)
@@ -392,7 +432,7 @@ class Week:
         session = {"close": close, "hellos": hellos, "log": lines[:-2] if name == "log-edited" else lines,
                    "record": ch.record.to_json()}
 
-        audits = cases[:1]
+        audits = [cases[families.index(LABEL)]] if name == "two-ranks" else cases[:1]
         match name:
             case "no-case":
                 audits = []
@@ -422,7 +462,9 @@ class Week:
 #: each named case's answer: the verdict (or `refused`, before the check) and the code its reason begins with
 NAMES = {"honest": ("accept", None), "twice": ("accept", None), "undecided": ("undecided", "audit"),
          "rejected": ("reject", "audit"), "undecided-rejected": ("reject", "audit"), "unsampled": ("reject", "missing"),
-         "two-members": ("reject", "members"), "no-case": ("reject", "evidence"), "two-cases": ("reject", "evidence"),
+         "two-members": ("reject", "members"), "two-ranks": ("reject", "members"), "two-stages": ("reject", "members"),
+         "root-in-family": ("accept", None), "other-family": ("accept", None),
+         "no-case": ("reject", "evidence"), "two-cases": ("reject", "evidence"),
          "other-registration": ("reject", "evidence"), "registration-form": ("reject", "evidence"),
          "case-coins": ("reject", "evidence"), "verdicts": ("reject", "evidence"), "fewer-windows": ("reject", "evidence"),
          "shared-rows": ("reject", "names"), "no-public": ("reject", "names"), "unpinned": ("reject", "coin"),
@@ -672,6 +714,89 @@ def test_a_window_in_a_period_of_another_circuit_refuses_the_period(pieces):
                              f"circuit {CIRCUIT[:16]}", "verdict": "reject"}
 
 
+def _asks(one_stage_v2):
+    """The audit `check` asks one-stage v2 itself for: its verdict and its reason on what the reference composes. No
+    proof here is one it accepts."""
+    def inner(params: dict, record: dict, evidence: dict, blobs: list[str]) -> tuple[str, Any, Any]:
+        out = one_stage_v2.exchange(_json({"blobs": blobs, "commitment": _hex(record), "evidence": _hex(evidence),
+                                           "params": params}))
+        assert out["verdict"] in ("reject", "undecided"), out
+        return out["verdict"], out["reason"], None
+    return inner
+
+
+def _one_window(seed: str, name: str, real: bool = False) -> tuple[Week, str, dict]:
+    """A week of one period with the one window `name`: the week, the window's session and the request."""
+    w = Week(random.Random(seed))
+    w.b.period_open("p", LANE, 100)
+    sid = w.window(3600, name, real=real)
+    w.b.period_close("p", 2 * 3600)
+    w.b.reserve(OTHER, 7 * DAY, SALT)
+    return w, sid, w.request()
+
+
+def _shown(session: dict) -> dict[str, set[str]]:
+    """The roots a session's release log shows it received, by family."""
+    shown: dict[str, set[str]] = {}
+    for e in map(json.loads, session["log"]):
+        if e["event"] == "root":
+            shown.setdefault(e["label"], set()).add(e["root"])
+    return shown
+
+
+@pytest.mark.parametrize("name", ["two-ranks", "two-stages"])
+def test_a_second_commitment_in_a_family_of_its_own_refuses_the_period(pieces, name):
+    """A window whose session's log shows two commitments, a family each, is refused under `members`, in Lean and in
+    the reference: two ranks' registrations, each in its rank's family, which is how the one-stage drivers lay out a
+    window of several ranks, and a two-stage audit's, the second stage's registration in its own family after the
+    first stage's sample. The sample's family shows one registration alone, the evidence holds its case, and the
+    stand-in accepts it: a step 5 that read the sample's family alone would pass this log on that one audit, the other
+    commitment read by nothing (by reading such a check, which is not run here)."""
+    w, sid, j = _one_window(name, name)
+    shown = _shown(j["evidence"]["windows"][0]["session"])
+    audited = R.digest(w.windows[0]["audits"][0]["registration"])
+    assert shown[LABEL] == {audited} and len(shown[SECOND]) == 1 and shown[SECOND] != shown[LABEL], shown
+    want = {"reason": f"members: session {sid}'s log shows 2 registrations: {ONE_MEMBER}", "verdict": "reject"}
+    assert check(j) == want
+    assert _answer(pieces, CHECK, j) == want
+
+
+def test_a_family_s_second_commitment_refuses_the_period(pieces):
+    """A session whose log shows two registrations in the sample's family, the second written on the challenger by
+    hand since the client refuses it (`ChallengerCoins.commit`, asserted where `Week.window` writes it), is refused
+    under `members`, in Lean and in the reference."""
+    _w, sid, j = _one_window("two-members", "two-members")
+    shown = _shown(j["evidence"]["windows"][0]["session"])
+    assert len(shown[LABEL]) == 2 and set(shown) <= {WINDOW, LABEL}, shown
+    want = {"reason": f"members: session {sid}'s log shows 2 registrations: {ONE_MEMBER}", "verdict": "reject"}
+    assert check(j) == want
+    assert _answer(pieces, CHECK, j) == want
+
+
+@pytest.mark.parametrize("name", list(ELSEWHERE_SHOWN))
+def test_one_stage_v2_itself_refuses_a_root_in_another_family_than_its_own(pieces, one_stage_v2, name):
+    """Step 5 reads no family's name, so it passes a window whose own root's coin is in the sample's family, ahead of
+    the sample's (written on the challenger by hand), and a window whose one registration is in another family than
+    the sample's: the stand-in accepts each. One-stage v2 itself refuses each when it reads the sample's coins, the
+    first for a coin of the family released after another root than the registration and the second for coins of
+    another family than the period's, so the period rejects under `audit` with that reason, in Lean and in the
+    reference."""
+    w, sid, j = _one_window(name, name)
+    assert check(j)["verdict"] == "accept" and _answer(pieces, CHECK, j)["verdict"] == "accept"
+
+    w, sid, j = _one_window(name, name, real=True)
+    shown = _shown(j["evidence"]["windows"][0]["session"])
+    digest = R.digest(w.windows[0]["audits"][0]["registration"])
+    root = w.b.sessions[sid]["root"]
+    assert shown == ({LABEL: {root, digest}} if name == "root-in-family" else {WINDOW: {root}, SECOND: {digest}})
+    want = check(j, _asks(one_stage_v2))
+    assert want["verdict"] == "reject", want
+    assert want["reason"].startswith(f"audit: session {sid}, registration {digest[:16]}: "), want
+    assert ELSEWHERE_SHOWN[name] in want["reason"], want
+    kind, text = pieces.call("period_check", j)
+    assert kind == "output" and json.loads(text) == want, (kind, text)
+
+
 def test_one_stage_v2_itself_answers_each_case(pieces, one_stage_v2):
     """The period's check on one-stage v2 itself answers a case as one-stage v2 answers what the reference composes
     for it. A sample read from the window's session's coins and proved in no session is read by one-stage v2 (its
@@ -679,12 +804,7 @@ def test_one_stage_v2_itself_answers_each_case(pieces, one_stage_v2):
     case's segment, pass its own reading) and rejected for its proofs; the same case with its segment's commitment
     another's is refused by one-stage v2's reading of the coins. Either way the period rejects under `audit` with
     one-stage v2's reason."""
-    def inner(params: dict, record: dict, evidence: dict, blobs: list[str]) -> tuple[str, Any, Any]:
-        out = one_stage_v2.exchange(_json({"blobs": blobs, "commitment": _hex(record), "evidence": _hex(evidence),
-                                           "params": params}))
-        assert out["verdict"] in ("reject", "undecided"), out
-        return out["verdict"], out["reason"], None
-
+    inner = _asks(one_stage_v2)
     w = Week(random.Random("real"))
     b = w.b
     b.period_open("p", LANE, 100)
