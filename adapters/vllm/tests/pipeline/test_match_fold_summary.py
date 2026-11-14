@@ -376,7 +376,8 @@ def test_the_access_journal_states_each_entry_s_view_and_references_in_the_store
                   {"kind": "write", "event": 3, "refs": ROWS_STORED[form], "7": [1, "<opaque>"]}]
         assert text == "".join(json.dumps(line, separators=(",", ":")) + "\n" for line in stored)
     journal.unlink()
-    for none in ({}, {"accesses": None}, {"accesses": []}):
+    no_access: tuple[dict[str, object], ...] = ({}, {"accesses": None}, {"accesses": []})
+    for none in no_access:
         quiet = types.SimpleNamespace(program=None, digest="cd" * 64, instances=[], body=None, **none)
         assert list(MF.persist_program(quiet, tmp_path, profile_name="stand_in", log_path="log")) == ["instances"] and not journal.exists()
     assert opened == []
