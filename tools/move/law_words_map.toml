@@ -108,7 +108,7 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.p
            "benchmarks/verifier_cost/**",
            "security/*/Flock/**", "security/*/Flock.lean", "security/*/Spot/**", "security/*/Spot.lean",
            "security/Proofs/Properties/Flock/**", "security/Proofs/Properties/Spot/**",
-           "verity/protocols/accounting/certifier/**", "benchmarks/network_traces/**", "benchmarks/prove_path/**",
+           "verity/protocols/accounting/certifier/**", "security/**/Certifier/**", "benchmarks/network_traces/**", "benchmarks/prove_path/**",
            "benchmarks/certifier_term/**", "benchmarks/network_e2e/**", "benchmarks/network_sim/**",
            "benchmarks/certifier_timing/**", "benchmarks/scan_cost/**", "benchmarks/datacenter/**",
            "benchmarks/nci/**", "**/vectors/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py",
