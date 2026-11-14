@@ -1914,17 +1914,36 @@ def die_with(parent: int) -> None:
         os.kill(os.getpid(), signal.SIGKILL)
 
 
+class NoLeanAnswer(RuntimeError):
+    """A negative's worker's Lean verifier process gave no answer: it ended, or answered outside its protocol
+    (`verifier.LeanError`). No check catches it, so the worker's task raises and the audit ends (`NegativeFailed`)."""
+
+
+class WorkerLean(V._Server):
+    """A negative's worker's own Lean verifier process (`_work`). Lean's answers, its output or its refusal, are the
+    verifier's as they are in the audit's process; where Lean gives none, `verifier.lean` would take the `LeanError`
+    as a refusal and the negative would be refused for a reason that is not its altered input, so `call` raises
+    `NoLeanAnswer` in its place."""
+
+    def call(self, fn: str, value: Any) -> tuple[str, Any]:
+        try:
+            return super().call(fn, value)
+        except V.LeanError as e:
+            raise NoLeanAnswer(f"a negative's worker's {self.exe} gave no answer on {fn}: {e}") from e
+
+
 def _work(fn: Callable[[], dict[str, dict]], send: Any, audit: int) -> None:
     """A worker's whole life, in a process forked from the audit (the process ``audit``), which it never outlives
     (`die_with`: an audit killed outright takes its workers with it, and each worker's Lean verifier process then
     stops at the end of its input): a Lean verifier process of its own (the audit's is never written to: the worker's
-    handle to the verifier's server is a new one before any check), the task, and its entries or its error sent to
+    handle to the verifier's server is a new one before any check, `WorkerLean`, under which a Lean process that gives
+    no answer ends the task rather than refuse its negative), the task, and its entries or its error sent to
     the audit with its seconds, its memory and, under the memo, the checks it asked and reused (it reuses what the
     audit kept before the fork, and what it keeps ends with it: the audit's own ``verifier_checks`` count none of a
     worker's)."""
     die_with(audit)
     t0, checks = time.time(), AM.counts()
-    V._server = V._Server()
+    V._server = WorkerLean()
     try:
         try:
             out: tuple[str, Any] = ("ok", fn())
@@ -1950,7 +1969,7 @@ class NegativeWorkers:
     the term that held it. A task's `entries` are its own,
     and `entries` of several are in the order given, whatever order they ended in. Nothing is retried and nothing
     falls back to the audit's process: a worker that raises or dies ends `run` with `NegativeFailed`, the others
-    killed. No worker is forked beside another Python thread of the audit's, whose locks would stay held in it: `run`
+    killed, and a worker's Lean verifier process that gives no answer makes its task raise (`WorkerLean`). No worker is forked beside another Python thread of the audit's, whose locks would stay held in it: `run`
     first calls ``before`` (the audit's: its own session's thread ended, `session_ended`), then
     reads the audit's threads before its first fork (`threads_alive`), prints them, keeps them in `timing`
     (``threads_at_fork``, one reading a `run` that forks, with Python's as they were before ``before`` beside it,

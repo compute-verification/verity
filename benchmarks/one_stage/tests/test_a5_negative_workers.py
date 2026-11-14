@@ -10,6 +10,8 @@
 * no worker outlives the audit: one killed outright takes its workers with it;
 * a worker's Lean verifier process is its own: it never writes to the audit's, which answers after the workers end, and
   a worker reuses the checks the audit's memo kept before it was forked;
+* a worker's Lean verifier process that ends without an answer ends the run, and no negative is refused for it; Lean's
+  own refusal is still a refusal;
 * no worker is forked beside another Python thread of the audit's: the run ends before any task starts, its error the
   fix, and the audit's summary is written with it; the threads read before the first fork are printed and in the
   timing whether or not the run is refused;
@@ -24,11 +26,13 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import multiprocessing
 import os
 import signal
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -36,6 +40,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.commitments.windows import history as HW, interface as I, rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R, verifier as V
 
 HERE = Path(__file__).resolve().parent
@@ -44,6 +49,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import a5  # noqa: E402
 import a5_memo as AM  # noqa: E402
+import test_a5_history as TH  # noqa: E402
 import test_a5_memo as TM  # noqa: E402
 
 GB = 2**30
@@ -261,6 +267,61 @@ def test_a_worker_asks_a_lean_process_of_its_own_and_the_audits_answers_after(mo
         assert [w.timing()["negatives"][name]["verifier_checks"] for name in ("honest again", "altered")] == [
             {"asked": {}, "reused": {"check": 1}}, {"asked": {"check": 1}, "reused": {}}]
         assert "R3-domain" in TM._check(ports=TM._ports("r-a-third-run")).codes and _lean_pid() == mine
+
+
+#: a Lean verifier process that reads its first request and is killed without answering, as one killed for memory is
+ENDS = "import os, signal, sys; sys.stdin.readline(); os.kill(os.getpid(), signal.SIGKILL)"
+
+
+def test_a_workers_lean_process_that_ends_without_an_answer_ends_the_run_and_refuses_no_negative(monkeypatch):
+    """The toy window's honest registration, nothing altered, checked as a5's ``registration`` task records it, by two
+    workers whose every Lean verifier process ends on its first request without an answer (`ENDS`, a Python started
+    where the verifier starts its executable). The run ends with `NegativeFailed`, the worker's error saying Lean gave
+    no answer, and no entry exists: no negative is refused because a Lean process ended. Taken as Lean's refusal, as
+    `verifier.lean` takes it, each entry would be ``refused: true`` beside Python's accept."""
+    popen = subprocess.Popen
+    monkeypatch.setattr(V, "executable", lambda exe=V.EXE: Path(sys.executable))
+    monkeypatch.setattr(V, "subprocess", SimpleNamespace(PIPE=subprocess.PIPE,
+                                                         Popen=lambda argv, **kw: popen([*argv, "-c", ENDS], **kw)))
+
+    def registration(name: str) -> dict[str, dict]:
+        v = TM._check()
+        return {name: {"refused": not v.ok, "codes": list(v.codes)}}
+
+    w = workers(2)
+    tasks = [w.submit(n, functools.partial(registration, n)) for n in ("honest-a", "honest-b")]
+    with pytest.raises(a5.NegativeFailed) as e:
+        w.run()
+    assert "raised:" in str(e.value) and f"NoLeanAnswer: a negative's worker's {V.EXE} gave no answer on registration" \
+        in str(e.value), str(e.value)
+    assert all(t.got is None for t in tasks) and not multiprocessing.active_children()
+    with pytest.raises(a5.NegativeFailed, match="did not run"):
+        w.entries(tasks)
+
+
+def test_a_refusal_that_is_leans_own_answer_is_still_a_refusal_in_a_worker(tmp_path):
+    """Lean's refusal is an answer, so a worker records it as a5 does in its own process: the history root's negative
+    as a5's ``history_root`` task records it (refused where the codes are `registration.HISTORY` alone), on a window
+    whose registered history root has a bit flipped, by each of two workers, is refused, with Lean's side its own
+    reason and no worker error. Needs the Lean verifier built."""
+    mine, doc, rec, publics, _table = TH._window(tmp_path / "w")
+    roots = I.registered_roots(rec["window"])
+    hist = HW.params(doc, mine, publics, HW.pins(doc, roots))
+    root = roots["latent"]
+    wrong = {**hist, "registered": {"latent": root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
+    leaf, want = CS.leaf_layer(publics), CS.expected_ports(mine)
+
+    def history_root(name: str) -> dict[str, dict]:
+        v = V.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, want, leaf_layer=leaf, work_table=mine.work_table,
+                    history=wrong)
+        return {name: {"refused": v.codes == (R.HISTORY,), "codes": list(v.codes), "lean": v.verifiers["lean"]}}
+
+    w = workers(2)
+    got = w.entries([w.submit(n, functools.partial(history_root, n)) for n in ("history-a", "history-b")])
+    for name in ("history-a", "history-b"):
+        assert got[name]["refused"] and got[name]["codes"] == [R.HISTORY], got[name]
+        assert isinstance(got[name]["lean"]["refused"], str) and V.EXE not in got[name]["lean"]["refused"], got[name]
+    assert not multiprocessing.active_children()
 
 
 def _negatives_file(out: Path, n: int, passing: bool = False) -> bytes:
