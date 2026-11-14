@@ -35,7 +35,7 @@ def unfused_norm_boundaries(se, by_key: dict, s: int, rec: dict, problems: list[
         if m:
             L = int(m.group(1))
             outs = node.exit.outs if node.exit is not None else None
-            if ev.op == "aten.add.Tensor" and sum(hasattr(a, "alloc") for a in ev.args) == 2 and hasattr(outs, "alloc"):
+            if ev.op == "aten.add.Tensor" and sum(hasattr(a, "alloc") for a in ev.args) == 2 and outs is not None and hasattr(outs, "alloc"):
                 adds[L] = outs.alloc
             elif ev.op == "aten.to.dtype" and ev.args and getattr(ev.args[0], "alloc", None) == adds.get(L) and L not in rec["residual"]:
                 sha = by_key.get((s, ev.id, "outs"))

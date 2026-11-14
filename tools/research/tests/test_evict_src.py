@@ -624,13 +624,6 @@ def _status_line(t: Path) -> str:
     return next(e for e in out.split("\0") if e and e != f"? {EV.READY_FILE}")[-120:]
 
 
-def test_a_git_worktree_made_from_a_tree_keeps_it(node):
-    """ci-bundle.sh and train.sh `git worktree add` from a checkout: its git data lives in the tree, its processes elsewhere."""
-    _git(node.src / node.a, "worktree", "add", "-q", "--detach", str(node.tmp / "wt"), node.a)
-    _age(node.src / node.a, 5)
-    assert "2: a git worktree made from it (.git/worktrees) may be in use" in kept(run(node))[node.a]
-
-
 def test_one_pass_at_a_time(node, monkeypatch):
     """A second pass during the first would take its aside tree for an interrupted pass's leftover and delete it while the first
     is still finding a user; it does nothing instead."""

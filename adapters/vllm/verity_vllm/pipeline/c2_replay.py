@@ -570,7 +570,7 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
     openings-after-release replay pool and the next pair's run.  The RSS drop is the evidence that the premise
     `c2_freed_before_replay` holds: 70 GB of small objects die into pymalloc arenas and glibc's heap, which keep pages the OS never sees
     back until trimmed -- ask glibc to return them (madvise/brk) so the drop measures the objects, not the allocators' retention."""
-    # the three readings are typed Any: a host that gives none (`rss_kb`'s None) raises TypeError at the record below, as on main
+    # the three readings are typed Any: a host that gives none (`rss_kb`'s None) raises TypeError at the record below
     _rss_c2a: Any = rss_kb()[0]
     held.clear()
     gc.collect()

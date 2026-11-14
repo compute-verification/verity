@@ -82,8 +82,8 @@ class Unit:
         def hexes(vs):
             return [bytes(v).hex() for v in vs]
 
-        return f"unit {self.name} (k={self.k}, T={self.T}, m={len(self.xq)}, n={len(self.b)}): xq={hexes(self.xq)}, " \
-               f"b={hexes(self.b)}"
+        return (f"unit {self.name} (k={self.k}, T={self.T}, m={len(self.xq)}, n={len(self.b)}): xq={hexes(self.xq)}, "
+                f"b={hexes(self.b)}")
 
 
 def keys(U: Unit) -> list[tuple]:
@@ -160,7 +160,7 @@ def exact_units() -> list:
     out = []
 
     def unit(name, rows, cols, live, slow=False):
-        cols = [tuple(c if l in live else 0 for l, c in enumerate(col)) for col in cols]
+        cols = [tuple(c if lane in live else 0 for lane, c in enumerate(col)) for col in cols]
         case = Case(Unit(name, 29, tuple(rows), tuple(cols)), live=tuple(live))
         out.append(pytest.param(case, id=name, marks=[pytest.mark.slow] if slow else []))
 
@@ -218,16 +218,16 @@ def sampled(U: Unit, n: int) -> Sweep:
 def exhaustive(U: Unit, live: tuple[int, ...]) -> Sweep:
     h = model()
     assert U.T == 1 and set(live) <= set(range(29))
-    assert all(col[l] == 0 for col in U.b for l in range(29) if l not in live)
+    assert all(col[lane] == 0 for col in U.b for lane in range(29) if lane not in live)
     salts = []
     for signs in range(1 << len(live)):
-        pos = {l: bool(signs >> n & 1) for n, l in enumerate(live)}
+        pos = {lane: bool(signs >> n & 1) for n, lane in enumerate(live)}
         for tags in range(1 << 12):
             neg = tuple(bool(tags >> (4 * t) & 1) for t in range(3))
             man = tuple(tags >> (4 * t + 1) & 7 for t in range(3))
             r = raw_of(pos, neg, man)
             p, n_, m_ = h.fields(r)
-            assert (n_, m_) == (list(neg), list(man)) and all(p[l] == b for l, b in pos.items())
+            assert (n_, m_) == (list(neg), list(man)) and all(p[lane] == b for lane, b in pos.items())
             salts.append([[r]] * len(U.xq))
     values = np.array([words(U, g) for g in salts])
     ks = keys(U)
