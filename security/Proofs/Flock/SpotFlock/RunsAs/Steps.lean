@@ -190,8 +190,8 @@ private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : 
     (h : Spot.Run.interiorAudit form i sample (some (it, receipt, draw, law, read)) = .ok (acc, staged)) :
     (∃ e, staged = [("interior", e)]) ∧ ∃ rec_ strata,
       Spot.Run.audit i it.record receipt draw law (it.provedUnits.getD (Spot.Draw.proved draw))
-        (it.instances.getD (it.provedUnits.getD (Spot.Draw.proved draw)).size) it.served it.sessionRoots =
-          .ok rec_ ∧
+        (it.instances.getD (it.provedUnits.getD (Spot.Draw.proved draw)).size) it.served it.sessionRoots
+          it.params.windowValues = .ok rec_ ∧
       Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
       acc = Spot.jeq (Spot.getD (Spot.SecondStage.attach rec_
         (Spot.SecondStage.check form (runOwn i it sample strata draw) it.statements)
@@ -220,8 +220,8 @@ private theorem record_wf {x : Spot.Record.Input} {r : Json} (h : Spot.Record.re
 
 /-- **An audit record is a well-formed object.** -/
 private theorem audit_wf {i : Spot.Run.Input} {record receipt draw law : Json} {proved : Array Int} {instances : Int}
-    {served sessionRoots r : Json}
-    (h : Spot.Run.audit i record receipt draw law proved instances served sessionRoots = .ok r) :
+    {served sessionRoots r : Json} {named : Array String}
+    (h : Spot.Run.audit i record receipt draw law proved instances served sessionRoots named = .ok r) :
     ∃ m : Std.TreeMap.Raw String Json compare, r = .obj m ∧ m.WF := by
   unfold Spot.Run.audit at h
   obtain ⟨x, _, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h

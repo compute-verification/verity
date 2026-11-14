@@ -171,8 +171,8 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
       simp only [hr, hj, ↓reduceIte]
   all_goals exact Iff.rfl
 
-theorem recordChecks_nil (c : Commitment) (e : Evidence) :
-    OneStage.recordChecks c.record (Flock.hexOf c.digest) e = #[] ↔ UnitsProved c e := by
+theorem recordChecks_nil (named : Array String) (c : Commitment) (e : Evidence) :
+    OneStage.recordChecks named c.record (Flock.hexOf c.digest) e = #[] ↔ UnitsProved named c e := by
   unfold OneStage.recordChecks
   simp only [Array.map_eq_empty_iff, Array.filter_eq_empty_iff]
   have hf : ∀ cs : Array (String × Check),
@@ -1334,7 +1334,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
     OneStage.check p c e = .accept pub prof ↔
       CallerHeld c.record p.verifier ∧
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
-        UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+        UnitsProved p.windowValues c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n := by
   unfold OneStage.check
@@ -1350,9 +1350,9 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
     simp only [h1, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hd]
     by_cases h2 : Draw.checkDraw e.draw (getD c.record "population") law = #[]
     · simp only [h2, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-      by_cases h3 : OneStage.recordChecks c.record (Flock.hexOf c.digest) e = #[]
+      by_cases h3 : OneStage.recordChecks p.windowValues c.record (Flock.hexOf c.digest) e = #[]
       · simp only [h3, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-        have hu := (recordChecks_nil c e).1 h3
+        have hu := (recordChecks_nil p.windowValues c e).1 h3
         have hdr := (checkDraw_nil _ _ _).1 h2
         rcases hv : OneStage.verdictOf e.verdicts with ⟨⟨⟩, ⟨⟩⟩ | r | r
         · have hva := (verdictOf_accept _).1 hv
@@ -1385,11 +1385,11 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
           rintro ⟨law', d', n', -, -, -, hva, -⟩
           have := (verdictOf_accept _).2 hva
           rw [hv] at this; cases this
-      · have : (OneStage.recordChecks c.record (Flock.hexOf c.digest) e).isEmpty = false := by
+      · have : (OneStage.recordChecks p.windowValues c.record (Flock.hexOf c.digest) e).isEmpty = false := by
           simpa [Array.isEmpty_iff] using h3
         simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
         rintro ⟨law', d', n', -, -, hu, -⟩
-        exact h3 ((recordChecks_nil c e).2 hu)
+        exact h3 ((recordChecks_nil p.windowValues c e).2 hu)
     · have : (Draw.checkDraw e.draw (getD c.record "population") law).isEmpty = false := by
         simpa [Array.isEmpty_iff] using h2
       simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
@@ -1416,10 +1416,74 @@ accepted, publishing `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
     (hr : Registered p.verifier c.record law) (hc : CallerHeld c.record p.verifier)
     (hd : Drawn e.draw (getD c.record "population") law)
-    (hu : UnitsProved c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
+    (hu : UnitsProved p.windowValues c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
     (hn : nat? (getD c.record "population") = some n) :
     OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
   (acceptMeans_iff p c e _ _).2 ⟨hc, law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
+
+/-- Naming no window value, the opened roots are the record's own reads less its ports' at their own roots. -/
+theorem openedRoots_nil (rec : Json) (vs : Array (String × Json)) :
+    openedRoots #[] rec vs = Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs)) := by
+  unfold openedRoots
+  exact Record.heldReads_nil rec _
+
+/-- Naming no window value, `UnitsProved` is the units' statement before window values: its last conjunct reads the
+record's own reads less its ports' at their own roots. -/
+theorem unitsProved_nil (c : Commitment) (e : Evidence) :
+    UnitsProved #[] c e ↔
+      (e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
+        Receipt c e ∧
+        (∀ served, e.served = some served →
+          (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
+        (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
+          ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧
+            jeq (getD reg.2 "root") pr.2) ∧
+        ((field? c.record "registered").isSome ∨
+            (Record.lessOwnReads c.record (Record.ownRegistered c.record (Record.sessionRegistered e.verdicts))).isSome →
+          SameRoots ((Record.lessOwnReads c.record
+              (Record.ownRegistered c.record (Record.sessionRegistered e.verdicts))).getD #[])
+            (Record.registeredRoots c.record))) := by
+  rw [UnitsProved, openedRoots_nil]
+
+/-- `acceptMeans` for a verifier that names no window value, its units' statement the one before window values
+(`unitsProved_nil`). -/
+theorem acceptMeans_unnamed (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
+    (hw : p.windowValues = #[]) (h : OneStage.check p c e = .accept pub prof) :
+    ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
+      (e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
+        Receipt c e ∧
+        (∀ served, e.served = some served →
+          (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
+        (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
+          ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧
+            jeq (getD reg.2 "root") pr.2) ∧
+        ((field? c.record "registered").isSome ∨
+            (Record.lessOwnReads c.record (Record.ownRegistered c.record (Record.sessionRegistered e.verdicts))).isSome →
+          SameRoots ((Record.lessOwnReads c.record
+              (Record.ownRegistered c.record (Record.sessionRegistered e.verdicts))).getD #[])
+            (Record.registeredRoots c.record))) ∧
+      VerdictsAccept e.verdicts ∧
+      Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
+      pub = publicOf p e law d n ∧ prof = profileOf p c e d n := by
+  obtain ⟨law, d, n, hr, hd, hu, rest⟩ := acceptMeans p c e pub prof h
+  rw [hw] at hu
+  exact ⟨law, d, n, hr, hd, (unitsProved_nil c e).1 hu, rest⟩
+
+/-- `acceptMeans`'s honest witness, not yet proved: a one-stage run naming no window value that the check accepts. Its
+theorem names the run: a registration that keeps R1–R8, an honest sample of its law, the record and the verdicts. -/
+def acceptMeans_honest : Prop :=
+  ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+    p.windowValues = #[] ∧ OneStage.check p c e = .accept pub prof
+
+/-- `acceptMeans`'s nontrivial witness, not yet proved: what `AcceptMeans` concludes fails at some inputs, so a check
+that accepted every input would break it. Its theorem, at the check that accepts everything, waits on `AcceptMeans` being
+stated of the check it reads. -/
+def acceptMeans_nontrivial : Prop :=
+  ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+    ¬ ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
+        UnitsProved p.windowValues c e ∧ VerdictsAccept e.verdicts ∧
+        Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
+        pub = publicOf p e law d n ∧ prof = profileOf p c e d n
 
 theorem digestIsRecord's : DigestIsRecord's := by
   intro b c h
