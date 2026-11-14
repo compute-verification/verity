@@ -14,7 +14,8 @@ untraced = ["tests/test_sketch.py"]
 # (p2_store/store-toy); gemm.py's check evaluates
 # ScaledMmS8Coordinate_v1 (verity.circuits), and what those import; full.py's GEMM is s8_linear's int_mm.py.
 # sketch.py's receipts are PoUB's (verity.protocols.accounting.poub.verifier, which imports
-# spot and the profile), held to serve.py's fixture (p2_v1/serve.py, store.py), with sha512_rows' engine
+# spot and the profile), held to serve.py's fixture (p2_v1/serve.py, store.py,
+# on PoUB's honest P2 prover in poub/prover), with sha512_rows' engine
 # and its host twin's sources. sketch.py and that engine read their variables through their settings.py, on
 # verity_config.settings.
 inputs = ["tools/config/verity_config",
@@ -23,6 +24,8 @@ inputs = ["tools/config/verity_config",
           "verity/protocols/accounting/pous/prover",
           "verity/channel.py",
           "verity/protocols/accounting/poub/verifier", "verity/protocols/proofs/spot",
+          "verity/protocols/accounting/poub/prover/__init__.py", "verity/protocols/accounting/poub/prover/audit_prover.py",
+          "verity/protocols/accounting/poub/prover/p2_prover.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/commitments/identity", "verity/commitments/randomness",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",

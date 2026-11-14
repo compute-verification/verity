@@ -3,8 +3,8 @@ them (`p2_signed_sessions.json`): five sessions over `test_p2_party.py`'s store 
 and the test clock, each closed by the test signer at leaf 0 (`pous_test_signer.AtLeaf`, which keeps no state): an
 honest prover accepted, one whose receipts skip a unit's reads, one whose openings are out of form, one gone mid-window
 (the verifier reads the stream's end where a root was due) and one the verifier can't write to (its first `open`
-fails). Each session's close (its chain, its lines and its signature's SHA-512), its case's SHA-512 and its answer are
-the record's. `python test_p2_signed_bytes.py --write` rewrites the record from the party as it is."""
+fails). Each session's close (its chain, its lines and its signature's SHA-512), its case's SHA-512, its answer and how
+the prover's side ended (with the answer, or what it raised) are the record's. `python test_p2_signed_bytes.py --write` rewrites the record from the party as it is."""
 
 from __future__ import annotations
 
@@ -74,13 +74,13 @@ def session(exe: Path, store, kind: str) -> dict:
                                                      garble=kind == "garble")
     with a, a.makefile("rb") as r, a.makefile("wb") as w:
         try:
-            p2_party_prover.prove(r, w, prover, request(store))
-        except (Gone, ConnectionError):
-            pass
+            proved = p2_party_prover.prove(r, w, prover, request(store))
+        except (Gone, ConnectionError) as e:
+            proved = type(e).__name__
     th.join()
     case, = kept
     close = json.loads(bytes.fromhex(case["evidence"]))["close"]
-    return {"answer": got["answer"],
+    return {"answer": got["answer"], "prover": "answer" if proved == got["answer"] else proved,
             "case_sha512": hashlib.sha512(json.dumps(case, sort_keys=True).encode()).hexdigest(),
             "close": {"chain": close["chain"], "lines": close["lines"], "public_key": close["public_key"],
                       "signature_sha512": hashlib.sha512(bytes.fromhex(close["signature"])).hexdigest()}}
@@ -98,6 +98,7 @@ def test_the_record_holds_each_kinds_verdict() -> None:
     assert [(record[k]["answer"]["verdict"], record[k]["answer"].get("failure")) for k in KINDS] == [
         ("accept", None), ("reject", "receipt"), ("reject", "malformed"), ("reject", "malformed"),
         ("reject", "malformed")]
+    assert [record[k]["prover"] for k in KINDS] == ["answer", "answer", "answer", "Gone", "ConnectionError"]
 
 
 if __name__ == "__main__" and sys.argv[1:] == ["--write"]:
