@@ -36,6 +36,9 @@ public import Definitions.Accounting.PeriodBinding
 public import Definitions.Accounting.Physical
 public import Definitions.Accounting.Slowdown
 public import Definitions.Accounting.Pouw
+public import Definitions.Accounting.Registration.View
+public import Definitions.Accounting.Registration.Guarantees
+public import Definitions.Accounting.Registration.Guarantees.Witnesses
 public import Definitions.Accounting.PouwWitness
 public import Definitions.Accounting.NetWitness
 public import Definitions.Accounting.PouwWork
@@ -105,6 +108,9 @@ The area's other guarantees are `Accounting.Guarantees.X`, stated in the module 
 * `CapacityOfStateBound` (`Capacity`): a state-bounded game's soundness is the capacity guarantee.
 * `Memory.Adds` (`Memory`): memory adds against PoUS's guarantee, counting the help.
 * `BandwidthOfAudit` (`BandwidthAudit`): the bandwidth audit's guarantee is the bandwidth guarantee.
+* `Verity.Guarantees.RegistrationSound` (`Registration.Guarantees`, the view and the prefix heads in
+  `Registration.View`): registration is an accounting protocol, and a log it accepts holds the registered facts the
+  theorems read.
 * `AccelAdditive` (`Additive`): instructions that different subprotocols issue together use at most a period's
   `ρ_r·T` units of each resource `r`.
 * `ServingBlocks.ServingBlockBound` (`ServingBlocks`): a training class's counted weight is at most the overhead lower
