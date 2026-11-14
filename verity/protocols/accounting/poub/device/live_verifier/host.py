@@ -84,7 +84,8 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   count is evidence the wipe's check takes beside the signed session). A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
-  evidence store (a preserved tree of kind `verifier-run/v1`, by the pinned tree's store client) with the credential infra keeps in
+  evidence store (a preserved tree of kind `verifier-run/v1`, by the store's reader in the pinned tree, `research.store.local`, never
+  the platform's command line) with the credential infra keeps in
   `/etc/vy/verifier-store.env`, which only that unit reads.
 
 **The compose gate** (`vy-compose-gate`, this file from `/opt/vy-compose/current`, `COMPOSE_HOST`) is a second service on
@@ -1273,20 +1274,26 @@ def replay_run(host: Host, run: str, *, now: Callable[[], datetime],
     return end
 
 
-def publish(host: Host, run: str, *, put: Callable[[list[str]], int] | None = None) -> int:
-    """Put the run's directory in the evidence store as a preserved tree, through the pinned tree's store client, its
-    request as the artifact's meta."""
+def store_put(kind: str, meta: dict, tree: Path) -> int:
+    """Put TREE in the evidence store as an artifact of KIND with META and push it, preserved: 0 once the remote holds it.
+    Through the store's reader in the pinned tree (`research.store.local`), which loads the standard library alone."""
+    sys.path.insert(0, str(RESEARCH))
+    from research.store.local import LocalStore
+    st = LocalStore()
+    art = st.put_artifact(kind, meta, tree=tree)
+    rep = st.push(art, preserve=True)
+    print(json.dumps({"id": art, "preserved": rep["preserved"], "errors": rep["errors"]}, sort_keys=True))
+    return 0 if rep["preserved"] else 1
+
+
+def publish(host: Host, run: str, *, put: Callable[[str, dict, Path], int] = store_put) -> int:
+    """Put the run's directory in the evidence store as a preserved tree (`put`, the store's by default), its request as the
+    artifact's meta."""
     req = request_of(host, run)
     meta = {k: req.get(k) for k in ("run", "by", "pinned", "peer", "period", "requested_utc")}
     meta["end"] = {k: (read_json(host.runs / run / "end.json") or {}).get(k) for k in ("rc", "ended_utc")}
     meta["replay"] = (read_json(host.runs / run / "replay" / "end.json") or {}).get("rc")
-    argv = ["put", "--kind", "verifier-run/v1", "--meta", json.dumps(meta, sort_keys=True), "--tree",
-            str(host.runs / run), "--preserve"]
-    if put is None:
-        sys.path.insert(0, str(RESEARCH))
-        from research.store import cli
-        return cli.main(argv)
-    return put(argv)
+    return put("verifier-run/v1", meta, host.runs / run)
 
 
 def close(host: Host, node: str, argv: list[str] | None = None) -> dict:
