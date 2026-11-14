@@ -391,10 +391,11 @@ class Sheet:
 
     @classmethod
     def of_file(cls, card: Mapping[str, Any], tick: Fraction = TICK) -> Sheet:
-        """The sheet a card file gives (`load_card(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
-        and as every operand class's peak rate the card's s8 MACs a SM-clock (`rate.tensor`; every class is int8) over
-        its SMs at that clock. Its memory figures at ticks of `tick` seconds, as `Accel.Card.toDevice` reads the card:
-        the bandwidth a ceiling rounded up, and the stores' sizes exact."""
+        """The sheet a card file gives (`load_card(sku)`'s table). Its figures: the SKU, the tensor's clock in Hz
+        (`clock.tensor`, or `clock.sm` on a card that gives the tensor none of its own), and as every operand class's
+        peak rate the tensor's reading of `readings` (every class is int8, `rate.tensor`'s unit). Its memory figures at
+        ticks of `tick` seconds, as `Accel.Card.toDevice` reads the card: the bandwidth a ceiling rounded up, and the
+        stores' sizes exact."""
         def v(entry: Mapping[str, Any]) -> Fraction:
             return Fraction(str(entry["value"]))
 
@@ -403,8 +404,9 @@ class Sheet:
         mem = v(store["dram"])
         if chip.denominator != 1 or mem.denominator != 1:
             raise Malformed(f"card {card['sku']}: its stores' bits and device memory's bytes are whole")
-        clock = v(card["clock"]["sm"]) * 10 ** 6
-        figures = DeviceFigures(_str(card["sku"], "sku"), clock, sms * v(card["rate"]["tensor"]) * clock)
+        clocks = card["clock"]
+        clock = v(clocks["tensor"] if "tensor" in clocks else clocks["sm"]) * 10 ** 6
+        figures = DeviceFigures(_str(card["sku"], "sku"), clock, readings(card)["tensor"])
         return cls(figures, math.ceil(8 * v(card["memory"]["bandwidth"]) * tick), int(chip), int(mem))
 
     def to_json(self) -> dict[str, Any]:
