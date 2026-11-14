@@ -25,7 +25,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
 `zk_session_soundH`: `Composed.zk_session_sound` for the sessions the prover's `--zk` writes, whose tables
 `Stmt.setupTables` sets up with `Stmt.setupHidden` (hidden outputs, the default `--statement`, `HmOut`), at the
 same sampling design and parameters, with the same proof. For any live prover `τ` of a hidden-output one-table `--zk` session,
-`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
+`Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`, the units those of the key program's
 partition (`keyProg c hU n`), each read at its `--zk` site in its hidden-output table and bound to the rows it commits,
 input or output (`placeZH`, `rsZH`: HiddenExec's `keyLayoutH` and `keyRowsH` moved to the `--zk` tables): the compiled
 `--zk` count curve at `planAtZKH` (`zk_flock_countC_execOS_atH`) at the simulated prover `simZ … τ`, with `δ_tree = 0`,

@@ -82,7 +82,7 @@ def AcceptedChecked {L K S : ℕ} (C : Prog) (P : Partition) (lay : BoundaryGate
 def AccSeqsChecked {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (As : Set (ℕ → Bool)) (valid : (ℕ → Bool) → Prop) (δ : ℝ) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) :
     Set (List (Obs L K S)) :=
-  {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ ∃ F ∈ faultySets d P δ, AcceptedChecked C P lay n As valid F op o}
+  {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ ∃ F ∈ incorrectSets d P δ, AcceptedChecked C P lay n As valid F op o}
 
 /-- **The check pins the checked inputs `chk`**: at each step `t < n`, two runs over the horizon `n` whose ingress agrees
 through step `t`, whose inputs agree off `chk`, and which hold one set of values, only at committed gates of proof blocks

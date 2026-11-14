@@ -37,7 +37,7 @@ That table's `sessionZC` is `ZkLink.batchedSessionZC` at the one-table plan (`se
 applies:
 
 * `zk_headline_exec_zc`: against any live prover, at any sampling design,
-  `Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + ε_bind`;
+  `Pr[verity-verify-proof --zk accepts ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks + ε_bind`;
 * `zk_headline_exec_zc_execOS`: the same at the live sample (`SamplingDesign.execOS`, `drawWith`'s stratified sampling design) under A3
   (`UniformRandomBytes`), with `SamplingDesign.stratified`'s count curve for `miss(K)`.
 
