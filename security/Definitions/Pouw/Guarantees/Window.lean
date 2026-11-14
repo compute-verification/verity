@@ -135,7 +135,7 @@ A unit is wrong when its committed outputs aren't its function of its inputs, so
 unit whose receipt came out right isn't wrong, and gap (4) adds it. Fiat–Shamir grinding of the per-matmul seeds enters
 PoUW's `δ` through the seeded pair (`CircuitWorkSeeded`, `CircuitCreditSeeded`). -/
 def WindowDelta : Prop :=
-  ∀ {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ} (L : Reg → (c : Fin C) → Law (Fin (n c))) (Lw : Reg → Law (WUnit n))
+  ∀ {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ} (L : Reg → (c : Fin C) → SamplingDesign (Fin (n c))) (Lw : Reg → SamplingDesign (WUnit n))
     (η : ℝ≥0∞) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool) (U : UnitStmts Tr n)
     (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
     (κ : Fin C → ℝ≥0∞) (g : (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess c S R) → ℝ≥0∞)
@@ -145,7 +145,7 @@ def WindowDelta : Prop :=
     (∀ c, BindSoundIn Lw sess committed A c (δlink c)) →
     ∀ σ : Strategy (auditReg Lw (windowSession sess)),
       prob (fun o => o.1 = true ∧ 𝓑 (U.wrong (committed (reg σ) (cont σ)))) (auditReg Lw (windowSession sess)) σ ≤
-        (⨆ (B : Finset (WUnit n)) (_ : 𝓑 B), (Law.prod (L (reg σ))).escape B) + η + (⨆ c, κ c) +
+        (⨆ (B : Finset (WUnit n)) (_ : 𝓑 B), (SamplingDesign.prod (L (reg σ))).escape B) + η + (⨆ c, κ c) +
           coll Lw sess g (reg σ) (cont σ) + ∑ c, δlink c (reg σ) (cont σ)
 
 /-- **The service's sample is its sessions' laws on copy-closed sets.** For `N` tiles, `K ≤ N` sampled and sessions of

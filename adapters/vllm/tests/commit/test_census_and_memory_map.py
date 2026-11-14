@@ -38,11 +38,12 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib.util
 from itertools import chain, count
+from pathlib import Path
 
 import pytest
 import verity_difftest as D
-from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_decoder
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.phi import Phi
@@ -56,6 +57,15 @@ from verity.circuits import requirement as R
 from verity.circuits.census import census, step_ends, step_of
 from verity.protocols.accounting.poub.verifier import codec
 from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
+
+#: The requirement suite's difftest, whose Port, instance format and Programs this test shares; a file of another suite,
+#: so loaded by its path.
+REQUIREMENT_DIFFTEST = Path(__file__).resolve().parents[4] / "verity/circuits/requirement/tests/test_requirement_difftest.py"
+_spec = importlib.util.spec_from_file_location("test_requirement_difftest", REQUIREMENT_DIFFTEST)
+assert _spec is not None and _spec.loader is not None
+_RD = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_RD)
+PORT, _lean, encode, rmsnorm, serve, toy_decoder = _RD.PORT, _RD._lean, _RD.encode, _RD.rmsnorm, _RD.serve, _RD.toy_decoder
 
 server = D.server_fixture(PORT)
 

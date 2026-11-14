@@ -8,28 +8,28 @@ import Proofs.Flock.Claims.Sampling.Select.Misses
 import Proofs.Flock.Claims.Sampling.Select.Take
 
 /-!
-# The sampling design the audit samples under (`Bridge.sampledLaw`)
+# The sampling design the audit samples under (`Bridge.sampledDesign`)
 
 The deployed sample (`Spot.OneStage.sampledFrom`) samples under the sampling design the registration's sampling design object expands to
-over its strata (`Draw.deriveLaw` over `Partition.strata`), else the sampling design `flockLaw` parses from the sampling design object,
+over its strata (`Draw.deriveSamplingDesign` over `Partition.strata`), else the sampling design `flockSamplingDesign` parses from the sampling design object,
 and refuses a Bernoulli one (`OneStage.coveredDesign`).
-`sampledLaw desc q lj tb n` is that sampling design, from the registration's descriptor bytes `desc`, query `q`, sampling design object `lj` and
+`sampledDesign desc q lj tb n` is that sampling design, from the registration's descriptor bytes `desc`, query `q`, sampling design object `lj` and
 work table `tb`, at the population `n`:
 
-* `sampledFrom_sampledLaw`: the deployed sample is `sampleUnits` under `sampledLaw`, at a verifier whose program `desc` parses to;
+* `sampledFrom_sampledDesign`: the deployed sample is `sampleUnits` under `sampledDesign`, at a verifier whose program `desc` parses to;
 * `notBernoulli_sampledDesign`, `notBernoulli_samplesUnder`: it is no Bernoulli sampling design (`NotBernoulli`);
-* `lawK law`: the units a sampling design samples, a subset sampling design's `k` or its strata's `k`s summed;
-* `SamplesUnder desc q lj tb n law kd`: the verifier samples `kd` units under `law`: `law` is `sampledLaw`'s, and `kd` its
-  `lawK`; it holds at every sample the one-stage verifier samples (`samplesUnder_of_sampledFrom`);
-* `sampledLaw_cases`: `sampledLaw` is a subset sampling design within the population, a Bernoulli sampling design, or the stratified or work sampling design
+* `samplingDesignK samplingDesign`: the units a sampling design samples, a subset sampling design's `k` or its strata's `k`s summed;
+* `SamplesUnder desc q lj tb n samplingDesign kd`: the verifier samples `kd` units under `samplingDesign`: `samplingDesign` is `sampledDesign`'s, and `kd` its
+  `samplingDesignK`; it holds at every sample the one-stage verifier samples (`samplesUnder_of_sampledFrom`);
+* `sampledDesign_cases`: `sampledDesign` is a subset sampling design within the population, a Bernoulli sampling design, or the stratified or work sampling design
   `Flock.Draw.derive` or `deriveWork` expands over the registration's strata;
 * `strata_pos`, `strata_nodup`: those strata each hold a unit, and their slots hold each unit once;
 * `popMatches_strata`: at `PopMatches`, `nsOf` is those strata's sizes and their slots are the units `0, …, n − 1`;
-* `lawSized_sampledLaw`, `lawSized_samplesUnder`: a `sampledLaw` that is no Bernoulli sampling design (`NotBernoulli`) is sized
-  (`LawSized`) at `lawK`, at any population;
-* `lawOn_sampledLaw`, `lawOn_samplesUnder`: at `PopMatches`, it is on the registration's strata (`LawOn` at `nsOf`), sampling
-  `lawK` units;
-* `designAt desc q lj tb n`: `sampledLaw`'s sampling design, or `subset 0` where it errs (`designAt_cases`), under which every sample
+* `samplingDesignSized_sampledDesign`, `samplingDesignSized_samplesUnder`: a `sampledDesign` that is no Bernoulli sampling design (`NotBernoulli`) is sized
+  (`SamplingDesignSized`) at `samplingDesignK`, at any population;
+* `samplingDesignOn_sampledDesign`, `samplingDesignOn_samplesUnder`: at `PopMatches`, it is on the registration's strata (`SamplingDesignOn` at `nsOf`), sampling
+  `samplingDesignK` units;
+* `designAt desc q lj tb n`: `sampledDesign`'s sampling design, or `subset 0` where it errs (`designAt_cases`), under which every sample
   `sampledFrom` samples is sampled (`sampledFrom_designAt`), no Bernoulli sampling design (`notBernoulli_designAt`) and sized (`sized_designAt`).
 -/
 
@@ -40,12 +40,12 @@ namespace Flock.Bridge
 open Properties.Spot
 
 /-- **The sampling design the audit samples under**: the registration's sampling design object `lj` expanded over the strata of the descriptor
-`desc` under the query `q` (`Draw.deriveLaw`, with the work table `tb`), else the sampling design `flockLaw` parses from it at the
-population `n`, a Bernoulli one refused, as `OneStage.sampledFrom` samples (`sampledFrom_sampledLaw`). -/
-def sampledLaw (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Except String Flock.Draw.Law := do
+`desc` under the query `q` (`Draw.deriveSamplingDesign`, with the work table `tb`), else the sampling design `flockSamplingDesign` parses from it at the
+population `n`, a Bernoulli one refused, as `OneStage.sampledFrom` samples (`sampledFrom_sampledDesign`). -/
+def sampledDesign (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Except String Flock.Draw.SamplingDesign := do
   let p ← Spot.Program.parse ⟨desc.toArray⟩
-  let derived ← Spot.Draw.deriveLaw p q lj tb
-  let parsed ← Spot.Draw.flockLaw (SecurityProofs.lawObj lj derived) n
+  let derived ← Spot.Draw.deriveSamplingDesign p q lj tb
+  let parsed ← Spot.Draw.flockSamplingDesign (SecurityProofs.samplingDesignObj lj derived) n
   Spot.OneStage.coveredDesign (derived.getD parsed)
 
 /-- `OneStage.coveredDesign` refuses a Bernoulli sampling design. -/
@@ -55,8 +55,8 @@ theorem coveredDesign_bernoulli (a b : ℕ) :
   rfl
 
 /-- `OneStage.coveredDesign` passes exactly the sampling designs that are no Bernoulli sampling design, as they are. -/
-theorem coveredDesign_ok {l law : Flock.Draw.Law} (h : Spot.OneStage.coveredDesign l = .ok law) :
-    law = l ∧ NotBernoulli l := by
+theorem coveredDesign_ok {l samplingDesign : Flock.Draw.SamplingDesign} (h : Spot.OneStage.coveredDesign l = .ok samplingDesign) :
+    samplingDesign = l ∧ NotBernoulli l := by
   cases l
   case bernoulli a b =>
     rw [coveredDesign_bernoulli] at h
@@ -65,80 +65,80 @@ theorem coveredDesign_ok {l law : Flock.Draw.Law} (h : Spot.OneStage.coveredDesi
 
 /-- **The units a sampling design samples**: a subset sampling design's `k`, a stratified or work sampling design's strata's `k`s summed; none for a Bernoulli
 sampling design, whose count the coins set. -/
-def lawK : Flock.Draw.Law → ℕ
+def samplingDesignK : Flock.Draw.SamplingDesign → ℕ
   | .subset k => k
   | .bernoulli _ _ => 0
   | .stratified _ St => (St.toList.map (·.k)).sum
   | .work _ ws => (ws.toList.map (·.k)).sum
 
-/-- **The deployed sample is `sampleUnits` under `sampledLaw`**: at a verifier whose program the descriptor `desc` parses to,
-under the sampling design object `Draw.derive` writes from its own, `sampledFrom` samples under the sampling design `sampledLaw` reads off its query,
+/-- **The deployed sample is `sampleUnits` under `sampledDesign`**: at a verifier whose program the descriptor `desc` parses to,
+under the sampling design object `Draw.derive` writes from its own, `sampledFrom` samples under the sampling design `sampledDesign` reads off its query,
 sampling design object and work table. -/
-theorem sampledFrom_sampledLaw {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
+theorem sampledFrom_sampledDesign {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
-    (hlo : Spot.Draw.derive v.program v.query v.law v.workTable = .ok lo) (n : ℕ) (src : ByteArray) :
+    (hlo : Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) (n : ℕ) (src : ByteArray) :
     Spot.OneStage.sampledFrom v lo n src =
-      (sampledLaw desc v.query v.law v.workTable n >>= fun law => Spot.Draw.sampleUnits law n src) := by
+      (sampledDesign desc v.query v.samplingDesign v.workTable n >>= fun samplingDesign => Spot.Draw.sampleUnits samplingDesign n src) := by
   unfold Spot.Draw.derive at hlo
   obtain ⟨derived, hd, hlo⟩ := SecurityProofs.bind_eq_ok.1 hlo
-  obtain rfl : SecurityProofs.lawObj v.law derived = lo := Except.ok.inj hlo
-  unfold Spot.OneStage.sampledFrom sampledLaw
+  obtain rfl : SecurityProofs.samplingDesignObj v.samplingDesign derived = lo := Except.ok.inj hlo
+  unfold Spot.OneStage.sampledFrom sampledDesign
   rw [hp, SecurityProofs.bind_ok, hd, SecurityProofs.bind_ok, SecurityProofs.bind_ok]
-  cases Spot.Draw.flockLaw (SecurityProofs.lawObj v.law derived) n <;> rfl
+  cases Spot.Draw.flockSamplingDesign (SecurityProofs.samplingDesignObj v.samplingDesign derived) n <;> rfl
 
-/-- **The verifier samples `kd` units under `law`**: `law` is the sampling design it samples under from the registration's descriptor
-`desc`, query `q`, sampling design object `lj` and work table `tb` at the population `n` (`sampledLaw`), and `kd` the units it samples
-(`lawK`). -/
-def SamplesUnder (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) (law : Flock.Draw.Law) (kd : ℕ) :
+/-- **The verifier samples `kd` units under `samplingDesign`**: `samplingDesign` is the sampling design it samples under from the registration's descriptor
+`desc`, query `q`, sampling design object `lj` and work table `tb` at the population `n` (`sampledDesign`), and `kd` the units it samples
+(`samplingDesignK`). -/
+def SamplesUnder (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) (samplingDesign : Flock.Draw.SamplingDesign) (kd : ℕ) :
     Prop :=
-  sampledLaw desc q lj tb n = .ok law ∧ lawK law = kd
+  sampledDesign desc q lj tb n = .ok samplingDesign ∧ samplingDesignK samplingDesign = kd
 
 /-- **Every sample the one-stage verifier samples is under a sampling design `SamplesUnder` names**: where `sampledFrom` samples,
 at a verifier whose program the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes,
-its sample is `sampleUnits` under a `law` with `SamplesUnder desc v.query v.law v.workTable n law (lawK law)`. -/
+its sample is `sampleUnits` under a `samplingDesign` with `SamplesUnder desc v.query v.samplingDesign v.workTable n samplingDesign (samplingDesignK samplingDesign)`. -/
 theorem samplesUnder_of_sampledFrom {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
-    (hlo : Spot.Draw.derive v.program v.query v.law v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
+    (hlo : Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : Spot.OneStage.sampledFrom v lo n src = .ok r) :
-    ∃ law, SamplesUnder desc v.query v.law v.workTable n law (lawK law) ∧
-      Spot.Draw.sampleUnits law n src = .ok r := by
-  rw [sampledFrom_sampledLaw hp hlo] at h
-  obtain ⟨law, hl, hd⟩ := SecurityProofs.bind_eq_ok.1 h
-  exact ⟨law, ⟨hl, rfl⟩, hd⟩
+    ∃ samplingDesign, SamplesUnder desc v.query v.samplingDesign v.workTable n samplingDesign (samplingDesignK samplingDesign) ∧
+      Spot.Draw.sampleUnits samplingDesign n src = .ok r := by
+  rw [sampledFrom_sampledDesign hp hlo] at h
+  obtain ⟨samplingDesign, hl, hd⟩ := SecurityProofs.bind_eq_ok.1 h
+  exact ⟨samplingDesign, ⟨hl, rfl⟩, hd⟩
 
-/-- `sampledLaw`'s steps: the descriptor's program, the sampling design `deriveLaw` expands over its strata, if any, and the sampling design
-`flockLaw` parses from the sampling design object `Draw.derive` writes. -/
-theorem sampledLaw_ok {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {law : Flock.Draw.Law}
-    (h : sampledLaw desc q lj tb n = .ok law) :
+/-- `sampledDesign`'s steps: the descriptor's program, the sampling design `deriveSamplingDesign` expands over its strata, if any, and the sampling design
+`flockSamplingDesign` parses from the sampling design object `Draw.derive` writes. -/
+theorem sampledDesign_ok {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
+    (h : sampledDesign desc q lj tb n = .ok samplingDesign) :
     ∃ p derived parsed, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧
-      Spot.Draw.deriveLaw p q lj tb = .ok derived ∧
-      Spot.Draw.flockLaw (SecurityProofs.lawObj lj derived) n = .ok parsed ∧ law = derived.getD parsed := by
-  unfold sampledLaw at h
+      Spot.Draw.deriveSamplingDesign p q lj tb = .ok derived ∧
+      Spot.Draw.flockSamplingDesign (SecurityProofs.samplingDesignObj lj derived) n = .ok parsed ∧ samplingDesign = derived.getD parsed := by
+  unfold sampledDesign at h
   obtain ⟨p, hp, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨derived, hd, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨parsed, hpar, h⟩ := SecurityProofs.bind_eq_ok.1 h
   exact ⟨p, derived, parsed, hp, hd, hpar, (coveredDesign_ok h).1⟩
 
-/-- **The audit samples under no Bernoulli sampling design**: `sampledLaw` refuses one (`OneStage.coveredDesign`). -/
+/-- **The audit samples under no Bernoulli sampling design**: `sampledDesign` refuses one (`OneStage.coveredDesign`). -/
 theorem notBernoulli_sampledDesign {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
-    {law : Flock.Draw.Law} (h : sampledLaw desc q lj tb n = .ok law) : NotBernoulli law := by
-  unfold sampledLaw at h
+    {samplingDesign : Flock.Draw.SamplingDesign} (h : sampledDesign desc q lj tb n = .ok samplingDesign) : NotBernoulli samplingDesign := by
+  unfold sampledDesign at h
   obtain ⟨_, -, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨_, -, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨_, -, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨rfl, hb⟩ := coveredDesign_ok h
   exact hb
 
-/-- **`sampledLaw`'s cases**: a subset sampling design within the population, a Bernoulli sampling design, or the sampling design `Flock.Draw.derive` or
+/-- **`sampledDesign`'s cases**: a subset sampling design within the population, a Bernoulli sampling design, or the sampling design `Flock.Draw.derive` or
 `deriveWork` expands over the registration's strata (`Partition.strata`). -/
-theorem sampledLaw_cases {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {law : Flock.Draw.Law}
-    (h : sampledLaw desc q lj tb n = .ok law) :
-    (∃ k, law = .subset k ∧ k ≤ n) ∨ (∃ a b, law = .bernoulli a b) ∨
+theorem sampledDesign_cases {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
+    (h : sampledDesign desc q lj tb n = .ok samplingDesign) :
+    (∃ k, samplingDesign = .subset k ∧ k ≤ n) ∨ (∃ a b, samplingDesign = .bernoulli a b) ∨
       ∃ p S k, Spot.Program.parse ⟨desc.toArray⟩ = .ok p ∧ Spot.Partition.strata p q = .ok S ∧
-        (Flock.Draw.derive k S = .ok law ∨ ∃ tab, Flock.Draw.deriveWork k S tab = .ok law) := by
-  obtain ⟨p, derived, parsed, hp, hd, hpar, rfl⟩ := sampledLaw_ok h
-  rcases SecurityProofs.deriveLaw_cases p q lj tb derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S, k, law', hS, rfl, hlaw⟩
-  · rcases SecurityProofs.flockLaw_cases _ _ _ hpar with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
+        (Flock.Draw.derive k S = .ok samplingDesign ∨ ∃ tab, Flock.Draw.deriveWork k S tab = .ok samplingDesign) := by
+  obtain ⟨p, derived, parsed, hp, hd, hpar, rfl⟩ := sampledDesign_ok h
+  rcases SecurityProofs.deriveSamplingDesign_cases p q lj tb derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S, k, samplingDesign', hS, rfl, hlaw⟩
+  · rcases SecurityProofs.flockSamplingDesign_cases _ _ _ hpar with ⟨k, rfl, hk, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
     · exact Or.inl ⟨k, rfl, hk⟩
     · exact Or.inr (Or.inl ⟨a, b, rfl⟩)
     · exact absurd hk hk1
@@ -203,15 +203,15 @@ theorem popMatches_strata {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spo
     simpa [SecurityProofs.rsSize] using h2
   · rw [← h1, ← hu, hpo]
 
-/-- **The sampling design the audit samples under is on the registration's strata**: at `PopMatches`, a `sampledLaw` that is not a
-Bernoulli sampling design is `LawOn` the strata's sizes `nsOf`, sampling `lawK` units: a subset sampling design within the `n` units they sum to,
+/-- **The sampling design the audit samples under is on the registration's strata**: at `PopMatches`, a `sampledDesign` that is not a
+Bernoulli sampling design is `SamplingDesignOn` the strata's sizes `nsOf`, sampling `samplingDesignK` units: a subset sampling design within the `n` units they sum to,
 or the stratified or work sampling design over the strata, whose slots are the units `0, …, n − 1` in order, each stratum's `k` the
 rule's. -/
-theorem lawOn_sampledLaw {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {law : Flock.Draw.Law}
-    (hpop : PopMatches desc q n) (h : sampledLaw desc q lj tb n = .ok law) (hb : NotBernoulli law) :
-    LawOn law (nsOf desc q) (lawK law) := by
+theorem samplingDesignOn_sampledDesign {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
+    (hpop : PopMatches desc q n) (h : sampledDesign desc q lj tb n = .ok samplingDesign) (hb : NotBernoulli samplingDesign) :
+    SamplingDesignOn samplingDesign (nsOf desc q) (samplingDesignK samplingDesign) := by
   have hsum : (nsOf desc q).sum = n := nsOf_sum hpop
-  rcases sampledLaw_cases h with ⟨k, rfl, hk⟩ | ⟨a, b, rfl⟩ | ⟨p, S, k, hp, hS, hlaw⟩
+  rcases sampledDesign_cases h with ⟨k, rfl, hk⟩ | ⟨a, b, rfl⟩ | ⟨p, S, k, hp, hS, hlaw⟩
   · exact ⟨rfl, by rw [hsum]; exact hk⟩
   · exact (hb a b rfl).elim
   obtain ⟨hns, hn⟩ := popMatches_strata hpop hp hS
@@ -219,8 +219,8 @@ theorem lawOn_sampledLaw {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lea
   have hslots : (S.toList.flatMap fun s => SecurityProofs.expand s.2.toList) = List.range (nsOf desc q).sum := by
     rw [hsum, hn]
   rcases hlaw with hder | ⟨tab, hwork⟩
-  · obtain ⟨-, hkn⟩ := SecurityProofs.derive_bounds k S law hder
-    obtain rfl := SecurityProofs.derive_ok k S law hder
+  · obtain ⟨-, hkn⟩ := SecurityProofs.derive_bounds k S samplingDesign hder
+    obtain rfl := SecurityProofs.derive_ok k S samplingDesign hder
     refine ⟨⟨?_, ?_⟩, by rw [hns']; exact hkn, ?_, ?_, rfl⟩
     · rw [Array.toList_map, List.flatMap_map]; exact hslots
     · rw [hns, Array.toList_map]
@@ -228,7 +228,7 @@ theorem lawOn_sampledLaw {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lea
     · rw [hns]; intro x hx; obtain ⟨s, hs, rfl⟩ := List.mem_map.1 hx; exact strata_pos hS s hs
     · intro s hs; rw [Array.toList_map] at hs; obtain ⟨s₀, -, rfl⟩ := List.mem_map.1 hs
       simp only [SecurityProofs.stratum_size, hns']
-  · obtain ⟨ws, hF, rfl⟩ := SecurityProofs.deriveWork_ok k S tab law hwork
+  · obtain ⟨ws, hF, rfl⟩ := SecurityProofs.deriveWork_ok k S tab samplingDesign hwork
     have hunits := SecurityProofs.units_of_forall₂ _ _ hF
     have htot : Flock.Draw.totalWork (ws.map fun s => { s with
         k := Flock.Draw.workK k s.work s.size (Flock.Draw.totalWork ws) s.floor }) = Flock.Draw.totalWork ws := by
@@ -243,57 +243,57 @@ theorem lawOn_sampledLaw {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lea
     · intro s hs; rw [Array.toList_map] at hs; obtain ⟨w, -, rfl⟩ := List.mem_map.1 hs
       exact (congrArg (fun t => Flock.Draw.workK k w.work w.size t w.floor) htot).symm
 
-/-- **The sampling design the audit samples under is sized**, at any population: a `sampledLaw` that is not a Bernoulli sampling design is a
-subset sampling design, or a stratified or work sampling design whose strata's slots hold each unit once, at `lawK` (`LawSized`), so its sample
-files hold `lawK` units (`lawSized_size`). -/
-theorem lawSized_sampledLaw {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
-    {law : Flock.Draw.Law} (h : sampledLaw desc q lj tb n = .ok law) (hb : NotBernoulli law) :
-    LawSized law (lawK law) := by
-  rcases sampledLaw_cases h with ⟨k, rfl, -⟩ | ⟨a, b, rfl⟩ | ⟨p, S, k, -, hS, hder | ⟨tab, hwork⟩⟩
+/-- **The sampling design the audit samples under is sized**, at any population: a `sampledDesign` that is not a Bernoulli sampling design is a
+subset sampling design, or a stratified or work sampling design whose strata's slots hold each unit once, at `samplingDesignK` (`SamplingDesignSized`), so its sample
+files hold `samplingDesignK` units (`samplingDesignSized_size`). -/
+theorem samplingDesignSized_sampledDesign {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
+    {samplingDesign : Flock.Draw.SamplingDesign} (h : sampledDesign desc q lj tb n = .ok samplingDesign) (hb : NotBernoulli samplingDesign) :
+    SamplingDesignSized samplingDesign (samplingDesignK samplingDesign) := by
+  rcases sampledDesign_cases h with ⟨k, rfl, -⟩ | ⟨a, b, rfl⟩ | ⟨p, S, k, -, hS, hder | ⟨tab, hwork⟩⟩
   · exact rfl
   · exact (hb a b rfl).elim
-  · obtain rfl := SecurityProofs.derive_ok k S law hder
+  · obtain rfl := SecurityProofs.derive_ok k S samplingDesign hder
     refine ⟨?_, rfl⟩
     rw [Array.toList_map, List.flatMap_map]
     exact strata_nodup hS
-  · obtain ⟨ws, hF, rfl⟩ := SecurityProofs.deriveWork_ok k S tab law hwork
+  · obtain ⟨ws, hF, rfl⟩ := SecurityProofs.deriveWork_ok k S tab samplingDesign hwork
     refine ⟨?_, rfl⟩
     have h1 := flatMap_expand_eq (SecurityProofs.units_of_forall₂ _ _ hF)
     have h2 : (ws.toList.flatMap fun a => SecurityProofs.expand a.toStratum.units.toList).Nodup := by
       rw [h1]; exact strata_nodup hS
     simpa only [Array.toList_map, List.map_map, List.flatMap_map, Function.comp_def] using h2
 
-/-- **The sampling design the verifier samples under is sized**, at any population: `LawSized` at the `kd` units it samples, when it is
-no Bernoulli sampling design (`lawSized_sampledLaw`). -/
-theorem lawSized_samplesUnder {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
-    {law : Flock.Draw.Law} {kd : ℕ} (h : SamplesUnder desc q lj tb n law kd) (hb : NotBernoulli law) :
-    LawSized law kd := by
+/-- **The sampling design the verifier samples under is sized**, at any population: `SamplingDesignSized` at the `kd` units it samples, when it is
+no Bernoulli sampling design (`samplingDesignSized_sampledDesign`). -/
+theorem samplingDesignSized_samplesUnder {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
+    {samplingDesign : Flock.Draw.SamplingDesign} {kd : ℕ} (h : SamplesUnder desc q lj tb n samplingDesign kd) (hb : NotBernoulli samplingDesign) :
+    SamplingDesignSized samplingDesign kd := by
   obtain ⟨h, rfl⟩ := h
-  exact lawSized_sampledLaw h hb
+  exact samplingDesignSized_sampledDesign h hb
 
-/-- **The sampling design the verifier samples under is on the registration's strata**: at `PopMatches`, `LawOn` at `nsOf` and the
-`kd` units it samples, when it is no Bernoulli sampling design (`lawOn_sampledLaw`). -/
-theorem lawOn_samplesUnder {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
-    {law : Flock.Draw.Law} {kd : ℕ} (hpop : PopMatches desc q n) (h : SamplesUnder desc q lj tb n law kd)
-    (hb : NotBernoulli law) : LawOn law (nsOf desc q) kd := by
+/-- **The sampling design the verifier samples under is on the registration's strata**: at `PopMatches`, `SamplingDesignOn` at `nsOf` and the
+`kd` units it samples, when it is no Bernoulli sampling design (`samplingDesignOn_sampledDesign`). -/
+theorem samplingDesignOn_samplesUnder {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
+    {samplingDesign : Flock.Draw.SamplingDesign} {kd : ℕ} (hpop : PopMatches desc q n) (h : SamplesUnder desc q lj tb n samplingDesign kd)
+    (hb : NotBernoulli samplingDesign) : SamplingDesignOn samplingDesign (nsOf desc q) kd := by
   obtain ⟨h, rfl⟩ := h
-  exact lawOn_sampledLaw hpop h hb
+  exact samplingDesignOn_sampledDesign hpop h hb
 
-/-- **The sampling design the verifier samples under at a registration**: `sampledLaw`'s, and `subset 0`, which samples no
-proof block, at a registration whose sampling design `sampledLaw` refuses, where `sampledFrom` refuses every sample
-(`sampledFrom_sampledLaw`). -/
-def designAt (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Flock.Draw.Law :=
-  match sampledLaw desc q lj tb n with
-  | .ok law => law
+/-- **The sampling design the verifier samples under at a registration**: `sampledDesign`'s, and `subset 0`, which samples no
+proof block, at a registration whose sampling design `sampledDesign` refuses, where `sampledFrom` refuses every sample
+(`sampledFrom_sampledDesign`). -/
+def designAt (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Flock.Draw.SamplingDesign :=
+  match sampledDesign desc q lj tb n with
+  | .ok samplingDesign => samplingDesign
   | .error _ => .subset 0
 
-/-- `designAt` is the sampling design the verifier samples under (`SamplesUnder`, at its `lawK`), or `subset 0`. -/
+/-- `designAt` is the sampling design the verifier samples under (`SamplesUnder`, at its `samplingDesignK`), or `subset 0`. -/
 theorem designAt_cases (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) :
-    SamplesUnder desc q lj tb n (designAt desc q lj tb n) (lawK (designAt desc q lj tb n)) ∨
+    SamplesUnder desc q lj tb n (designAt desc q lj tb n) (samplingDesignK (designAt desc q lj tb n)) ∨
       designAt desc q lj tb n = .subset 0 := by
   unfold designAt
-  cases h : sampledLaw desc q lj tb n with
-  | ok law => exact Or.inl ⟨h, rfl⟩
+  cases h : sampledDesign desc q lj tb n with
+  | ok samplingDesign => exact Or.inl ⟨h, rfl⟩
   | error _ => exact Or.inr rfl
 
 /-- **Under a law object of kind `subset`, `sampledLaw` is a subset sampling design**: `deriveLaw` expands none
@@ -325,20 +325,20 @@ theorem designAt_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean
 
 /-- **Every sample the one-stage verifier samples is under `designAt`**: where `sampledFrom` samples, at a verifier whose program
 the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes, its sample is `sampleUnits` under
-`designAt desc v.query v.law v.workTable n`. -/
+`designAt desc v.query v.samplingDesign v.workTable n`. -/
 theorem sampledFrom_designAt {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
-    (hlo : Spot.Draw.derive v.program v.query v.law v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
+    (hlo : Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : Spot.OneStage.sampledFrom v lo n src = .ok r) :
-    Spot.Draw.sampleUnits (designAt desc v.query v.law v.workTable n) n src = .ok r := by
-  obtain ⟨law, ⟨hl, -⟩, hd⟩ := samplesUnder_of_sampledFrom hp hlo h
+    Spot.Draw.sampleUnits (designAt desc v.query v.samplingDesign v.workTable n) n src = .ok r := by
+  obtain ⟨samplingDesign, ⟨hl, -⟩, hd⟩ := samplesUnder_of_sampledFrom hp hlo h
   unfold designAt
   rw [hl]
   exact hd
 
 /-- **The verifier samples under no Bernoulli sampling design** (`notBernoulli_sampledDesign`). -/
 theorem notBernoulli_samplesUnder {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
-    {law : Flock.Draw.Law} {kd : ℕ} (h : SamplesUnder desc q lj tb n law kd) : NotBernoulli law :=
+    {samplingDesign : Flock.Draw.SamplingDesign} {kd : ℕ} (h : SamplesUnder desc q lj tb n samplingDesign kd) : NotBernoulli samplingDesign :=
   notBernoulli_sampledDesign h.1
 
 /-- **`designAt` is no Bernoulli sampling design** (`notBernoulli_samplesUnder`; `subset 0` is none). -/
@@ -350,11 +350,11 @@ theorem notBernoulli_designAt (desc : Claims.Msg) (q lj : Lean.Json) (tb : Optio
     intro _ _ h'
     cases h'
 
-/-- **`designAt` is sized** at its `lawK` (`lawSized_samplesUnder`; `subset 0` at `0`). -/
+/-- **`designAt` is sized** at its `samplingDesignK` (`samplingDesignSized_samplesUnder`; `subset 0` at `0`). -/
 theorem sized_designAt (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) :
-    LawSized (designAt desc q lj tb n) (lawK (designAt desc q lj tb n)) := by
+    SamplingDesignSized (designAt desc q lj tb n) (samplingDesignK (designAt desc q lj tb n)) := by
   rcases designAt_cases desc q lj tb n with h | h
-  · exact lawSized_samplesUnder h (notBernoulli_samplesUnder h)
+  · exact samplingDesignSized_samplesUnder h (notBernoulli_samplesUnder h)
   · rw [h]
     exact rfl
 

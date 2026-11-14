@@ -233,11 +233,11 @@ structure Window where
   nJ : ℕ
   /-- the members, in the registration's order -/
   ms : List (Member nJ)
-  law : Flock.Draw.Law
+  samplingDesign : Flock.Draw.SamplingDesign
   ns : List ℕ
   kd : ℕ
   hns : ns.sum = nJ
-  hlaw : Flock.Bridge.LawOn law ns kd
+  hlaw : Flock.Bridge.SamplingDesignOn samplingDesign ns kd
   /-- the device's bytes the sample reads -/
   Ω : Type
   [fΩ : Fintype Ω]
@@ -245,8 +245,8 @@ structure Window where
   Lb : Fin 1 → ℕ
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
   hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src
-  hcls : ∀ m ∈ ms, ∀ ω : Ω, Flock.Guarantees.sampleEnded src law nJ ω = true →
-    mPtsOf m.D.unroll.g (m.part ((Flock.Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+  hcls : ∀ m ∈ ms, ∀ ω : Ω, Flock.Guarantees.sampleEnded src samplingDesign nJ ω = true →
+    mPtsOf m.D.unroll.g (m.part ((Flock.Bridge.execSel (n := nJ) src samplingDesign nJ).draw ω)).card =
       mPtsOf m.D.unroll.g (m.kd / nTab m.I)
   /-- the claim's share: at most an `ε` share of the population's proof blocks unbound -/
   ε : ℝ
@@ -265,7 +265,7 @@ noncomputable def joint (t : ℕ) : Flock.Guarantees.JointAuditV5 where
   Reg := ByteArray
   nJ := W.nJ
   ms := W.ms.map fun m => m.toV5 t
-  law := W.law
+  samplingDesign := W.samplingDesign
   ns := W.ns
   kd := W.kd
   hns := W.hns
@@ -293,7 +293,7 @@ noncomputable def extend (S : Widening) : Window where
 
 /-- **The window's sample's sampling design**: the registration's sampling design over the population, as `Spot.Draw.sampleUnits` samples it on
 the device's bytes in order (`Flock.Bridge.execSel`); a sample that fails samples every proof block. -/
-noncomputable def L : FlockSoundness.Audit.Law W.nJ := Flock.Bridge.execSel (n := W.nJ) W.src W.law W.nJ
+noncomputable def L : FlockSoundness.Audit.SamplingDesign W.nJ := Flock.Bridge.execSel (n := W.nJ) W.src W.samplingDesign W.nJ
 
 /-- The window's sample is Flock's window's, at any budget. -/
 theorem joint_L (t : ℕ) : (W.joint t).L = W.L := rfl
@@ -315,7 +315,7 @@ noncomputable def hidingTerm (_ : Window) : ℝ≥0∞ := 2 * (maxLeaves : ℝ�
 
 /-- The sampling design's own miss of a set `B` of the population's proof blocks (`JointAuditV5.pa`). -/
 noncomputable def pa (B : Finset (Fin W.nJ)) : ℝ :=
-  (_root_.Properties.Spot.oneStageOf W.law).Pa W.ns (B.map Fin.valEmbedding)
+  (_root_.Properties.Spot.oneStageOf W.samplingDesign).Pa W.ns (B.map Fin.valEmbedding)
 
 /-- **The sample's term**: the most the sampling design misses of any set of more than an `ε` share of the
 population's proof blocks, `JointShareV5`'s. -/
@@ -365,7 +365,7 @@ session played alone at `τ`, at the member's budgets. -/
 structure JointFinderCR (w : Flock.Guarantees.JointAuditV5) [Nonempty w.EndΩ]
     (τ : FlockSoundness.Game.Strategy w.game) : Prop where
   table : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
-    (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
+    (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign τ k).draw ω) (reg (w.memberSim τ k))) j
     (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
     (w.ms.get k).qF (w.ms.get k).qS
   link : ∀ k, Assumptions.LinkCRZCAt execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
