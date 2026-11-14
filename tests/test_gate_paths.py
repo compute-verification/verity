@@ -9,7 +9,7 @@ lean-audit, so that fails here too.
 
 Paths resolve against `git ls-files`: a tracked file, or a directory holding one. What a gate names that is never tracked
 (build output, a file a shipped tree is given, a directory of entry files that holds none yet) is in `EXEMPT` with its
-reason, or is gitignored. A suite's inputs may also name a fixture `fixtures/artifacts.json` registers for fetching.
+reason, or is gitignored. A suite's inputs may also name a fixture `artifacts.json` registers for fetching.
 """
 from __future__ import annotations
 
@@ -114,9 +114,9 @@ def _suite_tables() -> dict[str, dict]:
 
 @functools.cache
 def registered() -> frozenset[str]:
-    """The paths `fixtures/artifacts.json` registers. A fetched one is never tracked, and `suites.py` keys a suite whose inputs
+    """The paths `artifacts.json` registers. A fetched one is never tracked, and `suites.py` keys a suite whose inputs
     cover it on its id."""
-    doc = json.loads((ROOT / "fixtures" / "artifacts.json").read_text(encoding="utf-8"))
+    doc = json.loads((ROOT / "artifacts.json").read_text(encoding="utf-8"))
     return frozenset(v.rstrip("/") for k, v in doc.items() if k.startswith("art:") and isinstance(v, str))
 
 
