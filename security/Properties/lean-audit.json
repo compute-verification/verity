@@ -68,21 +68,10 @@
   "Properties.Pous.Component",
   "Properties.Pous.MemoryChallenger.Session",
   "Properties.Pous.Obligation",
-  "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
   "Properties.Attest",
   "Properties.Accounting.Requirement",
-  "Properties.Compose.Remote",
-  "Properties.Compose.Remote.Coins",
-  "Properties.Compose.Remote.Shared",
-  "Properties.Compose.Remote.Pooled",
-  "Properties.Compose.Compose",
   "Properties.Accounting.Served",
   "Properties.Accounting.RegisteredCircuit",
-  "Properties.Compose.Remote.Line",
-  "Properties.Compose.Remote.Schedule",
-  "Properties.Compose.Remote.Live",
-  "Properties.Compose.Remote.Subprotocol",
-  "Properties.Compose.Remote.SubprotocolDeployed",
   "Properties.Composition",
   "Properties.InferenceOnly.Protocol",
   "Properties.InferenceOnly.Record",
@@ -91,21 +80,33 @@
   "Properties.Verity.Sha512",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
+  "Properties.Verity.Committed",
   "Properties.Flock.Nets",
   "Properties.Flock.ReadNet",
   "Properties.Assumptions",
   "Properties.Verity.ExecutionPhaseFiles",
   "Properties.Verity.Idle",
   "Properties.Remote",
-  "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
-  "Properties.Certifier.JointBridge.WorkOfCreditedWords",
-  "Properties.Certifier.JointBridge.ServiceSoundOfSessions",
   "Properties.Flock.Circuit",
   "Properties.Pous.WipeSigned",
   "Properties.Challenger",
   "Properties.ZkServer",
   "Properties.Core.Site",
-  "Properties.InferenceOnly.Opening"
+  "Properties.InferenceOnly.Opening",
+  "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
+  "Properties.Compose.Remote",
+  "Properties.Compose.Remote.Coins",
+  "Properties.Compose.Remote.Shared",
+  "Properties.Compose.Remote.Pooled",
+  "Properties.Compose.Compose",
+  "Properties.Compose.Remote.Line",
+  "Properties.Compose.Remote.Schedule",
+  "Properties.Compose.Remote.Live",
+  "Properties.Compose.Remote.Subprotocol",
+  "Properties.Compose.Remote.SubprotocolDeployed",
+  "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
+  "Properties.Certifier.JointBridge.WorkOfCreditedWords",
+  "Properties.Certifier.JointBridge.ServiceSoundOfSessions"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": ["Definitions.Assumptions", "Properties.Assumptions"],
@@ -853,6 +854,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.GateARow": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24"
+  },
   "Verity.Site.Boundary": {
    "owner": "@lean",
    "digest": "50c25787a970be9a17ca64fb4e05503a0761b0713bc7559c426f3103eb93fa35",
@@ -907,6 +913,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Vocab.WiresSound": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24"
+  },
   "Verity.Wipe.SurvivorBound": {
    "owner": "@soundness",
    "digest": "59c32110ad37a324988ebec3721ddbed31555090ee2b008b734c1651b3387da1",
@@ -932,8 +943,8 @@
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
    "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order",
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
-   "Verity.Assumptions.TrustedDevice": "the honest verifier server's auditor-trusted devices (trusted-device): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
+   "Verity.Assumptions.TrustedDevice": "the honest verifier server's auditor-trusted devices (trusted-device): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
   },
   "extra": {
    "Verity.remote_soundness_of_subprotocols": {
@@ -977,7 +988,7 @@
    "Properties.Pouw.Period.ServiceSound",
    "Properties.Pouw.Period.StagedPins"
   ],
-  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound"]
+  "Verity.remote_soundness_of_subprotocols": ["Verity.GateARow", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound", "Verity.Vocab.WiresSound"]
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
@@ -2292,11 +2303,6 @@
    ],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
-  "Properties.Compose.Compose": {
-   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw"],
-   "except": [],
-   "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Compose.Compose`) are stated against the verifier's own partition of its program (`Spot.Slots.layout`) and the challenger's draw from bytes (`Spot.Select.select`, read as `Properties.Spot.bytesOf` reads them), never a proof"
-  },
   "Properties.Accounting.Served": {
    "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw", "Properties.Compose.Compose"],
    "except": [],
@@ -2312,30 +2318,10 @@
    "except": ["Properties.Pouw.Period.Witnesses"],
    "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Compose.ComposeMonitoringPeriod`, `Definitions.Accounting.Assumptions`), never a proof"
   },
-  "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod": {
-   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "Properties.Pouw.Period"],
-   "except": [],
-   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Compose.JointPeriod`), the bridge's realization (`Definitions.Certifier.JointBridge`), its named premises (`Definitions.Pouw.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
-  },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
    "except": [],
    "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Compose.ComposeMonitoringPeriod`, `Definitions.Pouw.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
-  },
-  "Properties.Certifier.JointBridge": {
-   "imports": [
-    "Definitions.Accounting",
-    "Definitions.Accounting.Assumptions",
-    "Properties.Pous.Period",
-    "Properties.Pouw.Period"
-   ],
-   "except": [],
-   "why": "a protocol's per-period guarantee read as the coins model's (`PeriodRun.Sound`) is stated over the period (`Definitions.Compose.JointPeriod`), its bridge (`Definitions.Certifier.JointBridge`), the bridge's named claims (`Definitions.Accounting.Assumptions`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.Period`), never a proof"
-  },
-  "Properties.Certifier.JointBridge.WorkOfCreditedWords": {
-   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions"],
-   "except": [],
-   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Compose.JointPeriod`), its realization (`Definitions.Certifier.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
   "Properties.NetworkPeriod": {
    "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
@@ -2406,7 +2392,6 @@
     "Properties.Verity.Game",
     "Properties.Verity.Sha512",
     "Definitions.Core.Hash",
-    "Definitions.Compose.JointLive",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
     "Flock.Hash",
@@ -2420,15 +2405,20 @@
     "Flock.Hm96",
     "Properties.Verity.Subprotocols",
     "Properties.Verity.Coupling",
-    "Definitions.Compose.JointPeriod",
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlusDraw",
     "Properties.Remote",
     "Properties.Verity.ExecutionPhaseFiles",
-    "Definitions.Core.Compiler"
+    "Definitions.Core.Compiler",
+    "Properties.Verity.Committed",
+    "Properties.Spot.Wires",
+    "Spot.FilePart",
+    "Spot.RecordText",
+    "Definitions.Compose.JointLive",
+    "Definitions.Compose.JointPeriod"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.ExecutionPhaseFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.ExecutionPhaseFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string); the two statements that tie the policy's clause to the committed files (`Properties.Verity.Committed`) read a wiring's rows (`Properties.Spot.Wires`), a file's rows a unit (`Spot.FilePart`) and the record's text as SPOT's reader reads it (`Spot.RecordText`), never over a proof"
   },
   "Properties.Core": {
    "imports": ["Definitions.Core", "CoreProtocol.Site", "RegistrationLog.SiteCheck"],
@@ -2501,60 +2491,15 @@
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.Compose.Remote": {
-   "imports": ["Poub", "Properties.Compose.Remote"],
-   "except": [
-    "Properties.Compose.Remote.Pooled",
-    "Properties.Compose.Remote.Line",
-    "Properties.Compose.Remote.Line.Premises",
-    "Properties.Compose.Remote.Line.Record",
-    "Properties.Compose.Remote.Schedule",
-    "Properties.Compose.Remote.Subprotocol",
-    "Properties.Compose.Remote.SubprotocolDeployed"
-   ],
-   "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
-   "sealed": true
-  },
   "Properties.Spot.Draw": {
    "imports": ["Definitions.Claims", "Spot"],
    "except": [],
    "why": "what the draw misses is stated against `Select.select`'s slots (`Spot.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
   },
-  "Properties.Compose.Remote.Pooled": {
-   "imports": ["Definitions.Accounting", "Poub"],
-   "except": [],
-   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Compose.Remote.Draw`), never a proof"
-  },
-  "Properties.Compose.Remote.Line": {
-   "imports": [
-    "Definitions.Pouw.Basic",
-    "Definitions.Compose.Remote",
-    "Definitions.Accounting.Assumptions",
-    "Poub",
-    "Properties.Compose.Remote.Line"
-   ],
-   "except": [],
-   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Compose.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
-  },
-  "Properties.Compose.Remote.Schedule": {
-   "imports": ["Definitions.Accounting", "Poub", "Properties.Compose.Remote"],
-   "except": [],
-   "why": "the schedule check (`Poub.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
-  },
   "Properties.Spot.Second": {
    "imports": ["Definitions.Claims", "Spot", "Properties.Spot.Draw"],
    "except": [],
    "why": "what the two-stage rule's second stage misses is stated against `Select.selectSecond` and the claims' escape `escCell` (`Definitions.Claims.SamplingTwo`), with `Properties.Spot.bytesOf`'s reading of uniform bytes, never a proof"
-  },
-  "Properties.Compose.Remote.Subprotocol": {
-   "imports": ["Poub", "Properties.Compose.Remote.Line"],
-   "except": [],
-   "why": "the bandwidth component's refinement is stated against its own check (`Poub.Protocol`) and the memory line of record (`Properties.Poub.Line`), whose model vocabulary it reads through that module; never a proof"
-  },
-  "Properties.Compose.Remote.SubprotocolDeployed": {
-   "imports": ["Properties.Compose.Remote.Subprotocol"],
-   "except": [],
-   "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Compose.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
   },
   "Properties.Spot.Bits": {
    "imports": ["Definitions.Claims.Sampling", "Spot.Bits"],
@@ -2719,6 +2664,76 @@
    "except": [],
    "why": "the circuit record's properties are stated over the code they are about (the record's text as Spot.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
    "sealed": true
+  },
+  "Properties.Compose.Compose": {
+   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw"],
+   "except": [],
+   "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Compose.Compose`) are stated against the verifier's own partition of its program (`Spot.Slots.layout`) and the challenger's draw from bytes (`Spot.Select.select`, read as `Properties.Spot.bytesOf` reads them), never a proof"
+  },
+  "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod": {
+   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "Properties.Pouw.Period"],
+   "except": [],
+   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Compose.JointPeriod`), the bridge's realization (`Definitions.Certifier.JointBridge`), its named premises (`Definitions.Pouw.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
+  },
+  "Properties.Certifier.JointBridge": {
+   "imports": [
+    "Definitions.Accounting",
+    "Definitions.Accounting.Assumptions",
+    "Properties.Pous.Period",
+    "Properties.Pouw.Period"
+   ],
+   "except": [],
+   "why": "a protocol's per-period guarantee read as the coins model's (`PeriodRun.Sound`) is stated over the period (`Definitions.Compose.JointPeriod`), its bridge (`Definitions.Certifier.JointBridge`), the bridge's named claims (`Definitions.Accounting.Assumptions`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.Period`), never a proof"
+  },
+  "Properties.Certifier.JointBridge.WorkOfCreditedWords": {
+   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions"],
+   "except": [],
+   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Compose.JointPeriod`), its realization (`Definitions.Certifier.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
+  },
+  "Properties.Compose.Remote": {
+   "imports": ["Poub", "Properties.Compose.Remote"],
+   "except": [
+    "Properties.Compose.Remote.Pooled",
+    "Properties.Compose.Remote.Line",
+    "Properties.Compose.Remote.Line.Premises",
+    "Properties.Compose.Remote.Line.Record",
+    "Properties.Compose.Remote.Schedule",
+    "Properties.Compose.Remote.Subprotocol",
+    "Properties.Compose.Remote.SubprotocolDeployed"
+   ],
+   "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
+   "sealed": true
+  },
+  "Properties.Compose.Remote.Pooled": {
+   "imports": ["Definitions.Accounting", "Poub"],
+   "except": [],
+   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Compose.Remote.Draw`), never a proof"
+  },
+  "Properties.Compose.Remote.Line": {
+   "imports": [
+    "Definitions.Pouw.Basic",
+    "Definitions.Compose.Remote",
+    "Definitions.Accounting.Assumptions",
+    "Poub",
+    "Properties.Compose.Remote.Line"
+   ],
+   "except": [],
+   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Compose.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
+  },
+  "Properties.Compose.Remote.Schedule": {
+   "imports": ["Definitions.Accounting", "Poub", "Properties.Compose.Remote"],
+   "except": [],
+   "why": "the schedule check (`Poub.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
+  },
+  "Properties.Compose.Remote.Subprotocol": {
+   "imports": ["Poub", "Properties.Compose.Remote.Line"],
+   "except": [],
+   "why": "the bandwidth component's refinement is stated against its own check (`Poub.Protocol`) and the memory line of record (`Properties.Poub.Line`), whose model vocabulary it reads through that module; never a proof"
+  },
+  "Properties.Compose.Remote.SubprotocolDeployed": {
+   "imports": ["Properties.Compose.Remote.Subprotocol"],
+   "except": [],
+   "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Compose.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
   }
  },
  "reads_exempt": {

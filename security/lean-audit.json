@@ -3266,6 +3266,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.GateARow": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24"
+  },
   "Verity.Partition.Correct": {
    "owner": "@proofs",
    "digest": "71598c961502ae6e52b3f9f9b0a38c000a3208215229ba18bfb4531b5533b322",
@@ -3302,12 +3307,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Vocab.InferenceOnlySound": {
-   "owner": "@lean",
-   "digest": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Verity.Vocab.NetworkCertifierSound": {
    "owner": "@network-accounting",
    "digest": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
@@ -3337,6 +3336,11 @@
    "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Verity.Vocab.WiresSound": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24"
   },
   "Verity.Wipe.OfRun.Preserves": {
    "owner": "@lean",
@@ -3380,8 +3384,8 @@
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
    "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order",
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
-   "Verity.Assumptions.TrustedDevice": "the honest verifier server's auditor-trusted devices (trusted-device): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
+   "Verity.Assumptions.TrustedDevice": "the honest verifier server's auditor-trusted devices (trusted-device): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
   },
   "extra": {
    "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
@@ -3497,7 +3501,6 @@
   "Proofs.Flock.Bridge",
   "Proofs.Flock.ZeroKnowledgeHidden",
   "Proofs.Flock.Masked",
-  "Proofs.Certifier.JointBridge.Guarantees",
   "Proofs.Poub.ReadUnit.Guarantees",
   "Properties.Flock.ReadNet",
   "PouwWindow.Lanes",
@@ -3591,7 +3594,11 @@
   "Properties.Verity.Idle",
   "Properties.Remote",
   "Properties.InferenceOnly",
-  "Properties.Verity.ExecutionPhaseFiles"
+  "Properties.Verity.ExecutionPhaseFiles",
+  "Properties.Verity.Committed",
+  "Properties.Spot.Wires",
+  "Spot.RecordText",
+  "Proofs.Certifier.JointBridge.Guarantees"
  ],
  "claims": {
   "modules": ["Definitions.Claims", "Definitions.Core.Interaction", "Definitions.Pous.Claims"],
@@ -5668,6 +5675,7 @@
  "witnesses_assumed": {
   "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands.",
   "Accounting.ReadUnit.ExpertReadAccepted": "not an assumption about the world but an unproved fact about code: the Lean check `Flock.ReadNet.check 256 3072` accepts the read template at H = 3072 as its text reads back (`flock-read-tmpl 256 3072` exits 0 on it); until Lean proves it, the honest witness takes it.",
+  "Verity.GateARow": "not an assumption about the world but an unproved count over code that reads no deployment: every unit of `Flock.Bridge.circuitOfFile`, at files that parse, has `Spot.FilePart.ofCircuit`'s `m` gates; no instance concludes it, so until Lean proves it a witness leaves it as it stands.",
   "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, which no theorem concludes: by definition it is `Claims.Hm96Hiding` at the deployed instance (hm96's mask `ZkView.My` and salt hash `ZkView.saltHash` at δ₁ = 2^-193) and adds no assumption, and only a zero-knowledge guarantee's witness takes it, as the trust base's extra premise is trusted for the zero-knowledge guarantees only."
  },
  "layers": {

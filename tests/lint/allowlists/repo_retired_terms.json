@@ -301,7 +301,7 @@
     {"file": "security/Proofs/Accounting/RegisteredCircuit/Tiles.lean", "count": 1},
     {"file": "security/Proofs/Accounting/RegisteredCircuit/Witness.lean", "count": 70},
     {"file": "security/Proofs/Accounting/RegisteredCircuit/WitnessPrefill.lean", "count": 46},
-    {"file": "security/Proofs/Accounting/Gates.lean", "count": 14},
+    {"file": "security/Proofs/Accounting/Gates.lean", "count": 13},
     {"file": "security/Proofs/Accounting/Gates/Bitwise.lean", "count": 14},
     {"file": "security/Proofs/Pouw/Headline/FpG1.lean", "count": 3},
     {"file": "security/Proofs/Pouw/Headline/FpG1Measured.lean", "count": 3},
