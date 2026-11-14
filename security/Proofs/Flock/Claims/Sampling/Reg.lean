@@ -123,7 +123,7 @@ structure Order (k : ℕ) where
 session's rounds those of `c`'s after the second stage's coin. -/
 def Code.atOrder (c : Code) (j : (x : Msg) → Order (c.V.k x)) : Code :=
   { c with
-    stage2 := fun x => univ.filter fun t => (j x).first < t
+    secondStage := fun x => univ.filter fun t => (j x).first < t
     rounds := fun x u => (c.rounds x u).filter fun t => (j x).second < t }
 
 section At

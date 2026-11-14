@@ -161,7 +161,7 @@ theorem retAll_E_nil (L : Compiled Coin A) (hck : ∀ x r, L.checked x r = []) (
       generalize (List.finRange (L.kOut x)).zip outer = jos
       refine retAll_bind (p := fun l : List (List Msg × Claims.Sampling.Opening Bool) => l = []) _ _
         (retAll_flatMapRP_nil _ (fun jo => ?_) _) fun found hfound => ?_
-      · generalize List.map (fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.capIn x)) = rs'
+      · generalize List.map (fun l => forkOn (L.secondStage x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.capIn x)) = rs'
         refine retAll_bind (p := fun _ => True) _ _ (retAll_true _) fun inner _ => ?_
         generalize (List.finRange (L.kIn x)).zip inner = lis
         exact retAll_flatMapRP_nil _ (fun li => retAll_runExt_nil L hck _ _ _ _ _) _
@@ -191,7 +191,7 @@ noncomputable def freeL (Coin : Type) : Compiled Coin (twoA Coin) where
   scopeCheck _ := true
   partition _ := some notPart
   commit := trueCm
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   sh _ _ := ()
   κb _ _ := 0

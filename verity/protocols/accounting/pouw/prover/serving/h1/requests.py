@@ -1,7 +1,7 @@
 """H1's requests and rounds (`Accounting.Served`: a request entry is an `act` value, a run input under the root of the round that admits it, committed before that round's coin).
 `pouw_h1.H1Run` builds them as it serves; this module holds what they are and how they are checked.
 
-* **Rounds.** Round s is step s, one round a step. vLLM's scheduler admits a request in the step that first schedules it
+* **Rounds.** Round s is step s, one round a step. The engine's scheduler admits a request in the step that first schedules it
   (`SchedulerOutput.scheduled_new_reqs`), and `pouw_h1_hooks.admitting`, the option's wrap of the model runner's
   ``execute_model``, hands those (`new_requests`) and the step's batch order (`batch_order`: Model Runner V2's own, each
   scheduled request's rows in the order its A tables hold them) to `pouw_h1.H1Run.admit` before the step's forward. Round s closes

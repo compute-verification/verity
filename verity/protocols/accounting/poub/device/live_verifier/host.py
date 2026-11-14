@@ -148,6 +148,11 @@ DECIMALS = {"--window-ms": (1.0, 600_000.0), "--jitter-ms": (0.0, 1_000.0), "--p
 PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.device.wipe_challenger", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.pous.device.challenger_party", 47610),
            "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_parties", 47612)}
+PARTY_CODE = {"bw_party": "import sys; from verity.protocols.accounting.pous.device import onsite; "
+                          "from verity.protocols.accounting.poub.verifier import p2_parties; "
+                          "sys.exit(p2_parties.main(sys.argv[1:], device_key=onsite.device_key))"}
+"""A party run as code rather than its module: PoUB's verifier handed the memory challenger's key loader of PoUS's
+device, which the verifier's own code may not load."""
 PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
 which `bw_party --fixture` holds."""
@@ -584,8 +589,9 @@ def party_args(verb: str, rest: list[str]) -> tuple[list[str], int]:
 
 
 def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
-    """The party's command line for `verb` (`PARTIES`): its module from the pinned tree as `auditor`, its key and session log in
-    `<root>/parties/<name>` (made there, never leaving the host), listening on every address at its port. A lane names
+    """The party's command line for `verb` (`PARTIES`): its module (or its code, `PARTY_CODE`) from the pinned tree as
+    `auditor`, its key and session log in `<root>/parties/<name>` (made there, never leaving the host), listening on every
+    address at its port. A lane names
     `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, `bw_party`'s
     `--pous-session SID` (the registration the block challenger's record of PoUS session SID gives, read on this host)
     or `--fixture` (`PARTY_FIXED`'s), one of them, and `--session SID` (the session id its close is signed under, by the
@@ -630,7 +636,8 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
         raise Refused("bw_party names no store: --pous-session SID holds the store the block challenger kept for PoUS "
                       "session SID, --fixture the fixture store's (a key whose forced command drops the caller's words "
                       "gives neither)")
-    return _as_auditor_python("-m", module, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}", *extra)
+    run = ("-c", PARTY_CODE[verb]) if verb in PARTY_CODE else ("-m", module)
+    return _as_auditor_python(*run, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}", *extra)
 
 
 def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:

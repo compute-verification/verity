@@ -235,7 +235,7 @@ theorem sampleDesign_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : Sample
   let E : (Fin L → Fin 256) → Prop := fun src =>
     (Slots.select rule d query table cm (bytesOf src)).isOk = true ∧
       Misses B (checkedOf (Slots.select rule d query table cm (bytesOf src)))
-  refine ⟨fun r => Pr fun dd => E (bytes (forkOn (D.stage2 x) r dd)), fun r => Pr_nonneg _,
+  refine ⟨fun r => Pr fun dd => E (bytes (forkOn (D.secondStage x) r dd)), fun r => Pr_nonneg _,
     fun r => Pr_mono fun dd hm => ?_, ?_⟩
   · rw [hch] at hm
     unfold sampleChecked at hm
@@ -253,10 +253,10 @@ theorem sampleDesign_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : Sample
       have hv0l : v0 < l.blocks.size := hlen ▸ Finset.mem_range.1 (hB hv0)
       obtain ⟨p, hp⟩ := index_of_mem (n := nPU D x) (hnPU ▸ (size_allSlots l).le) ((mem_allSlots _ _).2 hv0l)
       exact hm v0 hv0 p hp
-  · have hav : Ex (fun r => Pr fun dd => E (bytes (forkOn (D.stage2 x) r dd))) = Pr fun c => E (bytes c) := by
+  · have hav : Ex (fun r => Pr fun dd => E (bytes (forkOn (D.secondStage x) r dd))) = Pr fun c => E (bytes c) := by
       classical
       rw [← Ex_ind fun c => E (bytes c)]
-      rw [← Ex_resample (fun _ => D.stage2 x) (fun _ _ => rfl) fun c => if E (bytes c) then 1 else 0]
+      rw [← Ex_resample (fun _ => D.secondStage x) (fun _ _ => rfl) fun c => if E (bytes c) then 1 else 0]
       exact congrArg Ex (funext fun r => (Ex_ind _).symm)
     rw [hav, hunif]
     have hb := sampleMisses rule d query table cm L B

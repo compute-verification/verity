@@ -34,7 +34,6 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "verity/protocols/a
           "verity/protocols/accounting/certifier/device/connection_rows_run.py",
           "verity/protocols/accounting/certifier/device/runner_parts.py", "verity/protocols/accounting/certifier/device/certifier_key.py",
           "verity/protocols/accounting/certifier/device/runner_cli.py",
-          "benchmarks/network_traces/replay.py",
           "verity/protocols/accounting/certifier/device/load_relay.py", "verity/protocols/accounting/certifier/device/stall_probe.py",
           "benchmarks/network_traces/site.json", "verity/protocols/compose/device/live_challenger/auditor.py",
           "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",

@@ -3,13 +3,13 @@ module
 public import Proofs.Pouw.PearlPlus.Assembly
 public import Proofs.Pouw.PearlPlus.Rules
 public import Proofs.Properties.Pouw.PearlPlus.Verdict
-public import Definitions.Pouw.PearlC.TileDraw
+public import Definitions.Pouw.PearlC.TileSample
 public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl+'s bridge, the sample: the run's tickets and acceptance as the game's sample reads them
 
-`Definitions/Pouw/PearlC/TileDraw.lean` states γ for the sample the run makes: each tile's tickets from the declarations
+`Definitions/Pouw/PearlC/TileSample.lean` states γ for the sample the run makes: each tile's tickets from the declarations
 its unit's record makes before the coin (`drawTickets`), and an audit that accepts a sampled tile that is good and whose
 declaration is consistent with it (`goodDeclTiles`). This file reads the code's sample and acceptance in those terms.
 
@@ -38,7 +38,7 @@ different salts share an index is not one game's run.
 
 @[expose] public section
 
-namespace Pouw.PearlPlus.Draw
+namespace Pouw.PearlPlus.Sample
 
 open PouwCheck.PearlPlus
 
@@ -814,11 +814,11 @@ theorem audit_at {L : Pouw.PearlC.Layout} {u x : ℕ} (hu : u < L.N)
     show Ico (((gridTiles 64 64 L).getD _ (0, 0, 0)).2.2 * 64) _ = _
     rw [hd]
 
-end Pouw.PearlPlus.Draw
+end Pouw.PearlPlus.Sample
 
 namespace Pouw.PearlPlus.Bridge
 
-open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset Draw
+open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus Finset Sample
 
 /-- **The declaration a unit's record makes** before the coin: its kept width, and the rows and columns it credits, as
 `UnitRecord.credited`'s band rule filters a tile's (a real, unexcluded A row whose band holds no voluntary A row; a
@@ -875,9 +875,9 @@ theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (h
   obtain ⟨rfl, rfl, rfl⟩ := htile'
   try dsimp only at hrest
   obtain ⟨-, -, -, -, -, -, hform, -, hchk, -, -⟩ := hrest
-  obtain ⟨hp, -⟩ := Draw.tile?_some htile
+  obtain ⟨hp, -⟩ := Sample.tile?_some htile
   have hrec : p.records[pos]! ∈ p.records := by rw [getElem!_pos p.records pos hp]; exact List.getElem_mem hp
-  obtain ⟨-, -, hkept0, hkept⟩ := Draw.reason_none ((Properties.Pouw.PearlPlus.load_facts hload).1 _ hrec)
+  obtain ⟨-, -, hkept0, hkept⟩ := Sample.reason_none ((Properties.Pouw.PearlPlus.load_facts hload).1 _ hrec)
   have hd : dec ((auditTiling 64 64 U.layout).unit g) = declOf p.records[pos]! := by rw [hunit]; exact hdec _ hrec
   have hK := Assembly.record_domain htile hpass
   rw [← hk] at hK hkept
@@ -892,13 +892,13 @@ theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (h
     obtain ⟨x, hx, rfl⟩ := List.getElem_of_mem hi
     rw [hd] at hdi
     simp only [declOf, Finset.mem_filter, Finset.mem_range] at hdi
-    have hrp := Draw.rowsFailure_credited hchk hx (banded_row hdi.2)
+    have hrp := Sample.rowsFailure_credited hchk hx (banded_row hdi.2)
     obtain ⟨wn', -, henc, -⟩ := Assembly.formed_ok hform
     obtain ⟨hoa, -, -, hact, -, -⟩ := hopen pos rows cols htile
     rw [hoa] at henc
-    obtain ⟨hparse, s, β, hst⟩ := Draw.encode_rowA (by simp) henc x hx
-    rw [getElem!_pos _ x (by simpa using hx), List.getElem_map, Draw.rowBytesOf_eq, ← hk] at hparse
-    obtain ⟨hsz, hwords⟩ := Draw.parseRow_wordBytes hparse
+    obtain ⟨hparse, s, β, hst⟩ := Sample.encode_rowA (by simp) henc x hx
+    rw [getElem!_pos _ x (by simpa using hx), List.getElem_map, Sample.rowBytesOf_eq, ← hk] at hparse
+    obtain ⟨hsz, hwords⟩ := Sample.parseRow_wordBytes hparse
     have hW : ∀ l < (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).k,
         (ops.a.x[x]!)[l]! = c.act rows[x] l ∧ c.act rows[x] l < 2 ^ 32 ∧ (wordQ (c.act rows[x] l)).isSome := by
       intro l hl

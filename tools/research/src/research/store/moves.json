@@ -4429,6 +4429,24 @@
     },
     {
       "paths": {
+        "security/Definitions/Pouw/PearlC/TileDraw.lean": "security/Definitions/Pouw/PearlC/TileSample.lean",
+        "security/Proofs/Pouw/PearlC/TileDrawGap.lean": "security/Proofs/Pouw/PearlC/TileSampleGap.lean",
+        "security/Proofs/Pouw/PearlPlus/Draw.lean": "security/Proofs/Pouw/PearlPlus/Sample.lean",
+        "security/Proofs/Properties/Pouw/Draw.lean": "security/Proofs/Properties/Pouw/Sample.lean",
+        "security/Proofs/Properties/Pouw/PearlPlus/Draw.lean": "security/Proofs/Properties/Pouw/PearlPlus/Sample.lean",
+        "security/Properties/Pouw/PearlPlusDraw.lean": "security/Properties/Pouw/PearlPlusSample.lean",
+        "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Draws.lean": "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Samples.lean",
+        "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Draw.lean": "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/Sample.lean",
+        "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/FullDraw.lean": "verity/protocols/accounting/pouw/verifier/lean/window/PouwWindow/FullSample.lean"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/device/tests/test_two_stage_driver.py": "adapters/vllm/tests/pipeline/test_two_stage_driver.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/pous/p2_v1/bandwidth.py": "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
         "benchmarks/torch_gpu/p2_stage/stage.py": "verity/protocols/accounting/poub/prover/p2_stage/stage.py",
         "benchmarks/torch_gpu/p2_stage/layout.py": "verity/protocols/accounting/poub/prover/p2_stage/layout.py"

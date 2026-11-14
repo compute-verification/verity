@@ -375,12 +375,18 @@ def reference(dev: str, k: int, n: int, a: Sequence[Sequence[int]], b: Sequence[
     sd = [_salt_dead(d, ops.a.alpha[i], ops.a.beta[i], a[i]) for i in range(tm)]
     capped = (_cap_ok(d, k, n, rho, ops.a.codes, ops.b.codes, sd)
               and all(_cap_ok(d, k, n, rhor, [ops.a.codes[i]], ops.b.codes, [sd[i]]) for i in range(tm)))
-    try:
-        served = 0 <= col < n // tn and all(y[i][col * tn + j] == CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j]) << 16
-                                            for i in range(tm) for j in range(tn))
-    except P.Reject:
-        served = False
+    served = 0 <= col < n // tn and _served(y, checked, ops, col, tm, tn)
     return C.leaf(checked, "h3"), int(admitted and certs and capped and served)
+
+
+def _served(y: Sequence[Sequence[int]], checked: Any, ops: Any, col: int, tm: int, tn: int) -> bool:
+    """Whether each row's committed y at column tile ``col`` is the served y (`pearl_c_u.y`); False where the served y
+    rejects (`P.Reject`)."""
+    try:
+        return all(y[i][col * tn + j] == CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j]) << 16
+                   for i in range(tm) for j in range(tn))
+    except P.Reject:
+        return False
 
 
 def _salt_dead(d, alpha: int, beta: int, x: Sequence[int]) -> list[int]:
