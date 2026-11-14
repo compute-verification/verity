@@ -175,8 +175,12 @@ paths = [
 ]
 trusted = true
 loaded_by = [
+    "verity/protocols/accounting/certifier/prover/workload.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
+    "verity/protocols/accounting/pous/prover/workload.py",
+    "verity/protocols/accounting/pouw/prover/workload.py",
+    "verity/protocols/proofs/spot/prover/workload.py",
 ]
 
 [[place]]
@@ -362,10 +366,12 @@ paths = [
     "verity/protocols/accounting/certifier/prover",
 ]
 loads = [
+    "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
     "verity/protocols/accounting/certifier/verifier",
     "verity/protocols/proofs/spot/verifier",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -537,6 +543,7 @@ paths = [
     "verity/protocols/accounting/pouw/prover",
 ]
 loads = [
+    "verity/channel.py",
     "verity/circuits",
     "verity/circuits/ops",
     "verity/circuits/silicon",
@@ -546,6 +553,7 @@ loads = [
     "verity/protocols/accounting/pouw/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -662,6 +670,15 @@ paths = [
     "verity/protocols/proofs/recursion",
 ]
 trusted = true
+
+[[place]]
+paths = [
+    "verity/protocols/proofs/spot/prover/workload.py",
+]
+loads = [
+    "verity/channel.py",
+    "verity/runtime",
+]
 
 [[place]]
 paths = [
@@ -784,6 +801,10 @@ reaches = [
     "verity/channel.py",
 ]
 loaded_by = [
+    "verity/protocols/accounting/certifier/prover/workload.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
+    "verity/protocols/accounting/pous/prover/workload.py",
+    "verity/protocols/accounting/pouw/prover/workload.py",
+    "verity/protocols/proofs/spot/prover/workload.py",
 ]

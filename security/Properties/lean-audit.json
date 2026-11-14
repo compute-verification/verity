@@ -2489,11 +2489,6 @@
    "except": [],
    "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"
   },
-  "Properties.ZkServer": {
-   "imports": ["ZkServer"],
-   "except": [],
-   "why": "the record's rules are stated against the release side's own functions (`ZkServer.Record`, `ZkServer.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
-  },
   "Properties.Spot.Second": {
    "imports": ["Definitions.Claims", "Spot", "Properties.Spot.Draw"],
    "except": [],
@@ -2644,6 +2639,11 @@
    ],
    "except": [],
    "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.Certifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
+  },
+  "Properties.ZkServer": {
+   "imports": ["ZkServer"],
+   "except": [],
+   "why": "the record's rules are stated against the release side's own functions (`ZkServer.Record`, `ZkServer.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
   }
  },
  "reads_exempt": {
