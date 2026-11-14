@@ -15,7 +15,7 @@ from the repository's root. A row (`ROWS`) is the proof server's line at its las
 (`sweep.served_line()["P5+poolwin600"]`) with its case's levers at their measured values, over the 128k workload with
 every sparse-MLA head's blocks (`volume`: the `workload` card's sparse-MLA blocks counted over the serve plan's
 requests, `mla128`), its verification phase a datacenter's window, its design held to the plan its name adds (`PLANS`:
-the planner's own, or a stratum a distinct width, at the planner's κ or a held one). The head is the card's whole key
+the planner's own, or a margin on the strata, at the planner's κ or a held one). The head is the card's whole key
 blocks and end block, the forms that verify; `--partition UNITS` cuts each head's key block into its scores unit and
 its values units instead (`UNITS`, a `partition` card beside the line's own cut, modeled), and a row so cut names the
 cut and its label (`cut`). `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the
@@ -144,15 +144,14 @@ def warm(f: float) -> dict:
 CASES = {"(i) honest": {"case": TOKENS | MEASURED, "scale": {}},
          "(ii) honest": {"case": MEASURED, "scale": {}},
          "(iii) honest": {"case": MEASURED, "scale": warm(0.25)}}
-#: the margin a by-width plan samples every stratum by but the one that costs the most proving
+#: the margin a margin plan samples every stratum by but the one that costs the most proving
 MARGIN = 0.125
 #: the plans a case's design may be held to, by what each adds to the case's name: the keywords its design passes the
-#: planner beside the line's (`optimize.two_stage_design`). None is the planner's own, the public size classes at its
-#: κ. By width, each distinct width is a stratum, sampled with `MARGIN`, at the planner's κ or held to the κ named,
-#: which holds down the proof blocks a sampled replay block proves
-PLANS = {"": {}, ", by width": {"widths": True, "margin": MARGIN},
-         **{f", by width, kappa 2^{e}": {"widths": True, "margin": MARGIN, "kappas": (2.0 ** e,)}
-            for e in range(-4, -9, -1)}}
+#: planner beside the line's (`optimize.two_stage_design`). None is the planner's own: each template a stratum, at its
+#: κ. With a margin, `MARGIN`, it samples (1 + MARGIN) k_t of every stratum but the one that costs the most proving, at
+#: the planner's κ or held to the κ named, which holds down the proof blocks a sampled replay block proves
+PLANS = {"": {}, ", margin 1/8": {"margin": MARGIN},
+         **{f", margin 1/8, kappa 2^{e}": {"margin": MARGIN, "kappas": (2.0 ** e,)} for e in range(-4, -9, -1)}}
 #: a row: a case under a plan
 ROWS = {name + more: case | {"plan": plan} for name, case in CASES.items() for more, plan in PLANS.items()}
 
