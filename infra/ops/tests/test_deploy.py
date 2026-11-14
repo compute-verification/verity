@@ -929,7 +929,7 @@ UNPRESERVED_DROPIN = "/etc/systemd/system/vy-retention-gc.service.d/20-unpreserv
 def test_the_uk_south2_train_nodes_get_exactly_what_their_live_twin_gets():
     """vy-nebius-cpu-14 to -17 get what a live node of their kind runs, so a staged one's first install, the hour it exists, is
     one cpu-12 has already run: cpu-12's entries, its managed patterns and its record. A staged one goes without the collector's
-    unpreserved-runs drop-in, which deletes runs only on cpu-1 to cpu-15."""
+    unpreserved-runs drop-in, which deletes runs only on vy-nebius-2 and cpu-1 to cpu-15."""
     nodes = deploy.load()
     twin = nodes["vy-nebius-cpu-12"]
     want = sorted(twin.entries, key=lambda e: e.path)
