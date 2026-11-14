@@ -579,6 +579,14 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     return ports
 
 
+def specialization(fam: str, statics: dict[str, Any]) -> Any:
+    """`call_scope.specialization` over the catalog, every module loaded (`registry.catalog.load`): the registered Definition
+    `fam` bound to `statics`."""
+    from verity.circuits.call_scope import specialization as bound
+    from verity.definitions.registry.catalog import load
+    return bound(fam, statics, load()[0])
+
+
 # ---------------------------------------------------------------------------------------------------------------------------------
 # readers
 # ---------------------------------------------------------------------------------------------------------------------------------
