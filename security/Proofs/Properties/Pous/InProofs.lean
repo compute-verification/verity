@@ -8,7 +8,7 @@ public import Lms.Sign
 public import Proofs.Properties.Accounting.InProofs
 public import Proofs.Properties.Pous.MemoryChallenger
 import Proofs.Properties.Pous.WipeSigned
-import Proofs.Properties.NetworkCertifier.Device.Lms
+import Proofs.Properties.Certifier.Device.Lms
 
 /-!
 # PoUS's session inside proofs: an accepted run gives a session `verdict` accepts
@@ -217,7 +217,7 @@ theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestSession
   simp [verifyCoin, honestCommitment, honestOpening, h]
   simp [Flock.FV3.Domain.verifyOpening, Flock.FV3.Domain.climb, Flock.FV3.Scheme.climbL, domain,
     Flock.FV3.Sha512.Domain.make, Flock.FV3.Domain.make, Flock.FV3.Domain.leaf, Flock.FV3.Scheme.hash, Flock.FV3.hash,
-    Flock.FV3.Sha512.scheme, Properties.NetworkCertifier.Bytes.hash_size]
+    Flock.FV3.Sha512.scheme, Properties.Certifier.Bytes.hash_size]
   exact ⟨by decide, Properties.CertifierDevice.Proofs.Lms.beq_self _⟩
 
 theorem honest_message (leaf : ByteArray) : ∃ m, message (honestCommitment leaf) COMPLETE #[honestRound] = .ok m := by
