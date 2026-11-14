@@ -101,3 +101,209 @@ I merged across five word maps (draw, law, declared, wrong_units, coin_server) a
 
 Files resolved by hand: none. What doesn't compile: nothing. Statements changed: none.
 
+[2026-11-14T23:52Z] 08eedd88e572
+SUITESPLIT -> network-accounting lead. #10216 is resolved onto `main` and pushed, not marked. The head of `cursor/na-certifier-suite-parts-b51f` is `f4e4627d0250`.
+
+1. #10240 is on `main` (a47a389a7bdb, merged at 23:07Z), so I merged today's `main` (2f8b1ccfbe4) and not its branch. No commit between #10216's base e447bdd8190f and `main` carries a `Move:` or `Layout-move:` line, so a plain merge was the right one: no restack. Against `main`, the merge's tree differs only by #10216's own four files at their own paths: `ci.toml`, `test_shards.py`, `families/build.py`, and the certifier verifier's `pyproject.toml` (`parts = 3`).
+2. Both splits hold, because they shard different suites. #10240 splits pytest (3-pod: `pytest:*` beside the audit, seven named pytest suites beside lean-build) and `benchmarks/one_stage` into 7 parts (2/7 beside the audit, the rest with the Rust build); it kept the certifier verifier whole beside the audit. #10216 splits that one suite into 3 parts: 3/3 beside the audit, 1/3 beside lean-build, 2/3 with the Rust build. Each hunk takes #10240's lines with the whole certifier entry replaced by 3/3, and 1/3 placed after `verity-pouw-benchmarks:2/3` in every plan's lean-build shard. In `test_shards.py`, `ONE_STAGE` and `PYTEST_BESIDE_BUILD` stay, and `CERTIFIER` goes back into `BESIDE_AUDIT`, `BESIDE_BUILD`, `WITH_RUST` and the parts test's `split`, in the plans' order (`test_the_plans_are_the_documented_ones` compares in order). `check.suite_parts()` is {vllm 3, one_stage 7, pouw-benchmarks 3, certifier verifier 3, composition 3}. `test_shards.py` on the merged tree: 64 passed.
+3. Run `r20261114-231128-4e8b` (`research run --on auto --cwd source`, the same command as before; its workload has no pipe, so the pipefail rule doesn't touch it or my earlier run): rc 0.
+   - certifier verifier part 1/3: 447.5 s (7.5 min), 551 passed.
+   - part 2/3: 431.4 s (7.2 min), 482 passed and 1 skipped.
+   - part 3/3: 466.3 s (7.8 min), 549 passed.
+   - verity-check: 1032 passed in 445 s. verity-graph: 246 passed in 765 s. repository: 331 passed in 410 s. Nothing failed.
+4. The merge's hunks in the two files (`git show --cc f4e4627d0250 -- tools/verity/check/ci.toml tools/verity/check/tests/test_shards.py`):
+```
+commit f4e4627d0250ff473b3e86814c751de56238b64d
+Merge: 7eee5f2c597 2f8b1ccfbe4
+Author: Cursor Agent <cursoragent@cursor.com>
+Date:   Sat Nov 14 23:10:46 2026 +0000
+
+    Merge remote-tracking branch 'origin/main' into cursor/na-certifier-suite-parts-b51f
+    
+    Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
+    
+    # Conflicts:
+    #       tools/verity/check/ci.toml
+    #       tools/verity/check/tests/test_shards.py
+
+diff --cc tools/verity/check/ci.toml
+index 03af42fe74a,5890bfc146a..469ea589be3
+--- a/tools/verity/check/ci.toml
++++ b/tools/verity/check/ci.toml
+@@@ -116,24 -116,31 +116,33 @@@ group = 
+  # spare once its build narrows. The rest (`lean-suites:*`) goes with the Rust build. Beside them circuit-check has only what
+  # `SIBLINGS_GB` leaves it until they end (`check.cc_mem_gb`, `grant_when_alone`), so the longer they run, the longer a cold
+  # circuit-check, and its shard's slot holds them back; the 5-pod plan gives it a shard of its own. The suites in parts by test
+ -# id (`[tool.verity.tests] parts`) are split so that no shard runs one whole: verity-core-composition and
+ -# verity-pouw-benchmarks put one part in each group, verity-vllm one beside the audit and two with the Rust build, whose
+ -# shard holds no other parallel suite, so its lean-suites lane's memory (`check.SHARD_ASKS_GIB`) holds their workers, and
+ -# benchmarks/one_stage the part holding its longest test beside the audit and the rest (`lean-suites:*`) with the Rust build.
+ +# id (`[tool.verity.tests] parts`) are split so that no shard runs one whole: verity-core-composition, verity-pouw-benchmarks
+ +# and the certifier verifier's put one part in each group (two parts of a one-process suite on one shard would run in one
+- # process), and verity-vllm one beside the audit and two with the Rust build, whose shard holds no other parallel suite, so its
+- # lean-suites lane's memory (`check.SHARD_ASKS_GIB`) holds their workers.
+++# process), verity-vllm one beside the audit and two with the Rust build, whose shard holds no other parallel suite, so its
+++# lean-suites lane's memory (`check.SHARD_ASKS_GIB`) holds their workers, and benchmarks/one_stage the part holding its
+++# longest test beside the audit and the rest (`lean-suites:*`) with the Rust build.
+  
+- # 3 pods: the security analysis's audit beside pytest and the parallel suites; lean-build, the rest of the Lean and the Flock
+- # suite; the Rust build and the circuits beside the rest of lean-suites.
++ # 3 pods: the security analysis's audit beside the parallel suites and most of pytest (`pytest:*`); lean-build, the rest of
++ # the Lean and the Flock suite beside seven of pytest's suites (three parallel ones and four of its longest one-process
++ # ones); the Rust build and the circuits beside the rest of lean-suites. Whole beside the audit, pytest ran its parallel
++ # suites one at a time and its one-process suites nine at a time, the first shard's longest test step. The second shard's
++ # pytest takes no cores from a build (`check.groups`), and its ask (`check.SHARD_ASKS_GIB`'s pytest beside lean-suites)
++ # gives the Flock suite's workers memory they lack beside lean-build alone. verity/definitions goes there: beside the audit
++ # and vLLM's first part it would match the 5-pod plan's first shard's smaller ask.
+  [[plan]]
+  shards = [
+-     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest", "lean-suites:verity-vllm:1/3",
++     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest:*", "lean-suites:verity-vllm:1/3",
+       "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
+ -     "lean-suites:verity/protocols/accounting/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
+ +     "lean-suites:verity/protocols/accounting/certifier/verifier:3/3", "lean-suites:verity-pouw-check-difftest",
+-      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
++      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
++      "lean-suites:benchmarks/one_stage:2/7"],
+      ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
+-      "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity/protocols/accounting/certifier/verifier:1/3", "lean-agreement"],
+ -     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "pytest:research",
+ -     "pytest:verity/definitions", "pytest:verity/circuits/ops", "pytest:verity-graph",
+++     "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity/protocols/accounting/certifier/verifier:1/3", "lean-agreement",
+++     "pytest:research", "pytest:verity/definitions", "pytest:verity/circuits/ops", "pytest:verity-graph",
++      "pytest:benchmarks/training_slowdown", "pytest:repository", "pytest:verity/protocols/accounting/pous/verifier"],
+      ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
+ -     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*"],
+ +     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity/protocols/accounting/certifier/verifier:2/3",
+ +     "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*"],
+  ]
+  
+  # 4 pods: the 3-pod plan with pytest on a pod of its own, and circuit-check's four shards one to each pod, so a cold
+@@@ -142,15 -149,14 +151,16 @@@
+  shards = [
+      ["lean-audit:security/Proofs", "lean-audit:security/Properties", "circuit-check:1/4", "lean-suites:verity-vllm:1/3",
+       "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
+ -     "lean-suites:verity/protocols/accounting/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
+ +     "lean-suites:verity/protocols/accounting/certifier/verifier:3/3", "lean-suites:verity-pouw-check-difftest",
+-      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
++      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
++      "lean-suites:benchmarks/one_stage:2/7"],
+      ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
+ -     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "circuit-check:2/4"],
+ +     "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity/protocols/accounting/certifier/verifier:1/3", "lean-agreement",
+ +     "circuit-check:2/4"],
+      ["pytest", "circuit-check:3/4"],
+      ["flock-circuit-build", "flock-rust-tests", "circuit-check:*", "lean-suites:verity-core-composition:2/3",
+ -     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*"],
+ +     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity/protocols/accounting/certifier/verifier:2/3",
+ +     "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*"],
+  ]
+  
+  # 5 pods: pytest apart, and circuit-check alone in the last shard, so no step on the gate waits behind a cold circuit-check, in
+@@@ -163,13 -169,14 +173,14 @@@
+  shards = [
+      ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest:verity/definitions", "lean-suites:verity-vllm:1/3",
+       "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
+ -     "lean-suites:verity/protocols/accounting/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
+ +     "lean-suites:verity/protocols/accounting/certifier/verifier:3/3", "lean-suites:verity-pouw-check-difftest",
+-      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
++      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3",
++      "lean-suites:benchmarks/one_stage:2/7"],
+      ["flock-circuit-build", "flock-rust-tests", "lean-audit:*", "lean-suites:verity-core-composition:2/3",
+ -     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*",
+ -     "ratchet-gate"],
+ +     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity/protocols/accounting/certifier/verifier:2/3",
+ +     "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*", "ratchet-gate"],
+      ["lean-build", "lean-unit-cut", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
+ -     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement"],
+ +     "lean-suites:verity-pouw-benchmarks:2/3", "lean-suites:verity/protocols/accounting/certifier/verifier:1/3", "lean-agreement"],
+      ["pytest:*"],
+      ["circuit-check"],
+  ]
+diff --cc tools/verity/check/tests/test_shards.py
+index 14a3566a2c8,a8d2bb202fe..d72ac68e4bd
+--- a/tools/verity/check/tests/test_shards.py
++++ b/tools/verity/check/tests/test_shards.py
+@@@ -31,19 -31,25 +31,24 @@@ PACKAGES = LA.packages(CHECK.tracked_fi
+  SECURITY = tuple(f"lean-audit:{p}" for p in ("security", "security/Proofs", "security/Properties"))
+  #: those the hand-written plans name: the spec goes with its provers (`declaration.resolve`), so no plan spells its path
+  NAMED = SECURITY[1:]
+ -#: lean-suites' parts: its suites, the composition and PoUW benchmark suites and vLLM's each in the three parts by test id its
+ -#: pyproject declares, the one-stage benchmark's in seven
+ +#: lean-suites' parts: its suites, the composition and PoUW benchmark suites, the certifier verifier's and vLLM's each in the
+- #: three parts by test id its pyproject declares
+++#: three parts by test id its pyproject declares, the one-stage benchmark's in seven
+  SUITES = CHECK._parts_of()["lean-suites"]
+  COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
+  POUW = tuple(f"lean-suites:verity-pouw-benchmarks:{k}/3" for k in (1, 2, 3))
+ +CERTIFIER = tuple(f"lean-suites:verity/protocols/accounting/certifier/verifier:{k}/3" for k in (1, 2, 3))
+  VLLM = tuple(f"lean-suites:verity-vllm:{k}/3" for k in (1, 2, 3))
++ ONE_STAGE = tuple(f"lean-suites:benchmarks/one_stage:{k}/7" for k in range(1, 8))
+  #: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
+  BESIDE_AUDIT = (VLLM[0], *(f"lean-suites:{s}" for s in ("verity/protocols/proofs/recursion/verifier/vstar_cli",
+ -                                                        "verity-core-evaluate", "pous-check",
+ -                                                        "verity/protocols/accounting/certifier/verifier",
+ -                                                        "verity-pouw-check-difftest")),
+ -                COMPOSITION[2], POUW[2], ONE_STAGE[1])
+ -BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1])
+ -WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], "lean-suites:*")
+ +                                                        "verity-core-evaluate", "pous-check")),
+-                 CERTIFIER[2], "lean-suites:verity-pouw-check-difftest", COMPOSITION[2], POUW[2])
+++                CERTIFIER[2], "lean-suites:verity-pouw-check-difftest", COMPOSITION[2], POUW[2], ONE_STAGE[1])
+ +BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1], CERTIFIER[0])
+ +WITH_RUST = (COMPOSITION[1], POUW[0], CERTIFIER[1], *VLLM[1:], "lean-suites:*")
++ #: pytest's suites the 3-pod plan runs beside lean-build; the rest (`pytest:*`) go beside the security analysis's audit
++ PYTEST_BESIDE_BUILD = tuple(f"pytest:{s}" for s in (
++     "research", "verity/definitions", "verity/circuits/ops", "verity-graph",
++     "benchmarks/training_slowdown", "repository", "verity/protocols/accounting/pous/verifier"))
+  
+  
+  @pytest.fixture(autouse=True)
+@@@ -110,15 -116,33 +115,35 @@@ def test_the_5_pod_plan_runs_pytest_in_
+          D.resolve((("pytest:nowhere", "pytest:*"),), CHECK.JOBS, _parts(n=5))
+  
+  
++ def test_the_3_pod_plan_runs_pytest_in_two_shards_by_suite_neither_beside_a_build(tmp_path):
++     """Whole beside the security analysis's audit, pytest was the 3-pod plan's first shard's longest test step: its parallel
++     suites one at a time beside verity/commitments, its one-process suites nine at a time.  The plan names seven of its
++     suites beside lean-build, whose shard holds no build to share cores with (`check.groups`), and the rest (`pytest:*`)
++     beside the audit; the two cover every suite of pytest's once, and the second shard books pytest beside lean-suites' ask
++     (`check.SHARD_ASKS_GIB`), not lean-build's."""
++     names = [s.name for s in CHECK.SUITES.discover() if s.name not in CHECK.AFTER_LEAN]
++     shards = [CHECK.shard(f"{k}/3")["parts"] for k in range(1, 4)]
++     held = [[p.partition(":")[2] for p in s if p.partition(":")[0] == "pytest"] for s in shards]
++     beside_build = [p.partition(":")[2] for p in PYTEST_BESIDE_BUILD]
++     assert sorted(held[1]) == sorted(beside_build) and not held[2]
++     assert sorted(held[0]) == sorted(n for n in names if n not in beside_build)
++     for k, jobs in ((1, "16"), (2, "16")):
++         [argv] = [argv for g in CHECK.groups(tmp_path, 16, only=shards[k - 1]) for name, argv, _ in g if name == "pytest"]
++         assert argv[2:2 + len(held[k - 1])] == held[k - 1] and argv[argv.index("--jobs") + 1] == jobs, argv
++     assert CHECK.shard_ask_gib(shards[0], []) == 330 and CHECK.shard_ask_gib([p for p in shards[0] if "lean-audit" not in p], []) == 240
++     assert CHECK.shard_ask_gib(shards[1], []) == 240 and CHECK.shard_ask_gib(shards[1], ["lean-agreement"]) == 460
++ 
++ 
+  @pytest.mark.parametrize("n", sorted(D.plans()))
+  def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
+ -    """verity-core-composition, verity-pouw-benchmarks and verity-vllm declare three parts by test id: lean-suites' parts are
+ -    its suites with each of those as its three, and every plan's shards, gated and after landing, hold each part once and no
+ -    shard all three of a suite, so no shard runs one whole: the composition and PoUW suites one part on each of three shards,
+ -    vLLM's one beside the security analysis's audit and two beside the Rust build."""
+ -    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW, "verity-vllm": VLLM,
+ +    """verity-core-composition, verity-pouw-benchmarks, the certifier verifier's suite and verity-vllm declare three parts by
+-     test id: lean-suites' parts are its suites with each of those as its three, and every plan's shards, gated and after
+-     landing, hold each part once and no shard all three of a suite, so no shard runs one whole: the composition, PoUW and
+-     certifier suites one part on each of three shards (two parts of one suite on a shard run in one process), vLLM's one beside
+-     the security analysis's audit and two beside the Rust build."""
+++    test id, and benchmarks/one_stage seven: lean-suites' parts are its suites with each of those as its parts, and every
+++    plan's shards, gated and after landing, hold each part once and no shard all of a suite, so no shard runs one whole: the
+++    composition, PoUW and certifier suites one part on each of three shards (two parts of one suite on a shard run in one
+++    process), vLLM's one beside the security analysis's audit and two beside the Rust build."""
+ +    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW,
+-              "verity/protocols/accounting/certifier/verifier": CERTIFIER, "verity-vllm": VLLM}
+++             "verity/protocols/accounting/certifier/verifier": CERTIFIER, "verity-vllm": VLLM,
++              "benchmarks/one_stage": ONE_STAGE}
+      assert CHECK.suite_parts() == {s: len(parts) for s, parts in split.items()}
+      assert SUITES == [x for s in CHECK.AFTER_LEAN
+                        for x in ([p.removeprefix("lean-suites:") for p in split[s]] if s in split else [s])]
+```
+
