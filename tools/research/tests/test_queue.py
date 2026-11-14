@@ -2126,6 +2126,28 @@ def test_status_lists_every_open_pr_whose_body_names_no_linear_issue(world, monk
                                                                                   4: "none: docs only"}
 
 
+def test_status_json_writes_one_json_document_on_stdout_and_the_queues_notices_on_stderr(world, monkeypatch, capsys):
+    """A program reads `status --json`'s stdout as JSON, so the notices a reading makes (a pull ref GitHub doesn't have, a head
+    taken from its branch) go to stderr, and stdout holds the JSON alone."""
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    world.gh.put(1, world.change({"1.txt": "x\n"}), ready=False)
+    world.gh.put(2, two := world.change({"2.txt": "x\n"}), ready=False)
+    _git(world.origin, "update-ref", "-d", "refs/pull/2/head")
+    _git(world.origin, "update-ref", "refs/heads/feature-2", two)
+    world.gh.prs[2] = dataclasses.replace(world.gh.prs[2], branch="feature-2")
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    argv = ["queue", "status", "--json", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin),
+            "--repo", "o/verity", "--store", str(world.tmp / "queue-store"), "--marked-after", "2026-10-01T00:00:00Z"]
+    assert research_main(argv) == 0
+    got = capsys.readouterr()
+    assert [e["pr"] for e in json.loads(got.out)] == [1, 2]
+    assert "#2's pull ref can't be fetched" in got.err and "#2's pull ref isn't at its API head" in got.err
+
+
 def test_the_status_command_says_when_a_move_lands_on_its_mark_and_refuses_one_that_conflicts_with_main(world):
     """`status --loop` refuses a move PR that doesn't merge onto `main`, and says of one that does that it lands with a land
     verdict, or on its mark alone once the loop certifies its move on `main` and drive.toml allows it."""
