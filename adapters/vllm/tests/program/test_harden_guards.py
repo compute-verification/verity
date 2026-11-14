@@ -132,7 +132,8 @@ def test_G5_live_constructions_differing_in_M_are_distinct_but_not_distinguishab
             r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", d, "--wrapper", "step", "--M", str(M), "--pos0", "8"],
                                cwd=INTEGRATION, env=env, capture_output=True, text=True)
             assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
-        arts[M] = json.load(open(os.path.join(d, "artifact.json")))
+        with open(os.path.join(d, "artifact.json")) as artifact:
+            arts[M] = json.load(artifact)
     a1, a2 = arts[1], arts[2]
     assert a1["program_digest"] != a2["program_digest"] and a1["identity"] != a2["identity"]
     assert a1["target_profile"] == a2["target_profile"] and a1["applicability"] == a2["applicability"]

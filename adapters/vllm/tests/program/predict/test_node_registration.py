@@ -1,4 +1,4 @@
-"""`predict node-registration`: a TP2 node Program's θ registered from a toy TP Commit of record is a log nci-check's full check accepts
+"""`predict node-registration`: a TP2 node Program's θ registered from a toy TP Commit of record is a log the inference-only policy's full check accepts
 (`nci_reference.check_baseline`), each rank's θ parameter the entry `registered_rows.commit` makes of that rank's committed tensor,
 whether the checkpoint holds it (a shard composed at the rank) or the bundle does; and each way the Commit is not the node's is
 refused by name before a row is committed."""

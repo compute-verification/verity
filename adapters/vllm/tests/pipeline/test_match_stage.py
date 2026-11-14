@@ -5,10 +5,12 @@ limit and past the wall limit, and the stage's marks on the row's timeline."""
 from __future__ import annotations
 
 import subprocess
+import sys
 import types
 
 import pytest
 
+from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import match_stage as MS
 
 CMD = ["python", "-m", "a module", "--out", "x"]
@@ -133,9 +135,22 @@ def test_a_stage_above_the_memory_limit_is_killed_and_one_at_the_limit_is_not(mo
 
 def test_a_stage_past_the_wall_limit_is_killed_and_one_at_the_limit_is_not(monkeypatch, tmp_path):
     rec, seen = _run(monkeypatch, tmp_path, running=9, timeout_s=1.5, clock=(10.0, 11.5, 11.75, 12.0))
-    assert rec == _record(seen, status="timeout", returncode=-9, reason="wall > 2 s", seconds=2.0)
+    assert rec == _record(seen, status="timeout", returncode=-9, reason="wall > 1.5 s", seconds=2.0)
     assert seen.process == ["kill", "wait"] and seen.waited == [0.25] and seen.asked == []
     assert seen.marks[-1] == ("end", "match.fold", {"rc": -9, "status": "timeout"})
+
+
+@pytest.mark.parametrize("limit, text", [(180.0, "180"), (180, "180"), (1.5, "1.5"), (0.25, "0.25"), (1e6, "1000000"), (2.5e-7, "2.5e-07")])
+def test_the_wall_limit_is_written_as_it_was_given_a_whole_number_as_an_integer(monkeypatch, tmp_path, limit, text):
+    rec, _seen = _run(monkeypatch, tmp_path, running=9, timeout_s=limit, clock=(10.0, 11.0 + 2 * limit, 12.0 + 2 * limit))
+    assert rec["status"] == "timeout" and rec["reason"] == f"wall > {text} s"
+
+
+@pytest.mark.parametrize("given", ["180", repr(sys.float_info.max), "inf"])
+def test_the_laptop_limit_and_the_largest_the_parser_admits_read_as_they_did(given):
+    """180 s is `--laptop`'s limit; `--stage-timeout` admits any float, the largest finite one and `inf` among them."""
+    limit = cli.parse("match", ["--stage-timeout", given], {}).stage_timeout
+    assert limit == float(given) and MS._limit(limit) == f"{limit:.0f}"
 
 
 def test_with_both_limits_the_memory_is_read_before_the_wall_in_each_pass(monkeypatch, tmp_path):

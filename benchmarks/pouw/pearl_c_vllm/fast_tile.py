@@ -8,7 +8,8 @@ atom's bit-exact batch form).
 - `chain_debit`: `pearl_c_debit.chain_debit`, every word's masked group words, its totals, the backward bisection of the
   later promotions' intervals and its flags, over the tile's words together; `word_debits` keeps each word's counts apart
   (`volunteer_pass.py` sums them over any rows and columns); `tile_debit`, `pearl_c_debit.tile_debit`, adds the forming
-  elements from the words' flags and each row's salt-dead elements (the support's two ends on every element at once).
+  elements from the words' flags and each row's salt-dead elements (the support's two ends on every element at once),
+  and the words' mends (`_mends`: dead pairs, and products cut on both ends' chains, every word's atom at once).
 
 Each returns exactly what its scalar reference returns.  Wherever a word, an accumulator or a promotion leaves the finite
 range, or an input is not the shape the batch takes, it calls the scalar reference instead, so a rejection (and any other
@@ -276,13 +277,55 @@ def _fp8(w: np.ndarray) -> np.ndarray:
     return sign | np.where(e < -6, sub, normal)
 
 
-def _salt_dead(alpha: int, x: np.ndarray, beta: int, device) -> np.ndarray:
-    """`pearl_c_debit.salt_dead` on one formed row: the support's two ends from f32(α·x), each element's codes compared."""
+def _ends(alpha: int, x: np.ndarray, beta: int, device) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """`pearl_c_debit.row_ends` on one formed row: the support's two ends' codes from f32(α·x), and whether each
+    element's agree."""
     k, atom = x.shape[0], device.atom.k
     acc = _finite(_mul(np.full(k, alpha, np.uint32), x.astype(np.uint32)))
     cb = np.full((k, atom), D.flat_code(beta), np.int64)
     c = [_fp8(_step(device.atom, acc, cb, np.full((k, atom), f, np.int64))) for f in D.F_ENDS]
-    return (c[0] == c[1]) | ((c[0] | c[1]) & 0x7F == 0)
+    return c[0], c[1], (c[0] == c[1]) | ((c[0] | c[1]) & 0x7F == 0)
+
+
+def _salt_dead(alpha: int, x: np.ndarray, beta: int, device) -> np.ndarray:
+    """`pearl_c_debit.salt_dead` on one formed row: the support's two ends from f32(α·x), each element's codes compared."""
+    return _ends(alpha, x, beta, device)[2]
+
+
+def _cut(acc: np.ndarray, a: np.ndarray, b: np.ndarray, device) -> np.ndarray:
+    """`pearl_c_debit.cut_flags` on every lane of one atom of one group: a product is cut when its significand on the
+    adder, shifted right by its distance below the largest exponent of the lane's nonzero products and accumulator (at
+    least the floor), is 0."""
+    atom = device.atom
+    if len(atom.groups) != 1 or atom.width < 7 or ((a & 0x7F) == 0x7F).any() or ((b & 0x7F) == 0x7F).any():
+        raise _Scalar
+    ea, eb = (a >> 3) & 0xF, (b >> 3) & 0xF
+    sig = ((a & 7) | np.where(ea > 0, 8, 0)) * ((b & 7) | np.where(eb > 0, 8, 0))
+    e = np.maximum(ea, 1) + np.maximum(eb, 1) - 14
+    f, m = (acc.astype(np.int64) >> 23) & 0xFF, acc.astype(np.int64) & 0x7FFFFF
+    e_acc = np.where((f == 0) & (m == 0), atom.zero_exponent, np.where(f == 0, -126, f - 127))
+    top = np.maximum(np.maximum(np.where(sig > 0, e, atom.zero_exponent).max(axis=1), e_acc), atom.zero_exponent)
+    return ((sig << (atom.width - 7)) >> np.minimum(top[:, None] - e, 62)) == 0
+
+
+def _mends(ends_a: list, ends_b: list, device) -> int:
+    """`pearl_c_debit.word_mend` summed over every word (a, b) of the tile, from each row's `_ends`: per atom, the dead
+    pairs and the products cut on both ends' chains (each from +0 at a promotion group's first atom), counted once."""
+    pa, ma, da = (np.stack(x) for x in zip(*ends_a))
+    pb, mb, db = (np.stack(x) for x in zip(*ends_b))
+    ia, ib = np.repeat(np.arange(len(ends_a)), len(ends_b)), np.tile(np.arange(len(ends_b)), len(ends_a))
+    k, atom, g_ = pa.shape[1], device.atom.k, device.g
+    if pb.shape[1] != k or k % atom:
+        raise _Scalar
+    plus, minus, mends = np.zeros(len(ia), np.uint32), np.zeros(len(ia), np.uint32), 0
+    for t, s in enumerate(range(0, k, atom)):
+        if t % g_ == 0 if g_ else t == 0:
+            plus[:], minus[:] = 0, 0
+        sl = slice(s, s + atom)
+        a_p, b_p, a_m, b_m = pa[ia, sl], pb[ib, sl], ma[ia, sl], mb[ib, sl]
+        mends += int(((da[ia, sl] & db[ib, sl]) | (_cut(plus, a_p, b_p, device) & _cut(minus, a_m, b_m, device))).sum())
+        plus, minus = _step(device.atom, plus, a_p, b_p), _step(device.atom, minus, a_m, b_m)
+    return mends
 
 
 def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device=D.H100) -> tuple[int, int]:
@@ -297,25 +340,25 @@ def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]]
 
 
 def tile_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]],
-               formed: Sequence[tuple[int, Sequence[int], int]], device=D.H100) -> tuple[int, int, int]:
-    """`pearl_c_debit.tile_debit`: (flagged atoms, later +0 promotions, forming elements) over every word of the tile."""
+               formed: Sequence[tuple[int, Sequence[int], int]], formed_b: Sequence[tuple[int, Sequence[int], int]],
+               device=D.H100) -> tuple[int, int, int, int]:
+    """`pearl_c_debit.tile_debit`: (flagged atoms, later +0 promotions, forming elements, mends) over every word of the
+    tile."""
     try:
-        if not len(a_rows) or not len(b_rows) or len(formed) != len(a_rows):
+        if not len(a_rows) or not len(b_rows) or len(formed) != len(a_rows) or len(formed_b) != len(b_rows):
             raise _Scalar
         a = _rows(a_rows)
         flags, zeros = _flags(a, _rows(b_rows), device)
         flags = flags.reshape(len(a_rows), len(b_rows), -1)
         every = flags.all(axis=1)
-        elements = 0
-        for i, (alpha, x, beta) in enumerate(formed):
-            if every[i].all():
-                elements += a.shape[1]
-                continue
-            dead = _salt_dead(alpha, _rows([x], a.shape[1])[0], beta, device)
-            elements += int((np.repeat(every[i], device.atom.k) | dead).sum())
-        return int(flags.sum()), int(zeros.sum()), elements
+        k = a.shape[1]
+        ends_a = [_ends(alpha, _rows([x], k)[0], beta, device) for alpha, x, beta in formed]
+        ends_b = [_ends(alpha, _rows([x], k)[0], beta, device) for alpha, x, beta in formed_b]
+        elements = sum(k if every[i].all() else int((np.repeat(every[i], device.atom.k) | ends_a[i][2]).sum())
+                       for i in range(len(formed)))
+        return int(flags.sum()), int(zeros.sum()), elements, _mends(ends_a, ends_b, device)
     except _Scalar:
-        return _SCALAR["tile_debit"](a_rows, b_rows, formed, device)
+        return _SCALAR["tile_debit"](a_rows, b_rows, formed, formed_b, device)
 
 
 def word_debits(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device=D.H100

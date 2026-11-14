@@ -212,7 +212,7 @@ def judge (statements files : Json) (program : String) (shape : Shape) (layout e
       for fj in fs do
         let f ← finding fj
         unless f.accepted do
-          throw ("failed", s!"call {c}'s session {f.session} was rejected by the verifier of record ({f.why}): a " ++
+          throw ("failed", s!"call {c}'s session {f.session} was rejected by the verifier ({f.why}): a " ++
             "failed drawn unit refuses the whole window, not only its call (no partial credit, and no retry)")
         let opened := (finding? f.registered).getD []
         if opened.any fun (p, v, root) => (pubCall? (.str v)).isSome && (p, v, root) != (PUB_PORT, pv, pr) then

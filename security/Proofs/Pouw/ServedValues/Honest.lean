@@ -156,33 +156,33 @@ def skipStages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
   .stage (fun _ _ => .whole) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
 /-- The skipping period of `n` windows: every tile live, each window's stages `skipStages`. -/
-def skipPeriod (Ω : Type) (N : ℕ) : (n : ℕ) → ExecutionPhasePlay Bool Ω (Fin N) (circuit N).rounds n
+def skipMonitoringPeriod (Ω : Type) (N : ℕ) : (n : ℕ) → ExecutionPhasePlay Bool Ω (Fin N) (circuit N).rounds n
   | 0 => .done
-  | n + 1 => .window (fun _ => true) (skipStages N) fun _ => skipPeriod Ω N n
+  | n + 1 => .window (fun _ => true) (skipStages N) fun _ => skipMonitoringPeriod Ω N n
 
-theorem liveAt_skipPeriod {Ω : Type} {N : ℕ} :
-    ∀ (n : ℕ) (x : Paths Ω n) (w : Fin n), (skipPeriod Ω N n).liveAt x w = fun _ => true
+theorem liveAt_skipMonitoringPeriod {Ω : Type} {N : ℕ} :
+    ∀ (n : ℕ) (x : Paths Ω n) (w : Fin n), (skipMonitoringPeriod Ω N n).liveAt x w = fun _ => true
   | 0, _, w => w.elim0
   | n + 1, x, w => by
     refine Fin.cases ?_ (fun w' => ?_) w
     · rfl
-    · exact liveAt_skipPeriod n x.2 w'
+    · exact liveAt_skipMonitoringPeriod n x.2 w'
 
-theorem stages_skipPeriod {Ω : Type} {N : ℕ} :
-    ∀ (n : ℕ) (x : Paths Ω n) (w : Fin n), (skipPeriod Ω N n).executionPhaseAt x w = skipStages N
+theorem stages_skipMonitoringPeriod {Ω : Type} {N : ℕ} :
+    ∀ (n : ℕ) (x : Paths Ω n) (w : Fin n), (skipMonitoringPeriod Ω N n).executionPhaseAt x w = skipStages N
   | 0, _, w => w.elim0
   | n + 1, x, w => by
     refine Fin.cases ?_ (fun w' => ?_) w
     · rfl
-    · exact stages_skipPeriod n x.2 w'
+    · exact stages_skipMonitoringPeriod n x.2 w'
 
 /-- **No block of the skipping period is paid.** -/
 theorem skip_not_paid {B V : Type} {s N n : ℕ} (pr : Outcomes Bool B (circuit N).rounds s N n V)
     (x : Paths (Paths Bool (circuit N).rounds × B) n) (u : Fin n × Fin N) :
-    monitoringPeriodMode (circuit N) (skipPeriod _ N n) pr x u ≠ .paid := by
+    monitoringPeriodMode (circuit N) (skipMonitoringPeriod _ N n) pr x u ≠ .paid := by
   unfold monitoringPeriodMode
   split_ifs
-  · rw [stages_skipPeriod]
+  · rw [stages_skipMonitoringPeriod]
     simp [skipStages, SplitStages.joint, SplitStages.modeAt, tileStage, Declared.stageOf, circuit]
   · decide
 
@@ -225,31 +225,31 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
 
 /-- **The skipping period's live words are `N·n`** when every window is credited. -/
 theorem creditLive_skip (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
-    creditLive Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
+    creditLive Honest.scheme (circuit (tileCount σ sT)) (skipMonitoringPeriod (Ω1 σ sT) (tileCount σ sT) n)
       (windows σ sT regOf evOf n) x = tileCount σ sT * n := by
   unfold creditLive
   calc _ = ∑ _w : Fin n, (tileCount σ sT : ℝ) := Finset.sum_congr rfl fun w _ => by
           have hw : (windows σ sT regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
-          rw [if_pos hw, liveAt_skipPeriod n x w]
+          rw [if_pos hw, liveAt_skipMonitoringPeriod n x w]
           simp only [liveWords_true]
           exact sum_tileWords _
     _ = tileCount σ sT * n := by simp [mul_comm]
 
 /-- **The skipping period's credited size is `N·n` AND gates** when every window is credited. -/
 theorem creditedSize_skip (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
-    creditedSize Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
+    creditedSize Honest.scheme (circuit (tileCount σ sT)) (skipMonitoringPeriod (Ω1 σ sT) (tileCount σ sT) n)
       (windows σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x =
         tileCount σ sT * n := by
   unfold creditedSize
   calc _ = ∑ _w : Fin n, (tileCount σ sT : ℝ) := Finset.sum_congr rfl fun w _ => by
           have hw : (windows σ sT regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
-          rw [if_pos hw, liveAt_skipPeriod n x w]
+          rw [if_pos hw, liveAt_skipMonitoringPeriod n x w]
           simp [liveSize, liveWords_true, tileWords_eq, size_blocks]
     _ = tileCount σ sT * n := by simp [mul_comm]
 
 /-- **`RightValues`'s conclusion fails against a verifier that accepts everything.** Every window is credited
 (`hacc`), every block is live and the play accepts every path, but the prover skips every block whole
-(`skipPeriod`), so no block is right. The right values must cover `(1 − ε(n))₊·N_p·n` AND gates, positive once
+(`skipMonitoringPeriod`), so no block is right. The right values must cover `(1 − ε(n))₊·N_p·n` AND gates, positive once
 `Λ·ln(1/δ_s) < n` at `Λ = j10rRate (k s_T) 1`. So the conclusion's event holds on every path: its probability is `1`,
 above `δ_s + n·(0 + 0)` for `δ_s < 1`. -/
 theorem right_values_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
@@ -259,15 +259,15 @@ theorem right_values_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccep
         ((blocks (tileCount σ sT)).size ∅) (fun w t =>
         (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
           (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)).Good
-          (monitoringPeriodMode (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
+          (monitoringPeriodMode (circuit (tileCount σ sT)) (skipMonitoringPeriod (Ω1 σ sT) (tileCount σ sT) n)
             (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
               (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
           x w t) <
         creditFloor Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)
           ((windows σ sT regOf evOf n).prefixLen x)
-          (creditLive Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
+          (creditLive Honest.scheme (circuit (tileCount σ sT)) (skipMonitoringPeriod (Ω1 σ sT) (tileCount σ sT) n)
             (windows σ sT regOf evOf n) x)
-          (creditedSize Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
+          (creditedSize Honest.scheme (circuit (tileCount σ sT)) (skipMonitoringPeriod (Ω1 σ sT) (tileCount σ sT) n)
             (windows σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x)
           ((blocks (tileCount σ sT)).size ∅) 1 1 (j10rRate (k sT) 1) δs) ≤
       δs + n * (0 + 0) := by

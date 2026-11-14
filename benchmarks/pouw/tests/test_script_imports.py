@@ -82,7 +82,7 @@ def test_load_names_each_script_apart():
 
 def test_load_is_the_files_module_under_its_own_name_and_runs_it_once():
     theirs = CT.load("gpu_kit/sass_gate.py")
-    assert theirs.__name__ == "gpu_kit_sass_gate" and Path(theirs.__file__) == POUW / "gpu_kit" / "sass_gate.py"
+    assert theirs.__name__ == "gpu_kit_sass_gate" and Path(theirs.__file__) == CT.KERNELS / "gpu_kit" / "sass_gate.py"
     assert sys.modules["gpu_kit_sass_gate"] is theirs is CT.load("gpu_kit/sass_gate.py")
 
 

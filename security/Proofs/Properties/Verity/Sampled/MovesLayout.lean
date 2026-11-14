@@ -192,8 +192,8 @@ trees name their streams distinctly come from the verdict (`verdict_opens`, `ver
 stream answers the record's round's digest from v2's read and the record (`rep_answers`), and the session's one link
 round and its `N` live rounds from `Live.rounds_eq`. The roots (`firstStop_rootB`) and the link points (`link_pts`) read
 the same first opening. -/
-theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem ReachesOff.movesOf {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
@@ -207,7 +207,7 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
       (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
-    (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
+    (ht : TablesSent T (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hN : SampleNamed k (CoinTape.run (V.game θ F c) σ o.2).sent label after)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log) :
@@ -257,8 +257,8 @@ map, with `after` the strategy's `afterAt`): `ReachesOff.movesOf` at every outco
 device's log and that v2 samples at `after` (`SampledDigest`), where what it takes of a play holds of every tape whose
 play the sampled verdict accepts and whose log v2's check read is the device's, and v2's family and digest (`hN`) of
 those whose sample answers `after`. -/
-theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem movesReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
@@ -275,7 +275,7 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
-    MovesReach V θ F c k (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧
+    MovesReach V θ F c k (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent) ∧
         SampledDigest k o.sent after) A rd σ D M
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
   fun _ h ⟨hv, hn, ⟨hl, ht⟩, hd⟩ => h.movesOf hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl ht

@@ -21,24 +21,20 @@ import Proofs.Flock.Soundness.Refine.Seam
 import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
-# Piece (a): candidate 3's table is sound, in fork form
+# Piece (a): the executable's parameters meet the runs lemma's hypotheses
 
-`CompiledForkSound`'s analogue at `Model.holoTableCL`, at a registration whose registrant opens every level-0 position
-(`holoInnerCLO`, `Recursion.holoInnerCL` with the statement `HoloReg.Opens`' subtype): at a statement no table near the
-registered word makes true, every inner prover has a fork whose two runs clash (`clashPickHLO`: the reps, R's stream,
-or R's level 0 opened to a row other than the registered word's), or the table accepts with probability at most
-`holoError`. `holoForkSound_holoAt` is that at the executable's parameters (`holoAt st hp`).
+`holo_runs_sound` (`C3/Fork/Runs.lean`) is candidate 3's table in the form `RecursiveAuditHolo` reads: at a statement
+no table near the registered word makes true, two of an inner prover's runs clash, one opens R's level 0 to a row other
+than the word's (`RegClash`), or the table accepts with probability at most `holoError`. It composes the reps' count,
+the sparse phase's (`sparse_sound`, `C3/Fork/Sparse.lean`) and R's opening at unique decoding (`regOpen_sound`,
+`C3/Fork/RegOpen.lean`). `RecursiveAuditHolo` is about the word the prover's own runs open
+(`Recursive/RegExtract.lean`), whose registrant's openings it does not have, so its pick (`clashPickHL`) reads only
+clashes of two runs, and a `RegClash` is a fork against the run that opened the word (`regClash_fork`,
+`C3/Fork/Extract.lean`).
 
-`RecursiveAuditHolo` is about the word the prover's own runs open (`Recursive/RegExtract.lean`), whose registrant's
-openings it does not have, so its pick (`clashPickHL`) reads only clashes of two runs. This form is what the
-extraction reduces to where the runs open every position.
-
-* `holo_inner_sound_compiled`: the general lemma, `flock_inner_sound_compiled`'s analogue, from `holo_runs_sound`
-  (`C3/Fork/Runs.lean`) as `flock_inner_sound_compiled` is from `compiled_runs_sound`. `holo_runs_sound` composes the
-  reps' count, the sparse phase's (`sparse_sound`, `C3/Fork/Sparse.lean`) and R's opening at unique decoding
-  (`regOpen_sound`, `C3/Fork/RegOpen.lean`).
-* `holoAt_fast100`, `holoAt_linkLayout`, `holoAt_rsch`, `holoAt_units`: the executable parameters meet its hypotheses,
-  as `compiledForkSound_execClassAt` does for `execClassAt`.
+* `holoAt_fast100`, `holoAt_linkLayout`, `holoAt_rsch`, `holoAt_units`: the executable parameters (`holoAt st hp`) meet
+  `holo_runs_sound`'s hypotheses, as `compiledForkSound_execClassAt` does for `execClassAt`; `holoAtτ_*` are the same
+  at a typing `τv`.
 -/
 
 @[expose] public section
@@ -51,57 +47,6 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-
-/-- **Candidate 3's compiled inner protocol at a registration its registrant opens**: `holoInnerCL` with the statement
-a registration whose registrant opens every level-0 position. -/
-noncomputable def holoInnerCLO (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) : Inner :=
-  schedInner T CT {x : HoloReg F D // x.Opens H E Lf e.rsch.sch.level₀}
-    (fun x => holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts e.cls.shape
-      e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.1.cap)
-    (fun _ out => out.accepted = true)
-    (fun x => ∃ R : RegTable e.cls, e.rsch.Close A x.1.w R ∧ ∃ z, (R.toStatement e.τ e.regs).Satisfies z)
-
-/-- **The inner fork's output at a registration its registrant opens**: on two inner transcripts whose steps play the
-table to outcomes that clash (`ClashHL`, a `RegClash` included), a collision of `H` by the registrant's openings. -/
-noncomputable def clashPickHLO (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : {x : HoloReg F D // x.Opens H E Lf e.rsch.sch.level₀})
-    (t t' : List (List (SMsg T) × ((k : Fin r) → CT k))) : Pair :=
-  collOf H (∃ o o', outHL T CT A H E Lf e x.1 t = some o ∧ outHL T CT A H E Lf e x.1 t' = some o' ∧
-      ClashHL H E Lf e.sch e.rsch.sch x.1 o o')
-    fun ⟨_, _, _, _, hc⟩ => hc.collision x.2
-
-/-- **Candidate 3's compiled table is sound in fork form**: at the reps' schedule `fast100`'s, a link layout at every
-table, R's registered schedule either empty (R rejects) or `fast100`'s at `mReg`, and every unit slot within the table,
-the inner protocol `holoInnerCLO` is sound with the pick `clashPickHLO` and the error `holoError`. -/
-theorem holo_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
-    (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo)
-    (hsch : Accounting.fast100 e.cls.m = some e.sch)
-    (hlay : ∀ R : RegTable e.cls, (R.toStatement e.τ e.regs).LinkLayout e.cls.ptLocal e.cls.mPts)
-    (hR : e.rsch.sch.levels = [] ∨ Accounting.fast100 e.cls.shape.mReg = some e.rsch.sch)
-    (hunits : ∀ σ, ∀ u ∈ e.cls.units σ, u < 2 ^ (e.cls.kLog - e.cls.slotLog)) :
-    InnerSoundForkOn H (holoInnerCLO T CT A H E Lf e) (clashPickHLO T CT A H E Lf e)
-      (ENNReal.ofReal (holoError e)) := by
-  intro x hno G s
-  change {x : HoloReg F D // x.Opens H E Lf e.rsch.sch.level₀} at x
-  have hout : ∀ {t o}, PlaysT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal
-      e.cls.mPts e.cls.shape e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.1.cap) (schedSteps T CT 0 t) o →
-      outHL T CT A H E Lf e x.1 t = some o := by
-    intro t o ho
-    have hex : ∃ out, PlaysT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal
-        e.cls.mPts e.cls.shape e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.1.cap) (schedSteps T CT 0 t) out :=
-      ⟨o, ho⟩
-    rw [outHL, dif_pos hex]
-    exact congrArg some (PlaysT.det hex.choose_spec ho)
-  rcases holo_runs_sound T CT A hA H E Lf e hsch hlay hR hunits x.1 hno G s with
-    ⟨t, t', o, o', ht, ht', hG, hG', ho, ho', hc⟩ | hb
-  · left
-    have hr : 0 < (holoInnerCLO T CT A H E Lf e).r := Nat.succ_pos r
-    refine Inner.fork_of_outcomes H _ hr _ s ht ht' ?_
-    have ep : pickOn G (clashPickHLO T CT A H E Lf e x) t t' = clashPickHLO T CT A H E Lf e x t t' :=
-      pickOn_of hG hG'
-    exact (congrArg (StrictCR.IsColl H) ep).mpr (collOf_isColl H _ ⟨o, o', hout ho, hout ho', hc⟩)
-  · exact Or.inr hb
 
 /-- **The reps' schedule at the executable's parameters is `fast100`'s**, at a statement whose class checks pass. -/
 theorem holoAt_fast100 {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf st)) :
@@ -204,17 +149,5 @@ theorem holoAtτ_units (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sL
     ∀ σ, ∀ u ∈ (holoAtτ st hp τv).cls.units σ,
       u < 2 ^ ((holoAtτ st hp τv).cls.kLog - (holoAtτ st hp τv).cls.slotLog) :=
   holoAt_units st hp
-
-/-- **Candidate 3's table at the executable's parameters is sound in fork form**, at a registration its registrant
-opens and a statement whose class checks pass: `holo_inner_sound_compiled` at `execArith`, SHA-512 with plain leaves
-and `holoAt st hp`. -/
-theorem holoForkSound_holoAt {st : Flock.Stmt} (hp : HoloParams) (h : ClassOk (shapeOf st)) :
-    InnerSoundForkOn Refine.H512
-      (holoInnerCLO T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp))
-      (clashPickHLO T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp))
-      (ENNReal.ofReal (holoError (holoAt st hp))) := by
-  let _ : Inhabited Refine.Dig := ⟨Refine.H512 []⟩
-  exact holo_inner_sound_compiled T CT execArith execArith_correct Refine.H512 Refine.enc512 Refine.leafPlain
-    (holoAt st hp) (holoAt_fast100 hp h) (holoAt_linkLayout hp h) (holoAt_rsch st hp) (holoAt_units st hp)
 
 end FlockC3.Fork

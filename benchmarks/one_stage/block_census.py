@@ -276,7 +276,7 @@ def table(c: dict) -> str:
 
 
 def card(c: dict) -> dict:
-    """The planner's card (`benchmarks/sampling_plan/glm53.py` reads it): per proof-block Definition its counts in one
+    """The planner's card (`verity/protocols/proofs/spot/prover/cost/glm53.py` reads it): per proof-block Definition its counts in one
     request, output bits, ANDs, MACs, opened rows' bytes and staged block log2, and the gaps by row family
     (`gap_families`)."""
     keep = ("family", "prefill", "decode", "out_bits", "ands", "macs", "rows", "k_log")

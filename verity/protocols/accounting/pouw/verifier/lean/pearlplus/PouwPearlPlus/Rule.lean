@@ -17,8 +17,12 @@ After a tile's openings and digest pass, the record decides it, in `check_opened
   debit (`word_debit`) is 40 units per flagged atom (32 MACs and a quarter of a promotion add) and 32 per later promotion
   into a +0 total. P3's forming term (`pearl_c_debit.forming_elements`, `tileDebitDev`'s elems) adds fs = 64 times |cols|/n
   per credited row's element (i, l), l < k, that is salt-dead (`saltDead`: the support's two ends agree) or whose atom
-  block every word of the row over the credited columns flags. In integers, with D the words' inert work and E the
-  elements, the tile keeps its inert-work bound when 400·(n·D + 64·|cols|·E) ≤ creditOf(1, |K|, n)·|rows|·|cols|.
+  block every word of the row over the credited columns flags. A word's products that no salt makes count
+  (`pearl_c_debit.word_mend`, `wordMend`) add one unit each: an element salt-dead in both its A row and its B row (a
+  dead pair), or a product cut (its aligned contribution 0, `cuts`) at both ends of the support on the word's chain
+  from both rows' end codes (`rowEnds`, a forced zero). In integers, with D the words' inert work, M their mends and E
+  the elements, the tile keeps its inert-work bound when
+  400·(n·(D + M) + 64·|cols|·E) ≤ creditOf(1, |K|, n)·|rows|·|cols|.
 * **The served y** (`check_y`), on a call that commits one: each real row of the tile opens against the call's y root,
   holds a word for each of the tile's columns (the opening doesn't bind how many words a row has; one that ends before
   the tile's last column is refused, `the opened row holds N words`), and its word at column j is
@@ -166,12 +170,18 @@ def flatCode (beta : Nat) : Reject Nat := do toFp8 (f32MulV2 beta (← ofFp8 E_F
 /-- `pearl_c_debit.ends_agree`: the two ends' codes have one value, equal or both zeros (`Cap.codeVal_eq_iff`). -/
 def endsAgree (cPlus cMinus : Nat) : Bool := cPlus == cMinus || (cPlus ||| cMinus) &&& 0x7F == 0
 
-/-- `pearl_c_debit.salt_dead` on one element, `cb` its row's c_β: the codes of the support's two ends, the atom from the
-forming's accumulator f32(α·x) over [c_β]³² and [±11/4]³², agree; by `saltDeadP_iff_ends` it is P3's `saltDead`. -/
-def saltDead (alpha cb w : Nat) : Reject Bool := do
+/-- `pearl_c_debit.end_codes` on one element, `cb` its row's c_β: the codes of the support's plus and minus ends, the
+atom from the forming's accumulator f32(α·x) over [c_β]³² and [±11/4]³². -/
+def endCodes (alpha cb w : Nat) : Reject (Nat × Nat) := do
   let acc ← finite (f32MulV2 alpha w)
   let e := List.replicate 32 cb
-  pure (endsAgree (← toFp8 (← step acc e (List.replicate 32 F_PLUS))) (← toFp8 (← step acc e (List.replicate 32 F_MINUS))))
+  pure (← toFp8 (← step acc e (List.replicate 32 F_PLUS)), ← toFp8 (← step acc e (List.replicate 32 F_MINUS)))
+
+/-- `pearl_c_debit.salt_dead` on one element, `cb` its row's c_β: the codes of the support's two ends (`endCodes`)
+agree; by `saltDeadP_iff_ends` it is P3's `saltDead`. -/
+def saltDead (alpha cb w : Nat) : Reject Bool := do
+  let c ← endCodes alpha cb w
+  pure (endsAgree c.1 c.2)
 
 /-- `pearl_c_debit.forming_elements` on one credited row, `flags` its words' over the credited columns: all its k elements
 when every word flags every atom block, else each element l whose block l/32 every word flags or that is salt-dead
@@ -183,6 +193,45 @@ def rowElements (alpha beta : Nat) (x : Array Nat) (flags : List (Array Bool)) :
   let cb ← flatCode beta
   let dead ← x.mapM (saltDead alpha cb)
   return ((List.range x.size).filter fun l => every[l / 32]! || dead[l]!).length
+
+/-- `pearl_c_debit.row_ends` on one formed row: its elements' plus-end codes, their minus-end codes (`endCodes`), and
+whether each element's agree (`saltDead`). -/
+def rowEnds (alpha beta : Nat) (x : Array Nat) : Reject (Array Nat × Array Nat × Array Bool) := do
+  let cb ← flatCode beta
+  let ends ← x.mapM (endCodes alpha cb)
+  pure (ends.map (·.1), ends.map (·.2), ends.map fun c => endsAgree c.1 c.2)
+
+/-- `pearl_c_debit.cut_flags`: the products of the groups `gs`, from the incoming value `v`, whose aligned contribution at
+their group's exponent is 0 (a zero product among them). Must equal `Pouw.PearlC.Mend.cutFold`. -/
+def cutFold (p : Evaluate.TC.Fp8Atom.Pipeline) : List Nat → Evaluate.TC.Fp8Atom.Value →
+    List (Evaluate.TC.Fp8Atom.Code × Evaluate.TC.Fp8Atom.Code) → List Bool
+  | [], _, _ => []
+  | size :: gs, v, ab =>
+      let ps := (ab.take size).map fun x => Evaluate.TC.Fp8Atom.productTotal x.1 x.2
+      let E := Evaluate.TC.Fp8Atom.maxExp p.zeroExp ((v :: ps).filterMap Evaluate.TC.Fp8Atom.Value.finite?)
+      (ab.take size).map (fun x => Evaluate.TC.Fp8Atom.aligned p.width E (Evaluate.TC.Fp8Atom.product x.1 x.2) == 0) ++
+        cutFold p gs (Evaluate.TC.Fp8Atom.groupStepTotal p.width p.zeroExp v ps) (ab.drop size)
+
+/-- The products of one H100 atom step (`atom`) from the accumulator word `acc` that the adder cuts, in `k` order. -/
+def cuts (acc : Nat) (a b : List Nat) : List Bool :=
+  cutFold Evaluate.TC.Fp8Atom.hopperE4m3K32 Evaluate.TC.Fp8Atom.hopperE4m3K32.groups
+    (Evaluate.TC.Fp8Atom.fp32Value acc) ((a.map Evaluate.TC.Fp8Atom.code).zip (b.map Evaluate.TC.Fp8Atom.code))
+
+/-- One atom of a word's chain: the atom's index, the word it writes (from +0 at a group's first atom), the cuts so far. -/
+def cutStep (st : Nat × Nat × List Bool) (x : List Nat × List Nat) : Nat × Nat × List Bool :=
+  let w := if st.1 % PearlPlus.G = 0 then 0 else st.2.1
+  (st.1 + 1, atom w x.1 x.2, st.2.2 ++ cuts w x.1 x.2)
+
+/-- `pearl_c_debit.chain_cuts`: the cut flags of the word of code rows `a` and `b`, entry 32·t + r product r of atom t. -/
+def wordCuts (a b : Array Nat) : List Bool :=
+  (((List.range (a.size / 32)).map fun t => (slice a (32 * t) 32, slice b (32 * t) 32)).foldl cutStep (0, 0, [])).2.2
+
+/-- `pearl_c_debit.word_mend`: the elements of the word of the A row's ends `ea` and the B row's `eb` (`rowEnds`) that
+are a dead pair (salt-dead in both rows) or a forced zero (cut at both ends). -/
+def wordMend (ea eb : Array Nat × Array Nat × Array Bool) : Nat :=
+  let cp := wordCuts ea.1 eb.1
+  let cm := wordCuts ea.2.1 eb.2.1
+  ((List.range ea.2.2.size).filter fun l => (ea.2.2[l]! && eb.2.2[l]!) || (cp.getD l false && cm.getD l false)).length
 
 /-- fs, the salt-dependent part of `FORMING` (the noise atom and the cast), per inert forming element. Must equal
 `Prices.h100`'s `forming_credited`. -/
@@ -245,8 +294,11 @@ def capCheck (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops) : 
     let words ← cr.mapM fun i => cc.mapM fun j => wordFlags ops.a.codes[posA i]! ops.b.codes[posB j]!
     let elems ← (cr.zip words).mapM fun (i, ws) =>
       rowElements ops.a.alpha[posA i]! ops.a.beta[posA i]! ops.a.x[posA i]! (ws.map (·.1))
-    pure ((words.zip elems).map fun (ws, e) =>
-      debitUnits r.matmul.n cc.length (ws.foldl (fun t w => t + (w.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e)
+    let endsA ← cr.mapM fun i => rowEnds ops.a.alpha[posA i]! ops.a.beta[posA i]! ops.a.x[posA i]!
+    let endsB ← cc.mapM fun j => rowEnds ops.b.alpha[posB j]! ops.b.beta[posB j]! ops.b.x[posB j]!
+    pure (((words.zip elems).zip endsA).map fun ((ws, e), ea) =>
+      debitUnits r.matmul.n cc.length (ws.foldl (fun t w => t + (w.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e +
+        r.matmul.n * endsB.foldl (fun t eb => t + wordMend ea eb) 0)
   match replay with
   | .error e => throw s!"the debit replay: {e}"
   | .ok rowDebit =>

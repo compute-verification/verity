@@ -26,7 +26,7 @@ from verity import device as S
 from verity.protocols.accounting.registration.verifier import registration as G
 from verity_difftest import protocol as P
 
-INTERFACE = Path(__file__).resolve().parents[6] / "verity/protocols/interface"
+REGISTRATION = Path(__file__).resolve().parents[6] / "verity/protocols/accounting/registration/verifier/lean"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 SHEET = S.Sheet(S.DeviceFigures("sim-a", 2_000_000_000, (10**15, 2 * 10**15, 2 * 10**15, 15 * 10**14, 4 * 10**15)),
@@ -312,7 +312,7 @@ def cases(draw) -> dict:
     return c
 
 
-PORT = RegistrationPort(exe="core-registration", package=INTERFACE, reference=reference, inputs=cases())
+PORT = RegistrationPort(exe="core-registration", package=REGISTRATION, reference=reference, inputs=cases())
 
 
 def _listing(**host: Any) -> G.Auditor:
