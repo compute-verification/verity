@@ -11,9 +11,11 @@ is folded first and counts once.
 
 What it matches is computed from the cards and node files when it runs, never written here: each entry's value in its unit's
 forms (MHz and Hz, B and bit and 32-bit words, B/s and bit/s), and each GPU's tensor peak at each of its card's clock
-readings (``READINGS``) in every format its card weighs, in MACs and in FLOPs a second.  A value counts alone only if it is
-distinctive (``distinctive``: four significant digits or more, and not a power of two); an SM count, which is not, counts only
-as the value of a name in ``SMS`` (an assignment, a keyword, a key).  A file's count is its matching tokens.
+readings (``READINGS``) in every format its card weighs, in MACs and in FLOPs a second.  An entry counts alone only if it is
+distinctive (``distinctive``: four significant digits or more), and an entry, a form or a peak only if it is rare (``rare``:
+not a power of two, nor a small odd number times one, which a model's or a kernel's shape usually is, but for an entry of
+2**20 or more in its own unit); an SM count, which is neither, counts only as the value of a name in ``SMS`` (an assignment,
+a keyword, a key).  A file's count is its matching tokens.
 
 It reads the cards' TOML itself rather than through ``verity.device``, since the ``loaded_by`` of that trusted place only
 shrinks, and it imports only the standard library, since the ratchet gate runs ``test_no_new_device_figures`` without pytest.
@@ -106,8 +108,19 @@ def power_of_two(v: Fraction) -> bool:
 
 
 def distinctive(value: int | Decimal) -> bool:
-    """Whether a card value counts alone: four significant digits or more, and not a power of two."""
-    return digits(value) >= 4 and not power_of_two(Fraction(value))
+    """Whether a card value counts alone: four significant digits or more as its card writes it, and ``rare`` in its unit."""
+    return digits(value) >= 4 and rare(Fraction(value), written=True)
+
+
+def rare(v: Fraction, written: bool = False) -> bool:
+    """Whether a value is unlikely to be some other number: an integer of four digits or more, not a power of two, and not
+    a small odd number times one (an odd part under 64), which the shapes and sizes of models and kernels are (768, 6144,
+    49152), unless it is at least 2**20 as its card writes it (50 MiB, 96 GiB; their forms in bits or words are as often
+    a buffer or a float's bits); a fraction is."""
+    if v.denominator != 1:
+        return True
+    n = v.numerator
+    return len(str(abs(n))) >= 4 and not power_of_two(v) and (written and n >= 2 ** 20 or n // (n & -n) >= 64)
 
 
 def _entries(table: dict, at: tuple[str, ...] = ()):
@@ -138,7 +151,8 @@ def figures(cards: dict[str, str], nodes: dict[str, str]) -> Figures:
                 continue
             alone.setdefault(v, Figure(f"{what} ({unit})", read))
             for factor, form, written in FORMS.get(unit, ()):
-                alone.setdefault(v * factor, Figure(f"{what} in {form} ({entry['value']} {unit})", read + written))
+                if rare(v * factor):
+                    alone.setdefault(v * factor, Figure(f"{what} in {form} ({entry['value']} {unit})", read + written))
         if doc.get("kind") != "gpu":
             continue
         per_sm = Fraction(doc["sm"]["count"]["value"]) * Fraction(doc["rate"]["tensor"]["value"])
@@ -148,7 +162,7 @@ def figures(cards: dict[str, str], nodes: dict[str, str]) -> Figures:
             mhz = doc["clock"][reading]["value"]
             for fmt, weight in doc.get("weight", {}).items():
                 peak = per_sm * Fraction(mhz) * 10 ** 6 / Fraction(weight["value"])
-                if peak.denominator != 1 or digits(int(peak)) < 4 or power_of_two(peak):
+                if peak.denominator != 1 or not rare(peak):
                     continue
                 read = f'rate(card, fmt="{fmt}", mhz=card["clock"]["{reading}"]["value"]) with card = {loader}'
                 at = f"{name}'s {fmt} tensor peak at clock.{reading} ({mhz} MHz)"
@@ -450,6 +464,7 @@ reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "s" }
 tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "s" }
 [memory]
 bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "s" }
+bus = { value = 6144, unit = "bit", mark = "ceiling", source = "s" }
 [weight]
 s8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "s" }
 bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "s" }
@@ -466,10 +481,15 @@ def test_what_is_a_figure_and_what_is_not() -> None:
     assert figs.alone[Fraction(1830 * 10 ** 6)].read.endswith(" * 10**6")
     assert Fraction(132 * 4096 * 1830 * 10 ** 6) in figs.alone and Fraction(132 * 4096 * 1980 * 10 ** 6) in figs.alone
     assert Fraction(132 * 2048 * 1830 * 10 ** 6 * 2) in figs.alone and Fraction(65536) not in figs.alone
-    assert Fraction(52428800) in figs.alone and Fraction(52428800 * 8) in figs.alone and Fraction(4096) not in figs.alone
+    assert Fraction(52428800) in figs.alone and Fraction(52428800 * 8) not in figs.alone and Fraction(4096) not in figs.alone
+    assert Fraction(151397597184 * 8) in figs.alone
+    assert Fraction(6144) not in figs.alone and Fraction(768) not in figs.alone and Fraction(52428800 // 4) not in figs.alone
     assert figs.alone[Fraction(499289948160)].read == 'number(load_node("n")["memory"]["vdc"]["bytes"])'
     assert distinctive(1830) and distinctive(Decimal("1.597568e12")) and not distinctive(Decimal("4.26e12"))
     assert not distinctive(132) and not distinctive(65536) and not distinctive(Decimal("29.5"))
+    assert not distinctive(6144) and not distinctive(49152) and distinctive(3201) and distinctive(103079215104)
+    assert not rare(Fraction(2 ** 32), written=True) and rare(Fraction(4800)) and rare(Fraction(1047, 125))
+    assert rare(Fraction(52428800), written=True) and not rare(Fraction(52428800))
     py = ('"""1830 MHz in a docstring."""\n'
           "CLOCK = 1830  # 1980 in a comment\n"
           "HZ = 1830e6\n"
