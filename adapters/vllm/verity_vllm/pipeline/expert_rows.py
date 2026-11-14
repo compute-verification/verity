@@ -41,6 +41,7 @@ import json
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -408,6 +409,48 @@ def _entry(lo: int, hi: int, x: Row, arrive: int, members: str) -> list[Any]:
             int(r["i"])]
 
 
+@cache
+def _fused(t: str) -> tuple[int, int, int, int, tuple[str, ...]]:
+    from verity_vllm.query.program_view import spec_statics
+
+    tp = template(t)
+    if tp.layout != "fused":
+        raise ValueError(f"{t}: a {tp.layout} template, not a fused block")
+    S = spec_statics(t)
+    return (int(S["K"]), int(S["N"]), int(S["G"]), int(spec_statics(S["READ"])["V"]),
+            tuple(nm for nm, _ty in tp.fn.signature()[0]))
+
+
+def fused_unit(t: str, table: Any, e: int, xq: np.ndarray, sx: np.ndarray, g: int | None, ws: np.ndarray,
+               y: np.ndarray) -> dict[str, np.ndarray]:
+    """Fused template ``t``'s unit of a pair's block, its words by port (``in<k>``, ``o<k>``) from its operands alone: the read of
+    ``table`` (`commit_tables`' of the block's rows) at the pair's expert ``e`` (its key ``e``, the table's root and domain id, and
+    its row, salt and path at ``e``), the pair's activation ``xq`` (K e4m3 bytes) and scales ``sx`` (K / G f32 words), its routed
+    weight ``g`` (its f32 word; None for an unweighted template), the block's G-block scale row ``ws`` of expert ``e`` (K / G f32
+    words), and as outputs the block's served words ``y`` (N bf16 words, at the template's N) and a verdict of 1.  K, G and N are
+    the template's statics and E its read's V.  Refused where an operand is not of the template's size, ``e`` is not one of the
+    table's E experts, or ``g`` is given for an unweighted template or missing for a weighted one.  It holds neither the row nor
+    ``y`` to anything: that the twin of the pair row on the expert's rows is the served output is its caller's to hold."""
+    K, N, G, E, names = _fused(t)
+    if ("g" in names) != (g is not None):
+        raise ValueError(f"{t}: a {'weighted' if 'g' in names else 'unweighted'} fused block given {'no' if g is None else 'a'} "
+                         "routed weight")
+    if not 0 <= int(e) < E or len(table.salts) != E:
+        raise ValueError(f"{t}: expert {e} of a table of {len(table.salts)} rows, not one of the template's {E} experts")
+    row = np.asarray(table.rows.at([e])[0], dtype=np.uint16).reshape(-1)
+    xq, sx = np.ascontiguousarray(xq, dtype=np.uint8).reshape(-1), np.asarray(sx).astype("<u4").reshape(-1)
+    ws, y = np.asarray(ws).astype("<u4").reshape(-1), np.asarray(y, dtype=np.uint16).reshape(-1)
+    for what, a, want in (("row", row, N * K // 2), ("xq", xq, K), ("sx", sx, K // G), ("ws", ws, K // G), ("y", y, N)):
+        if a.size != want:
+            raise ValueError(f"{t}: its {what} is {a.size} elements, not the template's {want}")
+    words = {"tok": np.array([e], dtype="<u4").view("<u2"), "root": _digest_words(table.root),
+             "domain": _digest_words(table.domain.domain_id), "row": row, "salt": _digest_words(table.salts[e]),
+             "path": _digest_words(table.path(e)), "xq": xq.view("<u2"), "sx": sx.view("<u2"), "ws": ws.view("<u2")}
+    if g is not None:
+        words["g"] = np.array([g], dtype="<u4").view("<u2")
+    return {**{f"in{k}": words[nm] for k, nm in enumerate(names)}, "o0": y, "o1": np.ones(1, dtype=np.uint16)}
+
+
 class Reader:
     """The words and index entries of the cut's members (`read`), each pair row's operands read once, a layer's weight stacks
     while its rows are read; ``slices`` and ``packed`` are `serving_rows._slices` and ``_packed``, ``tables`` `commit_tables`'."""
@@ -523,7 +566,6 @@ class Reader:
                     f"unit {u}")
         else:
             (what, nb), G = plan.what[t], int(rs[0][3]["statics"]["G"])
-            routed = ARGS[plan.family[t]][1] is not None
             starts = {at: param for at, _n, _b, param, _l in plan.tables(t)}
             table, layer, pairs = None, None, {}
             for u, (p, b) in enumerate(plan.units[t]):
@@ -545,14 +587,11 @@ class Reader:
                 got = pairs.get(p)
                 if got is None:
                     got = pairs[p] = self.pair(x)
-                e, row = got["e"], table.rows.at([got["e"]])[0]
-                if not np.array_equal(row, np.ascontiguousarray(got["w"][b * nb:(b + 1) * nb]).reshape(-1).view("<u2")):
-                    raise ValueError(f"{t} unit {u}: its table's row at expert {e} is not row {x[2]['i']}'s block {b} of rows")
-                put(u, [np.array([e], dtype="<u4").view("<u2"), root, dom, row, _digest_words(table.salts[e]),
-                        _digest_words(table.path(e)), got["xq"].view("<u2"), got["sx"].astype("<u4").view("<u2"),
-                        *([np.array([got["g"]], dtype="<u4").view("<u2")] if routed else []),
-                        np.ascontiguousarray(got["ws"][b * nb // G]).astype("<u4").view("<u2"), got["y"][b * nb:(b + 1) * nb],
-                        np.ones(1, dtype=np.uint16)], f"unit {u}")
+                words = fused_unit(t, table, got["e"], got["xq"], got["sx"], got["g"], got["ws"][b * nb // G],
+                                   got["y"][b * nb:(b + 1) * nb])
+                if not np.array_equal(words["in3"], np.ascontiguousarray(got["w"][b * nb:(b + 1) * nb]).reshape(-1).view("<u2")):
+                    raise ValueError(f"{t} unit {u}: its table's row at expert {got['e']} is not row {x[2]['i']}'s block {b} of rows")
+                put(u, [words[q] for q in names], f"unit {u}")
                 entries.append(_entry(b0 + u, b0 + u + 1, x, got["arrive"], got["member"]))
         ends = [e[1] for e in entries]
         res = []
