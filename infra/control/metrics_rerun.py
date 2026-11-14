@@ -604,15 +604,17 @@ def load_state(path: Path, now: float, say: Callable[[str], None], dry_run: bool
         return {}
     try:
         state = json.loads(path.read_text())
-        if isinstance(state, dict):
-            return state
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        pass
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        state, why = None, f"{type(e).__name__}: {e}"
+    else:
+        why = f"a JSON {type(state).__name__}"
+    if isinstance(state, dict):
+        return state
     aside = path.with_name(path.name + ".corrupt")
     if not dry_run:
         path.replace(aside)
-    say(f"the record {path} is not a JSON object: {'it would be' if dry_run else 'it is'} moved aside to {aside}, and every "
-        f"number is held for its every from {iso(now)}")
+    say(f"the record {path} is not a JSON object ({why}): {'it would be' if dry_run else 'it is'} moved aside to {aside}, and "
+        f"every number is held for its every from {iso(now)}")
     return {"schema": SCHEMA, "held_since": iso(now), "launches": []}
 
 

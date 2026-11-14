@@ -386,7 +386,9 @@ def test_a_corrupt_record_is_moved_aside_said_once_and_every_number_waits_its_ev
     cfg.state.write_text("{not json")
     said = []
     state = R.load_state(cfg.state, NOW, said.append, dry_run=True)
-    assert cfg.state.read_text() == "{not json" and said[0].startswith(f"the record {cfg.state} is not a JSON object: it would be")
+    assert cfg.state.read_text() == "{not json" and said[0].startswith(f"the record {cfg.state} is not a JSON object "
+                                                                        "(JSONDecodeError: ")
+    assert "it would be moved aside" in said[0]
     state = R.load_state(cfg.state, NOW, said.append)
     assert not cfg.state.exists() and (tmp_path / "state.json.corrupt").read_text() == "{not json" and len(said) == 2
     assert state == {"schema": R.SCHEMA, "held_since": "2026-11-14T12:00:00Z", "launches": []}
