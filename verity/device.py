@@ -67,10 +67,12 @@ no figure of record uses it) or `placeholder` (none of these: open). `source` na
 `art:` id (a run's record), and a node by its kind, never its host name. The Lean card tables
 (`security/Definitions/Core/Accel`) are held to the GPU cards that name one (`lean`), number by number
 (`verity/hardware/tests/test_lean.py`). `rate` is the one calculator of a GPU's peak rates, Lean's `card.ρ`: a reader
-that needs the tensor peak at some clock calls it rather than multiplying the card's numbers itself.
+that needs the tensor peak at some clock calls it rather than multiplying the card's numbers itself. `readings` is the
+tensor peak under each reading of its clock the card states (`READINGS`): a reader that quotes a figure under every
+reading iterates it rather than naming a clock itself.
 
 ~~~python
-from verity.device import load_card, number, rate, skus
+from verity.device import load_card, number, rate, readings, skus
 skus("host")                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
 drift = load_card("nebius-vm-monotonic-raw")["drift"]["max"]  # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
 number(drift)                      # Fraction(1, 2000): the auditor's figure for its device's drift, under that premise
@@ -80,6 +82,7 @@ card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', '
 load_card("dgx-h200")["link"]["rate"]   # {'value': 5011000000000.0, 'unit': 'bit/s', 'mark': 'ceiling', 'source': ...}
 rate(card)                         # Fraction(989429760000000): s8 MACs a second, 132 SMs x 4096 x clock.tensor 1830 MHz
 rate(card, mhz=1980)               # Fraction(1070530560000000): the same at clock.sm's 1980 MHz, the second reading
+readings(card)                     # {'tensor': Fraction(989429760000000), 'sm': Fraction(1070530560000000)}: both
 rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
 ~~~
 
@@ -1607,6 +1610,19 @@ def rate(card: dict, resource: str = "tensor", *, fmt: str | None = None, mhz: f
     clock = number(tick) if mhz is None else Fraction(str(mhz))
     units = number(card["sm"]["count"]) * number(card["rate"][resource]) * clock * 10 ** 6
     return units if fmt is None else units / number(card["weight"][fmt])
+
+
+READINGS = ("tensor", "sm")
+"""The readings of the tensor's clock a GPU card states, the card's own first: `clock.tensor`, the tensor's clock
+ceiling, and `clock.sm`, the highest clock of the SMs its tensor cores are in. They are one clock on a card that gives
+the tensor none of its own."""
+
+
+def readings(card: dict, *, fmt: str | None = None) -> dict[str, Fraction]:
+    """The tensor peak of the whole GPU under each reading of its clock (``READINGS``), in that order: ``rate(card,
+    fmt=fmt)``, the card's own, then the same at ``clock.sm``. A figure quoted under every reading of the data sheet
+    is one of these a reading, so no reader names or picks a clock; ``rate`` refuses what it refuses."""
+    return {r: rate(card, fmt=fmt, mhz=None if r == "tensor" else card["clock"][r]["value"]) for r in READINGS}
 
 
 def check_card(table: dict, where: str) -> None:

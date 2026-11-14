@@ -298,14 +298,63 @@ def test_a_run_that_edits_the_shared_tree_is_not_what_the_next_run_of_that_commi
     sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
     (Path(dest) / ".lake").mkdir()
     (Path(dest) / ".lake" / "build.olean").write_text("built\n")
-    assert remote.tracked_dirt(Path(dest)) == [], "untracked build output is not dirt"
+    assert remote.tracked_dirt(Path(dest), sha) == [], "untracked build output is not dirt"
     (Path(dest) / "pkg" / "b.py").write_text("B = 99\n")
-    assert remote.tracked_dirt(Path(dest)) == ["pkg/b.py"]
+    assert remote.tracked_dirt(Path(dest), sha) == ["pkg/b.py"]
     with pytest.raises(remote.SourceNotReady, match=r"edited its tracked files \(pkg/b\.py\)"):
         remote.require_ready_source(dest, sha)
     sha2, dest2, doc2 = remote.ship_source(LOCAL, str(root), repo)
     assert (sha2, dest2) == (sha, dest) and (Path(dest) / "pkg" / "b.py").read_text() == "B = 2\n"
-    assert remote.require_ready_source(dest, sha) == doc2 and remote.tracked_dirt(Path(dest)) == []
+    assert remote.require_ready_source(dest, sha) == doc2 and remote.tracked_dirt(Path(dest), sha) == []
     (moved,) = (root / "src" / ".quarantine").iterdir()
     assert moved.name.startswith(f"{sha}-") and (moved / "pkg" / "b.py").read_text() == "B = 99\n", "kept for inspection"
     assert "an earlier run edited (pkg/b.py)" in capsys.readouterr().err
+
+
+def _two_commits(repo: Path) -> tuple[str, str]:
+    """A second commit in `repo`, where pkg/b.py is `B = 3`: (the first commit, the second, now HEAD)."""
+    base = _git(repo, "rev-parse", "HEAD")
+    (repo / "pkg" / "b.py").write_text("B = 3\n")
+    _git(repo, "commit", "-qam", "two")
+    return base, _git(repo, "rev-parse", "HEAD")
+
+
+def test_a_run_that_checks_out_another_commit_in_the_shared_tree_is_not_what_the_next_run_of_that_commit_gets(repo, tmp_path, capsys):
+    """A job that runs `git checkout -q BASE` inside the node's shared tree for a commit leaves BASE's files there under the commit's
+    name: `git status` compares them with BASE and prints nothing, and READY.json still names the commit.  The machine refuses a
+    checkout whose HEAD is not its identity, naming both, and the next ship sets it aside and ships the commit afresh."""
+    root = tmp_path / "root"
+    base, _ = _two_commits(repo)
+    sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
+    _git(Path(dest), "checkout", "-q", base)
+    assert (Path(dest) / "pkg" / "b.py").read_text() == "B = 2\n" and _git(Path(dest), "status", "--porcelain", "--untracked-files=no") == ""
+    assert json.loads((Path(dest) / remote.READY_FILE).read_text()) == doc, "READY.json still names the commit"
+    found = f"HEAD is at {base}, not at {sha}"
+    with pytest.raises(remote.SourceNotReady, match=rf"edited its tracked files \({found}\)"):
+        remote.require_ready_source(dest, sha)
+    sha2, dest2, doc2 = remote.ship_source(LOCAL, str(root), repo)
+    assert (sha2, dest2) == (sha, dest) and (Path(dest) / "pkg" / "b.py").read_text() == "B = 3\n"
+    assert _git(Path(dest), "rev-parse", "HEAD") == sha and remote.require_ready_source(dest, sha) == doc2
+    (moved,) = (root / "src" / ".quarantine").iterdir()
+    assert moved.name.startswith(f"{sha}-") and _git(moved, "rev-parse", "HEAD") == base, "kept for inspection"
+    assert f"an earlier run edited ({found})" in capsys.readouterr().err
+
+
+def test_tracked_dirt_holds_a_checkout_to_the_commit_it_is_named_for(repo, tmp_path):
+    """`git status` alone compares a tree with the commit its HEAD names now; `tracked_dirt` reads the HEAD too, and lists one that
+    is not the identity first.  HEAD on a branch or detached at the identity is the commit, and a tree without .git has nothing
+    to compare."""
+    base, sha = _two_commits(repo)
+    assert remote.tracked_dirt(repo, sha) == [], "on a branch at the identity"
+    _git(repo, "checkout", "-q", "--detach")
+    assert remote.tracked_dirt(repo, sha) == [], "detached at the identity"
+    _git(repo, "checkout", "-q", base)
+    assert remote.tracked_dirt(repo, sha) == [f"HEAD is at {base}, not at {sha}"] and remote.tracked_dirt(repo, base) == []
+    (repo / "a.txt").write_text("edited\n")
+    assert remote.tracked_dirt(repo, sha) == [f"HEAD is at {base}, not at {sha}", "a.txt"]
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    (plain / "a.txt").write_text("edited\n")
+    assert remote.tracked_dirt(plain, sha) == [], "shipped as an archive: no .git"
+    _git(plain, "init", "-q")
+    assert remote.tracked_dirt(plain, sha) == [f"HEAD is at no commit, not at {sha}"], "a .git whose HEAD names no commit is not the identity's"
