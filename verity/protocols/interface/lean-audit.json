@@ -4,7 +4,7 @@
  "exempt": {
   "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
   "CoreProtocol.RegistrationMain": "the core-registration executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
-  "CoreProtocol.PeriodDifftestMain": "the core-periods-difftest server's entry point, one line: Difftest.serve of Core.PeriodDifftest.table, which verity/periods/tests/test_periods_difftest.py drives against the Python mirror; audited under CoreProtocol.PeriodDifftest"
+  "CoreProtocol.PeriodDifftestMain": "the core-periods-difftest server's entry point, one line: Difftest.serve of Core.PeriodDifftest.table, which verity/tests/tests/test_periods_difftest.py drives against the Python mirror; audited under CoreProtocol.PeriodDifftest"
  },
  "escapes": {
   "Core.BlobProtocol.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.BlobsExample's guards cover BlobProtocol.case, which it runs on each line",
