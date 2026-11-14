@@ -5,9 +5,9 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
 /-!
-# `δ_link` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
+# `ε_bind` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
 
-`zk_flock_count_execOS_m1` leaves the binding error as the named hypothesis `BindSound δ_link`. It is discharged here in the
+`zk_flock_count_execOS_m1` leaves the binding error as the named hypothesis `BindSound ε_bind`. It is discharged here in the
 shape of `Audit.Partition.flock_batched_linkSoundE`, for the protocol as Lean defines it at the interactive-oracle layer
 (`sessionZK`), under expected-time collision resistance of SHA-512 for an explicit finder
 (`Assumptions.SHA512CRExpected`):
@@ -33,7 +33,7 @@ adds `k/(eR_w)` and the factor `1/(1 − ρ)`; here extraction is the oracle its
 (`LinkCRZ`), and the bound is `⊤` at any other (`linkBoundZ`).
 
 `zk_flock_count_execOS_m1_cr`: `zk_flock_count_execOS_m1` with the committed transcript the plurality value layer and
-`δ_link` that bound.
+`ε_bind` that bound.
 
 **What this does not cover.** The finder reads the oracle the prover sends at `Commit`; the protocol as run sends a Merkle
 cap, and the oracle is what extraction from the cap's openings recovers. The compiled counterpart, whose finder runs the
@@ -367,7 +367,7 @@ noncomputable def linkBoundZ (M : ℕ) (t' : ℝ) (R : Reg) (τ : Cont L Reg (ba
       (2 * t' / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M)))
   else ⊤
 
-/-- **The `--zk` link theorem: `δ_link` under expected-time collision resistance, prover by prover**
+/-- **The `--zk` link theorem: `ε_bind` under expected-time collision resistance, prover by prover**
 (interactive-oracle layer). For the batched `--zk` audit (`analysisZK`) with the plurality value layer (`XplurZ`), given
 the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string
 satisfies A2 at cost `t'` per trial (`LinkCRZ`),
@@ -426,7 +426,7 @@ variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **The `--zk` count curve at the live sample, every table at M1's parameters, `δ_link` under A2**
+/-- **The `--zk` count curve at the live sample, every table at M1's parameters, `ε_bind` under A2**
 (interactive-oracle layer): with the committed transcript the plurality value layer (`XplurZ`) of a binding of wires to
 registered commit strings (`ValueBindingZ`),
 `Pr[accept ∧ at least K incorrect units] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders

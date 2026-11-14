@@ -29,22 +29,26 @@ remote are two lists (`Composite.onsite`, `Composite.remote`), whose verifiers a
 (`Core.Composites.composites`): `Core.Onsite.protocol` (`verity/onsite/v0`) and remote's composite of record
 `Core.Remote.V1.protocol` (`verity/remote/v1`). Remote's development composite, `Core.Remote.protocol`
 (`verity/remote/v0`, H1's period as its work), is no composite's verifier, and `Core.Composites.ofIds` refuses its
-subprotocols. A subprotocol is listed by its compiled check's id (`Subprotocol.idAt`): every subprotocol but PoUW has
-one compiled check, the same in every composite that lists it, and PoUW's is Pearl+'s run verdict in a composite that
-lists Pearl+'s id and H1's period credit in any other (`Subprotocol.protocolAt`, `component`). So a composite's
-subprotocols are read off its list (`subprotocols`): onsite's seven and remote's three of them. The five that decide a
-period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
+subprotocols. A subprotocol is listed by its compiled check's id (`Subprotocol.idAt`): every subprotocol but PoUW and
+the inference-only policy has one compiled check, the same in every composite that lists it; PoUW's is Pearl+'s run
+verdict in a composite that lists Pearl+'s id and H1's period credit in any other, and the inference-only policy's is
+the rows check in a composite that lists its id and v0 in any other (`Subprotocol.protocolAt`, `component`). So a
+composite's subprotocols are read off its list (`subprotocols`): onsite's seven and remote's three of them, and the
+three of remote's plain sibling (`Composite.plain`). No compiled check carries the rows check's id yet: the game reads
+it as `rowsCheck`, whose behavior nothing here states (`rowsUnbuilt`), its claim is `rowsHeld`, which nothing here
+states either, and the code refuses the plain sibling's list (`Core.Composites.ofIds`). The five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
-| subprotocol | `Audit` | its compiled check | onsite | remote |
-| --- | --- | --- | --- | --- |
-| SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes |
-| PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | |
-| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes |
-| the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
-| PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | |
-| PoUB-P2 | `.poub` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | |
-| the network certifier | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | |
-| the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | yes | |
+| subprotocol | `Audit` | its compiled check | onsite | remote | plain |
+| --- | --- | --- | --- | --- | --- |
+| SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes | yes |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | | |
+| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
+| the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes | |
+| | | `rowsCheck` (`verity/inference-only/rows/v1`, the rows check, not yet compiled) | | | yes |
+| PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
+| PoUB-P2 | `.poub` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | | |
+| the network certifier | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | | |
+| the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | yes | | |
 
 The statement's form is the causal game, the committed files, one fixed extractor and one adversary form:
 
@@ -130,8 +134,9 @@ Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `Pous
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
 verdict at `k` accepts while its claim fails is at most its error there: one function of the subprotocol, so a composite's
 targets are those of the subprotocols it lists. `Verity.SoundnessOf` (`Properties.Verity.Soundness`) composes them at
-any composite, and `Verity.Soundness` is it at onsite's seven. `Verity.RemoteSoundness` composes remote's from SPOT's and PoUW's and, in the policy's place, the two statements that tie its clause to the committed files
-(`Properties.Verity.Committed`).
+any composite, and `Verity.Soundness` and `Verity.PlainSoundness` are it at onsite's seven and the plain sibling's three.
+`Verity.RemoteSoundness` composes remote's from SPOT's and PoUW's and, in the policy's place, the two statements that tie
+its clause to the committed files (`Properties.Verity.Committed`).
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the committed files), `place`,
 `programDigest`, `publicDigest` and `registered`, `families`, `signer` and `coinsRead`, `extract`, the finders and the
@@ -178,15 +183,28 @@ def Subprotocol.ofAudit : Audit → Subprotocol
   | .poub => .poub
   | .network => .network
 
+/-- **The inference-only policy's rows check's id**: the check that reads the run's record, its blocks in the clear,
+and holds each block to its budgets in rows of the committed circuit. Remote's plain sibling lists it in v0's place
+(`Verity.Registration.Composite.plain`). -/
+def rowsId : String := "verity/inference-only/rows/v1"
+
+/-- **What the rows check does, until a compiled check carries its id**: nothing here says (`opaque`), so no statement
+about the rows check holds by computing it, and its target at a composite that lists it is proved only from the compiled
+check that replaces this. -/
+opaque rowsUnbuilt : BlobProtocol := InferenceOnlyCheck.Protocol.protocol
+
+/-- **The rows check**: `rowsUnbuilt` under the rows check's id. -/
+def rowsCheck : BlobProtocol := { rowsUnbuilt with id := rowsId }
+
 /-- **The compiled check that decides subprotocol `a` in composite `k`**: PoUW's is Pearl+'s run verdict where `k`
-lists Pearl+'s id and H1's period credit elsewhere; every other subprotocol's is one check, the same in every
-composite. -/
+lists Pearl+'s id and H1's period credit elsewhere; the inference-only policy's is the rows check where `k` lists its id
+and v0 elsewhere; every other subprotocol's is one check, the same in every composite. -/
 def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → BlobProtocol
   | .sampled, _ => VStar.Recursive.Sampled.protocol
   | .pouw, k =>
     if PouwCheck.PearlPlus.Protocol.protocolId ∈ k then PouwCheck.PearlPlus.Protocol.protocol
     else PouwCheck.Period.protocol
-  | .inferenceOnly, _ => InferenceOnlyCheck.Protocol.protocol
+  | .inferenceOnly, k => if rowsId ∈ k then rowsCheck else InferenceOnlyCheck.Protocol.protocol
   | .pous, _ => PousCheck.RunProtocol.protocol
   | .poub, _ => Poub.P2Protocol.protocol
   | .network, _ => NetworkCheck.Period.protocol
@@ -283,6 +301,13 @@ def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : InferenceOnly
     ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = InferenceOnlyCheck.Protocol.protocol ∧
       (canonicalJson x.2.1.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p ∧
       InferenceOnlyCheck.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ InferenceOnlyCheck.Protocol.evidenceOf x.2.2.evidence = .ok e
+
+/-- **The inference-only policy's clause where v0 doesn't decide it in composite `k`**: `k` lists no v0 (remote's plain
+sibling, which lists the rows check) or lists the rows check, whose verdict decides there (`Subprotocol.protocolAt`).
+It is the clause in rows on the record's circuit, which the rows check's guarantee states. Nothing here says what it
+is (`opaque`). v0's clause there would read a case no check of `k` accepted, or none, and hold of every play, so the
+policy's target at such a composite is neither empty nor proved by computing it. -/
+opaque rowsHeld : Verity.Registration.Composite → Sent → Prop
 
 /-- Subprotocol `a`'s compiled check at composite `k` accepts its own case in what the prover sent. -/
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=
@@ -853,16 +878,20 @@ its passes credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss ta
 landed on tiles over their inert-work bound (credited nothing under `over_cap` `uncredited`; `X_O = 0` in a run
 `reject` accepts).
 
-The inference-only policy's is on the Program its compiled check judges: every case of the policy in the play's
-messages (`PolicyCase`) is `Properties.Remote.PolicyHeld`. The record names, by its SHA-512, the Program the parameters
-carry; θ holds what the log's first record registers; and that Program lays out a registered circuit whose inference
-blocks each have at most `Γ` gates and read at most `α` fresh input bits per gate, on every parse and layout, with
+The inference-only policy's, where v0 doesn't decide it (`k` lists no v0, as remote's plain sibling, or lists the rows
+check, whose verdict decides there), is `rowsHeld`, the clause in rows that the rows check's guarantee states; v0's
+clause there would read a case no check of `k` accepted, or none. Where `k` lists v0 and not the rows check (onsite,
+remote), it is on the Program v0's compiled check judges: every case of the policy in the play's messages
+(`PolicyCase`) is `Properties.Remote.PolicyHeld`. The record names, by its SHA-512, the Program the parameters carry;
+θ holds what the log's first record registers; and that Program lays out a registered circuit whose inference blocks
+each have at most `Γ` gates and read at most `α` fresh input bits per gate, on every parse and layout, with
 `Γ` and `α` the parameters the composite names for the policy. It reads no field of the vocabulary.
 
-The clause is proved of the case as sent (`Vocab.inferenceOnlySound`), and of nothing more: what links that case to the
-committed files is two checks the verifier lacks, which no code enforces, so the clause says nothing of the committed
-files until both exist. Neither is a premise of the claim. What each would establish is a named `Prop` of
-`Properties.Verity.Committed`, stated and not proved, which remote's soundness takes as a hypothesis.
+v0's clause is proved of the case as sent, at the composites where v0 decides (`Vocab.inferenceOnlySound`), and of
+nothing more: what links that case to the committed files is two checks the verifier lacks, which no code enforces, so
+the clause says nothing of the committed files until both exist. Neither is a premise of the claim. What each would
+establish is a named `Prop` of `Properties.Verity.Committed`, stated and not proved, which remote's soundness takes as a
+hypothesis.
 
 1. **The case's wires are the committed record's wires.** The circuit the clause speaks of is the Program's own layout.
    SPOT's claim is on the committed files' units, and no check holds the rows a unit commits to the Program's gates or
@@ -892,7 +921,10 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
-  | .inferenceOnly, o => ∀ p r e, PolicyCase k o.sent p r e → Properties.Remote.PolicyHeld p r e
+  | .inferenceOnly, o =>
+    if InferenceOnlyCheck.Protocol.protocolId ∈ k ∧ rowsId ∉ k then
+      ∀ p r e, PolicyCase k o.sent p r e → Properties.Remote.PolicyHeld p r e
+    else rowsHeld k o.sent
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other

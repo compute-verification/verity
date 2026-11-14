@@ -25,7 +25,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `m` of the window's faulty blocks with probability at most `(1 − q)^m` (`Flock.Guarantees.SamplingBlock.sampleMiss_le`,
   under A3: a uniform `kd`-subset of `n` units misses `m` fixed units with probability
   `C(n − m, kd)/C(n, kd) ≤ (1 − kd/n)^m`), and the window is accepted with a sampled faulty block with probability at most
-  `ε_ks,t + δ_link,t` (`SamplingBlock.accepted_drawnIncorrect_le`, from `Flock.SecurityProofs.EndToEndHiddenSampled`). That
+  `ε_ks,t + ε_bind,t` (`SamplingBlock.accepted_drawnIncorrect_le`, from `Flock.SecurityProofs.EndToEndHiddenSampled`). That
   the deployment's window `t`, at each value of the other windows' coins, is such a window with its faulty blocks as
   its incorrect proof blocks is a bridge not stated either: `IntegrityMonitoringPeriod` plays the windows as one sequential game, not over a
   product of window coins. No guarantee implies `SampledDetection`'s per-block form: it conditions each block on its
@@ -82,7 +82,7 @@ window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t 
   detects (`detected`, those of a window verity-verify-proof rejects) read only its coins and the earlier windows'. The sample
   misses the window's `m` faulty blocks with probability at most `(1 − q)^m`, `0 ≤ q ≤ 1` (A3, `q ≤ kd/n`), and the
   window detects none of them while it samples one with probability at most `ks t` (`EndToEndHiddenSampled`,
-  `ks t = ε_ks + δ_link`).
+  `ks t = ε_ks + ε_bind`).
 * Window `t` is run by identity `idW t`, one of the `J = |I|` the developer controls, at time `τw t`; a block runs at
   its window's time, and each identity's windows run in their order. Detection is terminal at a lag `Δ ≥ 0`
   (`TerminalDetection`), and one identity's faulty blocks within any span of `Δ` skip at most `Φ Δ`, `Φ H ≤ C` over the

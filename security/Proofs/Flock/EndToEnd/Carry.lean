@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Game
 
 * `SamplingBlock.accepted_sampledIncorrect_le_at`: one session's bound at the value layer of any values `Xv`
   (`zk_session_soundHJ_custody_sampled_at`): `ε_ks` and the binding errors against `Xv` (`errBoundZC`).
-* `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `δ_link`'s at every commit string no carried
+* `CarriedBlocks.errBound_le`: at the values `Xcar`, the binding errors are `ε_bind`'s at every commit string no carried
   leaf sits at, and at a carried leaf's commit string the leaf's trial's binding error at the pulled-back value
   (`CarriedBlocks.carriedE`).
 * `CarriedBlocks.monitoringPeriodE_errX_le`: that trial's binding error, averaged over the monitoring period up to the session, is the
@@ -111,8 +111,8 @@ theorem readP_nonneg (c : w.vb.Pos) : 0 ≤ w.readP c := div_nonneg (Nat.cast_no
 private theorem mul_add_le {π E K B g : ℝ} (hπ : 0 ≤ π) (h : E ≤ B + g) : π * (E + K) ≤ π * (B + K) + π * g := by
   nlinarith
 
-/-- **The binding errors against `Xv`, split**: at most `δ_link` plus `Σ_c π_c g_c/(1 − ρ)` when each commit string's
-binding error is at most `δ_link`'s per-string term plus `g_c`. -/
+/-- **The binding errors against `Xv`, split**: at most `ε_bind` plus `Σ_c π_c g_c/(1 − ρ)` when each commit string's
+binding error is at most `ε_bind`'s per-string term plus `g_c`. -/
 theorem errBound_le_of (R : w.Reg) (κ : Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R)
     (Xv : (R : w.Reg) → Cont w.L w.Reg (batchedSessionZC execArith hs512 (planZHJ w.dj w.y₀)) R → w.vb.Pos →
       w.vb.Val)
@@ -332,7 +332,7 @@ theorem Xcar_free (t : ℕ) (R : (S.W t).Reg)
   unfold Xcar
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
-/-- **The binding error at `Xcar`, per commit string**: `δ_link`'s term where no carried leaf sits, under A2 for the
+/-- **The binding error at `Xcar`, per commit string**: `ε_bind`'s term where no carried leaf sits, under A2 for the
 session's link finders, and where one sits, its binding error at the leaf's value. -/
 theorem err_le_gAt (t : ℕ) (τ : Strategy (S.W t).game)
     (hL : LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
@@ -371,7 +371,7 @@ theorem sum_gAt (t : ℕ) (τ : Strategy (S.W t).game) :
     ring
   · simp only [hx, ↓reduceIte, mul_zero, Finset.sum_const_zero, zero_div, zero_mul]
 
-/-- **The binding errors at `Xcar`**: `δ_link` plus the carried term. -/
+/-- **The binding errors at `Xcar`**: `ε_bind` plus the carried term. -/
 theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
     (hL : LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
       (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') :
@@ -382,7 +382,7 @@ theorem errBound_le (t : ℕ) (τ : Strategy (S.W t).game)
   rw [S.sum_gAt s t τ]
 
 /-- **One session's stage**: accepted with a sampled proof block incorrect, each carried leaf read at its value, with probability
-at most `ε_ks + δ_link` plus the carried term. -/
+at most `ε_ks + ε_bind` plus the carried term. -/
 theorem stage_le (t : ℕ) (τ : Strategy (S.W t).game) (hcr : (S.W t).CR τ) :
     prob (fun b => (S.record s t τ b).accepted ∧ (S.record s t τ b).sampledWrong) (S.W t).game τ ≤
       ((S.W t).ks + (S.W t).link) + ENNReal.ofReal (S.carriedE s t τ) := by

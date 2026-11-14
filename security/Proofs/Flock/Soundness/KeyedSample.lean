@@ -41,7 +41,7 @@ The window (`PlanDraw.executionPhase`, `plan.draw` for each call under one key, 
   swap indices' framings are distinct when the calls are admitted and each call's stratum names are distinct. So tier 3
   holds from the sample's own checks, with every swap index framed in under `2^64` bytes.
 * `SamplingDesign.keyedExecutionPhase_audit_of_record`, `SamplingDesign.keyedExecutionPhase_extraction_audit_of_record`: **step 4**, the window pins on the live
-  keyed sample at the sizing of record: `2^-40 + η + ε_ks + δ_link`, on a fresh uniform window secret (A5).
+  keyed sample at the sizing of record: `2^-40 + η + ε_ks + ε_bind`, on a fresh uniform window secret (A5).
 * `SamplingDesign.keyedExecutionPhaseReg_extraction_audit_of_record` (the claim of record), `SamplingDesign.keyedExecutionPhaseReg_audit_of_record`: the same on the
   real game, whose key context is the receipt digest, strategy by strategy (`prob_auditReg`).
 -/
@@ -1006,7 +1006,7 @@ variable {n M : ℕ} {cl : Fin n → Finset (Fin n)} {Reg : Type} {session : Fin
 
 /-- **The PoUW window audit on the live keyed sample, at the sizing of record** (step 4): the audit accepts while the unsound
 tiles do at least 0.1% of the work, or the unsound y cells are at least 0.1% of them, with probability at most
-`2^-40 + η + ε_ks + δ_link`. It is `audit_executionPhase_split_of_record_of_le_slack` at `L := keyedExecutionPhase sec domain context calls L`,
+`2^-40 + η + ε_ks + ε_bind`. It is `audit_executionPhase_split_of_record_of_le_slack` at `L := keyedExecutionPhase sec domain context calls L`,
 whose missProb `keyedExecutionPhase_escape_le_of_names` bounds by the product distribution's plus `η`: one `η` for every `B`, A4's for the
 sample's missProb tests (`executionPhaseTest`), which cost the same for every `B`.
 
@@ -1023,21 +1023,21 @@ theorem keyedExecutionPhase_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (ca
     (hA4 : ∀ B : Finset (Fin n), Assumptions.KeyedStreamsUniform S domain context
       (executionPhaseIdx (KeyedSample.flat calls) (executionPhaseK σ call w f 27713)) (fun _ => L)
       (executionPhaseTest (KeyedSample.flat calls) (executionPhaseK σ call w f 27713) B) η)
-    (A : Analysis ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hW : 0 < totalWork σ w)
+    (A : Analysis ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
     (σ' : Strategy (audit ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (totalWork σ w ≤ 1000 * unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         totalWork σ v ≤ 1000 * unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
         (audit ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session) σ' ≤
-      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + δlink :=
+      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + εbind :=
   audit_executionPhase_split_of_record_of_le_slack
     (fun B => keyedExecutionPhase_escape_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
 /-- **The claim of record: the PoUW window audit on the live keyed sample at the compiled layer** (randomized extractor):
-`keyedExecutionPhase_audit_of_record`'s bound with `ε_ks(σ)` and `δ_link(σ)`, through `extraction_audit_executionPhase_split_of_record_of_le_slack`. -/
+`keyedExecutionPhase_audit_of_record`'s bound with `ε_ks(σ)` and `ε_bind(σ)`, through `extraction_audit_executionPhase_split_of_record_of_le_slack`. -/
 theorem keyedExecutionPhase_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedSample.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)
@@ -1048,15 +1048,15 @@ theorem keyedExecutionPhase_extraction_audit_of_record {C : ℕ} (σ : Fin n →
       (executionPhaseIdx (KeyedSample.flat calls) (executionPhaseK σ call w f 27713)) (fun _ => L)
       (executionPhaseTest (KeyedSample.flat calls) (executionPhaseK σ call w f 27713) B) η)
     (A : ExtractionAnalysis ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session)
-    {εks δlink : (R : Reg) → Cont ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hW : 0 < totalWork σ w)
+    {εks εbind : (R : Reg) → Cont ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
     (σ' : Strategy (audit ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (totalWork σ w ≤ 1000 * unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         totalWork σ v ≤ 1000 * unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
         (audit ((keyedExecutionPhase (n := n) sec domain context calls L).closure cl) Reg session) σ' ≤
-      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') :=
+      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') :=
   extraction_audit_executionPhase_split_of_record_of_le_slack
     (fun B => keyedExecutionPhase_escape_le_of_names σ _ (executionPhaseK_le σ call w f 27713) calls hWS sec hsec L domain context η
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
@@ -1076,9 +1076,9 @@ theorem keyedExecutionPhaseReg_extraction_audit_of_record {C : ℕ} (σ : Fin n 
       (executionPhaseIdx (KeyedSample.flat calls) (executionPhaseK σ call w f 27713)) (fun _ => L)
       (executionPhaseTest (KeyedSample.flat calls) (executionPhaseK σ call w f 27713) B) η)
     (A : ∀ R, ExtractionAnalysis ((keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) Reg session)
-    {εks δlink : ∀ R, (R' : Reg) → Cont ((keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) Reg session R' →
+    {εks εbind : ∀ R, (R' : Reg) → Cont ((keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) Reg session R' →
       ℝ≥0∞}
-    (hks : ∀ R, (A R).KnowledgeSound (εks R)) (hlink : ∀ R, (A R).BindSound (δlink R)) (hW : 0 < totalWork σ w)
+    (hks : ∀ R, (A R).KnowledgeSound (εks R)) (hlink : ∀ R, (A R).BindSound (εbind R)) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
     (σ' : Strategy (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
@@ -1087,13 +1087,13 @@ theorem keyedExecutionPhaseReg_extraction_audit_of_record {C : ℕ} (σ : Fin n 
           totalWork σ v ≤ 1000 * unsoundWork σ v cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ')))))
         (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
       ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks σ'.1 (reg (atReg σ')) (cont (atReg σ')) +
-        δlink σ'.1 (reg (atReg σ')) (cont (atReg σ')) := by
+        εbind σ'.1 (reg (atReg σ')) (cont (atReg σ')) := by
   rw [prob_auditReg]
   exact keyedExecutionPhase_extraction_audit_of_record σ call w v f calls hWS sec hsec L domain (ctx σ'.1) η hnames hsmall
     (hA4 σ'.1) (A σ'.1) (hks σ'.1) (hlink σ'.1) hW hone hN hfy (atReg σ')
 
-/-- The oracle-layer form on the real, receipt-keyed game: at most `2^-40 + η + ε_ks + δ_link`, one `ε_ks` and one
-`δ_link` for every registration. -/
+/-- The oracle-layer form on the real, receipt-keyed game: at most `2^-40 + η + ε_ks + ε_bind`, one `ε_ks` and one
+`ε_bind` for every registration. -/
 theorem keyedExecutionPhaseReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C) (w v f : Fin M → ℕ)
     (calls : List PlanDraw.Call) (hWS : PlanStrata σ (executionPhaseK σ call w f 27713) (KeyedSample.flat calls))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) (hsec : Assumptions.UniformSecret sec)
@@ -1103,8 +1103,8 @@ theorem keyedExecutionPhaseReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
     (hA4 : ∀ (R : Reg) (B : Finset (Fin n)), Assumptions.KeyedStreamsUniform S domain (ctx R)
       (executionPhaseIdx (KeyedSample.flat calls) (executionPhaseK σ call w f 27713)) (fun _ => L)
       (executionPhaseTest (KeyedSample.flat calls) (executionPhaseK σ call w f 27713) B) η)
-    (A : ∀ R, Analysis ((keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : ∀ R, (A R).KnowledgeSound εks) (hlink : ∀ R, (A R).BindSound δlink) (hW : 0 < totalWork σ w)
+    (A : ∀ R, Analysis ((keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : ∀ R, (A R).KnowledgeSound εks) (hlink : ∀ R, (A R).BindSound εbind) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
     (σ' : Strategy (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
@@ -1112,7 +1112,7 @@ theorem keyedExecutionPhaseReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
         (totalWork σ w ≤ 1000 * unsoundWork σ w cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ'))) ∨
           totalWork σ v ≤ 1000 * unsoundWork σ v cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ')))))
         (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
-      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + δlink := by
+      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + εbind := by
   rw [prob_auditReg]
   exact keyedExecutionPhase_audit_of_record σ call w v f calls hWS sec hsec L domain (ctx σ'.1) η hnames hsmall (hA4 σ'.1)
     (A σ'.1) (hks σ'.1) (hlink σ'.1) hW hone hN hfy (atReg σ')

@@ -22,7 +22,9 @@ SHA-512 is evaluated.
 
 `lineHeld_accepted`: `Properties.Poub.Line.LineHeld`'s premises hold together with an accepted play. The record's
 one window is one group, its coin released at 0 and its root arriving at 1 (`groups_one`), so pass 0 runs over `[0, 1)`
-inside its span (`honestSchedule_one`), and `Subprotocol.lineHeldAtSubprotocol_honest` gives every premise.
+inside its span (`honestSchedule_one`), and `Subprotocol.lineHeldAtSubprotocol_honest` gives every premise. Stated with
+`Shared.run` as `Record.run` applies it, that is `LineHeld`'s honest witness
+(`Properties.Poub.Line.SecurityProofs.lineHeld_honest`).
 -/
 
 @[expose] public section
@@ -382,5 +384,34 @@ theorem lineHeld_accepted :
   exact ⟨node1, 0, Unit, Unit, inferInstance, fun _ _ _ _ => false, fun _ _ _ => 0, recs1,
     fun _ _ _ => Finset.range (receiptMax + 1), fun _ => (), _, receipts1, 0, 0, _, _, hP, hCv, hSk, hCov, hIc,
     hLive, hRef, hCnt, ⟨(), fun _ _ => false⟩, record_verified⟩
+
+/-- **`LineHeld`'s honest witness, with no premise.** At `lineHeld_accepted`'s play every premise of
+`Properties.Poub.Line.LineHeld` holds, and `Shared.run` runs the played record's session, at the node's parameters,
+windows a sample and registration, to an accepted state. -/
+theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_honest :
+    ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X)
+      (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+      (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ)
+      (recs : Cm → SampleCoins node.samples κ X → Record)
+      (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+      (com : SampleCoins node.samples κ X → Cm) (T : Trace (SampleCoins node.samples κ X))
+      (R : Receipts node.samples κ X) (δs δnet : ℝ)
+      (O : Outside (ofRecord T node (played recs com))) (I : Ingress (SampleCoins node.samples κ X)),
+      Paced (ofRecord T node (played recs com)) (recordPace node (played recs com)) ∧
+      Covers (ofRecord T node (played recs com)) ∧
+      SketchBoundAt (ofRecord T node (played recs com)) O δs ∧
+      Covered (ofRecord T node (played recs com)) O I ∧
+      IngressCounted (ofRecord T node (played recs com)) I δnet ∧
+      (∀ c, Live ((recordCommitted node recs correct).view c)) ∧
+      Refused ((recordCommitted node recs correct).play com) prf rest (ofRecord T node (played recs com)) R ∧
+      Counted ((recordCommitted node recs correct).play com) (ofRecord T node (played recs com)) ∧
+      ∃ ω rs s, _root_.Poub.Shared.run node.groupsPerCoin
+          (_root_.Poub.Session.State.init node.params node.reg (played recs com ω).coins
+            (played recs com ω).appendCoins (played recs com ω).notBeforeNs) (played recs com ω).events =
+          .ok (rs, s) ∧ s.outcome = some "accepted" := by
+  obtain ⟨node, κ, X, Cm, hX, prf, rest, recs, correct, com, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
+    hRef, hCnt, ω, rs, s, hr, ho⟩ := lineHeld_accepted
+  exact ⟨node, κ, X, Cm, hX, prf, rest, recs, correct, com, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hLive,
+    hRef, hCnt, ω, rs, s, hr, ho⟩
 
 end Properties.Poub.Line.Honest

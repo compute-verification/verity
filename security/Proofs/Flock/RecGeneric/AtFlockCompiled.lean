@@ -54,7 +54,7 @@ noncomputable def Compiled.ofRec (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin
   pre x := IV.k (Claims.Recursion.xI (D.record IV) x) + (D.record IV).kS x
   nS := (D.record IV).nS
   sh x s := (((D.record IV).nums x s).waits, ((D.record IV).nums x s).cap, ((D.record IV).nums x s).rounds,
-    ((D.record IV).nums x s).N₀)
+    (((D.record IV).nums x s).N₀ : ℝ))
   κb x s := ((D.record IV).nums x s).κ
   γb x s := ((D.record IV).nums x s).γ
   stmts x ms :=
