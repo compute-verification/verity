@@ -6445,7 +6445,9 @@ def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_n
     facts document is written (`--facts-only`) or stored (`--facts-cache`), and its failure is written beside what the
     build began with (`BUILDING`), which is all a check.py killed before its report leaves for the artifact cache's `put`;
     one that matches lets both happen and leaves that as the build began. Until the sample ends, `BUILDING` says it is
-    pending, which `put` refuses, so a check.py killed during the replay or the sample stores nothing either."""
+    pending, which `put` refuses, so a check.py killed during the replay or the sample stores nothing either. With no
+    replay the sample holds the package's `writable` directories from before the announcement until it ends, so no
+    dependent's build (`writing`) starts beside it."""
     pkg = tmp_path / "p"
     pkg.mkdir()
     (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
@@ -6463,10 +6465,14 @@ def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_n
 
     announced, calls, heard, wrote = [], [], [], []
 
+    def held() -> bool:
+        return set(A.writable(pkg)) <= A._WRITING
+
     def sampled(pkg_, roots, work, built, sealed, threads=None, log=print):
-        calls.append((list(announced), built, sealed, threads, json.loads((work / A.BUILDING).read_text())))
+        calls.append((list(announced), held(), built, sealed, threads, json.loads((work / A.BUILDING).read_text())))
         return ([] if matches else [A.Failure("sampled", "P.B", "sampled: P.B: planted")]), {"modules": ["P.B"]}
 
+    monkeypatch.setattr(A, "_WRITING", set())
     monkeypatch.setattr(A, "sandboxed", lambda: True)
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "run", fake_run)
@@ -6486,10 +6492,11 @@ def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_n
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     out = tmp_path / "facts.json.gz"
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False, replay=False, log=lambda *_: None, seals=Seals(),
-                  built=lambda: announced.append(True), matched=heard.append,
+                  built=lambda: announced.append(held()), matched=heard.append,
                   **({"facts_cache": tmp_path / "cache", "facts_reuse": True} if facts_to == "cache" else {"facts_out": out}))
-    assert calls == [([True], {"P.A", "P"}, seal, A.build_threads(pkg),
+    assert calls == [([True], True, {"P.A", "P"}, seal, A.build_threads(pkg),
                       {"package": str(pkg), "sandbox": True, "bound": rep["bound"]} | A.SAMPLE_PENDING)]
+    assert A._WRITING == set(), "the sample let go of the package's directories once it ended"
     assert heard == [matches] and rep["sampled"] == {"modules": ["P.B"]} and "sampled" in rep["seconds"]
     assert rep["failure_codes"] == ([] if matches else ["sampled"])
     assert wrote == ([] if not matches else [("stored", "key")] if facts_to == "cache" else [("written", out)])
@@ -6530,7 +6537,8 @@ def test_a_heavy_sample_beside_its_replay_takes_its_jobs_out_of_the_replay_s_sha
 def test_a_sample_with_no_room_beside_its_replay_runs_after_it(tmp_path, monkeypatch, room):
     """The audit asks `sample_jobs` how many recompiles of its sample fit beside its replay, given the build's threads:
     with none the sample starts only once the replay has ended, and with room it is started before it; either way the
-    verdict holds the sample's report and nothing is left in `_BESIDE`."""
+    verdict holds the sample's report and nothing is left in `_BESIDE`. Beside a replay the sample holds none of the
+    package's directories (`writing`): what it may run beside is planned there."""
     pkg = tmp_path / "p"
     pkg.mkdir()
     (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
@@ -6549,7 +6557,7 @@ def test_a_sample_with_no_room_beside_its_replay_runs_after_it(tmp_path, monkeyp
     order, asked = [], []
 
     def sampled(pkg_, roots, work, built, sealed, threads=None, log=print):
-        order.append("sample")
+        order.append("sample" if not set(A.writable(pkg)) & A._WRITING else "held")
         return [], {"modules": ["P.B"]}
 
     def replayed(*a):
@@ -6557,6 +6565,7 @@ def test_a_sample_with_no_room_beside_its_replay_runs_after_it(tmp_path, monkeyp
         return [], {"checked": 1, "reused": 0}
 
     monkeypatch.setattr(A, "_BESIDE", {})
+    monkeypatch.setattr(A, "_WRITING", set())
     monkeypatch.setattr(A, "sandboxed", lambda: True)
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "run", fake_run)
