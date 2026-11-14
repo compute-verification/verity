@@ -10,8 +10,9 @@ public import Std.Tactic.Do
 The facts the reads of the release log rest on, for `Verity.Sampled.readLog` (`coinsRead`'s line reading: a coin
 tree's line its own release, `treeStep`, and the other lines in pairs, a root's line, `rootOf`, and its coin's release)
 and for any other read of v2's logs. `countFresh` counts the pairs whose root's line shows the sample's family after the
-registration's digest, `chunks` cuts the sample's coins, and a coin tree's line answers no family's frame
-(`treeStep_frame`). `logRead` is `coinsRead`'s read, by its own name (`coinsRead_eq_logRead`).
+registration's digest, `chunks` cuts the sample's coins into their bits, which are the bits a sample reads of them
+(`bitsOfBytes_eq`, `chunks_flatten`), and a coin tree's line answers no family's frame (`treeStep_frame`). `logRead` is
+`coinsRead`'s read, by its own name (`coinsRead_eq_logRead`).
 
 `BEq Json` and `Json.parse` are `partial`, so no proof can read a field off a `Json` comparison v2 makes, or see that a
 line v2 accepts parses. A fact about one of the verifier's monadic functions is a Hoare triple proved by `mvcgen`, read
@@ -28,6 +29,7 @@ namespace Verity.Sampled
 open Lean (Json)
 open Std.Do
 open Spot.Challenger
+open Properties.Challenger (bitsOf)
 
 /-! ## Reading the verifier's monadic functions -/
 
@@ -103,6 +105,60 @@ def countFresh (label : String) (after : ByteArray) : List String → Nat
 def chunks : Nat → ByteArray → List (List Bool)
   | 0, _ => []
   | m + 1, ξ => Verity.bitsOfBytes (ξ.extract 0 COIN_BYTES) :: chunks m (ξ.extract COIN_BYTES ξ.size)
+
+theorem bit_cons_lt (x : UInt8) (l : List UInt8) {t : Nat} (ht : t < 8) :
+    Flock.Hm96.bit ⟨⟨x :: l⟩⟩ t = x.toNat.testBit t := by
+  unfold Flock.Hm96.bit
+  rw [Nat.div_eq_of_lt ht, Nat.mod_eq_of_lt ht, show (⟨⟨x :: l⟩⟩ : ByteArray).get! 0 = x from rfl,
+    Nat.testBit_eq_decide_div_mod_eq, Nat.shiftRight_eq_div_pow]
+  generalize x.toNat / 2 ^ t % 2 = r
+  by_cases h : r = 1 <;> simp [h]
+
+theorem bit_cons_add (x : UInt8) (l : List UInt8) (t : Nat) :
+    Flock.Hm96.bit ⟨⟨x :: l⟩⟩ (8 + t) = Flock.Hm96.bit ⟨⟨l⟩⟩ t := by
+  unfold Flock.Hm96.bit
+  rw [show (8 + t) / 8 = t / 8 + 1 by omega, show (8 + t) % 8 = t % 8 by omega]
+  rw [show (⟨⟨x :: l⟩⟩ : ByteArray).get! (t / 8 + 1) = (⟨⟨l⟩⟩ : ByteArray).get! (t / 8) by
+    show (x :: l).toArray[t / 8 + 1]! = l.toArray[t / 8]!
+    simp]
+
+theorem bitsOfBytes_list : ∀ l : List UInt8, Verity.bitsOfBytes ⟨⟨l⟩⟩ = l.flatMap byteBits
+  | [] => rfl
+  | x :: l => by
+    have e := bitsOfBytes_list l
+    unfold Verity.bitsOfBytes at e ⊢
+    rw [show (⟨⟨x :: l⟩⟩ : ByteArray).size = 8 / 8 + l.length by simp [ByteArray.size]; omega] at *
+    rw [show 8 * (8 / 8 + l.length) = 8 + 8 * l.length by omega, List.range_add, List.map_append, List.flatMap_cons,
+      List.map_map]
+    rw [show (⟨⟨l⟩⟩ : ByteArray).size = l.length from rfl] at e
+    rw [← e]
+    congr 1
+    · exact List.map_congr_left fun t ht => bit_cons_lt x l (List.mem_range.1 ht)
+    · exact List.map_congr_left fun t _ => bit_cons_add x l t
+
+theorem beq_bytes {a b : ByteArray} : (a == b) = true ↔ a = b := by
+  show (a.data == b.data) = true ↔ a = b
+  rw [beq_iff_eq, ByteArray.ext_iff]
+
+/-- The bits of bytes, as the device's log reads them, are their bits as a sample reads them. -/
+theorem bitsOfBytes_eq (b : ByteArray) : Verity.bitsOfBytes b = bitsOf b := by
+  rw [bitsOf_eq]
+  rcases b with ⟨⟨l⟩⟩
+  exact bitsOfBytes_list l
+
+/-- **`m` coins of `ξ` are its bits**, where `ξ` is `m` coins long. -/
+theorem chunks_flatten : ∀ (m : ℕ) (ξ : ByteArray), ξ.size = COIN_BYTES * m → (chunks m ξ).flatten = bitsOf ξ
+  | 0, ξ, h => by
+    rw [← bitsOfBytes_eq]
+    simp [chunks, Verity.bitsOfBytes, h]
+  | m + 1, ξ, h => by
+    have h64 : COIN_BYTES ≤ ξ.size := by
+      rw [h, Nat.mul_succ]
+      exact Nat.le_add_left _ _
+    have hs : (ξ.extract COIN_BYTES ξ.size).size = COIN_BYTES * m := by
+      rw [ByteArray.size_extract, Nat.min_self, h, Nat.mul_succ, Nat.add_sub_cancel]
+    rw [chunks, List.flatten_cons, chunks_flatten m _ hs, bitsOfBytes_eq, ← bitsOf_append,
+      ByteArray.extract_append_extract, Nat.zero_min, Nat.max_eq_right h64, ByteArray.extract_zero_size]
 
 /-! ## The read with v2's own tests -/
 
