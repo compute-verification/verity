@@ -1,4 +1,4 @@
-"""A frozen instance set's range as the Flock prover and verifier read it, with its frame-v3 statement commitments.
+"""A frozen input set's range as the Flock prover and verifier read it, with its frame-v3 statement commitments.
 
 The instances are B-Ligero's synthetic sets (the recipe the frozen ``bench-instances-bf16-hopper/v1``,
 ``bench-instances-fp8-ada/v1`` and ``bench-instances-fp8-hopper/v1`` tiers name; :func:`_relations`), sampled exactly as its
@@ -27,7 +27,7 @@ K = 1536
 
 @dataclass(frozen=True)
 class Relation:
-    """A relation's instance set: the model its accumulators are chained under, its operand words and chain-end word, and
+    """A relation's input set: the model its accumulators are chained under, its operand words and chain-end word, and
     the dataset, tier, seed and recipe its frozen tier names."""
     name: str
     word_dtype: str

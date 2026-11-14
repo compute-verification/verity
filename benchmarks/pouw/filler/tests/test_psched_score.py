@@ -131,6 +131,23 @@ def test_phase_gates_void_the_score(tmp_path, kw, gate):
     assert res["SCORE"] is None and not res["scored"] and res["score_if_gated"] is not None
 
 
+def test_show_prints_each_gate_from_its_own_dict(tmp_path, capsys):
+    """The locked `score.show` prints a line a gate: its verdict, then the detail it reads from that gate's dict."""
+    res = P.report(*write_run(tmp_path))
+    SC.show(res)
+    said = dict(ln.removeprefix("  gate ").split(": ", 1) for ln in capsys.readouterr().out.splitlines()
+                if ln.startswith("  gate "))
+    g = res["gates"]
+    assert list(said) == [*SC.GATES, "filler_paths"]
+    assert said["slowdown"] == f"pass  worst 1.020 at {g['slowdown']['at']} ({g['slowdown']['phase']})"
+    assert said["receipts"] == f"pass  timed {g['receipts']['timed_checked']} checked, 0 bad"
+    assert said["replay"].startswith(f"pass  {g['replay']['rounds']} rounds, {g['replay']['tiles']:.3g} tiles, ")
+    assert said["honest"].startswith("pass  control (S 2048 credited, ") and said["honest"].endswith(", caught")
+    assert said["dram"] == "pass  0.012% of HBM, counter control 1.006"
+    assert said["clocks"].startswith(f"pass  {g['clocks']['reps']} reps read; nvidia-smi between points: MHz [2092.0, ")
+    assert said["serving_exact"] == "pass  " and said["filler_paths"] == f"pass  {g['filler_paths']['why']}"
+
+
 def test_arm_places_a_phase_filler_only_beside_a_split():
     arm = A.load(ARM)
     for ph, b, l in S.points():

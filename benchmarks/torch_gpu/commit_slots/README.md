@@ -64,7 +64,7 @@ blocks.
 - `slots_gpu.py`: `Plan`, `StepCommitter`, `commit` and `regroup` on the engine (`../sha512_rows/engine.py`).
 - `check.py`: the GPU's roots against the reference's. `bench.py`: the call's throughput at the H200 example's layout,
   alone and beside the layer's int8 GEMMs. `step.py`: one streamed step at a layout file, timed by phase (`time`), and a
-  layout's compressions a row-slot on the host twin (`count`). `launches.py`: an nsys report's enqueue calls a step.
+  layout's compressions a row-slot on the host twin (`count`).
   `gpu.sh`: these, with the tests, under one GPU lease (`OUT=DIR bash gpu.sh` from the tree's root; its header has the
   options).
 

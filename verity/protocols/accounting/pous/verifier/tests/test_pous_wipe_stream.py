@@ -87,7 +87,7 @@ def test_a_native_fill_is_judged_as_the_python_fill(wipe_streamer, store: str) -
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", SMALL), signer=signer, log=ts.session_log(), egress_bits=0,
+            got["c"] = WP.serve(f, WP.request_of("n0", SMALL), signer=signer, log=ts.session_log(),
                                 clock=Clock(10 ** 9, 1), fill=native)
 
     t = threading.Thread(target=side)

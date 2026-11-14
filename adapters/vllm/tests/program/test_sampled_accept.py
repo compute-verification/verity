@@ -93,14 +93,25 @@ def test_the_outputs_are_accept_v1s():
         assert bind(A.SampledAccept, K=k, V=V, TILE=TILE).signature()[1] == bind(spec.Accept, K=k).signature()[1]
 
 
+def _x(w: list[int]) -> list[list[int]]:
+    """A unit's lanes as its rows of `ROW` lanes, one parameter each."""
+    return [w[j:j + A.ROW] for j in range(0, len(w), A.ROW)]
+
+
 def _tile(row, tile: int) -> tuple[int, int]:
-    """A tile's maximum and sum by its units: the head, then its parts of `part` lanes, each handing its thread sums on."""
-    w, n, step = _words(row), len(row), A.part(tile)
-    m = evaluate(bind(A.AcceptTileHead, N=n, FIRST=True, LAST=False), w, 0)[0]
+    """A tile's maximum and sum by its units: its heads of `head` lanes, each handing its maximum on, then its parts of `part`
+    lanes, each handing its thread sums on."""
+    w, n, step, h = _words(row), len(row), A.part(tile), A.head(tile)
+    out: tuple = ()
+    for at in range(0, n, h):
+        hn = min(h, n - at)
+        out = evaluate(bind(A.AcceptTileHead, N=hn, AT=at, FIRST=at == 0, LAST=False), *_x(w[at:at + hn]), 0,
+                       *(out[1:] + out[:1] if at else ()))
+    m = out[0]
     acc: tuple = ()
     for at in range(0, n, step):
         pn = min(step, n - at)
-        acc = evaluate(bind(A.AcceptTileSum, N=pn, AT=at, LAST=at + pn == n), w[at:at + pn], m, *([list(acc)] if at else []))
+        acc = evaluate(bind(A.AcceptTileSum, N=pn, AT=at, LAST=at + pn == n), *_x(w[at:at + pn]), m, *([list(acc)] if at else []))
     return m, acc[0]
 
 
@@ -129,7 +140,7 @@ def _row_end(logits, d: int, seed: int, pos: int, tile: int = TILE) -> int:
     assert n <= A.part(tile)
     others = [w for pair in zip(_words(m[:-1]), _words(s[:-1])) for w in pair]
     at = _words(logits[d])[0] if 0 <= d < v else NEG_INF
-    return evaluate(bind(A.AcceptRowEnd, T=t, N=n, AT=0), _words(logits[v - n:]), _words(m[-1])[0], at, seed, pos, *others)[0]
+    return evaluate(bind(A.AcceptRowEnd, T=t, N=n, AT=0), *_x(_words(logits[v - n:])), _words(m[-1])[0], at, seed, pos, *others)[0]
 
 
 @pytest.mark.parametrize("name", list(VECTORS))
@@ -192,7 +203,7 @@ def test_the_heads_carry_the_logit_at_the_draft_token(sizes):
         carry, lo = (), 0
         for t, n in enumerate(sizes):
             last = t == len(sizes) - 1
-            out = evaluate(bind(A.AcceptTileHead, N=n, FIRST=t == 0, LAST=last), row[lo:lo + n], d, *carry)
+            out = evaluate(bind(A.AcceptTileHead, N=n, AT=0, FIRST=t == 0, LAST=last), *_x(row[lo:lo + n]), d, *carry)
             assert _f(out[0]) == max(_f(w) for w in row[lo:lo + n])
             carry, lo = out[1:], lo + n
             assert last or carry[0] == lo
@@ -262,8 +273,9 @@ def test_sampled_accept_refuses_a_layout_the_kernels_were_not_read_at(statics, w
 
 
 def test_sampled_accept_has_no_dead_gate():
-    units = [A.AcceptUniform, bind(A.AcceptTileHead, N=1, FIRST=True, LAST=True), bind(A.AcceptTileHead, N=3, FIRST=False, LAST=False),
-             bind(A.AcceptTileHead, N=3, FIRST=False, LAST=True), bind(A.AcceptTileSum, N=16, AT=0, LAST=True),
+    units = [A.AcceptUniform, bind(A.AcceptTileHead, N=1, AT=0, FIRST=True, LAST=True),
+             bind(A.AcceptTileHead, N=3, AT=0, FIRST=False, LAST=False), bind(A.AcceptTileHead, N=3, AT=512, FIRST=False, LAST=False),
+             bind(A.AcceptTileHead, N=3, AT=0, FIRST=False, LAST=True), bind(A.AcceptTileSum, N=16, AT=0, LAST=True),
              bind(A.AcceptTileSum, N=16, AT=512, LAST=True), bind(A.AcceptRowEnd, T=17, N=16, AT=0),
              bind(A.AcceptResample, K=2, N=2, FIRST=True, LAST=False), bind(A.AcceptResample, K=2, N=1, FIRST=False, LAST=False),
              bind(A.AcceptResample, K=2, N=2, FIRST=False, LAST=True), bind(A.AcceptResample, K=1, N=1, FIRST=False, LAST=True)]
@@ -271,19 +283,56 @@ def test_sampled_accept_has_no_dead_gate():
         assert dead_gates(Program(fn), transitive=True).computed == 0, fn.id
 
 
+@pytest.mark.slow
+def test_the_call_s_kernel_is_the_definition_on_sampled_passes_and_the_zero_vector():
+    """`sampled_accept.accept_kernel`, circuit-check's reference for `SampledAccept_v1` (the sidecar registers it), at the
+    smallest layout: its sampler's draft passes and the all-zero vector, the one all-edge vector in its domain, each compared
+    and none a mismatch.  About 11 s, the Definitions' evaluator on four passes."""
+    from verity.circuits.evaluation import self_check
+    from verity.circuits.evaluation.batch import type_shape
+    from verity.circuits.evaluation.reference import signature_of
+
+    A.register_kernels()
+    t = bind(A.SampledAccept, K=K, V=V, TILE=TILE)
+    sc = self_check(t, kernel="numpy", n=3, seed=4)
+    assert (sc.compared, sc.mismatches) == (3, [])
+    zero = [np.zeros((1, *type_shape(pt)), np.uint64) for pt in signature_of(t)[0]]
+    sc = self_check(t, kernel="numpy", inputs=zero)
+    assert (sc.compared, sc.mismatches) == (1, [])
+
+
+def test_q_call_applies_to_every_unit_of_the_plan_no_gate_wider_than_its_x():
+    """GLM-5.3's layout with five draft tokens: `Q_call` v1 at its X cuts each of the plan's twelve Definitions, so none
+    computes a word wider than 32 bits (the resample selects the rows' 32-bit stream keys, not their 64-bit positions)."""
+    from verity.circuits import cut
+
+    memo: dict = {}
+    defns = {u.defn for u in A.plan(5, 154880)}
+    assert len(defns) == 12
+    for d in defns:
+        assert cut.call_gates(d, memo).widest(cut.CALL_X) is None, d.id
+        assert cut.evaluate_call(d, cut.CALL_X, memo).units, d.id
+
+
 def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers():
-    """GLM-5.3's layout with five draft tokens: nine Definitions; each draft row's lanes once in a head and once in a part
-    or the row end, every row's lanes once in the resample; a wire names a unit already written and one of its outputs."""
+    """GLM-5.3's layout with five draft tokens: twelve Definitions; each draft row's lanes once in a head and once in a part
+    or the row end, every row's lanes once in the resample, each read one row of `ROW` lanes; a wire names a unit already
+    written and one of its outputs; no unit is past a proof block's rows (`interface.check_proof_block`)."""
+    from verity.commitments.windows import interface as IF
+
     k, v = 5, 154880
     plan = A.plan(k, v)
     n = Counter(u.defn.id for u in plan)
     assert n == {
-        "AcceptTileHead_v1{N=8192,FIRST=True,LAST=False}": k, "AcceptTileHead_v1{N=8192,FIRST=False,LAST=False}": 17 * k,
-        "AcceptTileHead_v1{N=7424,FIRST=False,LAST=True}": k, "AcceptTileSum_v1{N=4096,AT=0,LAST=False}": 19 * k,
-        "AcceptTileSum_v1{N=4096,AT=4096,LAST=True}": 18 * k, "AcceptRowEnd_v1{T=19,N=3328,AT=4096}": k,
+        "AcceptTileHead_v1{N=4096,AT=0,FIRST=True,LAST=False}": k, "AcceptTileHead_v1{N=4096,AT=4096,FIRST=False,LAST=False}": 18 * k,
+        "AcceptTileHead_v1{N=4096,AT=0,FIRST=False,LAST=False}": 18 * k,
+        "AcceptTileHead_v1{N=3328,AT=4096,FIRST=False,LAST=True}": k, "AcceptTileSum_v1{N=2048,AT=0,LAST=False}": 19 * k,
+        "AcceptTileSum_v1{N=2048,AT=2048,LAST=False}": 19 * k, "AcceptTileSum_v1{N=2048,AT=4096,LAST=False}": 19 * k,
+        "AcceptTileSum_v1{N=2048,AT=6144,LAST=True}": 18 * k, "AcceptRowEnd_v1{T=19,N=1280,AT=6144}": k,
         "AcceptResample_v1{K=5,N=32,FIRST=True,LAST=False}": 1, "AcceptResample_v1{K=5,N=32,FIRST=False,LAST=False}": 4838,
         "AcceptResample_v1{K=5,N=32,FIRST=False,LAST=True}": 1}
     assert dict(A.cut(bind(A.SampledAccept, K=k, V=v, TILE=A.STATS_TILE))) == dict(Counter(u.defn for u in plan))
+    assert max(IF.check_proof_block(d) for d in {u.defn for u in plan}) <= IF.K_MAX
     seen: dict = {}
     read = {kind: np.zeros((k + 1, v), np.int64) for kind in ("head", "sum", "resample")}
     for u in plan:
@@ -291,6 +340,7 @@ def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers(
         assert sorted(params) == sorted([name for name, _ in u.reads] + [name for name, _, _ in u.wires]), u.key
         for _, (name, *at) in u.reads:
             if name == "logits":
+                assert at[1] % A.ROW == 0 and at[2] == min(at[1] + A.ROW, v), (u.key, at)
                 read["sum" if u.key[0] == "row" else u.key[0]][at[0], at[1]:at[2]] += 1
         for _, key, i in u.wires:
             ret = seen[key].signature()[1]
@@ -301,11 +351,85 @@ def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers(
     assert plan[-1].key == ("resample", v // A.RESAMPLE_N - 1)
 
 
+def _fields(defn) -> list[int]:
+    ret = defn.signature()[1]
+    fs = [f[1] if isinstance(f, tuple) else f for f in ret.fields] if hasattr(ret, "fields") else [ret]
+    return [len(list(f.leaf_widths())) for f in fs]
+
+
+def _run(units, ops: dict, done: dict) -> dict:
+    """``units`` evaluated in order, each on its reads of ``ops`` and its wires to the outputs in ``done`` (each unit's output
+    fields by key, each a list of words; a unit already there is not evaluated)."""
+    from verity.circuits.types import Value
+
+    for u in units:
+        if u.key in done:
+            continue
+        args = {name: _operand(ops, ref) for name, ref in u.reads}
+        args.update({name: done[key][i] for name, key, i in u.wires})
+        params = u.defn.signature()[0]
+        flat = [int(v) for v in evaluate(u.defn, *(args[n][0] if isinstance(t, Value) and isinstance(args[n], list) else args[n]
+                                                   for n, t in params))]
+        done[u.key], at = [], 0
+        for n in _fields(u.defn):
+            done[u.key].append(flat[at:at + n])
+            at += n
+    return done
+
+
+def _operand(ops: dict, ref: tuple):
+    name, *at = ref
+    if name == "logits":
+        return [int(w) for w in ops[name][at[0]][at[1]:at[2]]]
+    return ops[name][at[0]] if at else ops[name]
+
+
+@pytest.mark.slow
+def test_a_pass_is_each_rows_top_p_mask_then_the_sampled_accept():
+    """`pass_plan` at K = 2 over three rows of 17 tiles of 512 bf16 logits: each row's mask chunks, on the twin's top-p
+    pipeline outputs (`topp_stage_twins`, which `test_topp_stages` holds each pipeline unit to), then the accept's units, each
+    on its wires alone, give the references composed: `TopPMask_v4{V,S}`'s function (`sampling_rows.topp_mask_row` at
+    ``splits`` = S) on each temperature-scaled row, then `sampled_accept`.  Each row has a lane of about 0.993 of its mass and
+    one of about 0.0067 that top_p keeps, so the draft tokens are accepted everywhere, outside the kept set at the first
+    row, and refused by the second row's test.  It is the one test of the masked rows' wires from the mask chunks into the
+    accept's units; about two minutes, most of it the twin and 771 mask chunks evaluated one by one."""
+    from verity.definitions.numerics import topp_stage_twins as TW
+    from verity.definitions.registry import sampling_rows as SR, topp_stages as TS
+
+    rng = np.random.default_rng(273)
+    S, temp, top_p, seed, pos = 8, int(F(0.8).view(np.uint32)), int(F(0.999).view(np.uint32)), 0x5EED_0273, [90, 91, 92]
+    x = rng.normal(0, 3, (K + 1, V)).astype(F)
+    for p in range(K + 1):
+        x[p, rng.choice(V, 2, replace=False)] = (30.0, 26.0)
+    lg = (x.view(np.uint32) >> 16).astype(np.uint16)
+    plan = A.pass_plan(K, V, TILE)
+    done: dict = {}
+    for p in range(K + 1):
+        _, outs = TW.stage_rows(V, lg[p], top_p=top_p, seed=seed, pos=pos[p], temp=temp, splits=S)
+        done.update({("topp", p, *key): [[int(w) for w in f] for f in fs] for key, fs in outs.items() if key[0] != "select"})
+    ops = {"logits": lg, "temp": temp, "top_p": top_p, "splits": S, "seed": seed, "pos": pos}
+    masked = np.stack([SR.topp_mask_row(SR.temperature_scale_row(lg[p], temp), top_p, S) for p in range(K + 1)]).astype(np.uint32)
+    done = _run([u for u in plan if u.key[0] == "topp"], ops, done)
+    wrote = [[w for u in TS.mask_plan(V) if u.key[0] == "mask" for w in done[("topp", p, *u.key)][0]] for p in range(K + 1)]
+    assert np.array_equal(np.array(wrote, np.uint32), masked)
+    kept = [np.flatnonzero(masked[p] != NEG_INF) for p in range(K)]
+    best = [int(kept[p][np.argmax(masked[p][kept[p]].view(F))]) for p in range(K)]
+    outside = int(np.flatnonzero(masked[0] == NEG_INF)[0])
+    seen = set()
+    for draft in (best, [outside, best[1]], [best[0], int(kept[1][np.argmin(masked[1][kept[1]].view(F))])]):
+        want = A.sampled_accept(masked.view(F), draft, seed, pos, temp, TILE)
+        got = _run([u for u in plan if u.key[0] == "accept"], {**ops, "draft": [d & M32 for d in draft]}, dict(done))
+        assert tuple(w for f in got[plan[-1].key] for w in f) == _outputs(want), draft
+        seen.add(want["accepted"])
+    assert seen == {0, 1, 2}
+
+
 @pytest.mark.parametrize("fn, statics, why", [
     (A.AcceptTileSum, dict(N=100, AT=0, LAST=False), "whole vectors of every thread"),
     (A.AcceptTileSum, dict(N=16, AT=100, LAST=True), "multiple of 512"),
-    (A.AcceptTileHead, dict(N=0, FIRST=True, LAST=False), "positive int"),
-    (A.AcceptTileHead, dict(N=4, FIRST=1, LAST=False), "FIRST is a bool"),
+    (A.AcceptTileHead, dict(N=0, AT=0, FIRST=True, LAST=False), "positive int"),
+    (A.AcceptTileHead, dict(N=4, AT=0, FIRST=1, LAST=False), "FIRST is a bool"),
+    (A.AcceptTileHead, dict(N=4, AT=512, FIRST=True, LAST=False), "starts its first tile"),
     (A.AcceptRowEnd, dict(T=16, N=16, AT=0), "17 to 32"),
     (A.AcceptResample, dict(K=0, N=4, FIRST=True, LAST=False), "positive number of draft tokens"),
     (A.AcceptResample, dict(K=1, N=1, FIRST=True, LAST=True), "one lane"),

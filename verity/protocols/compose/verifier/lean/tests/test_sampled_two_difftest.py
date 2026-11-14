@@ -48,9 +48,9 @@ def _base_text() -> str:
     c = OS._two_stage_case(0)
     it = c["interior"]
     return canonical({
-        "form": T.TWO_STAGE, "boundary": _challenged(c["params"], "draw/first"), "challenger": c["challenger"],
+        "form": T.TWO_STAGE, "boundary": _challenged(c["params"], "draw/0"), "challenger": c["challenger"],
         "delta": c["delta"],
-        "interior": {"members": {}, "params": _challenged(it["params"], "draw/second"), "replay": it["replay"],
+        "interior": {"members": {}, "params": _challenged(it["params"], "draw/second/0"), "replay": it["replay"],
                      "values": it["values"]},
         "outputs": [], "public": c["public"], "rule": c["rule"], "values": c["values"]})
 
@@ -91,7 +91,7 @@ CHANGES = {
     "outputs-not-a-list": lambda p: _set(p, ("outputs",), "credited"),
     "outputs": lambda p: _set(p, ("outputs",), ["credited"]),
     "rule-all": lambda p: _set(p, ("rule",), {"rule": "all"}),
-    "rule-law": lambda p: _set(p, ("rule",), {"law": "rate:1/2", "rule": "law"}),
+    "rule-sampling-design": lambda p: _set(p, ("rule",), {"law": "rate:1/2", "rule": "law"}),
     **{f"rule-odd-{n}": (lambda r: lambda p: _set(p, ("rule",), r))(r) for n, r in enumerate(OS.ODD_RULES)},
     "challenger-not-a-string": lambda p: _set(p, ("challenger",), 3),
     "public-not-a-list": lambda p: _set(p, ("public",), "x"),

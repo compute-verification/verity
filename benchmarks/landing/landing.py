@@ -204,7 +204,7 @@ def write(w: kit.Writer, doc: dict, out: Path, days: float) -> bool:
     w.validation("passed" if holds else "failed", "benchmarks/landing/landing.py", detail, [rel])
     if holds:
         for m in measurements(doc["summary"]):
-            w.measurement(inputs=[f"{Q.CONTROL}:{Q.LIVE}/decisions.jsonl"], **m)
+            w.measurement(inputs=[f"{Q.CONTROL}:{Q.LIVE}/decisions.jsonl"], **m, mark="measured")
     return holds
 
 

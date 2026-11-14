@@ -43,6 +43,8 @@ from typing import Any
 
 from verity_vllm.engine import hooks
 
+__all__ = ["Part", "Rank", "Step", "add"]
+
 #: the tag of the two patches (`hooks.live`)
 TAG = "runner-step"
 

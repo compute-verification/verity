@@ -202,7 +202,7 @@ class _Whole(str):
 @pytest.mark.parametrize("rows", [1, 3, 64, 1 << 16])
 def test_the_netlist_and_its_digest_go_in_pieces(rows, table, monkeypatch):
     """`netlist` joins its rows :data:`ir_lower.NETLIST_ROWS` at a time (with an inline read's array rows and the pins) into
-    the text the one-piece netlist wrote, and `digest` encodes it :data:`ir_lower.HASH_CHUNK` characters at a time."""
+    the text the one-piece circuit description wrote, and `digest` encodes it :data:`ir_lower.HASH_CHUNK` characters at a time."""
     import hashlib
 
     monkeypatch.setattr(IL, "NETLIST_ROWS", rows)

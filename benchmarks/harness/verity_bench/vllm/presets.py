@@ -6,7 +6,8 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from verity_config import Admission, ConfigError, gpus, load, sha256
 

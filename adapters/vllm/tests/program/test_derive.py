@@ -25,14 +25,11 @@ from verity.definitions.registry import prims as P
 from verity.definitions.registry import stop_check as SC
 
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend import examples
 from verity_vllm.program.frontend import stop_rule as SR
-from verity_vllm.program.frontend.correspond import compare_bodies, correspond_rebound
+from verity_vllm.program.frontend.correspond import compare_bodies
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.family import DecoderLayerT
-from verity_vllm.program.frontend.torch_frontend import export as fe_export
-from verity_vllm.program.frontend.torch_frontend import function
 
 REF = dict(mode="reference")
 PROF = dict(mode="profile", profile="b1-eager")
@@ -59,13 +56,6 @@ def _unsupported(source, inputs, reason, **kw) -> Unsupported:
 # ---------------------------------------------------------------------------------------------------------
 # S1 — reference mode
 # ---------------------------------------------------------------------------------------------------------
-
-
-@function(static=("K", "N"))
-def LinearRow(x, weights, *, K, N):
-    """What an author writes for one bf16 Linear row with `examples.py`'s TA1 composites and a weights record (the S1
-    structural oracle); shapes come from the example inputs."""
-    return examples.BiasAdd(examples.Gemm(x[0], weights["weight"]), weights["bias"]).view(1, N)
 
 
 def _bits(x: torch.Tensor) -> np.ndarray:
@@ -147,25 +137,18 @@ def test_s1_mlp_reference_mode_evaluates_and_matches_stated_semantics():
     assert ulp.max() <= 64
 
 
-def test_s1_gemm_structure_corresponds_to_examples_gemm():
-    """Profile-mode Linear (bf16) derives to exactly the registered `Gemm_v1{K,N}` + `BiasAdd_v1{N}` kinds — the same
-    definitions `examples.py`'s authored Gemm uses, so the derived body equals the authored body node for node."""
+def test_s1_gemm_structure_is_the_registered_gemm():
+    """Profile-mode Linear (bf16) derives to exactly the registered `Gemm_v1{K,N}` + `BiasAdd_v1{N}` kinds."""
     m = torch.nn.Linear(16, 8, device="meta", dtype=torch.bfloat16)
     rep = derive_report(m, (_meta(1, 16),), **PROF, name="Linear")
     assert rep.ok, rep.unsupported
     fsd = rep.flat_definition
     ids = [n.fn.id for n in fsd.body.nodes]
     assert ids == ["Gemm_v1{K=16,N=8}", "BiasAdd_v1{N=8}"], ids
-    # the derived Gemm callee is *the* registered definition (guard/codec/digest apply); its body is the authored one
+    # the derived Gemm callee is *the* registered definition (guard/codec/digest apply)
     gemm = fsd.body.nodes[0].fn
     v = compare_bodies(gemm.body, ir_bind(b1.Gemm, K=16, N=8).body, fid=gemm.id)
     assert v.verdict == "identical", v
-    # ... and the whole derived program corresponds (frontend/correspond.py, identities rebound) to the program an author
-    # writes with `examples.py`'s Gemm/BiasAdd: the structural oracle of S1
-    authored = fe_export(LinearRow, (_meta(1, 16), {"weight": _meta(8, 16), "bias": _meta(8)}), static={"K": 16, "N": 8})
-    rc = correspond_rebound(rep.program, authored)
-    assert rc.corresponds and rc.to_json()["root_out"] == "identical", rc.to_json()
-    assert not rc.digest_equal  # identities differ (Derived[Linear] vs LinearRow): the claim is correspondence, not the digest
 
 
 def test_s1_tied_parameters_are_one_input():

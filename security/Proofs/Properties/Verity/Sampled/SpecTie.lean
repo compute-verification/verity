@@ -45,7 +45,7 @@ open FlockDeploy (JsonEquiv)
 open FlockSoundness.Discharge
 open FlockSoundness.Refine (ebind_ok throw_ne_ok throw_bind')
 open Properties.Challenger.CanonLine (nat?_equiv)
-open Properties.Challenger.CanonRead (sorted_getD getD_equiv)
+open Properties.Challenger.CanonRead (sorted_getD getD_equiv sortedKeys_of_wf)
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 

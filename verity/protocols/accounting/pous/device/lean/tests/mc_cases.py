@@ -20,12 +20,12 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-from hypothesis import strategies as st
-
 import verity_difftest as D
+from hypothesis import strategies as st
 from verity_difftest import protocol as P
-from verity.protocols.accounting.pous.device import memory_challenger as mc
+
 from verity.commitments.crypto import lms
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
@@ -199,10 +199,10 @@ def test_key(secret: bytes, height: int) -> lms.PrivateKey:
 class _SparseTree:
     """A deployed key's tree for leaf 0 alone (`test_pous_memory_challenger._SparseTree`)."""
 
-    def __init__(self, I: bytes, seed: bytes) -> None:
+    def __init__(self, identifier: bytes, seed: bytes) -> None:
         self.root = b""
-        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")  # type: ignore[arg-type]
-        self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
+        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, identifier, seed, self), 0, b"probe")  # type: ignore[arg-type]
+        self.root = lms.root_of(lms.DEPLOYED, identifier, b"probe", probe)
 
     def __getitem__(self, r: int) -> bytes:
         return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
@@ -210,8 +210,9 @@ class _SparseTree:
 
 @cache
 def deployed_key() -> lms.PrivateKey:
-    I, seed = hashlib.sha512(b"memory-challenger-lean/I").digest()[:16], hashlib.sha512(b"memory-challenger-lean/seed").digest()
-    return lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
+    identifier = hashlib.sha512(b"memory-challenger-lean/I").digest()[:16]
+    seed = hashlib.sha512(b"memory-challenger-lean/seed").digest()
+    return lms.PrivateKey(lms.DEPLOYED, identifier, seed, _SparseTree(identifier, seed))  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True)
@@ -278,23 +279,23 @@ class Session:
 
 
 @st.composite
-def sessions(draw, signer: AtLeaf | None = None) -> Session:
+def sessions(sample, signer: AtLeaf | None = None) -> Session:
     """An honest run of `MemoryChallenger` (some rounds late, some answers tampered), signed by `signer` or a sampled test
     signer at a sampled leaf."""
     if signer is None:
-        height = draw(st.integers(1, 2))
-        signer = test_signer(draw(st.sampled_from(SECRETS)), height, draw(st.integers(0, 2 ** height - 1)))
-    blocks, k = draw(st.integers(1, 24)), draw(st.integers(1, 4))
-    block_bytes, limit = draw(st.integers(1, 40)), draw(st.integers(1, 10 ** 6))
-    seed = draw(st.integers(0, 3))
-    session_id = hashlib.sha512(b"session %d" % draw(st.integers(0, 3))).digest()[:32]
-    tree = mc.CoinTree.draw(b"source %d" % seed, session_id, blocks, k, key=draw(st.sampled_from(COIN_KEYS)),
+        height = sample(st.integers(1, 2))
+        signer = test_signer(sample(st.sampled_from(SECRETS)), height, sample(st.integers(0, 2 ** height - 1)))
+    blocks, k = sample(st.integers(1, 24)), sample(st.integers(1, 4))
+    block_bytes, limit = sample(st.integers(1, 40)), sample(st.integers(1, 10 ** 6))
+    seed = sample(st.integers(0, 3))
+    session_id = hashlib.sha512(b"session %d" % sample(st.integers(0, 3))).digest()[:32]
+    tree = mc.CoinTree.draw(b"source %d" % seed, session_id, blocks, k, key=sample(st.sampled_from(COIN_KEYS)),
                             salts=[hashlib.sha512(b"salt %d %d" % (seed, j)).digest() * 3 for j in range(k)])
-    spends = draw(st.lists(st.one_of(st.integers(0, limit), st.just(limit), st.just(limit + 1)), min_size=k, max_size=k))
-    tampered = draw(st.sets(st.integers(0, k - 1), max_size=1))
-    clock = Clock(draw(st.integers(0, 2 ** 40)))
+    spends = sample(st.lists(st.one_of(st.integers(0, limit), st.just(limit), st.just(limit + 1)), min_size=k, max_size=k))
+    tampered = sample(st.sets(st.integers(0, k - 1), max_size=1))
+    clock = Clock(sample(st.integers(0, 2 ** 40)))
     c = mc.MemoryChallenger(tree, signer, log=ts.session_log(), limit_ns=limit, block_bytes=block_bytes,
-                            binding=draw(st.sampled_from(SETUP_ROOTS)), clock=clock)
+                            binding=sample(st.sampled_from(SETUP_ROOTS)), clock=clock)
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()

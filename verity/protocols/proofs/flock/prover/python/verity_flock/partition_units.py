@@ -108,7 +108,7 @@ class ClassCircuit:
 
 
 def lower_class(act: Activation, uc: ProofBlockCircuit, max_gates: int = 1 << 20) -> ClassCircuit:
-    """C-Flock's Boolean lowering of one unit (inputs ``in0 ..``, outputs ``out0 ..``, one word per port), or why not."""
+    """Flock's Boolean lowering of one unit (inputs ``in0 ..``, outputs ``out0 ..``, one word per port), or why not."""
     prims = {act.gate(j).prim.id for j in uc.gates}
     missing = tuple(sorted(p for p in prims if p not in IL.PIECES and not p.startswith("Const") and input_id(p) is None))
     if missing:

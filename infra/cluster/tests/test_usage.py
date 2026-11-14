@@ -288,3 +288,13 @@ def test_without_file_it_reads_vy_nebius_1s_record_with_one_tail_or_grep(capsys,
     assert sent == [f"tail -c {5 * 256 * 1024} {usage.RECORD}", f"grep -F '\"hour\": \"2026-10-03T' {usage.RECORD} || test $? -eq 1"]
     assert '"hour": "2026-10-03T' in json.dumps(r)        # the grep's pattern is the record's own format
     assert json.loads(capsys.readouterr().out.split("\n}\n")[0] + "\n}")["source"] == f"vy-nebius-1:{usage.RECORD}"
+
+
+def test_without_node_1s_address_in_the_environment_the_record_is_unread_and_the_finding_names_the_variable(capsys, monkeypatch):
+    monkeypatch.setattr(usage, "clock", lambda: epoch("2026-10-03T10:20:00Z"))
+    monkeypatch.delenv("VY_NEBIUS_1_HOST", raising=False)
+    a = argparse.Namespace(ucmd="hourly", node="nebius-1", hours=2, json=True, file=None)
+    assert usage.main(a) == 1
+    assert json.loads(capsys.readouterr().out)["findings"][0] == (
+        f"could not read vy-nebius-1:{usage.RECORD}: ReadError: VY_NEBIUS_1_HOST is unset: vy-nebius-1's address, which "
+        "machines.d/vy-nebius-1.toml registers as host")

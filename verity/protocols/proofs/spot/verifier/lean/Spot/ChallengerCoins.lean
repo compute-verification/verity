@@ -54,7 +54,7 @@ def challengerStream (c : LiveCommitment) (segment : Json) (after : ByteArray) (
   unless keys? segment == some #["after", "label", "openings", "start"] do throw SEGMENT_FORM
   let (.str label, some start, .arr openings) := (getD segment "label", nat? (getD segment "start"),
       getD segment "openings") | throw SEGMENT_FORM
-  unless getD segment "after" == Json.str (Flock.hexOf after) do
+  unless jsonStrIs (getD segment "after") (Flock.hexOf after) do
     throw "the draw's coins were not opened after the prover's commitment the verifier holds"
   let mut out := ByteArray.empty
   for (doc, i) in openings.toList.zipIdx do

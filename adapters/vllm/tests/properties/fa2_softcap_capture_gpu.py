@@ -1,7 +1,7 @@
 """FA2 with a logit soft cap on a target: the stock vllm-flash-attn `Is_softcap` kernel vLLM launches for Gemma-2, against
 `AttentionSoftcap_v2` (`registry.fa2_softcap`), the softcapped `Attention_v5` the target binds.
 
-One GPU process writes `<out>/fa2_softcap_capture.json`, the property record `fa2_softcap_capture` (`properties.record`).  `ok` = the
+One GPU process writes `<out>/fa2_softcap_capture.json`, the property record `fa2_softcap_capture` (`records.property_record`).  `ok` = the
 gate, MUFU ex2 / rcp, MUFU.TANH, every launch's tile and determinism, and every row equal to `AttentionSoftcap_v2` (which the target
 binds) on every head.  The device gate runs first and nothing else runs when it fails (exit 3):
 
@@ -50,9 +50,9 @@ from verity.definitions.registry import prims as P
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.fa_tap_exactness import PAGE
-from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
-from verity_vllm.properties.record import seal as seal_record
+from tests.properties.fa_tap_exactness import PAGE
+from tests.properties.fa_tap_exactness import cases as tap_cases
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
 RECORD = "fa2_softcap_capture.json"

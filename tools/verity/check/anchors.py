@@ -17,8 +17,8 @@ one, `.resolve()`, `.absolute()`, `.parent`, `.parents[N]`, `/ "lit"`, `.joinpat
 bound to one (`os.path` arithmetic on `__file__` isn't read). `files(X)` is the directory of the package X names, or the one
 holding the module it names. `files(__package__)`, `files(__name__)` and `files()` name the file itself, so they are its
 own directory and the move check reads them. A literal name follows its package, not the file, and resolving it takes the
-import roots: `joins` reads one only through a resolver its caller passes (`public_boundary.py`'s), and the move check
-passes none, so it reads no literal name. In a `*.sh`, anchored means `$(dirname "$0")/path` or `${BASH_SOURCE[0]}`'s, and
+import roots: `joins` reads one only through a resolver its caller passes, and the move check passes none, so it reads no
+literal name. In a `*.sh`, anchored means `$(dirname "$0")/path` or `${BASH_SOURCE[0]}`'s, and
 `"$VAR/path"` for a `VAR=$(cd "<one of those>/.." && pwd)` (a relative path after a bare `cd "$(dirname "$0")"` isn't
 read).
 """

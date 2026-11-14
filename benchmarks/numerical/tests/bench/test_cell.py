@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_flock import register as FR
 from verity_numerical.bench import cell as C
 from verity_numerical.bench import drivers
 
@@ -242,8 +243,6 @@ def test_an_ir_cells_verifier_binary_is_the_first_result_that_names_its_backend(
 
 
 def test_takes_lane_reads_the_installed_script():
-    from verity_flock import register as FR
-
     assert drivers.driver("C-interactive").takes_lane() is ("--lane" in Path(FR.__file__).read_text())
 
 

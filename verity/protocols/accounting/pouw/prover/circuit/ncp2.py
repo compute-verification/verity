@@ -44,11 +44,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 
-from verity.circuits.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
-import verity.circuits.ops.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
+import verity.circuits.ops.fp32  # registers F32Mul_v2, Bf16Add_v1
 import verity.circuits.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
 from verity.circuits.ops.ncp import NcpDequant, NcpDequantDef  # noqa: F401  (the dequantization unit, registered in ops)
 
@@ -353,5 +353,5 @@ def window(shape: Shape, calls: int, kind: str = "shift24") -> SpecializedDefini
     return bind(NcpWindowDef, M=shape.m, K=shape.k, N=shape.n, PERM=kind, C=calls)
 
 
-__all__ = ["BF16", "D", "F32", "NcpDequant", "NcpKey", "NcpNode", "Shape", "TAG_E1", "TAG_F1", "TAG_KEY", "TAG_NODE",
-           "TAG_ROW", "TAG_STRIP", "linear", "perm", "rfc6962", "templates", "weight", "window"]
+__all__ = ["BF16", "D", "F32", "NcpDequant", "NcpFormXDef", "NcpKey", "NcpNode", "Shape", "TAG_E1", "TAG_F1", "TAG_KEY",
+           "TAG_NODE", "TAG_ROW", "TAG_STRIP", "U32", "linear", "perm", "rfc6962", "templates", "weight", "window"]

@@ -50,37 +50,37 @@ def test_a_dirty_sources_capture_holds_its_diff_and_untracked_files_and_reproduc
     (r / "fold-out" / "steps.txt").write_bytes(b"\x00step 1\n")
     (r / "build").mkdir()
     (r / "build" / "big.o").write_bytes(b"ignored")
-    cap = tmp_path / "run" / E.DIRTY_CAPTURE
-    cap.parent.mkdir()
-    conds = E.source_conditions(r, dirty_capture=cap)
+    capture = tmp_path / "run" / E.DIRTY_CAPTURE
+    capture.parent.mkdir()
+    conds = E.source_conditions(r, dirty_capture=capture)
     assert conds["source.dirty"] is True
     assert conds["source.dirty_digest"] == E.source_conditions(r)["source.dirty_digest"], "capturing never changes the digest"
-    assert _replay(cap) == conds["source.dirty_digest"]
-    with tarfile.open(cap) as t:
+    assert _replay(capture) == conds["source.dirty_digest"]
+    with tarfile.open(capture) as t:
         assert t.getnames() == [E.DIRTY_PATCH, f"{E.DIRTY_UNTRACKED}/fold-out/steps.txt"], "ignored files are not the source"
         assert b"1 = 1" in t.extractfile(E.DIRTY_PATCH).read()
     patched = tmp_path / "replayed"
     _git(tmp_path, "clone", "-q", str(r), str(patched))
-    with tarfile.open(cap) as t:
+    with tarfile.open(capture) as t:
         subprocess.run(["git", "apply", "-"], cwd=patched, input=t.extractfile(E.DIRTY_PATCH).read(), check=True)
     assert (patched / "a.lean").read_text() == "theorem a : 1 = 1 := rfl\n"
 
 
 def test_a_clean_source_writes_no_capture(tmp_path):
     r = _repo(tmp_path)
-    cap = tmp_path / E.DIRTY_CAPTURE
-    assert E.source_conditions(r, dirty_capture=cap)["source.dirty"] is False
-    assert not cap.exists()
+    capture = tmp_path / E.DIRTY_CAPTURE
+    assert E.source_conditions(r, dirty_capture=capture)["source.dirty"] is False
+    assert not capture.exists()
 
 
-def test_a_source_over_the_untracked_cap_leaves_no_partial_capture(tmp_path, monkeypatch):
+def test_a_source_over_the_untracked_limit_leaves_no_partial_capture(tmp_path, monkeypatch):
     r = _repo(tmp_path)
     (r / "x").write_bytes(b"x" * 10)
     (r / "y").write_bytes(b"y" * 10)
-    monkeypatch.setattr(E, "UNTRACKED_CAP_BYTES", 15)
-    cap = tmp_path / E.DIRTY_CAPTURE
-    assert E.source_conditions(r, dirty_capture=cap)["source.dirty_digest"] == "too-large"
-    assert not cap.exists()
+    monkeypatch.setattr(E, "UNTRACKED_LIMIT_BYTES", 15)
+    capture = tmp_path / E.DIRTY_CAPTURE
+    assert E.source_conditions(r, dirty_capture=capture)["source.dirty_digest"] == "too-large"
+    assert not capture.exists()
 
 
 def test_an_unreadable_untracked_file_drops_the_capture_and_keeps_the_digest(tmp_path, monkeypatch):
@@ -94,10 +94,10 @@ def test_an_unreadable_untracked_file_drops_the_capture_and_keeps_the_digest(tmp
         return real_open(p, *a, **k)
 
     monkeypatch.setattr("builtins.open", failing_open)
-    cap = tmp_path / E.DIRTY_CAPTURE
-    digest = E.source_conditions(r, dirty_capture=cap)["source.dirty_digest"]
+    capture = tmp_path / E.DIRTY_CAPTURE
+    digest = E.source_conditions(r, dirty_capture=capture)["source.dirty_digest"]
     assert digest == E.source_conditions(r)["source.dirty_digest"] and digest not in (None, "too-large")
-    assert not cap.exists(), "a capture missing a hashed file would not reproduce the digest"
+    assert not capture.exists(), "a capture missing a hashed file would not reproduce the digest"
 
 
 def test_a_commit_landing_during_the_read_is_read_again_never_recorded_dirty_with_the_empty_digest(tmp_path, monkeypatch):
@@ -114,11 +114,11 @@ def test_a_commit_landing_during_the_read_is_read_again_never_recorded_dirty_wit
         return real(args, root, **kw)
 
     monkeypatch.setattr(E, "_git", git)
-    cap = tmp_path / E.DIRTY_CAPTURE
-    c = E.source_conditions(r, dirty_capture=cap)
+    capture = tmp_path / E.DIRTY_CAPTURE
+    c = E.source_conditions(r, dirty_capture=capture)
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=r, capture_output=True, text=True, check=True).stdout.strip()
     assert landed and (c["source.commit"], c["source.dirty"], c["source.dirty_digest"]) == (head, False, None)
-    assert not cap.exists(), "the first read's capture is not this source's"
+    assert not capture.exists(), "the first read's capture is not this source's"
 
 
 def test_a_head_that_never_settles_is_unknown_not_guessed(tmp_path, monkeypatch):
@@ -137,9 +137,9 @@ def test_an_index_only_change_is_clean(tmp_path):
     _git(r, "add", "a.lean")
     (r / "a.lean").write_text("theorem a : True := trivial\n")
     assert subprocess.run(["git", "status", "--porcelain"], cwd=r, capture_output=True, text=True, check=True).stdout.strip()
-    cap = tmp_path / E.DIRTY_CAPTURE
-    c = E.source_conditions(r, dirty_capture=cap)
-    assert (c["source.dirty"], c["source.dirty_digest"]) == (False, None) and not cap.exists()
+    capture = tmp_path / E.DIRTY_CAPTURE
+    c = E.source_conditions(r, dirty_capture=capture)
+    assert (c["source.dirty"], c["source.dirty_digest"]) == (False, None) and not capture.exists()
 
 
 def test_an_untracked_nested_repository_is_in_the_digest_and_keeps_the_tree(tmp_path):
@@ -149,10 +149,10 @@ def test_an_untracked_nested_repository_is_in_the_digest_and_keeps_the_tree(tmp_
     (r / "sub").mkdir()
     _git(r / "sub", "init", "-q")
     (r / "sub" / "f").write_text("f\n")
-    cap = tmp_path / E.DIRTY_CAPTURE
-    c = E.source_conditions(r, dirty_capture=cap)
+    capture = tmp_path / E.DIRTY_CAPTURE
+    c = E.source_conditions(r, dirty_capture=capture)
     assert c["source.dirty"] is True and c["source.dirty_digest"] not in (None, E.EMPTY_DIGEST, "too-large")
-    assert c["source.dirty_digest"] == hashlib.sha256(b"sub/\0\0").hexdigest() and not cap.exists()
+    assert c["source.dirty_digest"] == hashlib.sha256(b"sub/\0\0").hexdigest() and not capture.exists()
 
 
 def test_the_runner_moves_the_capture_into_the_run_dir_and_names_it_in_job_json(tmp_path):
@@ -160,9 +160,9 @@ def test_the_runner_moves_the_capture_into_the_run_dir_and_names_it_in_job_json(
 
     r = _repo(tmp_path)
     (r / "out.txt").write_text("left by an earlier run\n")
-    cap = Path(tempfile.mkdtemp(dir=tmp_path)) / E.DIRTY_CAPTURE
-    conds = E.source_conditions(r, dirty_capture=cap)
-    prep = {"section": {"conditions": conds}, "dirty_capture": cap}
+    capture = Path(tempfile.mkdtemp(dir=tmp_path)) / E.DIRTY_CAPTURE
+    conds = E.source_conditions(r, dirty_capture=capture)
+    prep = {"section": {"conditions": conds}, "dirty_capture": capture}
     rd = tmp_path / "runs" / "r1"
     rd.mkdir(parents=True)
     cli._place_dirty_capture(prep, rd)
@@ -170,10 +170,10 @@ def test_the_runner_moves_the_capture_into_the_run_dir_and_names_it_in_job_json(
     data = (rd / E.DIRTY_CAPTURE).read_bytes()
     assert rec == {"path": E.DIRTY_CAPTURE, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
                    "dirty_digest": conds["source.dirty_digest"]}
-    assert not cap.parent.exists(), "the staging dir goes"
+    assert not capture.parent.exists(), "the staging dir goes"
 
 
-def test_custody_always_uploads_the_capture_whatever_the_undeclared_cap(tmp_path):
+def test_custody_always_uploads_the_capture_whatever_the_undeclared_limit(tmp_path):
     rd = tmp_path / "r1"
     rd.mkdir()
     (rd / "job.json").write_text(json.dumps({"run": {"id": "r1"}}))

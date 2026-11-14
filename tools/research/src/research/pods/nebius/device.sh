@@ -4,7 +4,7 @@
 # 124-127. user.slice and system.slice, so
 # every other process on the host, are confined to 0-119 by vy-device-cores (device_cores.sh, which also moves IRQs, unbound
 # workqueues and kernel threads off 120-127); provers.slice (vy-provers) holds 128-191. 124-127 are vy-pous-quiet's cores: the
-# memory challenger replaces PoUS's timed verifier there.
+# memory challenger runs there.
 # A timed run takes its GPU under the lease: gpu-lease 1 --on 7 --max-min M --timed -- vy-device memory-challenger CMD...
 set -euo pipefail
 case "${1:-}" in

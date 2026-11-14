@@ -1,6 +1,7 @@
 """``cuda/arena_bytes.h``, the circuit prover's device arena, against ``arena_layout.py``'s replay of every allocation a
 session makes: over m 21 to 37 (the prover takes 22 to 35), k_log 20 to 27, M1 and M0, keep on and off, and each shape's
-statement extremes, the arena it sizes holds the session with at least half of FC_ARENA_MARGIN to spare. The header is
+statement extremes (the unit's level walk among them), the arena it sizes holds the session with at least half of
+FC_ARENA_MARGIN to spare. The header is
 compiled by the host's C compiler, so the sizes checked are the prover's own."""
 from __future__ import annotations
 
@@ -25,7 +26,7 @@ class CShape(ctypes.Structure):
                 ("recursive_steps", ctypes.c_int), ("log_inv_rates", ctypes.POINTER(ctypes.c_int)),
                 ("recursive_ks", ctypes.POINTER(ctypes.c_int)), ("queries", ctypes.POINTER(ctypes.c_int)),
                 ("hash_bytes", ctypes.c_int), ("zk", ctypes.c_int),
-                ("t_pad", ctypes.c_longlong), ("fold_words", ctypes.c_longlong)]
+                ("t_pad", ctypes.c_longlong), ("fold_words", ctypes.c_longlong), ("walk_bytes", ctypes.c_longlong)]
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +50,7 @@ def arena(lib: ctypes.CDLL, s: Shape) -> int:
     r, k = (ctypes.c_int * len(rates))(*rates), (ctypes.c_int * max(len(ks), 1))(*ks)
     q = (ctypes.c_int * len(s.queries))(*s.queries)
     c = CShape(s.m, s.k_log, s.sub_log, ik, len(ks), r, k, q, HB, int(s.zk), s.t_pad if s.zk else 0,
-               sum(1 << t for t in s.types))
+               sum(1 << t for t in s.types), s.walk_bytes)
     return lib.fc_arena_bytes_c(ctypes.byref(c))
 
 
@@ -66,6 +67,24 @@ def test_every_shape_fits_with_margin(lib: ctypes.CDLL) -> None:
                     short.append((s, keep, cap // MIB))
     assert cases > 1000
     assert not short, short[:10]
+
+
+def test_the_level_walk_takes_idle_room(lib: ctypes.CDLL) -> None:
+    """The unit's level walk's working arrays come from the arena while a rep's witness is built, when z, a and b (and for
+    rep 1 the level 0 that rep 0 kept) are all it holds. At the head block's statement (m 35, K 2^27, M1; a unit of 31,981,569
+    rows) the arena is no larger for them and the session fits as before; a unit of a whole block's rows there needs more
+    than the lincheck does, so the arena grows, and the session fits that too."""
+    head = Shape(35, 27, True)
+    walk = replace(head, walk_bytes=32 * 31_981_569)
+    assert arena(lib, walk) == arena(lib, head)
+    for keep in (True, False):
+        ev = session_events(walk, keep)
+        assert [e[1] for e in ev if e[0] == "a"].count("walk_z") == 2
+        assert replay(ev, arena(lib, walk)).fits
+        assert need(ev, arena(lib, walk) // MIB) == need(session_events(head, keep), arena(lib, head) // MIB)
+    wide = replace(head, walk_bytes=32 << 27)
+    assert arena(lib, wide) > arena(lib, head) and not replay(session_events(wide, True), arena(lib, head)).fits
+    assert replay(session_events(wide, True), arena(lib, wide)).fits
 
 
 def test_the_cut_overflows_are_seen() -> None:

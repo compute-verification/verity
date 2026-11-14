@@ -24,6 +24,9 @@ import numpy as np
 import pytest
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
+# run.py is loaded here by path, not by the suite's `conftest.load`: test_pearl_c_vllm.py runs this file by path, and
+# the suites of benchmarks/one_stage and benchmarks/pouw/pearlplus_lean run that test, where `conftest` is not this
+# suite's.
 _spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", KERNEL / "run.py")
 R = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(R)

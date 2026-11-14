@@ -18,11 +18,11 @@ from torch import nn
 from tests import fake_vllm
 from tests.check.test_weights_of_record_dsv4_experts import (  # noqa: F401  (dsv4: the checkpoint fixture)
     EX,
+    INTER,
     RANK,
     WORLD,
     E,
     H,
-    I,
     dsv4,
 )
 from tests.check.test_weights_of_record_routed_experts import _program
@@ -38,7 +38,7 @@ class _Mxfp4Method:
     mxfp4_backend, moe_kernel = "marlin", "built"
 
     def __init__(self) -> None:
-        self.num_experts, self.intermediate_size, self.hidden_size = E, I // WORLD, H
+        self.num_experts, self.intermediate_size, self.hidden_size = E, INTER // WORLD, H
         self.moe = types.SimpleNamespace(w13_num_shards=2)
 
 

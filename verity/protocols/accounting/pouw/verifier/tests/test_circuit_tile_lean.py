@@ -46,14 +46,14 @@ def lean_table(k: int, tm: int, tn: int):
                 g = e + r
                 if r < 5 * nw and r % 5 < 4:
                     t = 4 * (r // 5) + r % 5
-                    gates.append(("atom", ([] if r % 5 == 0 else [g - 1]) + [a + 32 * t + l for l in range(32)]
-                                  + [b + 32 * t + l for l in range(32)]))
+                    gates.append(("atom", ([] if r % 5 == 0 else [g - 1]) + [a + 32 * t + p for p in range(32)]
+                                  + [b + 32 * t + p for p in range(32)]))
                 elif r < 5 * nw:
                     gates.append(("add", ([] if r // 5 == 0 else [g - 5]) + [g - 1]))
                 else:
                     s = r - 5 * nw
-                    gates.append(("peel", [g - 1] + [pa + 16 * s + l for l in range(16)]
-                                  + [pb + 16 * s + l for l in range(16)]))
+                    gates.append(("peel", [g - 1] + [pa + 16 * s + p for p in range(16)]
+                                  + [pb + 16 * s + p for p in range(16)]))
             cs.append(e + 5 * nw - 1)
             us.append(e + ln - 1)
     return base, gates, cs + us
@@ -127,13 +127,13 @@ def lean_table4(k: int, tm: int, tn: int):
             for r in range(ln):
                 g = e + r
                 if r < nc:
-                    gates.append(("atom", ([] if r == 0 else [g - 1]) + [a + 64 * r + l for l in range(64)]
-                                  + [b + 64 * r + l for l in range(64)] + [sa + 4 * r + l for l in range(4)]
-                                  + [sb + 4 * r + l for l in range(4)]))
+                    gates.append(("atom", ([] if r == 0 else [g - 1]) + [a + 64 * r + p for p in range(64)]
+                                  + [b + 64 * r + p for p in range(64)] + [sa + 4 * r + p for p in range(4)]
+                                  + [sb + 4 * r + p for p in range(4)]))
                 else:
                     s = r - nc
-                    gates.append(("peel", [g - 1] + [pa + 16 * s + l for l in range(16)]
-                                  + [pb + 16 * s + l for l in range(16)]))
+                    gates.append(("peel", [g - 1] + [pa + 16 * s + p for p in range(16)]
+                                  + [pb + 16 * s + p for p in range(16)]))
             cs.append(e + nc - 1)
             us.append(e + ln - 1)
     return base, widths, gates, cs + us

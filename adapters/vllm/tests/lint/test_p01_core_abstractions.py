@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import ast
 from collections import defaultdict
-from functools import lru_cache
+from functools import cache
 from typing import TypeGuard
 
 import pytest
@@ -139,7 +139,7 @@ def definition_violations() -> list[R.Violation]:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out = definition_violations()
     for p in R.library_files():

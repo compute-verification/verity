@@ -65,7 +65,8 @@ of the task list's reads.  This process builds no body.  A target that misses, t
 here one after another; the target is held to the descriptor its binding's build gave or its record holds, and one that
 differs is its check's error.  A primitive its id makes, which has no body, is made here (`built_here`), and so is each
 Boolean Definition a binding's build registered (`made_words`, or its module imported): Flock lowers a word primitive by the
-first one registered of that word, so a check forked from here finds the one a full build's would.  A binding whose process
+one builder of that word's Boolean Definitions and refuses it for two, so a check forked from here holds every one a full
+build's would, and finds the builder or the refusal it finds.  A binding whose process
 dies fails the run, as it would kill a build in one process.  When every binding was built apart, the task list's entry is
 stored as a full build stores it, its reads every binding's share and this process's own; it and each record are digested
 where this process stores them, as a full build's are (a full build digests none of its reads where it builds them either).
@@ -511,7 +512,7 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
     """Do what ``effects`` (`_noting`'s) notes, under ``units`` as making their roots ran (`cache.producing`, so what it makes
     is theirs): import each module, then make each Definition not registered yet, in order, by its id
     (`codec.lookup_primitive`: an input, a family made on demand) or as the Boolean version made on demand of its word
-    (`verity.definitions.boolean.made_on_demand`).  False where a module doesn't import, the next Definition is made by
+    (`targets.HOOKS`' ``made_on_demand``).  False where a module doesn't import, the next Definition is made by
     neither or making it raises: the roots are to be made then, and register the rest as they did."""
     import importlib
 
@@ -532,9 +533,7 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
                     lookup_primitive(REGISTRY, fid)
                 except KeyError:
                     if word is not None:
-                        from verity.definitions.boolean import made_on_demand
-
-                        made_on_demand(word)
+                        TG._handed("made_on_demand")(word)
                 if not dict.__contains__(REGISTRY.defs, fid):
                     return False
         except Exception:  # noqa: BLE001  (making the roots does it as a full plan does, or raises as one does)
@@ -758,8 +757,8 @@ def made_words(plan: Plan, steps: Iterable[list] | None = None) -> int:
     """Made here: each Boolean Definition (a ``word`` and a ``build``) that a binding's build registered where this process
     didn't build it (``words``: built apart, or its record's) and that this process doesn't hold, from the record that reaches
     it (`make`), else by importing the module that holds it (`_words`: one it registers as it is imported).  Flock lowers a
-    word primitive by the build of the first registered Boolean Definition of that word (`verity_flock.ir_lower`'s
-    ``_boolean_build``), so each check forked from here finds the build a full build's would.  ``steps``: those a full plan
+    word primitive by the one build of that word's Boolean Definitions, and refuses it for two (`verity_flock.ir_lower`'s
+    ``_boolean_build``), so each check forked from here finds the build, or the refusal, a full build's would.  ``steps``: those a full plan
     took (`slices`), else `_word_steps`; each one taken is in ``plan.words``, with whether an object built here already
     stood for its node (`make` then made nothing).  `Stale` for one neither registers; the count made."""
     import importlib

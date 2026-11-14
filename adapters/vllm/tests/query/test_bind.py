@@ -199,6 +199,13 @@ def test_two_sources_declaring_one_label_differently_are_refused():
         source_ports([S(QUANT), S({"x_q": QUANT["x_s"]})])
 
 
+def test_where_a_row_and_its_identity_disagree_the_identity_is_read():
+    flat, other = row(LIN, "out"), row(ATT, "0", step=1, inv=2)
+    assert Binder([flat]).rows != Binder([other]).rows
+    assert Binder([{**flat, "identity": other}]).rows == Binder([other]).rows, "every field under `identity` is read before the row's own"
+    assert Binder([{**flat, "identity": {"op_path": ATT}}]).rows == Binder([{**flat, "op_path": ATT}]).rows, "and one field alone is"
+
+
 def test_an_incomplete_manifest_covers_nothing_and_names_what_it_leaves_out():
     rows = [row(LIN, "out"), row(LIN, "out", step=1)]
     lay = {0: [{"name": LIN, "numel": 4}], 1: [{"name": LIN, "numel": 4}]}
@@ -210,3 +217,97 @@ def test_an_incomplete_manifest_covers_nothing_and_names_what_it_leaves_out():
     bare = coverage_check({"complete": False}, lay)             # one that names no family and holds no row is refused the same way
     assert not bare["ok"] and (bare["checked"], bare["unmodelled"], bare["families_missing_entirely"]) == (0, {}, [])
     assert bare["error"] == "manifest incomplete: unmodelled Program families "
+
+
+MOE = "moe/L0"
+
+
+def composed(rows: list[dict], *, tokens: int | None = None, **more) -> dict:
+    """A global manifest of one engine step that batches r0 (3 token rows) and r1 (1); `tokens`: the rows the step states."""
+    step = {"engine_step": 0, "members": [{"request_id": "r0", "rows": 3}, {"request_id": "r1", "rows": 1}]}
+    return {"global": True, "engine_steps": [step if tokens is None else {**step, "rows": tokens}], "identities": rows, "manifest_digest": "d" * 64, **more}
+
+
+def test_a_row_with_no_step_of_its_own_is_on_no_engine_step_unless_it_states_one():
+    every = {**row(LIN, "out"), "step": "*"}
+    none = {k: v for k, v in row(LIN, "out").items() if k != "step"}
+    assert not Binder([every]).rows and not Binder([none]).rows
+    assert not Binder([every, none], arrivals={"r0": 2}).rows, "an arrival moves a step: it gives a row none"
+    assert sorted(Binder([{**every, "engine_step": 3}, {**none, "engine_step": 5}]).rows) == [3, 5]
+
+
+def test_a_row_of_no_request_stays_on_its_own_engine_step_under_a_schedule():
+    null = {**row(LIN, "out", step=1, engine_step=4), "request_id": None}
+    absent = {k: v for k, v in row(ATT, "out", step=1, engine_step=6).items() if k != "request_id"}
+    assert sorted(Binder([null, absent], arrivals={"r0": 2}).rows) == [4, 6], "no request, so no arrival moves its step"
+    assert sorted(Binder([null, absent]).rows) == [4, 6]
+    assert sorted(Binder([{**null, "request_id": "r0"}], arrivals={"r0": 2}).rows) == [3], "the same row of a request is moved"
+
+
+def test_coverage_is_of_one_ranks_rows_and_of_one_requests_when_one_is_named():
+    rows = [row(LIN, "out", element_range=[0, 4]), row(ATT, "out", request_id="r1", element_range=[0, 4]),
+            row(ATT, "out", inv=1, rank=1, element_range=[0, 4]), row("model.norm", "out", request_id="*", element_range=[0, 2])]
+    manifest = {"identities": rows, "manifest_digest": "d" * 64}
+    lay = {0: [{"name": LIN, "numel": 4}, {"name": "model.norm", "numel": 2}]}
+    every = coverage_check(manifest, lay)
+    assert (every["ok"], every["checked"], every["requests_with_missing"]) == (False, 3, ["r1"]), "rank 0's three rows; r1's is not committed"
+    r0 = coverage_check(manifest, lay, request_id="r0")
+    assert (r0["ok"], r0["checked"], r0["missing_n"]) == (True, 2, 0), "r0's row and the row of every request"
+    r1 = coverage_check(manifest, lay, request_id="r1")
+    assert (r1["ok"], r1["checked"], [m["op_path"] for m in r1["missing"]]) == (False, 2, [ATT])
+    rank1 = coverage_check(manifest, lay, rank=1)
+    assert (rank1["checked"], [(m["op_path"], m["invocation"]) for m in rank1["missing"]], rank1["committed_extras_n"]) == (1, [(ATT, 1)], 2)
+
+
+def test_a_requests_range_of_a_batched_moe_plane_must_fit_inside_its_own_token_rows():
+    """In a global manifest a MoE block plane is one tensor a step over its requests: r0 has 3 of the step's 4 token rows."""
+    def why(layout: dict, hi: int, *, request: str = "r0", tokens: int | None = None) -> str | None:
+        plane = row(MOE, "up", family="moe_block_stream", request_id=request, element_range=[0, hi])
+        got = coverage_check(composed([plane], tokens=tokens), {0: [{"name": f"{MOE}/up", **layout}]})
+        assert got["ok"] == (not got["missing"]) and got["checked"] == 1
+        return got["missing"][0]["why"] if got["missing"] else None
+
+    assert why({"numel": 12}, 9) is None, "3 words a token row: r0's three rows hold 9"
+    assert why({"numel": 12}, 10) == "the request-local range ends at 10; the request's 3 token rows of the plane hold 9 words"
+    assert why({"numel": 13}, 1) == "13 words do not split into the step's 4 token rows"
+    assert why({"numel": 12}, 1, request="r2") == "the request has no declared rows at the step"
+    assert why({"numel": 12}, 1, tokens=0) == "the step declares no token rows"
+    assert why({"numel": 12}, 6, tokens=6) is None, "the rows the step states, not its members' sum: 2 words a token row"
+    assert why({"numel": 12}, 7, tokens=6) == "the request-local range ends at 7; the request's 3 token rows of the plane hold 6 words"
+    assert why({"shape": [8, 2]}, 12) is None, "two rows a token: r0's share is 6 rows of 2 words"
+    assert why({"shape": [8, 2]}, 13) == "the request-local range ends at 13; the request's 3 token rows of the plane hold 12 words"
+    for rows in (6, 2, 0):
+        assert why({"shape": [rows, 2]}, 1) == f"{rows} rows, not a multiple of the step's 4 token rows: the plane covers no request"
+
+
+def test_a_global_manifests_token_ids_are_held_to_the_declared_composition_of_each_engine_step():
+    """The packed ids member has the step's declared token rows and the sampled ids one slot a sequence; a member the manifest's
+    `composition_reference` does not name is held to nothing, and one that is not committed is missing, not mismatched."""
+    ids, sampled = ("model.embed", "in"), ("runner.sampler", "sampled_token_ids")
+    rows = [row(*ids, family="input_token_ids", element_range=[0, 3]), row(*sampled, family="sampled_token_ids", element_range=[0, 1])]
+    ref = {f: {"op_path": op, "output_member": member} for f, (op, member) in (("input_token_ids", ids), ("sampled_token_ids", sampled))}
+
+    def check(n_ids: int = 4, n_sampled: int = 2, reference: dict | None = None, request_id: str | None = None, **step) -> dict:
+        manifest = composed(rows, composition_reference=ref if reference is None else reference)
+        manifest["engine_steps"][0].update(step)
+        lay = [{"name": "/".join(m), "numel": n} for m, n in ((ids, n_ids), (sampled, n_sampled)) if n]
+        return coverage_check(manifest, {0: lay}, request_id=request_id)
+
+    def mismatch(member: tuple[str, str], declared: int, committed: int) -> list[dict]:
+        return [{"engine_step": 0, "member": "/".join(member), "declared": declared, "committed": committed, "requests": ["r0", "r1"]}]
+
+    whole = check()
+    assert (whole["ok"], whole["composition_mismatch_n"], whole["composition_mismatch"]) == (True, 0, [])
+    short = check(n_ids=3)
+    assert (short["ok"], short["missing_n"], short["steps_with_missing"]) == (False, 0, [0]), "every identity is covered: the step's size is not"
+    assert (short["composition_mismatch_n"], short["composition_mismatch"]) == (1, mismatch(ids, 4, 3))
+    assert check(n_sampled=1)["composition_mismatch"] == mismatch(sampled, 2, 1) and check(n_sampled=3)["composition_mismatch"] == mismatch(sampled, 2, 3)
+    assert check(n_ids=5, rows=5)["ok"] and check(rows=5)["composition_mismatch"] == mismatch(ids, 5, 4), "the rows the step states, not its members' sum"
+    assert check(n_sampled=3, n_seq=3)["ok"] and check(n_seq=3)["composition_mismatch"] == mismatch(sampled, 3, 2)
+    wide = {**ref, "input_token_ids": {**ref["input_token_ids"], "per_row": 2}}
+    assert check(n_ids=8, reference=wide)["ok"] and check(reference=wide)["composition_mismatch"] == mismatch(ids, 4, 4)
+    unnamed = check(n_ids=3, reference={"sampled_token_ids": ref["sampled_token_ids"]})
+    assert (unnamed["ok"], unnamed["composition_mismatch"]) == (True, []), "no reference for the ids: their size is held to nothing"
+    absent = check(n_sampled=0)
+    assert (absent["ok"], [m["output_member"] for m in absent["missing"]], absent["composition_mismatch"]) == (False, ["sampled_token_ids"], [])
+    assert check(n_ids=3, request_id="r0")["ok"], "one request's coverage does not see the step's size"

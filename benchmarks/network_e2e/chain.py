@@ -25,7 +25,8 @@ it stood on; `stubs` lists what is still a stand-in.
   (`endpoint_config`), its bits placed in the run's link-windows.
 * **The prove path** (`prove_path`, ``--prove-path DIR|TGZ``): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
-  coins and every negative was refused; a forged arm when Lean refused the forged unit it sampled. The advice the arm
+  coins and every negative was refused; a forged arm when the forged unit it sampled was stopped (`prove_path.forged_row`:
+  the ZK server released no proof of it, or in a plain audit Lean refused the proof it read). The advice the arm
   committed is held to ``--advice``'s: the stand-in's codec committed the file's bytes (its SHA-512), v0's commitment is
   hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path is bound to them
   only when the file is their advice and the Commit it proves is theirs, and only a bound prove path counts in the OK.

@@ -7,7 +7,7 @@
 #
 # - One file moves. It holds no Python, so no module is renamed.
 # - What changes is each path to the file: its readers' constants and joins, `.gitattributes`' merge driver row, the
-#   public boundary's `structure` row, the suites' inputs and the docs that name it.
+#   suites' inputs and the docs that name it.
 # - No Lean module, lakefile or manifest names it.
 # - No directory is split or emptied: what is left under `fixtures/` (two directories of proofs') stays.
 # - `tools/verity/check/tests/test_suites.py`, which the other maps leave, is rewritten: its toy trees hold the registry

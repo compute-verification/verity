@@ -61,6 +61,11 @@
 # (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
 # against PROVER_RUN, any run id (default none), whose lease it reads.
 #
+# No host's address is written here: the launcher's environment holds VY_CHALLENGER_1_HOST (the challenger host) and
+# VY_AUDITOR_1_HOST (the verifier host), which the gate steps are handed and the default VERIFIER_SSH is built from,
+# and VY_NEBIUS_2_HOST (the prover's node), which the default PROVER_SSH is built from. One that is needed and unset
+# ends the run, naming it, before anything is written or run; whatif reaches no host and reads none.
+#
 # Steps 1 and 3 take a slot of PROVER_NODE's SLOTS (default the GPU node's GPU slots; empty: none), the one way that node
 # takes a run (/etc/vy/runs-via-slot): `slot.py --by memory-accounting`, from the shipped tree. The slot pins the run to
 # its cores, and run.sh and node.sh pin the engines and the prover with taskset as before. Step 1 waits at most
@@ -78,7 +83,14 @@ PERIOD=${1:?usage: gate_run.sh [--dry-run] PERIOD | gate_run.sh probe|prover|wha
 PIN=${PIN:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 GATE_ON=${GATE_ON:-vy-nebius-cpu-5}
 PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
-PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@81.85.2.121}
+need() {
+  # VAR WHOSE: the run ends, naming VAR, unless the environment holds that host's address
+  [ "$VERB" = whatif ] || [ -n "${!1:-}" ] || { echo "$1 is unset: the address of $2"; exit 3; }
+}
+need VY_CHALLENGER_1_HOST "the challenger host"
+need VY_AUDITOR_1_HOST "the verifier host"
+[ -n "${PROVER_SSH+given}" ] || need VY_NEBIUS_2_HOST "the prover's node, or PROVER_SSH (empty: GATE_ON's /etc/vy/peers line)"
+PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@${VY_NEBIUS_2_HOST:-}}
 MAXMIN=${MAXMIN:-90} CHECKPOINT=${CHECKPOINT:-1} GATE_MEM=${GATE_MEM:-1}
 WHATIF_ON=${WHATIF_ON:-vy-nebius-cpu-4}
 ROLE=${ROLE:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} PORT=${PORT:-7951}
@@ -98,7 +110,7 @@ LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES + HOST_GIB))
 LEASE_FROM=${LEASE_FROM:-}
 SLOTS=${SLOTS-/workspace/research/locks/gpu/slots} CHECKPOINT_WAIT_S=${CHECKPOINT_WAIT_S:-900} SLOT_WAIT_S=${SLOT_WAIT_S:-3600}
 PLAN=${PLAN:-honest,skip:0.0625,honest,skip:0.0625} ARENA_GIB=${ARENA_GIB:-62} UTIL=${UTIL:-0.8}
-VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-auditor-tunnel-prover prover@81.85.1.145}
+VERIFIER_SSH=${VERIFIER_SSH:--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-auditor-tunnel-prover prover@${VY_AUDITOR_1_HOST:-}}
 STATE=$HOME/.research/gate-runs/$PERIOD${DRY:+.dry}.env
 mkdir -p "$(dirname "$STATE")"
 touch "$STATE"
@@ -155,15 +167,16 @@ GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_
   ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"}
   ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"} --env "ARENA_BLOCKS=$((ARENA_GIB * 262144))" ${PACED:+--env "PACED=$PACED"}
   ${PACE_PASS_MS:+--env "PACE_PASS_MS=$PACE_PASS_MS"} ${SESSIONS:+--env "SESSIONS=$SESSIONS"}
-  ${WINDOWS:+--env "WINDOWS=$WINDOWS"} ${WINDOW_MS:+--env "WINDOW_MS=$WINDOW_MS"} ${SAMPLES:+--env "SAMPLES=$SAMPLES"})
+  ${WINDOWS:+--env "WINDOWS=$WINDOWS"} ${WINDOW_MS:+--env "WINDOW_MS=$WINDOW_MS"} ${SAMPLES:+--env "SAMPLES=$SAMPLES"}
+  --env "VY_CHALLENGER_1_HOST=${VY_CHALLENGER_1_HOST:-}" --env "VY_AUDITOR_1_HOST=${VY_AUDITOR_1_HOST:-}")
 gate_step() {
   # NAME VERB GB research-run-args...: gate.sh VERB on GATE_ON in GB of memory, waited for (a dry step, or GATE_MEM=0
   # where reservations are full and a fire queued behind them would outwait the prover's tunnel, reserves none)
   local name=$1 verb=$2 mem=(--mem-gb "$3" --mem-wait 3600)
   shift 3
   [ -z "$DRY" ] && [ "$GATE_MEM" != 0 ] || mem=()
-  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" "${GATE_ENV[@]}" "${mem[@]}" "$@" \
-    -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
+  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" --send "$HERE/main_line.sh" "${GATE_ENV[@]}" \
+    "${mem[@]}" "$@" -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
 }
 
 if [ "$VERB" = whatif ]; then

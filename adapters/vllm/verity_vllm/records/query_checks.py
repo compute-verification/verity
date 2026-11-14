@@ -32,8 +32,8 @@ class Findings:
         return cls(n=required(f, "n", where, int, f"{name}.n"), first=objects(f, "first", where, f"{name}.first"))
 
     @classmethod
-    def if_written(cls, doc: Mapping[str, Any], key: str, where: str, name: str | None = None) -> Self | None:
-        return None if doc.get(key) is None else cls.of(doc, key, where, name)
+    def if_written(cls, doc: Mapping[str, Any], key: str, where: str) -> Self | None:
+        return None if doc.get(key) is None else cls.of(doc, key, where)
 
 
 @dataclass(frozen=True)

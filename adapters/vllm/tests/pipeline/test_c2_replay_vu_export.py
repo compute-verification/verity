@@ -8,12 +8,15 @@ import functools
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
-#: the modules of the commands that replay a sealed bundle on CPU (`commit-replay`, `tp-commit-replay`): their replay has no
-#: export hook, so nothing would take what it kept
-NO_HOOK = ("verity_vllm.pipeline.cpu_replay", "verity_vllm.pipeline.tp.commit_replay")
+#: the modules of the processes that sample a replay's population with no export hook, so nothing would take what the driver
+#: kept: the commands that replay a sealed bundle on CPU (`commit-replay`, `tp-commit-replay`), a slim bundle's planner
+#: (`replay-plan`), and the tensor-parallel Commit with its ranks' workers, where each rank's replay of record runs
+NO_HOOK = ("verity_vllm.pipeline.cpu_replay", "verity_vllm.pipeline.tp.commit_replay", "verity_vllm.pipeline.replay_plan",
+           "verity_vllm.pipeline.tp.commit", "verity_vllm.pipeline.tp.rank_worker")
 
 #: argv[1] is imported; what the process holds then, and again once `c2_replay.vu_export` has made a hook as the Commit makes it
 CHILD = ("import importlib, json, sys\n"
@@ -31,8 +34,11 @@ CHILD = ("import importlib, json, sys\n"
 @functools.cache
 def held(module: str) -> dict[str, dict[str, bool]]:
     """A fresh process that imports `module`, as its command does: whether `vu_store` is loaded and the driver's
-    `keep_population` is on after the import (`imported`), and after the Commit's hook is made there (`hook_made`)."""
-    child = subprocess.run([sys.executable, "-c", CHILD, module], capture_output=True, text=True, check=True)
+    `keep_population` is on after the import (`imported`), and after the Commit's hook is made there (`hook_made`).  It runs in
+    the adapter's directory, so the `verity_vllm` it imports is this tree's."""
+    child = subprocess.run([sys.executable, "-c", CHILD, module], cwd=Path(__file__).resolve().parents[2], capture_output=True,
+                           text=True, check=False)
+    assert child.returncode == 0, child.stderr[-2000:]
     return json.loads(child.stdout)
 
 

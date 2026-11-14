@@ -57,16 +57,45 @@ def test_what_finished_and_what_moved_between_two_dumps_by_scope():
                                     "new_done": 0, "removed": 0}
 
 
-def test_a_goal_stalls_on_a_step_past_its_hour_and_not_updated_or_with_no_step_due_within_a_day():
+def edit(goals: list[dict], gid: str, **fields) -> list[dict]:
+    """The goals with `gid`'s fields changed, a field given as None dropped."""
+    return [{k: v for k, v in (g | fields).items() if v is not None} if g["id"] == gid else g for g in goals]
+
+
+def test_a_goal_stalls_on_a_step_past_its_hour_and_not_updated_since():
     b = goals(B)
-    # beta waits, through its piece, on a step due at 3 PM that nobody touched since; gamma is due in 11 days and waits on nothing
+    # beta waits, through its piece, on a step due at 3 PM (23:00Z) last touched at 12:30 PM; gamma has gone unwritten
     assert V.stalls(b, NOW) == [{"goal": "top/beta", "why": "past its hour and not updated since", "steps": ["top/beta-step"]},
-                                {"goal": "top/gamma", "why": "no step due within 24 hours", "steps": []}]
+                                {"goal": "top/gamma", "why": "nothing under it written in 24 hours", "steps": []}]
     # half an hour past its hour a step is not dead yet, and alpha's step, due at 5:30 PM, is within its hour of grace at 6 PM
     assert [s["goal"] for s in V.stalls(b, NOW - timedelta(hours=2, minutes=30))] == ["top/gamma"]
-    touched = [g | {"updatedAt": "2026-11-09T23:30:00.000Z"} if g["id"] == "top/beta-step" else g for g in b]
-    assert [s["goal"] for s in V.stalls(touched, NOW)] == ["top/gamma"]
+    assert [s["goal"] for s in V.stalls(edit(b, "top/beta-step", updatedAt="2026-11-09T23:30:00.000Z"), NOW)] == ["top/gamma"]
+    # an update at its hour, or none at all, is not an update since
+    for at in ("2026-11-09T23:00:00.000Z", None):
+        assert V.stalls(edit(b, "top/beta-step", updatedAt=at), NOW)[0] == V.stalls(b, NOW)[0]
+    assert V.stalls(edit(b, "top/beta-step", status="done"), NOW)[0]["goal"] == "top/gamma"
     assert V.stalls([g | {"prioritySet": False} for g in b], NOW) == []
+
+
+def test_a_goal_stalls_when_nothing_under_it_is_written_in_a_day():
+    b = goals(B)
+    # gamma, due in 11 days and waiting on nothing, was last written 27 hours ago; alpha and beta were written today
+    assert [s for s in V.stalls(b, NOW) if s["goal"] == "top/gamma"] == [
+        {"goal": "top/gamma", "why": "nothing under it written in 24 hours", "steps": []}]
+    # written 24 hours ago to the second it is not stalled, and a second before that it is
+    assert [s["goal"] for s in V.stalls(edit(b, "top/gamma", updatedAt="2026-11-09T02:00:00.000Z"), NOW)] == ["top/beta"]
+    assert "top/gamma" in [s["goal"] for s in V.stalls(edit(b, "top/gamma", updatedAt="2026-11-09T01:59:59.000Z"), NOW)]
+    # a goal not written itself is not stalled while a step under it is: alpha's step was written at 10 AM
+    old = edit(b, "top/alpha", updatedAt="2026-11-08T00:00:00.000Z")
+    assert "top/alpha" not in [s["goal"] for s in V.stalls(old, NOW)]
+    # but a step with no updatedAt is not written, and neither is one written and done
+    for unwritten in (edit(old, "top/alpha-step", updatedAt=None), edit(old, "top/alpha-step", status="done")):
+        assert [s for s in V.stalls(unwritten, NOW) if s["goal"] == "top/alpha"] == [
+            {"goal": "top/alpha", "why": "nothing under it written in 24 hours", "steps": []}]
+    # what is due no longer counts: gamma brought due within the hour is still stalled, and alpha with nothing due is not
+    assert "top/gamma" in [s["goal"] for s in V.stalls(edit(b, "top/gamma", due="2026-11-09T18:30-08:00"), NOW)]
+    far = edit(edit(b, "top/alpha", due="2026-12-01"), "top/alpha-step", due="2026-12-01")
+    assert "top/alpha" not in [s["goal"] for s in V.stalls(far, NOW)]
 
 
 def test_agents_are_counted_by_lane_from_their_names():
@@ -190,8 +219,9 @@ def test_the_command_compares_two_dumps_and_exits_0_with_the_rows_it_cant_read_s
     assert out.startswith("research velocity: Mon 9 Nov 12:00 PM to 6:00 PM PST (6 h). A reading, not a gate.")
     assert "top priority, set by hand: 5 goals, 3 open, 1 of them off track" in out
     assert "  net days (earlier less later)     +0.5" in out and "since the baseline not read: its dump" in out
-    assert "stalled now                       2 of 3 open: 1 with a step past its hour and not updated since, 1 with no step" in out
-    assert "    top/beta: top/beta-step past its hour and not updated since" in out
+    assert ("stalled now                       2 of 3 open: 1 with a step past its hour and not updated since, 1 with nothing "
+            "under it written in 24 hours\n") in out
+    assert "    top/beta: top/beta-step past its hour and not updated since\n    top/gamma: nothing under it written in 24 hours\n" in out
     for name, why in (("LANDING", "a test has no queue table"), ("AGENTS", "give --agents FILE.json"),
                       ("MACHINES", "a test has no pod"), ("ASKS", "this window ends in the past")):
         assert f"{name:<10}not read: " in out and why in out

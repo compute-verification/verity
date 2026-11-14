@@ -66,6 +66,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -95,7 +96,7 @@ def spawn(cmd: Sequence[str], log: Path) -> tuple[int, str, dict]:
 
     with open(log, "w") as f:
         p = subprocess.Popen(list(cmd), stdout=subprocess.PIPE, stderr=f, text=True)
-        out = p.stdout.read()
+        out = p.stdout.read() if p.stdout is not None else ""
         _, status, ru = os.wait4(p.pid, 0)
         p.returncode = os.waitstatus_to_exitcode(status)
         f.write(out)
@@ -103,9 +104,9 @@ def spawn(cmd: Sequence[str], log: Path) -> tuple[int, str, dict]:
                                "maxrss_gib": round(ru.ru_maxrss / 2**20, 3)}
 
 
-def _one(tree: Path, pattern: str, flag: str, given: str | None, *, required: bool = False,
+def _one(tree: Path, pattern: str, flag: str, given: str | None, *,
          keep: Callable[[Path], bool] = Path.is_file) -> Path | None:
-    """The one path under `tree` that `pattern` names, or `given`; None where nothing does and it isn't required."""
+    """The one path under `tree` that `pattern` names, or `given`; None where nothing does."""
 
     if given:
         return Path(given)
@@ -113,28 +114,47 @@ def _one(tree: Path, pattern: str, flag: str, given: str | None, *, required: bo
     if len(found) > 1:
         raise ValueError(f"{len(found)} paths under {tree} are named `{pattern}` ({', '.join(map(str, found[:4]))}): "
                          f"say which with {flag}")
-    if not found and required:
-        raise ValueError(f"nothing under {tree} is named `{pattern}`: give it with {flag}")
     return found[0] if found else None
 
 
-def files(a: Any) -> dict[str, Path | None]:
+def _need(tree: Path, pattern: str, flag: str, given: str | None, *,
+          keep: Callable[[Path], bool] = Path.is_file) -> Path:
+    found = _one(tree, pattern, flag, given, keep=keep)
+    if found is None:
+        raise ValueError(f"nothing under {tree} is named `{pattern}`: give it with {flag}")
+    return found
+
+
+@dataclass(frozen=True)
+class Files:
+    """The session directory and the statement's files. The session, circuit and public input are every statement's;
+    the rest are None where the proof holds none."""
+
+    session: Path
+    circuit: Path
+    public: Path
+    partition: Path | None
+    program: Path | None
+    registered: Path | None
+    tables: Path | None
+    stage: Path | None
+
+
+def files(a: Any) -> Files:
     """The session directory and the statement's files, each `--proof`'s one path of its name or its flag's."""
 
     tree = Path(a.proof)
-    record = _one(tree, "session.json", "--session", a.session and str(Path(a.session) / "session.json"), required=True)
-    session = record.parent
-    return {
-        "session": session,
-        "circuit": _one(tree, "circuit.txt", "--circuit", a.circuit, required=True),
-        "public": _one(tree, "pub*.bin", "--public", a.public, required=True,
-                       keep=lambda p: p.is_file() and p.parent != session),
-        "partition": _one(tree, "partition.json", "--partition", a.partition),
-        "program": _one(tree, "program*.json", "--program", a.program),
-        "registered": _one(tree, "registered.json", "--registered", a.registered),
-        "tables": _one(tree, "tables", "--tables", a.tables, keep=Path.is_dir),
-        "stage": _one(tree, "stage.json", "--stage", a.stage),
-    }
+    session = _need(tree, "session.json", "--session", a.session and str(Path(a.session) / "session.json")).parent
+    return Files(
+        session=session,
+        circuit=_need(tree, "circuit.txt", "--circuit", a.circuit),
+        public=_need(tree, "pub*.bin", "--public", a.public, keep=lambda p: p.is_file() and p.parent != session),
+        partition=_one(tree, "partition.json", "--partition", a.partition),
+        program=_one(tree, "program*.json", "--program", a.program),
+        registered=_one(tree, "registered.json", "--registered", a.registered),
+        tables=_one(tree, "tables", "--tables", a.tables, keep=Path.is_dir),
+        stage=_one(tree, "stage.json", "--stage", a.stage),
+    )
 
 
 def bound(circuit: Path) -> dict:
@@ -171,7 +191,7 @@ def _json(path: Path, flag: str) -> Any:
         raise ValueError(f"{path} ({flag}) is not JSON ({e}): no verifier was started") from e
 
 
-def hold(f: Mapping[str, Path | None], stage: Mapping[str, Any]) -> dict:
+def hold(f: Files, stage: Mapping[str, Any]) -> dict:
     """What the circuit states (`bound`) and the files held to it. A partition file is held by its digest under the
     bound rule, as the verifier computes it (`HmRow.partitionDigest`; the provisional cover's the same bytes under its
     own rule): one that isn't the bound object, or that the circuit binds nothing for, is refused here. `held` names
@@ -180,27 +200,27 @@ def hold(f: Mapping[str, Path | None], stage: Mapping[str, Any]) -> dict:
     digest as the verifier computes it (`ProvedScope.programDigest`: the descriptor without `annotations`) and the
     Definition it names (`program_fn`), which is refused when `stage` names another as its `word`."""
 
-    to = bound(f["circuit"])
+    to = bound(f.circuit)
     doc = {**to, "held": [], "withheld": [], "program": None}
-    if f["program"]:
-        desc = _json(f["program"], "--program")
+    if f.program:
+        desc = _json(f.program, "--program")
         fn = desc.get("program_fn") if isinstance(desc, dict) else None
         if None not in (fn, stage.get("word")) and fn != stage["word"]:
-            raise ValueError(f"{f['program']} is the program of another Definition than the statement's: its `program_fn` "
-                             f"is {fn}, and {f['stage']} names the `word` {stage['word']}: no verifier was started (the "
+            raise ValueError(f"{f.program} is the program of another Definition than the statement's: its `program_fn` "
+                             f"is {fn}, and {f.stage} names the `word` {stage['word']}: no verifier was started (the "
                              "verifier compares no program with this circuit, so it would not refuse it)")
         doc["program"] = {"sha512": _digest({k: v for k, v in desc.items() if k != "annotations"}
                                             if isinstance(desc, dict) else desc), "fn": fn}
-    if f["partition"]:
+    if f.partition:
         rule = (to["partition"] or {}).get("rule")
         if rule not in (PARTITION_V1, PARTITION_COVER):
-            raise ValueError(f"{f['circuit']} binds no partition under a rule this command hashes (its rule is {rule!r}; "
-                             f"{PARTITION_V1} and {PARTITION_COVER} are), so nothing holds {f['partition']} to it: no "
+            raise ValueError(f"{f.circuit} binds no partition under a rule this command hashes (its rule is {rule!r}; "
+                             f"{PARTITION_V1} and {PARTITION_COVER} are), so nothing holds {f.partition} to it: no "
                              "verifier was started")
-        got = _digest(_json(f["partition"], "--partition"), rule)
+        got = _digest(_json(f.partition, "--partition"), rule)
         if got != to["partition"]["digest"]:
-            raise ValueError(f"{f['partition']} is not the partition the circuit binds: its digest under {rule} is {got}, "
-                             f"and {f['circuit']} binds {to['partition']['digest']}: no verifier was started")
+            raise ValueError(f"{f.partition} is not the partition the circuit binds: its digest under {rule} is {got}, "
+                             f"and {f.circuit} binds {to['partition']['digest']}: no verifier was started")
         doc["held"].append("partition")
         if rule == PARTITION_COVER:
             doc["withheld"].append("partition")
@@ -270,16 +290,18 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
     if a.repeat < 1:
         raise ValueError(f"--repeat {a.repeat}: the verifier runs once or more")
     f = files(a)
-    stage = json.loads(f["stage"].read_text()) if f["stage"] else {}
+    stage = json.loads(f.stage.read_text()) if f.stage else {}
     of = block(a, stage)
-    proofs = sorted(p for p in f["session"].glob("*.rep*.bin") if p.is_file())
+    proofs = sorted(p for p in f.session.glob("*.rep*.bin") if p.is_file())
     if not proofs:
-        raise ValueError(f"{f['session']} holds no proof file (`<table>.rep0.bin`, `<table>.rep1.bin`)")
+        raise ValueError(f"{f.session} holds no proof file (`<table>.rep0.bin`, `<table>.rep1.bin`)")
     to = hold(f, stage)
     handed = to.pop("program")
-    f = {k: None if k in to["withheld"] else p for k, p in f.items()}
-    held = [f[k] for k in ("circuit", "public", "partition", "program", "registered") if f[k]]
-    tables = sorted(p for p in f["tables"].iterdir() if p.is_file()) if f["tables"] else []
+    if "partition" in to["withheld"]:
+        f = replace(f, partition=None)
+    optional = {"partition": f.partition, "program": f.program, "registered": f.registered}
+    held = [f.circuit, f.public, *(p for p in optional.values() if p)]
+    tables = sorted(p for p in f.tables.iterdir() if p.is_file()) if f.tables else []
     out.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="lean-verify-archive-"))
     try:
@@ -290,14 +312,14 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
         if rc or any(p.name not in keys for p in held):
             raise ValueError(f"`{a.lean} archive-put` exited {rc} and named {len(keys)} of {len(held) + len(tables)} "
                              f"files ({out / 'archive-put.log'})")
-        if stage.get("circuit_sha512") not in (None, keys[f["circuit"].name]):
-            raise ValueError(f"{f['circuit']} is not the circuit {f['stage']} names: its SHA-512 is "
-                             f"{keys[f['circuit'].name]}, and `circuit_sha512` there is {stage['circuit_sha512']}: no "
+        if stage.get("circuit_sha512") not in (None, keys[f.circuit.name]):
+            raise ValueError(f"{f.circuit} is not the circuit {f.stage} names: its SHA-512 is "
+                             f"{keys[f.circuit.name]}, and `circuit_sha512` there is {stage['circuit_sha512']}: no "
                              "session was verified")
-        cmd = [a.lean, "verify", "--statement", a.statement, "--archive", str(scratch), "--circuit", keys[f["circuit"].name],
-               "--public", keys[f["public"].name],
-               *(x for k in ("partition", "program", "registered") if f[k] for x in (f"--{k}", keys[f[k].name])),
-               *([] if a.plain else ["--zk"]), *a.verify_arg, "--session", str(f["session"])]
+        cmd = [a.lean, "verify", "--statement", a.statement, "--archive", str(scratch), "--circuit", keys[f.circuit.name],
+               "--public", keys[f.public.name],
+               *(x for k, p in optional.items() if p for x in (f"--{k}", keys[p.name])),
+               *([] if a.plain else ["--zk"]), *a.verify_arg, "--session", str(f.session)]
         runs = []
         for i in range(a.repeat):
             t = clock()
@@ -309,7 +331,7 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
             runs.append({"wall_s": round(wall, 3), **used, "rc": rc, "accepted": verdict.get("accepted") is True and rc == 0,
                          "why": verdict.get("why") or None,
                          "verdict_sha512": hashlib.sha512(line.encode()).hexdigest() if line else None,
-                         "phases_ms": {"session" if m["name"] == str(f["session"]) else m["name"]: int(m["ms"])
+                         "phases_ms": {"session" if m["name"] == str(f.session) else m["name"]: int(m["ms"])
                                        for m in PHASE.finditer(log)}})
             if not runs[-1]["accepted"]:
                 break
@@ -318,10 +340,10 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
     accepted = len(runs) == a.repeat and all(r["accepted"] for r in runs)
     return {
         "schema": SCHEMA, "run": settings.RESEARCH_RUN_ID, "block": of,
-        "statement": {"id": a.statement, "zk": not a.plain, "circuit_sha512": keys[f["circuit"].name], "bound": to, "program": handed,
+        "statement": {"id": a.statement, "zk": not a.plain, "circuit_sha512": keys[f.circuit.name], "bound": to, "program": handed,
                       "files": [_sized(p) for p in held], "tables": [_sized(p) for p in tables]},
         "proof": {"files": [_sized(p) for p in proofs], "bytes": sum(p.stat().st_size for p in proofs),
-                  "record_bytes": (f["session"] / "session.json").stat().st_size},
+                  "record_bytes": (f.session / "session.json").stat().st_size},
         "verifier": {"command": [Path(a.lean).name, *cmd[1:]], "archive_put_s": round(put_s, 3), "repeat": a.repeat, "runs": runs},
         "accepted": accepted, "label": label(to, not a.plain) if accepted else None,
         "host": stamp(),

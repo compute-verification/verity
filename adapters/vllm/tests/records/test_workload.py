@@ -113,6 +113,10 @@ def test_a_wrong_schema_or_type_is_refused():
         Workload.of(_v2() | {"variants": {"greedy": 0.0}}, "w")
     with pytest.raises(RecordError, match="not a JSON object"):
         Workload.of([], "w")
+    doc = _v2()
+    doc["requests"][0]["seed"] = None
+    with pytest.raises(RecordError, match=r"'requests\[0\].seed' is null: a request's seed is an integer, or absent"):
+        Workload.of(doc, "w")
 
 
 def test_a_record_passes_through_and_the_digest_is_of_the_document_read():

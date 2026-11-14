@@ -6,7 +6,8 @@ from typing import Any, Callable
 
 #: the index units at the served statics (TOPK 2,048, blocks of `dsa_topk_reads.index_block` keys, a row's class N a
 #: multiple of TOPK from 4,096 to 131,072): a block of N keys from AT (the whole row up to `dsa_topk_mask_cut.WHOLE_MAX`, then
-#: 16,384 keys and a last one of 2,048 to 16,384), and the merge of M blocks
+#: 16,384 keys and a last one of 2,048 to 16,384), and the merge of M blocks; the `_v2`s are those the long row's cut binds
+#: (`dsa_topk_reads.cut`), at the `_v1`s' spots
 RANGES = {
     "DsaMaskPositions_v1{N=2048..40960 step 2048,AT=0..114688 step 16384,K=2048}": (
         # a whole block first and last, the shortest last block after the first and last, the first class's one block, a
@@ -15,6 +16,11 @@ RANGES = {
         "N=18432,AT=0", "N=40960,AT=0",
     ),
     "DsaPositionsMerge_v1{M=1..8,K=2048}": ("M=1", "M=8", "M=3"),
+    "DsaMaskPositions_v2{N=2048..40960 step 2048,AT=0..114688 step 16384,K=2048}": (
+        "N=16384,AT=0", "N=16384,AT=114688", "N=2048,AT=16384", "N=2048,AT=114688", "N=4096,AT=0", "N=10240,AT=49152",
+        "N=18432,AT=0", "N=40960,AT=0",
+    ),
+    "DsaPositionsMerge_v2{M=1..8,K=2048}": ("M=1", "M=8", "M=3"),
 }
 
 

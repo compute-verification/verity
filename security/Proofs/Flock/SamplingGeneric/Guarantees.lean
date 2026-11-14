@@ -2,9 +2,7 @@ module
 
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.TwoCount
-public import Proofs.Flock.SpotFlock.KS
-public import Proofs.Flock.SpotFlock.Frame
-public import Proofs.Flock.SpotFlock.FrameIsBuilt
+public import Proofs.Flock.SpotFlock.WiredKS
 
 /-!
 # The deployed two-stage sampled verifier's guarantee
@@ -15,20 +13,63 @@ on the challenger's bytes uniform at each of its two calls and seven facts of it
 (`SamplingDeploy.Order.stage`) is `SamplingDeploy.ksTwo_atOrder`'s code (`SamplingDeploy.codeTwoAt_eq_stage`). Its
 witnesses are `Flock.SecurityProofs.SampledKSTwo_honest` and `Claims.SamplingGeneric.compilerKSTwo_nontrivial`.
 
-`Flock.SecurityProofs.SpotKSTwo : Flock.Guarantees.SpotKSTwo` is the same at SPOT[Flock]'s code (`SpotFlock.code`),
-whose code facts, coins and sessions' runs are proved (`SpotFlock.ksTwo_spot`), with the sessions' openings at SPOT's
-own layout (`SpotFlock.layoutFor`, `SpotFlock.sessionOpensTwo_of_frameIs`) from two facts: the registration's frame is
-SPOT's own (`SpotFlock.Built`), and each gate's value has one address that holds at every checked unit that needs it
-(`SpotFlock.Addresses`). Together they give that the frame opens as it says (`SpotFlock.frameIs_built`), and the layout
-embeds the statement at every registration (`SpotFlock.embeds_layoutFor`). Every registration whose frame is set to
-SPOT's has `Built` (`SpotFlock.built_spot`). Its honest instance needs `Addresses` at a two-stage registration, which
-nothing proves yet; `Addresses` fails at a registration that commits a value one proof block writes and another reads in
-two trees.
+`Flock.SecurityProofs.SpotKSTwo : Flock.Guarantees.SpotKSTwo` is the same at SPOT[Flock]'s code at the connected
+program (`SpotFlock.codeConnected`). The verifier, the sessions, their rounds, the samples and the frame are
+`SpotFlock.code`'s. The statement's program is the members' programs with every read sent through the code's own
+wiring map (`SpotFlock.wireMap`), returning the written bits at an output port a link names (`SpotFlock.returned`).
+The map sends a source bit to the gate on the same bit of its writer unit's output row (`SpotFlock.wireTarget`) only
+where a wire names the bit's port and no link does, the port's rows place the unit, the wire's writer is a template's
+name, no link names the writer's output port, and the writer has a written bit there at a gate the program does not
+return; every other position stays where it is, so a port a link and a wire both name stays an input. A gate the map
+moves stays in the program, an input gate that no gate reads and no proof block or replay block holds, and a session's
+opening of a gate is revealed at the gate the map sends it to, under the roots the connected program opens that gate
+under. The code facts, coins and sessions' runs are proved (`SpotFlock.ksTwo_connected`), with the sessions' openings
+at the connected program (`SpotFlock.stmtOpens_connected`) from two premises on the held code, one of them a fact
+nothing proves:
 
-`Flock.SecurityProofs.SpotExfilTwo : Flock.Guarantees.SpotExfilTwo` is `CompiledTwo.Exfil` at the same code and layout
-facts, by `CompiledTwo.exfil_of_ks` on `SpotKSTwo`: what an accepted run serves is in the influence set at `δ`, at
-`SpotKSTwo`'s errors, and that set has at most `Σ_{T admissible} 2^{b(T)}` members. Its nontrivial witness is
-`Claims.SamplingGeneric.compilerExfilTwo_nontrivial`; its honest instance waits on the same `Addresses`.
+* `SpotFlock.BuiltWired`: the registration's frame is SPOT's own at the connected program. Every held code whose frame
+  is set to it has it (`SpotFlock.builtWired_spot`).
+* `SpotFlock.AddressesConnected`: each gate's value has one address at the connected program, fixed before the run,
+  which holds at every accepted run's checked unit whose proof block needs the gate. Nothing proves it at a
+  registration: not that the checked unit's instance is one of its session's (`SpotFlock.CheckedRun.Counted`), not
+  that the address's place reads the row its session holds the gate in (`SpotFlock.CheckedRun.RowAt`), and not that
+  `SpotFlock.V` holds each needed gate's read to one entry, a linked gate's to the boundary record.
+
+At a held code that fails one of them the guarantee says nothing, though `SpotFlock.V` may still accept its runs.
+
+What the proof reads of the held wiring is decided where the design evaluates (`SpotFlock.two`, by
+`SpotFlock.wiringOk`), so `SpotFlock.V` refuses every run of a held code that fails it and the guarantee takes no
+premise for it: each template has its own name; each wire's writer's part is before its reader's
+(`SpotFlock.WiresFirst`), so each wire's writer names a template; every source bit is at a port a link or a wire
+names (`SpotFlock.SourcesNamed`), so no accepted run has an input the developer supplies or a row the second stage's
+check opens off the interior record; every wired source bit has a gate to go to (`SpotFlock.WiresMove`), so the
+connected program has no wired read left as a free input; each wire's reader port has its writer's output port's
+words and row schema; a written port no link names is read by a wire, names no wire of its own and has no bit the
+boundary record holds; each reference read at a port neither names reads a port of the interior registration; and
+the interior registration registers no value. Each member's circuit is in the scope Flock's hidden-output proof
+covers (`SpotFlock.membersScoped`).
+
+The guarantee speaks of what a replay block returns: its served outputs are the written bits at an output port a link
+names, so at a design with no link it says nothing. What it covers rests on the links the held code holds: an output
+that leaves and that no held link names is outside it. The held links are the auditor's copy, which nothing in the
+statement holds to the replay block program's own links (`SecondStage.replayLinks`), though `SpotFlock.V` runs the
+design's check of them (`SecondStage.linksOk`). That check asks that each link is for a template one of the parts
+is of, whose units its rows place, and not that an output that leaves has a link. Over the members' programs side by
+side every written bit is returned, whatever the links; the connected program of a design with no wire still returns
+only the linked ones. So at every design, with a wire or without, the guarantee speaks only of the linked outputs,
+where the side-by-side statement speaks of every written bit. Its honest instance needs a registration that meets the
+two premises and at which the design evaluates, which nothing proves yet.
+
+Over the members' programs side by side, `SpotFlock.ksTwo_spot` gives the same knowledge soundness at `SpotFlock.code`
+from `SpotFlock.Built` and `SpotFlock.Addresses` (`SpotFlock.frameIs_built`, `SpotFlock.sessionOpensTwo_of_frameIs`).
+No guarantee reads those.
+
+`Flock.SecurityProofs.SpotExfilTwo : Flock.Guarantees.SpotExfilTwo` is `CompiledTwo.Exfil` at the same code and
+premises, by `CompiledTwo.exfil_of_ks` on `SpotKSTwo` (`SpotFlock.exfilTwo_connected`): the served outputs are in the
+influence set at `δ`, at `SpotKSTwo`'s errors, and that set has at most `Σ_{T admissible} 2^{b(T)}` members. The served
+outputs are the extractor's witness's openings, under the statement's roots, at the gates the connected program
+returns. Its nontrivial witness is
+`Claims.SamplingGeneric.compilerExfilTwo_nontrivial`; its honest instance waits on the same registration.
 -/
 
 @[expose] public section
@@ -71,26 +112,34 @@ def SampledKSTwo : Prop :=
       (SamplingDeploy.replayTwo (c.atOrder (SamplingDeploy.orderOf s)) reg L₁
         (SamplingDeploy.bytesFirst c L₁ (SamplingDeploy.orderOf s) b₁)) cap).KS FlockDeploy.sha512
 
-/-- **SPOT[Flock]'s two-stage verifier is knowledge sound at SHA-512 at its own frame, where each value has one
-address**: at a registration `h` whose frame is SPOT's own (`SpotFlock.Built`), at which each gate's value has one
-address that holds at every checked unit that needs it (`SpotFlock.Addresses`), `CompiledTwo.KS` holds at Flock's
-masked record over the readable relation and SHA-512, at SPOT[Flock]'s two-stage code (`SpotFlock.code`), the interior
-registrations' roots (`SpotFlock.iroots`), the two-stage design (`SpotFlock.two`) and the replay sample of record
-(`SpotFlock.rs`), its inner wait's count the replay cap (`SpotFlock.cap`). -/
+/-- **SPOT[Flock]'s two-stage verifier is knowledge sound at SHA-512 at the connected program**: at a held code `h`
+whose frame is SPOT's own at the connected program (`SpotFlock.BuiltWired`) and at which each gate's value has one
+address there that holds at every checked unit that needs it (`SpotFlock.AddressesConnected`), `CompiledTwo.KS` holds
+at Flock's masked record over the readable relation and SHA-512, at SPOT[Flock]'s two-stage code at the connected
+program (`SpotFlock.codeConnected`: the members' programs wired by `SpotFlock.wireMap`, returning
+`SpotFlock.returned`), the interior registrations' roots (`SpotFlock.iroots`), the two-stage design there
+(`SpotFlock.twoConnected`) and the replay sample of record (`SpotFlock.rsConnected`), its inner wait's count the
+replay cap (`SpotFlock.cap`). The design evaluates only at a held code whose registered wiring passes its check
+(`SpotFlock.wiringOk`), so a held code that fails it has no accepted run. -/
 def SpotKSTwo : Prop :=
-  ∀ h : SpotFlock.Held, SpotFlock.Built h → SpotFlock.Addresses h →
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
-      SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h) (SpotFlock.cap h)).KS FlockDeploy.sha512
+  ∀ h : SpotFlock.Held,
+    SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) → SpotFlock.AddressesConnected h →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).KS FlockDeploy.sha512
 
-/-- **SPOT[Flock]'s two-stage verifier bounds what an accepted run serves, at SHA-512, at its own frame, where each
-value has one address**: at `SpotKSTwo`'s registration, code, interior roots, design, replay sample and replay cap
-(`SpotFlock.cap`), `CompiledTwo.Exfil` holds at every `δ ≥ 0`: `Pr[acc ∧ the served outputs are outside the influence
-set at δ]` is at most `KSLinOn`'s bound at the two-stage errors and the binding finder `Bext`, and the influence set at
-any input values has at most `Σ_{T admissible} 2^{b(T)}` members. -/
+/-- **SPOT[Flock]'s two-stage verifier bounds what an accepted run serves, at SHA-512, at the connected program**: at
+`SpotKSTwo`'s held code, premises, code, interior roots, design, replay sample and replay cap (`SpotFlock.cap`),
+`CompiledTwo.Exfil` holds at every `δ ≥ 0`: `Pr[acc ∧ the served outputs are outside the influence set at δ]` is at
+most `KSLinOn`'s bound at the two-stage errors and the binding finder `Bext`, and the influence set at any input
+values has at most `Σ_{T admissible} 2^{b(T)}` members. The served outputs are the extractor's witness's openings,
+under the statement's roots, at the connected program's returned gates, the written bits at an output port a link
+names (`SpotFlock.returned`). An output that leaves and that no held link names is outside the bound, and at a held
+code with no link nothing is returned and the bound is on nothing. -/
 def SpotExfilTwo : Prop :=
-  ∀ h : SpotFlock.Held, SpotFlock.Built h → SpotFlock.Addresses h →
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
-      SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h) (SpotFlock.cap h)).Exfil FlockDeploy.sha512
+  ∀ h : SpotFlock.Held,
+    SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) → SpotFlock.AddressesConnected h →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).Exfil FlockDeploy.sha512
 
 end Flock.Guarantees
 
@@ -99,8 +148,7 @@ theorem Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo :=
     SamplingDeploy.ksTwo_stage c reg two L₁ L₂ b₁ R s b₂ iroots cap hA₁ hA₂ hreg hr hcap hi hruns.to hnum hopens
 
 theorem Flock.SecurityProofs.SpotKSTwo : Flock.Guarantees.SpotKSTwo :=
-  fun h hB hS => SpotFlock.ksTwo_spot h
-    (SpotFlock.sessionOpensTwo_of_frameIs h _ (SpotFlock.embeds_layoutFor h) (SpotFlock.frameIs_built h hB hS))
+  fun h hB hA => SpotFlock.ksTwo_connected h hB hA
 
 theorem Flock.SecurityProofs.SpotExfilTwo : Flock.Guarantees.SpotExfilTwo :=
-  fun h hB hS => Claims.SamplingGeneric.CompiledTwo.exfil_of_ks (Flock.SecurityProofs.SpotKSTwo h hB hS)
+  fun h hB hA => SpotFlock.exfilTwo_connected h hB hA

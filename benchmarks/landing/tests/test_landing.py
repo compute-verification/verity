@@ -107,6 +107,7 @@ def test_the_result_holds_both_metrics_and_their_companions(tmp_path: Path) -> N
         "ci/lean-mark-to-main-median": (3.0, "hours", None),
         "ci/lean-landed": (1, "PRs", None),
         "ci/lean-within-2h": (0.0, "share of the PRs landed", None)}
+    assert {m["mark"] for m in result["measurements"]} == {"measured"}
     assert result["validation"]["status"] == "passed"
     assert result["measurement_files"] == ["out/landing.json"]
     assert json.loads((tmp_path / "out" / L.DOC).read_text())["schema"] == L.SCHEMA

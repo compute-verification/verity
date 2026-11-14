@@ -1,6 +1,7 @@
-"""The FP8 served table at a scheme's cap: per model, its served pass's per-input measurement (`served_debit.py --per-input`'s
-``inputs.json``), the verdicts of its reference verify (`verify_run.py`'s ``verify.json``) where one was run, and the ε that
-`HonestTileCapRate`'s served citation takes: the largest of the model's inputs' upper limits, each recomputed at
+"""The FP8 served table at a scheme's inert-work bound: per model, its served pass's per-input measurement
+(`served_debit.py --per-input`'s ``inputs.json``), the verdicts of its reference verify (`verify_run.py`'s
+``verify.json``) where one was run, and the ε that `HonestTileCapRate`'s served citation takes: the largest of the
+model's inputs' upper limits, each recomputed at
 δ = 0.05/m with m every input the table measures (all its models, and a model's fresh trials beside its pass-salt
 measurement), so the limits are 95% simultaneous over the whole table.
 
@@ -103,13 +104,13 @@ def markdown(table: dict) -> str:
         verify = ", ".join(f"{v['pass']} {'ACCEPT' if v['accepted'] else 'REJECT'}" for v in r["verify"]) or "—"
         lines.append(f"| {r['model']} | `{r['run']}` | {r['m_model']} | {r['tile_draws']} | {r['failures']} | "
                      f"{r['share_max']:.3g} | {r['epsilon']:.4f} | {r['epsilon_method']} | {fresh} | {verify} |")
-    lines += ["", f"ε is the largest of a model's inputs' upper limits on the input's honest tile-rejection rate at the cap, "
+    lines += ["", (f"ε is the largest of a model's inputs' upper limits on the input's honest tile-rejection rate at the cap, "
               f"each at δ = 0.05/m with m = {table['m']}, every input the table measures over all its models and "
               f"measurements (served_debit.input_bound); an input is one matmul of the pass. Every draw, pass-salt and fresh, "
               f"weighs an input's tiles by their area |rows|·|cols|, which within one input (one shape) is proportional to "
               f"`TR.Wref` (`pearlCTilesDevRev1K`: `tileShare` on the tile's rows, not its passing rows). So ε is a rate "
               f"under Lean's draw, not under the deployed audit's, whose `tile_weight` counts credited cells only and so "
-              f"differs on tiles with filler, excluded or voluntary rows."]
+              f"differs on tiles with filler, excluded or voluntary rows.")]
     quality = [r for r in table["models"] if "quality" in r]
     if quality:
         lines += ["", "| model | quality run | mode | scheme | WikiText-2 perplexity | top-1 vs bf16 | greedy tokens vs bf16 |",
@@ -119,25 +120,25 @@ def markdown(table: dict) -> str:
                 lines.append(f"| {r['model']} | `{r['quality']['run']}` | {mode} | {q.get('scheme') or '—'} | "
                              f"{q['perplexity']:.4f} | {q.get('top1_agreement_vs_bf16', float('nan')):.4f} | "
                              f"{q.get('greedy_token_agreement_vs_bf16', float('nan')):.4f} |")
-        lines += ["", "A quality run's scheme may name another hashing format than the served `-h3` (runs before 2026-10-06 "
+        lines += ["", ("A quality run's scheme may name another hashing format than the served `-h3` (runs before 2026-10-06 "
                   "ran `pearl-c-sm120-v1-h1`): the formats differ only in their hashes. The noise seeds hash A's and B's "
                   "roots, so a run under one format draws other noise than a run under another, as another salt does; the "
-                  "forming, the chain and the peel are the same."]
+                  "forming, the chain and the peel are the same.")]
     for r in table["models"]:
         if "forming" in r:
             f = r["forming"]
-            lines += ["", f"{r['model']}: its tiles were recorded before the served replay charged Lean's forming term "
+            lines += ["", (f"{r['model']}: its tiles were recorded before the served replay charged Lean's forming term "
                       f"fs·(|C|/n)·elems (`pearl_c_debit.forming_elements`). On its {f['tiles']} recorded tiles, at Prices.sm120Loop, a "
                       f"verdict flips only if at least {f['dead_to_flip_min']:.2%} of a tile's |R|·k elements are salt-dead "
                       f"(forming_headroom.py; the unneeded ones are bounded by the recorded atoms). Lean's ρ_D = 1/64 "
                       f"({1 / 64:.2%}) of a unit's elements (`FormingP.saltDeadP_card_le`, under its domain conditions) "
                       f"{'covers' if f['unit_rows_covered_by_rho_D'] else 'does not cover'} the tiles that hold all their "
-                      f"unit's rows (decode); a prefill tile has the threshold only."]
+                      f"unit's rows (decode); a prefill tile has the threshold only.")]
     windows = table.get("windows", [])
     if windows:
         lines += ["", "## Replay diagnostic: salt-to-deadline windows", "",
-                  "| window | audit | scheme | t_s | credited / claimed GEMMs | cuBLASLt capacity | replay-diagnostic fraction "
-                  "[certified, uncertified] | overhead × cuBLASLt | proving cost | tiles accepted | controls |",
+                  ("| window | audit | scheme | t_s | credited / claimed GEMMs | cuBLASLt capacity | replay-diagnostic fraction "
+                  "[certified, uncertified] | overhead × cuBLASLt | proving cost | tiles accepted | controls |"),
                   "|---|---|---|---|---:|---:|---:|---:|---|---:|---|"]
         for w in windows:
             controls = ", ".join(f"{k} {v}" for k, v in sorted(w["controls"].items()))
@@ -146,17 +147,17 @@ def markdown(table: dict) -> str:
                          f"{w['fraction']:.2%} [{w['fraction']:.4f}, {w['uncertified_fraction']:.4f}] | {w['slowdown']:.3f} | "
                          f"{w['proving_cost'] or '— (hidden-zk)'} | {w['tiles_accepted']} / {w['tiles']} | {controls} |")
         fr = [w["fraction"] for w in windows]
-        lines += ["", "A replay audit is a diagnostic, not a verification: only a sampled "
+        lines += ["", ("A replay audit is a diagnostic, not a verification: only a sampled "
                   "proof over Flock with ZK verifies a computation. Each window's audit recomputes its drawn tiles on the "
                   "CPU (`archive/pouw-blake3/exhaustion/audit.py`), so its fraction is the replay diagnostic: certified = "
                   "(1 − γ)(1 − ε_s)·credited / capacity, the lower end at δ_s = 1/20 over the audit's draws; uncertified = "
                   "credited / capacity, with capacity the cards' fastest cuBLASLt FP8 GEMMs in the window (before and after, "
                   "averaged). The overhead is capacity / credited, the served kernel's time per GEMM over cuBLASLt's. Proving "
                   "cost is the cost of the sampled Flock ZK proofs over the same work, which hidden-zk measures; "
-                  "'— (hidden-zk)' means it has no number for the scheme yet."]
+                  "'— (hidden-zk)' means it has no number for the scheme yet.")]
         if len(fr) > 1:
-            lines += ["", f"Across the {len(fr)} windows the replay-diagnostic fraction spans {min(fr):.2%} to {max(fr):.2%} "
-                      f"(spread {max(fr) - min(fr):.2%}, {(max(fr) - min(fr)) * 1e4:.1f} basis points)."]
+            lines += ["", (f"Across the {len(fr)} windows the replay-diagnostic fraction spans {min(fr):.2%} to {max(fr):.2%} "
+                      f"(spread {max(fr) - min(fr):.2%}, {(max(fr) - min(fr)) * 1e4:.1f} basis points).")]
     return "\n".join(lines) + "\n"
 
 

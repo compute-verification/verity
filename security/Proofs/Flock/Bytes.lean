@@ -8,7 +8,8 @@ public import Mathlib.Data.Set.Card
 # Byte strings as lists of bytes, and the hex they are written in
 
 A byte string is read as its list of bytes (`bs`), and an encoding is split field by field, each of a width it fixes
-(`split_bytes`); `be64`, `be32` and SHA-512 have fixed widths (`be64_size`, `be32_size`, `hash_size`). A byte array's
+(`split_bytes`); `be64`, `be32` and SHA-512 have fixed widths (`be64_size`, `be32_size`, `hash_size`), and `be64`
+determines the number it writes (`be64_inj`, `be64_size_inj`). A byte array's
 fold is its list's (`foldl_eq`); `hexOf` writes each byte as two characters, one byte per pair, so two byte arrays with
 one hex string are one (`hexOf_inj`); lists cut into pieces of one length `k > 0` are one when their concatenations are
 (`flatten_inj`).
@@ -56,6 +57,39 @@ theorem be64_bs (x : UInt64) : bs (be64 x) =
 theorem be64_size (x : UInt64) : (be64 x).size = 8 := by
   rw [← bs_length, be64_bs]
   rfl
+
+theorem byte_toNat (x : UInt64) (k : Nat) (hk : k < 64) :
+    ((x >>> (UInt64.ofNat k)).toUInt8).toNat = x.toNat / 2 ^ k % 256 := by
+  simp [UInt64.toNat_shiftRight, Nat.shiftRight_eq_div_pow, Nat.mod_eq_of_lt hk]
+
+theorem be64_inj {x y : UInt64} (h : be64 x = be64 y) : x = y := by
+  have h' := congrArg bs h
+  rw [be64_bs, be64_bs] at h'
+  simp only [List.cons.injEq] at h'
+  obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, -⟩ := h'
+  have e : ∀ k, k < 64 → (x >>> (UInt64.ofNat k)).toUInt8 = (y >>> (UInt64.ofNat k)).toUInt8 →
+      x.toNat / 2 ^ k % 256 = y.toNat / 2 ^ k % 256 := fun k hk he => by
+    rw [← byte_toNat x k hk, ← byte_toNat y k hk, he]
+  have a0 := e 56 (by omega) h0
+  have a1 := e 48 (by omega) h1
+  have a2 := e 40 (by omega) h2
+  have a3 := e 32 (by omega) h3
+  have a4 := e 24 (by omega) h4
+  have a5 := e 16 (by omega) h5
+  have a6 := e 8 (by omega) h6
+  have a7 := e 0 (by omega) h7
+  have hx := x.toNat_lt
+  have hy := y.toNat_lt
+  apply UInt64.toNat_inj.mp
+  simp only [Nat.reducePow] at a0 a1 a2 a3 a4 a5 a6 a7 hx hy ⊢
+  omega
+
+/-- A length prefix of a string under `2^64` bytes determines its length. -/
+theorem be64_size_inj {n m : Nat} (hn : n < 2 ^ 64) (hm : m < 2 ^ 64) (h : be64 n.toUInt64 = be64 m.toUInt64) :
+    n = m := by
+  have := congrArg UInt64.toNat (be64_inj h)
+  simp only [Nat.toUInt64, UInt64.toNat_ofNat'] at this
+  rwa [Nat.mod_eq_of_lt hn, Nat.mod_eq_of_lt hm] at this
 
 theorem be32_size (x : UInt32) : (be32 x).size = 4 := by
   simp [be32]

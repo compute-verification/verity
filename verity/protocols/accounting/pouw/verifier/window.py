@@ -75,11 +75,11 @@ import json
 import math
 import struct
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from verity.circuits.codec import canonical_json
 from verity.commitments import domains, hm96
@@ -187,7 +187,7 @@ class Work:
     n: int
 
     @classmethod
-    def at(cls, ell: int, bits: int = GRID_BITS) -> "Work":
+    def at(cls, ell: int, bits: int = GRID_BITS) -> Work:
         return cls(ell, point(ell, bits), point(ell + 1, bits))
 
     def to_json(self, tile_work: int) -> dict[str, int]:
@@ -415,7 +415,7 @@ class Entry:
         return list(struct.unpack(f"<{ENTRY_WORDS}H", self.row()))
 
     @classmethod
-    def from_row(cls, row: bytes) -> "Entry":
+    def from_row(cls, row: bytes) -> Entry:
         """The entry a row holds; raises ValueError for a row of another length, an unknown kind or a nonzero pad."""
         row = bytes(row)
         if len(row) != ENTRY_BYTES:
@@ -432,7 +432,7 @@ class Entry:
         return cls(kind, lo, hi, n_a, n_b, row[48:112], row[112:176], row[176:240], row[272:336], tile0, cols, m)
 
     @classmethod
-    def from_words(cls, words: Sequence[int]) -> "Entry":
+    def from_words(cls, words: Sequence[int]) -> Entry:
         if len(words) != ENTRY_WORDS or any(not 0 <= int(w) < 1 << 16 for w in words):
             raise ValueError(f"an entry row is {ENTRY_WORDS} u16 words")
         return cls.from_row(struct.pack(f"<{ENTRY_WORDS}H", *map(int, words)))
@@ -443,7 +443,7 @@ class Entry:
                 "m": self.m, "record": self.record.hex()}
 
     @classmethod
-    def from_json(cls, x: Mapping[str, Any]) -> "Entry":
+    def from_json(cls, x: Mapping[str, Any]) -> Entry:
         return cls(x["kind"], x["lo"], x["hi"], x["n_a"], x["n_b"], bytes.fromhex(x["root_a"]), bytes.fromhex(x["root_b"]),
                    bytes.fromhex(x["root_h3"]), bytes.fromhex(x["record"]), x["tile0"], x["cols"], x["m"])
 
@@ -751,7 +751,7 @@ def _registered_root(registration: Mapping[str, Any]) -> tuple[bytes, bytes]:
     return root, dom
 
 
-def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int) -> list[int]:
+def instance_ts(registration: Mapping[str, Any], sampled: Sequence[int], sigma: int, cap: int) -> list[int]:
     """Session σ's tile indices: sampled[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless the sample is
     the registration's K′ distinct indices of [0, N), ascending, and σ one of its S sessions."""
     n, law = registration.get("population"), registration.get("law")
@@ -760,16 +760,17 @@ def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: in
     k = law.get("k") if isinstance(law, Mapping) and law.get("law") == "subset" else None
     if not _positive(k):
         raise ValueError(f"the registration's law {law!r} is not subset:K′")
-    drawn = list(drawn)
-    if len(drawn) != k or any(not isinstance(t, int) or isinstance(t, bool) for t in drawn) or drawn != sorted(set(drawn)) \
-            or not 0 <= drawn[0] <= drawn[-1] < n:
+    sampled = list(sampled)
+    if len(sampled) != k or any(not isinstance(t, int) or isinstance(t, bool) for t in sampled) \
+            or sampled != sorted(set(sampled)) or not 0 <= sampled[0] <= sampled[-1] < n:
         raise ValueError(f"the draw is not {k} distinct ascending indices of [0, {n})")
     if not isinstance(sigma, int) or not 0 <= sigma < sessions(k, cap):
         raise ValueError(f"session {sigma!r} is not one of the window's {sessions(k, cap)}")
-    return [drawn[sigma * cap + s] if sigma * cap + s < k else n - 1 for s in range(cap)]
+    return [sampled[sigma * cap + s] if sigma * cap + s < k else n - 1 for s in range(cap)]
 
 
-def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int, domain_h3: bytes) -> bytes:
+def public_inputs(registration: Mapping[str, Any], sampled: Sequence[int], sigma: int, cap: int,
+                  domain_h3: bytes) -> bytes:
     """F_σ: the verifier's own ``--public-inputs`` file for session σ's `cap` tile instances, from the registration (the
     one-stage record: its population N, its sampling design subset:K′ and its execution phase root and domain at port `PORT`), its own sample,
     σ, the cap and `domain_h3`, the domain id of the pass's -h3 tile tree (the verifier's own, from the pass's execution phase and
@@ -779,7 +780,7 @@ def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: 
     if len(domain_h3) != _DIGEST:
         raise ValueError("the pass's -h3 domain id is 64 bytes")
     common = root + dom + side_domain(dom, "a").domain_id + side_domain(dom, "b").domain_id + bytes(domain_h3)
-    body = b"".join(t.to_bytes(16, "little") + common for t in instance_ts(registration, drawn, sigma, cap))
+    body = b"".join(t.to_bytes(16, "little") + common for t in instance_ts(registration, sampled, sigma, cap))
     head = {"format": PUBLIC_INPUTS_FORMAT, "instances": cap, "ports": [dict(p) for p in PUBLIC_PORTS]}
     return json.dumps(head, sort_keys=True).encode() + b"\n" + body
 

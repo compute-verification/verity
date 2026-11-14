@@ -19,6 +19,7 @@ from verity_vllm.check.replay.index import (
     SAMPLER_OP,
     ProgramIndex,
     const_word,
+    file_args,
     node_runs,
     plane_copies,
 )
@@ -158,7 +159,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
     composable interior whose own inputs have that defect (bounded by INTERIOR_DEPTH).  Derived from the Program rows alone (families +
     member claims), never from the collector's emissions.  Empty when every interior input composes (Gemm_v1 under BiasAdd_v1)."""
     out: set[str] = set()
-    for group in r.get("args") or []:
+    for group in file_args(r):
         for sl in node_runs(group):
             a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
             if pi.member_at(a, lo, hi) is not None:

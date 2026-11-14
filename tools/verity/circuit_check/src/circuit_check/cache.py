@@ -426,8 +426,14 @@ def _importing() -> bool:
 
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
-#: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
-_ENUMERATORS = frozenset({("verity.definitions.registry.catalog", "load"), ("verity.definitions.boolean", "_load")})
+#: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them.
+#: The sidecar that loads the catalog hands them (`targets.HOOKS`' ``enumerators``)
+_ENUMERATORS: set[tuple[str, str]] = set()
+
+
+def enumerators(functions: Iterable[tuple[str, str]]) -> None:
+    """Hold what each of ``functions`` (module, qualified name) lists by the package's modules, as `_ENUMERATORS`' are."""
+    _ENUMERATORS.update(functions)
 
 
 def _enumerator(f) -> bool:

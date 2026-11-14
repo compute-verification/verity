@@ -113,7 +113,7 @@ def verdicts(rope, tmp_path_factory):
 @pytest.mark.slow
 @pytest.mark.parametrize("name", ["honest", "a missing root", "a short y", "swapped files", "swapped files and digests"])
 def test_a_drawn_session_of_two_tables_is_refused(verdicts, name):
-    """Honest or tampered, the sampled session's statements set up and it meets the refusal of its sample's law; its
+    """Honest or tampered, the sampled session's statements set up and it meets the refusal of its sample's sampling design; its
     verdict names the two tables it set the session up as (``session_tables``)."""
     v = verdicts[name]
     assert not v["accepted"] and v["why"] == SUBSET, v["why"]

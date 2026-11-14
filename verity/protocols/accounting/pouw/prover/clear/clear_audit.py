@@ -3,7 +3,9 @@
 window, and its verifier is the Lean (`verity/protocols/accounting/pouw/verifier/lean/check`, `pouw.verifier`).  Benchmarks
 replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`, `pearl_c4/replay.py`), the schemes' tests run their
 end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are difftested against `Sampled.select` and
-`draw_coin`.  This directory is not a package: callers put it on ``sys.path``.
+`draw_coin`.  Each module here has two names: `verity.protocols.accounting.pouw.prover.clear.clear_audit`, and the bare `clear_audit` for
+a caller that puts this directory on ``sys.path``.  A caller keeps to one of the two: they are two copies of every class
+here, and `Verifier.audit` tells a `Sampled` by its class.
 
 0.-2. **Coins, weights and the salt** are core's (`verity.protocols.accounting.pouw.verifier.audit`: `weights_root`, `Epoch.start`).
 3. **Units.**  For each matmul the prover commits the activation rows (bound to the salt and the index); the scheme
@@ -13,7 +15,7 @@ end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are d
 5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` samples t
    tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
    source is the epoch's sampling coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
-   Pearl's mining rule, not one of the audit's laws, and stays unwired: the tiles whose digest, read little-endian, is at
+   Pearl's mining rule, not one of the audit's sampling designs, and stays unwired: the tiles whose digest, read little-endian, is at
    most ``target·|rows|·|cols|·k``.  The prover opens each selected tile's strips and leaf; the verifier recomputes the
    tile through the scheme.
 6. **Profile.**  When every selected tile passes, `WorkProfile` states what that establishes.
@@ -34,6 +36,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from itertools import accumulate
 from math import lcm
+from typing import Any
 
 from verity.protocols.accounting.pouw.verifier.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA, Epoch, TileRef,
                                               Workload, activation_binding, commit_rows, hm96_salt, opened_value, rows_domain,
@@ -81,7 +84,7 @@ class TileOpening:
     leaf: Opening
 
 
-def reference_kernel(scheme: PoUWScheme, ctx: Context, noise, a: Sequence[bytes], b: Sequence[bytes],
+def reference_kernel(scheme: PoUWScheme, ctx: Context, noise: Any, a: Sequence[bytes], b: Sequence[bytes],
                      tiles: Sequence[Tile]) -> list[tuple[bytes, list[list]]]:
     """One matmul through the scheme's reference, tile by tile: ``[(digest, useful tile)]``."""
     out = []

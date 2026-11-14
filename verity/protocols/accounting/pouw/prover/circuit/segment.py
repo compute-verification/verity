@@ -221,6 +221,19 @@ __all__ = [
     "thread_rows",
     "warp_check",
     "warp_checkpoint",
+    "I8",
+    "M32",
+    "U32",
+    "PouwDigitHi",
+    "PouwDigitLo",
+    "PouwDigitZ",
+    "PouwFx1Absorb",
+    "PouwI8Neg",
+    "PouwLow8",
+    "PouwResAdd",
+    "PouwSegDot0",
+    "PouwSx8",
+    "rotl",
 ]
 
 BIT = BL.BIT

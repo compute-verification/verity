@@ -123,7 +123,7 @@ def test_served_check_is_free_and_takes_its_share_of_skip():
 def test_batching_frees_most_of_todays_sampling_spend():
     for f in B.FAMILIES:
         t = B.today(f)
-        r = next(r for r in B.levers(f) if r["lever"] == "today's draws in regime sessions/256")
+        r = next(r for r in B.levers(f) if r["lever"] == "today's samples in regime sessions/256")
         assert -r["d_B"] > 0.99 * t.B_sample
         assert abs(r["d_eps"]) < 1e-3 * t.eps
 

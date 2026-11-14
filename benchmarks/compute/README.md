@@ -33,10 +33,12 @@ verity bench compute --from RUN --per-call [--uncredited F] [--top N]
   - `$OUT/compute.json`: the printed document.
   - `result.json`: the same result in the fields every resource's benchmark reports, through the harness kit's writer
     (`verity_bench.kit`). Under `research run` it is the run directory's (`$RESEARCH_RUN_DIR/result.json`), where
-    `research` reads a run's result; outside one it is `$OUT/result.json`. Its measurements are `metric` (the printed
-    number, its unit and its target), `verified` (the credited MACs), `capacity`, `free` (capacity less verified) and
-    `error` (the answer's δ_s, sampling's alone). A recorded run's record holds no registration of its hardware and no
-    span the verifier holds its passes to, so `capacity` and `free` are one entry each, with no value and why.
+    `research` reads a run's result; outside one it is `$OUT/result.json`. Its measurements are
+    `compute-accounting/verified-compute-share` (the printed number, its unit and its target, under its id in
+    `metrics.toml`, where the console's Metrics tab reads it), `verified` (the credited MACs), `capacity`, `free`
+    (capacity less verified) and `error` (the answer's δ_s, sampling's alone). A recorded run's record holds no
+    registration of its hardware and no span the verifier holds its passes to, so `capacity` and `free` are one entry
+    each, with no value and why.
     `capacity()` in `run.py` gives them for a registered site and a span, at each data-sheet reading: a clock of a
     registered device's card file (`clock.tensor`, `clock.sm`).
 - **Exit code:** 0 with the number printed; 1 with none (the answer is not an accept, the Lean verifier's verdict is

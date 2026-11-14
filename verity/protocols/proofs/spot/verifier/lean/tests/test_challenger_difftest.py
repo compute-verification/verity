@@ -1728,7 +1728,8 @@ def draw_coins(j: Any) -> Any:
     def reason() -> dict:
         key = Ch.ChallengerKey.from_json(j["key"])
         why = T.coins_reason(key, j["main"], j["coins"], j["window"], j["label"], after, bytes_read, lms_verify)
-        if why is None:  # one object for both readers: a component's check reads, from the same evidence, the bytes read
+        # one object for both readers: a subprotocol's check reads, from the same evidence, the bytes read
+        if why is None:
             drawn = T.draw_coins(key, j["window"], j["label"], after, j["coins"], lms_verify)
             assert drawn[:len(bytes_read)] == bytes_read
         return {"reason": why}

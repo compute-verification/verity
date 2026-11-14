@@ -27,7 +27,7 @@ untraced = ["tests/test_difftest.py", "tests/test_known_rows.py", "tests/test_la
 # core protocol interface and the LMS verifier, core's identity and randomness, and Flock's verifier with its
 # configuration.
 inputs = ["tools/difftest", "verity/__init__.py", 
-          "verity/hardware/record.py",
+          "verity/channel.py",
           "verity/claims/__init__.py",
           "verity/protocols/accounting/pouw/verifier", "verity/protocols/accounting/pouw/prover",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot",

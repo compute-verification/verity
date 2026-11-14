@@ -158,8 +158,8 @@ def test_one_ptxas_build_may_have_an_entry_per_target():
     p["toolkits"]["12.9.1-sm_90a"] = {**p["toolkits"]["12.9.1"], "args": ["-arch sm_90a -m 64", "-arch sm_90a -m 64 -fmad false"]}
     sm90 = note(args="-arch sm_90a -m 64 -fmad false")
     assert SG.toolkit_of(sm90, p) == ("12.9.1-sm_90a", None) and SG.toolkit_of(NOTES["plain"], p) == ("12.9.1", None)
-    assert SG.toolkit_of(note(args="-arch sm_100a -m 64"), p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 "
-                                                                        "with unpinned arguments '-arch sm_100a -m 64'")
+    assert SG.toolkit_of(note(args="-arch sm_100a -m 64"), p) == (
+        None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 with unpinned arguments '-arch sm_100a -m 64'")
     p["toolkits"]["12.9.1-sm_90a"]["numeric"] = None
     assert SG.toolkit_of(sm90, p) == (None, "ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned without a numeric run")
 
@@ -171,8 +171,8 @@ def test_ptxas_verbose_flag_is_not_an_argument_that_matters():
 
 def test_a_toolkit_pinned_without_a_numeric_run_exempts_nothing():
     v = verdict("plain", p=pins(numeric=None))
-    assert v["toolkit"] is None and v["unpinned"] == "ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned " \
-                                                     "without a numeric run"
+    assert v["toolkit"] is None and v["unpinned"] == ("ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned "
+                                                      "without a numeric run")
     assert v["offending_n"] == v["flagged"]
 
 
@@ -828,8 +828,8 @@ def test_why_failed_names_the_first_instruction_and_why():
 
 
 def test_ftz_or_approximate_ptx_fails():
-    r = judge("plain", ptx=["\tadd.rn.f32 %f1, %f2, %f3;\n\tfma.rn.ftz.f32 %f4, %f1, %f2, %f3;\n\tdiv.full.f32 %f5, %f1, %f2;"
-                            "\n\tsqrt.approx.f32 %f6, %f1;\n\tadd.rn.f32 %f7, %f1, %f2; // .ftz\n"])
+    r = judge("plain", ptx=[("\tadd.rn.f32 %f1, %f2, %f3;\n\tfma.rn.ftz.f32 %f4, %f1, %f2, %f3;\n\tdiv.full.f32 %f5, %f1, %f2;"
+                             "\n\tsqrt.approx.f32 %f6, %f1;\n\tadd.rn.f32 %f7, %f1, %f2; // .ftz\n")])
     assert not r["ok"] and r["ptx_bad"] == ["fma.rn.ftz.f32 %f4, %f1, %f2, %f3;", "div.full.f32 %f5, %f1, %f2;",
                                             "sqrt.approx.f32 %f6, %f1;"]
 

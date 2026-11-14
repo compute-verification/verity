@@ -16,9 +16,9 @@ import verity_difftest as D
 from hypothesis import strategies as st
 
 from verity.commitments import attest
+from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeU64Domain
 from verity.commitments.merkle import CommitmentDomain
-from verity.commitments.crypto import lms
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -142,21 +142,21 @@ def test_hss_verify(server, device):
     """The liveness record and the signed root under their messages, the identity, the deployment and the party, each
     now and then another one's, and the signature flipped, cut, or another identity's."""
     live, signed = device["live"], device["signed"]
-    I = device["lower"][:16]
-    messages = {live: lms.liveness_message(I, DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD, 2),
-                signed: lms.period_root_message(I, DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD, len(RECORDS),
+    identifier = device["lower"][:16]
+    messages = {live: lms.liveness_message(identifier, DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD, 2),
+                signed: lms.period_root_message(identifier, DEPLOYMENT, PARTY, ATTACHMENT, LINK, PERIOD, len(RECORDS),
                                                 device["root"])}
 
     @st.composite
-    def inputs(draw) -> dict:
-        sig = draw(st.sampled_from([live, signed]))
-        m, x = messages[sig], draw(st.integers(0, 2 ** 20))
-        sig = draw(mostly(st.just(sig), st.sampled_from([_flip(sig, x), sig[:-1], device["theirs"]])))
-        return {"W": 1, "H": draw(mostly(st.just(2), st.sampled_from([1, 3, 31]))),
-                "identity": draw(mostly(st.just(device["identity"]), st.sampled_from([device["stranger"],
+    def inputs(sample) -> dict:
+        sig = sample(st.sampled_from([live, signed]))
+        m, x = messages[sig], sample(st.integers(0, 2 ** 20))
+        sig = sample(mostly(st.just(sig), st.sampled_from([_flip(sig, x), sig[:-1], device["theirs"]])))
+        return {"W": 1, "H": sample(mostly(st.just(2), st.sampled_from([1, 3, 31]))),
+                "identity": sample(mostly(st.just(device["identity"]), st.sampled_from([device["stranger"],
                                                                                       device["identity"][:-1]]))).hex(),
-                "deployment": draw(DEPLOYMENTS), "party": draw(PARTIES), "signature": sig.hex(),
-                "message": draw(mostly(st.just(m), st.sampled_from([_flip(m, x), m[:-1]]))).hex()}
+                "deployment": sample(DEPLOYMENTS), "party": sample(PARTIES), "signature": sig.hex(),
+                "message": sample(mostly(st.just(m), st.sampled_from([_flip(m, x), m[:-1]]))).hex()}
 
     stats = D.run(port("hss_verify", hss_verify, inputs()), examples=150, server=server)
     assert stats.outputs > 60 and stats.rejects > 5, stats
@@ -188,31 +188,31 @@ def test_attest_check(server, device):
     root = device["root"]
 
     @st.composite
-    def inputs(draw) -> dict:
-        x = draw(st.integers(0, 2 ** 20))
-        positions = draw(st.lists(st.integers(0, len(RECORDS) - 1), max_size=3))
+    def inputs(sample) -> dict:
+        x = sample(st.integers(0, 2 ** 20))
+        positions = sample(st.lists(st.integers(0, len(RECORDS) - 1), max_size=3))
         reads = []
         for pos in positions:
             rec, path = RECORDS[pos], list(attest.path(RECORDS, pos))
-            pos, rec, path = draw(mostly(st.just((pos, rec, path)), st.sampled_from([
+            pos, rec, path = sample(mostly(st.just((pos, rec, path)), st.sampled_from([
                 (pos, _flip(rec, x), path), ((pos + 1) % len(RECORDS), rec, path), (pos, rec, path[:-1]),
                 (pos, rec, path[::-1]), (pos + len(RECORDS), rec, path)]), 6))
             reads.append({"position": pos, "record": rec.hex(), "path": [s.hex() for s in path]})
-        sig = draw(mostly(st.just(device["root_signature"]), st.sampled_from(
+        sig = sample(mostly(st.just(device["root_signature"]), st.sampled_from(
             [_flip(device["root_signature"], x), device["root_signature"][:-1], device["their_root_signature"],
              device["live_lower"]]), 6))
-        lower = draw(mostly(st.just(device["lower"]), st.sampled_from([device["their_lower"], device["lower"][:-1]]), 8))
-        certificate = draw(mostly(st.just(device["certificate"]), st.sampled_from(
+        lower = sample(mostly(st.just(device["lower"]), st.sampled_from([device["their_lower"], device["lower"][:-1]]), 8))
+        certificate = sample(mostly(st.just(device["certificate"]), st.sampled_from(
             [_flip(device["certificate"], x), device["certificate"][:-1], device["their_certificate"]]), 8))
-        return {"W": 1, "H": 2, "identity": draw(mostly(st.just(device["identity"]), st.sampled_from(
+        return {"W": 1, "H": 2, "identity": sample(mostly(st.just(device["identity"]), st.sampled_from(
                     [device["stranger"], device["identity"][:-1]]), 8)).hex(),
                 "lower": lower.hex(), "certificate": certificate.hex(),
-                "deployment": draw(mostly(st.just(DEPLOYMENT.hex()), DEPLOYMENTS, 8)),
-                "party": draw(mostly(st.just(PARTY), PARTIES, 8)),
-                "attachment": draw(mostly(st.just(ATTACHMENT), st.just(ATTACHMENT[::-1]), 8)).hex(),
-                "link": draw(mostly(st.just(LINK), LINKS, 8)), "period": draw(mostly(st.just(PERIOD), U64, 8)),
-                "count": draw(mostly(st.just(len(RECORDS)), st.sampled_from([len(RECORDS) + 1, 4, 2 ** 64]), 8)),
-                "root": draw(mostly(st.just(root), st.sampled_from([_flip(root, x), root[:-1]]), 8)).hex(),
+                "deployment": sample(mostly(st.just(DEPLOYMENT.hex()), DEPLOYMENTS, 8)),
+                "party": sample(mostly(st.just(PARTY), PARTIES, 8)),
+                "attachment": sample(mostly(st.just(ATTACHMENT), st.just(ATTACHMENT[::-1]), 8)).hex(),
+                "link": sample(mostly(st.just(LINK), LINKS, 8)), "period": sample(mostly(st.just(PERIOD), U64, 8)),
+                "count": sample(mostly(st.just(len(RECORDS)), st.sampled_from([len(RECORDS) + 1, 4, 2 ** 64]), 8)),
+                "root": sample(mostly(st.just(root), st.sampled_from([_flip(root, x), root[:-1]]), 8)).hex(),
                 "signature": sig.hex(), "reads": reads}
 
     stats = D.run(port("attest_check", attest_check, inputs()), examples=200, server=server)
@@ -231,14 +231,14 @@ def test_attest_liveness(server, device):
     party's signed root."""
 
     @st.composite
-    def inputs(draw) -> dict:
-        x = draw(st.integers(0, 2 ** 20))
-        sig = draw(mostly(st.just(device["live"]), st.sampled_from([_flip(device["live"], x), device["live"][:-1],
+    def inputs(sample) -> dict:
+        x = sample(st.integers(0, 2 ** 20))
+        sig = sample(mostly(st.just(device["live"]), st.sampled_from([_flip(device["live"], x), device["live"][:-1],
                                                                      device["signed"]])))
-        return {"W": 1, "H": 2, "identity": draw(mostly(st.just(device["identity"]), st.just(device["stranger"]))).hex(),
-                "deployment": draw(DEPLOYMENTS), "party": draw(PARTIES),
-                "attachment": draw(mostly(st.just(ATTACHMENT), st.just(ATTACHMENT[:-1]))).hex(), "link": draw(LINKS),
-                "period": draw(mostly(st.just(PERIOD), U64)), "block": draw(mostly(st.just(2), U64)),
+        return {"W": 1, "H": 2, "identity": sample(mostly(st.just(device["identity"]), st.just(device["stranger"]))).hex(),
+                "deployment": sample(DEPLOYMENTS), "party": sample(PARTIES),
+                "attachment": sample(mostly(st.just(ATTACHMENT), st.just(ATTACHMENT[:-1]))).hex(), "link": sample(LINKS),
+                "period": sample(mostly(st.just(PERIOD), U64)), "block": sample(mostly(st.just(2), U64)),
                 "signature": sig.hex()}
 
     stats = D.run(port("attest_liveness", attest_liveness, inputs()), examples=150, server=server)

@@ -349,7 +349,7 @@ def main(a: argparse.Namespace, runner: Callable[[str], str] | None = None) -> i
     else:
         src = f"{nebius1.NODE}:{RECORD}"
         cmd = hourly_command(a.hours) if a.ucmd == "hourly" else day_command(a.day)
-        runner = runner or status.ssh(status.HOSTS[nebius1.NODE])
+        runner = runner or status.reach(nebius1.NODE)
     findings: list[str] = []
     try:
         rows = parse(Path(a.file).read_text() if a.file else runner(cmd))

@@ -65,11 +65,6 @@ def test_a_row_names_no_consumer(held: Any) -> None:
 
 
 @empty
-def test_a_plan_document_without_hooks_has_none(held: Any) -> None:
-    assert P.hooks_of_doc(holding({"hooks": [{"module": "m", "kind": "forward_output", "slot": "out"}]}, "hooks", held)) == []
-
-
-@empty
 def test_a_kernel_recorded_without_candidates_ran_its_one_config(held: Any) -> None:
     ran = {"kwargs": {"XBLOCK": 2}, "num_warps": 16}
     record = {T.source_sha256("kernel"): holding({"candidates": [ran], "executed": [ran]}, "candidates", held)}

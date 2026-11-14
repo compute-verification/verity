@@ -105,13 +105,17 @@ def test_the_weights_root_is_pouws_view_of_theta():
 
 def test_a_changed_code_scale_or_key_moves_the_root():
     shapes, rows = model()
-    base = Wt.weights_root(Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY))
+
+    def root(rows_of: list[list[bytes]], key: bytes) -> bytes:
+        return Wt.weights_root(Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows_of[w], key))
+
+    base = root(rows, KEY)
     code = [list(r) for r in rows]
     code[1][2] = bytes([code[1][2][0] ^ 1]) + code[1][2][1:]
     scale = [list(r) for r in rows]
     scale[3][0] = scale[3][0][:-1] + bytes([scale[3][0][-1] ^ 0x80])
     for other, key in ((code, KEY), (scale, KEY), (rows, bytes(32))):
-        assert Wt.weights_root(Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: other[w], key)) != base
+        assert root(other, key) != base
 
 
 def test_refuses_rows_of_another_width_or_count():

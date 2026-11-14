@@ -32,6 +32,9 @@
 #          period open for a rerun in it and runs no auditor. With LEASE_BY (a UTC time) it opens nothing for a lease
 #          that began after LEASE_BY, and stops waiting 2 minutes after it.
 #
+# CHALLENGER and AUDITOR are the challenger host and the verifier host as USER@HOST, by default research@ the addresses
+# VY_CHALLENGER_1_HOST and VY_AUDITOR_1_HOST hold; a host with neither ends any VERB but form, naming the variable.
+#
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
 # what doesn't need it runs (the circuit, main's first-parent line, the peers line to PROVER_NODE and its lease status,
 # the verifier host's host key). A dry fire that can't read PROVER_NODE's leases (a stopped node) says so and goes on.
@@ -56,8 +59,8 @@ fi
 [ "$VERB" = form ] && exit 0
 : "${OUT:?}"
 GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
-CHALLENGER=${CHALLENGER:-research@204.12.178.84}
-AUDITOR=${AUDITOR:-research@81.85.1.145}
+CHALLENGER=${CHALLENGER:-research@${VY_CHALLENGER_1_HOST:?the address of the challenger host, or CHALLENGER as USER@HOST}}
+AUDITOR=${AUDITOR:-research@${VY_AUDITOR_1_HOST:?the address of the verifier host, or AUDITOR as USER@HOST}}
 AUDITOR_FP=${AUDITOR_FP:-SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs}
 LANE=${LANE:-memory-accounting} MODEL=${MODEL:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} ARENA_BLOCKS=${ARENA_BLOCKS:-16252928}
 PORT=${PORT:-7951} CAP=${CAP:-4} PACE_PASS_MS=${PACE_PASS_MS:-85} MINUTES=${MINUTES:-30}
@@ -65,6 +68,9 @@ PACED=${PACED:-1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7}
 JITTER_MS=${JITTER_MS:-50} QUANTILE=${QUANTILE:-max} PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
 SSH=(ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=15
   -i "$GATE_KEY")
+
+# shellcheck source=benchmarks/remote_session/main_line.sh
+source "$(dirname "${BASH_SOURCE[0]}")/main_line.sh" || exit 3
 
 gate() {
   # HOST WORDS...: one request to that host's gate, its answer on stdout
@@ -86,35 +92,16 @@ circuit() {
   printf 'verity/remote-bandwidth/v0 verifier tree %s' "$tree" | sha512sum | cut -d' ' -f1
 }
 
-main_line() {
-  # main's first-parent history into $OUT/main.probe.txt, from MAIN_FROM: origin where origin is a repository main is
-  # pushed to (GitHub, a bare repository), else, where origin is a checkout, that checkout's own origin. A run's clone
-  # (--cwd clone) has its source root as origin, a checkout whose origin/main stood still when it was made; the node's
-  # bare repository behind it holds main as the newest launch pushed it. Nothing falls back to a checkout's copy.
-  local unshallow=()
-  [ "$(git rev-parse --is-shallow-repository)" = true ] && unshallow=(--unshallow)
-  MAIN_FROM=$(git remote get-url origin 2> /dev/null) || { MAIN_FROM="(no origin)"; return 3; }
-  if [ "$(git -C "$MAIN_FROM" rev-parse --is-bare-repository 2> /dev/null)" = false ]; then
-    MAIN_FROM=$(git -C "$MAIN_FROM" remote get-url origin 2> /dev/null) \
-      || { MAIN_FROM="(the checkout $MAIN_FROM has no origin)"; return 3; }
-  fi
-  git fetch -q "${unshallow[@]}" "$MAIN_FROM" +refs/heads/main:refs/remotes/origin/main >> "$OUT/fetch.probe.log" 2>&1 \
-    && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.probe.txt"
-}
-
 probe() {
   local c
   c=$(circuit) || exit 3
   echo "circuit $c (COMMIT $COMMIT)"
   [ -z "${CIRCUIT:-}" ] || [ "$CIRCUIT" = "$c" ] || { echo "CIRCUIT $CIRCUIT is not COMMIT's $c"; exit 3; }
   CIRCUIT=$c
-  main_line || {
-    echo "can't fetch main's first-parent history from $MAIN_FROM (fetch.probe.log), so COMMIT can't be checked on it:" \
-      "nothing was sent. In a run's clone main is read from the node's bare repository behind the source root, never the" \
-      "source root's own copy: if the bare can't be reached or holds no main, relaunch from a checkout fetched just" \
-      "before (git fetch origin main), whose launch pushes its origin/main there, and tell infra if it still fails"
+  main_line "$OUT/fetch.probe.log" "$OUT/main.probe.txt" || {
+    main_refused fetch.probe.log "COMMIT can't be checked on it: nothing was sent"
     exit 3; }
-  echo "main from $MAIN_FROM at $(head -n 1 "$OUT/main.probe.txt")"
+  echo "main from $MAIN_SHOWN at $(head -n 1 "$OUT/main.probe.txt")"
   grep -qxF "$COMMIT" "$OUT/main.probe.txt" || {
     echo "COMMIT $COMMIT is not on main's first-parent line, so no session would credit: pick a commit on it, or" \
       "relaunch from a checkout fetched just before (git fetch origin main) if main has moved past it since"; exit 3; }

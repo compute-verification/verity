@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 # the tiny model's tensors are too small for threads to pay off
 torch.set_num_threads(1)
@@ -74,7 +75,6 @@ def deterministic_cpu():
     """Two of PyTorch's CPU kernels are not deterministic: SDPA's flash kernel, and oneDNN's bf16 GEMM behind F.linear
     (the same call twice can differ, by up to 3 on 2% of a 256 x 224 output; torch 2.9 and 2.14). The tests pin SDPA's
     math backend and turn oneDNN off, which leaves both deterministic. The GPU runs use neither."""
-    from torch.nn.attention import SDPBackend, sdpa_kernel
     with sdpa_kernel(SDPBackend.MATH), torch.backends.mkldnn.flags(enabled=False):
         yield
 

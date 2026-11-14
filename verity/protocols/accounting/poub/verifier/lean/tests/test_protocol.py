@@ -18,13 +18,13 @@ import shutil
 from fractions import Fraction
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
 from test_drawn import BASES, edited, shaped
 from verity_difftest import canonical
 from verity_difftest import protocol as P
+
 from verity.protocols.accounting.poub.verifier import audit, period
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

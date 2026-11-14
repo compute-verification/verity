@@ -1,9 +1,12 @@
 """The format steps: the formats' plain quantization (`fp`), Dither's coins on a format's integer grid (`native`) and
 int8 run exactly by limb splitting (`emulate`)."""
+import types
+
 import numpy as np
 import pytest
 import torch
 
+import gates as G
 import matmul
 import spec
 import steps
@@ -150,8 +153,6 @@ def test_native_gptq_stays_on_the_grid_and_beats_rounding(grid, scale):
                                                   ("e4m3i104", "channel", "e4m3i120"), ("e2m1x2", "nvi9", "")])
 @pytest.mark.parametrize("coin", [0.0, 1.0])
 def test_g1_serves_the_centred_product_of_the_nearest_levels(grid, scale, act_grid, coin, monkeypatch):
-    import types
-    import gates as G
     g = torch.Generator().manual_seed(5)
     x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
     step = spec.parse({"linear": [{"step": "native", "grid": grid, "scale": scale, "act": "g1", "weight": "g1",
@@ -189,8 +190,6 @@ def test_dither3_moves_the_nearest_level_by_its_gap_onto_three_levels(grid):
 
 
 def test_dither3_activations_beside_dithered_weights_serve_the_dithered_product(monkeypatch):
-    import types
-    import gates as G
     g = torch.Generator().manual_seed(8)
     x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
     step = spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "channel", "act": "dither3"}]},
@@ -213,8 +212,6 @@ def test_dither3_activations_beside_dithered_weights_serve_the_dithered_product(
 
 @pytest.mark.parametrize("coin", [0.0, 1.0])
 def test_g1_weights_beside_int8_activations_centre_only_the_weights(coin, monkeypatch):
-    import types
-    import gates as G
     g = torch.Generator().manual_seed(6)
     x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
     step = spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "nvi10", "act": "dither",
@@ -260,8 +257,6 @@ def test_row_chunks_change_no_bit(llama, ids, calib, monkeypatch):
 
 
 def test_a_native_weight_is_cached_once_across_seeds():
-    import types
-    import gates as G
     step = next(s for s in spec.load("pc-c2-nvfp4-2s").linear if s.defn.name == "native")
     store = {}
     for seed in (0, 1, 2):

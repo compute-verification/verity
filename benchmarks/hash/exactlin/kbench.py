@@ -45,14 +45,15 @@ PARTS = ("stock_quant", "stock_mm", "stock_mm_notd", "stock_mm_td", "fused_quant
 WORK = X.Workspace("cuda") if torch.cuda.is_available() else None
 
 
-def nvml() -> Callable[[], int | None]:
+def nvml(device: int | None = None) -> Callable[[], int | None]:
+    """SM clock MHz of torch's CUDA device `device` (default the current one), by its UUID: NVML's indices ignore
+    CUDA_VISIBLE_DEVICES. A reader of None where NVML can't be read."""
     try:
         import pynvml
         pynvml.nvmlInit()
-        idx = torch.cuda.current_device()
-        import os
-        uuid = os.environ.get("GPU_LEASE_UUID")
-        h = pynvml.nvmlDeviceGetHandleByUUID(uuid) if uuid else pynvml.nvmlDeviceGetHandleByIndex(idx)
+        idx = torch.cuda.current_device() if device is None else device
+        uuid = str(torch.cuda.get_device_properties(idx).uuid)
+        h = pynvml.nvmlDeviceGetHandleByUUID(uuid if uuid.startswith("GPU-") else f"GPU-{uuid}")
         return lambda: pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM)
     except Exception:  # noqa: BLE001
         return lambda: None

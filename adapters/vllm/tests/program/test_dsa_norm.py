@@ -147,7 +147,7 @@ def test_its_scale_is_not_the_batch_invariant_triton_familys(N: int) -> None:
 
 def test_registrations() -> None:
     word = bind(DN.DsaRMSNorm, N=512, EPS=EPS)
-    assert SW.boolean_version(word).id == "DsaRMSNorm_v2{N=512,EPS=1e-05}"
+    assert SW.boolean_version(word).id == "DsaRMSNorm_v3{N=512,EPS=1e-05}"
     assert TR.word_of(bind(BN.DsaRMSNormV2, N=512, EPS=EPS)).id == word.id
     assert RK.ROWS[NR.FAMILY].returns == ("out",) and RK.EVALUATORS[NR.FAMILY] == NR.EVALUATOR
     rng = np.random.default_rng(5)

@@ -106,7 +106,7 @@ def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, d
     if measured:
         writer = kit.Writer(run_dir, run_id, kit.host_stamp())
         for m in measured:
-            writer.measurement(**m, inputs=[rel])
+            writer.measurement(**m, inputs=[rel], mark="measured")
 
 
 # ---- points ------------------------------------------------------------------------------------------------------------------
@@ -295,7 +295,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
             p["epsilon"] = epsilon_at(sch, card, m, model)
             p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
             g = (p.get("gamma") or {}).get("gamma")
-            p["gate"] = None if g is None else {"cap": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
+            p["gate"] = None if g is None else {"gamma_max": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
             p["whys"] = O.point_whys(p)
             doc["points"][name] = p
     _write(out / "overhead.json", doc)
