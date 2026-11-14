@@ -64,20 +64,27 @@ B=${BUILD_DIR:-}
 
 FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}
-mkdir -p "$B/base/benchmarks/remote_session"
-ln -s "$TREE/benchmarks/codec_tensor" "$B/base/benchmarks/codec_tensor"
-ln -s "$TREE/verity" "$B/base/verity"
-BASE=$B/base/$RS/session.cu
-{ [ -n "$BASE_REV" ] && git -C "$TREE" show "$BASE_REV:$RS/session.cu" > "$BASE" 2> /dev/null; } || rm -f "$BASE"
-"$NVCC" "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-"$NVCC" "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" benchmarks/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+# The base's session.cu sits where BASE_REV has it, the prover's directory or (before the provers' move) $RS, and its
+# includes resolve to this tree's codec_tensor and circuits from either place.
+P=verity/protocols/accounting/poub/prover
+mkdir -p "$B/base/$RS" "$B/base/$P/remote_session"
+ln -s "$TREE/verity/circuits" "$B/base/verity/circuits"
+ln -s "$TREE/$P/codec_tensor" "$B/base/$P/codec_tensor"
+ln -s "$TREE/$P/codec_tensor" "$B/base/benchmarks/codec_tensor"
+BASE=
+for p in "$P/remote_session/session.cu" "$RS/session.cu"; do
+  [ -n "$BASE_REV" ] && git -C "$TREE" show "$BASE_REV:$p" > "$B/base/$p" 2> /dev/null && { BASE=$B/base/$p; break; }
+  rm -f "$B/base/$p"
+done
+"$NVCC" "${FLAGS[@]}" -o "$B/session.so" $P/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+"$NVCC" "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" $P/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
 M=
-[ -f "$BASE" ] && { "$NVCC" "${FLAGS[@]}" -o "$B/base.so" "$BASE" > "$O/base.ptxas" 2>&1 & M=$!; }
+[ -n "$BASE" ] && { "$NVCC" "${FLAGS[@]}" -o "$B/base.so" "$BASE" > "$O/base.ptxas" 2>&1 & M=$!; }
 wait $S || { grep -n -m 40 -A 3 'error' "$O/session.ptxas"; say "BUILD: session.cu does not compile for sm_$ARCH"; exit 4; }
 wait $K || { tail -n 40 "$O/kv.ptxas"; say "BUILD: kv.cu does not compile for sm_$ARCH"; exit 4; }
 [ -n "$M" ] || {
-  say "BUILD: no base to compare the kernels with, so nothing runs: give BASE_REV (a commit whose $RS/session.cu" \
-    "holds the kernels as they were)"
+  say "BUILD: no base to compare the kernels with, so nothing runs: give BASE_REV (a commit whose session.cu, in" \
+    "$P/remote_session or $RS, holds the kernels as they were)"
   exit 5
 }
 wait "$M" || {

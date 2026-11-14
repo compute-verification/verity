@@ -35,15 +35,13 @@ import argparse
 import hashlib
 import json
 import random
-import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 
-def _python(repo: Path):
-    sys.path.insert(0, str(repo / "benchmarks" / "pous"))
-    from p2_v1 import reference, wire
+def _python():
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference, wire
     from verity.protocols.accounting.pous.verifier import verifier
     return reference, wire, verifier
 
@@ -832,8 +830,8 @@ def answers(py, inst: dict) -> dict:
     return ANSWERS[inst["kind"]](py, inst)
 
 
-def write(repo: Path, out: Path) -> dict[str, Path]:
-    py = _python(repo)
+def write(out: Path) -> dict[str, Path]:
+    py = _python()
     d = out / "difftest"
     d.mkdir(parents=True, exist_ok=True)
     insts = instances(py)
@@ -848,12 +846,12 @@ def main() -> None:
     ap.add_argument("verity", type=Path, help="the checkout whose Python verifier is the reference")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
-    py = _python(a.verity)
+    py = _python()
     for module in py:
         here = Path(module.__file__).resolve()
         if not here.is_relative_to(a.verity.resolve()):
             raise SystemExit(f"{module.__name__} comes from {here}, not from the checkout {a.verity}")
-    write(a.verity, a.out)
+    write(a.out)
 
 
 if __name__ == "__main__":

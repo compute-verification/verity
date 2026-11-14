@@ -4,7 +4,7 @@ public import PousCheck.Params
 public import PousCheck.Prim.Bytes
 
 /-!
-P2's parameters and maps, as `verity/core/protocols/pous/schemes/p2.py` computes them for
+P2's parameters and maps, as `verity/protocols/accounting/pous/verifier/schemes/p2.py` computes them for
 the codec `p2-16448/v4`:
 
 ~~~text
