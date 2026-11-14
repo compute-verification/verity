@@ -27,7 +27,7 @@ during it, is ever registered in `θ`, and neither is any novel input of `c`.
 What the bounds use is the rule's consequence for a partial containment `M` of `c` in `d`: a gate that `M`'s computed
 gates `S` read from outside `S` (`c.D.into M.S`: a dark gate of `c`, or an input gate of `c`) goes into `d`'s `θ` only
 when it is in `c`'s `θ`. A dark value, or a novel input of `c`, that `d` listed in `θ` would be read for free, and an
-IU could then thread `c`'s counted multiplications on it without paying for the read.
+inference block could then thread `c`'s counted multiplications on it without paying for the read.
 
 The inference-only check (`InferenceOnlyCheck.Theta`) enforces the provenance form: each `θ` entry cites the first entry of the
 deployment's registration log (`theta-record-unknown`, `theta-not-at-deployment-start`), which is at or before every
