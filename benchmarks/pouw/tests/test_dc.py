@@ -284,9 +284,7 @@ def test_device_census_is_well_formed():
     import tomllib
     note = re.compile(r"note:\d{8}T\d{4}Z-[a-z0-9-]+")
     named = tomllib.loads((MODEL_DATA / "citations.toml").read_text())
-    devices = MODEL_DATA / "devices"
-    dirs = sorted(p for p in devices.iterdir() if p.is_dir()) if devices.exists() else []
-    for d in dirs:
+    for d in sorted(p for p in (MODEL_DATA / "devices").iterdir() if p.is_dir()):
         with open(d / "census.csv", newline="") as f:
             lines = list(csv.DictReader(f))
         with open(d / "rows.csv", newline="") as f:
