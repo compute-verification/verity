@@ -35,8 +35,8 @@ paths = []
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "infra/move/**",
            "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
-           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
-           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "verity/circuits/silicon/hawkeye/**", "tools/check/tests/test_suites.py",
+           "tools/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
            "infra/research/src/research/store/moves.json",
            "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
@@ -55,7 +55,7 @@ root_prefixes = ["/data/watchers/src/", "$D/src/", "{tmp_path}/src/"]
 # `tools/move/NAME.toml` in a move line (`Move:`, `Layout-move:`) names a map as the move's base holds it, and the landing
 # code reads the move tool at a commit (`git cat-file`, `git ls-tree`), where before this move it is a directory and after
 # it a link, which git doesn't follow: these readers keep the path as `tools/move/`'s own scripts do.
-"tools/verity/check/move_check.py" = ["tools/move", "tools/move/*"]
+"tools/check/move_check.py" = ["tools/move", "tools/move/*"]
 "infra/research/src/research/queue.py" = ["tools/move", "tools/move/*"]
 "infra/research/src/research/carry.py" = ["tools/move", "tools/move/*"]
 "adapters/vllm/tools/ratchet_gate.py" = ["tools/move", "tools/move/*"]
@@ -67,7 +67,7 @@ root_prefixes = ["/data/watchers/src/", "$D/src/", "{tmp_path}/src/"]
 "infra/research/tests/test_vqueue*.py" = ["tools/move", "tools/move/*"]
 "infra/research/tests/test_carry.py" = ["tools/move", "tools/move/*"]
 "infra/research/tests/test_landing.py" = ["tools/move", "tools/move/*"]
-"tools/verity/check/tests/test_lean_audit.py" = ["tools/move", "tools/move/*"]
+"tools/check/tests/test_lean_audit.py" = ["tools/move", "tools/move/*"]
 # Node 1's custody copy of research is installed at `/workspace/custody/tools/research/` (deploy.toml's `path`, the
 # machine's layout, which this move doesn't change), and the custody scripts name it from `$SRC`; so do the control pod's
 # budget guard tree (`/data/guard-src`, made on the pod) and its boot script, which runs from it.
