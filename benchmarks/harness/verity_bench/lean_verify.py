@@ -95,7 +95,7 @@ def spawn(cmd: Sequence[str], log: Path) -> tuple[int, str, dict]:
 
     with open(log, "w") as f:
         p = subprocess.Popen(list(cmd), stdout=subprocess.PIPE, stderr=f, text=True)
-        out = p.stdout.read()
+        out = p.stdout.read() if p.stdout is not None else ""
         _, status, ru = os.wait4(p.pid, 0)
         p.returncode = os.waitstatus_to_exitcode(status)
         f.write(out)
