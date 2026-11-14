@@ -239,7 +239,7 @@ TERMS = {"k_{sched}": ("schedules",), "k_{fail}": ("cells",)}
 PHASE_TERMS = {"\\ell_{a,j}": ("free",), "k_{skip,j}": ("faulty_sets", "faulty_bits", "faulty_entries"),
                "T_j \\log_2 d_{jit}": ("jitter",)}
 ADVICE = ("not in this record: the realized advice length |a_j| is a value. The run's published registration copies state "
-          "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
+          "the compiler's cap in its place (`served_verdicts.py public_docket`), but each window's advice is "
           "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
           "committed; the bound's ℓ_{a,j} holds no advice length (`CHARGED`)")
 OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "

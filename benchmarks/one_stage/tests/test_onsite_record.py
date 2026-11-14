@@ -87,7 +87,7 @@ K = PUBLIC["K"]
 NO_ADVICE = {"format": "verity/registration/v2", "window": {"circuit": "cd" * 64}}
 #: the run's advice registration as `served_verdicts.py public-registration` publishes it, its advice committed padded to
 #: its compiler's cap ℓ_a = 2^23 (`advice_windows.pad`)
-PUBLISHED = SV.public_registration({"row_bits": 256, "rows": 2 ** 23 // 256,
+PUBLISHED = SV.public_docket({"row_bits": 256, "rows": 2 ** 23 // 256,
                                     "binding": {"advice": {"root": "ab" * 64, "bits": 2 ** 23}},
                                     "compiler": {"name": "c", "digest": "d", "cap_bits": 2 ** 23}})
 #: K of record with both checks open and the one audit's ℓ_a + 1 bits for the one phase
@@ -2461,7 +2461,7 @@ def test_a_run_with_no_window_report_writes_no_record(tmp_path, capsys):
 
 def published(cap: int) -> dict:
     """The run's advice registration as published, its advice padded to its compiler's cap ℓ_a = ``cap``."""
-    return SV.public_registration({"row_bits": 256, "rows": -(-cap // 256),
+    return SV.public_docket({"row_bits": 256, "rows": -(-cap // 256),
                                    "binding": {"advice": {"root": "ab" * 64, "bits": cap}},
                                    "compiler": {"name": "c", "digest": "d", "cap_bits": cap}})
 
