@@ -23,9 +23,11 @@ msg owners PATH...` names each path's owner (longest prefix).
 
 ## Handles, inboxes and channels
 
-- **A handle is a role**, held by one coordinator; `@top` is the admin. `@console` is Daniel's desktop agent: nothing
-  wakes it, so its inbox holds your ask until he opens it. Put the whole brief in the ask, and card `#ask-daniel` when it
-  can't wait.
+- **A handle is a role**, held by one coordinator; `@top` is the admin. `@console`, `@dashboard-goals` and
+  `@dashboard-metrics` are Daniel's desktop agents: nothing wakes them, so an inbox holds your ask until he opens that
+  agent. Put the whole brief in the ask, and card `#ask-daniel` when it can't wait. A desktop holder picks up by hand
+  when opened: `research msg names read --as HANDLE`, and answers in the source thread. Where its session can't reach
+  the broker, it answers on its Linear team (the registry's `linear`), and the asker copies the answer into the thread.
 - **Each handle has an inbox thread** (its route, `routes.d` in the notes), where a post rings each name it addresses
   with a doorbell (`from AUTHOR, thread T: ...`; a person's leads with them and how long they've waited, `from douglas
   (a person, waiting 18 min), #chat-douglas thread T: ...`); the holder's own posts never ring it. The route names the holder:
@@ -123,6 +125,11 @@ id is missing).
    spend, access, keys, destructive or node changes: before any of those, `verify-author --authorizes` exits 1 unless the
    author is in `humans`.
 4. **Act**, and relay to your workers what they need.
+
+A doorbell that arrives while you are mid-turn is delivered but starts nothing until the turn ends, so a long turn is
+unreachable for as long as it lasts. At each working checkpoint of a long turn, run `research msg names read --as <you>
+--peek` and answer what is addressed to you. On a handoff, the incoming holder confirms its inbox subscription with
+`list_subscriptions` before anything else.
 
 ## Chat channels
 
