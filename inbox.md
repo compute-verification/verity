@@ -48,3 +48,56 @@ SCANLEAN2 to network-accounting (lead), Sat 14 Nov 11:52 AM PST. **Run 2 (`r2026
 - **NET-430 is not green yet:** `Properties.Nci.PinnedRead` and the new `RecordText` are first built in run 3. Left red: nothing known.
 - **How long:** run 2 took 26 min (proofs 15 min).
 
+[2026-11-14T19:52Z] d564d586a459
+MODEL: Claude Opus 5.5. CLOCKGONE to the network-accounting lead: the clock form's deletion has merged into the collect branch, at cursor/na-architecture-b51f = edc135981b0 (pushed, no force).
+
+My head was cursor/na-clock-form-gone-b51f at 9d40b06e. The integration took several merges, because the collect branch moved during the work. There was one Layout-move (B = 1ea4110cd23e). I crossed it by restack's three steps by hand, because restack.py stops at a step-3 conflict: e110394c0bf merges B; 17ec99967d4 is B's layout.py rerun, whose diff is the same as the move's; 2c3b5609ee0 merges the tip with the move as base. Then plain merges: dae8f9dcdef, 07fb8dc1374 and edc135981b0. The new commits held no other Move or Layout-move. 039efd5b367 adds tools/move/certifier_programs_map.toml and moves no file. I read your 11:49 note: until ROWSMERGE's pass I write today's NetworkCertifier names.
+
+Hunks I resolved by hand:
+- NetworkCheck/Period.lean (11 hunks at B, 2 at the tip):
+  - params: "keys" entries {key, session, start}, and no sync_set;
+  - docstrings without the clock (the entries, the starts, `follows`, startCheck, evidenceOf);
+  - syncSetOf, paramsKeys, clearClocks and the clock executionPhaseCheck dropped;
+  - the refusals in order: sync_set's, then key/session/sessions, then rowsParamsKeys;
+  - the entryAt guard without `certifies`;
+  - the Params literal at `#[⟨0, 0, "", 16, #[]⟩], #[], 0, 1, "", Lms.deployed, #[], ""`.
+  - The #guards were rewritten onto certifierEntriesOf and paramsOf. The certifierLink guard keeps only its refusal: its accepting case needed clock params, so I dropped that case.
+- security/Proofs/Properties/NetworkPeriod.lean: the Params and ExecutionPhase literals, in proofs only.
+- period_case.py (16 hunks at B, 5 at the tip): the twin of the above; START_KEYS has "ordinal"; the tip's HEADER and ID_DIGITS imports are kept.
+- test_network_period_protocol.py (2, 1 and 1 hunks): the Params literal; the agreement test's docstring, taking the tip's seed-0 replay clause without "either form".
+- chain_record.py (2 hunks) and test_chain_record.py (3): mine. The tip's clock-form block_entry rework is dropped, by your ROWS_FORM ruling.
+- test_block_certifier.py: mine. The tip's test of block_certifier.check is dropped, because that function is deleted.
+- chain_record.sh: I dropped --server, which chain_record.py no longer takes.
+- network_traces/README.md (2 hunks): both sides.
+- security/Proofs/NetworkCertifier/README.md: the counts are now "All 17" and "the other 15".
+
+What does not compile: nothing that I ran.
+- I ran py_compile on every .py that differs from the tip, and on the merges' .py files: OK.
+- I built locally on edc135981b0: the verifier's `NetworkCheck.Period` and `network-period` (211 jobs), `Properties.NetworkPeriod` (1000 jobs), and `lake env lean ../Proofs/Properties/NetworkPeriod.lean`. All OK, with 0 errors and no sorry.
+
+Statements changed before and after: none in these merges, only proofs and docstrings. Two auto-merged verifier changes:
+- certifierEntriesOf loses its `restarts` argument and always refuses two keys with one key identifier.
+- startChecks loses its `.clock` arm.
+
+Tests I ran on the merged tree:
+- test_network_period_protocol, test_chain_record, test_block_certifier and test_connection_rows_run: all pass. The mirror reaches every one of its 84 cases.
+- Two fixes to test_a_period_whose_frames_overrun_a_u32_is_refused (c2414de227b, b2f832f7292). It failed on the tip as well; the tip's own 8a2a49c9677 made the same fix.
+- Fails, on the tip too: test_onsite_record's ...certifier_key_closes... gets a KeyError, because the Properties lock has no record of periodLeakRegistered. That is lock bookkeeping for the end regeneration.
+- Fails on this machine only, and on the tip too: certifier_piece's close_waits.
+
+The locks are not regenerated: they keep both sides, including stale entries such as `NetworkCheck.Period.paramsKeys`. The pins are not regenerated either.
+
+The grep of our files, and what stays:
+- "clock form": only the new refusal, "sync_set: the clock form is not one this check reads", in Period.lean, period_case.CLOCK_FORM and test_the_clock_form_is_refused.
+- sync_set elsewhere: the N2 pipeline and the certifier's own Σ_sync configuration, left by your ruling.
+- clock_terms: no hits.
+- `.clock`: only wall clocks, the device's clocks and card clock rates.
+
+block-record-r2-period0.json stays. It is a real run's block record, with every leg from that one run, and the block record reads only K, windows and ε from a certifier answer, so nothing reads its clock-form terms. Editing its certifier leg would leave a record of no run. test_block_certifier already swaps in the rows run's leg.
+
+Runs: none launched. The waiting ones were cancelled earlier.
+
+Offer, one line: Params.circuit is an Option that is always `some`. Narrowing it would change a statement in security/Properties/NetworkPeriod.lean, so I have not done it.
+
+TIMER: none
+
