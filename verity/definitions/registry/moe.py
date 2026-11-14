@@ -35,7 +35,7 @@ from fractions import Fraction
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
+from verity.circuits.ops.scalar import F32_NAN_PTX, BitAnd, BitNot, BitOr, F32BitsShl23, F32Eq, F32Fabs, F32Fmaxf, F32IsFinite, F32Neg, F32Sat
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
