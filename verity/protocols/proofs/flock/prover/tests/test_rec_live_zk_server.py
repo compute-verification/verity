@@ -30,7 +30,7 @@ def _schedule(streams=("circuit/rep0",)):
 
 def _proxy(schedule, coins=None):
     """A proxy held to ``schedule``, on live coins."""
-    return RL.Proxy(coins or RL.CoinServer(T._counter_rand()), T._salts(), schedule=schedule)
+    return RL.Proxy(coins or RL.LiveCoinPart(T._counter_rand()), T._salts(), schedule=schedule)
 
 
 def _run(proxy, hello=None, y=bytes(32), opens=("circuit/rep0",), streams=("circuit/rep0",)):
@@ -93,7 +93,7 @@ def test_a_finished_record_off_its_schedule_is_refused(change, why):
 
 
 @pytest.mark.parametrize("n", [0, 16, 31, 33, 48, 16000])
-def test_link_y_of_another_length_is_refused_before_the_coin_server_sees_it(n):
+def test_link_y_of_another_length_is_refused_before_the_live_coin_part_sees_it(n):
     """``y`` of zeros passes ``any(y)`` whatever its length, so the length is the schedule's (2 elements here), and a ``y``
     that is not whole elements is refused as well."""
     proxy = _proxy(_schedule())
@@ -101,7 +101,7 @@ def test_link_y_of_another_length_is_refused_before_the_coin_server_sees_it(n):
     assert proxy.coins.link["y"] is None and proxy.coins.rounds == []
 
 
-def test_the_coin_server_records_the_pinned_hello_never_the_provers_spelling():
+def test_the_live_coin_part_records_the_pinned_hello_never_the_provers_spelling():
     """A Hello in another key order (or other whitespace) is held, and the challenger records the schedule's, in canonical
     form; key order alone was log2(7! 2!) free bits a session."""
     sched = _schedule()
@@ -163,7 +163,7 @@ def test_a_stopped_record_does_not_show_whether_or_when_an_open_was_sent():
 
 def _coin_calls(reqs, schedule):
     """Every call the ZK server makes on the challenger while it handles `reqs`, in order, the ones it refuses included."""
-    coins, calls = RL.CoinServer(T._counter_rand()), []
+    coins, calls = RL.LiveCoinPart(T._counter_rand()), []
     for name in ("start", "commit", "y", "open", "round", "record"):
         f = getattr(coins, name)
         setattr(coins, name, lambda *a, _f=f, _n=name, **kw: (calls.append((_n, a, kw)), _f(*a, **kw))[1])
@@ -173,7 +173,7 @@ def _coin_calls(reqs, schedule):
     return calls
 
 
-def test_the_coin_server_never_sees_where_an_open_was_sent():
+def test_the_live_coin_part_never_sees_where_an_open_was_sent():
     """The challenger's live-coin part is the auditor's, so its calls, not only its record, must not show where the prover sent each Open:
     every placement of the two Opens before their first rounds, finished or cut anywhere,
     gives the challenger's live-coin part the honest session's calls or a prefix of them."""
@@ -208,7 +208,7 @@ def test_the_coin_server_never_sees_where_an_open_was_sent():
     assert sessions == 2 * (first[two[0]] + 1) * (first[two[1]] + 1)
 
 
-def test_a_stray_commit_link_or_finish_reaches_the_coin_server_as_a_plain_stop():
+def test_a_stray_commit_link_or_finish_reaches_the_live_coin_part_as_a_plain_stop():
     """A Commit before Hello or after the first, a Link before Commit or after the first, and a Finish before the last
     round are refused by the ZK server itself, before any call on the challenger's live-coin part, so wherever one comes the challenger's live-coin part's
     calls are a prefix of the honest session's: they show where the session stopped, never which request stopped it."""
@@ -313,7 +313,7 @@ def test_any_exception_while_handling_a_request_is_a_refusal_and_serve_goes_on(t
     """The ZK server's own fault (here the challenger's, a KeyError) stops the session it happened in, as a refusal; and a
     request that raises something other than ValueError ends neither `Proxy.handle` nor `serve`."""
 
-    class Broken(RL.CoinServer):
+    class Broken(RL.LiveCoinPart):
         def round(self, *a, **kw):
             raise KeyError("no such coin")
 
@@ -368,7 +368,7 @@ def test_the_zk_server_serves_only_with_a_schedule(tmp_path, capsys):
     """No first session pins one: `Proxy` and `serve` take the schedule as a required keyword, and `main` will not serve
     without ``--schedule``."""
     with pytest.raises(TypeError):
-        RL.Proxy(RL.CoinServer(T._counter_rand()), T._salts())
+        RL.Proxy(RL.LiveCoinPart(T._counter_rand()), T._salts())
     with pytest.raises(TypeError):
         RL.serve("127.0.0.1:0", tmp_path)
     with pytest.raises(SystemExit) as e:

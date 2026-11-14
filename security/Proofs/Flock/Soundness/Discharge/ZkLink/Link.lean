@@ -429,7 +429,7 @@ variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C
 /-- **The `--zk` count curve at the live sample, every table at M1's parameters, `ε_bind` under A2**
 (interactive-oracle layer): with the committed transcript the plurality value layer (`XplurZ`) of a binding of wires to
 registered commit strings (`ValueBindingZ`),
-`Pr[accept ∧ at least K incorrect units] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders
 satisfy A2 (`LinkCRZ`), and `⊤` on the right at any other. -/
 theorem zk_flock_count_execOS_m1_cr (hA : A.Correct)
     (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)

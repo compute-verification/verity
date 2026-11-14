@@ -31,7 +31,7 @@ averaged over the sample (`ksAvgZK`). The lowering comes from each sampled proof
 
 **The count curve** (`zk_flock_count`, and `zk_flock_count_execOS` at the live sample under A3): in the shape of
 `Prog.flock_headline`,
-`Pr[accept ∧ at least K incorrect units] ≤ miss(K) + ε_ks^zk + ε_bind`, with
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks^zk + ε_bind`, with
 * `miss(K)`: `SamplingDesign.stratified`'s count curve at the live sample, under A3 (`uniform/io-getrandombytes`);
 * `ε_ks^zk = ksAvgZK`: per table `padLinkError + (padRepError + εInner)²`, proved here;
 * `ε_bind`: the named `BindSound` hypothesis, as `Audit.flock_batched_count` leaves it without `--zk`.
@@ -291,7 +291,7 @@ theorem zk_knowledgeSound (hA : A.Correct) (decode : DecoderZK (C := C) planZ ta
   exact (sessionZK_sound A hA (planZ (L.draw ω) R) (tab (L.draw ω) R u) _).trans
     (le_iSup (fun j : Fin (planZ (L.draw ω) R).length => ((planZ (L.draw ω) R).get j).bound) (tab (L.draw ω) R u))
 
-/-- **The batched `--zk` audit's count curve**: `Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks^zk + ε_bind`. -/
+/-- **The batched `--zk` audit's count curve**: `Pr[accept ∧ at least K incorrect proof blocks] ≤ miss K + ε_ks^zk + ε_bind`. -/
 theorem zk_flock_count (hA : A.Correct) (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → (Fin C.N → Bool))
     {εbind : (R : Reg) → Cont L Reg (batchedSessionZK A planZ) R → ℝ≥0∞}
@@ -305,7 +305,7 @@ theorem zk_flock_count (hA : A.Correct) (place : ∀ S R u, u ∈ S → UnitPlac
 
 /-- **The `--zk` count curve at the live sample.** With the units sampled by `Flock.Draw.drawWith`'s stratified sampling design on a
 byte source that A3 makes uniform (`hA3`), as in `Prog.flock_headline`:
-`Pr[accept ∧ at least K incorrect units] ≤ miss(K) + ε_ks^zk + ε_bind`, with `miss(K)` `SamplingDesign.stratified`'s count curve. -/
+`Pr[accept ∧ at least K incorrect proof blocks] ≤ miss(K) + ε_ks^zk + ε_bind`, with `miss(K)` `SamplingDesign.stratified`'s count curve. -/
 theorem zk_flock_count_execOS (hA : A.Correct)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
