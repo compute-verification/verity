@@ -177,17 +177,13 @@ BENCHMARKS_IMPORTERS = {
 CIRCUIT_CHECK = "tools/verity/circuit_check/src"
 #: The files of circuit-check that still import another distribution of the workspace, each with the packages it imports:
 #: Flock's lowerings and templates, which its lowering and template checks hold each Definition's Boolean circuit to.  An
-#: entry that is a module (``verity.definitions.registry``) covers that module and the ones under it, not its package:
-#: the served circuits circuit-check checks, listed ahead of their move into the vLLM adapter, which makes them another
-#: distribution's; circuits' to remove, as circuit-check is handed them.  It only shrinks.
+#: entry that is a module (``verity_flock.x``) covers that module and the ones under it, not its package.  It only shrinks.
 CIRCUIT_CHECK_IMPORTS = {
     f"{CIRCUIT_CHECK}/circuit_check/ambient.py": {"verity_flock"},
     f"{CIRCUIT_CHECK}/circuit_check/checks.py": {"verity_flock"},
-    f"{CIRCUIT_CHECK}/circuit_check/sidecars.py": {"verity_flock", "verity.definitions.registry"},
+    f"{CIRCUIT_CHECK}/circuit_check/sidecars.py": {"verity_flock"},
     f"{CIRCUIT_CHECK}/circuit_check/structural.py": {"verity_flock"},
-    f"{CIRCUIT_CHECK}/circuit_check/targets.py": {"verity_flock", "verity.definitions.boolean", "verity.definitions.numerics",
-                                                  "verity.definitions.registry"},
-    f"{CIRCUIT_CHECK}/circuit_check/units.py": {"verity.definitions.boolean"},
+    f"{CIRCUIT_CHECK}/circuit_check/targets.py": {"verity_flock"},
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
