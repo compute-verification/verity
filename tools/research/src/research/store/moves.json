@@ -2487,6 +2487,12 @@
       "paths": {
         "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/harness/native/": "verity/protocols/accounting/pouw/prover/kernels/harness/native/",
+        "benchmarks/pouw/nvfp4_sm120/": "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/"
+      }
     }
   ]
 }

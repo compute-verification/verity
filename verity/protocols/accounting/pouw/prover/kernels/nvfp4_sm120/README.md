@@ -13,10 +13,10 @@ layout CUTLASS's and cuBLASLt's GEMMs take.
 
 ## Running it
 
-The baselines run inside the harness (`../harness/`), which gates and times them with every other arm; a number of
+The baselines run inside the harness (`../../../../../../../benchmarks/pouw/harness/`), which gates and times them with every other arm; a number of
 record is the harness's. Nothing in this directory is started by itself.
 
 ## Who reads it
 
 The harness reads `nvf4_plain.cu`: its build compiles it, with the mainloop, into the harness's library, and
-`../tests/test_harness.py` reads its text for its registry entries. Nothing here commits, hashes or checks a proof.
+`../../../../../../../benchmarks/pouw/tests/test_harness.py` reads its text for its registry entries. Nothing here commits, hashes or checks a proof.

@@ -29,7 +29,7 @@ if [[ $arch == sm_120a ]]; then
   export LD_LIBRARY_PATH=$CUDA_HOME/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 fi
 POUW_HARNESS_LIB=$(PH_ARCH=$arch POUW_HARNESS_BUILD=${POUW_HARNESS_BUILD:-/workspace/research/cache/pouw-harness-build} \
-  bash benchmarks/pouw/harness/native/build.sh 2> "$O/harness-build.log")
+  bash verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh 2> "$O/harness-build.log")
 export POUW_HARNESS_LIB
 cp "$(dirname "$POUW_HARNESS_LIB")/build.json" "$O/harness-build.json"
 sub=$1
