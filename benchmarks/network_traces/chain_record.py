@@ -591,9 +591,9 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
         sizes = [sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]]
         drawn, q = sum(s["k"] for s in law["strata"]), min(Fraction(s["k"], m) for s, m in zip(law["strata"], sizes))
         if q == 0 or sum(sizes) != n:
-            raise SystemExit(f"--audit {d}: a stratified law whose strata cover its {n} units, each drawn, not {law}")
+            raise SystemExit(f"--audit {d}: a stratified sampling design whose strata cover its {n} units, each drawn, not {law}")
     else:
-        raise SystemExit(f"--audit {d}: K's q is a subset or stratified law's, not {law}")
+        raise SystemExit(f"--audit {d}: K's q is a subset or stratified sampling design's, not {law}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
             "units": n, "drawn": drawn, "q": str(q), "free": terms["free"], "inputs": terms,
             "held": sorted(IF.held_params(pins, roots))}
@@ -640,7 +640,7 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
     """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
-    when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync (`TransferBlocks.charge`),
+    when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync,
     and no cell: no connection passes the certifier but the link, whose counts the advice fixes."""
     bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")

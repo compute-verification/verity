@@ -214,11 +214,11 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
 
 /-- `Session.verify` on sampled receipts: the first opening that fails, with its sample, or accept. -/
 def checkWindow (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
-    (drawn : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
-  if openings.size ≠ drawn.size then return .reject .malformed none
+    (sampled : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
+  if openings.size ≠ sampled.size then return .reject .malformed none
   let mut receipters : Std.HashMap Nat Receipter := {}
-  for k in [0:drawn.size] do
-    let (i, p) := drawn[k]!
+  for k in [0:sampled.size] do
+    let (i, p) := sampled[k]!
     let r := match receipters.get? i with
       | some r => r
       | none => receipter reg.receipt (w.seedOf i) reg.rows
@@ -232,12 +232,12 @@ rejection names the sample and failure `checkWindow` on the whole window would (
 failing opening is the window's first), and an acceptance is every chunk's, each chunk's openings passing `checkOpening`
 under the receipter of their pass's seed (`checkWindow_accept`). -/
 def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (appends : Array Append)
-    (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
-  if openings.size ≠ drawn.size then return .reject .malformed none
+    (w : WindowRecord) (sampled : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
+  if openings.size ≠ sampled.size then return .reject .malformed none
   let size := max 1 size
-  let tasks := (List.range ((drawn.size + size - 1) / size)).map fun c =>
+  let tasks := (List.range ((sampled.size + size - 1) / size)).map fun c =>
     Task.spawn (prio := .dedicated) fun _ =>
-      checkWindow reg digest appends w (drawn.extract (c * size) ((c + 1) * size))
+      checkWindow reg digest appends w (sampled.extract (c * size) ((c + 1) * size))
         (openings.extract (c * size) ((c + 1) * size))
   for t in tasks do
     if t.get ≠ .accept then return t.get
@@ -248,7 +248,7 @@ if the sample runs past its doubled reads, which it does with probability below 
 def verifyWindow (reg : Registration) (appends : Array Append) (w : WindowRecord) (openingsCoin : ByteArray)
     (samples : Nat) (openings : Array Opening) : Option Verdict := do
   let digest := reg.digest
-  let drawn ← receiptSample digest w.index openingsCoin samples (w.passes.map (·.plan.length))
-  pure (checkWindow reg digest appends w drawn openings)
+  let sampled ← receiptSample digest w.index openingsCoin samples (w.passes.map (·.plan.length))
+  pure (checkWindow reg digest appends w sampled openings)
 
 end Poub

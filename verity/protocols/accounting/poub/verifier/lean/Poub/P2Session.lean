@@ -195,12 +195,12 @@ def init (held : Held) (params : Session.Params) (coins : Array ByteArray) (notB
 /-- `p2.Session.verify` on window `w`'s samples: each opening checked on PoUS's vk root in the order sampled
 (`P2.checkOpeningWith`, each pass's seed and sign rows derived once), the first that fails with its sample, or accept;
 `malformed` for another number of openings than samples. -/
-def checkOpenings (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array P2.Opening) :
+def checkOpenings (reg : P2.Registration) (w : WindowRecord) (sampled : Array (Nat × Nat)) (openings : Array P2.Opening) :
     Verdict := Id.run do
-  if openings.size ≠ drawn.size then return .reject .malformed none
+  if openings.size ≠ sampled.size then return .reject .malformed none
   let mut keys : Std.HashMap Nat (ByteArray × Array ByteArray) := {}
-  for k in [0:drawn.size] do
-    let (i, p) := drawn[k]!
+  for k in [0:sampled.size] do
+    let (i, p) := sampled[k]!
     let (seed, signs) := match keys.get? i with
       | some x => x
       | none => let s := w.seedOf i; (s, P2.unitSigns s reg.rows)
@@ -212,13 +212,13 @@ def checkOpenings (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat
 
 /-- `checkOpenings` over contiguous chunks of `size` samples, each chunk on a thread of its own: the first chunk's
 rejection in sample order, which is `checkOpenings`'s on the whole window, or accept. -/
-def checkOpeningsChunked (size : Nat) (reg : P2.Registration) (w : WindowRecord) (drawn : Array (Nat × Nat))
+def checkOpeningsChunked (size : Nat) (reg : P2.Registration) (w : WindowRecord) (sampled : Array (Nat × Nat))
     (openings : Array P2.Opening) : Verdict := Id.run do
-  if openings.size ≠ drawn.size then return .reject .malformed none
+  if openings.size ≠ sampled.size then return .reject .malformed none
   let size := max 1 size
-  let tasks := (List.range ((drawn.size + size - 1) / size)).map fun c =>
+  let tasks := (List.range ((sampled.size + size - 1) / size)).map fun c =>
     Task.spawn (prio := .dedicated) fun _ =>
-      checkOpenings reg w (drawn.extract (c * size) ((c + 1) * size)) (openings.extract (c * size) ((c + 1) * size))
+      checkOpenings reg w (sampled.extract (c * size) ((c + 1) * size)) (openings.extract (c * size) ((c + 1) * size))
   for t in tasks do
     if t.get ≠ .accept then return t.get
   return .accept
@@ -274,8 +274,8 @@ def verify (size : Nat) (held : Held) (s : Session.State) (t : Int) (line : Byte
   | none => fail s
   | some v =>
     let openings := openingsOf v
-    Session.verifyBy s t fun drawn => match s.awaiting t with
-      | some (w, _) => checkOpeningsChunked size held.reg w drawn openings
+    Session.verifyBy s t fun sampled => match s.awaiting t with
+      | some (w, _) => checkOpeningsChunked size held.reg w sampled openings
       | none => .reject .malformed none
 
 private def ratJ (q : Rat) : Json := .str (toString q)

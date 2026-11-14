@@ -53,7 +53,7 @@ command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanp
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
 { (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) \
-    && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
+    && (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${SMALL_FLOCK_WORK:-$W}
@@ -111,7 +111,7 @@ KEPT=(); [ -z "$LOGITS" ] || KEPT=(--kept "$LOGITS")
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086
-"${ON_CARDS[@]}" "${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
+"${ON_CARDS[@]}" "${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --first-stage "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --challenger-host "$W/first/challenger-host" --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"

@@ -59,7 +59,8 @@ answer's, which host ran each party.
 **Checked on the run** (``checked``, `CHECKED`): the auditor's configuration of the run, each an obligation the record
 checks on the auditor's inputs, never a named assumption and never charged, each with ``holds`` and, where it doesn't,
 ``why``. `auditor-record` (`auditor_record`): PeriodLeakRegistered's hA, hr and hkey, that the period's LMS parameters,
-key and session are the auditor's record of its network certifier (``--certifier-key``) and that the auditor's
+and the key and session of the listed entry whose stretch holds its one execution phase, are the auditor's record of
+its network certifier (``--certifier-key``) and that the auditor's
 registration (``--site-registration``) holds that key for a network certifier its log places, read from those two
 inputs, each named by its SHA-512 (``from``), and the period's parameters, held by SHA-512 to those its check read
 (the composite of record's), never the prover's node or its deployment.json; `certifier-key` closes only where it
@@ -138,10 +139,9 @@ rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON
 tied to each execution phase's scan (``advice``: the bits each phase adds), the figure, with no tighter figure beside
 it, only how it tightens (``tight``, `TIGHT`), conditional on the coins and on each open premise of `UNCHARGED` while they are open
 (``conditional_on``). Its ``state_charge`` (`state_charge`, `STATE_CHARGE`) says which charge K applied each audit
-tied to a phase's scan: stateFree, its free inputs with its reads of the scan's state held, only where RowsStateHeld is
-in the lock at the statement and definitions `STATE_PINS` pins, so that its proof stands over the entry a window's
-activations commit, else free; where it is free and a tied audit's parameters state a circuit record, there is no
-figure (`STATE_UNCOVERED`). Beside the bound, ``advice_charge``: the served run's
+tied to a phase's scan: free, its whole free inputs, as the tree's period check charges it, refusing a scan state that
+is not its wired audit's (RowsStateTied); stateFree, its free inputs with its reads of the scan's state held, only where
+RowsStateHeld is in the lock at the statement and definitions `STATE_PINS` pins, which the tree's locks don't hold. Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
 audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
@@ -207,7 +207,7 @@ if str(HERE.parents[1]) not in sys.path:
     sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
 import advice_charge as AC  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-from served_integrity import exact_delta  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage.served_integrity import exact_delta  # noqa: E402
 
 FORMAT = "verity/onsite-network-record/v1"
 EXTENDS = "verity/all-protocols-window/v1"
@@ -457,9 +457,29 @@ RESTATE_TIED = ("to be restated before any pin of it counts, and never a dischar
                 "not the frames view. Restated with a scope premise over the frames view, read again at that "
                 "statement (``takes``) and pinned, it leaves ``open``; until then only the tight form rests on it, and "
                 "the figure of record is the conservative one, which doesn't read it (`OPEN`)")
-#: PeriodLeakRegistered, a property of the period check's acceptance, by its name in `LOCKS`
+#: PeriodLeakRegistered, a property of the period check's acceptance still to be stated, by the name `LOCKS` would
+#: list it under
 PERIOD_REGISTERED = "Properties.NetworkPeriodLeak.periodLeakRegistered"
+#: why PeriodLeakRegistered is open whatever a lock states: no Lean states it, and a statement over an accepted period
+#: says what the accept establishes only where it ties the leak bound's quantities to that period
+RESTATE_PERIOD = ("to be stated: no Lean states it. It is to give MonitoringPeriodLeakAccepted's leak bound at the one "
+                  "execution phase of a period the rows-form check accepts, which it establishes only where it ties "
+                  "that bound's quantities to the accepted period, for each secret's period: the phase's statement "
+                  "and partition to the scan's registration and its one-stage answer, the bits of its incorrect sets "
+                  "to the scan's descriptor and the answer's bound, the network certifier's schedules and caps to the "
+                  "parameters' schedule and cells, its run and observations to the rows its listed key signed, its "
+                  "openings to the rows the registration holds, the registered inputs to the registration's entries, "
+                  "and the jitter bound to the parameters'. A statement that leaves them free holds or fails whatever "
+                  "the check accepted. The premises it takes (``takes``) are those of the statement it was first "
+                  "drafted as, some of which no Lean defines today")
 AUDITOR_RECORD, AUDITOR_LISTING, SCAN_STATE_PINNED = "auditor-record", "auditor-listing", "scan-state-pinned"
+#: why auditor-record doesn't hold where the period's parameters list no readable keys, or no first execution phase
+NO_KEYS = (f"the period's parameters ({CASE}'s params) state no LMS parameters, listed keys (each a key, a session and "
+           "a start) and first execution phase")
+#: why auditor-record doesn't hold where no listed entry's stretch holds the period's execution phase
+NO_ENTRY = (f"no listed entry's stretch holds the period's execution phase ({CASE}'s params' first is below every "
+            "entry's start), so it has no key and session to hold to the auditor's record; the period check refuses "
+            "such a period (NetworkCheck.Period.entryAt, rowsCheck)")
 #: remote's SPOT case (`served_cases.SAMPLED`), whose params θ the remote theorem's registered-files condition
 #: reads (`registered_files`)
 SAMPLED_ID = "verity/sampled-proofs/v1"
@@ -474,8 +494,10 @@ REGISTERED_FILES = "registered-files"
 CHECKED = {
     AUDITOR_RECORD: ("PeriodLeakRegistered's hA, hr and hkey, an obligation on the auditor's configuration that the run "
                      "checks: the auditor's registration A parses from its record (Core.Site.Registration.Auditor.ofJson "
-                     "of the registration's params' auditor), the period's LMS parameters, key and session are the "
-                     "auditor's record of its network certifier (certifier-key/v1), and A holds that key for a network "
+                     "of the registration's params' auditor), the period's LMS parameters, and the key and session of "
+                     "the listed entry whose stretch holds its one execution phase (its params' first, the entry "
+                     "NetworkCheck.Period.entryAt picks), are the auditor's record of its network certifier "
+                     "(certifier-key/v1), and A holds that key for a network "
                      "certifier its log places (A.key cert.id = some (hexOf key)). It reads only the auditor's inputs, "
                      "its certifier-key record (--certifier-key) and its registration (--site-registration: the "
                      "registration log's params and the log, which the log's check accepts, "
@@ -539,8 +561,8 @@ CHECKED = {
                         "missing included, neither the network certifier's verdict nor the composite of record's is "
                         "established, and there is no bound (`STATE_UNPINNED`)"),
 }
-#: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
-#: registration opens at its registered inputs, is K's; MonitoringPeriodLeakAccepted's is the same count at the trace's values
+#: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, once it is stated
+#: (`RESTATE_PERIOD`), at the values the registration opens at its registered inputs, is to be K's; MonitoringPeriodLeakAccepted's is the same count at the trace's values
 #: there; PeriodTiedCount's is to count a phase's tied audits with the scan as one Program, as ℓ_{a,j} does, once it is
 #: restated (`RESTATE_TIED`). The lock records a guarantee's named assumptions, never the antecedents its statement
 #: takes, so each gives ``statement``, the digest of its statement among the lock's reads (`statement`) at which it was
@@ -559,11 +581,12 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
                   "NetTiming.ScopeAcc": "wires-fit", "NetTiming.CertifierRegisters": "certifiers-open"}},
     PERIOD_REGISTERED: {
-        "statement": "808274afd667f0e04b4758786bf29fedb31a024e4a2a92147a7003fa9cc4d59f",
+        "statement": None,
+        "restate": RESTATE_PERIOD,
         "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
-                  "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesCovered": "schedules-covered",
+                  "NetTiming.ExecutionPhasesPlaced": "windows-placed", "NetTiming.SchedulesCovered": "schedules-covered",
                   "NetTiming.SenderDecodes": "client-decodes", "NetTiming.ScopeAcc": "wires-fit",
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.CertifiersOpen": "certifiers-open",
                   "hA": AUDITOR_RECORD, "hr": AUDITOR_RECORD, "hkey": AUDITOR_RECORD}},
@@ -574,7 +597,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge", "NetTiming.RWired": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
                   "NetTiming.RowsTiesOrdered": "rows-ties-ordered", "NetTiming.CircuitCounts": "free-count",
-                  "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.TiedExposed": "tied-exposed",
+                  "NetTiming.ExecutionPhasesPlaced": "windows-placed", "NetTiming.TiedExposed": "tied-exposed",
                   "NetTiming.SchedulesHeld": "schedules-held", "NetTiming.SchedulesCovered": "schedules-covered",
                   "NetTiming.SenderDecodes": "client-decodes", "NetTiming.PhaseParsed": "sampled-leg-bridge",
                   "NetTiming.RowsStateHeld": "rows-state-held", "NetTiming.RowsProgWired": "rows-prog-wired",
@@ -667,12 +690,13 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "auditor's registration holds for the network certifier it placed (Registration.Auditor.key), "
                             "never the evidence's or the prover's copy. PeriodLeakRegistered states it (``stated_by``) as "
                             "its hA, hr and hkey, which the run checks of the auditor's inputs (``checked``, "
-                            f"`{AUDITOR_RECORD}`). Open, by this name, beside trusted-device, until the lock holds that "
-                            "guarantee at the statement `RESTS_ON` pins, taking them by that name, and the run's check "
+                            f"`{AUDITOR_RECORD}`). Open, by this name, beside trusted-device, until that guarantee is "
+                            "stated, tying the accepted period to the leak bound's quantities (`RESTATE_PERIOD`), and a "
+                            "lock holds it at the statement `RESTS_ON` pins, taking them by that name, and the run's check "
                             "holds (``unchecked``: why it doesn't); while it is open the network verdict is not "
                             "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
                       "discharged_by": (), "stated_by": PERIOD_REGISTERED, "checked": AUDITOR_RECORD},
-    "windows-placed": {"is": "WindowsPlaced, MonitoringPeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
+    "windows-placed": {"is": "ExecutionPhasesPlaced, MonitoringPeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
                              "the period read, and each of its faulty sets at δ commits at most the bits β the period "
                              "charges it, from the period check's acceptance of the scan; the tied audits' half is "
                              "`tied-exposed`",
@@ -727,10 +751,11 @@ PREMISES: dict[str, dict[str, Any]] = {
 UNCHARGED = ("certifier-key",)
 CERTIFIER_KEY = "certifier-key"
 NOT_ESTABLISHED = "not established"
-KEY_OPEN = (f"{CERTIFIER_KEY} is open: the lock doesn't hold PeriodLeakRegistered at the statement `RESTS_ON` pins, "
-            f"taking the auditor's record as {AUDITOR_RECORD} (hA, hr and hkey), or the run's check of it doesn't hold "
-            "(``checked``), so the Lean answer's accept (``answer``) establishes no network verdict, and the record "
-            "cites none with an open condition")
+KEY_OPEN = (f"{CERTIFIER_KEY} is open: no Lean statement ties the accepted period's commitment and evidence to the "
+            "leak bound's quantities (`RESTATE_PERIOD`), so no lock holds PeriodLeakRegistered at a statement "
+            f"`RESTS_ON` pins, taking the auditor's record as {AUDITOR_RECORD} (hA, hr and hkey); or the run's check "
+            "of that record doesn't hold (``checked``). So the Lean answer's accept (``answer``) establishes no "
+            "network verdict, and the record cites none with an open condition")
 LISTING_UNMET = (f"{AUDITOR_LISTING} doesn't hold (``checked``): a circuit file the period lists isn't, by SHA-512, one "
                  "the run published as the file its audit's sessions were verified against, so the Lean answer's "
                  "accept (``answer``) establishes no network verdict, and the record states no bound")
@@ -818,20 +843,16 @@ STATE_PINS: dict[str, str | None] = {
     "NetworkCheck.Period.stateHeldIn": "f034cfeb8082ba6a91f8d2d851c0f4aeda7145051f564a8312d76276b964925d",
     "NetworkCheck.Period.auditStateEntries": "e3e53a0ba614ba12360f3cf8e073412a146c1ba7eb144be53810be7027644996",
     "NetworkCheck.Period.stateEntries": "a7c8123beed3f6e036818652a4c5bca16f9b8a994fb5b074d052d5a8f55469e4"}
-STATE_CHARGE = ("which charge the rows form's K applied to each audit tied to an execution phase's scan "
-                "(`NetworkCheck.Period.chargeOf`): its free inputs with its reads of the scan's state held (stateFree) "
-                "where its SCAN_STATE is the scan's state in every phase tied to it (stateHeldIn, over the entries "
-                "auditStateEntries reads: its registered ones and its window's activations entry), else its free inputs "
-                "(free). The record states stateFree only where RowsStateHeld is in the lock at the statement, and "
-                "reading stateHeldIn, auditStateEntries and the stateEntries both call at the digests that "
-                "`STATE_PINS` pins, so that its proof "
-                "stands over the activations entry, and free otherwise, naming each digest the lock doesn't give as "
-                "pinned (``unpinned``). A tied audit's stateFree is its free unless the period's parameters state its "
-                "circuit record (``with_record``)")
-STATE_UNCOVERED = ("the charge is free (`STATE_CHARGE`), and the period's parameters state a tied audit's circuit "
-                   "record, so the rows form may have charged that audit its stateFree, less than its free, where no "
-                   "proof in the lock stands over the entries it held; the public doesn't separate the two, so the "
-                   "record states no figure of record")
+STATE_CHARGE = ("which charge the rows form's K applied to each audit tied to an execution phase's scan. The tree's "
+                "period check charges each its whole free inputs, the parameters' `free` of each audit the scan's "
+                "`prog` is an output of, once (`NetworkCheck.Period.rowsExecutionPhaseCheck`'s `tiedAudits` sum), and "
+                "refuses an execution phase whose scan's state is not its wired audit's SCAN_STATE "
+                "(`Properties.NetworkPeriod.RowsStateTied`), so at its locks, which hold no RowsStateHeld, the record "
+                "states free. It states stateFree, a tied audit's free inputs with its reads of the scan's state held, "
+                "a charge the tree's check doesn't make, only where a lock holds RowsStateHeld at the statement, and "
+                "reading stateHeldIn, auditStateEntries and stateEntries at the digests `STATE_PINS` pins, and free "
+                "otherwise, naming each digest the lock doesn't give as pinned (``unpinned``). A tied audit's "
+                "stateFree is its free unless the period's parameters state its circuit record (``with_record``)")
 #: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
 RULES = {
     "per-phase": "the run's K and eps over one of its m execution phases, K/m: their average, which no statement bounds a "
@@ -1487,7 +1508,10 @@ def premises(locks: Sequence[Path], root: Path = ROOT,
 def auditor_record(params: Any, composed: str | None, key: Path | None, site: Path | None) -> dict[str, Any]:
     """`CHECKED`'s auditor-record on the run: the period's ``params``, its case's, held to those its check read by their
     SHA-512, ``composed``, the composite of record's for its network certifier's case (`composite.canonical`, None
-    where it has none), against the auditor's record of its network certifier at ``key`` (certifier-key/v1,
+    where it has none), their LMS parameters and the key and session of the listed entry whose stretch holds their
+    execution phase ``first`` (the last listed whose ``start`` is at most it, as `NetworkCheck.Period.entryAt` picks;
+    `NO_KEYS` where they list none readable, `NO_ENTRY` where none holds it), against the auditor's record of its
+    network certifier at ``key`` (certifier-key/v1,
     `warden_chain.RECORD`) and its registration at ``site``, ``{"params", "log"}``: the registration log's params,
     ``{"auditor", "composite"}``, and the log, which its check accepts (`registration.check_log`, held to
     `Core.Registration` by difftest), whose auditor holds the record's key for a network certifier the log places.
@@ -1515,9 +1539,14 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     except (KeyError, TypeError, ValueError):
         return out | {"why": f"--certifier-key isn't a {WC.RECORD} record of a key and a session"}
     try:
-        p = {"lms": params["lms"], "key": bytes.fromhex(params["key"]), "session": bytes.fromhex(params["session"])}
-    except (KeyError, TypeError, ValueError):
-        return out | {"why": f"the period's parameters ({CASE}'s params) state no LMS parameters, key and session"}
+        entries = [(bytes.fromhex(e["key"]), bytes.fromhex(e["session"]), int(e["start"])) for e in params["keys"]]
+        first, lms = int(params["first"]), params["lms"]
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return out | {"why": NO_KEYS}
+    held = [e for e in entries if e[2] <= first]
+    if not held:
+        return out | {"why": NO_ENTRY}
+    p = {"lms": lms, "key": held[-1][0], "session": held[-1][1]}
     if composed is None:
         return out | {"why": f"the composite of record has no {NETWORK} case stating the SHA-512 of the parameters the "
                              "period's check read"}
@@ -1772,8 +1801,8 @@ def state_charge(case: Mapping[str, Any], public: Mapping[str, Any], audits: int
     reads, else ``free`` with ``unpinned``, each such the locks don't give as pinned, by the digest they give (None for
     none); ``tied``, the tied audits (the public's ``scans[j].tied``, else each of the commitment's ``audits``,
     `TIED_ALL`), and ``with_record``, those whose parameters state a circuit record, the only ones whose stateFree may be
-    less than their free; and ``missing`` (`STATE_UNCOVERED`) where the charge is free and one is. A lock that can't be
-    read gives none, and ``unread`` names it, by its path under the tree where it is one, with why."""
+    less than their free. A lock that can't be read gives none, and ``unread`` names it, by its path under the tree
+    where it is one, with why."""
     seen: dict[str, str | None] = {}
     unread: list[str] = []
     for lock in locks:
@@ -1790,8 +1819,7 @@ def state_charge(case: Mapping[str, Any], public: Mapping[str, Any], audits: int
     tied = sorted({int(i) for s in public["scans"] for i in (s["tied"] if s.get("tied") is not None else range(audits))})
     with_record = [i for i in tied if i < len(params) and isinstance(params[i], Mapping) and "circuit" in params[i]]
     out = {"charge": "free" if unpinned else "stateFree", "is": STATE_CHARGE, "tied": tied, "with_record": with_record}
-    return out | ({"unpinned": unpinned} if unpinned else {}) | ({"unread": unread} if unread else {}) | (
-        {"missing": STATE_UNCOVERED} if unpinned and with_record else {})
+    return out | ({"unpinned": unpinned} if unpinned else {}) | ({"unread": unread} if unread else {})
 
 
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any],
@@ -1815,8 +1843,7 @@ def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int
            conditional: Sequence[str] = ()) -> tuple[dict[str, Any], dict[str, Any]]:
     """The figure of record (`of_record`, at ``conditional``), with the charge K applied its tied audits
     (``state_charge``, `state_charge`), and ``advice_charge``'s ``cap`` from OUT's advice registration
-    (`REGISTRATION`) and the case's commitment: both the one ``missing`` or ``error`` where either can't be read, and
-    the figure ``missing`` beside that charge where it is one the public can't be held to (`STATE_UNCOVERED`)."""
+    (`REGISTRATION`) and the case's commitment: both the one ``missing`` or ``error`` where either can't be read."""
     try:
         cap = advice_cap(json.loads((out / REGISTRATION).read_text()))
     except FileNotFoundError:
@@ -1826,8 +1853,7 @@ def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int
     try:
         ell = caps(case, cap)
         charge = state_charge(case, public, len(ell), LOCKS)
-        fig = {"missing": charge["missing"]} if "missing" in charge else of_record(public, ell, K, prem, conditional)
-        return fig | {"state_charge": charge}, {"ell_a": ell, "is": CAP}
+        return of_record(public, ell, K, prem, conditional) | {"state_charge": charge}, {"ell_a": ell, "is": CAP}
     except (IndexError, KeyError, TypeError, ValueError) as e:
         return (why := {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}), why
 

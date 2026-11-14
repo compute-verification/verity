@@ -77,7 +77,7 @@ def _emitted(target) -> TM.Tmpl:
     """``target``'s flat ``flock-ir-unit/v2`` lowering as `tmpl.emit` templates it."""
     C, _ins, words = ST._lowered(target)
     lay = IL.layout(C, list(C.inputs), [f"o{j}" for j in range(len(words))])
-    return TM.emit(TM.parse_flat(IL.netlist(lay, "t").splitlines()))[0]
+    return TM.emit(TM.parse_flat(IL.circuit_description(lay, "t").splitlines()))[0]
 
 
 def test_the_emitted_template_of_a_flat_lowering_is_its_lowering_by_construction():

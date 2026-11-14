@@ -8,13 +8,13 @@ import weakref
 from typing import Any
 
 from verity.protocols.accounting.pouw.prover.serving import (
-    batch_order,
-    CreditTrace,
     H1_SCHEME,
     H1_TILE,
     H1_WEIGHT_KEY,
-    h1_weight_root,
+    CreditTrace,
     H1Run,
+    batch_order,
+    h1_weight_root,
     new_requests,
     numpy_of,
     observe_matmul,

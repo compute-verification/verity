@@ -82,7 +82,9 @@ bucket 0 read. A period's first execution phase that is not the run's first star
 ended in, which the check holds to nothing: it charges that start once, as free input at the state's full width (the
 period's `start` term, `Scan.start`), so an adversary-chosen start carries no more than the bits it counts. A later
 execution phase of a period starts from the state the one before it ended in, which the check neither holds nor
-charges, so it refuses it (`startCarriedRefusal`). -/
+charges, so it refuses it (`startCarriedRefusal`): a period the check accepts is one execution phase. A period that
+spans a restart, its key's later listed session starting after the period's first execution phase, has a second
+execution phase, and is refused so. -/
 def scanStartCheck (w i : Nat) (reg : Json) : Option (Core.Verdict × String) :=
   if i != 0 then some (.reject, s!"window {w}: {startCarriedRefusal}")
   else if w != 0 || startEmpty reg then none

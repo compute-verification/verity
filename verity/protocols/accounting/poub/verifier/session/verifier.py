@@ -469,7 +469,7 @@ def ingress_bursts(ingress_bytes_per_s: float, figures: timing.Figures) -> float
     """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
     `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts on the node of `figures`: one rebuild batch in flight (S_chip),
     one second at the disks' measured rate (the charge up to `figures.disk_bytes_per_s`), and one link burst
-    (`figures.phase_bytes`) when the charge is above that, the boundary links charged too."""
+    (`figures.link_burst_bytes`) when the charge is above that, the boundary links charged too."""
     disk = min(ingress_bytes_per_s, figures.disk_bytes_per_s)
     n = ledger.Node.stated(figures, disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
     return n.rebuild_burst_bytes + n.disk_burst_bytes + n.link_burst_bytes
@@ -1563,7 +1563,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     ap.add_argument("--disk-burst-bytes", type=float,
                     help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
     ap.add_argument("--link-burst-bytes", type=float,
-                    help="one link burst, charged with the links (default: `figures.phase_bytes`)")
+                    help="one link burst, charged with the links (default: `figures.link_burst_bytes`)")
     ap.add_argument("--node", type=Path, metavar="FILE",
                     help="the node's capacities, as `ledger.Node.to_json` writes them (default: `ledger.Node.stated`'s, "
                          "with the disk and link flags, which a node handed in states itself)")

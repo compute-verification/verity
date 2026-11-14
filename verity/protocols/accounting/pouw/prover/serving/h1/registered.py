@@ -55,7 +55,7 @@ from verity.commitments.rowleaf import (
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-from verity.protocols.accounting.pouw.prover.serving.tensors import h1_device, tensors
+from verity.protocols.accounting.pouw.prover.serving.tensors import dtype_name, h1_device, tensors
 
 _INST = hm96.SHA512
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
@@ -301,8 +301,7 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
                          "the GPU path")
     if not (gpu and getattr(words, "is_cuda", False)):
         words = _host(words)
-    if len(words.shape) != 2 or not words.shape[0] or not words.shape[1] or str(words.dtype) not in ("uint16",
-                                                                                                  "torch.uint16"):
+    if len(words.shape) != 2 or not words.shape[0] or not words.shape[1] or dtype_name(words) != "uint16":
         raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
     n, w = (int(d) for d in words.shape)
     dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)

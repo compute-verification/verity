@@ -58,7 +58,8 @@ import torch
 from verity_config.settings import SHARED
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
-from verity.protocols.accounting.pouw.prover.serving import row_table_nvcc, row_table_side_stream
+from verity.protocols.accounting.pouw.prover.serving import row_table_nvcc
+from verity_torch.pouw import row_table_side_stream
 
 RESULT_SCHEMA = "research/result/v0.1"
 #: a read's fresh rows and their bytes: the opened history row (576 u16 words), its salt, its path (17 x 64) and its output row

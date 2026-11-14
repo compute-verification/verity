@@ -41,28 +41,28 @@ from typing import Any
 
 import numpy as np
 from verity.protocols.accounting.pouw.prover.serving import (
-    batch_order,
     COIN_DRAW,
-    commit_committed,
-    commit_site,
-    CommitTap,
-    draw_challenger,
-    Epoch,
     H1_CHALLENGER,
     H1_SCHEME,
     H1_TILE,
+    ROUND0,
+    CommitTap,
+    Epoch,
     H1Call,
     H1Run,
     Matmul,
+    Shape,
+    Workload,
+    batch_order,
+    commit_committed,
+    commit_site,
+    draw_challenger,
     new_requests,
     numpy_of,
     program_salt,
-    ROUND0,
-    Shape,
     to_host,
     verifier_coins,
     weights_root,
-    Workload,
     zy_host,
 )
 from verity.protocols.proofs.spot.device.challenger import LiveRecord
@@ -422,7 +422,7 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
                    **({"round_coins": rounds.challenger.commitment.to_json()} if rounds is not None else {})}
     source = H1_CHALLENGER if opener is not None else "in-process"
     run = H1Run(entry, salt, modules, shapes, rows, steps, transcript_dir=transcript_dir, rounds=rounds, key=key,
-                   draw=draw, admission=admission, coin_source=source, opener=opener, served=served)
+                   draw=draw, admission=admission, coins_from=source, opener=opener, served=served)
     if commit is not None:
         ports = {o["port"] for o in executor.collective_rpc("h1rank_commit", kwargs=dict(commit))}
         if len(ports) != 1:

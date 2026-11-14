@@ -36,7 +36,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   bound, so the escape term needs no Markov's inequality: `J (1 − q)^(K+1)` at an escape share `J K B/C`, against
   `SlowdownRemote`'s `J ((1 − q)/q) B/(θC)`.
 * **The halt**: `TerminalDetection` stays a named premise. The halt is code (`Fleet`'s R5-all in
-  `verity/protocols/spot/verifier/service.py`, its verifier `Spot.Fleet`), and
+  `verity/protocols/proofs/spot/verifier/service.py`, its verifier `Spot.Fleet`), and
   `Properties.Spot` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
   an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
@@ -72,7 +72,7 @@ open Verity Slowdown.Slowdown
 
 /-- **The slowdown, remote protocol, over a monitoring period.** A monitoring period of `T` windows, window `t`
 with its own uniform coins `Ω t`, independent of the others' (a window is a round of live coins: the deployment's
-window, or a finer cut of it where its PoUW and sampled-proofs coins are flipped at different times). Every bound on a
+window, or a finer cut of it where its PoUW and SPOT coins are flipped at different times). Every bound on a
 window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t ↦ a]`, `a` uniform on `Ω t`).
 
 * PoUW certifies window `t` at capacity `cap_t ≥ 0`, `∑ cap_t ≤ C`, its certificate incorrect (`incorrect t`) with probability

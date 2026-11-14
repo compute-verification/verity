@@ -94,7 +94,7 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
 
 
 def leak_cost(units: list[dict]) -> float:
-    """What the sampled-proofs planner pays to prove ``units`` (each taken ``n`` times), up to one factor: a type's samples
+    """What the SPOT planner pays to prove ``units`` (each taken ``n`` times), up to one factor: a type's samples
     grow with its blocks' outputs at their size class plus `LOCATION_BITS`, and each sample's proving with its block's rows."""
     return sum(u["n"] * (unit_class(sum(u["block"]["out_bits"])) + LOCATION_BITS) * 2 ** u["block"]["est_log"] for u in units)
 

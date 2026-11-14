@@ -43,7 +43,7 @@ the audit accepts while the compute account did less than the work certificate `
 account's ops of each class (`Accounting.OpClass`) over the period's window, each at its price, summed (`Schedule.work`). It
 counts ops, not time and not words.
 
-PoUW's per-period statements credit words. `Properties.Pouw.Period.H1CheckedCreditPeriod` bounds the probability that
+PoUW's per-period statements credit words. `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod` bounds the probability that
 the play accepts while its words fixed right fall below the check's credit (`creditPrefix`: `(1 − ε(j))₊` of the live
 words of the windows before the check's first refusal). The two differ in their unit and in what they are about:
 

@@ -40,6 +40,7 @@ public import Definitions.Certifier.Guarantees.SampledCharge
 public import Definitions.Certifier.WindowCharge
 public import Definitions.Certifier.Warden
 public import Definitions.Certifier.ResponseCap
+public import Definitions.Certifier.Marks
 public import Definitions.Certifier.Tap
 public import Definitions.Certifier.RecordRows
 public import Definitions.Certifier.MonitoringPeriod
@@ -97,10 +98,10 @@ public import Definitions.Certifier.Assumptions
 public import Definitions.Certifier.Guarantees
 public import Definitions.Certifier.Guarantees.Pooled
 public import Definitions.Flock.Guarantees
-public import Definitions.Compose.Assumptions.Remote
-public import Definitions.Certifier.Assumptions.RemoteOutside
+public import Definitions.Poub.Assumptions.Remote
+public import Definitions.Poub.Assumptions.RemoteOutside
 public import Definitions.Pouw.Assumptions.CreditedWords
-public import Definitions.Compose.Assumptions.RemoteP2
+public import Definitions.Poub.Assumptions.RemoteP2
 public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Pouw.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
@@ -112,6 +113,7 @@ public import Definitions.Certifier.Guarantees.MonitoringPeriod
 public import Definitions.Certifier.Guarantees.PooledLeak
 public import Definitions.Certifier.Guarantees.Checked
 public import Definitions.Certifier.Guarantees.ResponseCap
+public import Definitions.Certifier.Guarantees.Marks
 public import Definitions.Certifier.Guarantees.Carried
 public import Definitions.Certifier.Guarantees.MonitoringPeriodChecked
 public import Definitions.WeightSecurity.Assumptions

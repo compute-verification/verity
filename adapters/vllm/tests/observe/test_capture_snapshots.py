@@ -1,6 +1,6 @@
 """`verity_vllm.observe.capture`'s snapshots on a CPU: in a listed step a `Capture` copies each call's tensors that are no
 roots, writes them by their content under `values/<step>/` and lists them in `snapshots.json`; a tensor over the byte limit
-is copied a KV block in use at a time where one of its first two dimensions is the cache's block count, and listed as
+is copied a KV page in use at a time where one of its first two dimensions is the cache's page count, and listed as
 skipped otherwise.  The runner, pinned memory and the CUDA event are `test_capture_steps`'s stand-ins;
 `torch.cuda.synchronize` is stood in by a count."""
 from __future__ import annotations
@@ -216,9 +216,9 @@ def test_a_block_of_a_calls_tensor_is_held_to_the_calls_limit(tmp_path, syncs):
 def test_a_tensor_over_the_limit_with_the_caches_block_count_is_copied_a_block_in_use_at_a_time(tmp_path, syncs):
     by_block = torch.arange(64, dtype=torch.uint8).reshape(16, 4)
     by_layer = torch.arange(128, dtype=torch.uint8).reshape(2, 16, 4)
-    # the block count as a later dimension, and a block that is itself over the limit, are listed as skipped
+    # the page count as a later dimension, and a page that is itself over the limit, are listed as skipped
     late, wide = torch.zeros(2, 2, 16, dtype=torch.uint8), torch.zeros(16, 33, dtype=torch.uint8)
-    # nor is a block cut again where a dimension of its own is the block count
+    # nor is a page cut again where a dimension of its own is the page count
     square = torch.zeros(16, 16, 3, dtype=torch.uint8)
 
     def launches(capture: Capture, runner: S._Runner) -> None:

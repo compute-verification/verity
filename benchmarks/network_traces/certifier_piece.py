@@ -190,7 +190,7 @@ UNNAMED = "a machine the chain step did not name"
 SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
 #: every key at its level). Each is public as the protocol's output, its sample or its structure: the chain's and each
-#: step's verdict, ε at δ (the sample's law, population and size) and where it runs in the clear, what the path stubs
+#: step's verdict, ε at δ (the sample's sampling design, population and size) and where it runs in the clear, what the path stubs
 #: and how its negatives came out. Everything else stays in the kept run: the scan's answers (its registration and
 #: each execution phase's answer and row registrations, the period check's evidence less its certificates: witness, as a
 #: case's evidence is), the endpoint's report (each Commit window's request, carried, step and output counts, its
@@ -534,6 +534,31 @@ def kept_run(serve_dir: Path) -> str:
         raise NotRun(f"{len(runs)} warden runs kept under {serve_dir / PRIVATE} ({runs[:4]}), not one: the run's "
                         "load goes through the warden only with CERTIFIER_FRONT")
     return runs[0]
+
+
+def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]] | None:
+    """The network certifier run the front kept under ``serve_dir`` as a served window's scan reads it
+    (`prove_path.kept_scan`, which takes this from its caller): the run's deployment parameters, its certified I/O
+    (`warden_chain.io`) and its certified ingress, each execution phase's number and rows (`warden_rows.window_rows`);
+    None where the front kept no run. ValueError, naming why, where the kept run can't be read."""
+    from benchmarks.network_traces import warden_chain as WC
+    from verity.protocols.accounting.certifier.verifier import relay_check as RC, warden_rows as WRW
+
+    if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
+        return None
+    unpacked = None
+    try:
+        unpacked, kept = unpack(serve_dir / PRIVATE / kept_run(serve_dir) / "fetch.tar.gz")
+        _, params = WC.deployment(kept)
+        io = WC.io(kept)
+        phases = [(r.window, list(WRW.window_rows(r, params)))
+                  for r in RC.read_records(WC.witness(kept), params)[RC.INGRESS]]
+    except (SystemExit, NotRun) as e:
+        raise ValueError(f"the certifier front's kept run: {e}") from None
+    finally:
+        if unpacked is not None:
+            rm(unpacked)
+    return params, io, phases
 
 
 def ran_on(chained: Path | None = None) -> dict[str, str]:

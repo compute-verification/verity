@@ -73,6 +73,11 @@ def test_wires_and_reads_are_the_ranks_moved_to_their_units():
         return ([] if W.wires_ok(ranks, joined, [rank, rank]) else ["ranks-wires"]) + \
             ([] if W.reads_ok(ranks, joined, [rank, rank]) else ["ranks-reads"])
     reads = [read("r0/w", 0), read("r1/w", 2)]
+
+    def wide(b: int, s: int) -> dict:
+        return {"at": 0, "base": b, "out": "o0", "port": "x", "radix": [4], "reader": "A", "step": [s], "writer": "B"}
+    assert codes([wire(0, 0), wire(2, 2), wide(3, -1)], reads) == []
+    assert codes([wire(0, 0), wire(2, 2), wide(0, 1)], reads) == ["ranks-wires"]
     assert codes([wire(0, 0), wire(2, 2), wire(2, 0)], reads) == []
     assert codes([wire(0, 0), wire(2, 0)], reads) == ["ranks-wires"]
     assert codes([wire(0, 0), wire(2, 2), wire(0, 0)], reads) == ["ranks-wires"]
@@ -133,10 +138,10 @@ def _w(reader: str, port: str, writer: str, at: int, radix: int, base: int) -> d
 def test_a_port_two_selects_write_is_read_through_the_one_its_units_read():
     """`Spot.SecondWindow`'s `#guard` on `wireFor`."""
     ws = [_w("A", "live", "F", 0, 1, 0), _w("A", "live", "L", 1, 1, 0)]
-    assert W.wire_for(ws, "A", "live", 0, 1) == (W.SS.Wire("A", "live", "F", "o0"),)
-    assert W.wire_for(ws, "A", "live", 1, 1) == (W.SS.Wire("A", "live", "L", "o0"),)
-    assert W.wire_for(ws, "A", "live", 0, 2) is None and W.wire_for(ws, "A", "x", 0, 2) == (None,)
-    assert W.wire_for(ws[:1], "A", "live", 0, 2) is None
+    assert W.wire_for(W.Index(ws), "A", "live", 0, 1) == (W.SS.Wire("A", "live", "F", "o0"),)
+    assert W.wire_for(W.Index(ws), "A", "live", 1, 1) == (W.SS.Wire("A", "live", "L", "o0"),)
+    assert W.wire_for(W.Index(ws), "A", "live", 0, 2) is None and W.wire_for(W.Index(ws), "A", "x", 0, 2) == (None,)
+    assert W.wire_for(W.Index(ws[:1]), "A", "live", 0, 2) is None
 
 
 def test_a_wired_read_opens_the_writer_ranks_tree_and_an_own_read_its_own():
@@ -151,7 +156,7 @@ def test_a_wired_read_opens_the_writer_ranks_tree_and_an_own_read_its_own():
         return {"domain": "d" + r, "leaves": 2, "reads": reads, "root": r, "value": v}
 
     def ok(port: str, j: dict) -> bool:
-        return W.window_read_ok(EX_RANKS, ws, dockets, own, True, W.SS.Part("A", 0, 2), 0, port, j)
+        return W.window_read_ok(EX_RANKS, W.Index(ws), dockets, own, True, W.SS.Part("A", 0, 2), 0, port, j)
     assert ok("x", e("B/o0", "b1", [0, 1])) and not ok("x", e("B/o0", "b1", [1, 0])) and not ok("x", e("A/y", "a0", [0, 1]))
     assert ok("y", e("A/y", "a0", [0, 1])) and not ok("y", e("A/y", "a0", [1, 0])) and not ok("y", e("B/o0", "b1", [0, 1]))
 
@@ -169,3 +174,17 @@ def test_the_statements_are_the_sampled_members_by_position():
                                                  [(0, "A", 0, 0, 2)], [("A", 1)], ss)]
     assert codes([stmt("A")]) == ["second-read"] and codes([]) == ["second-cover"]
     assert codes([stmt("B")]) == ["second-order"] and codes([stmt("A"), stmt("A")]) == ["second-read", "second-order"]
+
+
+def test_the_index_meets_what_a_scan_meets():
+    """`Index.meets` is the scan's wires of a port meeting some units, by first unit, and `Index.ports` its ports."""
+    def w(t: str, p: str, a: int, n: int) -> dict:
+        return {"reader": t, "port": p, "writer": "W", "out": "o0", "at": a, "radix": [n], "base": 0, "step": [1],
+                "cut": [0, 1]}
+    ws = [w("B", "x", 4, 2), w("A", "y", 0, 8), w("A", "x", 6, 1), w("A", "x", 0, 3), w("A", "x", 3, 2), w("A", "y", 2, 1)]
+    ix = W.Index(ws)
+    for t, p, lo, n in [("A", "x", 0, 1), ("A", "x", 2, 2), ("A", "x", 5, 1), ("A", "x", 7, 3), ("A", "y", 3, 1),
+                        ("A", "y", 9, 1), ("B", "x", 0, 9), ("C", "x", 0, 9)]:
+        scan = sorted((x for x in ws if x["reader"] == t and x["port"] == p and W._reads_in(x, t, lo, n)), key=lambda x: x["at"])
+        assert ix.meets(t, p, lo, n) == scan
+    assert ix.ports("A") == ["x", "y"] and ix.ports("B") == ["x"] and ix.ports("C") == []

@@ -24,7 +24,7 @@ format:
 
 Registration registers the site, θ, `B` and each day's registered circuit, not the circuit `B` builds. A subprotocol's
 Program and parameters, and the proof system, are that protocol's public verifier parameters, not entries of the log;
-each window's program is held to its day's registered one (the sampled-proofs registration record's R2, `day` and
+each window's program is held to its day's registered one (the SPOT registration record's R2, `day` and
 `declarations`). A window's day is the UTC day of its open's `started_utc`, which the auditor's challenger signs
 (`challenger.declared_day`): a window that opens before UTC midnight and closes after is a window of its open's day.
 
