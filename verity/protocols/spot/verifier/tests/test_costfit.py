@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.spot.costfit import Fitted, Observation, fit, from_record
-from verity.protocols.spot.optimize import Candidate
+from verity.protocols.spot.prover.costfit import Fitted, Observation, fit, from_record
+from verity.protocols.spot.prover.optimize import Candidate
 
 TRUE = {"one": 0.6, "ands*drawn": 9.5e-11}
 
