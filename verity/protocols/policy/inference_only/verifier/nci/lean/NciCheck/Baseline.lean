@@ -107,7 +107,7 @@ def FORMAT : String := "verity/registration/v1"
 def FORMAT_V2 : String := "verity/registration/v2"
 
 /-- A registration record's digest, `SHA-512(format || 0 || canon(record))` with its own format (v1 or v2) as the tag
-(`registration.digest`, `Spot.Registration.digest`), as lowercase hex. -/
+(`registration.digest`, `Spot.Docket.digest`), as lowercase hex. -/
 def digest (rec : Json) : Except String String := do
   let tag := if strAt rec "format" == some FORMAT_V2 then FORMAT_V2 else FORMAT
   return Flock.hexOf (Flock.Sha512.hash (tag.toUTF8.push 0 ++ (← Flock.canon rec).toUTF8))

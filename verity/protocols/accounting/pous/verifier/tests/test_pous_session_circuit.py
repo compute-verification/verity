@@ -107,8 +107,8 @@ def test_a_slot_past_the_row_is_refused() -> None:
 
 
 def _session(K: int, late: int | None = None):
-    """A session of K rounds as the memory challenger signs it: its header row, the records tree's domain id, the signed
-    context, the records rows and the digest the signature signs (`lms.memory_challenger_message` of `mc.message`), round
+    """A session of K rounds as the memory challenger signs it: its header length and row, the signed context, the records
+    rows and the digest the signature signs (`lms.memory_challenger_message` of `mc.message`), round
     ``late``, if any, signed past the limit."""
     c = mc.SessionCommitment(_rand(32), _rand(64), _rand(32), 1 << 20, K, 854_000, 2056, _rand(64))
     rounds = [Round(j, RNG.randrange(1 << 20), 1000 * j, 1000 * j + 500, _rand(64)) for j in range(K)]
@@ -119,40 +119,39 @@ def _session(K: int, late: int | None = None):
     head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()
     flat = b"".join(r.value() for r in rounds) + bytes(S.RECORD_BYTES * (K % 2))
     rows = [flat[184 * t:184 * (t + 1)] for t in range(S.records_rows(K))]
-    return (c, len(head), head + bytes(S.head_bytes(len(head)) - len(head)),
-            mc._domain(mc.RECORD_BINDING, c.session, K).domain_id, S.signed_context(I, c.session), rows, m)
+    return c, len(head), head + bytes(S.head_bytes(len(head)) - len(head)), S.signed_context(I, c.session), rows, m
 
 
 def test_the_signed_digest_reference_is_the_memory_challengers() -> None:
-    """`session_digest` gives the digest the memory challenger's signature signs, at an odd and an even K and at the
-    largest K, the constants it copies are the memory challenger's, and a late round's ok is 0."""
-    assert (S.SESSION_TAG, S.RECORD_SCHEMA) == (mc.SESSION_TAG, mc.RECORD_SCHEMA)
-    for K in (1, 4, S.MAX_ROUNDS):
-        c, n, head, domain, ctx, rows, m = _session(K)
-        assert S.session_digest(K, n, c.limit_ns, head, domain, ctx, rows) == (1, m, tuple(rows))
-    c, n, head, domain, ctx, rows, m = _session(3, late=1)
-    assert S.session_digest(3, n, c.limit_ns, head, domain, ctx, rows) == (0, m, tuple(rows))
+    """`session_digest` gives the digest the memory challenger's signature signs, at an odd and an even K and at a K
+    past one record per compression, the constant it copies is the memory challenger's, and a late round's ok is 0."""
+    assert S.SESSION_TAG == mc.SESSION_TAG and S.RECORD_BYTES == mc.RECORD_BYTES
+    for K in (1, 4, 140):
+        c, n, head, ctx, rows, m = _session(K)
+        assert S.session_digest(K, n, c.limit_ns, head, ctx, rows) == (1, m, tuple(rows))
+    c, n, head, ctx, rows, m = _session(3, late=1)
+    assert S.session_digest(3, n, c.limit_ns, head, ctx, rows) == (0, m, tuple(rows))
     with pytest.raises(ValueError, match="K"):
-        resolve(bind(S.PousSessionDigest, K=S.MAX_ROUNDS + 1, HEAD=789, LIMIT=1)).signature()
+        resolve(bind(S.PousSessionDigest, K=0, HEAD=753, LIMIT=1)).signature()
 
 
 @pytest.mark.slow
 def test_the_signed_digest_unit_agrees_with_its_reference() -> None:
-    """About 50 s (three record leaves, a pad, three nodes and the two message hashes, at K = 3). On the honest session
-    the unit's ok is 1, its m the digest the signature signs and its records rows the rows it read; a flipped bit of the
-    context, of the header, of the domain id or of a record's digest changes m, and a late round sets ok to 0."""
+    """About 30 s (the records' stream digest, three compressions, and the two message hashes, at K = 3). On the honest
+    session the unit's ok is 1, its m the digest the signature signs and its records rows the rows it read; a flipped bit
+    of the context, of the header or of a record's digest changes m, and a late round sets ok to 0."""
     K = 3
-    c, n, head, domain, ctx, rows, m = _session(K)
+    c, n, head, ctx, rows, m = _session(K)
     late = _session(K, late=2)
-    cases = [(head, domain, ctx, rows), (head, domain, _flip(ctx, 50), rows), (_flip(head, 100), domain, ctx, rows),
-             (head, _flip(domain, 33), ctx, rows), (head, domain, ctx, [_flip(rows[0], 92 + 40)] + rows[1:])]
+    cases = [(head, ctx, rows), (head, _flip(ctx, 50), rows), (_flip(head, 100), ctx, rows),
+             (head, ctx, [_flip(rows[0], 92 + 40)] + rows[1:])]
     want = [S.session_digest(K, n, c.limit_ns, *cs) for cs in cases]
     assert want[0] == (1, m, tuple(rows)) and all(w[1] != m for w in want[1:])
     assert late[1] == n
-    cases.append(late[2:6])
+    cases.append(late[2:5])
     want.append(S.session_digest(K, n, c.limit_ns, *cases[-1]))
     assert want[-1][0] == 0
-    params = [[_bits(h), _bits(d), _bits(x), *[_bits(r) for r in rs]] for h, d, x, rs in cases]
+    params = [[_bits(h), _bits(x), *[_bits(r) for r in rs]] for h, x, rs in cases]
     cols = [np.array([p[a] for p in params], dtype=np.uint8) for a in range(len(params[0]))]
     out = np.asarray(E.evaluate_batch(bind(S.PousSessionDigest, K=K, HEAD=n, LIMIT=c.limit_ns), *cols))
     assert out.reshape(len(cases), -1).tolist() == [[ok, *_bits(mm), *(b for r in rs for b in _bits(r))]
