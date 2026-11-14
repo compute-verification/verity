@@ -13,7 +13,7 @@ import sys
 import types
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -32,8 +32,7 @@ def _bf16_add_ref(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     # round-to-nearest-even to bf16
     u = s.view(np.uint32).astype(np.uint64)
     lsb = (u >> 16) & 1
-    u = (u + 0x7FFF + lsb) >> 16
-    return u.astype(np.uint16)
+    return ((u + 0x7FFF + lsb) >> 16).astype(np.uint16)
 
 
 def test_evaluate_spec_bias_add_matches_numpy_reference():
@@ -83,6 +82,9 @@ class _Largest:
         return np.full(n, high - 1)
 
 
+_LARGEST = cast(np.random.Generator, _Largest())                                                           # a `Generator` to mypy; the calls below reach its `integers` alone
+
+
 @pytest.mark.parametrize("kind", difftest.REQUIRED_EDGE_KINDS + ("random",))
 def test_word_generators_of_f32(kind: str) -> None:
     w = difftest.words_for(kind, [8, 8], "float32", np.random.default_rng(1))
@@ -98,7 +100,7 @@ def test_word_generators_of_f32(kind: str) -> None:
         assert set(w.reshape(-1).tolist()) == {0x7F7FFFFF, 0xFF7FFFFF, 0x43000000}                        # ±max finite, 128
     if kind == "subnormal":
         assert np.all(w != 0) and np.all(w < 0x00800000)
-        assert np.all(difftest.words_for(kind, [3], "float32", _Largest()) == 0x007FFFFF)
+        assert np.all(difftest.words_for(kind, [3], "float32", _LARGEST) == 0x007FFFFF)
     if kind == "alternating":
         assert np.all((f[0::2] <= -1) & (f[0::2] >= -2)) and np.all((f[1::2] >= 1) & (f[1::2] <= 2))
         bf16 = difftest.words_for(kind, [8, 8], "bfloat16", np.random.default_rng(1))                      # the same values, cut to bf16
@@ -108,9 +110,9 @@ def test_word_generators_of_f32(kind: str) -> None:
 @pytest.mark.parametrize("dtype, words, largest", [("int32", np.uint32, 2**31 - 2), ("int64", np.uint64, 2**62 - 1)])
 def test_word_generators_of_integers_stay_below_one_bound_whatever_the_kind_but_zeros(dtype: str, words: type, largest: int) -> None:
     for kind in ("random", "max", "subnormal", "alternating"):
-        w = difftest.words_for(kind, [2, 3], dtype, _Largest())
+        w = difftest.words_for(kind, [2, 3], dtype, _LARGEST)
         assert w.dtype == words and w.shape == (2, 3) and np.all(w == largest)
-    z = difftest.words_for("zeros", [2, 3], dtype, _Largest())
+    z = difftest.words_for("zeros", [2, 3], dtype, _LARGEST)
     assert z.dtype == words and z.shape == (2, 3) and not z.any()
     one = difftest.words_for("random", [], dtype, np.random.default_rng(1))                                # no shape: one word
     assert one.dtype == words and one.shape == () and one <= largest
