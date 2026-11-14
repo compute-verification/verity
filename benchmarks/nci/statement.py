@@ -2,7 +2,7 @@
 ``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the page is: the slide's questions, the symbols,
 section 4's terms, the ladder and the fit bound, years of growth, the regimes, section 6's thresholds and the known holes'
 cheating share. The slowdown is the slowdown calculator's at MFU_0, ``slowdown.theorem.multiple_bound`` in Lean's form
-(``InferenceOnly.Slowdown.remoteSlowdown``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, free compute at MFU_0
+(``Slowdown.Slowdown.remoteSlowdown``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, free compute at MFU_0
 under the reference-efficiency assumption; every scenario is a set of overrides on ``tiers.DEFAULTS``. The slowdown by
 the fit bound (``fit_slowdown``) is the same with the fit bound in place of the closed-form memory cap, which the page's memory rungs cite.
 
