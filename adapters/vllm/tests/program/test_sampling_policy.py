@@ -152,10 +152,10 @@ def test_mixed_batch_is_refused(tmp_path):
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _requests_manifest(tmp_path, n: int, arrive=None, caps=None, seeds=True):
+def _requests_manifest(tmp_path, n: int, arrive=None, max_tokens=None, seeds=True):
     from verity_vllm.pipeline.workload import SAMPLING
     p = tmp_path / f"wl_{n}.json"
-    reqs = [{"request_id": f"r{i}", "index": i, "prompt_len": 8, "max_tokens": int((caps or [16] * n)[i]),
+    reqs = [{"request_id": f"r{i}", "index": i, "prompt_len": 8, "max_tokens": int((max_tokens or [16] * n)[i]),
              "arrive_step": int((arrive or [0] * n)[i]), **({"seed": 1000 + i} if seeds else {})} for i in range(n)]
     p.write_text(json.dumps({"schema": "verity-vllm/workload/v2", "model": "unsloth/Llama-3.2-1B", "requests": reqs,
                              "sweep": {"row_id": "r", "sampling": "stoch-t0.8-p0.95", "sampling_params": SAMPLING["stoch-t0.8-p0.95"],
@@ -183,7 +183,7 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend.vllm_meta import registered_policy_splits
     target = TargetProfile.default().with_overrides(num_sms=num_sms)
-    cases: list[tuple[int, list[int] | None, list[int] | None] | None] = [  # (n, arrive, caps), or no manifest
+    cases: list[tuple[int, list[int] | None, list[int] | None] | None] = [  # (n, arrive, max_tokens), or no manifest
         (1, None, None), (2, [0, 5], [16, 9]), (8, None, None), (8, None, [16] * 4 + [3] * 4),
         (8, [0, 0, 0, 0, 3, 3, 6, 6], [16] * 8), None]
     geoms = set()
@@ -193,7 +193,7 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
                 pol = sampling_policy(None, None)
                 pol.update(kind="stochastic", seeded=True, temperature=0.8, top_p=0.95, top_k=0)
             else:
-                pol = sampling_policy(None, _requests_manifest(tmp_path, c[0], arrive=c[1], caps=c[2]))
+                pol = sampling_policy(None, _requests_manifest(tmp_path, c[0], arrive=c[1], max_tokens=c[2]))
             assert sampler_geometry(pol, target, LP=lp_t[0], T=lp_t[1]) is None
             assert pol["splits"] == S == registered_splits(num_sms) == splits_for(1, num_sms) and registered_policy_splits(pol) == S
             g = pol["geometry"]

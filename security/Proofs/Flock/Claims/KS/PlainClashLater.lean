@@ -26,7 +26,7 @@ coins only.
 * `plainLevelColsOf_ok`, `plainLevelColsOf_ge`: the reader's level-`ℓ` rows at a proof that decodes, and none past the
   schedule.
 * `slotOpensL_entriesAt`, `slotOpensL_level`: a rep's level-`ℓ` openings are the reader's level-`ℓ` entries.
-* `accepts_reqsDK`, `accepts_opensLDLfK`: at flock-verify's acceptance through `keep` at a sample value, each rep's
+* `accepts_reqsDK`, `accepts_opensLDLfK`: at verity-verify-proof's acceptance through `keep` at a sample value, each rep's
   recorded caps and request at level `ℓ ≥ 1`, and each table's recorded caps and level-`ℓ` openings at a model leaf as
   its reps' proofs' recursive caps and `plainLevelColsOf` entries; `accepts_opensLDK` at `leaf512`; `accepts_reqsD`,
   `accepts_opensLD` at `keep := id`.
@@ -208,7 +208,7 @@ theorem accepts_reqsD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
           ∀ R ∈ pend.reqs, R.level < sch.levels.size := by
   simpa only [decodeWithK_id_std] using accepts_reqsDK id ((acceptsAtD_iff_acceptsAtDK_id I dr t).1 h)
 
-/-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings at the
+/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings at the
 model leaf `lf` are its reps' deployed ones**, at every level `ℓ ≥ 1`: each rep's caps its proof's recursive caps and
 its level-`ℓ` openings its `plainLevelColsOf` entries (`accepts_reqsDK`). -/
 theorem accepts_opensLDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
@@ -269,7 +269,7 @@ theorem accepts_opensLDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) 
   exact ⟨slotOpensL_level _ 0 ℓ _ _ _ _ p₀ pend₀ hp₀ rfl (fun _ => rfl) hlv hQ hlt₀ (fun hℓ => hf₀ ℓ h1 hℓ) h1,
     slotOpensL_level _ 1 ℓ _ _ _ _ p₁ pend₁ hp₁ rfl (fun _ => rfl) hlv hQ hlt₁ (fun hℓ => hf₁ ℓ h1 hℓ) h1⟩
 
-/-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
+/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
 reps' deployed ones**, at every level `ℓ ≥ 1`: each rep's caps its proof's recursive caps and its level-`ℓ` openings its
 `plainLevelColsOf` entries (`accepts_reqsDK`); `accepts_opensLDLfK` at `leaf512`. -/
 theorem accepts_opensLDK (keep : Bool → Bool)
@@ -315,7 +315,7 @@ theorem accepts_opensLDK (keep : Bool → Bool)
                   (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! ℓ :=
   accepts_opensLDLfK keep leaf512 h
 
-/-- **At flock-verify's acceptance at `dr`, each table's recorded caps and level-`ℓ` openings are its reps' deployed
+/-- **At verity-verify-proof's acceptance at `dr`, each table's recorded caps and level-`ℓ` openings are its reps' deployed
 ones**, at every level `ℓ ≥ 1`: `accepts_opensLDK` at `keep := id`. -/
 theorem accepts_opensLD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtD I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧

@@ -60,7 +60,7 @@ The guarantee is knowledge soundness of the sampled audit: except with a bounded
 accepts, at most the profile's count of proof blocks are incorrect. Its top statement is Flock's
 `Flock.Guarantees.SampledKSLiveV3`, stated in `security/Proofs/Flock/Bridge/ScopeGate.lean` and proved in
 `security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
-that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
+that `verity-verify-proof --zk` accepts the files and the run passes the registration's population while the claim fails. It
 covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
 (`Bridge.SampledKSLiveV5` and those behind it) read the file through `Flock.Desc.parseStmt`, so they also cover templated
 statements (`Flock.Tags.templated`, whose acceptance `flock_verify_sound` covers), at the circuit `HmOut.unrolled`
@@ -70,7 +70,7 @@ the last two taken at the collision finders the proof builds from the prover (`T
 unfold to them), and `RecordCustodyZKJPLaw` (read as `RecordCustodyZKJ`) in
 `security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`.
 
-In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
+In the one-stage form, v2's verdicts are its own run of `verity-verify-proof verify --zk` on the sessions' files, which come
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
 carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
@@ -107,7 +107,10 @@ independently with probability `NUM/DEN`.
 strata and that sampler but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` samples
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
-soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`).
+soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`). The audit on the
+proofs refuses a `stratified` or `work` design in its one-statement form too, by the design's kind
+(`OneStageZk.SUBSET_ONLY`), written as a sampling design or as a rate: that form's soundness statement covers `subset:K` alone, which
+a rate `rate:NUM/DEN` names over the population. Its per-member form parses every design v1 does.
 
 **What an accepted audit establishes.** Under a stratified sample, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
@@ -159,7 +162,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Flock/Soundness/Audit/`,
   whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`).
-- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`flock-verify draw`): the
+- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`verity-verify-proof draw`): the
   samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
   `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
@@ -180,19 +183,30 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`Claims.Sampling.Partition`, `Deploy.checked`).
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `Spot/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters, evidence, refusals
-  and check are in the module's docstring. It reads the
+  and check are in the module's docstring; the parameters, one statement's check and a member's statement and files
+  are in `Spot/OneStageZkStatement.lean`, which it imports, and the run over the members and the checks in the
+  module itself, all in the namespace `Spot.OneStageZk`. It reads the
   sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`, `order_why`).
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s.
   A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
-  `statements`; `one_stage.proofs.members_v2` writes it), which the audit parses and refuses. The executable's
-  `members` (`Spot/MembersParse.lean`, `proofs.members_parsed`) prints what its parsers read of a case, with no verdict,
-  and its `refusal` (`Spot/MembersRefusal.lean`, `one_stage.members.refusal`) why the audit's check refuses it, each as
-  its module's docstring says; the refusal accepts nothing and never
-  exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
-  (`one_stage.closing`, `challenger.members_tree_reason`).
+  `statements`; `one_stage.proofs.members_v2` writes it), which the audit's `check` reads beside the one
+  statement's and decides by `checkMembersAt`: it accepts where the form's run returns with every session accepted
+  and v1's check at the coins accepts on the sessions' verdicts (`one_stage.members.check`, with the Python of the
+  run, `members_run`). The pass that reads every member's files (`membersFiles`) is compiled as `membersFilesKept`,
+  proved equal to it: it reads the blobs' lookup tables once and a circuit file once for the members that name it,
+  and keeps of the file the circuit's own verdicts and the circuit without its rows (`Spot/CircuitKept.lean`), so
+  its work on a circuit's rows is by the file and not by the member; and it parses and hashes the program, and
+  evaluates the partition's query on it, once for the members that read it under the parameters' partition, so its
+  work on the program is by the program and not by the member. The executable's `members` (`Spot/MembersParse.lean`,
+  `proofs.members_parsed`) prints what its parsers read of a case, with no verdict, as its module's docstring says. A
+  window's sessions run on its challenger's session, each closed there after its evidence
+  (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
+  (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
+  every wired row of every unit of the sample to its writer's output row in the members' public files
+  (`OneStageZk.wiresHeld`, the `members_wires` piece); `one_stage.members` leaves a wiring `Outside`.
 - **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
   to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
   challenger key, every session of a lane that the ledger opens on a root during a monitoring period, whatever its
@@ -309,7 +323,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   `check_verdicts` is given the service's Python verdict.
 - `proofs`: the proof system's own run of Flock's Lean verifier on a statement's proof files (`Proof`:
   circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
-  `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
+  `verity-verify-proof verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
@@ -328,8 +342,8 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`. Its two modes (`CostModel.commit_weight`, `PROVING_ONLY`) and its prices of
-  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the laws of
-  the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
+  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the sampling designs
+  of the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
   in a public size class (`verity.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
 - `costfit`: Flock's cost model fitted from measurements, as a cost-model/v1 record.
@@ -391,12 +405,13 @@ A program's weights, constants and tables are values: committed once, under hidi
   port that reads a registered input of the verifier's own program is ever bound, and nor is any port the window's
   registered circuit record declares registered for the statement's template (its registered reads, table reads and
   openings' verdicts, outputs included: `RegBound.declaredOf`), which must be a registered port of the file. A file
-  that binds ports is verified with that record (`flock-verify --interface`), and refused without it.
+  that binds ports is verified with that record (`verity-verify-proof --interface`), and refused without it.
 - **Served trees.** A served path registers each tree a proof block reads as a registered value. `served.register_served`
   returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
 - **The audit record** holds the roots the verifier opened the reads against (`audit.session_registered`, Lean
-  `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`).
+  `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`), taking a read named by one of its
+  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other.
 
 Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py`.
 

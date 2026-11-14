@@ -145,7 +145,10 @@ theorem checkBlobsAt_popHeld {p : _root_.Spot.OneStageZk.Params}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     _root_.Spot.OneStageZk.popHeld p.base.verifier c.record = .ok () := by
-  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  rcases _root_.Spot.OneStageZk.checkBlobsAt_accept h with ⟨-, -, h⟩ | ⟨ms, sts, -, -, h⟩
+  swap
+  · obtain ⟨r, hr, -, -⟩ := _root_.Spot.OneStageZk.checkMembersAt_accept h
+    exact (_root_.Spot.OneStageZk.membersRun_held hr).2
   unfold _root_.Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
@@ -207,13 +210,13 @@ structure Accepted (I : Exec.Inputs) (t : Exec.Transcript) (v : _root_.Spot.Regi
   loads : ∀ {tags : Flock.Tags} {c : Flock.Circuit} {pub : Flock.Public},
     Flock.HmOut.loadPublic tags c I.publicFile = .ok pub → pub.n = n
 
-/-- **Where v2's check accepts at the coins `ξ`, its one session is `Accepted`**: at the statement's tags, the circuit
+/-- **Where v2's check accepts at the coins `ξ` on parameters that name no members, its one session is `Accepted`**: at the statement's tags, the circuit
 and public files the parameters name on the blobs, the session's record and proof files (`sessionRecord`,
 `sessionProofs`), the verifier of the parameters and the population the record names. -/
 theorem checkBlobsAt_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB record proofs n,
       Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
@@ -221,7 +224,7 @@ theorem checkBlobsAt_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
       _root_.Spot.nat? (_root_.Spot.getD c.record "population") = some n ∧
       Accepted (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs))
         { record := record, proofs := proofs } p.base.verifier n := by
-  obtain ⟨r, pubB', hsz, hpub', hph, hrun, hall⟩ := checkBlobsAt_run h
+  obtain ⟨r, pubB', hsz, hpub', hph, hrun, hall⟩ := checkBlobsAt_run hm h
   obtain ⟨n, hn, hpop⟩ := popHeld_ok (checkBlobsAt_popHeld h)
   have hs := eq_single hsz
   rw [hs] at hrun
@@ -244,7 +247,7 @@ theorem checkBlobsAt_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
 theorem checkBlobs_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
     ∃ tags0 circuitB pubB record proofs n,
       Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
@@ -254,7 +257,7 @@ theorem checkBlobs_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
         { record := record, proofs := proofs } p.base.verifier n := by
   unfold _root_.Spot.OneStageZk.checkBlobs _root_.Core.atCoins at h
   split at h
-  · exact checkBlobsAt_event h
+  · exact checkBlobsAt_event hm h
   · cases h
 
 /-! ## The events -/

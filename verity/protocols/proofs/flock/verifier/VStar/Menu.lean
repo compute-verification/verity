@@ -11,8 +11,8 @@ each slot has, and its unit types' count. A shape may carry several entries (two
 session of that shape is staged over the largest of their inner sessions, by `m` and then `k_log`, at the most claims
 among them, each slot has the most positions among them, and its type table holds the most of their types.
 
-`sessions` lists each shape's inner session; `vstar menu` runs V* over them, which is how `Menu.Staged` is checked at
-the pinned menus.
+`sessions` lists each shape's inner session; `vstar menu` runs V* over them, which is how it is checked that V* stages
+every shape of the pinned menus.
 -/
 
 @[expose] public section

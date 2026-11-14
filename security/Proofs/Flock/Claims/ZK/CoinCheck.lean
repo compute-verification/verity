@@ -52,7 +52,7 @@ def chainK (ν tag : List UInt8) (E : CoinEnc Dg Coin Salt) : List Coin → Dg �
 /-- The Merkle path from a node up, then `k` at the node it reaches. -/
 def walkK (ν : List UInt8) (ME : Enc Unit Dg) : ℕ → Dg → List Dg → (Dg → OC Bool) → OC Bool
   | _, a, [], k => k a
-  | idx, a, s :: r, k => hq (ν ++ GK.upIn ME idx a s) fun b => walkK ν ME (idx / 2) b r k
+  | idx, a, s :: r, k => hq (ν ++ upIn ME idx a s) fun b => walkK ν ME (idx / 2) b r k
 
 /-- **An opening's walk**: the chain, the round digest `H(ν ‖ ROUND ‖ pos ‖ T_0)`, the salt hash `H(ν ‖ sp ‖ y)`, the
 hm96 leaf, the path; then `k` at the root it reaches. -/
@@ -84,7 +84,7 @@ def chainIns (Hd : List UInt8 → Dg) (tag : List UInt8) (E : CoinEnc Dg Coin Sa
 /-- The path's hash inputs, from the leaf up. -/
 def walkIns (Hd : List UInt8 → Dg) (ME : Enc Unit Dg) : ℕ → Dg → List Dg → List (List UInt8)
   | _, _, [] => []
-  | idx, a, s :: r => GK.upIn ME idx a s :: walkIns Hd ME (idx / 2) (up Hd ME idx a s) r
+  | idx, a, s :: r => upIn ME idx a s :: walkIns Hd ME (idx / 2) (up Hd ME idx a s) r
 
 /-- The round digest's input. -/
 def rIn (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinOpening Dg Coin Salt) : List UInt8 :=
@@ -153,10 +153,9 @@ theorem walkK_passes (ME : Enc Unit Dg) : ∀ (idx : ℕ) (a : Dg) (sibs : List 
     Passes H ν (walkK ν ME idx a sibs k) (walkIns (keyedDg H ν) ME idx a sibs) (k (walk (keyedDg H ν) ME idx a sibs))
   | _, a, [], k => Passes.refl H ν _
   | idx, a, s :: r, k => by
-      have e : keyedDg H ν (GK.upIn ME idx a s) = up (keyedDg H ν) ME idx a s :=
-        (GK.up_eq (keyedDg H ν) ME idx a s).symm
-      have h := (hq_passes H ν (GK.upIn ME idx a s) fun b => walkK ν ME (idx / 2) b r k).trans H ν
-        (walkK_passes ME (idx / 2) (keyedDg H ν (GK.upIn ME idx a s)) r k)
+      have e : keyedDg H ν (upIn ME idx a s) = up (keyedDg H ν) ME idx a s := rfl
+      have h := (hq_passes H ν (upIn ME idx a s) fun b => walkK ν ME (idx / 2) b r k).trans H ν
+        (walkK_passes ME (idx / 2) (keyedDg H ν (upIn ME idx a s)) r k)
       rw [e] at h
       exact h
 

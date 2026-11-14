@@ -31,7 +31,7 @@ exposes a collision:
 namespace SpotFlock
 
 open Claims Claims.Sampling
-open Properties.NetworkCertifier.Bytes (bs bs_inj)
+open Properties.Certifier.Bytes (bs bs_inj)
 
 variable (h : Held)
 

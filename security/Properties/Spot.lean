@@ -19,8 +19,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
-  registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
-  (`Receipt`);
+  registered values' reads against the registered roots, a read named by one of the record's own ports taken only at
+  that port's root (`UnitsProved`), and the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
@@ -297,8 +297,9 @@ def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
 
 /-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own sampling design over its
 program and query applies (`LinkPoints.lawOf`, with the population), some sample under it ends, and no member's fewest
-and most sampled proof blocks under it, over the samples that end, give different link points (`LinkPoints.refused`, which
-refuses a sampling design no sample of which ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
+and most sampled proof blocks under it, over the samples that end, give different link points, nor is any member's
+fewest none, a sample that ends missing it (`LinkPoints.refused`, which refuses a sampling design no sample of which
+ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
 def RL (v : Registration.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
     LinkPoints.refused law n v.members = .ok #[]
@@ -386,11 +387,12 @@ def Receipt (c : Commitment) (e : Evidence) : Prop :=
   jeq (getD e.receipt "registration") (.str (Flock.hexOf c.digest))
 
 /-- The roots the verifiers that accepted report opening the sessions' registered reads against, for the
-record's own values (its roots' ports and its registered values): `{value: root}`, a value reported under two roots mapped
-to null; none when no such verdict reports any (`audit.session_registered`, which `Record.sessionRegistered` and
-`Record.ownRegistered` compute from the verdicts). -/
+record's own values (its roots' ports and its registered values), less the reads of its own ports at their own roots
+(each port's last root, `Record.byPort`): `{value: root}`, a value reported under two roots mapped to null; none when no
+such verdict reports any (`audit.session_registered` and `audit.less_own_reads`, which `Record.sessionRegistered`,
+`Record.ownRegistered` and `Record.lessOwnReads` compute from the verdicts). -/
 def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
-  Record.ownRegistered rec (Record.sessionRegistered vs)
+  Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs))
 
 /-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
 the same key and root in the second. -/
@@ -402,8 +404,8 @@ exactly the units the sample proves (its units and a work sample's closure, asce
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
 each port); and, when the record registers values or the verifiers report reads of the record's own values,
-those reads were opened against exactly the record's `{value: root}` (`Record.registeredRoots`, each value's last
-entry). -/
+those reads, less those of its own ports at their own roots (`openedRoots`), were opened against exactly the record's
+`{value: root}` (`Record.registeredRoots`, each value's last entry). -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧

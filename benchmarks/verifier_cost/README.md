@@ -93,7 +93,7 @@ research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-
   -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2
 ~~~
 
-`flock_read.sh K...` measures Flock's Lean verifier (`flock-verify verify --zk`) on the H1 tile unit, step by step:
+`flock_read.sh K...` measures Flock's Lean verifier (`verity-verify-proof verify --zk`) on the H1 tile unit, step by step:
 `flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
 `Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
@@ -122,12 +122,15 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
 units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
 batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
 changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
-`Partition.unitGates` (one gate table per program, `unitGates_eq_unitGatesFast`), `Slots.popOk` (from the ranges,
-`popOk_eq_popOkRanges`: no replay unit and no input gate is built) and the references: `TemplateQuery.gates` on every
+`Partition.unitGates` (a range at a time, `TemplateQuery.unitGates`), `Slots.popOk` (from the ranges,
+`popOk_eq_popOkRanges`: no replay unit and no input gate is built), the one-stage check's call of it
+(`OneStageZk.popHeld`, compiled in `Spot/OneStageZkStatement.lean`, which imports `Spot.PopOrder` so that it runs from
+the ranges too; its row carries the root's input gates, counted) and the references: `TemplateQuery.gates` on every
 unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
 population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` units
 (default 50). `POPULATION_ARGS='--input-members M'` widens the root's input nodes to M members each, which only the
-layout's input class reads. `$OUT` gets population.jsonl, one row per N and function (units, milliseconds, peak RSS).
+layout's input class reads: `popOk`'s row and `popHeld`'s must not grow with M.
+`$OUT` gets population.jsonl, one row per N and function (units, milliseconds, peak RSS).
 
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
@@ -164,6 +167,36 @@ layout holds a proof block per input gate. `PERF_N` adds a `perf` profile at tha
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
   bash benchmarks/verifier_cost/whole_run.sh run toy 146 1000 10000 50000
+~~~
+
+`members_files.sh N|all...` times the per-member form's pass over every member's files against the members of one
+circuit file. `members_files.py` writes one per-member case as the executable's `check` takes it: a driver's (`MF_CASE`,
+an audit's `window/case-v2-members.json`), or a stand-in window's of `MEMBERS` members (default 300) of one unit over
+two templates (`benchmarks/one_stage/members_standin.py`'s: one member of each template sampled, the rest sharing their
+template's circuit file unsampled), audited as a served window's audit step runs it, on Flock's prover, the Lean
+verifier and the ZK server; v2's `check` must accept the case, and its seconds and peak RSS go to inputs.jsonl.
+`members_files/Main.lean`, built in a scratch Lake package against the checkout's verifier, takes the case's first N
+members of one circuit file (`all`: every member of the case) and times `OneStageZk.membersFiles` as the compiled
+check runs it (`membersFilesKept`: the blobs' lookup tables read once, a circuit file read and parsed once,
+`Spot/CircuitKept.lean`'s summary kept of it, and the strata of the partition's query evaluated on the program once
+for the members that share the parameters' partition) and the pass as stated, `Member.files` a member, each parsing
+its file and evaluating the query itself (`membersFiles_eq_kept` proves them equal). It exits 1 where the two disagree
+on a check's result or a member's files are not held. The stated pass runs up to `REF_MAX` members (default 150). The
+compiled pass's microseconds at N less those at 1, over N - 1, are its work on one more member of a file; the stated
+pass's over N are a member's with its file's parse. `MEMBERS` may name several sizes, a window, a case and its rows
+each: the rows at one N across the cases are the pass against the window's members at a fixed count of members handed.
+A stand-in window's program does not grow with its members (its root holds the templates' nodes), so these rows do
+not vary the program's size; each case's row says how large its program is and what one evaluation of its partition's
+query costs on it, which is the part of the stated pass's work on a member that grows with the program. `$OUT` gets
+members_files.jsonl: each case's row (its members, blobs and bytes, the circuit file's, its program's bytes and root
+nodes, and the microseconds of one evaluation of its partition's query's strata) and one row per N and pass (members,
+circuit files, microseconds, peak RSS, the result's digest).
+
+~~~sh
+research run --as proofs --project verity --on auto --source . --cwd clone --mem-gb 32 -- \
+  bash benchmarks/verifier_cost/members_files.sh 1 2 16 150 all
+research run --as proofs --project verity --on auto --source . --cwd clone --mem-gb 32 --env "MEMBERS=300 1200" -- \
+  bash benchmarks/verifier_cost/members_files.sh 1 16 150
 ~~~
 
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
@@ -289,7 +322,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --poo
 ~~~
 
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
-config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs
+config's word-level descriptor: `verity-verify-proof qcall-program` at each X, with the output's SHA-256 so two commits' outputs
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
 the command.
 

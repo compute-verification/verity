@@ -356,7 +356,10 @@ theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ (out : Array (String × Lean.Json)) (pub' : _root_.Spot.OneStage.Public) (prof' : Core.Integrity),
       _root_.Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := out } = .accept pub' prof' := by
-  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  rcases _root_.Spot.OneStageZk.checkBlobsAt_accept h with ⟨-, -, h⟩ | ⟨ms, sts, -, -, h⟩
+  swap
+  · obtain ⟨r, -, -, hc⟩ := _root_.Spot.OneStageZk.checkMembersAt_accept h
+    exact ⟨_, _, _, hc⟩
   unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
@@ -406,7 +409,7 @@ theorem components_nodup (k : Verity.Registration.Composite) (s : Verity.Sent) :
     rw [List.map_map]
     rfl
   rw [e]
-  cases k <;> decide
+  exact Verity.ids_nodup k
 
 theorem eq_of_ids {β : Type} {f : β → String} {l : List β} {x y : β} (hnd : (l.map f).Nodup) (hx : x ∈ l)
     (hy : y ∈ l) (h : f x = f y) : x = y := by
@@ -433,6 +436,30 @@ def V2Accepts (bs : Core.Blobs) (a b e : ByteArray) (p : _root_.Spot.OneStageZk.
     _root_.Spot.OneStage.commitmentOf b = .ok c ∧ VStar.Recursive.Sampled.evidenceOf e = .ok (.inl ev) ∧
     _root_.Spot.OneStageZk.coinsOf p c ev = .ok ξ ∧ Properties.Challenger.oneStageZkSource p c = some dr ∧
     ∃ pub prof, _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof
+
+/-- The sampled component's one-stage parameters are `OneStageZk.paramsEitherOfJson`'s, of either form, at what it
+reads past the form. -/
+theorem dispatch_params {j : Lean.Json} {p : _root_.Spot.OneStageZk.Params}
+    (h : VStar.Recursive.Sampled.paramsOfJson j = .ok (.inl p)) :
+    ∃ rest, _root_.Spot.OneStageZk.paramsEitherOfJson rest = .ok p := by
+  unfold VStar.Recursive.Sampled.paramsOfJson at h
+  simp only [bind, Except.bind] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; done)
+    | (cases h; exact ⟨_, by assumption⟩)
+
+/-- The sampled component's one-stage evidence is `OneStageZk.evidenceEitherOf`'s, of either form, at the bytes it
+reads past the form. -/
+theorem dispatch_evidence {b : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
+    (h : VStar.Recursive.Sampled.evidenceOf b = .ok (.inl e)) :
+    ∃ b', _root_.Spot.OneStageZk.evidenceEitherOf b' = .ok e := by
+  unfold VStar.Recursive.Sampled.evidenceOf at h
+  simp only [bind, Except.bind] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; done)
+    | (cases h; exact ⟨_, by assumption⟩)
 
 /-- **The case's parameters are the composite's one-stage parameters**: in a composition composite `k` accepted, the
 parameters sampled proofs' case decodes to are the ones `ParamsAt` reads, since the components' ids are distinct. -/
@@ -524,11 +551,13 @@ theorem ShowsDraw.mono {log log' : List Verity.Release} {dr : Draws} {ξ : ByteA
 
 /-- **What the sample asks of the sampled check's read of the device's log** (`read`, `Vocab.coinsRead .sampled`):
 wherever composite `k` accepted what the prover sent as a `same` composition (`Verity.SameAccepts`) and v2's case in it
-accepts at the coins `ξ` it read under the challenger `dr`, the read returns a log that shows the sample there
-(`ShowsDraw`). -/
+accepts at the coins `ξ` it read under the challenger `dr`, on parameters that name no members (`OneStatement`), the
+read returns a log that shows the sample there (`ShowsDraw`). A window of members has the read of its own accepts
+(`MemberForm.accept_read`). -/
 def DrawRead (k : Verity.Registration.Composite) (read : Verity.Sent → Option (List Verity.Release)) : Prop :=
   ∀ s a b e p c ev ξ dr, Verity.SameAccepts k s → V2Case k s a b e →
-    V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr → ∃ log, read s = some log ∧ ShowsDraw log dr ξ
+    V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr → OneStatement s.params →
+      ∃ log, read s = some log ∧ ShowsDraw log dr ξ
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
@@ -545,19 +574,17 @@ theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR
     {o : Verity.Exchange} {a b e : ByteArray} {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray}
     {dr : Draws} (hS : Verity.SameAccepts k o.sent) (hcase : V2Case k o.sent a b e)
-    (hacc : V2Accepts (Core.Blobs.ofArray o.sent.blobs) a b e p c ev ξ dr) (hl : V.Logged .sampled o) :
-    ShowsDraw o.log dr ξ := by
-  obtain ⟨log, hlog, hs⟩ := hR o.sent a b e p c ev ξ dr hS hcase hacc
+    (hacc : V2Accepts (Core.Blobs.ofArray o.sent.blobs) a b e p c ev ξ dr) (hone : OneStatement o.params)
+    (hl : V.Logged .sampled o) : ShowsDraw o.log dr ξ := by
+  obtain ⟨log, hlog, hs⟩ := hR o.sent a b e p c ev ξ dr hS hcase hacc hone
   rw [← hl log (Option.mem_def.2 hlog)]
   exact hs
 
-/-- **A sampled verdict that accepts is sampled proofs' case accepting** (`composite_readsV2`). -/
+/-- **A sampled verdict that accepts is sampled proofs' case accepting** (`Verity.component_eq_some`). -/
 theorem verdict_case {V : Vocab d α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     (h : V.Verdict k .sampled o) : Verity.CaseAccepts k VStar.Recursive.Sampled.protocol o.sent := by
   obtain ⟨-, -, P, hP, hc⟩ := h
-  have hk' : Verity.component k .sampled = some VStar.Recursive.Sampled.protocol := composite_readsV2 k
-  rw [hk'] at hP
-  cases hP
+  obtain rfl : P = VStar.Recursive.Sampled.protocol := (Verity.component_eq_some.1 hP).2
   exact hc
 
 /-- **The sample in a play**: where the play's parameters name sampled proofs' one-stage form, the sampled verdict
@@ -565,11 +592,11 @@ accepts and the sampled check's read of the device's log is the play's, v2 drew 
 whose bits start the play's coins of `dr`'s family released after `dr`'s digest. -/
 theorem logged_draw {V : Vocab d α} {k : Verity.Registration.Composite} (hR : DrawRead k (V.coinsRead .sampled))
     {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt o.params p₀)
-    (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
+    (hone : OneStatement o.params) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧ ShowsDraw o.log dr ξ := by
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hθ (verdict_case hv)
   obtain ⟨L, n, units, hd⟩ := drew_of hcase hacc
-  exact ⟨dr, L, n, ξ, units, hd, shows_of_logged hR hv.2.1 hcase hacc hl⟩
+  exact ⟨dr, L, n, ξ, units, hd, shows_of_logged hR hv.2.1 hcase hacc hone hl⟩
 
 /-! ## The live audit's sample -/
 
@@ -605,13 +632,14 @@ coins, every sample whose bytes start with the play's coins of `dr`'s family rel
 theorem coupled_draw {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params}
-    (hθ : ParamsAt o.params p₀) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
+    (hθ : ParamsAt o.params p₀) (hone : OneStatement o.params) (hv : V.Verdict k .sampled o)
+    (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
       ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.design = L → A.n = n →
         (freshCoins dr.label dr.after o.log).flatten <+:
           bitsOf (_root_.Properties.Spot.bytesOf (A.src ω.1 0)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw hR hθ hv hl
+  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw hR hθ hone hv hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hL hn hω =>
     (extend_draw A _ ω).trans (draw_of_drew hd A ω.1 hL hn (List.IsPrefix.trans hs hω))⟩
 
@@ -621,15 +649,15 @@ digest samples exactly `units`. -/
 theorem coupled_draw_coins {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params}
-    (hθ : ParamsAt o.params p₀) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) {m B : ℕ}
-    (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
+    (hθ : ParamsAt o.params p₀) (hone : OneStatement o.params) (hv : V.Verdict k .sampled o)
+    (hl : V.Logged .sampled o) {m B : ℕ} (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
     (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
       _root_.Properties.Spot.bytesOf (coinBytes m B (κ ω) 0)) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
       ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.design = L → A.n = n →
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR hθ hv hl
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR hθ hone hv hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hL hn hp => h ω hL hn (by rw [hsrc]; exact fresh_prefix_coinBytes hp)⟩
 
 end Verity.Sampled

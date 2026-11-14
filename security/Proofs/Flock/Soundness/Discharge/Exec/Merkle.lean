@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
-# The leaf scheme of each table flock-verify sets up (`hms`)
+# The leaf scheme of each table verity-verify-proof sets up (`hms`)
 
 `accepts_tables_hm96` refines a table whose leaves are `hm96-sha512/v1` (`hms : sts[j].merkle = MerkleScheme.hm96Sha512`).
 This file proves `hms` from the statement's tags: `HmRow.parse` refuses a circuit file whose `leaf_scheme` id is not the
@@ -505,7 +505,7 @@ open Refine Game Transcript Model Accounting
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **flock-verify refines each table of the session it accepts, for tags that implement `hm96-sha512/v1`**:
+/-- **verity-verify-proof refines each table of the session it accepts, for tags that implement `hm96-sha512/v1`**:
 `accepts_tables_hm96` with `hms` discharged by `setupH_tagsAt_hm96`. -/
 theorem accepts_tables_hm96_of_leaf {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf = "hm96-sha512/v1")
     (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :

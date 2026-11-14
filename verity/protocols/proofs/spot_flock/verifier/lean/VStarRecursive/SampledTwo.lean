@@ -42,7 +42,7 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
      public structure, each session's coins one tree of the interior's challenger session, closed after its
      evidence, the trees opened in order, the members laid over the registration, each session verified on its
      member's files); every session must accept;
-  3. each verdict stamped with what the second-stage statement check reads of it, as `flock-verify verify` writes it
+  3. each verdict stamped with what the second-stage statement check reads of it, as `verity-verify-proof verify` writes it
      and the stream's driver hands it on (`stamped`): the delivered sessions, the session's public header's and
      registered reads' digests, its sample and one table;
      neither stage's bytes run past one coin's (`stagesFit`, `STAGE_PAST`): the first stage's bytes are read as one
@@ -249,7 +249,7 @@ def rootsSplit (boundary : Json) (roots : Option Json) : Json × Json :=
     (if mine.isEmpty then .null else Json.mkObj mine.toList, Json.mkObj rest.toList)
 
 /-- **Each verdict as the second-stage statement check reads it** (check, 3): the verdicts in session order with the
-delivered sessions, and what `flock-verify verify` names of the session it checked: its public file's header's digest,
+delivered sessions, and what `verity-verify-proof verify` names of the session it checked: its public file's header's digest,
 its registered reads' (where its member reads any), its sample and one table. A refusal where a member's public file, a
 session's record or a header is not on the blobs or not readable. -/
 def stamped (p : Params) (e : Evidence) (bs : Core.Blobs) (out : Array (String × Json)) :

@@ -420,7 +420,7 @@ def logicalText (done : Array D) (u : D) : String :=
     | none => let (a, b) := u.rows.getD c ([], []); line ([toString c] ++ sideStr a ++ sideStr b)
   "\n".intercalate (order.map rowStr ++ [line ["one", "1", "one", "1", "one"]]) ++ "\n"
 
-/-! ## Archives (`flock-verify layout`'s format) -/
+/-! ## Archives (`verity-verify-proof layout`'s format) -/
 
 /-- An archive's types, tables, layouts and unit: each type and layout checked as `BlockLayout.checkFile` checks it. -/
 def load (j : Json) : V ((String → Option CircuitType) × Array BlockLayout × (String → Option TableInfo) ×

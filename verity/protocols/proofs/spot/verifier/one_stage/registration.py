@@ -40,8 +40,8 @@
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
-  to the record. That they are the proved rows' is `flock-verify`'s check of the public file (`checkPublic`), stated by
-  the Lean guarantee `FailClosed.flock_verify_public_ties`; `flock-verify` reads no `scheme` from the header, only META's.
+  to the record. That they are the proved rows' is `verity-verify-proof`'s check of the public file (`checkPublic`), stated by
+  the Lean guarantee `FailClosed.flock_verify_public_ties`; `verity-verify-proof` reads no `scheme` from the header, only META's.
 * **`window`** is provenance, apart from the binding and the seed salt it names (Binding, Seed salt). `kind` says whether the roots are what the integration
   committed as it ran (`served`) or a fresh commitment to values captured from its run (`stand-in`, whose link to the run's
   root is provenance, not proof).
@@ -310,9 +310,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
     or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `members`: the per-member
     form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
-    refuses the record when a member's fewest and most sampled proof blocks give different link points
-    (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
-    sampling design are not well formed over the population."""
+    refuses the record when a member's fewest and most sampled proof blocks give different link points or some sample
+    that ends misses a member, its fewest none (`link_points.refused`), no sample under the sampling design ends
+    (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the population."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)

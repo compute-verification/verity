@@ -313,10 +313,10 @@ def commitOf? (commit : Json) : Option (ByteArray × Array Json) :=
   if isHexBytes s then
     (hex? commit).bind fun raw =>
     (String.fromUTF8? raw).bind fun text =>
-    (Json.parse text).toOption.bind fun j =>
+    (Flock.JsonParse.parse text).toOption.bind fun j =>
     (Spot.PyJson.canonical j).toOption.bind fun t =>
     (Json.getArr? (get j "registered")).toOption.bind fun xs =>
-    if t == text && isObj j && get j "format" == Json.str COMMIT_FORMAT && xs.all isObj then
+    if t == text && isObj j && jsonStrIs (get j "format") COMMIT_FORMAT && xs.all isObj then
       some (Flock.Sha512.hash ((COMMIT_FORMAT.toUTF8.push 0) ++ raw), xs)
     else none
   else none
@@ -725,7 +725,7 @@ def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array 
   let some units ← port (workUnits coin st reg kvs (← law ss k)) | throw ("sampler", "the draw's stream ran out")
   pure units
 
-/-- `credit._finding`: a session's registered finding (flock-verify's `registered`, `{port: {value, root}}`: each
+/-- `credit._finding`: a session's registered finding (verity-verify-proof's `registered`, `{port: {value, root}}`: each
 registered port's value and the root its reads were opened against) as `(port, value, root)` in port order. -/
 def finding? (x : Json) : Option (List (String × String × String)) :=
   if isObj x then (fields x).mapM fun (port, e) =>

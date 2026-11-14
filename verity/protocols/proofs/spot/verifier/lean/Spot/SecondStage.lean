@@ -120,7 +120,10 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   record or a value the verifier holds,
   and the read's verdict port reads a value the verifier fills with 1 (`openedRow`): the row is then the table's at
   that key, short of a SHA-512 collision. A key the block computes, a wire, is refused, with a reason of its own
-  (`KEY_WHY`): no statement covers it. A read is a template the auditor's params record as one (`Own.reads`,
+  (`KEY_WHY`): no statement covers it. Only where the wired key's switch is on (`WIRED_KEY`, off in the build of
+  record; on only in the development executable `sampled-proofs-wired-key-dev`) is such a key taken, when it is whole
+  (`keyFailure`, each failure its own reason) and each sampled unit's key its writer unit's committed output row
+  (`second-read`). A read is a template the auditor's params record as one (`Own.reads`,
   `Run.templateReads`): the template check (`flock-read-tmpl check V H`, `Flock.ReadNet.check`) accepted the circuit
   file they name for it as the read of a table of `V` rows, where the params were made; round 2 runs no template
   check. The table whose root and domain id the verifier fills has `V` leaves in round 1's record (`oneTable`). It is
@@ -150,6 +153,7 @@ module
 
 public import Flock.FV3
 public import Flock.Program
+public import Spot.Bits
 public import Spot.Record
 public import Spot.Schedule
 meta import Flock.FV3
@@ -221,6 +225,25 @@ def KEY_WHY : String :=
   "the interior registration registers the opened row of a read at a key the block computes (the read's key is " ++
   "wired to another template's output): no statement covers it"
 
+/-- **The wired key's switch**: whether round 2 takes a read whose key a wire fills (`openedRow`, `keyFailure`). Off, it
+refuses each one with `KEY_WHY`. It is a constant of the build: the run of record (`Run.run`) holds `Own.wiredKey` to
+it, and no executable reads the field from its input; only the development executable `sampled-proofs-wired-key-dev`
+(`Spot.WiredKeyDevMain`) holds it on, for development plays, never an accept of record. It turns on only once the
+statement that a sampled reader unit's key is its writer unit's committed output row is proved. -/
+def WIRED_KEY : Bool := false
+
+def KEY_WIRES_WHY : String :=
+  "a read's key is wired, but not by exactly one wire"
+
+def KEY_LINKED_WHY : String :=
+  "a read's key is both wired and linked: it is its writer's row or a value the verifier holds, never both"
+
+def KEY_WIDTH_WHY : String :=
+  "a read's key is wired to a writer's output row of other u16 words than the key's row"
+
+def KEY_BOUNDS_WHY : String :=
+  "a read's key is wired, and its rows give a unit a writer row outside its writer's units a replay block"
+
 /-- A read's key port (`EmbeddingRead_v1{V, H}`, whose template the verifier builds: `Flock.ReadNet.readTmpl`). -/
 def OPENING_KEY : String := "tok"
 
@@ -247,6 +270,10 @@ def OWN_SOURCES : List String := ["bytes"]
 
 /-- The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1. -/
 def VERDICT_ONE : Array (String × String) := #[("bytes", "00000001")]
+
+/-- `VERDICT_ONE` as one 16-bit leaf, the width of the verdict value's row: the bytes of 1 as one 16-bit half
+(`Supplied.halfLeaves`). `openedRow` doesn't read it until `halfLeaves` is written. -/
+def VERDICT_ONE_LEAF : Array (String × String) := #[("bytes", "0001")]
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
@@ -290,7 +317,7 @@ def Stmt.ofJson? (j : Json) : Option Stmt :=
   | .str t, .obj h, .obj d, .obj r => some ⟨t, .obj h, .obj d, .obj r⟩
   | _, _, _, _ => none
 
-/-- What an accepted verdict of record names of the session it checked (`flock-verify verify`'s verdict): the digests
+/-- What an accepted verdict of record names of the session it checked (`verity-verify-proof verify`'s verdict): the digests
 of the public file's header and of the `--registered` file it checked the session against (`public_header_sha512`,
 `registered_sha512`, null for none), the sample it checked it at (`unit_draw`) and the number of tables it set the
 session up as (`session_tables`). -/
@@ -402,6 +429,29 @@ def rowsOf? : Json → Option (Array Rows)
     pure (Rows.mk t p per runs)
   | _ => none
 
+/-- The u16 words of the rows a wire joins: template `template`'s session port `port` reads rows of `reads` words, and
+its writer's output port writes rows of `writes` (`replayWidths`). -/
+structure Width where
+  template : String
+  port : String
+  reads : Nat
+  writes : Nat
+  deriving Repr, Inhabited, DecidableEq
+
+def Width.toJson (w : Width) : Json :=
+  Json.mkObj [("port", Json.str w.port), ("reads", Lean.toJson w.reads), ("template", Json.str w.template),
+    ("writes", Lean.toJson w.writes)]
+
+/-- Widths from their JSON: a list of objects of exactly `template`, `port`, `reads` and `writes`, two strings and two
+natural numbers. -/
+def widthsOf? : Json → Option (Array Width)
+  | .arr ws => ws.mapM fun w => do
+    guard (keys? w == some #["port", "reads", "template", "writes"])
+    let .str t := getD w "template" | none
+    let .str p := getD w "port" | none
+    pure (Width.mk t p (← nat? (getD w "reads")) (← nat? (getD w "writes")))
+  | _ => none
+
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
 registrations' records, the second sample's units, the design's links (`replayLinks`, none when the replay block's
 Definition makes none), the `{value: root}` the verifiers report the sessions read
@@ -412,8 +462,10 @@ wires (`replayWires`, none when the Definition makes none), the rows of the port
 (`replayRows`), the names the replay block's return has in the boundary registration's record (`replayReturns`), and,
 of the values the interior registration registers, the verifier's own copies of those it holds without the prover:
 each one it fills itself, with its rows of sources (`Registration.Verifier.supplied`, `Supplied.Rows`), and the names
-of those it pinned or holds to an earlier record (`fixed`: `Registration.Verifier.pinned` and `outputs`); and the
-templates the auditor's params record as reads, each with its table's rows, `(template, V)` (`Run.templateReads`). -/
+of those it pinned or holds to an earlier record (`fixed`: `Registration.Verifier.pinned` and `outputs`); the
+templates the auditor's params record as reads, each with its table's rows, `(template, V)` (`Run.templateReads`); the
+words of the rows each wire joins (`replayWidths`); and the wired key's switch, by default `WIRED_KEY`, which no
+executable of record sets otherwise. -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -431,6 +483,8 @@ structure Own where
   supplied : Array (String × Array (Array (String × String))) := #[]
   fixed : Array String := #[]
   reads : Array (String × Nat) := #[]
+  widths : Array Width := #[]
+  wiredKey : Bool := WIRED_KEY
 
 /-- `second_stage.supplied_of`: the verifier's supplied values from their JSON, `{value: [[source, ...], ...]}`, a
 row a list of sources, each `{kind: name}` of two strings, as `(value, rows)` each, a row its `(kind, name)` sources;
@@ -727,6 +781,18 @@ def replayRows (P : Flock.Program.Prog) (key : String) : Array Rows :=
       ((wireRuns P.defs d).getD #[]).map fun (w, per, rs) => ⟨w.template, w.port, per, rs⟩
   | none => #[]
 
+/-- **The design's widths**: for each wire of the replay block program `P` defines under descriptor id `key`
+(`replayWires`), the u16 words of a row its reader's port reads, its parameter's, and of one its writer writes, the
+writer's output field the wire names (`Bits.wordsOf`). A wire whose templates or field `P` doesn't define gives
+none. -/
+def replayWidths (P : Flock.Program.Prog) (key : String) : Array Width :=
+  ((replayWires P key).getD #[]).filterMap fun w => do
+    let t ← P.defs[← P.index[w.template]?]?
+    let tw ← P.defs[← P.index[w.writer]?]?
+    let (_, ty) ← t.params.find? (·.1 == w.port)
+    let g ← (fields tw.ret).zipIdx.findSome? fun (g, f) => if "o" ++ toString f == w.wport then some g else none
+    pure ⟨w.template, w.port, Bits.wordsOf ty, Bits.wordsOf g⟩
+
 /-- The rows of template `t`'s session port `port` (`Own.rows`). -/
 def rowsOf (own : Own) (t port : String) : Option Rows := own.rows.find? fun r => r.template == t && r.port == port
 
@@ -767,6 +833,28 @@ def wireOf (own : Own) (t port : String) : Option Wire :=
 
 /-- Wire `w`'s writer's part. -/
 def writerOf (own : Own) (w : Wire) : Option Part := (own.parts.getD #[]).find? (·.template == w.writer)
+
+def KEY_ORDER_WHY : String :=
+  "a read's key is wired to a writer whose part is not before the reader's in the interior window"
+
+/-- **Why template `t`'s wired key is not whole**, none when it is: exactly one wire names its key port (`OPENING_KEY`,
+else `KEY_WIRES_WHY`), no link does (`KEY_LINKED_WHY`), the writer's output field the wire names is a row of the key
+row's u16 words (`Own.widths`, `KEY_WIDTH_WHY`), the writer's part is before the reader's in the interior window
+(`posOf`, `KEY_ORDER_WHY`), and the key's rows give each unit a writer row among the writer's units a replay block
+(`KEY_BOUNDS_WHY`). That a sampled unit's key is that row's committed value is `second-read`'s (`readOk`). -/
+def keyFailure (own : Own) (t : String) : Option String :=
+  let ws := (own.wires.getD #[]).filter fun w => w.template == t && w.port == OPENING_KEY
+  match ws with
+  | #[w] =>
+    let ps := own.parts.getD #[]
+    if (linkOf own t OPENING_KEY).isSome then some KEY_LINKED_WHY
+    else if !(own.widths.find? fun x => x.template == t && x.port == OPENING_KEY).any (fun x => x.reads == x.writes) then
+      some KEY_WIDTH_WHY
+    else if !decide (posOf ps w.writer < posOf ps t) then some KEY_ORDER_WHY
+    else if !((writerOf own w).any fun p => (rowsOf own t OPENING_KEY).any fun r =>
+        r.runs.all fun x => decide (x.row + (x.count - 1) * x.step < p.n)) then some KEY_BOUNDS_WHY
+    else none
+  | _ => some KEY_WIRES_WHY
 
 /-- The interior record's port that holds template `t`'s session port `p`: at a port a wire names, its writer's output
 port, the one tree the interior commits that value in; else its own (`portOf`). -/
@@ -1310,11 +1398,13 @@ def oneTable (own : Own) (mine : Array (String × Array (Array (String × String
 /-- **An opened row**: link `x` names the opened row of a read against a root round 1 committed. Its template is a
 read (`readSize`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
 (`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which are one table's
-of round 1's record at every unit, of the read's rows (`oneTable`); its key (`OPENING_KEY`) is no wire, and is linked
-at values the interior registration doesn't register (`registered`: a port of round 1's record then, by
-`second-links`) or the verifier holds (`own.fixed`, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its
-template's reference statement's reads (`Own.refReads`, the template's first), a value the verifier fills, of at least
-one row, each row `VERDICT_ONE`. A key the block computes, a wire, is refused: no statement covers it (`inputsWhy`). -/
+of round 1's record at every unit, of the read's rows (`oneTable`); its key (`OPENING_KEY`) is either no wire, and
+linked at values the interior registration doesn't register (`registered`: a port of round 1's record then, by
+`second-links`) or the verifier holds (`own.fixed`, `mine`), or, where the wired key's switch is on (`Own.wiredKey`),
+one wire, whole (`keyFailure`), the key at each sampled unit its writer unit's committed output row (`second-read`'s
+`readOk`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference statement's reads (`Own.refReads`,
+the template's first), a value the verifier fills, of at least one row, each row `VERDICT_ONE`. With the switch off, a
+key the block computes, a wire, is refused: no statement covers it (`inputsWhy`). -/
 def openedRow (own : Own) (registered : Array String) (mine : Array (String × Array (Array (String × String))))
     (x : Link) : Bool :=
   let t := x.template
@@ -1330,7 +1420,9 @@ def openedRow (own : Own) (registered : Array String) (mine : Array (String × A
   (readSize own t).isSome && OPENING_ROW.contains x.port &&
     OPENING_TABLE.all (fun p => !(linked p).isEmpty && (linked p).all isMine) &&
     (linked OPENING_ROOT).all (fun r => (linked OPENING_DOMAIN).all fun d => oneTable own mine t r d) &&
-    (wireOf own t OPENING_KEY).isNone && !(linked OPENING_KEY).isEmpty && (linked OPENING_KEY).all held &&
+    (match wireOf own t OPENING_KEY with
+      | none => !(linked OPENING_KEY).isEmpty && (linked OPENING_KEY).all held
+      | some _ => own.wiredKey && (keyFailure own t).isNone) &&
     match verdict with
     | some v => (match ownRows mine v with
       | some rows => !rows.isEmpty && rows.all (· == VERDICT_ONE)
@@ -1368,12 +1460,14 @@ def inputsFailure (own : Own) : Option String :=
     !(own.fixed.contains v || mine.any (·.1 == v)) &&
       (!(!links.isEmpty && links.all (openedRow own names mine)) || readUnlinked own v)
 
-/-- Why value `v` is refused (`inputsFailure`): `KEY_WHY` where a link names it as the opened row of a read whose key
-is wired, a key the block computes, else `INPUTS_WHY`. -/
+/-- Why value `v` is refused (`inputsFailure`): where a link names it as the opened row of a read whose key is wired, a
+key the block computes, `KEY_WHY` with the wired key's switch off (`Own.wiredKey`), and with it on why the key is not
+whole (`keyFailure`); else `INPUTS_WHY`. -/
 def inputsWhy (own : Own) (v : String) : String :=
-  if (own.links.getD #[]).any fun x => x.value == v && (readSize own x.template).isSome &&
-      OPENING_ROW.contains x.port && (wireOf own x.template OPENING_KEY).isSome then KEY_WHY
-  else INPUTS_WHY
+  match (own.links.getD #[]).find? fun x => x.value == v && (readSize own x.template).isSome &&
+      OPENING_ROW.contains x.port && (wireOf own x.template OPENING_KEY).isSome with
+  | some x => if own.wiredKey then (keyFailure own x.template).getD INPUTS_WHY else KEY_WHY
+  | none => INPUTS_WHY
 
 /-- `second-interior-order` unless the interior record names the replay sample in its order (`interiorOrderOk`), then
 `second-interior-names` unless no value the interior registration registers is of a name the boundary registration's
@@ -1868,6 +1962,30 @@ theorem check_ok_wired {allow : Bool} {own : Own} {ss : Array Json} (h : (check 
   refine ⟨s, p, hs, hf, hwr, fun port e w he hl hw => ?_⟩
   rw [← hpt] at hl hw
   exact readOk_wired hl hw (Array.all_eq_true_iff_forall_mem.mp hr _ he)
+
+/-- **The build of record holds the wired key's switch off.** -/
+theorem wiredKey_off : WIRED_KEY = false := rfl
+
+/-- **With the switch off, a wired key opens no row**: where a wire names a read's key, `openedRow` fails, so round 2
+refuses the row as it did before the switch (`inputsWhy`: `KEY_WHY`). -/
+theorem openedRow_wired_off {own : Own} {registered : Array String}
+    {mine : Array (String × Array (Array (String × String)))} {x : Link} {w : Wire}
+    (hk : own.wiredKey = false) (hw : wireOf own x.template OPENING_KEY = some w) :
+    openedRow own registered mine x = false := by
+  simp [openedRow, hw, hk]
+
+/-- **A wired key round 2 takes is whole**: where a wire names a read's key and `openedRow` passes, the switch is on and
+the key is whole (`keyFailure`): one wire, no link, of the writer row's words, the writer's part first, each unit's
+writer row among the writer's units. -/
+theorem openedRow_wired {own : Own} {registered : Array String}
+    {mine : Array (String × Array (Array (String × String)))} {x : Link} {w : Wire}
+    (hw : wireOf own x.template OPENING_KEY = some w) (h : openedRow own registered mine x = true) :
+    own.wiredKey = true ∧ keyFailure own x.template = none := by
+  cases hk : own.wiredKey
+  · simp [openedRow, hw, hk] at h
+  · cases hf : keyFailure own x.template
+    · exact ⟨rfl, rfl⟩
+    · simp [openedRow, hw, hk, hf] at h
 
 /-- The reference reads `refReadsOf` gives template `t` are ones the auditor's params give it. -/
 theorem refReadsOf_mem {own : Own} {t : String} {r : Json} (h : refReadsOf own t = some r) :

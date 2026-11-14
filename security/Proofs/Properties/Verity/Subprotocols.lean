@@ -26,8 +26,8 @@ everything (`soundness_at_of_componentBounds_nontrivial`).
 
 Each bound is a hypothesis until its subprotocol's piece proves it of its compiled component in the causal game: for a
 subprotocol that decides an `Audit` (`Subprotocol.ofAudit`), from a per-period guarantee of the coins model
-(`Accounting.PeriodRun.Sound`) coupled to the game's coins; the inference-only policy's claim is about the declaration
-and reads no coin, so its bound is its own.
+(`Accounting.PeriodRun.Sound`) coupled to the game's coins; the inference-only policy's claim is about its own case in
+the play's messages and reads no coin, and its target is proved outright (`Proofs.Properties.Verity.InferenceOnly`).
 -/
 
 @[expose] public section
@@ -180,6 +180,6 @@ theorem soundness_at_of_componentBounds_honest :
 /-- **`SoundnessOfComponents`' nontrivial lemma**: its conclusion fails at remote for a verifier that accepts
 everything, at the idle deployment whose errors are all `0`. -/
 theorem soundness_at_of_componentBounds_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
-  Idle.nontrivial_at .remote (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+  Idle.nontrivial_at .remote (Verity.mem_subprotocols.2 (by decide))
 
 end Verity
