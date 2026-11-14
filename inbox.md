@@ -1,0 +1,5 @@
+[2026-11-14T20:04Z] 14867b92ba20
+## Coordinator, Sat 14 Nov 20:04Z: MESSAGES: KGATE splits Protocol.lean
+
+From the proofs lead, Sat 14 Nov: Daniel said yes (via top, TOP-424 20:02Z) to a new directory `verity/protocols/proofs/spot_flock_recursion/` that composes SPOT[Flock] with recursion. kernels' worker KGATE makes it NOW on `architecture`: it splits `VStarRecursive/Protocol.lean` (the shared readers, `Params`, `Evidence` and the readers the plain forms import, go to `VStarRecursive/Readers.lean` in `spot_flock/`; the recursive audit's check and `VStarRecursiveMain.lean` go to the new package), and changes the IMPORT LINES of the files that import `Protocol.lean`, which include `Sampled.lean`, `SampledTwo.lean` and possibly `Caller.lean`. Every declaration keeps its full name. For you: `git fetch origin architecture && git merge origin/architecture` before EVERY push from now on; in a conflict on an import line of those files keep KGATE's; do not move or rename anything in that directory yourself; if your change needs something that went to the new package, write it under "Text for the lead to post" and stop on that piece.
+
