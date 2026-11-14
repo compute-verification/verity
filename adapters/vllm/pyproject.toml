@@ -63,6 +63,7 @@ follow_imports = "silent"
 # test files that start a program the read guard can't trace (git, lake, a shell): keyed on the suite's whole tree. A compiler
 # needs no entry: a file whose closure builds native code may start one (the test-file family's `compilers`)
 untraced = [
+    "tests/commit/test_census_and_memory_map.py",
     "tests/lint/test_merge_allowlist.py",
     "tests/lint/test_mypy.py",
     "tests/lint/test_ruff.py",
@@ -112,8 +113,9 @@ untraced = [
 # reference decode it imports) and imports the store's load (load.py, with the library's wrapper gpu.py); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
-# `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
-# `remote-audit-verifier`.
+# `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest`, test_remote_session.py
+# `remote-audit-verifier` and test_census_and_memory_map.py `requirement-difftest`, through the port's own test
+# (verity/circuits/requirement/tests/test_requirement_difftest.py, loaded by file) and the harness (tools/difftest).
 # tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
 # compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
@@ -121,7 +123,7 @@ inputs_only = true
 inputs = ["verity", "hardware/cards", "verity/README.md", "tools/config/verity_config", "artifacts.json",
           "demos/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/accounting/pouw/verifier/lean/check/lakefile.toml",
-          "verity/protocols/accounting/poub/verifier/lean/lakefile.toml",
+          "verity/protocols/accounting/poub/verifier/lean/lakefile.toml", "verity/circuits/requirement/lakefile.toml", "tools/difftest",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
           "benchmarks/remote_session/prover.py", "verity/protocols/accounting/poub/verifier/session/verifier.py", "verity/protocols/accounting/poub/verifier/session/wire.py",
@@ -283,6 +285,10 @@ tests = [
     "tests/program/test_dense_family_boundary.py",
 ]
 paths = ["adapters/vllm/verity_vllm", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/commit/test_census_and_memory_map.py"]
+paths = ["verity/circuits/requirement", "verity/circuits/difftest", "verity/circuits/base", "verity/circuits/lean", "tools/difftest"]
 
 [[tool.verity.tests.reads]]
 tests = [
