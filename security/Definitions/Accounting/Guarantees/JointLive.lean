@@ -19,7 +19,7 @@ collision bound, `⊤` elsewhere). That is the adaptive form: the subprotocols' 
 order, and the prover may adapt every byte to every coin released before it. Given those guarantees, at every strategy,
 the probability that some subprotocol accepts while its claim fails is at most the errors summed:
 
-* `JointPeriodLive`: one period, the five subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit and the network
+* `JointPeriodLive`: one period, the five subprotocols (SPOT, PoUW, PoUS, the bandwidth audit and the network
   certifier);
 * `JointPeriodLiveECR`: the same in the one adversary form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
   bound is numbers;
@@ -43,7 +43,7 @@ open Accounting
 open scoped ENNReal
 
 /-- **The joint guarantee over a period played as a causal game.** On any device and any period read off the run of a
-causal game `G`, over a circuit, whose five subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit and the
+causal game `G`, over a circuit, whose five subprotocols (SPOT, PoUW, PoUS, the bandwidth audit and the
 network certifier) have their per-period guarantees over `G` at certificates `c` (integrity `ε`, work `W`, space `S`,
 bandwidth `Q`, communication `K`) and errors `err`, each a function of the strategy (`PeriodLive.error`'s
 `δ + loss(Pr[B^s finds a collision])`, or `condError`'s): at every strategy `s`, the probability that some subprotocol

@@ -190,7 +190,7 @@ def test_remote_v1_takes_pearl_plus_in_the_period_s_place_and_publishes_its_dige
 
 
 def test_a_v2_answer_whose_query_is_a_digest_its_evidence_carries_stays_private(tmp_path):
-    """Sampled proofs' answer names its partition's digest as its profile's query, and its evidence carries that digest too; the
+    """SPOT's answer names its partition's digest as its profile's query, and its evidence carries that digest too; the
     public output holds the outcome only, so it passes the guard, and the answers are in the private directory whole."""
     partition = os.urandom(64).hex()
     evidence = json.dumps({"partition": partition, "sessions": ["s0"]}).encode()
