@@ -1253,6 +1253,56 @@ private def atSite : Site := ⟨[sheet], Core.Registration.Example.locs, links�
 #guard stepsWithin 1000 ⟨1, 1000000000⟩ tick (some (fig 1 1000)) == 999
 #guard stepsWithin 1000 ⟨1, 1000000000⟩ tick none == 0
 
+/-! The auditor's device a key names (`Site.holder`), on the example's locations with their keys in lower-case hex,
+and what it reaches (`Site.hostLinks`, `Site.hostsOf`). -/
+
+/-- The example's devices and auditor's host of the auditor's, their keys in lower-case hex. -/
+private def hexed (x : Site.Loc) : Site.Loc :=
+  match x.id with
+  | "cert0" => { x with key := "c0" }
+  | "chal0" => { x with key := "e1" }
+  | "vm0" => { x with key := "a2" }
+  | _ => x
+
+/-- The auditor whose registered keys are the keys `xs` state. -/
+private def keysOf (xs : List Site.Loc) : Site.Registration.Auditor :=
+  { auditor with key := fun i => (xs.find? (·.id == i)).bind fun x => if x.kind.auditor then some x.key else none }
+
+private def host1 : Site.Loc := { id := "node1", kind := .host, parent := some "site0", chip := some (1 <<< 25) }
+private def cert1 : Site.Loc :=
+  { id := "cert1", kind := .certifier, parent := some "site0", owner := .auditor, key := "c1",
+    scheme := Core.Registration.Example.lms }
+private def link (id a b : String) : Site.Link := { id, ends := (a, b), β := some 10000000000, latency := 1 }
+
+private def hexLocs : List Site.Loc := locs.map hexed
+private def upper (x : Site.Loc) : Site.Loc := if x.id == "cert0" then { x with key := "C0" } else x
+private def hexSite : Site := ⟨[sheet], hexLocs, links⟩
+/-- Beside the example: a second host, joined to the challenger and to the first host, and a certifier with no link. -/
+private def wideLocs : List Site.Loc := hexLocs ++ [host1, cert1]
+private def wide : Site := ⟨[sheet], wideLocs, links ++ [link "mc1" "chal0" "node1", link "hh0" "node0" "node1"]⟩
+
+-- a key names its device: the certifier's its certifier, the challenger's its challenger
+#guard (hexSite.holder (keysOf hexLocs) "c0").map (·.id) == some "cert0"
+#guard (hexSite.holder (keysOf hexLocs) "e1").map (·.id) == some "chal0"
+-- and names none: an auditor's host's key, a key no location of the auditor's holds, a key the auditor registers
+-- for none of them, a key two of its locations hold, a key not in lower-case hex though its device holds it
+#guard (hexSite.holder (keysOf hexLocs) "a2").isNone
+#guard (hexSite.holder (keysOf hexLocs) "ff").isNone
+#guard (hexSite.holder (keysOf []) "c0").isNone
+#guard (Site.holder ⟨[sheet], hexLocs ++ [{ cert1 with key := "c0" }], links⟩
+  (keysOf (hexLocs ++ [{ cert1 with key := "c0" }])) "c0").isNone
+#guard (site.holder (keysOf locs) "k0").isNone
+#guard (Site.holder ⟨[sheet], hexLocs.map upper, links⟩ (keysOf (hexLocs.map upper)) "C0").isNone
+-- the certifier reaches its uplink's half on its host's side and that host, never the half to the outside
+#guard (hexSite.hostLinks "cert0").map (·.id) == ["up0"] ∧ hexSite.hostsOf "cert0" == ["node0"]
+-- the challenger reaches its links and the hosts they join it to, each once
+#guard (hexSite.hostLinks "chal0").map (·.id) == ["mc0"] ∧ hexSite.hostsOf "chal0" == ["node0"]
+#guard (wide.hostLinks "chal0").map (·.id) == ["mc0", "mc1"] ∧ wide.hostsOf "chal0" == ["node0", "node1"]
+-- a certifier the Site gives no link reaches nothing, though its key names it; a link between hosts, no device's
+#guard (wide.holder (keysOf wideLocs) "c1").map (·.id) == some "cert1"
+#guard wide.hostLinks "cert1" == [] ∧ wide.hostsOf "cert1" == []
+#guard !(["cert0", "cert1", "chal0"].any fun i => (wide.hostLinks i).any (·.id == "hh0"))
+
 end Example
 
 end Account

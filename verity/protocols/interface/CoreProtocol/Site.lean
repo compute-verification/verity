@@ -681,6 +681,43 @@ def boundary (h : Option String) : List Link :=
 
 end Site
 
+/-! ## The auditor's devices, by their keys
+
+A protocol's answer names the key its check ran under, never a location. `holder` finds the one device of the auditor's
+that holds that key, and `hostLinks` and `hostsOf` what that device witnesses: the links that join it and a host of the
+prover's, and those hosts. A network certifier's is the half of its uplink on its host's side and that host; a memory
+challenger's, its links and the hosts they join it to. -/
+
+namespace Site
+
+variable (S : Site)
+
+/-- `s` is lower-case hex: an even, positive number of the digits `0`–`9` and `a`–`f`. -/
+def lowerHex (s : String) : Bool :=
+  !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
+
+/-- **The device of the auditor's that holds key `k`**: a network certifier or a memory challenger, the one location of
+the auditor's (`Kind.auditor`) that registers `k` as its key, where `k` is the auditor's own key for it
+(`Registration.Auditor.key`, which the `owner` check holds a registered key to) and in lower-case hex, the one form a
+key is compared in, so that one key is not two strings. None where no location of the auditor's holds `k`, more than one
+does, or the one that does is no such device. -/
+def holder (A : Registration.Auditor) (k : String) : Option Loc :=
+  if lowerHex k then
+    match S.locs.filter fun x => x.kind.auditor && x.key == k && A.key x.id == some k with
+    | [x] => if x.kind = .certifier ∨ x.kind = .challenger then some x else none
+    | _ => none
+  else none
+
+/-- **The links `i` reaches**: those that join it and a host of the prover's, in the Site's order. -/
+def hostLinks (i : String) : List Link :=
+  S.links.filter fun k =>
+    (k.ends.1 = i ∧ S.kind? k.ends.2 = some .host) ∨ (k.ends.2 = i ∧ S.kind? k.ends.1 = some .host)
+
+/-- **The hosts `i` reaches**: the far ends of its links that are hosts of the prover's, each once. -/
+def hostsOf (i : String) : List String := ((S.far i).filter fun h => S.kind? h = some .host).eraseDups
+
+end Site
+
 /-! ## The JSON `verity.core.site` writes, and the deployed digests -/
 
 namespace Site
