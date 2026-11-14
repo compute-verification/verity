@@ -33,6 +33,13 @@ ahead of the tree (the Lean bar warns of one, naming the count to lower it to); 
 (`off_gate` in `tools/verity/check/policy.toml`), reports a change that grows a list or adds a finding to a file it
 touches.
 
+`lint/allowlists/superseded_versions.json` is circuit-check's suite's
+(`tools/verity/circuit_check/tests/test_superseded_versions.py`): every Definition version the registries register below
+a higher one of its name and kind (a Boolean version, registered with the word Definition it computes, supersedes no word),
+one entry each, or one line of its `held` table naming the workload of record that still names it. That list is exact: a
+superseded version with neither fails, and so does a line for a version that is gone. The same gate reports a change that
+leaves its entries more than it found.
+
 ## Bookkeeping
 
 `conftest.py`'s `BOOKKEEPING` names the tests whose findings warn (a `Bookkeeping` warning in pytest's summary) and pass:

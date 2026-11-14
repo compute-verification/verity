@@ -42,7 +42,7 @@ inputs = [
     # `window_code` takes the window it charges from the certifier's prover (`window_charge.Advice`) and its code
     # word's width from the certifier's verifier (`arith_encode.CW`); those two load the certifier's chain checks
     # beside them and the grid and certificate `head_check` reads
-    "verity/protocols/__init__.py",
+    "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
     "verity/protocols/accounting/certifier/__init__.py",
     "verity/protocols/accounting/certifier/prover/__init__.py",
     "verity/protocols/accounting/certifier/prover/window_charge.py",
@@ -111,3 +111,5 @@ inputs = [
     # the record of the value settings in force, which the suite makes as the benchmark does (serve_tax.value_settings)
     "adapters/vllm/verity_vllm/settings.py",
 ]
+# the runner's tests start `run.sh` under bash, a program the read guard can't trace: keyed on the suite's whole tree
+untraced = ["tests/test_prod_repro.py"]

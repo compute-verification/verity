@@ -59,10 +59,18 @@ nothing and is listed under "Refused".
 The serving rate isn't a record: it is modeled from the census's MACs a served token, the fleet's assumed serving MFU
 (`FLEETS`) and the card's data-sheet peak, and the output says so.
 
+SPOT's table also prints the prover GPUs a serving GPU at two designs, a line each naming its source: at the sampling
+plan of record (its art), the table's total; and at the exfiltration run of record's design (`at_record`, the run),
+read by `verity bench exfiltration`'s own reader of that record's rows (`exfiltration.rows_of_record` and `at_share`):
+the planner's world year at `exfiltration.SHARE` of total compute, whose proving is a share of total compute at an
+audit budget β, so a serving GPU holds that share / (1 - β) prover GPUs, modeled. Where that record can't be read the
+line says why and the table stands.
+
 Under a research run, a runner that names metric ids for the table's totals (`benchmarks/prove/run.py`'s `METRICS`)
 has `record` write them through the harness kit: a measurement a total of SPOT's table at the workload's sampling plan
 of record, its mark (measured, modeled or partial, as the table says it) the first of its inputs, and `CHECKS` as the
-run's validation. A table with every block proved records nothing.
+run's validation; and the figure at the exfiltration run of record's design (`AT_RECORD`), modeled, its input the run
+it is read from. A table with every block proved records nothing.
 """
 
 from __future__ import annotations
@@ -74,6 +82,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from verity_bench import exfiltration as E
 from verity_bench import jobs, kit, overhead_records, settings, steady
 from verity_bench import lean_verify as L
 from verity_bench import overhead as O
@@ -115,11 +124,18 @@ FLEETS = Path("benchmarks/rho/data/reference.toml")
 SYSTEMS = ("flock", "spot")
 #: the proof system whose table a runner records under its metric ids: SPOT, at the workload's sampling plan of record
 RECORDED = "spot"
-#: the totals of that table a runner records, by their key in the table's `totals`, with the unit each measurement carries
+#: the prover GPUs a serving GPU at the exfiltration run of record's design, beside that table (`at_record`)
+AT_RECORD = "gpus_per_serving_gpu_at_record"
+#: the figures a runner records, by their key in the table's `totals` (`AT_RECORD`: the document's own), with the unit
+#: each measurement carries
 FIGURES = {"gpus_per_serving_gpu": "prover GPUs a serving GPU",
            "gpu_seconds_per_token": "prover GPU-seconds a served token",
            "lean_verifier_seconds_per_token": "Lean verifier seconds a served token",
-           "proof_bytes_per_token": "proof bytes a served token"}
+           "proof_bytes_per_token": "proof bytes a served token",
+           AT_RECORD: "prover GPUs a serving GPU"}
+#: the scope of the exfiltration run of record's rows that `AT_RECORD` is read over, at `exfiltration.SHARE`: the
+#: planner's world year, `verity bench exfiltration`'s figure
+DESIGN_SCOPE = "world year"
 #: the unit of each Lean figure's fitted rate, as the table prints it
 LEAN_RATE_UNITS = {"lean_verifier_seconds_per_token": "s an AND gate", "proof_bytes_per_token": "bytes a witness bit"}
 #: the table a run's result keeps beside its measurements, relative to the run's directory
@@ -528,6 +544,28 @@ def plan(store: Any, workload: Workload, given: str | None) -> tuple[P.SamplingP
                        f"{got.serving_gpu_seconds / got.period_s:.4g} serving GPUs")
 
 
+def at_record(store: Any) -> dict:
+    """The prover GPUs a serving GPU at the exfiltration run of record's design, read as `verity bench exfiltration`
+    reads it (`exfiltration.rows_of_record`, `exfiltration.at_share`): the planner's rows over `DESIGN_SCOPE` at
+    `exfiltration.SHARE` of total compute, where its proving is `prove_share` of total compute at the audit budget
+    `beta`, so a serving GPU holds prove_share / (1 - beta) prover GPUs. Modeled, as the planner's rows are; where the
+    record can't be read, no value and `why`."""
+
+    out = {"record": E.RECORD, "scope": DESIGN_SCOPE, "share": E.SHARE, "run": None, "prove_share": None, "beta": None,
+           "gpus_per_serving_gpu": None, "status": "modeled", "why": None}
+    try:
+        scopes, plans, _, _ = E.rows_of_record(store)
+        if DESIGN_SCOPE not in scopes:
+            return out | {"why": f"no run of record holds the {DESIGN_SCOPE}'s rows (they hold {', '.join(sorted(scopes))})"}
+        p = E.at_share(DESIGN_SCOPE, *scopes[DESIGN_SCOPE], E.SHARE, plans.get(DESIGN_SCOPE))
+    except ValueError as e:
+        return out | {"why": str(e)}
+    if "prove" not in p["parts"]:
+        return out | {"run": p["run"], "why": f"{p['run']}'s {DESIGN_SCOPE} rows don't all hold their proving's share (`prove`)"}
+    return out | {"run": p["run"], "prove_share": p["parts"]["prove"], "beta": p["beta"],
+                  "gpus_per_serving_gpu": p["parts"]["prove"] / (1 - p["beta"])}
+
+
 def serving(root: Path, workload: Workload) -> P.Serving:
     """The stated serving rate: the fleet's assumed serving MFU of the card's data-sheet peak."""
 
@@ -551,7 +589,8 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
           store: Any = None, root: Path | None = None, local_only: bool = False) -> dict:
     """A proof system's table on a workload from the store's records, each type priced at `provers` provers on a host
     of `cores` CPU cores a card: `prove.report`'s rows, sources and totals, with the inputs read, the runs and rows
-    refused, the stated serving rate and the totals a monitoring period over all compute."""
+    refused, the stated serving rate and the totals a monitoring period over all compute. SPOT's also holds the
+    prover GPUs a serving GPU at the exfiltration run of record's design (`at_record`)."""
 
     if system != "spot" and sampling:
         raise ValueError(f"--sampling is SPOT's: {system} proves every block (pass --system spot)")
@@ -581,7 +620,8 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
     return {"schema": P.SCHEMA, "workload": w.name, "model": w.model, "cut": blocks.cut, "provers": provers, "cores": cores,
             "macs_in_blocks": blocks.macs_in_blocks, "inputs": inputs,
             "refused": refused, "serving": {"gpu_seconds_per_token": seconds, "status": "modeled", "basis": rate.basis},
-            **doc, "periods": _periods(root, rate, doc["totals"]["gpus_per_serving_gpu"], sampled)}
+            **doc, "periods": _periods(root, rate, doc["totals"]["gpus_per_serving_gpu"], sampled),
+            **({} if sampled is None else {"at_record": at_record(store)})}
 
 
 def _periods(root: Path, rate: P.Serving, ratio: float, sampled: P.SamplingPlan | None) -> dict:
@@ -612,26 +652,40 @@ def _periods(root: Path, rate: P.Serving, ratio: float, sampled: P.SamplingPlan 
 # ---- the result ------------------------------------------------------------------------------------------------------------
 
 
-def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str]:
-    """A total's value and its mark, in the table's words. The proving totals: their status (`measured`, `modeled`, or
-    `partial` with how many block types it leaves out), the share of the proving time steady-state rows measure and
-    the range's other end. The Lean verifier's seconds and the proof's bytes: `not measured`, with no value, else the
-    status, each source's share of the figure (own, family, fitted) with the fitted rate, and the block type measured
-    with what its accept holds (its record's `label`)."""
+#: the kit's marks (`kit.MARKS`) from the strongest to the weakest: a total computed from two figures takes the weaker
+#: of their marks
+STRENGTH = ("measured", "partial", "modeled")
 
+
+def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str, str]:
+    """A total's value, its mark (`kit.MARKS`) and that mark in the table's words. The proving totals: their status
+    (`measured`, `modeled`, or `partial` with how many block types it leaves out), the share of the proving time
+    steady-state rows measure and the range's other end. The Lean verifier's seconds and the proof's bytes: `not
+    measured`, with no value and the mark `modeled` (no run of record measures every block type, so a figure the
+    table has is in part fitted), else the status, each source's share of the figure (own, family, fitted) with the
+    fitted rate, and the block type measured with what its accept holds (its record's `label`). The figure at the
+    exfiltration run of record's design (`AT_RECORD`): modeled, with how it is read from that run's rows, or `not
+    read` and why."""
+
+    if figure == AT_RECORD:
+        r = doc["at_record"]
+        if r["gpus_per_serving_gpu"] is None:
+            return None, r["status"], f"not read: {r['why']}"
+        return r["gpus_per_serving_gpu"], r["status"], f"{r['status']}: {_design(r)}"
     t = doc["totals"]
     if figure in ("gpus_per_serving_gpu", "gpu_seconds_per_token"):
+        mark = "partial" if t["missing"] else t["status"]
         status = (f"partial: {len(t['missing'])} block type(s) with no figure, whose proving it leaves out"
                   if t["missing"] else t["status"])
         low, high = t[f"{figure}_range"]
         other = "" if low == high else f"; range {low:.6g} to {high:.6g}, the other end {t['range_basis']}"
         own = (f"; at the sampling plan's own prices, which its planner sized the sample at: {t['planned'][figure]:.6g}"
                if t.get("planned") else "")
-        return t[figure], (f"{status}: steady-state measurements cover {t['steady_time_share']:.1%} of the proving time"
+        return t[figure], mark, (f"{status}: steady-state measurements cover {t['steady_time_share']:.1%} of the proving time"
                            f"{' it prices' if t['missing'] else ''}{other}{own}")
     v = t[figure]
     if v is None:
-        return None, ("not measured: no Lean verifier run of record measures a block type "
+        return None, "modeled", ("not measured: no Lean verifier run of record measures a block type "
                       f"(`{RUN_OF_RECORD}={record_name(doc['workload'], LEAN)}`)")
     m = t["lean_verify"][0]
     status = "modeled, not measured" if v["status"] == "modeled" else v["status"]
@@ -640,27 +694,41 @@ def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str]:
     rate = ("no fitted rate" if v["fitted_rate"] is None else
             f"fitted rate {v['fitted_rate']:.4g} {LEAN_RATE_UNITS[figure]}")
     one = "one block type" if len(t["lean_verify"]) == 1 else f"{len(t['lean_verify'])} block types, the most proving time first"
-    return v["value"], (f"{status}: {shares} ({rate}); measured on {one}, `{m['block']}` ({m['label']}, run {m['run']}): "
+    return v["value"], v["status"], (f"{status}: {shares} ({rate}); measured on {one}, `{m['block']}` ({m['label']}, run {m['run']}): "
                         f"{v['basis']}")
 
 
 def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dict]:
     """The kit writer's measurements of a table, one a metric id of `metrics`: the total its
-    key names (`FIGURES`), in that total's unit. A total with a value has its mark as the first of its inputs, since
-    the kit holds a `why` only for a measurement with no value, then (for the prover GPUs a serving GPU) the stated
-    serving rate, then the records the table read; a total with none has its mark as its `why`."""
+    key names (`FIGURES`), in that total's unit, with its mark (`_mark`). A total with a value has its mark in the
+    table's words as the first of its inputs, since the kit holds a `why` only for a measurement with no value, then
+    the records the table read; a total with none has those words as its `why`. The prover GPUs a serving GPU are the
+    proving total over the stated serving rate, so their mark is the weaker of the two's (`STRENGTH`), first among
+    their inputs, then proving's words and the serving rate's. The figure at the exfiltration run of record's design
+    (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records."""
 
     if bad := sorted(set(metrics.values()) - FIGURES.keys()):
         raise ValueError(f"no total of the table is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
+    if AT_RECORD in metrics.values() and "at_record" not in doc:
+        raise ValueError(f"`{AT_RECORD}` is SPOT's: only a table at a sampling plan holds it")
     targets = list(dict.fromkeys(t for i in doc["inputs"] for t in i["targets"]))
     s, out = doc["serving"], []
     for name, figure in metrics.items():
-        value, mark = _mark(doc, figure)
-        if value is None:
-            out.append({"name": name, "value": None, "unit": FIGURES[figure], "why": mark, "inputs": targets})
+        value, mark, said = _mark(doc, figure)
+        if figure == AT_RECORD:
+            run = doc["at_record"]["run"]
+            read = [] if run is None else [run]
+            out.append({"name": name, "value": value, "unit": FIGURES[figure], "mark": mark,
+                        **({"why": said, "inputs": read} if value is None else {"inputs": [said, *read]})})
             continue
-        serving = [f"serving rate ({s['status']}, a stated input): {s['basis']}"] if figure == "gpus_per_serving_gpu" else []
-        out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [mark, *serving, *targets]})
+        if value is None:
+            out.append({"name": name, "value": None, "unit": FIGURES[figure], "why": said, "inputs": targets, "mark": mark})
+            continue
+        inputs = [said]
+        if figure == "gpus_per_serving_gpu":
+            mark = max(mark, s["status"], key=STRENGTH.index)
+            inputs = [mark, f"proving: {said}", f"serving rate ({s['status']}, a stated input): {s['basis']}"]
+        out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [*inputs, *targets], "mark": mark})
     return out
 
 
@@ -762,6 +830,29 @@ def _planned_lines(planned: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+def _design(r: Mapping[str, Any]) -> str:
+    """How the figure at the exfiltration run of record's design is read from that run's rows (`at_record`)."""
+
+    return (f"run {r['run']} (`{RUN_OF_RECORD}={r['record']}`), the planner's {r['scope']} at {r['share']:.0%} of total "
+            f"compute: its proving's {r['prove_share']:.3%} of total compute over 1 - its audit budget, "
+            f"{r['beta']:.3%}")
+
+
+def _record_lines(doc: Mapping[str, Any]) -> list[str]:
+    """The prover GPUs a serving GPU at the sampling plan of record and at the exfiltration run of record's design,
+    side by side, each naming its source: the plan's art, and the run whose rows it is read from (`at_record`)."""
+
+    t, r = doc["totals"], doc["at_record"]
+    plan = next(x for i in doc["inputs"] if i["slot"] == SAMPLING for x in i["targets"])
+    head = "- prover GPUs per serving GPU at"
+    lines = [f"{head} the sampling plan of record ({plan}): {t['gpus_per_serving_gpu']:.4g}, {t['status']}"]
+    if r["gpus_per_serving_gpu"] is None:
+        return [*lines, f"{head} the exfiltration run of record's design (`{RUN_OF_RECORD}={r['record']}`): not read: "
+                        f"{r['why']}"]
+    return [*lines, f"{head} the exfiltration run of record's design: {r['gpus_per_serving_gpu']:.4g}, {r['status']}: "
+                    f"{_design(r)}"]
+
+
 def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
     """The Lean verifier's seconds and the proof's bytes a served token, a line each: `not measured` with no statement
     measured, else the figure with its status, what was measured (the block type with its share of the proving time,
@@ -857,6 +948,8 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         more = len(t["missing"]) - MISSING_NAMED
         lines.append(f"- partial: {len(t['missing'])} block type(s) with no figure, whose proving every total here leaves "
                      f"out: {named}" + (f"; and {more} more, which `--json` names" if more > 0 else ""))
+    if "at_record" in doc:
+        lines += _record_lines(doc)
     if above := t["above_cores"]:
         lines.append(_above_line(above, bool(t["missing"])))
     if planned:

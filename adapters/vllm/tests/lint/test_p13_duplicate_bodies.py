@@ -23,7 +23,7 @@ import textwrap
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from . import _ratchet as R
@@ -33,8 +33,9 @@ RULE = "P13 (no duplicate function bodies)"
 KIND = "duplicate-body"
 MIN_LINES = 9
 #: where the provers' side of ``verity`` is, from ``verity/``, beside the packages of ``verity/definitions``
-PROVER_PLACES = ("circuits", "commitments", "protocols/certifier/prover", "protocols/poub/verifier/commitments/gates",
-                 "protocols/pous/prover", "protocols/pouw/prover")
+PROVER_PLACES = ("circuits", "commitments", "protocols/accounting/certifier/prover",
+                 "protocols/accounting/poub/verifier/commitments/gates", "protocols/accounting/pous/prover",
+                 "protocols/accounting/pouw/prover")
 #: a verifier's package inside one of those
 VERIFIER_PLACES = ("commitments/attest",)
 _DEFS = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -64,8 +65,9 @@ def _bound(fn: _Def) -> frozenset[str]:
             out.add(n.id)
         elif isinstance(n, ast.arg):
             out.add(n.arg)
-        elif isinstance(n, (*_DEFS, ast.ClassDef)) and n is not fn:
-            out.add(n.name)
+        elif isinstance(n, (*_DEFS, ast.ClassDef)):
+            if n is not fn:
+                out.add(n.name)
         elif isinstance(n, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and n.name:
             out.add(n.name)
         elif isinstance(n, ast.MatchMapping) and n.rest:
@@ -196,7 +198,7 @@ def duplicates(pkg: Iterable[Body], ml: Iterable[Body]) -> list[tuple[Body, str,
     return sorted(out, key=lambda t: (t[0].file, t[0].line))
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[tuple[R.Violation, ...], dict[tuple[str, str, str, str], list[str]]]:
     """The violations, and for each key the other copies (``file:line symbol``) the failure message names."""
     pkg = [b for p in R.library_files() for b in bodies(R.parse(p), R.rel(p))]

@@ -25,8 +25,8 @@ from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, sal
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
 from verity.protocols.proofs.spot.device import challenger as Ch
 
-# the clear audit is a reference tool (verity/protocols/accounting/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
+# the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
 from clear_audit import Prover, Sampled, Verifier
 
 PINNED = json.loads(V.OUT.read_text())
@@ -172,9 +172,12 @@ def test_a_served_window_flips_every_coin_from_its_entropy_and_none_from_the_os(
 #: The PoUW and proof-system modules that read the operating system's randomness, each with why it isn't a coin, or
 #: the claim instance that names it
 OS_RANDOMNESS = {
-    "protocols/pouw/prover/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
+    "protocols/accounting/pouw/prover/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
                                             "by A5's uniform/python-secrets",
-    "protocols/spot/verifier/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
+    "protocols/accounting/pouw/prover/clear/clear_audit.py": "the reference prover's hm96 hiding key when its caller "
+                                                             "gives none (`Prover.salt_key`), the committer's secret "
+                                                             "and no coin",
+    "protocols/proofs/spot/verifier/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
                                                            "(`_dumps`), no coin",
 }
 
@@ -185,7 +188,7 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     the served path."""
     verity = Path(EC.__file__).resolve().parents[4]
     found = set()
-    for d in ("protocols/pouw/verifier", "protocols/spot", "protocols/pouw/prover"):
+    for d in ("protocols/accounting/pouw/verifier", "protocols/proofs/spot", "protocols/accounting/pouw/prover"):
         for path in (verity / d).rglob("*.py"):
             rel = path.relative_to(verity).as_posix()
             if "/tests/" in f"/{rel}" or "/.lake/" in f"/{rel}":
