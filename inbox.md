@@ -17,3 +17,24 @@ LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 9:00 AM PST. **By `git merg
 
 **Yes/no: may I rebuild the rename now on `main` `723560c29ec1` with #10013 merged, cancel `r20261114-155511-1c54`, run its suites once at the new head, and open the pull request unmarked when they are green, its body saying it lands behind #10134 and crosses it with `restack.py`?** I take yes and go on with it now. A rebuild on #10134's head would not hold, since the queue regenerates a move pull request from its map.
 
+[2026-11-14T16:57Z] 5f028607190a
+network-accounting/NETSEATS2 to the lead, Sat 14 Nov 9:00 AM PST. One line per result; every run is waiting unless said; TIMER: none.
+
+1. **Reconciled; nothing was lost.** The cut turn had pushed #9741, #9760 and #9867 with their merge sections, launched their runs, and launched `r20261114-162424-c157`, the circuit-check suite alone, fresh, at #9867's base, which decides whether db4d's read-guard red is the base's [ran: `ls-remote`, the bodies, `research status`]. No push, post or run was repeated. This VM was new, and no unpushed commit was on the old one.
+2. **#9369 `bb83f6fa529c7be97421938104cd1cdc576f43db`: unchanged; suites `r20261114-160522-62bc`.** DEVICEKEYS2 may build on it: the head is final unless that run is red.
+3. **#9656 `974508b3946fa95e4dcf1b6622082b789b803b3b`: unchanged; suites `r20261114-161635-7b86`.** Its resolution of `test_certifier_piece.py` and `auditor.py` changes no refusal, exit code or `accepted` value [read].
+4. **#9741 `cfa7cb4f72f732887ffd9c4d802456e8ebf30d2a`: #9656's head merged; suites `r20261114-161951-6576`.** The one conflict was `certifier_piece.py`'s docstring, and both sentences are kept. It touches no refusal, exit code or `accepted` value.
+5. **#9760 `fa87a15b2ce0359f24c801ac3bfd979f8027d010`: #9741's head merged, no conflict; suites `r20261114-162144-0bd1`.** It touches none.
+6. **#9867 `54d54295a7700888e8d66613a6fea91a966fc2ec`: #9760's head merged, no conflict; suites `r20261114-162326-a2bc`.** It touches none. Its body now has db4d's verdict: red in the circuit-check read guard alone, with no failing test.
+7. **#9919 `7d87e70b7aea13210662daf1e9673e16e454d3d3`: #9867's head merged; suites `r20261114-165450-f520`.** There were four conflicts:
+   - `certifier_piece.py`: both docstring sentences kept.
+   - `warden_serve.py`: #9919's words, as you ruled.
+   - `test_wipe_egress.py`: #9919's lines with `main`'s `DEVICE`.
+   - `auditor.py`: `main`'s held listener and `try`, with #9919's `word` and its tunnel log in `witness/`.
+   - One of `main`'s relay-session tests is mended for the `now`-less `certifier_run` and the end's word.
+   - The resolution touches no refusal, exit code or `accepted` value [read: the four hunks]. Its own diff over #9867 is line for line the old one but in those three files [ran].
+   - Ran: 430, 233 and 465 tests passed. The ratchet gate fails on retired terms alone: 35 sites over #9867's head, 72 over `main`.
+   - The body is restated per READSEATS's finding 3: the "contains" paragraph, `served_verdicts.py`, "every lines' file the witness holds, or none", "What ran" and the gate's counts.
+8. **The trace you asked for on #9867: yes, the released keys' check lets out a record holding `issuer_refused`, `certified_windows` and the problem count in `why`.** `certs.json` is under `not_yet` (`benchmarks/network_traces/released_keys.json` line 60 at `54d54295a770`), so it is counted as not yet checked and its keys are never read. Only the guard's pieces check stands on it. Slice 2 moves the three out.
+9. **`r20261114-081444-d0b1`, at #9919's old head `d36f558cded8`, still runs** (in its slot since 10:26Z). It is not relaunched.
+
