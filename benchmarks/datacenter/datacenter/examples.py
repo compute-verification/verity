@@ -9,7 +9,8 @@ rates, SHA-512 oracle and squaring ceilings, and half the host's on each socket,
 multiply-adds by precision at the dense datasheet peaks `benchmarks/census/hardware.json` names; CUDA-core word
 operations, `cuda:op`, and Boolean gates, `cuda:gate`, at its integer rate times 32 lanes), each socket's host DRAM
 (half the node's online memory) and each PCIe link at PCIe 5.0 x16's rate. A capacity not measured yet is `math.inf`,
-the upper bound that claims nothing; the residuals are declared.
+the upper bound that claims nothing; the residuals are declared. A GPU's memory, the host's DRAM, a PCIe lane's rate and
+a node's uplink are read from the node's file and its cards (`verity.device`).
 
 `with_dpu` adds an NVIDIA BlueField-3 DPU between a node's NIC and its way out, and the DPU's BMC behind it, with Amodo's
 measured stores and wipe coverage (amododesign.com, its note on DPU memory wipes): what a wipe can't reach on them is
@@ -21,16 +22,22 @@ from __future__ import annotations
 
 import math
 
+from verity.device import load_card, load_node, number
 from verity.protocols.accounting.poub.verifier import timing as T
 
 from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkEntry, Zone
+
+NODE = load_node("rtx-pro-6000-server-x8")
+GPU_CARD = load_card(NODE["device"]["sku"])
+HOST_CARD = load_card(NODE["host"]["sku"])
+UPLINK_GBPS = int(number(NODE["interface"]["eth0"]["rate"]) / 10 ** 9)
 
 GB = 8e9
 INF = math.inf
 US = Assumption("hop", 1e-6, "s", "measured")
 
 S_CHIP = Assumption("rtx-pro-6000/S_chip", T.GPU_CHIP_BYTES * 8, "bits", "measured")
-GPU_MEMORY = Assumption("rtx-pro-6000/memory", 103_079_215_104 * 8, "bits", "datasheet")
+GPU_MEMORY = Assumption("rtx-pro-6000/memory", int(number(GPU_CARD["store"]["dram"])) * 8, "bits", "datasheet")
 GPU_READ = Assumption("rtx-pro-6000/memory-read", T.GPU_READ_BYTES_PER_S * 8, "bit/s", "measured")
 GPU_WRITE = Assumption("rtx-pro-6000/memory-write", T.GPU_WRITE_BYTES_PER_S * 8, "bit/s", "datasheet")
 GPU_RESIDUAL = Assumption("rtx-pro-6000/residual", 1 * GB, "bits", "declared")
@@ -45,11 +52,12 @@ GPU_RATE = {
        for w, r in T.GPU_SQUARINGS_PER_S.items()},
 }
 HOST_CHIP = Assumption("xeon-6776p/caches", T.HOST_CHIP_BYTES // 2 * 8, "bits", "declared")
-HOST_DRAM = Assumption("host-dram/socket-capacity", 1_872_605_741_056 // 2 * 8, "bits", "measured")
+HOST_DRAM = Assumption("host-dram/socket-capacity", int(number(NODE["memory"]["dram"]["bytes"])) // 2 * 8, "bits",
+                       "measured")
 HOST_READ = Assumption("host-dram/socket-read", T.HOST_READ_BYTES_PER_S / 2 * 8, "bit/s", "measured")
 HOST_WRITE = Assumption("host-dram/socket-write", T.HOST_WRITE_BYTES_PER_S / 2 * 8, "bit/s", "datasheet")
 HOST_RESIDUAL = Assumption("host-dram/socket-residual", 4 * GB, "bits", "declared")
-PCIE5_X16 = 32e9 * 16 * 128 / 130          # 32 GT/s a lane, 16 lanes, 128b/130b coding: one direction's bits a second
+PCIE5_X16 = float(number(HOST_CARD["pcie"]["speed"]) * 10 ** 9) * 16 * 128 / 130  # 16 lanes, 128b/130b: one way's bit/s
 PCIE_GPU = Assumption("pcie/gpu", PCIE5_X16, "bit/s", "datasheet")
 PCIE_SOCKET = Assumption("pcie/socket-aggregate", INF, "bit/s", "measured")
 PCIE_NIC = Assumption("pcie/nic", PCIE5_X16, "bit/s", "datasheet")
@@ -99,7 +107,7 @@ def with_dpu(node: Datacenter) -> Datacenter:
 
 def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[str, ...] = ("ext0",),
                challengers: tuple[str, ...] = (), dpus: bool = False, prefix: str = "b", name: str | None = None,
-               uplink_gbps: int = 400, spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
+               uplink_gbps: int = UPLINK_GBPS, spine_gbps: int = 400, fabric_latency: float = 2e-6, uplink_latency: float = 1e-6,
                outside_latency: float | None = None, cadence: Cadence | None = None) -> Datacenter:
     """`blocks` nodes (`rtx_node`, named `{prefix}0`, `{prefix}1`, …, each `with_dpu` when `dpus`) behind a leaf-spine
     fabric: each node's way out (its NIC, or its DPU) to its own certifier (`{prefix}I.cert`), the certifier to a leaf

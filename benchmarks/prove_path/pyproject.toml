@@ -47,7 +47,9 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           "verity/protocols/accounting/pouw/prover/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
           "tools/config/verity_config",
           # verity_difftest, which test_prove_path imports: under `verity` until the difftest map moved it
-          "tools/difftest"]
+          "tools/difftest",
+          # the cards class_rows.py reads its targets' SM counts from
+          "hardware/cards/rtx-pro-6000-server.toml", "hardware/cards/h200-sxm-141gb.toml"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

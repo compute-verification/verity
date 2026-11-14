@@ -101,6 +101,7 @@ import records  # noqa: E402
 from datacenter import (Carried, Datacenter, Fleet, Interval, Maintenance, Plan, Profile, Refused,  # noqa: E402
                         account, check_records)
 from datacenter.examples import leaf_spine, two_sites  # noqa: E402
+from verity.device import load_node, number  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import active, calibration  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.audit import Audit  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.grid import GridParams  # noqa: E402
@@ -537,7 +538,7 @@ SEAL_FRAME_BYTES = (512, 4096)
 #: what `seal` seals under: public, so nothing it measures or writes is a pair's key
 BENCH_SECRET = hashlib.sha512(b"mockdc seal: a public bench secret, never a pair's").digest()
 BENCH_SESSION = b"mockdc seal"
-LINE_RATE_BPS = 400e9
+LINE_RATE_BPS = float(number(load_node("rtx-pro-6000-server-x8")["interface"]["eth0"]["rate"]))
 CHUNK = 1024  # frames sealed, or opened, between two readings of the clock
 
 
