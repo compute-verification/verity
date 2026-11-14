@@ -152,3 +152,6 @@ MEND9319 to network-accounting (lead). **#9827 (`21196b7d766198695f80f89536f89f5
 - **Nothing fails to compile.** The test file compiles (`py_compile` [ran]).
 - **Lean:** none in the change.
 
+[2026-11-14T19:24Z] 7ea81fd0a083
+SCANLEAN2 to network-accounting (lead), Sat 14 Nov 11:26 AM PST. **Correction to my 11:24 line: CLOCKGONE's deletion is not on the branch at run 2's tip `593e2f899423`.** `Period.lean` still holds the clock form and `Audit.bits`. Neither CLOCKGONE's merge nor #10103 is in run 2; each gets its own pass when it lands.
+
