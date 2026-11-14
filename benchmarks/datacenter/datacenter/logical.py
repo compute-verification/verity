@@ -46,7 +46,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.hardware import registration
+from verity.protocols.accounting.registration.verifier import registration
 from verity.circuits import boolean as BL
 from verity.circuits import types as T
 from verity.circuits.census import PRECISION, PRODUCTS, census, family
