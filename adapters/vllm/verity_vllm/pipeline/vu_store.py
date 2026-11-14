@@ -347,7 +347,7 @@ def memory_headroom() -> float | None:
             lim, cur = Path(lim_f).read_text().strip(), int(Path(cur_f).read_text().strip())
         except (OSError, ValueError):
             continue
-        if lim.isdigit() and int(lim) < (1 << 60):
+        if lim.isdecimal() and int(lim) < (1 << 60):
             return max(0.0, 1.0 - cur / int(lim))
     try:
         mi = {ln.split(":")[0]: int(ln.split()[1]) for ln in Path("/proc/meminfo").read_text().splitlines() if ln.split()[1:]}

@@ -507,4 +507,4 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
     return 0
 
 
-__all__ = ["NAME", "TIE_TAG", "Chain", "Tie", "audit_inputs", "checked_pins", "commit", "tie"]
+__all__ = ["COMMANDS", "NAME", "TIE_TAG", "Chain", "Tie", "audit_inputs", "checked_pins", "commit", "main", "tie"]
