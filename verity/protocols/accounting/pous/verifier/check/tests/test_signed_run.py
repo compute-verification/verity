@@ -157,7 +157,7 @@ def _repeat(s: Signed) -> int:
         if r.index in seen:
             return j
         seen.add(r.index)
-    raise AssertionError("no round draws an index twice")
+    raise AssertionError("no round samples an index twice")
 
 
 def _opening(s: Signed, j: int, f) -> Signed:
@@ -316,12 +316,12 @@ def test_setup_accepted_is_one_string() -> None:
 
 
 @pytest.mark.slow
-def test_drawn_sessions_agree(test_server) -> None:
+def test_sampled_sessions_agree(test_server) -> None:
     """Sessions under flipped coins on the one setup, honest or under one bit off in one opening's row or path, or in the
     setup record's signature."""
     signer = M.test_signer(M.SECRETS[0], 2, 1)
 
-    def draw(seed: int, edit: int, x: int) -> dict:
+    def sampled(seed: int, edit: int, x: int) -> dict:
         s = signed_run(signer, coins=hashlib.sha512(b"coins %d" % seed).digest())
         j = x % len(s.openings)
         if edit == 1:
@@ -333,7 +333,7 @@ def test_drawn_sessions_agree(test_server) -> None:
             s = dataclasses.replace(s, setup=dataclasses.replace(s.setup, signature=M._flip(s.setup.signature, x)))
         return s.case()
 
-    port = D.ProtocolPort(EXE, TEST.reference, st.builds(draw, st.integers(0, 2 ** 16), st.integers(0, 3),
+    port = D.ProtocolPort(EXE, TEST.reference, st.builds(sampled, st.integers(0, 2 ** 16), st.integers(0, 3),
                                                          st.integers(0, 2 ** 16)), package=LEAN, serve=("--test", "serve"))
     stats = D.run(port, examples=40, server=test_server)
     assert stats.counts.get("accept", 0) > 3 and stats.counts.get("reject", 0) > 10, stats
