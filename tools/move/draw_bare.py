@@ -7,7 +7,8 @@
     python3 tools/move/draw_bare.py plan [--write]    which words each file of ours may take by word (`[code.files]`)
                                                       and which files are renamed by hand (`[code.by_hand]`, each with
                                                       its reason); `--write` writes both into the map
-    python3 tools/move/draw_bare.py code [--dry-run]  rename `[code.files]`' words in code and backticked names alone
+    python3 tools/move/draw_bare.py code [--dry-run]  rename `[code.files]`' words in code and backticked names alone,
+                                                      and `[code.tokens]`' names, the hand edits a build needs
 
 The order: `rename.py --map tools/move/draw_bare_map.toml` (the namespaces, modules and paths), then `plan --write` on
 the moved tree, then `code`, then the `by_hand` files; build the Lean after each, and read `resolve_check.py` first.
@@ -20,9 +21,10 @@ or a local), others' (a name another owner declares, `[code] keep`), or by type 
 A file takes a word by `code` only when nothing else can own the word there: in Lean, no other owner's module that
 declares it is reachable through the file's imports, and no file outside ours that reaches the file spells it; in
 Python, the file imports no module outside ours that declares it, no file outside ours imports the file and spells it,
-and the file serializes no record by its fields' names. A word one of our files takes by hand is by hand in every file
-of ours linked to it by an import, either way, where either file declares it. It reads source text and elaborates
-nothing, so the build is the authority. Run from the repository's root.
+and the file serializes no record by its fields' names; and in either, the word's new word is no name in the file's code
+yet. A word one of our files takes by hand is by hand in every file of ours linked to it by an import, either way, where
+either file declares it. It reads source text and elaborates nothing, so the build is the authority. Run from the
+repository's root.
 """
 from __future__ import annotations
 
@@ -71,8 +73,14 @@ def tracked() -> list[str]:
     return [f for f in out if f and Path(f).is_file()]
 
 
+@cache
+def excluded() -> tuple[str, ...]:
+    return tuple(load()["rewrite"]["exclude"])
+
+
 def ours(f: str) -> bool:
-    return any(fnmatch.fnmatchcase(f, g) for g in SCOPE) and not POUW.match(f)
+    return (any(fnmatch.fnmatchcase(f, g) for g in SCOPE) and not POUW.match(f)
+            and not any(rename._match(f, g) for g in excluded()))
 
 
 def keeps(data: dict) -> list[re.Pattern[str]]:
@@ -252,6 +260,7 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
                 if m in by_module:
                     py_users[by_module[m]].add(f)
 
+    new = load()["code"]["words"]
     safe: dict[str, list[str]] = {}
     hand: dict[str, str] = {}
     whys: dict[str, tuple[set[str], dict[str, str]]] = {}
@@ -259,6 +268,9 @@ def plan() -> tuple[dict[str, list[str]], dict[str, str]]:
         if not (words := code_words(f)):
             continue
         why: dict[str, str] = {}
+        for w in sorted(words):
+            if any(is_code(f, m.start()) for m in re.finditer(rf"(?<![\w'.]){new[w]}(?![\w'!?])", text(f))):
+                why[w] = f"`{new[w]}` is already a name in its code"
         if f.endswith(".lean"):
             for g in sorted(reach(f)):
                 for w in sorted(words & declared.get(g, set())):
@@ -336,6 +348,21 @@ def apply_code(dry: bool) -> int:
             print(f"{f}: {n}")
             if not dry:
                 Path(f).write_text("".join(out) + t[last:])
+    paths = tracked()
+    for glob, toks in data["code"].get("tokens", {}).items():
+        for f in (x for x in paths if fnmatch.fnmatchcase(x, glob) and ours(x)):
+            t = text(f)
+            out, last, n = [], 0, 0
+            pat = re.compile("|".join(rf"(?<![\w'.]){re.escape(k)}(?![\w'!?])" for k in toks))
+            for m in pat.finditer(t):
+                if is_code(f, m.start()):
+                    out += [t[last:m.start()], WORD.sub(lambda w: new[w.group(1)], m.group(0))]
+                    last, n = m.end(), n + 1
+            if n:
+                changed, sites = changed + 1, sites + n
+                print(f"{f}: {n} by hand")
+                if not dry:
+                    Path(f).write_text("".join(out) + t[last:])
     print(f"{sites} site(s) in {changed} file(s)" + (" (dry run)" if dry else ""))
     return 0
 
