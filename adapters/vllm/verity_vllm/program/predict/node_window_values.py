@@ -36,6 +36,7 @@ from verity.commitments import randomness as RND
 from verity.commitments.windows import interface as IF
 
 from .node_window import PEERS, STAND_IN, WEIGHTS, NodeWindow, _family
+from .node_window_join import Joined
 
 PROMPT = "prompt"
 SAMPLE = 1024
@@ -715,7 +716,7 @@ def joint(values: Sequence[Values]) -> list[Values]:
     return list(values)
 
 
-def check_join(joined: Any, checks: Sequence[Check], seed: int, most: int = SAMPLE) -> dict[str, Any]:
+def check_join(joined: Joined, checks: Sequence[Check], seed: int, most: int = SAMPLE) -> dict[str, Any]:
     """Each peer input `node_window_join.join` wired (``joined.wired``), up to ``most`` of its units sampled under ``seed``: each
     of its rows as the joined circuit's wire reads it, the writer rank's row (its Check's `Check.row`, the rank's own
     units), against the reader rank's Program's words there (its stood peer rows, `joint`'s). ``checks[r]`` is rank r's
