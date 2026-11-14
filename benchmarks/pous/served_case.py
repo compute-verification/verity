@@ -49,6 +49,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.accounting.pous.prover import weight_store as ws
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import run as R
@@ -210,9 +211,9 @@ def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: b
     pous.linear_types = SP._linear_types
     try:
         _, _, tensors = pous._plaintext(SP.ENTRY, model)
-        layout, commitment = pous._commit(pous.DEFAULT_SCHEME, tensors)
+        layout, commitment = ws.commit(pous.DEFAULT_SCHEME, tensors)
         _need(commitment == published.commitment, "the snapshot's W is not the one setup committed to")
-        store = pous._encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
+        store = ws.encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
         try:
             _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
                   f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")
@@ -268,7 +269,7 @@ def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[st
     return write(private, case, got), got
 
 
-#: the answer fields the wipe's verifier and its Lean agree on, as `wipe_period.leg` holds them (the reasons may differ)
+#: the answer fields the wipe's verifier and its Lean agree on, as `wipe_run.leg` holds them (the reasons may differ)
 WIPE_FIELDS = ("commitment", "protocol", "public", "verdict")
 
 

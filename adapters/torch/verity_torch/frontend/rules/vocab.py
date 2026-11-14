@@ -15,8 +15,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from verity.circuits.defs import bind as ir_bind
-from verity.definitions.registry import ref_prims as RP
-from verity.definitions.registry import value_inputs as _vi
+from verity_vllm.definitions.registry import ref_prims as RP
+from verity_vllm.definitions.registry import value_inputs as _vi
 
 from verity_torch.frontend.rules import ref_kinds as R
 

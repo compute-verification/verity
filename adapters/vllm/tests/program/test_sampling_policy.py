@@ -178,7 +178,7 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
     S = registered_splits(num_SMs) = splits_for(1, num_SMs) as a constant of its Program (`sampling["splits"]` the int, no `splits`
     input), for every wrapper shape and the step wrapper alike; the geometry carries nothing of the batch, so every component of every
     workload on the target declares the same (GP-01 agreement by construction)."""
-    from verity.definitions.registry.topp_geometry import registered_splits, splits_for
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for
 
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend.vllm_meta import registered_policy_splits

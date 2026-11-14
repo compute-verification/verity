@@ -39,7 +39,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity_machine_model import eps as E
-from verity_machine_model.model import device
+from verity_machine_model.model import card, device
 from verity_machine_model.sheet import ROOT
 from verity_machine_model.skip import design_skip
 
@@ -74,9 +74,8 @@ class Family:
     design: str
     dvar: str                            # the design data's Lean name
     title: str                           # the design, in prose
-    pipes: dict[str, tuple[str, int]]    # DS row: (Lean pipe, the Programming Guide's results an SM clock)
-    peaks: tuple[int, ...]               # the sheet's dense MACs an SM clock, by operand type (rows.csv DS_tensor)
-    fmax: int                            # MHz
+    lanes: dict[str, tuple[str, str]]    # DS row: (Lean pipe, the card file's rate of it)
+    formats: tuple[str, ...]             # the operand formats whose dense MACs an SM clock are the sheet's peaks
     fmax_src: str
     uniform: dict[str, int]              # the uniform writer kinds and ω, their destination's 32-bit words
     bytes: str                           # the table level's byte class, priced 0 at b_T = 0
@@ -89,6 +88,35 @@ class Family:
     def key(self) -> str:
         return "sm_" + self.ns[2:]
 
+    def _card(self, *path: str) -> int:
+        """A whole number of the device's card file (model.toml's `card`): `path`'s entry, or `rate.tensor` over the
+        entry for a `weight`."""
+        from verity.device import number   # here: only a reader of the card needs verity
+
+        c = card(self.data)
+        x = number(c[path[0]][path[1]])
+        if path[0] == "weight":
+            x = number(c["rate"]["tensor"]) / x
+        if x.denominator != 1:
+            raise SystemExit(f"{c['sku']}.toml: {'.'.join(path)} gives {x}, not the whole number the Lean states")
+        return int(x)
+
+    @property
+    def pipes(self) -> dict[str, tuple[str, int]]:
+        """DS row: (Lean pipe, its results an SM clock), the card file's rate."""
+        return {r: (p, self._card("rate", k)) for r, (p, k) in self.lanes.items()}
+
+    @property
+    def peaks(self) -> tuple[int, ...]:
+        """The sheet's dense MACs an SM clock, by operand type (rows.csv DS_tensor): the card file's rate.tensor over
+        each format's weight."""
+        return tuple(self._card("weight", f) for f in self.formats)
+
+    @property
+    def fmax(self) -> int:
+        """f_max, MHz: the card file's clock.sm."""
+        return self._card("clock", "sm")
+
     @property
     def out(self) -> Path:
         return OUT.with_name(f"{self.ns}.lean")
@@ -96,15 +124,15 @@ class Family:
 
 SM120 = Family(
     "Sm120", "RTX PRO 6000", device("sm_120"), "DS-120", "dither-c-peel-fx1", "h1fx1", "H1 + fx1",
-    {"DS_imad": ("imad", 64), "DS_lop": ("lop", 64), "DS_xu": ("xu", 16), "DS_shfl": ("shfl", 32)},
-    (256, 512, 1024, 2048), 2430, "the driver's reported maximum, SPEC's P1: no data sheet states it",
+    {"DS_imad": ("imad", "imad"), "DS_lop": ("lop", "alu"), "DS_xu": ("xu", "sfu"), "DS_shfl": ("shfl", "shfl")},
+    ("tf32", "f16", "s8", "nvf4"), "the driver's reported maximum, SPEC's P1: no data sheet states it",
     {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(5860, 100000),
     "an IMMA.16832 at L = 32",
     "fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word)")
 FAMILIES = (SM120,)
 CATCH_ALL = {"sm_120": "NOROW"}    # A2's catch-all by device: every warp instruction no other class names, issue alone
 
-DEVICE, DESIGN, FMAX = SM120.device, SM120.design, SM120.fmax
+DEVICE, DESIGN = SM120.device, SM120.design
 UNIFORM, SKIP, EPS = SM120.uniform, SM120.skip, SM120.eps
 VECTOR = "VF3s-16"                 # the measured reading's vector
 Q_M = Fraction(9, 8)               # scalar floors: q*₀ 1.120 (operands free), ClassPSlots' lane floor ≥ 9/8 at w ≤ 15
@@ -576,7 +604,7 @@ end Accounting.TS.Headline.{f.ns}
 
 
 def render_measured(i: Instance, m: Measured) -> str:
-    ix = i.classes.index
+    ix, fmax = i.classes.index, SM120.fmax
     rows = []
     for j, r in enumerate(m.rows):
         entries = [f"({ix(k)}, {m.c[k][r].numerator}, {m.c[k][r].denominator})" for k in i.classes if r in m.c[k]]
@@ -599,7 +627,7 @@ file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
 * `rowNames`, `{vf}`, `machine`: the measured vector {VECTOR} (the exporter's `VECTOR`, named there, not model.toml's
   `current`), {len(m.rows)} rows of SMSP-cycles a warp instruction at its epoch's census, each sparse over `Sm120.classes`;
-  every facet SM-clocked, f_max {FMAX} MHz.
+  every facet SM-clocked, f_max {fmax} MHz.
 * `h1fx1`, `model`: H1 + fx1 (`{DESIGN}`) on that machine. Its writer kinds are the census's MMA forms, each at
   the committed words an instruction of it writes (forms.toml: `m·n·k_dense/(L·split)` at L = {E.design(DESIGN).L},
   rounded up), and the uniform `UNI` (1); `MMA` (the forms' fallback line) and `UNI64` ({VECTOR} prices it on the
@@ -627,7 +655,7 @@ def {vf} : List Sparse := [
 
 /-- The measured machine: {VECTOR}'s rows over `Sm120.classes`. -/
 noncomputable def machine : Machine (Fin {len(i.classes)}) (Fin {len(m.rows)}) :=
-  rowsMachine {len(i.classes)} {len(m.rows)} {vf} {FMAX}
+  rowsMachine {len(i.classes)} {len(m.rows)} {vf} {fmax}
 
 /-- H1 + fx1's design data on {VECTOR}: writer kinds as (class, ω), and `Sm120.h1fx1`'s routes. -/
 def h1fx1 : DesignData where

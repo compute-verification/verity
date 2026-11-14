@@ -8,6 +8,8 @@ import hashlib
 import json
 import os
 
+from verity_vllm.definitions.boolean import word_descriptor
+
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.instance_sequence import RootView
@@ -18,7 +20,6 @@ from verity_vllm.query.program_view import _read_instance_header
 
 def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:
     """Derive dir ``d``'s Program as the Match reads it, in word units: a Boolean derive's word Program (`program.boolean.word_descriptor`)."""
-    from verity.definitions.boolean import word_descriptor
     with gzip.open(word_descriptor(d)) as f:
         desc = json.load(f)
     with open(os.path.join(d, "derive-report.json")) as f:

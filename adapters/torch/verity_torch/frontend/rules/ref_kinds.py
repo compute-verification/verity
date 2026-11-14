@@ -1,6 +1,6 @@
 """Width-conversion composites of the derive frontend for reference mode.
 
-`verity/definitions/registry/ref_prims.py` (vocabulary `verity-ref-vocab/1`) is the reference vocabulary
+`adapters/vllm/verity_vllm/definitions/registry/ref_prims.py` (vocabulary `verity-ref-vocab/1`) is the reference vocabulary
 (`LinearRef_v1{DT="f32"}` / `AddRef` / `MulRef` / `ReluRef`: sequential f32 fma chain from +0, `F32MaxRef(x, +0)`).
 What is here are the two element-wise width conversions a `.to(dtype)` cast needs as *one call*: batched
 `Bf16ToF32_v1` (exact) and `F32ToBf16Rn_v1` (RNE), both exact-model-tested registered primitives. They are
@@ -13,7 +13,7 @@ from __future__ import annotations
 from verity.circuits.defs import Builder, CompositeDefinition
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import prims as P
 
 F32 = Value(32)
 BF16 = Value(16)

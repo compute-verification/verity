@@ -621,7 +621,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
   shift 2
   # off the GPU, which none leases here or the engine holds under the tie: the weights hashed by h1.registered's NumPy
   # path, the reference
-  (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" verity/protocols/proofs/spot/prover/audit/prove_path.py window-commit --serve-run "$D" \
+  (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/one_stage/window_commit.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
     --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --law "$V3C_LAW" --out "$VW/window" "$@") > "$json" 2> "$err"
   rc=$?
@@ -842,7 +842,8 @@ print(f"the audit read its records tied to W {w}…, R chained right after it: {
 }
 v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json
   (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" verity/protocols/proofs/spot/prover/audit/records_audit.py period --window "$VW/window" \
-    --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json") > "$OUT/v3c-audit/period.log" 2>&1
+    --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json" --tied "$("$TREE/.venv/bin/python" -c \
+    'from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE; print(SCAN_STATE)')") > "$OUT/v3c-audit/period.log" 2>&1
   local rc=$?
   [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/"
   say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$OUT/v3c-audit/period.log" | cut -c1-800)"

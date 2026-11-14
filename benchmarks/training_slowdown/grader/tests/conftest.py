@@ -1,4 +1,4 @@
-"""The suite's step: the lf model's tiny training step (`adapters/vllm/tests/program/train_step_lf.py`, loaded by its path)
+"""The suite's step: the lf model's tiny training step (`adapters/torch/tests/frontend/train_step_lf.py`, loaded by its path)
 with its log-free loss, derived by the training-step frontend at the step's batch shape and at the structure's, and handed
 over as a lane hands it over (`grader.write_handover`); at a compute capability `cc`, the step's bf16 linears' GEMMs are lowered
 to the routes `ROUTES` stands in for that GPU's cuBLAS and its attention to that GPU's flash attention at the stand-in shape
@@ -17,12 +17,12 @@ import pytest
 import torch
 
 import grader as G
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import fa2_train as FT
-from verity.definitions.registry import fa2_train_bwd as FTB
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import fa2_train as FT
+from verity_vllm.definitions.registry import fa2_train_bwd as FTB
 from verity_torch.frontend.train_step import AdamW, export_step, primitives, step_report
 
-LF_PATH = Path(__file__).resolve().parents[4] / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"
+LF_PATH = Path(__file__).resolve().parents[4] / "adapters" / "torch" / "tests" / "frontend" / "train_step_lf.py"
 #: the step's batch and the structure Program's, as rows of tokens: the structure's attention at a T of 32 (its tokens less
 #: one), whole blocks of the 16 rows and keys its stand-in heads take at a cc (`training_attention.STAND_IN`)
 STEP, STRUCTURE = (2, 17), (3, 33)

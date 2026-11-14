@@ -619,7 +619,7 @@ def main() -> None:
     binder = None
     if args.store:
         from verity_vllm.protocols.remote_bandwidth.binder import Binder, Every
-        from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
+        from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
         window = {}
         if args.store_window:
             from verity.protocols.accounting.poub.verifier.audit import NoiseTiles
