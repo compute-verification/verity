@@ -51,8 +51,9 @@ def recordsRows (k : Nat) : Nat := (k + 1) / 2
 
 /-- Unit 0's, unit 1's and each round's program. -/
 def programs (c : SessionCommitment) (p : Lms.Params) : String × String × Array String :=
-  (s!"PousSessionSig_v1\{{p.N},{p.W},{p.H}}", s!"PousSessionDigest_v1\{{c.k},{(headOf c).size},{c.limitNs}}",
-   (Array.range c.k).map fun j => s!"PousRound_v1\{{c.blockBytes},{j % 2}}")
+  (s!"PousSessionSig_v1\{N={p.N},W={p.W},H={p.H}}",
+   s!"PousSessionDigest_v1\{K={c.k},HEAD={(headOf c).size},LIMIT={c.limitNs}}",
+   (Array.range c.k).map fun j => s!"PousRound_v1\{N={c.blockBytes},SLOT={j % 2}}")
 
 def byJ (openings : Array CoinOpening) (j : Nat) : Option CoinOpening := openings.findRev? (·.j == j)
 

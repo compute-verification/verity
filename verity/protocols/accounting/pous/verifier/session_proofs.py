@@ -32,9 +32,9 @@ _LMS_PARAMS: Mapping[str, tuple[int, int, int]] = {mc.LMS: (64, 1, 20)}
 
 @dataclass(frozen=True, slots=True)
 class UnitOutcome:
-    """One unit's proof as its verifier left it: ``program``, the bound Definition (``PousRound_v1{2056,1}``), whether the
-    proof was accepted, ``rows[p]`` parameter p's committed row, and ``known``, the parameters public in the proof with
-    their values."""
+    """One unit's proof as its verifier left it: ``program``, the bound Definition's id (``PousRound_v1{N=2056,SLOT=1}``),
+    whether the proof was accepted, ``rows[p]`` parameter p's committed row, and ``known``, the parameters public in the
+    proof with their values, in parameter order."""
 
     program: str
     accepted: bool
@@ -67,9 +67,9 @@ def _field(b: bytes) -> bytes:
 def programs(commitment: mc.SessionCommitment, scheme: str) -> tuple[str, str, tuple[str, ...]]:
     """Unit 0's, unit 1's and each round's program: what each proof must be of."""
     n, w, h = _LMS_PARAMS[scheme]
-    return (f"PousSessionSig_v1{{{n},{w},{h}}}",
-            f"PousSessionDigest_v1{{{commitment.k},{len(_head(commitment))},{commitment.limit_ns}}}",
-            tuple(f"PousRound_v1{{{commitment.block_bytes},{j % 2}}}" for j in range(commitment.k)))
+    return (f"PousSessionSig_v1{{N={n},W={w},H={h}}}",
+            f"PousSessionDigest_v1{{K={commitment.k},HEAD={len(_head(commitment))},LIMIT={commitment.limit_ns}}}",
+            tuple(f"PousRound_v1{{N={commitment.block_bytes},SLOT={j % 2}}}" for j in range(commitment.k)))
 
 
 def _by_j(openings: Sequence[mc.CoinOpening]) -> dict[int, mc.CoinOpening]:

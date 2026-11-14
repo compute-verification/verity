@@ -4,6 +4,7 @@ wrong row, record, digest, round and index, and both read the rows the memory ch
 
 from __future__ import annotations
 
+import json
 import random
 
 import numpy as np
@@ -14,6 +15,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import resolve
 from verity.commitments.crypto import lms as R
 from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.device.memory_challenger import Round
 from verity.protocols.accounting.pous.prover import session_circuit as S
 
@@ -102,3 +104,51 @@ def test_the_round_unit_agrees_with_its_reference(slot) -> None:
 def test_a_slot_past_the_row_is_refused() -> None:
     with pytest.raises(ValueError, match="SLOT"):
         resolve(bind(S.PousRound, N=2056, SLOT=2)).signature()
+
+
+def _session(K: int, late: int | None = None):
+    """A session of K rounds as the memory challenger signs it: its header, the records tree's domain id, the signed
+    context, the records rows and the digest the signature signs (`lms.memory_challenger_message` of `mc.message`), round
+    ``late``, if any, signed past the limit."""
+    c = mc.SessionCommitment(_rand(32), _rand(64), _rand(32), 1 << 20, K, 854_000, 2056, _rand(64))
+    rounds = [Round(j, RNG.randrange(1 << 20), 1000 * j, 1000 * j + 500, _rand(64)) for j in range(K)]
+    if late is not None:
+        rounds[late] = Round(late, rounds[late].index, 0, c.limit_ns + 1, rounds[late].digest)
+    I = _rand(16)
+    m = R.memory_challenger_message(I, c.session, mc.message(c, mc.COMPLETE, rounds))
+    head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()
+    flat = b"".join(r.value() for r in rounds) + bytes(S.RECORD_BYTES * (K % 2))
+    rows = [flat[184 * t:184 * (t + 1)] for t in range(S.records_rows(K))]
+    return c, head, mc._domain(mc.RECORD_BINDING, c.session, K).domain_id, S.signed_context(I, c.session), rows, m
+
+
+def test_the_signed_digest_reference_is_the_memory_challengers() -> None:
+    """`session_digest_ok` accepts the digest the memory challenger's signature signs, at an odd and an even K and at the
+    largest K, and the constants it copies are the memory challenger's."""
+    assert (S.SESSION_TAG, S.RECORD_SCHEMA) == (mc.SESSION_TAG, mc.RECORD_SCHEMA)
+    for K in (1, 4, S.MAX_ROUNDS):
+        c, head, domain, ctx, rows, m = _session(K)
+        assert S.session_digest_ok(K, len(head), c.limit_ns, head, domain, ctx, rows, m) == 1
+    with pytest.raises(ValueError, match="K"):
+        resolve(bind(S.PousSessionDigest, K=S.MAX_ROUNDS + 1, HEAD=789, LIMIT=1)).signature()
+
+
+@pytest.mark.slow
+def test_the_signed_digest_unit_agrees_with_its_reference() -> None:
+    """About 50 s (three record leaves, a pad, three nodes and the two message hashes, at K = 3). The honest session gives
+    1; a flipped bit of m, of the context, of the header, of the domain id, of a record's digest and a late round each
+    give 0."""
+    K = 3
+    c, head, domain, ctx, rows, m = _session(K)
+    late = _session(K, late=2)
+    rows_late = late[4]
+    cases = [(head, domain, ctx, rows, m), (head, domain, ctx, rows, _flip(m, 63, 7)),
+             (head, domain, _flip(ctx, 50), rows, m), (_flip(head, 100), domain, ctx, rows, m),
+             (head, _flip(domain, 33), ctx, rows, m), (head, domain, ctx, [_flip(rows[0], 92 + 40)] + rows[1:], m)]
+    want = [S.session_digest_ok(K, len(head), c.limit_ns, *cs) for cs in cases]
+    assert want == [1, 0, 0, 0, 0, 0]
+    cases.append(late[1:4] + (rows_late, late[5]))
+    want.append(S.session_digest_ok(K, len(head), late[0].limit_ns, *cases[-1]))
+    assert want[-1] == 0
+    params = [[_bits(h), _bits(d), _bits(x), *[_bits(r) for r in rs], _bits(mm)] for h, d, x, rs, mm in cases]
+    assert _run(bind(S.PousSessionDigest, K=K, HEAD=len(head), LIMIT=c.limit_ns), params) == want
