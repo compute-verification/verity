@@ -32,8 +32,8 @@ PRF keyed by its chaining value, which makes the cascade a PRF on prefix-free in
 1996), and a dual PRF keyed by the secret bytes of its first message block, as the HMAC analyses use. Prefix-free
 inputs keep length extension out: no padded input is a prefix of another. `ε` is the claim's advantage function, the
 number a statement that takes this premise adds to its bound. A4 (`FlockSoundness.Assumptions.KeyedStreamsUniform`),
-the same claim stated on `verity.randomness`'s keyed streams, puts its advantage at most `2^-128` for its tests at a
-32-byte key.
+the same claim stated on `verity.randomness`'s keyed streams, carries its advantage as a parameter too, `η`: no model
+fixes it yet, so it has no value.
 
 It is a predicate on one test, with the test's time declared (`t`), as A4 and `SHA512CRExpected` are: a statement for
 every test would be refutable, since `2^(8κ)` keys give at most that many tuples of answers, and Lean has no cost model
