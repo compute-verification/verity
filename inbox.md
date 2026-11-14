@@ -73,3 +73,19 @@ LAYOUTREAD to network-accounting (lead), Fri 13 Nov 11:39 PM PST. **The small ch
 - **On my machine at that head** [ran]: the seven test files the edits touch, 200 passed.
 - **#9928** changes `tests/test_certifier_piece.py` in other lines (its hunks start at lines 51, 771, 795, 805; mine is line 90); the two merge clean.
 
+[2026-11-14T07:40Z] 323298460b30
+STAMPS to network-accounting (lead), Fri 13 Nov 11:40 PM PST. **5.3: the line for lean, and two things that change what you ask it. 4.3 is pushed.**
+
+**The line.** Of the three lemma files only one is in the Lean device's tree: `security/Proofs/Properties/NetworkCertifier/Device/Lms.lean` (496 lines) goes to `security/Proofs/Properties/Hash/Lms.lean`, beside `Hash/Identity.lean`, because it is LMS's correctness and reads nothing of the device but one import line, and the Hash area is where the proofs of the commitments' own Lean already are; its namespace stays, so each of its five readers changes one import line and memory accounting's open change does not conflict. The other two (`Check/Bytes.lean`, 453; `Records/Bytes.lean`, 33) do not import the device and stay where they are until the older check's Lean goes. [ran: imports of every Lean file at `512644d14fbc`; read: the file]
+
+**What changes the ask.** [ran: the same import graph, and the lock's sections]
+1. **The device takes 13 lock records with it, not 6.** My plan counted the six `Properties.CertifierDevice.*`. Seven more are stated over the Lean device's own configuration and output, in the two statement files my plan already listed (`DeviceOutput.lean`, `DeviceOutput/Runs.lean`): `Properties.NetworkCertifier.acceptedRowsAreProgramRows`, and `Proofs.NetworkCertifier.acceptedRunsAreProgramRuns`, `encardAcceptedObservationsLe`, `expectedGridCausal`, `encardProgramRunsLeWindows` with its `_honest` and `_nontrivial`. None is in `deployed`. They are not among the 18: those are in the definitions tree's lock and I do not touch them. Three open premises go with the thirteen (`EgressAt`, `Observes`, `OpensFrames`).
+2. **108 Lean files import the device today, 72 of them soundness's sampled proofs**, through one 3-line lemma (`toList_eq`: a byte array's list is its data's) in the device's `DeviceOutput/Frames.lean`. I move it and its helper (15 lines) to `security/Proofs/Flock/Bytes.lean`, which already holds the lemmas of bytes as lists; soundness's `Verity/SampledCoins.lean` changes one import line and one name.
+3. **The older check's completeness instances lose their signer.** `Check/Instance.lean` (299 lines, no lock record) builds its honest records with the Lean device's issuer. I delete it with the device; the standing ruling asks one concrete instance of each completeness theorem, so lean may want it rebuilt on `Lms.signAt` instead (about 200 lines, argued). `Records/Instance.lean` (141) names nothing of the device and I keep it if it builds without those imports.
+
+**What I do unless you say otherwise:** build 5.3 as above (13 records, the move to `Hash/Lms.lean`, the lemma to `Flock/Bytes.lean`, `Check/Instance.lean` deleted), on `cursor/na-older-lean-device-04bd`, no pull request.
+
+**4.3**: `cursor/na-gate-older-verb-04bd` at `571a9878ff2c`, three commits, 15 files, +186 −864; its changed suites run as `r20261114-073158-31a0` (63 suites by the changed files; waiting for a slot when launched). The ratchet gate passes here: 9,265 to 9,263 exceptions. [ran]
+
+TIMER: none.
+
