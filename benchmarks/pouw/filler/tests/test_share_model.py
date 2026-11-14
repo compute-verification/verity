@@ -56,6 +56,13 @@ ARMS = {60: {"split": {"ms": 9.0}, "full": {"ms": 4.0}, "full2": {"ms": 8.0}},
 FILL = [{"shape": "big", "m": 8192, "n": 8192, "k": 8192, "fill_sms": sms, "B": 32, "L": 2048, "alone": {"share": a},
          "window": {"fill_share": w, "fill_gb_per_s": gb}, "slowdown": s, "arms": ARMS[sms]}
         for sms, a, w, gb, s in [(92, 0.45, 0.327, 12.0, 1.1), (60, 0.3, 0.218, 9.0, 1.04)]]
+# a dfill run of two splits: re-tuned, the 60-SM one shares more and slows decode past the limit; the 92-SM one has no
+# re-tuned arm
+DFILL = [{"shape": "dfree-split", "fill_sms": sms, "B": 32, "L": 2048, "place": "split", "alone": {"share": a},
+          "window": {"fill_share": w}, "slowdown": s, "arms": ARMS[sms], "rec_checked": n, "rec_bad": bad, **tuned}
+         for sms, a, w, s, n, bad, tuned in [
+             (60, 0.3, 0.2, 1.04, 64, 1, {"tuned": {"fill_share": 0.25, "slowdown": 1.08, "split_only": 1.02}}),
+             (92, 0.45, 0.3, 1.03, 96, 0, {})]]
 
 
 @pytest.fixture(scope="module")
@@ -413,4 +420,29 @@ def test_main_with_a_fill_run_prints_its_table_and_its_two_fillers_replace_the_m
     assert head[5] == "| decode B = 256, L = 2K | 0.065 | 0.064 | 0.263, 0.260, 1.040 | 0.359, 0.356, 1.100 |"
     assert filler == ["filler: measured (--fill)"]
     assert (res["filler"], res["fill"], res["dfill"], res["fstep"]) == ("measured (--fill)", FILL, [], [])
+
+
+def test_main_with_a_dfill_run_prints_its_table_and_the_adaptive_split_as_tuned_and_re_tuned(tmp_path, monkeypatch,
+                                                                                              capsys):
+    """`--dfill DIR` reads `DIR/dfill.jsonl`: its table, a line a split, and the adaptive split's pick at each point,
+    first with cuBLASLt as tuned for the whole GPU, then re-tuned on the partition. Both picks join the headline."""
+    blocks, res = _run(tmp_path, monkeypatch, capsys, "--dfill", DFILL)
+    dfill, as_tuned, re_tuned, _, head = blocks[1:6]
+    assert dfill[0] == ("| DRAM-free filler | B | L | alone share | share beside decode | decode slowdown | "
+                        "split only | tuned: share, slowdown, split only | receipts checked (bad) |")
+    assert dfill[2] == ("| dfree-split 60 SMs | 32 | 2048 | 0.300 | 0.200 | 1.040 | 1.500 | 0.250, 1.080, 1.020 | "
+                        "64 (1) |")
+    assert dfill[3] == "| dfree-split 92 SMs | 32 | 2048 | 0.450 | 0.300 | 1.030 | 1.250 | – | 96 (0) |"
+    assert len(dfill) == 4
+    # within 5%, as tuned the 92-SM split shares the most; re-tuned only the 60-SM one was measured, past the limit
+    assert as_tuned == ["adaptive split ≤ 5%: B 32 L 2048: 92 SMs, share 0.300, slowdown 1.030"]
+    assert re_tuned == [("adaptive split ≤ 5%, cuBLASLt tuned on the partition: B 32 L 2048: 0 SMs, share 0.000, "
+                         "slowdown 1.000")]
+    assert res["adaptive"] == {"as tuned for the whole GPU": {"32:2048": [92, 0.3, 1.03]},
+                               "tuned": {"32:2048": [0, 0.0, 1.0]}}
+    # of the DRAM-free fillers the headline prints the tuned 92-SM split and the two picks; with no split, decode alone
+    assert [c.split(":")[0] for c in head[0].split(" | ")[3:]] == [
+        "60 SMs", "92 SMs", TUNED, "dfree adaptive ≤ 5%", "dfree adaptive ≤ 5% tuned"]
+    assert head[5].endswith(" | 0.363, 0.360, 1.030 | 0.065, 0.064, 1.000 |")  # 0.065 / 1.03 + 0.3
+    assert (res["filler"], res["dfill"]) == ("W11 (assumed)", DFILL)
 
