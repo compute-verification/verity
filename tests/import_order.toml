@@ -503,6 +503,7 @@ loads = [
     "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
+    "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/protocols/accounting/pous/verifier",
     "verity/runtime",

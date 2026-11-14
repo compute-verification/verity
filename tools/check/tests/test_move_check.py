@@ -1380,6 +1380,22 @@ def test_a_parenthesized_import_of_a_module_that_did_not_move_there_is_refused(t
         assert f["path"] == "pkg/app/use.py" and "linear.api" in f["hunk"]
 
 
+WHOLE_NEW = "from app.protocols.bandwidth import (\n    remote as R,\n    host as H,\n)\n"
+
+
+@pytest.mark.parametrize("new", [WHOLE_NEW, WHOLE_NEW.replace("host as H", "host as H2"),
+                                 WHOLE_NEW.replace("bandwidth import (", "linear import (")])
+def test_an_import_the_move_writes_whole_in_parentheses_binds_each_name_where_its_module_went(tmp_path, new):
+    """A relative `from .store import remote as R, host as H`, written absolute and whole, one name a line, as
+    `tools/move/layout.py` writes it: each name binds where its module went, and one bound under another name or to a
+    module that went elsewhere is refused."""
+    r = _app(tmp_path, {"pkg/app/use.py": "from .store import remote as R, host as H\n"}, {"pkg/app/use.py": new})
+    if new == WHOLE_NEW:
+        assert r["certified"], r["refusals"]
+    else:
+        assert _refused(r) == {"pkg/app/use.py": "edit beyond moved paths and module names"}
+
+
 def test_a_module_anchor_that_names_another_directory_is_refused(tmp_path):
     [f] = _app(tmp_path, {"pkg/app/use.py": PY_OLD},
                {"pkg/app/use.py": PY_NEW.replace("parents[2]", "parents[3]")})["refusals"]
