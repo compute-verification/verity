@@ -284,6 +284,9 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   `spot_params_of`), in two stages with `TwoStageProofServer` and `TwoStageVerifier` (`SPOT_TWO_MANIFEST`,
   `SPOT_TWO_PROTOCOL`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
+- `workload`: sampled proofs' messages with the workload, as message types and the two channels between the workload and
+  the prover (`MESSAGES`, `CHANNELS`), among them the messages that serve more than one protocol; `parties` takes `REPLAY`
+  from it, and `tests/test_workload_messages.py` holds the list.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's sample from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a sample's coins from one family of the auditor's
