@@ -153,9 +153,11 @@ Rules:
 - **Say what, never who.** No handle and no lead as the subject; the owner is a field. Another lead's part is that
   lead's goal, linked. The exception is when who holds something is itself the content: which lead owns a directory,
   or an outcome that is one team's own number ("ci's changes refused for a merge conflict").
+  With no goal to link, ask that lead for one and name the lead until it exists.
 - **No status diary:** no "where it stands", "so far" or "plan", no dated steps, nothing about what is in review or
   waiting to merge, no run counts, restarts, machines or GPU counts, no corrections, no history of the goal, no who
   approved what. The page shows when it was last written.
+- **Today's sentence stays true:** rewrite it when it changes; never append a correction.
 - **No description of a dependency.** What the goal waits on is a link, and the dependency's state lives on it.
 - **Anything you refer to is a goal he can click, or it is cut.** Link another goal with `[its title](#goal-id)` and
   an ask with `[text](ask:<card id>)`; both render as chips. Never a bare id, and never a goal by number.
@@ -186,9 +188,9 @@ Goals as Daniel approved them. An outcome whose problem today needs saying:
 ~~~markdown
 The network certifier certifies every execution phase of a GLM-5.3 serving run.
 
-On Friday's run of record it did not sign the first phase, because it stalled while the operating system moved its
-memory pages. The audit then refused every later phase as well, so no part of that run is certified. The certifier's
-node is now set not to move those pages.
+On the last served try it did not sign the first execution phase, because it stalled while the operating system moved
+its memory pages. It signed every later phase, and the try as a whole was still refused, since one phase
+was unsigned. The certifier's node is now set not to move those pages.
 
 ### Risks
 
@@ -212,10 +214,6 @@ Dashboard shows how much slower GLM-5.3 serves with Verity on than stock vLLM do
 
 At most $2.05$ points slower than stock. Verity's whole compute budget is 10%.
 
-### Risks
-
-The benchmark is accurate to about $\pm 1$ point. That is enough to check the total, and not enough to say what each
-change costs on its own, except the largest.
 ~~~
 
 Parallel items, and a limit:
