@@ -79,6 +79,7 @@ from verity_vllm.protocols.interface import Context, Option, Target
 from verity.protocols.accounting.pouw.prover.serving import circuit as PC
 from verity.protocols.accounting.pouw.prover.serving import device as PD
 from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving import int8_arm, run_matmul
 from verity.protocols.accounting.pouw.prover.serving import lead as PL
 from verity.protocols.accounting.pouw.prover.serving import native as PN
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
@@ -546,7 +547,7 @@ def ncp_linear_op() -> Any:
 
     @torch.library.custom_op("verity_pouw::ncp_linear", mutates_args=(), schema="(Tensor x, Tensor weight, Tensor? bias, str entry, int w) -> Tensor")
     def ncp_linear(x, weight, bias, entry, w):
-        return _CIRCUIT_RUNS[entry][0].gemm(w, x, weight, bias)
+        return run_matmul(_CIRCUIT_RUNS[entry][0], w, x, weight, bias)
 
     @ncp_linear.register_fake
     def _(x, weight, bias, entry, w):
@@ -564,7 +565,7 @@ def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int, _orig: Any)
         return call
 
     def apply(layer: Any, x: Any, bias: Any = None) -> Any:
-        return run.gemm(w, x, layer.weight, bias)
+        return run_matmul(run, w, x, layer.weight, bias)
     return apply
 
 
@@ -716,6 +717,12 @@ def h1_run(entry: str) -> PH.H1Run | None:
     return _H1_RUNS.get(entry)
 
 
+def _int8_exact() -> Any:
+    from verity_vllm.engine import int8_exact
+
+    return int8_exact
+
+
 def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     """H1 on the int8_exact arm: the execution phase's salt `audit.salt_of` over the weights' root, as every scheme's, from the
     challenger's salt coin (the auditor device's opened after the execution phase's open root, once round 0 is admitted:
@@ -734,6 +741,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     only by default). On an arm that serves z/y records (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each
     committed layer whose N is whole 32-column units serves through ``scaled_mm_zy`` over T slots, the records its z. The
     served values are the arm's, untouched. A linear at a K outside ``ks`` serves unhooked (`pouw_h1_hooks.wire`)."""
+    int8_arm.use(_int8_exact)
     layers = PHK.layers(target.model, linear_types(), settings.ks)
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}

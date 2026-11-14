@@ -1611,7 +1611,7 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
 
 def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
     """Sampled proofs' row from the records audit kept under ``audit_dir`` (module docstring)."""
-    import served_integrity as SI
+    from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI
 
     reg = audit_dir / WINDOW_REGISTRATION
     try:

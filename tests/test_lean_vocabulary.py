@@ -694,13 +694,13 @@ KNOWN: dict[str, str] = {
         "duplicate of the execution block (no canonical yet): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/served_h1/serve.py::Record":
         "homonym, a served request's benchmark row: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/of_record.py::Record":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/replay_window.py::Window":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py::Window":
         "homonym, one replayed window's checks: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/served_commit.py::Challenger":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_zk/statement.py::Statement":
+    "verity/protocols/accounting/pouw/prover/kernels/served_zk/statement.py::Statement":
         "homonym, a benchmark's statement bench: rename (compute-accounting)",
     "benchmarks/pouw/theory/checked_strip.py::Block":
         "homonym, a block of rows and columns of one design: rename (compute-accounting)",

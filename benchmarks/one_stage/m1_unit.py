@@ -440,7 +440,7 @@ def main() -> int:
                          "column blocks or parts (comma-separated); else the first --n")
     a = ap.parse_args()
 
-    import a0
+    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
     import a11_kinds as K
     from verity_flock import class_statement as CS
     from verity_flock import ir_lower as IL

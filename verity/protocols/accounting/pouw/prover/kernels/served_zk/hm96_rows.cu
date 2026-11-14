@@ -14,8 +14,8 @@
 //                H(leaf_prefix_i || hm96 leaf) into the tree's level 0, and with one CTA the tree's levels above it; a
 //                grid-stride loop over the rows
 //   sz_level     one level of the tree (a thread a node), for trees wider than one CTA
-#include "../../../verity/protocols/proofs/flock/prover/cuda/sha512.cuh"
-#include "../../../verity/commitments/cuda/row_commit.cuh"
+#include "../../../../../proofs/flock/prover/cuda/sha512.cuh"
+#include "../../../../../../commitments/cuda/row_commit.cuh"
 
 struct Args { unsigned long long p[16]; int i[16]; };
 

@@ -64,7 +64,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 
 HERE = Path(__file__).resolve().parent
 #: the sm_120 kernel's directory, the default kernel
-SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+SM120 = HERE.parent / "pearl_c_sm120"
 M_REAL, LAYERS = 32, 32
 SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "down": (4096, 14336)}   # (n, k)
 POISON, SLOT, SEG_TPB = 0xA5, 256, 256

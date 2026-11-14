@@ -1,5 +1,5 @@
-// The SASS gate's test kernels (../../test_sass_gate.py): ordinary FP32 arithmetic, and every sequence the gate pins
-// (harness/sass_pins.json). ptxas expands div.rn (also with a constant numerator), sqrt.rn and rcp.rn with .FTZ instructions
+// The SASS gate's test kernels (benchmarks/pouw/tests/test_sass_gate.py): ordinary FP32 arithmetic, and every sequence
+// the gate pins (../../../sass_pins.json). ptxas expands div.rn (also with a constant numerator), sqrt.rn and rcp.rn with .FTZ instructions
 // and MUFU seeds in every build, and seeds integer division (32-, 16- and 64-bit, and a uniform divisor) with MUFU.RCP and
 // F2I.FTZ. Built without flags, every kernel passes; built with --use_fast_math, -ftz=true or -prec-div=false
 // -prec-sqrt=false, the FP32 kernels fail. The listings beside this file: NAME.nvdisasm.txt from `nvdisasm -c` of

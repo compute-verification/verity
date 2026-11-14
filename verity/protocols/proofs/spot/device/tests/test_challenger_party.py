@@ -15,8 +15,8 @@ import pytest
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
-import a5_coins as AC  # noqa: E402
-import challenger_party as CP  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_party as CP  # noqa: E402
 
 ROOT_A, ROOT_B = "ab" * 64, "cd" * 64
 

@@ -6,8 +6,8 @@ public import CoreProtocol.Site
 # The Site's difftest: `Core.Site` behind `Difftest.serve`
 
 `site-difftest` serves `table` to the core difftest harness, whose Python half (`tests/test_site_difftest.py`) holds it to
-`verity.core.site`. The Site is core's (`CoreProtocol.Site`, in `core_protocol`); its port is here because this package
-already requires the interface and the harness, and the registration log is the proof system's record. The functions,
+`verity.core.site`. The Site is core's (`CoreProtocol.Site`, in `core_protocol`); its port is here, beside the registration log's
+check, because the log is what the Site is folded from. The functions,
 on the JSON `verity.core.site` writes, with the deployed digests (`Registration.sha512`):
 
 * `site_refusal`, `{"auditor", "log", "entry"}`: the entry held to the log, `{"refusal": name | null, "head", "digest"}`;
@@ -21,7 +21,7 @@ on the JSON `verity.core.site` writes, with the deployed digests (`Registration.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace Spot.SiteDifftest
+namespace RegistrationLog.SiteDifftest
 
 open Lean (Json toJson)
 open Flock (V)
@@ -79,4 +79,4 @@ def siteViews (j : Json) : V Json := do
 def table : List (String × (Json → V Json)) :=
   [("site_refusal", siteRefusal), ("site_check", siteCheck), ("site_views", siteViews)]
 
-end Spot.SiteDifftest
+end RegistrationLog.SiteDifftest

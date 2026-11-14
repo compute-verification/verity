@@ -19,8 +19,8 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
-import a5_coins as AC  # noqa: E402
-import a5_memo as AM  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import check_memo as AM  # noqa: E402
 
 XOR8 = PrimitiveDefinition("A5MemoTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
