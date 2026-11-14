@@ -14,8 +14,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from verity.periods import block_count
-from verity.protocols.reporting import PERIODS
+from verity.protocol import MONITORING_PERIODS, block_count
 from verity_e2e_demo import block_record as R
 from verity.protocols.accounting.poub.verifier import ledger
 
@@ -368,7 +367,7 @@ def test_the_reference_deployment_is_the_census_entry_the_fixtures_carry() -> No
 def test_a_period_s_blocks_are_core_s_block_count() -> None:
     window_s, machines = R.REFERENCE["window_s"], R.REFERENCE["machines"]
     periods = R.monitoring_period(R.REFERENCE, Fraction(1, 2**40))["periods"]
-    assert [(name, p["seconds"]) for name, p in periods.items()] == list(PERIODS)
+    assert [(name, p["seconds"]) for name, p in periods.items()] == list(MONITORING_PERIODS)
     for p in periods.values():
         assert p["blocks_per_machine"] == block_count(p["seconds"], window_s)
         assert p["blocks"] == block_count(p["seconds"], window_s, machines)

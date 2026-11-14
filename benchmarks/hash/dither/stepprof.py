@@ -10,9 +10,9 @@ wall; each stream's busy time a step and its parts are reported too, and the ser
 is how long it waits on the others and the host.
 
 The units kernels carry the noise b, c and U, the MMAs, the receipts, the peel and y in one launch, so they are one part;
-the peel's own cost is the peeled form's kernel time less the unpeeled form's (a kernel-level row).  The old quantizer
-(`int8_exact.quantize_rows`, eager torch ops inside the graph) is most of the forward's at::native kernels; an -xl arm's
-is exactlin_quant_rows.
+the peel's own cost is the peeled form's kernel time less the unpeeled form's (a kernel-level row).  The quantizer is
+`engine.int8_fused`'s exactlin_quant_rows, the row_quant op's CUDA body, or a dither-a arm's own
+exactlin_quant_rows_dithera.
 
     python stepprof.py gate.sqlite > stepprof.json
     python stepprof.py --table stepprof.json        # the parts as a text table (ms a step and share of the step's wall)
