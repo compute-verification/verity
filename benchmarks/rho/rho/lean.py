@@ -53,15 +53,14 @@ def status(name: str) -> str:
 
 
 @cache
-def premise_kind(name: str, locks: tuple[Path, ...] = LOCKS) -> str:
-    """The lock section a premise is listed in: `assumptions` (a named assumption), `open` or `domain`; `absent` where
-    no lock lists it."""
+def premises(statement: str, locks: tuple[Path, ...] = LOCKS) -> dict[str, str]:
+    """Each premise the lock's record of a proof of `statement` takes, by its section (`assumptions`, `domain`,
+    `open`); empty where no lock records a proof of it."""
     for path in locks:
-        lock = json.loads(path.read_text())
-        for section in ("assumptions", "open", "domain"):
-            if name in (lock.get(section) or {}):
-                return section
-    return "absent"
+        for entry in json.loads(path.read_text())["guarantees"].values():
+            if any(s.rsplit(" : ", 1)[-1] == statement for s in entry.get("signature", ())):
+                return {p: section for section, names in (entry.get("premises") or {}).items() for p in names}
+    return {}
 
 
 def weakest(names: Iterable[str]) -> str:
