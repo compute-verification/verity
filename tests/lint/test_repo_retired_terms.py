@@ -16,7 +16,12 @@ What a row retires:
 * each identifier written in backticks in a clause that says ``until renamed``, when it is one only code spells
   (``Flock.Firewall``, ``FC_FIREWALL*``, ``DrawIsCoin``: a dot, an underscore, a hyphen, an inner capital or a ``*``,
   which matches any identifier characters); a plain word there (``window``), a path, and a name that owns the next
-  (``machine_model``'s ``cover``) are not.
+  (``machine_model``'s ``cover``) are not.  A ``*`` name's site isn't one where the identifier around it already says
+  the row's term: its words before a parenthesis, ``;`` or ``,``, joined as ``MonitoringPeriod`` or lowerCamel
+  ``monitoringPeriod`` (as spelled otherwise) or ``monitoring_period`` (in any case), so ``MonitoringPeriodChecked``
+  and ``liveAt_monitoringPeriod`` say ``monitoring period`` and aren't ``*Period*`` sites.  The identifier is taken
+  whole, so one holding an old name beside the term (``ledgerPeriod_le_monitoringPeriod``) passes the glob, and a name
+  that is itself a row's old name (``ComposePeriod``) still counts through its own term.
 
 The lint reads the whole text of what the lane-text lint reads (``test_repo_lane_text.py``: code, Lean, shell and
 config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP`` names, with each reason, and outside
@@ -26,7 +31,7 @@ key's value (``goal = "vllm/serving-cost-benchmark"``, ``GOAL``); the tree holds
 elsewhere still counts.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power law,
 nvidia-smi's ``power.draw``, ``AUDIT_CAP``, ``cap_bits``, a memory cap, a compute capability), by the code around it
 (hypothesis's ``draw``) and by the file's place (``OWN_CAPS``: PoUS's and PoUB's own caps, a row table's size, the live
-proof block's caps, a PoUW session's cap, a request's length cap, a logit soft cap).  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file
+proof block's caps, a PoUW session's cap, Flock's caps, a request's length cap, a logit soft cap).  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file
 with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file
 it touches, grows this list, or leaves a renamed file's entry behind; it loads this module alone from the change's
 base, so the module imports only the standard library and reads ``GLOSSARY.md`` from the tree it runs in.
@@ -152,6 +157,9 @@ OWN_CAPS = {
     "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
     "verity/protocols/accounting/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
     "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
+    "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
+    "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
+    "security/Proofs/Flock/": "Flock's caps in its proofs: the Merkle cap, and its bounds on runs, tables and samples",
     **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
     **dict.fromkeys(REQUEST_CAPS, "a request's length cap, its `max_tokens`"),
     **dict.fromkeys(SOFTCAP_CAPS, "a logit soft cap, the softcapped attention chain's `CAP`"),
@@ -175,6 +183,8 @@ KEEP = re.compile(r"[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b|note:[\w./-]+|art:[0-9
 GOAL = re.compile(r'[ \t]*goal[ \t]*=[ \t]*"(?P<id>[\w-]+/[\w-]+)"[ \t]*(?:#.*)?')
 #: a character of what ``KEEP`` keeps
 ID = re.compile(r"[\w./:-]")
+#: a character of one identifier
+IDENT = re.compile(r"\w")
 FIX = (f"Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) "
        f"stays only where it already stands. If the file moved, move its entry in the same change: `python3 "
        f"tests/lint/test_{NAME}.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).")
@@ -221,6 +231,18 @@ class Term:
         self.anchors = frozenset(w.lower() + s for w in [max(WORDS.findall(old) or [old], key=len)]
                                  for s in INFLECT["verb"])
         self.code = code
+        self.says = self._says(new) if code and "*" in old else None
+
+    @staticmethod
+    def _says(new: str) -> re.Pattern | None:
+        """An identifier that says the term ``new`` gives (its words before a parenthesis, ``;`` or ``,``): those words
+        in CamelCase as spelled but for the first letter's case, or in snake_case in any case; None when they aren't
+        plain words."""
+        words = re.split(r"[(;,]", new, maxsplit=1)[0].split()
+        if not words or not all(re.fullmatch(r"[A-Za-z0-9]+", w) for w in words):
+            return None
+        camel = "".join(w[0].upper() + w[1:] for w in words)
+        return re.compile(f"[{camel[0]}{camel[0].lower()}]{re.escape(camel[1:])}|(?i:{re.escape('_'.join(words))})")
 
     @staticmethod
     def _part(p: str) -> str:
@@ -324,7 +346,7 @@ def sites_of(text: str, by: dict[str, list[Term]], path: str = "") -> list[tuple
     draws, caps, toml = hypothesis_draws(text, path), path.startswith(tuple(OWN_CAPS)), path.endswith(".toml")
     out, end, line, at = [], -1, 1, 0
     for s, e, t in hits:
-        if s < end or text[s:e] == "draw" and s in draws or kept(text, s, e, caps, toml, path in CAPITALS):
+        if s < end or text[s:e] == "draw" and s in draws or kept(text, s, e, caps, toml, path in CAPITALS, t.says):
             continue
         end = e
         line, at = line + text.count("\n", at, s), s
@@ -332,10 +354,12 @@ def sites_of(text: str, by: dict[str, list[Term]], path: str = "") -> list[tuple
     return out
 
 
-def kept(text: str, s: int, e: int, own_caps: bool = False, toml: bool = False, live: bool = False) -> bool:
+def kept(text: str, s: int, e: int, own_caps: bool = False, toml: bool = False, live: bool = False,
+         says: re.Pattern | None = None) -> bool:
     """Whether the site ``text[s:e]`` stands in what ``KEEP`` keeps or in ``OTHER_SENSES``, read from the run of id
     characters around it and the few words about it, in a goal's id on a TOML file's ``GOAL`` line (``toml``), or is a
-    "cap" in a file ``OWN_CAPS`` names (``own_caps``), other than ``PEARL_CAP`` outside ``CAPITALS`` (``live``)."""
+    "cap" in a file ``OWN_CAPS`` names (``own_caps``), other than ``PEARL_CAP`` outside ``CAPITALS`` (``live``), or
+    stands in an identifier that already says its row's term (``says``, a ``*`` name's ``Term.says``)."""
     a, b = s, e
     while a and ID.match(text, a - 1):
         a -= 1
@@ -343,6 +367,14 @@ def kept(text: str, s: int, e: int, own_caps: bool = False, toml: bool = False, 
         b += 1
     if any(m.start() <= s - a < m.end() for m in KEEP.finditer(text[a:b])):
         return True
+    if says:
+        i, j = s, e
+        while i and IDENT.match(text, i - 1):
+            i -= 1
+        while j < len(text) and IDENT.match(text, j):
+            j += 1
+        if says.search(text, i, j):
+            return True
     if toml:
         start = text.rfind("\n", 0, s) + 1
         stop = text.find("\n", e)
@@ -837,6 +869,48 @@ def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in
     first = [(1, "'OldName' is retired; say the first by spelling (GLOSSARY.md)")]  # of one length: the spelling decides
     assert said("an OldName", (1, "OldN*", "the second by spelling"), (2, "*Name", "the first by spelling")) == first
     assert said("an OldName", (2, "OldN*", "the second by spelling"), (1, "*Name", "the first by spelling")) == first
+
+
+PERIOD_EXAMPLE = """# Glossary
+## Older names
+
+| Old name, where it stays | Term |
+|---|---|
+| "horizon"; the Lean's `*Horizon*` and `*Period*` names (`ComposePeriod`, `CircuitWorkPeriod`), until renamed | monitoring period (`horizon` is its pooled reading) |
+| `Dampener*`, `*RemotePeriod`, until renamed | the slowdown |
+| the Lean's `*Epoch*` names, until renamed | (`MonitoringEpoch` once renamed) |
+"""
+
+
+def period_sites(text: str) -> list[str]:
+    by: dict[str, list[Term]] = {}
+    for t in terms_of(PERIOD_EXAMPLE):
+        for a in t.anchors:
+            by.setdefault(a, []).append(t)
+    return [w.split(" is retired")[0].strip("'\"") for _, w in sites_of(text, by)]
+
+
+def test_a_name_that_already_says_the_row_s_term_is_not_a_site_of_its_glob() -> None:
+    """A ``*`` name's site in an identifier that says the row's term (its words before the parenthesis, in CamelCase,
+    lowerCamel or snake_case) isn't one; the old names, a name in a dotted path beside one that says the term, another
+    row's glob, and a glob whose row gives no plain term still count.  The identifier is read whole, so one holding an old
+    name beside the term passes."""
+    got = {t.old: t for t in terms_of(PERIOD_EXAMPLE)}
+    assert got["*Period*"].says.pattern == "[Mm]onitoringPeriod|(?i:monitoring_period)"
+    assert not got["*Period*"].says.search("MONITORINGPeriod monitoringperiod")
+    assert got["*Epoch*"].says is None and got["ComposePeriod"].says is None and got["horizon"].says is None
+    assert period_sites("MonitoringPeriodChecked, MonitoringPeriod, monitoring_period_checked, MONITORING_PERIOD") == []
+    assert period_sites("monitoringPeriodG, monitoringPeriod_every, liveAt_monitoringPeriod") == []
+    assert period_sites("ledgerPeriod_le_monitoringPeriod") == []
+    assert period_sites("ComposePeriod, CircuitWorkPeriod, DampenerRemotePeriod, MONITORINGPeriod, "
+                        "Accounting.MonitoringPeriod.LedgerPeriod, composePeriod, ledgerPeriod") == [
+        "ComposePeriod", "CircuitWorkPeriod", "DampenerRemotePeriod", "MONITORINGPeriod", "LedgerPeriod",
+        "composePeriod", "ledgerPeriod"]
+    assert period_sites("ComposeHorizon, PooledHorizonBound, the horizon") == [
+        "ComposeHorizon", "PooledHorizonBound", "horizon"]
+    assert period_sites("DampenerMonitoringPeriod, MonitoringPeriodRemotePeriod") == [
+        "DampenerMonitoringPeriod", "MonitoringPeriodRemotePeriod"]
+    assert period_sites("ComposeEpoch, MonitoringEpoch") == ["ComposeEpoch", "MonitoringEpoch"]
 
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
