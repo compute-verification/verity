@@ -19,8 +19,8 @@ tried: no demo lists it, and its guarantee rests on a premise that is stated and
 - The scheme's scalar reference (`verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py`, `pearl_c4_c_L.py`),
   its tile check as a circuit (`prover/circuit/pc4.py`), its pinned vectors and their tests stay in PoUW's package:
   PoUW's own circuits load `pc4`, which loads the scheme, and PoUW loads nothing of `experimental/`.
-- The shipping, the reference replay of a device run and the replay on a model's captures are measurements, under
-  `benchmarks/pouw/pearl_c4/`.
+- The shipping (`benchmarks/pouw/pearl_c4/ship.sh`), the reference replay of a device run (`replay.py` beside it) and
+  the replay on a model's captures (`real.py`, `real_table.py`) are measurements, and stay under `benchmarks/`.
 - Its Lean is in PoUW's areas of `security/`: `Definitions/Pouw/PearlC/` (the files named `*Fp4*`, `Row4Circuit`,
   `Tile4Circuit`), `Definitions/Pouw/Assumptions/PearlC/TTOutFp4*` and `Proofs/Pouw/PearlC/` (the files named `*Fp4*`,
   `Row4Words`, `Tile4Circuit`).
