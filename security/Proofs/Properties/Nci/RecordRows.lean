@@ -31,9 +31,9 @@ A unit reads through its parameters, and the record cuts each parameter into row
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
-open Flock.Program (Prog Scope Ref Ty Defn isInputId)
+open Flock.Program (Prog Scope Ref Ty Defn isInputId fieldsOf)
 open Flock.TemplateQuery (TRange)
-open NciCheck.RecordText (Row outerOf fieldsOf)
+open NciCheck.RecordText (Row outerOf)
 open NciCheck.Record.SecurityProofs (RootFirst ranges_spec)
 open NciCheck.Properties.SecurityProofs
 
@@ -166,17 +166,11 @@ private theorem fields_leaves (ty : Ty) : (fieldsOf ty).foldl (fun a t => a + t.
   | value w => exact Nat.zero_add _
   | array n e => exact Nat.zero_add _
   | tuple fs =>
-    have e : fieldsOf (.tuple fs) = if fs.isEmpty then [Ty.tuple fs] else fs.toList := rfl
-    rw [e]
-    split
-    · exact Nat.zero_add _
-    · rw [Ty.leaves, ← Array.foldl_toList]
+    have e : fieldsOf (.tuple fs) = fs.toList := rfl
+    rw [e, Ty.leaves, ← Array.foldl_toList]
   | record fs =>
-    have e : fieldsOf (.record fs) = if fs.isEmpty then [Ty.record fs] else fs.toList.map (·.2) := rfl
-    rw [e]
-    split
-    · exact Nat.zero_add _
-    · rw [Ty.leaves, ← Array.foldl_toList, List.foldl_map]
+    have e : fieldsOf (.record fs) = fs.toList.map (·.2) := rfl
+    rw [e, Ty.leaves, ← Array.foldl_toList, List.foldl_map]
 
 /-- **A leaf of an output row is a leaf of the return.** -/
 theorem outRow_lt (d : Defn) (f l : ℕ) (hf : f < (fieldsOf d.ret).length)

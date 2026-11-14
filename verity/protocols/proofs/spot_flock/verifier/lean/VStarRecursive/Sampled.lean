@@ -13,8 +13,9 @@ soundness covers the one-stage form only, and the verifier refuses every form it
 * **commitment**: the registration record (`OneStage.commitmentOf`), as both forms read it;
 * **evidence**: `{"form", ...}`, the rest that form's evidence. One-stage evidence naming no `proofs` is v1's, and
   refused; evidence naming one is v2's, in either of its forms (`OneStageZk.evidenceEitherOf`);
-* **check**: that form's check on the blobs; evidence of the other form rejects, so with the recursive params refused
-  only one-stage v2's check runs.
+* **check**: that form's check on the blobs, its acceptance held to the caller's check (`Caller.gate`) against that
+  form's verifier; evidence of the other form rejects, so with the recursive params refused only one-stage v2's check
+  runs.
 -/
 module
 
@@ -74,7 +75,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match p, e with
-  | .inl p, .inl e => OneStageZk.checkBlobs p c e bs
+  | .inl p, .inl e => Caller.gate c.record p.base.verifier (OneStageZk.checkBlobs p c e bs)
   | .inr p, .inr e => Recursive.checkBlobs p c e bs
   | .inl _, .inr _ => .reject s!"the evidence's form is {RECURSIVE}, and the parameters' is {ONE_STAGE}"
   | .inr _, .inl _ => .reject s!"the evidence's form is {ONE_STAGE}, and the parameters' is {RECURSIVE}"
