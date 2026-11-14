@@ -77,13 +77,17 @@ INF = SC.INFERENCE_ONLY
 V1 = SC.V1
 SAMPLED = SC.SAMPLED
 UNNAMED = "the run's registration record is not the declared circuit's: its program is not the circuit's SHA-512"
+#: The one statement's refusal of a stratified design (`Spot.OneStageZk.SUBSET_ONLY`)
+SUBSET_ONLY = "the law is stratified, which the one-statement audit's soundness statement doesn't cover: it covers a subset law"
 
 
-def v1_case(program, query, previous: str | None = None) -> dict:
-    """v1's case as a5 writes it (`replay.Case.case`'s params, a v2 record, its evidence) for ``program``."""
+def v1_case(program, query, previous: str | None = None, law: dict | None = None) -> dict:
+    """v1's case as a5 writes it (`replay.Case.case`'s params, a v2 record, its evidence) for ``program``, under a
+    subset design unless ``law`` names another: the v2 case made from it is read by the one statement's parser
+    (`Spot.OneStageZk.paramsOfJson`), which refuses any other."""
     part = P.partition(program, query)
     ports = {"x": {"leaves": 8, "domain": "02" * 64}}
-    law = {"law": "stratified", "k": 1}
+    law = law or {"law": "subset", "k": 1}
     rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
                    registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
@@ -493,7 +497,8 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
 def test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, capsys, sampled_exe):
     """`vstar-recursive sampled check` reads the toy's v2 case in the form ``one-stage`` through its commitment and names
     the record's digest; it rejects it, as v2's Lean does, and that rejection is the case's verdict. v1's case in the
-    same form is refused by name at its params, the reason remote's composite would give for a v1 case."""
+    same form is refused by name at its params, the reason remote's composite would give for a v1 case. The same case
+    under a stratified design is not written: the one statement's parser refuses the design by its kind."""
     program, query = toy()
     v1 = v1_case(program, query)
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
@@ -506,6 +511,12 @@ def test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name(tmp
     assert got["protocol"] == SAMPLED and got["verdict"] == "reject", got
     assert got["reason"].startswith("params: the parameters name no proofs: one-stage v1 "), got
     assert "is refused" in got["reason"], got
+    stratified = v1_case(program, query, law={"law": "stratified", "k": 1})
+    rc, _, refused, out = run(capsys, "--audit", audit_dir(tmp_path / "stratified", stratified), "--private",
+                              tmp_path / "stratified" / "private", "--alpha", "1", "--gamma", 1,
+                              *stand_ins(tmp_path, stratified), "--sampled-exe", sampled_exe)
+    assert rc == 1 and [(r["protocol"], r["reason"].split(": params: ")[-1]) for r in refused] == \
+        [(SAMPLED, SUBSET_ONLY)], out
 
 
 @pytest.mark.parametrize("change, reason", [

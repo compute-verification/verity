@@ -37,7 +37,8 @@ theorem deployedKey_params {key : ChallengerKey} (h : OneStageZk.deployedKey key
 at other parameters (`KEY_PARAMS`). -/
 theorem paramsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk.paramsOfJson j = .ok p) :
     ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
-  unfold OneStageZk.paramsOfJson at h
+  have h := OneStageZk.paramsOfJson_parsed h
+  unfold OneStageZk.paramsParsed at h
   simp only [bind, Except.bind] at h
   repeat' split at h
   all_goals try contradiction
