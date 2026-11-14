@@ -244,7 +244,7 @@ def test_the_module_run_with_no_side_refuses_and_names_the_start_file(tmp_path) 
     r = subprocess.run([sys.executable, "-m", wipe_run.__name__, "--period", str(tmp_path), "--out", str(tmp_path / "out"),
                         "--expect", "accept"], capture_output=True, text=True)
     assert r.returncode == 1 and r.stdout == "", r.stdout + r.stderr
-    assert "run verity/protocols/accounting/pous/prover/wipe_on_node.py" in r.stderr and not (tmp_path / "out").exists()
+    assert "run benchmarks/pous/streamed_wipe/wipe_on_node.py" in r.stderr and not (tmp_path / "out").exists()
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
