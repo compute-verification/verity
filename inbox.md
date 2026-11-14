@@ -157,3 +157,10 @@ Cancelled runs: all seven of this morning's, at the turn's start.
 
 Next: slice 2 of #9867 on the collect branch.
 
+[2026-11-14T19:57Z] 1e22183c2bbd
+NETSEATS2: slice 2 of #9867, the statements I am about to change on the collect branch [argued]. TIMER: none.
+
+1. certs.json (warden_chain.certificates via chain_record.py certs) stops publishing issuer_refused, certified_windows and rows (each window's certified). `why` loses its problem count: "the network certifier's own check refuses the run", with the problems in the witness. Those four values are written instead to the chain's private side: chain_record.sh passes --witness "$Q/witness/certs/certs.json". The gate's own verdict, warden_check, stays as the gate publishes it.
+2. The report's d1 and network terms count the windows from certs.json's `windows`. Each window's acceptance becomes the certificates step's verdict, since an accepted certs.json certifies every window. So a refused run's `acc` becomes all false, not a per-window list.
+3. released_keys.json gains the list "the chain's certificates step" for certs.json, every key with its kind, and certs.json comes off not_yet. A test holds the list to certificates' writer.
+
