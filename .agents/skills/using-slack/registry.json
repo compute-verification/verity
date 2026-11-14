@@ -330,8 +330,6 @@
         "benchmarks/pouw/facet_break/",
         "benchmarks/pouw/dc/",
         "benchmarks/pouw/theory/",
-        "benchmarks/pouw/lean_headline.py",
-        "benchmarks/pouw/lean_headline_dc.py",
         "benchmarks/pouw/tests/test_lean_headline.py",
         "benchmarks/pouw/tests/test_lean_headline_dc.py",
         "benchmarks/tensor_duty/",
