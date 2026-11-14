@@ -6,7 +6,13 @@ are kept for the target's rows alone, copied right after each launch (the stand-
 clears every tensor when it returns, as the next layer would), and `moe_capture.read` gives them back from the record
 `write` wrote. A step that launches at no Python site, experts without ``A_scale``, a step laid out in another order
 than the one read, draft tokens, a rank whose pieces are not the trace's and a changed file are refused. The wraps are
-patches of `verity_vllm.engine.hooks`, and `moe_capture.uninstall` takes them off."""
+patches of `verity_vllm.engine.hooks`, and `moe_capture.uninstall` takes them off.
+
+A runner with capture sizes stands in for one that replays CUDA graphs: its manager captures each size as vLLM's does
+(an uncaptured warm-up forward, then the captured one), its dispatch sends a step to the smallest captured size that
+holds it, and a replayed step runs the block at the padded rows while the capture's slots take the copies the graph
+recorded (the stand-in issues them under a scratch capture, since no graph replays on a CPU): the capture, armed
+before the worker warms up, reads such a step's rows from its slots, and a step above every size from its launches."""
 from __future__ import annotations
 
 import json
@@ -21,7 +27,7 @@ import pytest
 import torch
 
 from tests import fake_vllm as stand_in
-from verity_vllm.engine import hooks
+from verity_vllm.engine import graph_slots, hooks
 from verity_vllm.engine import moe_capture as MC
 
 E, TOPK, H, MID, G = 6, 2, 8, 4, 4
@@ -40,6 +46,43 @@ PIECES = [[0, 3], [3, 2], [5, 1]]
 #: the rows of ``a`` in each of its steps' launches, and the rows the stand-in runner pads a step's launches with
 ROWS = [(2, 5), (1, 3), (0, 1)]
 PAD = [0, 2, 0, 0]
+
+
+#: the sizes a compiled stand-in captures, and the modes it captures each at: steps 0 to 2 of `STEPS` hold 5, 3 and 2
+#: rows, so the first runs its launches in Python, the second replays the FULL graph of 4 and the third the
+#: PIECEWISE graph of 2
+SIZES = {"PIECEWISE": (2, 4), "FULL": (4,)}
+DISPATCH = [["NONE", 5], ["FULL", 4], ["PIECEWISE", 2]]
+
+
+def desc(mode: str, tokens: int, ubatches: int = 1) -> SimpleNamespace:
+    return SimpleNamespace(cg_mode=SimpleNamespace(name=mode), num_tokens=tokens, num_ubatches=ubatches)
+
+
+class Manager:
+    """vLLM's `CudaGraphManager` as the capture follows it: `capture` runs every size's warm-up and captured forward,
+    `dispatch` gives a step its graph, FULL before PIECEWISE."""
+
+    def __init__(self, sizes: dict[str, tuple[int, ...]]) -> None:
+        self._capture_descs = {mode: [desc(mode, n) for n in ns] for mode, ns in sizes.items()}
+        self._capture_mem_samples: list[int] | None = None
+        self.captured: set[tuple[str, int]] = set()
+        self.ubatches = 1
+
+    def capture(self, create_forward_fn: Any) -> None:
+        for mode, descs in self._capture_descs.items():
+            for d in descs:
+                create_forward_fn(d, warmup=True)("NONE")
+                create_forward_fn(d, warmup=False)(mode)
+                self.captured.add((mode, d.num_tokens))
+
+    def dispatch(self, tokens: int) -> SimpleNamespace:
+        fits = sorted((pad, mode) for mode, pad in self.captured if pad >= tokens)
+        return desc(*((fits[0][1], fits[0][0]) if fits else ("NONE", tokens)), ubatches=self.ubatches)
+
+
+def dispatch_cg_and_sync_dp(manager: Manager, num_reqs: int, num_tokens: int) -> tuple[SimpleNamespace, None]:
+    return manager.dispatch(num_tokens), None
 
 
 def batch_order(tokens: dict[str, int], drafts: dict[str, list[int]], decode_query_len: int) -> list[str]:
@@ -64,14 +107,20 @@ class Vllm:
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self.gen = torch.Generator().manual_seed(20)
-        fake = stand_in.install(monkeypatch, extra=[":".join(MC.ROUTER_SITE)])
+        fake = stand_in.install(monkeypatch, extra=[":".join(site) for site in (MC.ROUTER_SITE, MC.GRAPH_SITE, MC.WORKER_SITE)])
         self.fm, self.tm, self.router = fake[MC.FUSED_MOE_SITE[0]], fake[MC.TRITON_MOE_SITE[0]], fake[MC.ROUTER_SITE[0]]
         self.fm.invoke_fused_moe_triton_kernel = self.tm.invoke_fused_moe_triton_kernel = self.kernel
         fake.set(":".join(MC.ROUTER_SITE), self.grouped_topk)
+        fake.set(":".join(MC.GRAPH_SITE), Manager)
+        fake.set(":".join(MC.WORKER_SITE), Worker)
         mod = types.ModuleType(RUNNER_MODULE)
         setattr(mod, "sort_batch_req_ids", batch_order)
+        setattr(mod, MC.DISPATCH, dispatch_cg_and_sync_dp)
         monkeypatch.setitem(sys.modules, RUNNER_MODULE, mod)
         self.runner_module = mod
+        #: whether the stream is capturing a graph: the stand-in's `torch.cuda.is_current_stream_capturing`
+        self.in_graph = False
+        monkeypatch.setattr(graph_slots, "stream_capturing", lambda t: self.in_graph)
 
     def bits(self, *shape: int, dtype: torch.dtype) -> torch.Tensor:
         """Made-up values of ``dtype``: every bit pattern of its words."""
@@ -149,15 +198,49 @@ class Model(torch.nn.Module):
 
 
 class Runner:
-    """The V2 runner as the capture reads it: its module's batch order, its input batch after the forward."""
+    """The V2 runner as the capture reads it: its module's batch order and dispatch, its graph manager, its input batch
+    after the forward. With ``sizes`` it captures graphs (`capture_model`) and replays a step that fits one."""
 
     decode_query_len = 1
 
-    def __init__(self, v: Vllm) -> None:
-        self.model, self.order, self.steps = Model(v), batch_order, 0
+    def __init__(self, v: Vllm, sizes: dict[str, tuple[int, ...]] | None = None) -> None:
+        self.v, self.model, self.order, self.steps = v, Model(v), batch_order, 0
+        self.cudagraph_manager = Manager(sizes or {})
+        #: the manager the runner dispatches a step with: its own
+        self.dispatches = self.cudagraph_manager
 
     def get_model(self) -> Model:
         return self.model
+
+    def capture_model(self) -> None:
+        def create_forward_fn(d: SimpleNamespace, warmup: bool) -> Any:
+            def forward_fn(mode: str) -> None:
+                self.v.in_graph = mode != "NONE"
+                try:
+                    self.model(d.num_tokens)
+                finally:
+                    self.v.in_graph = False
+            return forward_fn
+
+        self.cudagraph_manager.capture(create_forward_fn)
+        for _, m in self.model.named_modules():
+            if isinstance(m, Experts):
+                m.truth.clear()
+
+    def replay(self, pad: int) -> None:
+        """A graph's replay at ``pad`` rows: the kernels run and the copies the capture recorded are issued again."""
+        slots = MC._ON[id(self)].slots if id(self) in MC._ON else None
+        scratch = ("REPLAY", pad)
+        if slots is not None:
+            slots.plans[scratch], slots.capturing = [], scratch
+        self.v.in_graph = True
+        try:
+            self.model(pad)
+        finally:
+            self.v.in_graph = False
+            if slots is not None:
+                slots.capturing = None
+                del slots.plans[scratch]
 
     def execute_model(self, so: SimpleNamespace, dummy_run: bool = False) -> None:
         tokens = so.num_scheduled_tokens
@@ -167,11 +250,25 @@ class Runner:
         self.execute_model_state = SimpleNamespace(input_batch=SimpleNamespace(
             req_ids=[*ids, "pad"], num_reqs=len(ids), query_start_loc_np=np.cumsum([0, *(tokens[r] for r in ids), 9]),
             num_computed_tokens_np=np.array([start[r] for r in ids] + [0])))
-        self.model(sum(tokens.values()) + PAD[self.steps % len(PAD)])
+        at, _ = getattr(sys.modules[RUNNER_MODULE], MC.DISPATCH)(self.dispatches, len(ids), sum(tokens.values()))
+        if at.cg_mode.name == "NONE":
+            self.model(sum(tokens.values()) + PAD[self.steps % len(PAD)])
+        else:
+            self.replay(at.num_tokens)
         self.steps += 1
 
 
 Runner.__module__ = RUNNER_MODULE
+
+
+class Worker:
+    """vLLM's worker as `moe_capture.arm` patches it: its warm-up captures its runner's graphs."""
+
+    def __init__(self, rank: int, v: Vllm, sizes: dict[str, tuple[int, ...]] | None = None) -> None:
+        self.rank, self.model_runner = rank, Runner(v, sizes)
+
+    def compile_or_warm_up_model(self) -> None:
+        self.model_runner.capture_model()
 
 
 class Workers:
@@ -179,10 +276,10 @@ class Workers:
 
     def __init__(self, v: Vllm) -> None:
         self.v = v
-        self.made: list[SimpleNamespace] = []
+        self.made: list[Worker] = []
 
-    def __call__(self, rank: int = 0) -> SimpleNamespace:
-        self.made.append(SimpleNamespace(rank=rank, model_runner=Runner(self.v)))
+    def __call__(self, rank: int = 0, sizes: dict[str, tuple[int, ...]] | None = None) -> Worker:
+        self.made.append(Worker(rank, self.v, sizes))
         return self.made[-1]
 
 
@@ -196,17 +293,19 @@ def workers(v: Vllm) -> Iterator[Workers]:
     before = hooks.live()
     made = Workers(v)
     yield made
+    MC.disarm()
     for w in reversed(made.made):
         if id(w.model_runner) in MC._ON:
             MC.uninstall(w)
+    MC._PARKED.clear()
     assert hooks.live() == before and not MC._ON
 
 
-def experts(worker: SimpleNamespace, name: str) -> Experts:
+def experts(worker: Worker, name: str) -> Experts:
     return dict(worker.model_runner.get_model().named_modules())[name]
 
 
-def run(worker: SimpleNamespace, steps: list[dict[str, Any]] = STEPS) -> None:
+def run(worker: Worker, steps: list[dict[str, Any]] = STEPS) -> None:
     for s in steps:
         worker.model_runner.execute_model(scheduled(s))
 
@@ -225,7 +324,7 @@ def expected(truth: list[dict[str, torch.Tensor]], field: str, shape: tuple[int,
 def test_every_launch_of_the_targets_rows_is_kept_and_read_back(workers: Workers, tmp_path) -> None:
     ranks = [workers(0), workers(1)]
     assert [MC.install(w, ["a", "c"], list(MODULES)) for w in ranks] == [0, 1]
-    assert len(hooks.live(MC.TAG)) == 6
+    assert len(hooks.live(MC.TAG)) == 10
     for w in ranks:
         run(w)
     takes = [MC.take(w, str(tmp_path / "ranks")) for w in ranks]
@@ -246,6 +345,7 @@ def test_every_launch_of_the_targets_rows_is_kept_and_read_back(workers: Workers
                 assert got[f].shape == (6, *shapes[f]) and got[f].any()
                 assert np.array_equal(got[f], expected(truth, f, shapes[f])), (rank, name, f)
             assert got["pieces"] == PIECES and got["steps"] == [0, 1, 2] and got["tiles"] == [[TILE13, TILE2]] * 3
+            assert got["dispatch"] == [["NONE", 5], ["NONE", 3], ["NONE", 2]]
             assert got["of"] == {"in_q": "float8_e4m3fn", "in_scale": "float32", "router_ids": "int32", "up": "bfloat16",
                                  "act_q": "float8_e4m3fn", "act_scale": "float32", "topk_weights": "float32",
                                  "down": "bfloat16"}
@@ -272,8 +372,89 @@ def test_a_step_that_launches_at_no_python_site_is_refused(workers: Workers) -> 
     w = workers()
     MC.install(w, ["a"], list(MODULES))
     experts(w, MODULES[1]).path = "graph"
-    with pytest.raises(TypeError, match=r"model\.layers\.1\.mlp\.experts gave no in_q, in_scale, up, act_q, .*CUDA graph"):
+    with pytest.raises(TypeError, match=r"model\.layers\.1\.mlp\.experts gave no in_q, in_scale, up, act_q, .*compiled past"):
         run(w, STEPS[:1])
+
+
+SHAPES = {"in_q": (H,), "in_scale": (H // G,), "router_ids": (TOPK,), "up": (TOPK, 2 * MID), "act_q": (TOPK, MID),
+          "act_scale": (TOPK, MID // G), "topk_weights": (TOPK,), "down": (TOPK, H)}
+
+
+def test_a_replayed_steps_rows_are_cut_from_the_slots_its_graph_copies_into(workers: Workers, tmp_path) -> None:
+    MC.arm(["a"], list(MODULES))
+    ranks = [workers(0, SIZES), workers(1, SIZES)]
+    for w in ranks:
+        w.compile_or_warm_up_model()
+        slots = MC._ON[id(w.model_runner)].slots
+        # one slot a module's field, of the largest size's rows, whatever the sizes and modes captured
+        assert len(slots.slots) == len(MODULES) * len(MC.KEPT) and {s.shape[0] for s in slots.slots.values()} == {4}
+        assert sorted(slots.plans) == [("FULL", 4), ("PIECEWISE", 2), ("PIECEWISE", 4)] and slots.errors == []
+        Manager({"FULL": (8,)}).capture(lambda d, warmup: lambda mode: None)       # a speculator's graphs: not the runner's
+        assert slots.max_rows == 4 and len(slots.plans) == 3
+        run(w)
+    takes = [MC.take(w, str(tmp_path)) for w in ranks]
+    MC.write(tmp_path, MC.spans(takes, STEPS))
+    for rank, w in enumerate(ranks):
+        for name in MODULES:
+            got = MC.read(tmp_path, "a", rank, name)
+            truth = experts(w, name).truth
+            assert len(truth) == len(STEPS) and [len(t["in_q"]) for t in truth] == [5, 4, 2, 2]
+            for f in MC.KEPT:
+                assert np.array_equal(got[f], expected(truth, f, SHAPES[f])), (rank, name, f)
+            assert got["pieces"] == PIECES and got["dispatch"] == DISPATCH and got["tiles"] == [[TILE13, TILE2]] * 3
+    assert [MC.uninstall(w) for w in reversed(ranks)] == [1, 0] and len(MC._PARKED) == 2
+    MC.disarm()
+    assert not hooks.live(MC.TAG)
+
+
+def test_a_capture_installed_after_the_graphs_were_captured_refuses_a_replayed_step(workers: Workers) -> None:
+    w = workers(0, SIZES)
+    w.compile_or_warm_up_model()
+    MC.install(w, ["a"], [MODULES[0]])
+    run(w, STEPS[:1])
+    with pytest.raises(TypeError, match=r"replays the FULL CUDA graph of 4 tokens, whose capture this capture did not follow"):
+        run(w, STEPS[1:2])
+
+
+def test_a_launch_recorded_into_a_graph_outside_the_runners_capture_is_refused(workers: Workers, v: Vllm) -> None:
+    w = workers()
+    MC.install(w, ["a"], [MODULES[0]])
+    v.in_graph = True
+    with pytest.raises(TypeError, match="router_ids is launched into a CUDA graph outside vLLM's capture of the runner's"):
+        run(w, STEPS[:1])
+
+
+def test_a_step_in_micro_batches_and_one_not_dispatched_are_refused(workers: Workers) -> None:
+    w = workers()
+    MC.install(w, ["a"], [MODULES[0]])
+    w.model_runner.cudagraph_manager.ubatches = 2
+    with pytest.raises(TypeError, match="dispatched at 5 tokens in 2 micro-batches"):
+        run(w, STEPS[:1])
+    w.model_runner.cudagraph_manager.ubatches = 1
+    w.model_runner.dispatches = Manager({})
+    with pytest.raises(TypeError, match="was not dispatched through .* with the runner's own graph manager"):
+        run(w, STEPS[:1])
+
+
+def test_arm_installs_once_a_worker_and_refuses_a_second_arming(workers: Workers, v: Vllm,
+                                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ValueError, match="no request or no module"):
+        MC.arm(["a"], [])
+    MC.arm(["a"], [MODULES[0]])
+    with pytest.raises(ValueError, match="already armed"):
+        MC.arm(["a"], [MODULES[0]])
+    w = workers(0, SIZES)
+    w.compile_or_warm_up_model()
+    w.compile_or_warm_up_model()
+    assert MC._ON[id(w.model_runner)].names == (MODULES[0],)
+    MC.disarm()
+    other = workers(1, SIZES)
+    other.compile_or_warm_up_model()
+    assert id(other.model_runner) not in MC._ON
+    with monkeypatch.context() as m:
+        m.delattr(Worker, "compile_or_warm_up_model")
+        with pytest.raises(TypeError, match="gpu_worker holds no Worker.compile_or_warm_up_model"):
+            MC.arm(["a"], [MODULES[0]])
 
 
 def test_experts_without_a_scale_are_refused(workers: Workers) -> None:
@@ -333,6 +514,9 @@ def test_a_rank_whose_pieces_are_not_the_traces_is_refused(workers: Workers, tmp
         MC.spans([take], STEPS[:2])
     with pytest.raises(ValueError, match="ran it at"):
         MC.spans([take], [*STEPS[:2], {"step": 2, "rows": [["a", 5, 2]]}])
+    other = {"rank": 1, "requests": {"a": {**take["requests"]["a"], "dispatch": DISPATCH}}}
+    with pytest.raises(ValueError, match=r"rank 1 ran its steps at .*\['FULL', 4\].*an earlier rank at .*\['NONE', 3\]"):
+        MC.spans([take, other], STEPS)
 
 
 def test_read_refuses_a_changed_file_and_what_the_record_lacks(workers: Workers, tmp_path) -> None:

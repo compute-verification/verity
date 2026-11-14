@@ -24,12 +24,19 @@ trace, `write` writes the record (`CAPTURE`) beside the ranks' files, and `read`
 at one rank back from it.
 
 The launch sites are the pinned vLLM's Python ones, which `acquire.sources.moe_source` wraps too (`FUSED_MOE_SITE`,
-`TRITON_MOE_SITE`, `ROUTER_SITE`, `launch_arg`), so the engine is an eager one: a step replayed from a CUDA graph, or a
-forward compiled past the launcher, launches at none of them, and the capture refuses that step rather than keep less.
+`TRITON_MOE_SITE`, `ROUTER_SITE`, `launch_arg`). A step vLLM replays from a CUDA graph runs none of them, so the
+capture follows vLLM's capture of its graphs (`GRAPH_SITE`, `engine.graph_slots`): in each graph's capture a launch of
+a named module copies its tensors, every row, into static slots, a copy the graph replays at every step, and after a
+replayed step's forward the targets' rows are cut from the slots' first rows, with the tiles the capture launched at
+(the padded size's). The step's graph is read from the runner's dispatch (`DISPATCH`), and each piece's is kept
+(``dispatch``: its mode and padded tokens, ``NONE`` for a step that ran its launches in Python). So on an engine that
+captures graphs the capture is installed before it does: `arm`, in a process before it builds its worker, installs
+on the worker right before it warms up (`WORKER_SITE`). Installed later, it refuses the first replayed step of a
+target, and so does a forward compiled past the launcher, rather than keep less.
 Refused too: a module whose launches carry no ``A_scale`` (experts that are not block FP8), a router other than the
-grouped one, a step that samples draft tokens, and a runner whose module has no ``sort_batch_req_ids`` (the runner is
-vLLM's V2 model runner, `v1.worker.gpu.model_runner`, whose order the step's rows are read in before the forward and
-held to its input batch after it).
+grouped one, a step that samples draft tokens or runs in micro-batches, and a runner whose module has no
+``sort_batch_req_ids`` (the runner is vLLM's V2 model runner, `v1.worker.gpu.model_runner`, whose order the step's
+rows are read in before the forward and held to its input batch after it).
 
 What is kept is served values: nothing here logs or prints them, a refusal names shapes and rows only, and they are
 written only under the directory `take` is given.
@@ -46,10 +53,11 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.engine import hooks, runner_step, step_trace
+from verity_vllm.engine import graph_slots, hooks, runner_step, step_trace
 
-__all__ = ["CAPTURE", "FUSED_MOE_SITE", "KEPT", "LAUNCH_ARGS", "ROUTER_SITE", "TAG", "TRITON_LAUNCH", "TRITON_MOE_SITE",
-           "Capture", "install", "launch_arg", "read", "spans", "take", "uninstall", "write"]
+__all__ = ["CAPTURE", "DISPATCH", "FUSED_MOE_SITE", "GRAPH_SITE", "KEPT", "LAUNCH_ARGS", "ROUTER_SITE", "TAG",
+           "TRITON_LAUNCH", "TRITON_MOE_SITE", "WORKER_SITE", "Capture", "arm", "disarm", "install", "launch_arg", "read",
+           "spans", "take", "uninstall", "write"]
 
 #: a capture's record, beside its ranks' files
 CAPTURE = "capture.json"
@@ -63,6 +71,12 @@ FUSED_MOE_SITE = ("vllm.model_executor.layers.fused_moe.fused_moe", TRITON_LAUNC
 TRITON_MOE_SITE = ("vllm.model_executor.layers.fused_moe.experts.triton_moe", TRITON_LAUNCH)
 #: the grouped router, at the name its caller looks up when it routes
 ROUTER_SITE = ("vllm.model_executor.layers.fused_moe.router.grouped_topk_router", "grouped_topk")
+#: the class through whose ``capture`` vLLM captures every graph: (module, name)
+GRAPH_SITE = ("vllm.v1.worker.gpu.cudagraph_utils", "CudaGraphManager")
+#: the dispatch of a step to a graph, by the name the runner's own module holds it under
+DISPATCH = "dispatch_cg_and_sync_dp"
+#: the worker, whose ``compile_or_warm_up_model`` captures its runner's graphs: (module, name)
+WORKER_SITE = ("vllm.v1.worker.gpu_worker", "Worker")
 #: the launcher's positional index of each argument read from a launch, after (A, B, C):
 #: invoke_fused_moe_triton_kernel(A, B, C, A_scale, B_scale, topk_weights, sorted_token_ids, expert_ids,
 #: num_tokens_post_padded, mul_routed_weight, top_k, config, ...)
@@ -72,6 +86,11 @@ KEPT = ("in_q", "in_scale", "router_ids", "up", "act_q", "act_scale", "topk_weig
 
 #: the capture on each runner of this process, by ``id(runner)``
 _ON: dict[int, Capture] = {}
+#: the slots of the captures taken off: a graph captured with a capture on replays its copies for as long as it
+#: lives, so the tensors they write stay allocated with the process
+_PARKED: list[graph_slots.Slots] = []
+#: `arm`'s patch of the worker, where this process is armed
+_ARMED: list[hooks.Hooks] = []
 
 
 def launch_arg(a: Sequence[Any], k: Mapping[str, Any], name: str) -> Any:
@@ -101,13 +120,15 @@ def _sort(runner: Any) -> Callable[..., Sequence[str]]:
 
 class Capture(runner_step.Part):
     """One runner's capture: at each step that schedules a target, the target's rows of each named module's launches,
-    as `KEPT` names them, with the launches' tiles; ``pieces`` is each target's (first position, tokens) a step."""
+    as `KEPT` names them, with the launches' tiles; ``pieces`` is each target's (first position, tokens) a step and
+    ``dispatch`` the (mode, padded tokens) each of those steps ran at."""
 
     rank = runner_step.Rank.OBSERVE
 
     def __init__(self, runner: Any, targets: Sequence[str], modules: Mapping[str, Any]) -> None:
         self.runner, self.targets, self.names = runner, frozenset(targets), tuple(sorted(modules))
         self.pieces: dict[str, list[list[int]]] = {r: [] for r in self.targets}
+        self.dispatch: dict[str, list[list[Any]]] = {r: [] for r in self.targets}
         self.kept: dict[str, dict[str, dict[str, list[np.ndarray]]]] = {
             r: {m: {f: [] for f in KEPT} for m in self.names} for r in self.targets}
         self.tiles: dict[str, dict[str, list[list[dict[str, int]]]]] = {r: {m: [] for m in self.names} for r in self.targets}
@@ -119,12 +140,23 @@ class Capture(runner_step.Part):
         #: the named module whose forward is running, and what each has launched this step
         self.at: str | None = None
         self.seen: dict[str, dict[str, Any]] = {}
+        #: this step's dispatch: (mode, padded tokens, tokens, micro-batches); None before it
+        self.step: tuple[str, int, int, int] | None = None
+        #: (mode, padded tokens) -> module -> what its launches gave that graph's capture: each field's shape a token,
+        #: its rows, TOPK and tiles; the fields' rows are in the slots
+        self.graphs: dict[tuple[str, int], dict[str, dict[str, Any]]] = {}
+        self.slots = graph_slots.Slots(dropped=self.graphs.clear)
         self.hooks = hooks.Hooks(tag=TAG)
-        sites = [(importlib.import_module(site), name, wrapper) for (site, name), wrapper in
-                 ((FUSED_MOE_SITE, self._launch), (TRITON_MOE_SITE, self._launch), (ROUTER_SITE, self._router))]
+        graphs = importlib.import_module(GRAPH_SITE[0])
+        sites: list[tuple[Any, str, Callable[..., Any]]] = [
+            *((importlib.import_module(site), name, wrapper) for (site, name), wrapper in
+              ((FUSED_MOE_SITE, self._launch), (TRITON_MOE_SITE, self._launch), (ROUTER_SITE, self._router))),
+            (getattr(graphs, GRAPH_SITE[1], graphs), "capture", self.slots.capture_wrapper(self._mine)),
+            (sys.modules[type(runner).__module__], DISPATCH, self._dispatched)]
         for owner, name, _ in sites:
             if not callable(getattr(owner, name, None)):
-                raise TypeError(f"{owner.__name__} holds no {name}: the capture reads the pinned vLLM's launch sites")
+                raise TypeError(f"{owner.__name__} holds no {name}: the capture reads the pinned vLLM's launch sites, "
+                                "its capture of its graphs and its dispatch of a step to one")
         self.handles = [h for name in self.names for h in (
             modules[name].register_forward_pre_hook(self._enter(name)),
             modules[name].register_forward_hook(self._leave, always_call=True))]
@@ -133,17 +165,58 @@ class Capture(runner_step.Part):
         self.remove = runner_step.add(runner, self)
 
     def off(self) -> None:
-        """Take the capture off its runner's step, the launch sites and its modules. The rows stay with it."""
+        """Take the capture off its runner's step, the launch sites and its modules. The rows stay with it, and the
+        slots its graphs copy into stay allocated."""
         self.remove()
         self.hooks.uninstall()
         for h in self.handles:
             h.remove()
         self.handles = []
+        if self.slots.slots:
+            _PARKED.append(self.slots)
+
+    # -- the step's graph --------------------------------------------------------------------------------------------------
+    def _mine(self, manager: Any) -> bool:
+        """Whether ``manager`` is the runner's own: a speculator's graphs are captured through the same class."""
+        return manager is getattr(self.runner, "cudagraph_manager", None)
+
+    def _dispatched(self, orig: Callable[..., Any]) -> Callable[..., Any]:
+        def dispatch(manager: Any, num_reqs: Any, num_tokens: Any, *a: Any, **k: Any) -> Any:
+            out = orig(manager, num_reqs, num_tokens, *a, **k)
+            if self.rows is not None and self._mine(manager):
+                desc = out[0]
+                self.step = (str(desc.cg_mode.name), int(desc.num_tokens), int(num_tokens), int(getattr(desc, "num_ubatches", 1)))
+            return out
+        return dispatch
+
+    def _replayed(self, mode: str, pad: int, rows: Mapping[str, tuple[int, int, int]]) -> dict[str, dict[str, Any]]:
+        """What a step replayed from the ``mode`` graph of ``pad`` tokens launched, as a step that ran its launches
+        in Python leaves it in ``seen``: each named module's fields, the targets' rows cut from the slots' first rows,
+        and the tiles its graph's capture launched at."""
+        entries = self.slots.entries(mode, pad)
+        if entries is None:
+            raise TypeError(f"the step replays the {mode} CUDA graph of {pad} tokens, whose capture this capture did not "
+                            "follow: it is installed before the engine captures its graphs (`arm`), or the engine is "
+                            "an eager one")
+        slot = {name: entry for entry in entries for name in (entry[1],)}
+        out: dict[str, dict[str, Any]] = {}
+        for name in self.names:
+            meta = self.graphs.get((mode, pad), {}).get(name, {})
+            lacks = [f for f in KEPT if f not in meta or f"{name}/{f}" not in slot]
+            if lacks:
+                raise TypeError(f"{name} gave no {', '.join(lacks)} in the capture of the {mode} CUDA graph of {pad} "
+                                "tokens: another router or kernel path is not captured")
+            seen: dict[str, Any] = {"tile13": meta["tile13"], "tile2": meta["tile2"]}
+            for f in KEPT:
+                value = self.slots.value(slot[f"{name}/{f}"], self.total, pad)
+                seen[f] = {r: _bits(value[lo:hi]).reshape(hi - lo, *meta[f]) for r, (lo, hi, _) in rows.items()}
+            out[name] = seen
+        return out
 
     # -- the step's rows ---------------------------------------------------------------------------------------------------
     def before_forward(self, step: runner_step.Step) -> None:
         """The rows each target's tokens take in this step's launches, in the runner's batch order."""
-        self.rows, self.at, self.seen = None, None, {}
+        self.rows, self.at, self.seen, self.step = None, None, {}, None
         so = step.scheduler_output
         tokens = {r: int(n) for r, n in so.num_scheduled_tokens.items()}
         if not self.targets & tokens.keys():
@@ -163,6 +236,7 @@ class Capture(runner_step.Part):
         """Hold the rows read before the forward to the step's input batch and every named module to its three launches,
         then keep the step's rows."""
         rows, self.rows = self.rows, None
+        at, self.step = self.step, None
         if rows is None:
             return
         batch = getattr(getattr(step.runner, "execute_model_state", None), "input_batch", None)
@@ -175,34 +249,57 @@ class Capture(runner_step.Part):
         if laid != rows:
             raise ValueError(f"the step laid its requests out at (first row, end row, first position) {laid}, and the "
                              f"capture read its launches at {rows}")
+        if at is None:
+            raise TypeError(f"the step was not dispatched through {type(step.runner).__module__}'s {DISPATCH} with the "
+                            "runner's own graph manager: the capture reads there whether a step replays a CUDA graph")
+        mode, pad, tokens, ubatches = at
+        if tokens != self.total or ubatches != 1:
+            raise TypeError(f"the step was dispatched at {tokens} tokens in {ubatches} micro-batches and scheduled "
+                            f"{self.total} rows: the capture reads one launch a module of the scheduled rows")
+        if self.slots.errors:
+            raise TypeError(f"the capture's slots: {'; '.join(self.slots.errors[:3])}")
+        got = self._replayed(mode, pad, rows) if mode in graph_slots.GRAPH_MODES else self.seen
         for name in self.names:
-            seen = self.seen.get(name, {})
+            seen = got.get(name, {})
             lacks = [f for f in KEPT if f not in seen]
             if lacks:
-                raise TypeError(f"{name} gave no {', '.join(lacks)} at this step's Python launch sites: a step replayed "
-                                "from a CUDA graph or compiled past the launcher launches at none (replay eager), and "
-                                "another router or kernel path is not captured")
+                raise TypeError(f"{name} gave no {', '.join(lacks)} at this step's Python launch sites: a forward "
+                                "compiled past the launcher launches at none, and another router or kernel path is "
+                                "not captured")
             for r in rows:
                 for f in KEPT:
                     self.kept[r][name][f].append(seen[f][r])
                 self.tiles[r][name].append([seen["tile13"], seen["tile2"]])
         for r, (lo, hi, start) in rows.items():
             self.pieces[r].append([start, hi - lo])
+            self.dispatch[r].append([mode, pad])
         self.seen = {}
 
     # -- the launches ------------------------------------------------------------------------------------------------------
     def _enter(self, name: str) -> Callable[..., None]:
         def enter(module: Any, args: Any) -> None:
             self.at = name
+            if self.slots.capturing is not None:
+                self.graphs.setdefault(self.slots.capturing, {}).pop(name, None)
         return enter
+
+    def _tapped(self) -> bool:
+        """Whether a launch running now is one to read: a named module's, in a step with a target or in the capture
+        of one of the runner's graphs."""
+        return self.at is not None and (self.rows is not None or self.slots.capturing is not None)
+
+    def _launches(self) -> dict[str, Any]:
+        """What the module at ``self.at`` has launched in this forward: a step's, or a graph's capture's."""
+        graph = self.slots.capturing
+        return (self.seen if graph is None else self.graphs.setdefault(graph, {})).setdefault(str(self.at), {})
 
     def _leave(self, module: Any, args: Any, out: Any) -> None:
         self.at = None
 
     def _keep(self, seen: dict[str, Any], field: str, t: Any, pairs: bool) -> None:
         """Keep each target's rows of ``t`` as ``field``: a token's row of a token-major tensor ([M, ...]), or with
-        ``pairs`` its TOPK pairs' rows, of a token-major ([M, TOPK, ...]) or a pair-major one ([M * TOPK, ...])."""
-        assert self.rows is not None
+        ``pairs`` its TOPK pairs' rows, of a token-major ([M, TOPK, ...]) or a pair-major one ([M * TOPK, ...]). In a
+        graph's capture every row is copied into the field's slot instead, a row a token, and the copy is the graph's."""
         m, topk = seen["m"], seen["topk"]
         shape = tuple(getattr(t, "shape", ()))
         if shape[:1] == (m,) and (not pairs or shape[1:2] == (topk,)):
@@ -214,12 +311,23 @@ class Capture(runner_step.Part):
         of = str(t.dtype).rpartition(".")[2]
         if self.of.setdefault(field, of) != of:
             raise TypeError(f"{self.at}'s {field} is {of} at this launch and was {self.of[field]} at an earlier one")
-        seen[field] = {r: _bits(t[lo * per:hi * per]).reshape(hi - lo, *token) for r, (lo, hi, _) in self.rows.items()}
+        graph, captured = self.slots.capturing, graph_slots.stream_capturing(t)
+        if graph is None:
+            assert self.rows is not None
+            if captured:
+                raise TypeError(f"{self.at}'s {field} is launched into a CUDA graph outside vLLM's capture of the "
+                                "runner's graphs: its rows would be the graph's and not this step's")
+            seen[field] = {r: _bits(t[lo * per:hi * per]).reshape(hi - lo, *token) for r, (lo, hi, _) in self.rows.items()}
+            return
+        entry = self.slots.stage((self.names.index(str(self.at)), KEPT.index(field)), f"{self.at}/{field}", t.reshape(m, -1), m)
+        if captured:
+            self.slots.plans[graph].append(entry)
+        seen[field] = tuple(int(x) for x in token)
 
     def _router(self, orig: Callable[..., Any]) -> Callable[..., Any]:
         def grouped_topk(*a: Any, **k: Any) -> Any:
             out = orig(*a, **k)
-            if self.rows is not None and self.at is not None:
+            if self._tapped():
                 self._routed(out[1])
             return out
         return grouped_topk
@@ -227,26 +335,26 @@ class Capture(runner_step.Part):
     def _routed(self, ids: Any) -> None:
         """The router's ids of one forward of the module at ``self.at``, which fix its rows and TOPK."""
         import torch
-        seen = self.seen.setdefault(str(self.at), {})
+        seen, graph = self._launches(), self.slots.capturing
         if "router_ids" in seen:
             raise TypeError(f"{self.at} routed twice in one forward")
-        if ids.dim() != 2 or ids.shape[0] < self.total or ids.is_floating_point():
-            raise TypeError(f"{self.at}'s router gave ids of shape {tuple(ids.shape)} ({ids.dtype}) at a step of "
-                            f"{self.total} rows")
+        if ids.dim() != 2 or ids.is_floating_point() or (ids.shape[0] < self.total if graph is None else ids.shape[0] != graph[1]):
+            raise TypeError(f"{self.at}'s router gave ids of shape {tuple(ids.shape)} ({ids.dtype}) at a "
+                            + (f"step of {self.total} rows" if graph is None else f"graph of {graph[1]} tokens"))
         seen["m"], seen["topk"] = int(ids.shape[0]), int(ids.shape[1])
         self._keep(seen, "router_ids", ids.to(torch.int32), pairs=True)
 
     def _launch(self, orig: Callable[..., Any]) -> Callable[..., Any]:
         def launch(A: Any, B: Any, C: Any, *a: Any, **k: Any) -> Any:
             out = orig(A, B, C, *a, **k)
-            if self.rows is not None and self.at is not None:
+            if self._tapped():
                 self._launched(A, C, a, k)
             return out
         return launch
 
     def _launched(self, A: Any, C: Any, a: Sequence[Any], k: Mapping[str, Any]) -> None:
         """One launch of the module at ``self.at``: its A, A_scale and C, right after the kernel wrote C, and its tile."""
-        seen = self.seen.setdefault(str(self.at), {})
+        seen = self._launches()
         weighted, scale, top_k, config = (launch_arg(a, k, n) for n in ("mul_routed_weight", "A_scale", "top_k", "config"))
         if weighted is not True and weighted is not False:
             raise TypeError(f"a launch of {self.at} with mul_routed_weight {type(weighted).__name__}: neither its w13 "
@@ -280,7 +388,8 @@ class Capture(runner_step.Part):
 
 def install(worker: Any, targets: Sequence[str], modules: Sequence[str]) -> int:
     """Put a `Capture` on ``worker``'s runner for ``targets`` (the requests' engine ids) and ``modules`` (the MoE
-    modules to capture, by their names in the worker's model); its rank."""
+    modules to capture, by their names in the worker's model); its rank. On a worker whose runner replays CUDA graphs,
+    before it captures them (`arm`)."""
     runner = worker.model_runner
     if id(runner) in _ON:
         raise ValueError("a capture is already on this worker's runner: `uninstall` it first")
@@ -293,6 +402,36 @@ def install(worker: Any, targets: Sequence[str], modules: Sequence[str]) -> int:
     _sort(runner)
     _ON[id(runner)] = Capture(runner, targets, {m: named[m] for m in modules})
     return int(worker.rank)
+
+
+def arm(targets: Sequence[str], modules: Sequence[str]) -> None:
+    """In a process that has built no worker yet: `install` on each worker it builds, right before the worker warms
+    up, which is when its runner captures its graphs. `disarm` takes the patch off."""
+    if _ARMED:
+        raise ValueError("this process is already armed: `disarm` it first")
+    if not targets or not modules:
+        raise ValueError("no request or no module to capture")
+    owner = getattr(importlib.import_module(WORKER_SITE[0]), WORKER_SITE[1], None)
+    if not callable(getattr(owner, "compile_or_warm_up_model", None)):
+        raise TypeError(f"{WORKER_SITE[0]} holds no {WORKER_SITE[1]}.compile_or_warm_up_model: the capture is installed "
+                        "where the pinned vLLM's worker captures its graphs")
+
+    def warm_up(orig: Callable[..., Any]) -> Callable[..., Any]:
+        def compile_or_warm_up_model(worker: Any, *a: Any, **k: Any) -> Any:
+            if id(worker.model_runner) not in _ON:
+                install(worker, targets, modules)
+            return orig(worker, *a, **k)
+        return compile_or_warm_up_model
+
+    into = hooks.Hooks(tag=TAG)
+    into.wrap(owner, "compile_or_warm_up_model", warm_up)
+    _ARMED.append(into)
+
+
+def disarm() -> None:
+    """Take `arm`'s patch of the worker off. A capture it installed stays on until `uninstall`."""
+    while _ARMED:
+        _ARMED.pop().uninstall()
 
 
 def _on(worker: Any) -> Capture:
@@ -314,9 +453,9 @@ def uninstall(worker: Any) -> int:
 def take(worker: Any, directory: str) -> dict[str, Any]:
     """Write the worker's kept rows under ``<directory>/rank<r>/<i>/<j>.bin`` (i a target's place in sorted order, j a
     module's): a file holds its `KEPT` fields in order, each the request's tokens' rows. Returns the rank and, for each
-    target a step scheduled, its ``pieces`` (first position, tokens) and each module's file (from ``directory``),
-    sha256, fields (the words' numpy dtype, the torch dtype they are the bits of, a token's shape) and tiles (the w13
-    and w2 launch's, a piece)."""
+    target a step scheduled, its ``pieces`` (first position, tokens), each piece's ``dispatch`` (mode, padded tokens)
+    and each module's file (from ``directory``), sha256, fields (the words' numpy dtype, the torch dtype they are the
+    bits of, a token's shape) and tiles (the w13 and w2 launch's, a piece)."""
     c, rank = _on(worker), int(worker.rank)
     out: dict[str, Any] = {}
     for i, rid in enumerate(sorted(c.targets)):
@@ -333,14 +472,15 @@ def take(worker: Any, directory: str) -> dict[str, Any]:
                              "fields": {f: {"dtype": a.dtype.str, "of": c.of[f], "shape": list(a.shape[1:])}
                                         for f, a in arrays.items()},
                              "tiles": c.tiles[rid][name]}
-        out[rid] = {"pieces": c.pieces[rid], "modules": modules}
+        out[rid] = {"pieces": c.pieces[rid], "dispatch": c.dispatch[rid], "modules": modules}
     return {"rank": rank, "requests": out}
 
 
 def spans(takes: Sequence[Mapping[str, Any]], steps: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
     """`write`'s spans from every rank's `take` and the replay's own step trace (`StepTrace` rows ``(request, first
-    position, tokens)``): each captured request's pieces and the engine step of each, with every rank's modules. A
-    rank whose pieces are not the trace's rows of the request, in step order, is refused."""
+    position, tokens)``): each captured request's pieces, the engine step and the dispatch of each, with every rank's
+    modules. A rank whose pieces are not the trace's rows of the request, in step order, or whose steps ran at another
+    dispatch than another rank's, is refused."""
     trace: dict[str, list[tuple[int, list[int]]]] = {}
     for s in steps:
         for rid, start, n in s["rows"]:
@@ -352,14 +492,18 @@ def spans(takes: Sequence[Mapping[str, Any]], steps: Sequence[Mapping[str, Any]]
             if mine["pieces"] != pieces:
                 raise ValueError(f"request {rid}: rank {t['rank']} captured (first position, tokens) {mine['pieces']} "
                                  f"and the replay's trace ran it at {pieces}")
-            span = out.setdefault(rid, {"pieces": pieces, "steps": [s for s, _ in trace[rid]], "ranks": {}})
+            span = out.setdefault(rid, {"pieces": pieces, "steps": [s for s, _ in trace[rid]],
+                                        "dispatch": mine["dispatch"], "ranks": {}})
+            if mine["dispatch"] != span["dispatch"]:
+                raise ValueError(f"request {rid}: rank {t['rank']} ran its steps at (mode, padded tokens) "
+                                 f"{mine['dispatch']} and an earlier rank at {span['dispatch']}")
             span["ranks"][str(t["rank"])] = mine["modules"]
     return out
 
 
 def write(directory: Path, spans: Mapping[str, Mapping[str, Any]]) -> Path:
     """The record of ``spans`` (`spans`') as ``directory/CAPTURE``, where ``directory`` is the one every rank's `take`
-    wrote under: the order of a file's fields, and each request's pieces, steps and ranks."""
+    wrote under: the order of a file's fields, and each request's pieces, steps, dispatch and ranks."""
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / CAPTURE
     path.write_text(json.dumps({"kept": list(KEPT), "requests": spans}, indent=1))
@@ -369,9 +513,9 @@ def write(directory: Path, spans: Mapping[str, Mapping[str, Any]]) -> Path:
 def read(directory: Path, request: str, rank: int, module: str) -> dict[str, Any]:
     """One request's rows of ``module`` at ``rank`` from the capture written to ``directory``: each field of `KEPT` as
     its words ([T, *a token's shape], T the request's tokens over its pieces, in piece order), and under ``pieces``,
-    ``steps``, ``tiles`` and ``of`` each piece's (first position, tokens), its engine step, its (w13, w2) tiles, and
-    each field's torch dtype. Refused by name: a request, rank, module or field the record lacks, and a file that is
-    not the bytes the record's sha256 and shapes say."""
+    ``steps``, ``dispatch``, ``tiles`` and ``of`` each piece's (first position, tokens), its engine step, its (mode,
+    padded tokens), its (w13, w2) tiles, and each field's torch dtype. Refused by name: a request, rank, module or
+    field the record lacks, and a file that is not the bytes the record's sha256 and shapes say."""
     doc = json.loads((directory / CAPTURE).read_text())
     if doc.get("kept") != list(KEPT):
         raise ValueError(f"{directory / CAPTURE}: its files hold {doc.get('kept')}, not {list(KEPT)}")
@@ -393,8 +537,8 @@ def read(directory: Path, request: str, rank: int, module: str) -> dict[str, Any
     sizes = [np.dtype(fields[f]["dtype"]).itemsize * int(np.prod(shapes[f])) for f in KEPT]
     if sum(sizes) != len(raw):
         raise ValueError(f"{directory / at['file']}: {len(raw)} bytes, and its fields' shapes say {sum(sizes)}")
-    out: dict[str, Any] = {"pieces": span["pieces"], "steps": span["steps"], "tiles": at["tiles"],
-                           "of": {f: fields[f]["of"] for f in KEPT}}
+    out: dict[str, Any] = {"pieces": span["pieces"], "steps": span["steps"], "dispatch": span["dispatch"],
+                           "tiles": at["tiles"], "of": {f: fields[f]["of"] for f in KEPT}}
     for i, f in enumerate(KEPT):
         out[f] = np.frombuffer(raw, dtype=fields[f]["dtype"], count=int(np.prod(shapes[f])),
                                offset=sum(sizes[:i])).reshape(shapes[f])

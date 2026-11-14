@@ -22,7 +22,7 @@ from typing import Any
 
 import torch
 
-__all__ = ["GRAPH_MODES", "WORDS", "Entry", "Slots"]
+__all__ = ["GRAPH_MODES", "WORDS", "Entry", "Slots", "stream_capturing"]
 
 #: the modes of a step vLLM replays from a graph
 GRAPH_MODES = ("FULL", "PIECEWISE")
@@ -31,6 +31,11 @@ WORDS = ((8, torch.int64), (4, torch.int32), (2, torch.int16), (1, torch.uint8))
 
 #: a staged copy: its order, its name, its slot, and whether the slot holds one row a token
 Entry = tuple[tuple[Any, ...], str, torch.Tensor, bool]
+
+
+def stream_capturing(val: torch.Tensor) -> bool:
+    """Whether work on ``val`` issued now is recorded into a CUDA graph."""
+    return val.is_cuda and torch.cuda.is_current_stream_capturing()
 
 
 class Slots:

@@ -54,12 +54,9 @@ from verity_vllm.acquire.sources.inductor_hooks import (
 )
 from verity_vllm.engine import hooks
 from verity_vllm.engine.graph_slots import GRAPH_MODES, Slots
+from verity_vllm.engine.graph_slots import stream_capturing as _capturing
 
 INPUT_NAMES = (("input_ids", "ids"), ("positions", "positions"))
-
-
-def _capturing(val: torch.Tensor) -> bool:
-    return val.is_cuda and torch.cuda.is_current_stream_capturing()
 
 
 class ServedCompiledSource:
