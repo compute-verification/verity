@@ -25,3 +25,7 @@ Listed and left:
 
 Unbuilt: no Lean identifier or code changed, so I built nothing and ran no test file.
 
+[2026-11-14T20:36Z] f92ecaa3d638
+model: claude-opus-5-5-high (Claude Opus 5.5); subscriptions removed: none held
+ROUTES, Sat 14 Nov 12:36 PM PST. Pushed 70eef687409 to architecture (dampener and the D_ keys, map tools/move/nci_slowdown_names_map.toml; one reader outside: the doc comment of security/Definitions/InferenceOnly/Guarantees/Remote.lean, training's). benchmarks/nci sites by the lint: 154 before, 109 after. Every command of the directory prints the same numbers.
+
