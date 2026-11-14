@@ -1,8 +1,9 @@
 """The store's load of a layer: its matrices from the P2-encoded store into plaintext load buffers on the GPU, by
-memory-accounting's decode unchanged (`libp2v1.so` from `benchmarks/pous/p2_v1/`, built for sm_90a by `build.sh`, through
-its own wrapper `p2_v1.gpu.Kernels`) under the store's own load, `p2_v1.load`: `EncodedRows`, the encoded rows of a range
-of the store's blocks resident on the device, its screen (`EncodedRows.check`, raising `StoreError` with the flag bits
-`WIDE` and `PADDING`) and `scatter`. They are defined there and read here by this directory's modules.
+memory-accounting's decode unchanged (`libp2v1.so` from `verity/protocols/accounting/pous/prover/p2/p2_store/`, built for sm_90a by
+`build.sh`, through its own wrapper `p2_store.gpu.Kernels`) under the store's own load, `p2_store.load`: `EncodedRows`,
+the encoded rows of a range of the store's blocks resident on the device, its screen (`EncodedRows.check`, raising
+`StoreError` with the flag bits `WIDE` and `PADDING`) and `scatter`. They are defined there and read here by this
+directory's modules.
 
 `decode_matrix(store, layer, tensor, out)` decodes one tensor's blocks (a matrix of `layout.MATRICES`: QKV is
 [16512, 16384] s8 at the frozen shape) into `out`. `decode_layer(store, layer, staging)` is the fixture's `decode_layer`:
@@ -28,8 +29,8 @@ try:
 except ImportError:
     import layout as L  # type: ignore[no-redef]
 
-from p2_v1 import gpu  # noqa: F401
-from p2_v1.load import P_BYTES, PADDING, WIDE, EncodedRows, StoreError, scatter  # noqa: F401
+from p2_store import gpu  # noqa: F401
+from p2_store.load import P_BYTES, PADDING, WIDE, EncodedRows, StoreError, scatter  # noqa: F401
 
 
 def flat(buf: Any) -> Any:
