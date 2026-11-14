@@ -127,7 +127,7 @@ from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
 from .one_stage import registration as R
-from .workload import MAX_BLOCKS, MAX_REPLAY, REPLAY
+from .workload import MAX_BLOCKS, REPLAY
 
 ID = R.PROTOCOL
 #: SPOT as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
