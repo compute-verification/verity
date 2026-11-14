@@ -106,8 +106,8 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA, sparse: bool = Fa
     reg = G.Registered.commit(P.program_digest(prog), VALUE, table.tolist(), schema=schema)
     positions, refs = (list(range(ROWS)), list(POS)) if sparse else G.table(POS)
     rows, salts, entry = reg.statement(positions)
-    if sparse:
-        read = sorted(set(refs))
+    read = sorted(set(refs)) if sparse else None
+    if read is not None:
         entry = {"value": entry["value"], FC.TABLE_ROWS: read, "positions": [entry["positions"][r] for r in read],
                  "paths": [entry["paths"][r] for r in read]}
     bit_rows = G.SCHEMA if schema == G.SCHEMA else G.SCHEMA_V2
@@ -127,7 +127,7 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA, sparse: bool = Fa
     (out / "served-x.json").write_text(json.dumps(dataclasses.asdict(x_tree), sort_keys=True))
     (out / "out-port.json").write_text(json.dumps(out_port, sort_keys=True))
     write_registered(registered_file(prog, query, tree, x_tree, out_port), out / "registered.json")
-    return {"n": N, "rows": ROWS, "value": VALUE, "root": tree.root, "x_root": x_tree.root, "out_root": out_port["root"],
+    return {"n": N, "rows": ROWS, FC.TABLE_ROWS: read, "value": VALUE, "root": tree.root, "x_root": x_tree.root, "out_root": out_port["root"],
             "row_schema": schema, "program": P.program_digest(prog), "partition": P.digest(part), "pin": FC.digest(text)}
 
 
