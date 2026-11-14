@@ -43,7 +43,7 @@ def _sites_of(plan: AcquisitionPlan) -> tuple[list[AcquisitionSite], list[Acquis
 def _slot_of_output(output: Any, slot: str) -> Any:
     if slot == "out":
         return output
-    if slot.isdigit():
+    if slot.isdecimal():
         k = int(slot)
         return output[k] if isinstance(output, (tuple, list)) and k < len(output) else None
     return None

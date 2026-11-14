@@ -16,6 +16,8 @@ from typing import Any
 from verity.circuits.refs import Coll, Refs, concat
 from verity.circuits.types import Array, Type, Value
 
+__all__ = ["Unexpressible", "kind"]
+
 
 class Unexpressible(Exception):
     """φ asks for a structure the vocabulary cannot express.  The message names the fact precisely."""

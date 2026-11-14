@@ -1622,7 +1622,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
                  str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
-                 "--checkpoint-dir", "unread", "--out", str(out)])
+                 "--checkpoint-dir", "unread", "--law", "rate:1/4", "--out", str(out)])
     assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
     assert seen["digs"] == {u.id: u.digest for u in s.units} and s.compiles == [True, False]
     assert not list(Path(s.a.row_dir).glob("build_request*"))
@@ -1709,6 +1709,30 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
         tie(window_registration=str(tmp_path / "other.json"))
     with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
         tie(SimpleNamespace(outputs=4))
+
+
+def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_fixed_count_is_refused():
+    """`window_design`: window-commit's ``--law`` is the rate the window's audit states to its stream, and the window is
+    committed under the sampling design that rate names over the circuit's own proof blocks, so its registration is under
+    the design the stream holds it to: a subset design under a rate, one K for every stratum under a stratified rate, at
+    1 where the rate's denominator is no smaller than the largest stratum. A fixed count, which no stream takes, is
+    refused by name."""
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
+    from verity.protocols.proofs.spot.verifier import service as S
+
+    small, large = (bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in (64, 128))
+    circuit = IF.Circuit("test", ((small, 3), (large, 37)))
+    program, query = circuit.program()
+    assert PP.window_design("rate:1/40", circuit) == {"law": "subset", "k": 1}
+    assert PP.window_design("rate:1/8", circuit) == {"law": "subset", "k": 5}
+    assert PP.window_design("stratified-rate:1/40", circuit) == {"law": "stratified", "k": 1}
+    dense = PP.window_design("stratified-rate:1/8", circuit)
+    assert dense["law"] == "stratified" and dense["k"] > 1 and dense == S.params_law("stratified-rate:1/8", program, query, None)[0]
+    for fixed in ("subset:1", "stratified:1", "work:1"):
+        with pytest.raises(ValueError, match="a fixed count") as e:
+            PP.window_design(fixed, circuit)
+        assert repr(fixed) in str(e.value)
 
 
 def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
