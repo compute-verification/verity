@@ -195,12 +195,18 @@ class Auditor:
         return report | {"session_id": sid.hex()}
 
 
+CONF = hashlib.sha512(b"a committed configuration").hexdigest()
+
+
 def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, **kw):
     auditor = auditor or Auditor(tmp_path)
     monkeypatch.setattr(CS, "salt", auditor.salt)
     monkeypatch.setattr(CS, "session", auditor.session)
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
-    kw.setdefault("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
+    key = hashlib.sha512(auditor.signer.public_key).hexdigest()
+    kw.setdefault("trusted_sha512", key)
+    kw.setdefault("deployment", {"configuration": CONF, "committed": frozenset({CONF}), "pins": [
+        {"key-sha512": key, "party": "memory-challenger", "protocol": "pous", "scheme": "lms-sha512/n64-w1-h20/v0"}]})
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
                     party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
                     private=s.private, pins=s.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
@@ -232,7 +238,9 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
         "blocks": 48, "checkpoint_bytes": 7776, "share": str(Fraction(w_bytes, 7776)), "held": None}
     assert prof["outside"]["bytes"] == {"the embedding and the head": 2048, "the norms": 96, "the per-row scales": 1024}
     assert "KV cache" in prof["outside"]["serving"] and prof["window"] == 3
-    assert prof["placement"][CS.PREMISE].startswith(f"holds: the memory challenger ran on {AUDITOR}")
+    assert prof["placement"][CS.PREMISE] == (
+        f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's pous sessions; "
+        f"the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
