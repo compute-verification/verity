@@ -122,6 +122,15 @@ Each value carries its mark, how it was had, which the tab shows beside it: the 
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
 and also writes as the first of its `inputs`, where the tab reads it until it reads `mark`.
 
+A value over a span of time or of compute says which, each as its own field of the measurement, held only where
+given: `period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and `over`, `world` or `datacenter`
+(`kit.OVER`). A run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one
+id may give a value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s
+three, over a week, a month and a year of a datacenter's and of the world's compute). Its `title` and `unit` are those
+of the period and scope it is named for (`exfiltration-gb-world-year`'s, the `year` over the `world`), which the
+benchmark writes last of its name, so a reader that keys measurements by name alone reads that one; one that keys on
+the name, period and `over` reads the others.
+
 The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
 that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
 "parked".
