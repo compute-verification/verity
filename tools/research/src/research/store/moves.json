@@ -3098,6 +3098,32 @@
     },
     {
       "paths": {
+        "demos/onsite_served/served_table.py": "tools/verity/cli/verity_cli/served_table.py",
+        "demos/onsite_served/minutes.py": "benchmarks/demo_minutes/onsite_minutes.py",
+        "demos/onsite_served/tests/test_onsite_minutes.py": "benchmarks/demo_minutes/tests/test_onsite_minutes.py",
+        "demos/vllm/minutes.py": "benchmarks/demo_minutes/minutes.py",
+        "demos/vllm/settings.py": "benchmarks/demo_minutes/settings.py",
+        "demos/vllm/metrics.toml": "benchmarks/demo_minutes/metrics.toml",
+        "demos/vllm/pyproject.toml": "benchmarks/demo_minutes/pyproject.toml",
+        "demos/vllm/tests/test_minutes.py": "benchmarks/demo_minutes/tests/test_minutes.py",
+        "demos/vllm/README.md": "adapters/vllm/tools/served_run/README.md",
+        "demos/vllm/run.sh": "adapters/vllm/tools/served_run/run.sh",
+        "demos/vllm/placement.toml": "adapters/vllm/tools/served_run/placement.toml",
+        "demos/vllm/serve.sh": "adapters/vllm/tools/served_run/serve.sh",
+        "demos/vllm/serve_load.py": "adapters/vllm/tools/served_run/serve_load.py",
+        "demos/vllm/commit.sh": "adapters/vllm/tools/served_run/commit.sh",
+        "demos/vllm/published.sh": "adapters/vllm/tools/served_run/published.sh",
+        "demos/vllm/workloads/SHA256SUMS": "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
+        "demos/vllm/tests/test_run.py": "adapters/vllm/tests/tools/test_served_run.py",
+        "demos/lifecycle/README.md": "tools/verity/cli/tests/lifecycle/README.md",
+        "demos/lifecycle/lifecycle.py": "tools/verity/cli/tests/lifecycle/lifecycle.py",
+        "demos/lifecycle/onsite.py": "tools/verity/cli/tests/lifecycle/onsite.py",
+        "demos/lifecycle/remote.py": "tools/verity/cli/tests/lifecycle/remote.py",
+        "demos/lifecycle/tests/test_lifecycle.py": "tools/verity/cli/tests/lifecycle/test_lifecycle.py"
+      }
+    },
+    {
+      "paths": {
         "verity/definitions/registry/": "adapters/vllm/verity_vllm/definitions/registry/",
         "verity/definitions/numerics/": "adapters/vllm/verity_vllm/definitions/numerics/",
         "verity/definitions/tests/": "adapters/vllm/verity_vllm/definitions/tests/",

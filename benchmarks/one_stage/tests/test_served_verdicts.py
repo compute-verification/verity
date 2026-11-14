@@ -74,7 +74,7 @@ import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
-_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "demos" / "vllm" / "serve_load.py")
+_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "adapters" / "vllm" / "tools" / "served_run" / "serve_load.py")
 SL = importlib.util.module_from_spec(_SL)
 _SL.loader.exec_module(SL)
 
@@ -6172,7 +6172,8 @@ WEIGHTS_REGISTRATION = (
     "--key TMP/serve/private/weights.key --out TMP/serve/weights_registration.json --deployment-record "
     "TMP/serve/deployment-registration.json")
 NEW_RELEASE_RUN = "-c import uuid; print(uuid.uuid4().hex)"
-SERVE_LOAD = ("TMP/tree/demos/vllm/serve_load.py --port 18190 --model verity-int8/Llama-3.2-1B-INT8 {load} "
+SERVE_LOAD = ("TMP/tree/adapters/vllm/tools/served_run/serve_load.py --port 18190 --model verity-int8/Llama-3.2-1B-INT8 "
+              "{load} "
               f"--prompt-range 16:24 --release {RELEASE_RUN} --seed 1 --out TMP/serve/load.jsonl")
 VARIED_LOAD = SERVE_LOAD.format(load="--varied 4 --rate 1000 --max-tokens 4")
 FIXED_LOAD = SERVE_LOAD.format(load="--fixed 4 --window-steps 256")

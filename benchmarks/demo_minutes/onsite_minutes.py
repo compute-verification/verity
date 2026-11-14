@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """The onsite demo's minutes from its first command to its verdict, read off its two runs' records: the metric
-``vllm/onsite-demo-minutes`` (`demos/onsite_served/metrics.toml`). Standard library only.
+``vllm/onsite-demo-minutes`` (`benchmarks/demo_minutes/metrics.toml`). Standard library only.
 
-    research run --cwd source -- python3 demos/onsite_served/minutes.py PROVER_RUN AUDITOR_RUN [--runs-dir DIR] [--main REF]
+    research run --cwd source -- python3 benchmarks/demo_minutes/onsite_minutes.py PROVER_RUN AUDITOR_RUN
+        [--runs-dir DIR] [--main REF]
 
-A run of record runs the demo's two commands (README.md, "Running it") each under ``research run``: PROVER_RUN is the
-prover node's, AUDITOR_RUN the auditor device's, whose log (``stdout.log``) holds the period's ``VERDICT`` line. The
-minutes run from PROVER_RUN's ``started_utc`` to AUDITOR_RUN's ``ended_utc``. Finding the runs, the served commit (the
-prover node's run's), what is refused and what is written are `demos/vllm/minutes.py`'s, the remote demo's reader,
-whose code this one runs with its own verdict (`verdict`). It also refuses an AUDITOR_RUN whose log holds no
-``VERDICT`` line, a line whose ``run`` is ``local`` (a `verity run` outside any research run, whose record holds no
-time), and one whose ``components`` give a verdict on fewer than the goal's seven checks (`CHECKS`).
+A run of record runs the demo's two commands (`tools/verity/cli/README.md`, "The onsite served window") each under
+``research run``: PROVER_RUN is the prover node's, AUDITOR_RUN the auditor device's, whose log (``stdout.log``) holds
+the period's ``VERDICT`` line. The minutes run from PROVER_RUN's ``started_utc`` to AUDITOR_RUN's ``ended_utc``. Finding
+the runs, the served commit (the prover node's run's), what is refused and what is written are `minutes.py`'s, the
+remote demo's reader, whose code this one runs with its own verdict (`verdict`). It also refuses an AUDITOR_RUN whose
+log holds no ``VERDICT`` line, a line whose ``run`` is ``local`` (a `verity run` outside any research run, whose record
+holds no time), and one whose ``components`` give a verdict on fewer than the goal's seven checks (`CHECKS`).
 """
 from __future__ import annotations
 
@@ -22,14 +23,14 @@ from pathlib import Path
 METRIC = "vllm/onsite-demo-minutes"
 #: the goal's seven checks, by the names a ``VERDICT`` line's ``components`` give them (served_table's ONSITE_COMPONENTS)
 CHECKS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe")
-VLLM = Path(__file__).resolve().parents[1] / "vllm"
+HERE = Path(__file__).resolve().parent
 
 
 def _reader():
     """The remote demo's reader, loaded by its path under a name of its own, with its directory first on the path for
     the `settings` it imports."""
-    sys.path.insert(0, str(VLLM))
-    spec = importlib.util.spec_from_file_location("vllm_demo_minutes", VLLM / "minutes.py")
+    sys.path.insert(0, str(HERE))
+    spec = importlib.util.spec_from_file_location("remote_demo_minutes", HERE / "minutes.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -57,7 +58,7 @@ def verdict(d: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    return R.main(argv, read=verdict, metric=METRIC, checker="demos/onsite_served/minutes.py", nargs=2, doc=__doc__)
+    return R.main(argv, read=verdict, metric=METRIC, checker="benchmarks/demo_minutes/onsite_minutes.py", nargs=2, doc=__doc__)
 
 
 if __name__ == "__main__":
