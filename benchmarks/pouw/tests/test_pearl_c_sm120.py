@@ -8,6 +8,7 @@ them.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real sm_120a bui
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -29,8 +30,21 @@ HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accountin
 
 #: by `load`: other directories have a fixture.py, a sass_gate.py and a run.py too
 F = load("pearl_c_sm120/fixture.py")
-S = load("pearl_c_sm120/sass_gate.py")
-RUN = load("pearl_c_sm120/run.py")
+
+
+def kernel(file: str):
+    """The kernel's FILE as a module named ``pearl_c_sm120_<stem>``, as `load` names a script, run once however many
+    tests ask."""
+    name = f"pearl_c_sm120_{Path(file).stem}"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, HERE / file)
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+S = kernel("sass_gate.py")
+RUN = kernel("run.py")
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
 HASH_SOURCE = (HERE.parent / "pearl_c" / "hash_h3.cuh").read_text() + (HERE / "hash_fast.cuh").read_text()
