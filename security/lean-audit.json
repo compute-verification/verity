@@ -4511,18 +4511,6 @@
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
    "nontrivial": "Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial"
   },
-  "Flock.SecurityProofs.SampledKSLivePub": {
-   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest", "Flock.SecurityProofs.EndToEndRegistered_honest"]
-  },
-  "Flock.SecurityProofs.SampledKSLiveV2": {
-   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest", "Flock.SecurityProofs.EndToEndRegistered_honest"]
-  },
-  "Flock.SecurityProofs.SampledKSLiveV3": {
-   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest"]
-  },
-  "Flock.SecurityProofs.SampledKSLiveV5": {
-   "honest": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
-  },
   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": {
    "honest": ["Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest"],
    "nontrivial": "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
@@ -4555,6 +4543,10 @@
   "NetTiming.SecurityProofs.SampledLeakChecked": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakChecked_nontrivial"
+  },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
+   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
@@ -4636,10 +4628,6 @@
   "NetTiming.SecurityProofs.SampledLeakCarried": {
    "honest": ["NetTiming.Witness.SampledLeakCarried_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakCarried_nontrivial"
-  },
-  "Hash.SecurityProofs.HistoryReadBinding": {
-   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
-   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
   },
   "WeightSecurity.SecurityProofs.TheftServedTied": {
    "honest": ["WeightSecurity.SecurityProofs.TheftServedTiedHonest"],
@@ -4745,16 +4733,28 @@
    "honest": ["Flock.SecurityProofs.StreamStopBudget_honest"],
    "nontrivial": "Flock.SecurityProofs.StreamStopBudget_nontrivial"
   },
-  "Verity.Sampled.remote_soundness_deployedReady": {
-   "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
-   "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
-  },
   "Flock.SecurityProofs.SpotFirstHitTwo": {
    "nontrivial": "Claims.SamplingGeneric.compilerFirstHitTwoXAt_nontrivial"
   },
   "Flock.SecurityProofs.MaskedKSTable": {
    "honest": ["Flock.SecurityProofs.MaskedKSTable_honest"],
    "nontrivial": "Flock.SecurityProofs.MaskedKSTable_nontrivial"
+  },
+  "Flock.SecurityProofs.SampledKSLivePub": {
+   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest", "Flock.SecurityProofs.EndToEndRegistered_honest"]
+  },
+  "Flock.SecurityProofs.SampledKSLiveV2": {
+   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest", "Flock.SecurityProofs.EndToEndRegistered_honest"]
+  },
+  "Flock.SecurityProofs.SampledKSLiveV3": {
+   "honest": ["Flock.SecurityProofs.SampledKSLiveHonest"]
+  },
+  "Flock.SecurityProofs.SampledKSLiveV5": {
+   "honest": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
+  },
+  "Verity.Sampled.remote_soundness_deployedReady": {
+   "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
+   "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
   },
   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": {
    "honest": ["NetTiming.Witness.ConstantRate_honest"],
@@ -27954,6 +27954,10 @@
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
+   "Hash.SecurityProofs.HistoryReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
+    "outcome": "accept"
+   },
    "Pouw.Salt.keyed_leaf_hides": {
     "function": "Hash.Keyed.digest",
     "outcome": "none"
@@ -27964,10 +27968,6 @@
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
-    "outcome": "accept"
-   },
-   "Hash.SecurityProofs.HistoryReadBinding": {
-    "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
    "Accounting.SecurityProofs.TableReadBinding": {
@@ -28342,7 +28342,6 @@
    "Verity.SecurityProofs.PackSoundComplete": "frozen (no-function): It states the tensor-core step relation and its range and is-zero gadgets against the step semantics, over the integers, for every input and witness (a pipeline's parameters, steps, verification units and their BF16 word), rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.Compose": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.CorrectOfOpening": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.ContainsImplements": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.SoundAnd": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
    "Verity.SecurityProofs.SoundMono": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
@@ -28622,6 +28621,7 @@
    "WeightSecurity.SecurityProofs.TheftServedMinEntropy": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Served.lean) by two to the served channel's covert capacity in bits less the weights' min-entropy under honest use, stated as honest-use hardness against every party (WeightSecurity.Assumptions.HonestUseHard at Set.univ), and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term; it reads no function's acceptance.",
    "NetTiming.SecurityProofs.PooledLeakCarried": "frozen (obligation,no-function,world-unlisted): It is PooledLeakAccepted's bound with the leak relation with checked inputs over runs that carry the pool (LeakAtCarried for LeakAt), each run opening the row the record rule names (PoolChained: the previous run's closing row, or a genesis row at a restart), where serving picks the restarts (chains) and opened rows (genesis) at each secret and sample of the coins, from a registered finite set Cs wherever every audit accepts (ResetsIn), each run pinning its checked inputs (CheckedUnique) and its closing row (CheckedClosing) and, wherever every audit accepts, opening the root the record rule names at the pattern picked (CarriedRoots), conditional on the period's inputs as named hypotheses (MonitoringPeriodChannel, MonitoringPeriodAdaptive, MonitoringPeriodEscapes, and MonitoringPeriodLeaksCarried, which a live SampledLeakCarried would give at each run), not discharged; with trusted-host (TrustedHost) it bounds Pr[every run accepts ∧ ¬PooledGoodCarried at the pattern picked] by (1 − q)^Fmax + Σ e_i + Σ e'_i + Σ_i Pr[PoolColl i], the last a SHA-512 collision between two rows with one root, and counts the secrets whose audits all accept and that meet PooledGoodCarried at the pattern picked for them at each draw of the coins by #Cs · #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ (reg_i ∪ chk_i ∪ prow_i)) · Dj^k_i, #Cs charging the pattern as advice (m + 1 patterns in a week's period under the public restart rule), so a restart the rule makes after a refused run is not charged; it is not a run of the sampled verifier, the challenger's draw or the network check's code. At the empty pool, with no opening or closing gate and the one pattern that restarts no run, it states the bound over windows that each hold a pool of their own, at their leak relations with a valid run (PooledGoodChecked, MonitoringPeriodLeaksChecked), with no collision term, but counts only the secrets whose audits all accept; NetTiming.pooledLeakChecked_of_carried proves that bound there with the count over every secret, from NetTiming.encard_pooledCarried_le at the one pattern.",
    "NetTiming.SecurityProofs.SampledLeakCarried": "frozen (no-function): It is SampledLeakChecked for one run that reads an opened row at its opening gates (OpensAtInputs) and leaves one at its closing gates, stated over the sampled audit's statement as Definitions.NetworkCertifier states it, at every compiled sampled verifier where Claims.SamplingGeneric.Compiled.KS holds (its proof reads the proved SampledAuditAccepted), on the statements whose check misses with probability at most εchk (CheckedWitness); its relation (RLeakCarried) reads both rows off the extracted witness, and it bounds AccSeqsCarried, the observation sequences the circuit's Program (circuitProgram) accepts with a valid run from a fixed opened row, where the check pins its checked inputs (CheckedUnique), not runs of the network check's code; it charges the free inputs outside each statement's registered, checked and opening inputs (freeInputs \\ (reg ∪ chk ∪ prow)).",
+   "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedTied": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run records each window's trace of a checked population (security/Definitions/WeightSecurity/Tied.lean) by two to the served channel's covert capacity per charge unit in bits times the honest-use bound, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable), the bound on what the audit leaves undetected among the traces' incorrect blocks (WeightSecurity.Served.UndetectedLe), the population's check (Population.Dataflow.Checked) and its fan-out to charge units (Population.Dataflow.FanOut), with two open premises as probability terms: that a release is not its trace's outputs, the network certifier's egress tie (WeightSecurity.Assumptions.EgressTied), and that a trace does not hold its window's inputs, the advice charge's (WeightSecurity.Assumptions.AdviceCovered); it reads no function's acceptance.",
    "Nci.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (Nci.CompliesAtMost); the join from a published complies of the count to that verdict is NciCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
    "WeightSecurity.SecurityProofs.TheftFaulted": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Faulted.lean), with the audit's incorrect blocks as fault inputs to a faulted circuit rather than as overwrites of releases, under honest-use hardness on a typical set of weights (WeightSecurity.Assumptions.HonestUseHard), the model claim that the faults no cut covers, within the budget M, make the circuit at most N^(λ-1) times easier to use, N the number of such patterns (WeightSecurity.Assumptions.FaultedUseHard, taken at WeightSecurity.Cut.Interiors; a fault the cut covers adds only its hint to the fault channel's strings, with no premise), the fault channel's simulability (WeightSecurity.Assumptions.Simulable), an empty fault pattern beside each honest query (WeightSecurity.NoFault) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the atypical weights and the releases' faithfulness to the faulted run as probability terms, the second of which the network certifier's tie of each release to a trace of a checked dataflow discharges (Population.Dataflow.determinate_of_checked); it reads no function's acceptance.",
@@ -28637,9 +28637,9 @@
    "Flock.SecurityProofs.UnrelLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released, b its failure budget (Flock.StopCount.UnrelWithin), at every order of the record's ops (Flock.StopCount.opsRun: Firewall.Record's openSession, finish, stop, release, slot and admit, and the Loop's wait) and every stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), the Lean record's ops with no acceptance of a Lean function to take, so the lock records its text. The deployed opener is Python's Firewall, so for the deployment it rests on the firewall's difftests.",
    "Flock.SecurityProofs.UnreleasedLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released (Flock.StopCount.UnreleasedWithin: of any sessions, distinct, each opened on the stream if opened at all), b its failure budget, at every run (Flock.StopCount.run, the model RecStopsOfRun is about), message counts and stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
    "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
    "Accounting.SecurityProofs.Remote.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": "frozen (no-function): A cost bound over the MH100w machine model, not over a Lean function of the code, so it has no acceptance to take. It is about one straight-line program fixed before the coins: a program that branches on the coins, loads a whole chunk from a computed address (priced at `other`, which a device's chunk copy doesn't pay) or stores to one (no MH100w instruction) is outside it. Its model is reviewed against the H200's measurements (security/Definitions/Pouw/Assumptions/Dimension/H100W.lean): every definition it reads matches the hardware or is stricter, none looser, so the bound holds on the H200 a fortiori at any price table meeting Floor c. Floor c is the hypothesis: the H200's table meets it at c = 32 on every priced form, and the census's 26 unpriced forms keep h100Floor's marker (security/Definitions/Pouw/Assumptions/Dimension/H100Floor.lean) until they are priced.",
    "Pouw.SecurityProofs.Writes.RunBall": "frozen (no-function): A bound in the chunk model (security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
@@ -36608,7 +36608,7 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "d7a2ae1043cc0959499c77b8ed4a55ed945dd728013571334cb63cc4a00602a1",
+   "digest": "1c1577345b7a6f4816a08f028d540cde0b07b9d86f3403d83e0576f466d8546d",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Builder": "330557dcf94849eb4e17a37f661f7dcf381868026d5c68952c525352731fbdad",
@@ -36636,6 +36636,7 @@
     "Verity.Registration.theta": "7c0838a8b1b1426b2f24da6346bbe18eb4ce285ba459392fe9ab84f2c1d8cc79",
     "Verity.Site.Entry": "eede2c2d387eb4a9f99d5ebf3aaeb8a876d36db8021ef093ad4c9f788a7e15a0",
     "Verity.Site.Kind": "25686527e2604e7940fabb1c28353e7124b3967540ba78b07037d43c4b5631f6",
+    "Verity.Site.Kind.auditorHost": "44794e51da4aa9fcded39c39c661110f4412a7f8aaecadf39b9f7618eb0611f9",
     "Verity.Site.Kind.certifier": "71665d4207fc3aa3cc7ab58bb4975f605c752d0a974e289613969a5515666443",
     "Verity.Site.Kind.challenger": "6b66b12f125f4a337ca387fc897dfd46bc89f443bc1519c0c29791ec521890fa",
     "Verity.Site.Kind.device": "bca80413b69899850d65a4174b35218d6924b72d91616c32876521fa6e391534",
@@ -36643,8 +36644,8 @@
     "Verity.Site.Kind.memory": "1bfdce81da8ecbc8debddecddc1dfbda685f4536704dfb51c0e09bdcf94a3ae7",
     "Verity.Site.Kind.outside": "831eaf5e037a9ec38c07eaff5dff75fd3f92884d8a96707f4065be5ad609ae88",
     "Verity.Site.Kind.site": "da13405696114966c75713e4f0386c4c5ee83d232e51c9cd11ead140b56c610b",
-    "Verity.Site.Link": "ef6fce8a8b9d2340739697d9f5dbf92c1cbc8f64cd6b897798563d0e978c667c",
-    "Verity.Site.Loc": "02890e0712936de452acaca15682c3bdd8e8c98c87acf37cd65923e04fcd2cc1",
+    "Verity.Site.Link": "62d906747d7eb6a2368d369f4cbf199d051aac58e7f6e3a256259454a981bc4b",
+    "Verity.Site.Loc": "e52177045244a858ec3d89d1cbda926e9db6e8feebda2b453c5762b988493e3e",
     "Verity.Site.Owner": "3b54969c79f0c5bb04ee5be5d7aa4f7070f84c3270a4226ae5c8c543da1b0047",
     "Verity.Site.Owner.auditor": "3adf3b385218375bda24799f067a1c34a17e4927493cebd516530af6920651eb",
     "Verity.Site.Owner.prover": "67ff08251b819c0feecedcebd010a7005d157b55d030aaa36acea9d16cbda19f",

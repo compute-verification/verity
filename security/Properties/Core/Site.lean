@@ -6,7 +6,7 @@ public import CoreProtocol.Site
 /-!
 # The Site's code: its fold and its check are the spec's
 
-`Core.Site` (`verity/core/protocols/interface/CoreProtocol/Site.lean`, package `core_protocol`) is code, so it
+`Core.Site` (`verity/protocols/interface/CoreProtocol/Site.lean`, package `core_protocol`) is code, so it
 requires nothing of `Security/`: it copies `Verity.Site` and `Verity.Registration` (`Definitions.Core.Site`) over types
 of its own. These are its properties, each a `Prop` stated against the code's functions and the spec's definitions, on
 the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests`, `auditor`), and
@@ -15,9 +15,10 @@ the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests
 * `Fold`: the code's Site of a log is the spec's Site of the log it denotes (`Verity.Site.ofLog`).
 * `Refuses`: an entry's refusal in code is the spec's (`Verity.Registration.Entry.refusal`), check for check, so
   `EntryValid`: the code accepts an entry exactly when it is valid (`Verity.Registration.Entry.Valid`).
-* `Checks`: the code's check of a log accepts it exactly when the log is valid (`Verity.Registration.Valid`), with the
-  spec's Site of it, and `RefusedAt`: when it refuses, the index it names is the first entry the spec refuses, with that
-  refusal.
+* `Checks`: the code's check of a log accepts it exactly when the log is valid (`Verity.Registration.Valid`) and its
+  Site is complete against the auditor's figures (`Verity.Registration.Complete`), with the spec's Site of it, and
+  `RefusedAt`: when it refuses, the index it names is the first entry the spec refuses, with that refusal, or the log's
+  end, where every entry passes and the log's Site is not complete.
 
 The code's difftest (`site-difftest`) holds it to `verity.core.site`, so these carry the Python Site to the spec. A code
 figure (`Core.Site.Figure`, a nonnegative `Rat`) denotes the same rational in `ℚ≥0` (`figure`).
@@ -37,6 +38,7 @@ def kind : Core.Site.Kind → Verity.Site.Kind
   | .memory => .memory
   | .certifier => .certifier
   | .challenger => .challenger
+  | .auditorHost => .auditorHost
   | .outside => .outside
 
 /-- The code's kind of a spec kind. -/
@@ -47,6 +49,7 @@ def ofKind : Verity.Site.Kind → Core.Site.Kind
   | .memory => .memory
   | .certifier => .certifier
   | .challenger => .challenger
+  | .auditorHost => .auditorHost
   | .outside => .outside
 
 /-- The spec's tier of a code tier. -/
@@ -107,12 +110,28 @@ def sheet (k : Core.Site.Sheet) : Verity.Site.Sheet := ⟨deviceFigures k.figure
 /-- The code's sheet of a spec sheet. -/
 def ofSheet (k : Verity.Site.Sheet) : Core.Site.Sheet := ⟨ofDeviceFigures k.figures, k.bw, k.chip, k.mem⟩
 
+/-- The spec's shared rate of a code shared rate: the tier's, and the same rate. -/
+def shared (p : Core.Site.Tier × Nat) : Verity.Site.Tier × ℕ := (tier p.1, p.2)
+
+/-- The code's shared rate of a spec shared rate. -/
+def ofShared (p : Verity.Site.Tier × ℕ) : Core.Site.Tier × Nat := (ofTier p.1, p.2)
+
 /-- The spec's location of a code location. -/
 def loc (x : Core.Site.Loc) : Verity.Site.Loc :=
-  ⟨x.id, kind x.kind, x.parent, owner x.owner, x.sheet, x.tier.map tier, x.bytes, x.key⟩
+  { id := x.id, kind := kind x.kind, parent := x.parent, owner := owner x.owner, sheet := x.sheet,
+    tier := x.tier.map tier, bytes := x.bytes, key := x.key, scheme := x.scheme, bw := x.bw, chip := x.chip,
+    shared := x.shared.map shared, drift := x.drift.map figure, timeUnit := x.timeUnit.map figure,
+    timebase := x.timebase }
 
 /-- The spec's link of a code link. -/
-def link (k : Core.Site.Link) : Verity.Site.Link := ⟨k.id, k.ends, k.β, k.latency⟩
+def link (k : Core.Site.Link) : Verity.Site.Link := ⟨k.id, k.ends, k.β, k.latency, k.unmediated⟩
+
+/-- The spec's figures for a memory leaf of the code's. -/
+def memoryFigures (f : Core.Site.MemoryFigures) : Verity.Site.MemoryFigures := ⟨f.host, f.bw, f.bytes⟩
+
+/-- The spec's figures for a host of the code's. -/
+def hostFigures (h : Core.Site.HostFigures) : Verity.Site.HostFigures :=
+  ⟨h.chip, h.cards, h.shared.map shared, h.ways⟩
 
 /-- The spec's site entry of a code site entry. -/
 def entry (e : Core.Site.Entry) : Verity.Site.Entry := ⟨e.sheets.map sheet, e.locs.map loc, e.links.map link⟩
@@ -129,10 +148,13 @@ def log (l : Core.Site.Registration) : Verity.Registration := l.map regEntry
 
 /-- The code's location of a spec location. -/
 def ofLoc (x : Verity.Site.Loc) : Core.Site.Loc :=
-  ⟨x.id, ofKind x.kind, x.parent, ofOwner x.owner, x.sheet, x.tier.map ofTier, x.bytes, x.key⟩
+  { id := x.id, kind := ofKind x.kind, parent := x.parent, owner := ofOwner x.owner, sheet := x.sheet,
+    tier := x.tier.map ofTier, bytes := x.bytes, key := x.key, scheme := x.scheme, bw := x.bw, chip := x.chip,
+    shared := x.shared.map ofShared, drift := x.drift.map ofFigure, timeUnit := x.timeUnit.map ofFigure,
+    timebase := x.timebase }
 
 /-- The code's link of a spec link. -/
-def ofLink (k : Verity.Site.Link) : Core.Site.Link := ⟨k.id, k.ends, k.β, k.latency⟩
+def ofLink (k : Verity.Site.Link) : Core.Site.Link := ⟨k.id, k.ends, k.β, k.latency, k.unmediated⟩
 
 /-- The code's site entry of a spec site entry. -/
 def ofEntry (e : Verity.Site.Entry) : Core.Site.Entry :=
@@ -163,6 +185,7 @@ def refusal : Core.Site.Registration.Refusal → Verity.Registration.Refusal
   | .figures => .figures
   | .capacity => .capacity
   | .owner => .owner
+  | .inventory => .inventory
   | .uncertified => .uncertified
   | .challengerReach => .challengerReach
 
@@ -170,9 +193,12 @@ def refusal : Core.Site.Registration.Refusal → Verity.Registration.Refusal
 def digests (D : Core.Site.Registration.Digests) : Verity.Registration.Digests :=
   ⟨fun k => D.sheet (ofSheet k), fun e => D.entry (ofRegEntry e), fun c => D.genesis (ofComposite c)⟩
 
-/-- **The auditor a code auditor denotes**: the same sheets, as the spec's, the same tolerance and the same keys. -/
+/-- **The auditor a code auditor denotes**: the same sheets, as the spec's, the same tolerance, the same keys and
+schemes, and the same figures for each memory leaf, each host and each of its own hosts' clocks and time bases. -/
 def auditor (A : Core.Site.Registration.Auditor) : Verity.Registration.Auditor :=
-  ⟨fun sku => (A.sheet sku).map sheet, ⟨figure A.tolerance⟩, A.key⟩
+  { sheet := fun sku => (A.sheet sku).map sheet, tolerance := ⟨figure A.tolerance⟩, key := A.key, scheme := A.scheme,
+    memory := A.memory.map fun p => (p.1, memoryFigures p.2), hosts := A.hosts.map fun p => (p.1, hostFigures p.2),
+    drift := A.drift.map fun p => (p.1, figure p.2), timebases := A.timebases }
 
 /-- **The fold is the spec's**: the code's Site of a log is the spec's Site of the log it denotes. -/
 def Fold : Prop := ∀ l : Core.Site.Registration, site (Core.Site.ofLog l) = Verity.Site.ofLog (log l)
@@ -193,27 +219,32 @@ def EntryValid : Prop :=
     e.refusal D A c S head = none ↔
       Verity.Registration.Entry.Valid (digests D) (auditor A) (composite c) (site S) head (regEntry e)
 
-/-- **The check of a log is the spec's**: it accepts a log exactly when the log it denotes is valid, and then with the
-spec's Site of that log. -/
+/-- **The check of a log is the spec's**: it accepts a log exactly when the log it denotes is valid and its Site is
+complete against the auditor's figures, and then with the spec's Site of that log. -/
 def Checks : Prop :=
   ∀ (D : Core.Site.Registration.Digests) (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
     (l : Core.Site.Registration),
     (Core.Site.Registration.check D A c l).toOption.map site =
-      if Verity.Registration.Valid (digests D) (auditor A) (composite c) (log l) then
+      if Verity.Registration.Valid (digests D) (auditor A) (composite c) (log l) ∧
+          Verity.Registration.Complete (digests D) (auditor A) (Verity.Site.ofLog (log l)) then
         some (Verity.Site.ofLog (log l))
       else none
 
-/-- **A refusal names the first invalid entry**: when the check refuses a log at index `i` with refusal `r`, the log's
-first `i` entries are valid, and the spec refuses entry `i` against them with `r`. -/
+/-- **A refusal names the first invalid entry, or the log's end**: when the check refuses a log at index `i` with
+refusal `r`, the log's first `i` entries are valid, and either `i` is an entry's index and the spec refuses entry `i`
+against them with `r`, or `i` is the log's length, `r` is `inventory`, and the log's Site is not complete against the
+auditor's figures. -/
 def RefusedAt : Prop :=
   ∀ (D : Core.Site.Registration.Digests) (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
     (l : Core.Site.Registration) (i : Nat) (r : Core.Site.Registration.Refusal),
     Core.Site.Registration.check D A c l = .error (i, r) →
-      ∃ hi : i < l.length,
-        Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (l.take i)) ∧
-          Verity.Registration.Entry.refusal (digests D) (auditor A) (composite c)
+      Verity.Registration.Valid (digests D) (auditor A) (composite c) (log (l.take i)) ∧
+        ((∃ hi : i < l.length,
+            Verity.Registration.Entry.refusal (digests D) (auditor A) (composite c)
               (Verity.Site.ofLog (log (l.take i))) (Verity.Registration.head (digests D) (composite c) (log (l.take i)))
-              (regEntry l[i]) = some (refusal r)
+              (regEntry l[i]) = some (refusal r)) ∨
+          (i = l.length ∧ r = .inventory ∧
+            ¬Verity.Registration.Complete (digests D) (auditor A) (Verity.Site.ofLog (log l))))
 
 /-! ## The witnesses' instances
 
@@ -223,16 +254,20 @@ guarantees' honest and nontrivial witnesses (`Proofs.Properties.Core.Site`) are 
 /-- Digests that name each kind of thing by one string: the genesis is `genesis`, and every entry is `entry`. -/
 def witnessDigests : Core.Site.Registration.Digests := ⟨fun _ => "sheet", fun _ => "entry", fun _ => "genesis"⟩
 
-/-- An auditor with no data sheet, no tolerance and no device. -/
-def witnessAuditor : Core.Site.Registration.Auditor := ⟨fun _ => none, ⟨0, le_refl _⟩, fun _ => none⟩
+/-- An auditor with no data sheet, no tolerance and no device or host of its own, and its figures for the one host
+`h0`: one bit of on-chip state, and no card, shared rate or way out. -/
+def witnessAuditor : Core.Site.Registration.Auditor :=
+  { sheet := fun _ => none, tolerance := ⟨0, le_refl _⟩, key := fun _ => none, hosts := [("h0", { chip := 1 })] }
 
 /-- The empty Site, the Site of the empty log. -/
 def emptySite : Core.Site := ⟨[], [], []⟩
 
-/-- A site entry: a site, one host in it, and the host's uplink to the outside. -/
+/-- A site entry: a site, whose unit of time is a second, one host in it, at the auditor's figure for it, and the host's
+uplink to the outside. -/
 def hostEntry : Core.Site.Entry :=
-  { locs := [{ id := "dc", kind := .site }, { id := "h0", kind := .host, parent := some "dc" }]
-    links := [{ id := "uplink", ends := ("h0", Core.Site.outside), β := 1, latency := 1 }] }
+  { locs := [{ id := "dc", kind := .site, timeUnit := some ⟨1, by decide⟩ },
+      { id := "h0", kind := .host, parent := some "dc", chip := some 1 }]
+    links := [{ id := "uplink", ends := ("h0", Core.Site.outside), β := some 1, latency := 1 }] }
 
 /-- The honest log's one entry: `hostEntry`, following the genesis. -/
 def honestEntry : Core.Site.Registration.Entry := .site "genesis" hostEntry
