@@ -40,6 +40,7 @@ PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifi
 
 def _load():
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_scan_zk", HERE / "scan_zk.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -47,7 +48,7 @@ def _load():
 
 
 sz = _load()
-import warden_serve as WS
+from benchmarks.network_traces import warden_serve as WS
 
 
 def test_each_rounds_host_read_is_the_rounds(tmp_path):
@@ -289,7 +290,7 @@ def test_a_group_of_two_execution_phases_scan_is_not_held_at_the_schedules_const
     each count alone: without the second execution phase's two members `ingress-0` is still at another count's
     constant (at two ticks, a port that is no member's), and with every member the schedule names at its constant
     the two are ports ending ``/o0`` that are no member's."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     K, PC = sz.scan_ok, SP.mirror(PERIOD_CASE)
     for T in (2, 3, 4, sz.TEST.params.window):
@@ -437,7 +438,7 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     R8 lets nothing through, and the answer has no such key. The period check holds both, and the same answer naming
     one lane's alone or the lanes' in another order, and refuses by name one naming another Input, the name past the
     last lane's, or a lane's name without its lane."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
     cls = SimpleNamespace(NR=2, EVERY=every, KO=1, IDB=1)
@@ -486,7 +487,7 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
     check refuses, naming ``state`` (`period_case.tied_input_wired` and `tied_unheld`, the mirror of
     the Lean check's `tiedInputWired`), wherever ``state`` is in the list: it wires the lanes' ``prog<j>``
     alone, so nothing ties ``state``'s rows to a registration that computed them."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
     cls = SimpleNamespace(NR=2, EVERY=2, KO=1, IDB=1)
@@ -768,7 +769,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     refused by name.
     Slow (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no
     stand-in can stand for."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
     run = published(tmp_path / "run", sz.TEST, windows=1)

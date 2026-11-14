@@ -61,10 +61,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
-import warden_serve as WS  # noqa: E402
+from benchmarks.network_traces import warden_serve as WS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registration as RG  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402

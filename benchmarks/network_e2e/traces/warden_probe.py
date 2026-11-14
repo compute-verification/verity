@@ -169,7 +169,7 @@ def _path() -> None:
 def main(argv: list[str]) -> int:
     out = Path(argv[argv.index("--out") + 1]) if "--out" in argv else None
     _path()
-    import warden_serve
+    from benchmarks.network_traces import warden_serve
 
     from verity.protocols.accounting.certifier.verifier import warden
 
@@ -187,6 +187,6 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 elif __name__ == "__mp_main__":
     _path()
-    import warden_serve
+    from benchmarks.network_traces import warden_serve
 
     time_keeps(warden_serve.Publisher)
