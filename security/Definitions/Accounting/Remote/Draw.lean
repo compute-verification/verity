@@ -48,17 +48,20 @@ the `U_t` (`RemoteAudit.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t,
 `derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})` (`verity/ml/randomness`), a partial Fisher–Yates whose step
 `i` swaps position `i` with position `i + Key.uniform(U_t − i)`, read from the keyed SHA-512 stream at
 `("s", "openings", i)`. `Key.uniform(N)` is exact rejection sampling: it reads `w`-bit big-endian words,
-`w = 8 ⌈(bitlen N + 64) / 8⌉`, and returns the first word below `2^w − (2^w mod N)`, reduced mod `N`
-(`Actual.wordIndex`). For `N < 2^448` the first word is the top `w` bits of the stream's first block.
+`w = 8 ⌈(bitlen N + 64) / 8⌉`, one after another from the stream's first byte, and returns the first word below
+`2^w − (2^w mod N)`, reduced mod `N` (`Actual.wordIndex`). The stream's first block holds its first `⌊512 / w⌋` words,
+at least 4 for `N < 2^64`.
 
 * `Blocks m`: a window's first blocks, draw `i`'s first SHA-512 block as its big-endian value. The deployed function from
   window `t`'s coin to its first blocks is the guarantees' `prf t`.
-* `word N b`: the block's first word at `N`, its top `width N` bits; `offset N r b` is the sampler's draw on it, or `r`
-  when the sampler rejects it (what it then draws from the stream's later words, left free).
+* `wordAt N j b`: word `j` of a block at `N`, the `width N` bits below its top `j·width N`; `pick N b` is the sampler
+  on the block's `512 / width N` words, the first it accepts, and `offset N r b` its draw, or `r` when it rejects them
+  all (what it then draws from the stream's later blocks, left free).
 * `arrange j i`: the partial Fisher–Yates' arrangement after `i` swaps, positions to receipts, as `Key.subset` keeps it
   (`swapped`); `openings U k b r` is the set of the receipts at its first `k` positions, the window's openings.
-* `test U k C b`: the window test on first blocks `b`: when the sampler accepts each of the `k` draws' first words at
-  `U`, whether the openings lie in `C`, and otherwise true. It reads `b`'s first `k` blocks and runs the Fisher–Yates.
+* `test U k C b`: the window test on first blocks `b`: when the sampler accepts a word of each of the `k` draws' first
+  blocks at `U`, whether the openings lie in `C`, and otherwise true. It reads `b`'s first `k` blocks and runs the
+  Fisher–Yates.
 * `below δ P u`: the threshold coin. `u`, 512 uniform bits, falls below `min(1, δ/P)` rounded down to a multiple of
   `2^-512`, and always when `P ≤ δ`.
 * `DrawCoins n κ X`: a session's coins, the other coins `x` (the prover's, the world's, every window's challenge) and each
@@ -140,17 +143,19 @@ abbrev Blocks (m : ℕ) : Type := Fin m → Pous.Bits 512
 /-- The sampler's word width at `N`: `8 ⌈(bitlen N + 64) / 8⌉` bits (`Key._uniform`). -/
 def width (N : ℕ) : ℕ := 8 * ((Nat.size N + 71) / 8)
 
-/-- The first word of an `L`-bit block at `N`: its top `width N` bits, the stream's first `width N / 8` bytes read
-big-endian. -/
-def word (N : ℕ) {L : ℕ} (b : Pous.Bits L) : Pous.Bits (width N) :=
-  (Pous.bitsEquiv (width N)).symm ⟨Pous.bitsVal b / 2 ^ (L - width N), by
-    have hb : Pous.bitsVal b < 2 ^ L := (Pous.bitsEquiv L b).isLt
-    refine Nat.div_lt_of_lt_mul (hb.trans_le ?_)
-    rw [← pow_add]
-    exact Nat.pow_le_pow_right (by norm_num) (by omega)⟩
+/-- Word `j` of an `L`-bit block at `N`: the `width N` bits below its top `j·width N`, the stream's `width N / 8` bytes
+from byte `j·width N / 8` on read big-endian, when `(j + 1)·width N ≤ L`. -/
+def wordAt (N j : ℕ) {L : ℕ} (b : Pous.Bits L) : Pous.Bits (width N) :=
+  (Pous.bitsEquiv (width N)).symm
+    ⟨Pous.bitsVal b / 2 ^ (L - (j + 1) * width N) % 2 ^ width N, Nat.mod_lt _ (Nat.two_pow_pos _)⟩
 
-/-- A draw's offset at `N`: the sampler's on the block's first word when it accepts it, else `r`. -/
-def offset (N r : ℕ) (b : Pous.Bits 512) : ℕ := ((Actual.wordIndex N (word N b)).map Fin.val).getD r
+/-- **The sampler on one block**, as deployed: the first of the block's `512 / width N` words it accepts, none when it
+rejects them all. -/
+def pick (N : ℕ) (b : Pous.Bits 512) : Option (Fin N) :=
+  (List.range (512 / width N)).findSome? fun j => Actual.wordIndex N (wordAt N j b)
+
+/-- A draw's offset at `N`: the sampler's on the block's words when it accepts one, else `r`. -/
+def offset (N r : ℕ) (b : Pous.Bits 512) : ℕ := ((pick N b).map Fin.val).getD r
 
 /-- The arrangement after `i` swaps, positions to receipts: step `l` swaps positions `l` and `l + j l`
 (`swapped[i], swapped[j] = swapped.get(j, j), swapped.get(i, i)`). -/
@@ -166,12 +171,12 @@ def offsets {m : ℕ} (U : ℕ) (b : Blocks m) (r : ℕ → ℕ) (i : ℕ) : ℕ
 def openings {m : ℕ} (U k : ℕ) (b : Blocks m) (r : ℕ → ℕ) : Finset ℕ :=
   (range k).image (arrange (offsets U b r) k)
 
-/-- Every one of the `k` draws of a window of `U` takes its offset from its first word. -/
+/-- Every one of the `k` draws of a window of `U` takes its offset from a word of its first block. -/
 def accepted {m : ℕ} (U k : ℕ) (b : Blocks m) : Prop :=
-  ∀ i : Fin m, (i : ℕ) < k → (Actual.wordIndex (U - i) (word (U - i) (b i))).isSome = true
+  ∀ i : Fin m, (i : ℕ) < k → (pick (U - i) (b i)).isSome = true
 
-/-- **The window test**: on first blocks whose `k` first words at `U` the sampler accepts, whether the openings lie in
-`C`; true when it rejects one. -/
+/-- **The window test**: when the sampler accepts a word of each of the `k` draws' first blocks at `U`, whether the
+openings lie in `C`; true when it rejects every word of one. -/
 def test {m : ℕ} (U k : ℕ) (C : Finset ℕ) (b : Blocks m) : Prop :=
   accepted U k b → openings U k b (fun _ => 0) ⊆ C
 
@@ -206,7 +211,7 @@ variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Run n m s κ
 def samples (t : Fin n) (ω : DrawCoins n κ X) : ℕ := min (s t) (D.size t ω)
 
 /-- The receipts window `t` opens at coins `ω`: its draw on the first blocks `prf t` gives its coin, with the fallbacks
-`rest ω t` where the sampler rejects a first word. -/
+`rest ω t` where the sampler rejects every word of a first block. -/
 def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
     (ω : DrawCoins n κ X) : Finset ℕ :=
   openings (D.size t ω) (D.samples t ω) (prf t (ω.2 t)) (rest ω t)

@@ -727,6 +727,13 @@ def accepts(failure: dict | None, verdicts: dict, windows: int, outcome: dict | 
             len(verdicts) == windows and all(v["accepted"] for v in verdicts.values()))
 
 
+def gamma_answer(lean: lv.Lean, record: audit.Record, node: ledger.Node, capacity_bytes_per_s: float) -> dict:
+    """The Lean's γ terms for an accepted session's record against the node's R (`capacity_bytes_per_s`), from PoUB's
+    Lean verifier (`verity/protocols/accounting/poub/verifier/lean/`), held to `ledger.gamma`'s `Gamma.ledger.to_json()`,
+    which `Verifier.ledgers` is to declare in place of the Python's."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+
+
 class Pair:
     """Session k through the verifiers, with `audit.AuditRun`'s interface: each event goes to `s`, the driver's books,
     and to the Lean process's session k, at one reading of the verifier's clock. The result is the one
@@ -1823,7 +1830,8 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
 
 
 __all__ = ["AVERAGE", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
-           "WORST_PASS", "accepts", "ingress_bursts", "lean_record", "load_registry", "main", "memory", "memory_error",
+           "WORST_PASS", "accepts", "gamma_answer", "ingress_bursts", "lean_record", "load_registry", "main", "memory",
+           "memory_error",
            "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
            "recorded_paced", "recorded_rates", "recorded_windows", "regions_of", "save_registry", "sketch_at",
            "timing_parts"]
