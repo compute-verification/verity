@@ -2,12 +2,14 @@
 (`git_head`), the device's memory in use (`nvidia_smi_used_mib`), an engine row's request (`_rid_of`) and the staging's
 environment (`staging_environ`) where it refuses, excludes families, traces the footprint or drops a flush point; the Programs'
 forecast (`c2_programs_forecast`) where an instance file can't be read, and the check that the engine is left as it was
-(`assert_pristine`) where a runner's method or a module's forward is still wrapped, or the sampler keeps a hook.  The two
-commands each reader runs are stood in.  CPU only."""
+(`assert_pristine`) where a runner's method or a module's forward is still wrapped, or the sampler keeps a hook; and the
+kept bytes' digests (`tensor_digests`): a whole FA2 row's planes, a row of zeros, a later pair's differences and the step
+dumped.  The two commands each reader runs, and `commit`'s clock, are stood in.  CPU only."""
 from __future__ import annotations
 
 import dataclasses
 import gzip
+import hashlib
 import json
 import subprocess
 from collections.abc import Callable
@@ -173,3 +175,81 @@ def test_a_hook_left_on_the_sampler_is_refused_unless_the_baseline_counts_it() -
     with pytest.raises(AssertionError, match=r"^sampler hooks present$"):
         commit.assert_pristine(eng, BASELINE)
     commit.assert_pristine(eng, BASELINE | {"sampler_hooks": 1})
+
+
+FA2 = "fa2.m1/L0/g1x1x1"
+#: A whole-buffer FA2 row's six planes and their bytes, at one head block, one row and one key block.
+PLANES = (("S", 512), ("P", 512), ("RP", 256), ("ROW", 32), ("O", 256), ("FIN", 16))
+FA2_BYTES = sum(nb for _, nb in PLANES)
+
+
+def kept(*tensors: tuple[str, bytes]) -> SimpleNamespace:
+    """A committer that kept ``tensors`` back to back at step 0, and nothing at step 1."""
+    data = b"".join(b for _, b in tensors)
+    layout, off = [], 0
+    for name, b in tensors:
+        layout.append(SimpleNamespace(name=name, dev_off=off, nbytes=len(b), dtype="uint8", shape=(len(b),)))
+        off += len(b)
+    return SimpleNamespace(_gpu_blocks={0: (torch.frombuffer(bytearray(data), dtype=torch.uint8), len(data)), 1: (None, 0)},
+                           _layouts={0: layout})
+
+
+def b2(b: bytes) -> str:
+    return hashlib.blake2b(b, digest_size=8).hexdigest()
+
+
+@pytest.fixture
+def digests(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Callable[..., int]:
+    """`tensor_digests` into ``tmp_path`` on `commit`'s clock held at 0, with no step dumped unless the test sets one."""
+    monkeypatch.setattr(commit, "time", SimpleNamespace(perf_counter=lambda: 0.0))
+    monkeypatch.delenv("VERITY_DUMP_STEP", raising=False)
+    return lambda com, pair, prev: commit.tensor_digests(com, tmp_path, pair, prev)
+
+
+def test_each_kept_tensor_and_each_plane_of_a_whole_fa2_row_is_digested_and_a_row_of_zeros_is_named(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str], digests: Callable[..., int]) -> None:
+    up, fa2 = bytes(range(8)), bytes(FA2_BYTES)
+    prev: dict[str, Any] = {}
+    assert digests(kept(("mlp.up/L0", up), (FA2, fa2)), 0, prev) == 1
+    planes, off = {}, 0
+    for pl, nb in PLANES:
+        planes[f"{FA2}/{pl}"] = b2(fa2[off:off + nb])
+        off += nb
+    step = {"mlp.up/L0": b2(up), FA2: b2(fa2), **planes}
+    assert json.loads((tmp_path / "tensor_digests_pair0.json").read_text()) == {"0": step}
+    assert prev == {"pair": 0, "digests": {0: step}}
+    assert capsys.readouterr().out == f"[delta] FA2 ROWS BOUND AS ZEROS (pair 0): 1 e.g. ['0:{FA2}']\n"
+
+
+def test_a_later_pair_names_the_steps_and_the_families_whose_digests_differ_from_the_pair_before(
+        capsys: pytest.CaptureFixture[str], digests: Callable[..., int]) -> None:
+    prev: dict[str, Any] = {}
+    digests(kept(("mlp.up/L0", bytes(8)), (FA2, bytes(FA2_BYTES))), 0, prev)
+    capsys.readouterr()
+    assert digests(kept(("mlp.up/L0", b"\1" * 8), (FA2, b"\1" * 512 + bytes(FA2_BYTES - 512))), 1, prev) == 0
+    assert capsys.readouterr().out == (
+        "[delta] TENSOR DIGESTS pair 1 vs pair 0: 1 steps differ [0]; differing tensors by family {'up': 1, 'fa2.m1': 1, 'fa2.m1/S': 1}; "
+        f"steps whose digest MULTISET is equal (pure permutation) 0; 0.0s e.g. mlp.up/L0, {FA2}, {FA2}/S\n")
+    assert prev["pair"] == 1
+
+
+def test_a_step_whose_tensors_only_changed_places_is_counted_as_a_permutation(
+        capsys: pytest.CaptureFixture[str], digests: Callable[..., int]) -> None:
+    prev: dict[str, Any] = {}
+    digests(kept(("mlp.up/L0", b"\1" * 8), ("mlp.down/L0", b"\2" * 8)), 0, prev)
+    digests(kept(("mlp.up/L0", b"\2" * 8), ("mlp.down/L0", b"\1" * 8)), 1, prev)
+    assert capsys.readouterr().out == (
+        "[delta] TENSOR DIGESTS pair 1 vs pair 0: 1 steps differ [0]; differing tensors by family {'up': 1, 'down': 1}; "
+        "steps whose digest MULTISET is equal (pure permutation) 1; 0.0s e.g. mlp.up/L0, mlp.down/L0\n")
+
+
+def test_the_step_asked_for_dumps_its_fa2_l0_row_s_bytes_and_its_layout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                         digests: Callable[..., int]) -> None:
+    monkeypatch.setenv("VERITY_DUMP_STEP", "0")
+    fa2 = bytes(range(256)) * (FA2_BYTES // 256) + bytes(FA2_BYTES % 256)
+    digests(kept(("mlp.up/L0", bytes(8)), (FA2, fa2)), 3, {})
+    assert (tmp_path / "dump_step0_pair3_fa2.m1_L0_g1x1x1.bin").read_bytes() == fa2
+    assert json.loads((tmp_path / "dump_step0_pair3_layout.json").read_text()) == [["mlp.up/L0", "uint8", [8], 8, 0],
+                                                                                   [FA2, "uint8", [FA2_BYTES], FA2_BYTES, 8]]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["dump_step0_pair3_fa2.m1_L0_g1x1x1.bin", "dump_step0_pair3_layout.json",
+                                                          "tensor_digests_pair3.json"]
