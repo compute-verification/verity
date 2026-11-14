@@ -11,18 +11,20 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops.boolean import mufu as BM
 from verity.definitions.registry import boolean_dsa_norm as BD
-from verity.definitions.registry import boolean_norms as BN, boolean_norms_split as BS
+from verity.definitions.registry import boolean_norms as BN
+from verity.definitions.registry import boolean_norms_split as BS
 from verity.definitions.registry import boolean_sigma as SG
 from verity.definitions.registry import cuda_rmsnorm as C
 from verity.definitions.registry import cuda_rmsnorm_split as NS
 from verity.definitions.registry import dsa_norm as DN
-from verity.definitions.registry import tp_allreduce as TA, tp_allreduce_split as TS
+from verity.definitions.registry import tp_allreduce as TA
+from verity.definitions.registry import tp_allreduce_split as TS
+
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
@@ -93,7 +95,7 @@ def served(monkeypatch):
         for i, op in enumerate(ops, start=7):
             rng = np.random.default_rng(i)
             vals = [bf16s(rng, n, 0.1 if nm == "w" else 1.0) for nm, n in groups]
-            outs = ev(fn, [v[None] for v in vals]).astype(np.uint16).reshape(len(members), N)
+            outs: np.ndarray = ev(fn, [v[None] for v in vals]).astype(np.uint16).reshape(len(members), N)
             if bad and i == 7:
                 outs[0, 5] ^= 1
             op = op or layer.format(L=i - 1)

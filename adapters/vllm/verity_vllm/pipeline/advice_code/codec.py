@@ -40,7 +40,7 @@ records (the tie: prompt and output lengths against the certified ids, `finish` 
 The hits, the resumes and the order of new requests that `derived.walk_steps` would otherwise read are the replay's, so
 v1 sends none. Every prefix-cache lookup's hit is the replay's block pool's (`pool.BlockPool`, its LRU and eviction
 included), past the cumulative pool bound too, as the compile slice's pool derives it
-(`verity.protocols.certifier.prover.compile_slice_v2`), so no hit is the prover's choice. The registered caps hold the
+(`verity.protocols.certifier.prover.compile_slice_v4`), so no hit is the prover's choice. The registered caps hold the
 hits, the resumes and the lag bits at 0 (`CAPS`), so their counts code in 0 bits. The KV pool's size is registered
 before the run, never sent: a prover that chose it could declare a bigger pool and buy hits with it.
 

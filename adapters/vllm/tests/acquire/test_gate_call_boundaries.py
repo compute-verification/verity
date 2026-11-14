@@ -82,6 +82,7 @@ def test_a_manifest_naming_no_call_boundaries_passes(tmp_path, capsys):
     (tmp_path / "manifest.json").write_text(json.dumps({"identities": [{"family": "instance_outputs"}, {"family": "weights"}]}))
     rc, line, rec = _gate(tmp_path, capsys)
     assert rc == 0 and rec["pass"] is True and rec["identities"] == 0
+    assert rec["schema"] == "verity-vllm/call-boundaries-gate/v1"
     assert line.startswith("identities=0 claimed=0 covered=0 uncovered=0 unattached=0 sources=none wall=")
 
 
