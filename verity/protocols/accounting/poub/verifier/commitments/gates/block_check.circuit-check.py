@@ -15,7 +15,7 @@ def _block_check_roots() -> list[Any]:
     binding's message and its hm96 leaf, the sketch's bytes into the receipt and its pick, each read's rank, position and
     depth (v2's from all 32 bits of pos), and the verdict's flags. The deployed unit (about 30 M ANDs at p512/k2)
     is past any whole lowering here, so each part is also bound at a deployed field, among them the 512- and 1,024-bit
-    Karatsuba squares and their folds by C, which no toy word reaches. Each toy's whole lowering (about 2.5 M ANDs) is over
+    Karatsuba squares and their folds by C, which no toy word reaches. Each toy's whole lowering (2.5 M to 2.8 M ANDs) is over
     the default budget: its correspondence and pin are checked with ``--lower-max-ands 3000000``."""
     from verity.circuits.defs import bind
     from verity.protocols.accounting.poub.verifier.commitments.gates.block_check import (BlockOpeningCheck, BlockOpeningCheckV2, BlockVerdict, CodecBinding,
