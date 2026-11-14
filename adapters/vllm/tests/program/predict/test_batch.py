@@ -12,14 +12,20 @@ from dataclasses import dataclass, replace
 from itertools import accumulate
 
 import pytest
-
-from verity.protocols.accounting.certifier.verifier import advice as I1
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Tuple, Value
+from verity.protocols.accounting.certifier.verifier import advice as I1
+
 from verity_vllm.check.batch import BATCH, SHARED, check, own, report
 from verity_vllm.program.frontend.seed_rule import rid_of
-from verity_vllm.program.predict.batch import BatchDependent, check_compiled, registered_phi, templates, workload_labels
+from verity_vllm.program.predict.batch import (
+    BatchDependent,
+    check_compiled,
+    registered_phi,
+    templates,
+    workload_labels,
+)
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.phi import Phi
 
@@ -64,10 +70,10 @@ def test_the_registered_split_count_keeps_one_nucleus_at_every_batch_size_and_po
     engine (`engine.topp_pin`: vLLM's loop at num_sm = registered S x B) launches the registered S at every B, and the keep set
     is the same at every (B, i)."""
     import numpy as np
-
-    from verity_vllm.pipeline.topp_split_probe import gen_random
     from verity.definitions.registry.topp_geometry import registered_splits, splits_for
     from verity.definitions.registry.topp_split import topp_keep_row
+
+    from verity_vllm.pipeline.topp_split_probe import gen_random
 
     nsm, V = RTX["num_sms"], 4096
     S_reg = registered_splits(nsm)
@@ -424,6 +430,7 @@ def test_compile_steps_passes_its_own_rule():
     """At top_p 1 and below: the compiler emits the registered split count at any top_p; an unseeded request's seed,
     derived from its id and the window's seed salt, is the one it compiles to alone."""
     from verity.definitions.registry.topp_geometry import registered_splits
+
     from verity_vllm.engine.served_seed import derived
     steps = pytest.importorskip("verity_vllm.program.predict.steps")
     I1 = pytest.importorskip("verity.protocols.accounting.certifier.verifier.advice")

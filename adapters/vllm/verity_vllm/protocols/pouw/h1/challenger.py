@@ -147,7 +147,7 @@ def address(raw: Any) -> str | None:
     if raw is None:
         return None
     host, sep, port = raw.rpartition(":") if isinstance(raw, str) else ("", "", "")
-    if not (sep and host and port.isdigit()):
+    if not (sep and host and port.isdecimal()):
         raise ValueError(f"pouw setting 'challenger' is the auditor device's challenger as HOST:PORT, not {raw!r}")
     return raw
 
