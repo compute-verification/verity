@@ -6,8 +6,8 @@ layers that share a quant method; and H1's install's of a layout without its row
 quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population.  Pearl-C's of
 a kernel directory without one cubin, of a pass whose coins don't parse or are no object, of a live salt over other
 weights than its workload's, of a group of experts that repeat, are another group's, differ in shape or whose bytes
-are not the kernel's size for them and of B̃'s prefetch on a kernel without it, and the in-process certifier's of fewer
-coin bytes than it asks for."""
+are not the kernel's size for them, of a grouped call under a schedule with other side steps and of B̃'s prefetch on a
+kernel without it, and the in-process certifier's of fewer coin bytes than it asks for."""
 from __future__ import annotations
 
 import random
@@ -356,6 +356,33 @@ def test_a_group_is_stacked_only_from_experts_whose_bytes_are_the_kernels_size_f
     g = PG._Group(run, G, (0, 1))
     assert g.stacked["b"].tolist() == [0] * 40 + [1] * 40
     assert [run.weights[w].b["b"].data_ptr() - g.stacked["b"].data_ptr() for w in (0, 1)] == [0, 40]
+
+
+def test_a_grouped_call_is_refused_under_a_schedule_with_other_side_steps_before_its_group(monkeypatch):
+    """A grouped call runs on a side lane only `SIDE_STEPS`' steps: a schedule with any other there is refused, naming the
+    schedule and its side steps sorted, before the call's group is read; a schedule with only those goes on to it."""
+    reached: list[tuple[int, ...]] = []
+
+    class Reached(Exception):
+        pass
+
+    def group(run, ws):
+        reached.append(ws)
+        raise Reached
+
+    monkeypatch.setattr(PG, "group", group)
+    refused: tuple[tuple[str, ...], ...] = (("gemm",), ("tile_hash", "screen", "gemm"))
+    taken: tuple[tuple[str, ...], ...] = ((), ("tile_hash",), ("a_tree", "tile_hash"))
+    for side in refused:
+        run = SimpleNamespace(entry="e", schedule=SimpleNamespace(name="s", side=side))
+        said = f"e: a grouped call runs only a_tree, tile_hash on a side lane, not s's {', '.join(sorted(side))}"
+        with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
+            PG.gemm_grouped(run, [0], None, [0])
+    assert reached == []
+    for side in taken:
+        with pytest.raises(Reached):
+            PG.gemm_grouped(SimpleNamespace(entry="e", schedule=SimpleNamespace(name="s", side=side)), [0, 1], None, [0, 0])
+    assert reached == [(0, 1)] * 3
 
 
 def test_a_prefetch_of_b_is_refused_on_a_kernel_whose_pipeline_lacks_it():
