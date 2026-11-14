@@ -59,11 +59,13 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "network_traces"))
+#: the directory of Flock's proof-format reader, `redigest.py`, which the leak scan reads proof streams with
+sys.path.insert(0, str(HERE.parents[1] / "verity/protocols/proofs/flock/prover/agreement"))
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import a7  # noqa: E402
-import leak_scan as LS  # noqa: E402
+import redigest  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.accounting.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
@@ -384,7 +386,7 @@ def scan(vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], pub
     Definition before any input, so what it holds the verifier has whatever the witness."""
     pieces, held, left_out = LS.public_pieces(sys.modules[__name__], blobs, held, public)
     got = {**received(vdir, control, pieces, held), "public_pieces": left_out}
-    return {**got, **LS.scan(got, pieces, vdir)}
+    return {**got, **LS.scan(got, pieces, vdir, lambda b: LS.reads(b, redigest))}
 
 
 # --- cost points --------------------------------------------------------------------------------------------------------------

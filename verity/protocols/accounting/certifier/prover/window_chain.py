@@ -1,4 +1,4 @@
-"""A served endpoint's Commit windows' advice (`verity_vllm.pipeline.window_advice`) as one I1 v0 advice
+"""A served endpoint's Commit windows' advice (a `WindowAdvice`, the serving system's) as one I1 v0 advice
 (`verity.protocols.accounting.certifier.verifier.advice`), each request in it once.
 
 A Commit window that carries requests in (window advice v1) opens with the state its predecessor's advice closed with
@@ -12,17 +12,33 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import replace
+from typing import Any, Protocol
 
 from verity.protocols.accounting.certifier.verifier import advice as I1
-from verity_vllm.pipeline import window_advice as WA
 
 
-def must(advice: WA.Advice) -> list[str]:
+class WindowAdvice(Protocol):
+    """What `join` reads of the serving system's window advice: the version of a window that aborts a request
+    (`ABORTS`), an advice's outputs and the requests it closes (`outputs`, `close`), and whether a window opens
+    where the one before it closed (`follows`, refusing with `I1.MalformedAdvice`). The vLLM adapter's
+    `pipeline.window_advice` module is one, which its callers pass."""
+
+    ABORTS: int
+
+    def outputs(self, advice: Any) -> Sequence[Any]: ...
+
+    def close(self, advice: Any) -> Sequence[Any]: ...
+
+    def follows(self, last: Any, advice: Any) -> Any: ...
+
+
+def must(advice: Any, WA: WindowAdvice) -> list[str]:
     """The ids of the requests ``advice`` ends with outputs still to keep: the next window must carry them."""
     return [advice.requests[c.request].id for c in WA.close(advice) if c.must]
 
 
-def join(windows: Sequence[tuple[int, WA.Advice]], release: Callable[[int, str, int, int], int]) -> I1.Advice:
+def join(windows: Sequence[tuple[int, Any]], release: Callable[[int, str, int, int], int],
+         WA: WindowAdvice) -> I1.Advice:
     """The Commit windows ``windows`` (each its number and advice, in order) as one I1 v0 advice: each window's requests
     and steps in turn, a carried request the earlier window's, so each of its rows names the request its earlier window
     admitted, and kept output λ of request ``id``, which window k released in its own ``bucket``, released at
@@ -33,7 +49,7 @@ def join(windows: Sequence[tuple[int, WA.Advice]], release: Callable[[int, str, 
     steps: list[I1.StepAdvice] = []
     buckets: list[int] = []
     index: dict[str, int] = {}
-    last: tuple[int, WA.Advice] | None = None
+    last: tuple[int, Any] | None = None
     for k, (w, a) in enumerate(windows):
         if a.version == WA.ABORTS:
             raise I1.MalformedAdvice(f"Commit window {w} aborts a request, which I1 v0 can't say")
@@ -43,7 +59,7 @@ def join(windows: Sequence[tuple[int, WA.Advice]], release: Callable[[int, str, 
             except I1.MalformedAdvice as err:
                 raise I1.MalformedAdvice(f"Commit window {w} doesn't open where window {w - 1} closed: {err}") from None
         else:
-            if last is not None and (left := must(last[1])):
+            if last is not None and (left := must(last[1], WA)):
                 raise I1.MalformedAdvice(f"Commit window {last[0]} ends request {left[0]!r} with outputs still to "
                                          f"keep, and window {last[0] + 1} isn't among the windows")
             if a.carried:
@@ -60,7 +76,7 @@ def join(windows: Sequence[tuple[int, WA.Advice]], release: Callable[[int, str, 
                                       for r in st.rows)) for st in a.steps]
         buckets += [release(k, a.requests[o.request].id, o.index, b) for o, b in zip(WA.outputs(a), a.release)]
         last = (w, a)
-    if last is not None and (left := must(last[1])):
+    if last is not None and (left := must(last[1], WA)):
         raise I1.MalformedAdvice(f"Commit window {last[0]} ends request {left[0]!r} with outputs still to keep, and "
                                  f"window {last[0] + 1} isn't among the windows")
     return I1.Advice(tuple(requests), tuple(steps), tuple(buckets))
