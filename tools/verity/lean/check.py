@@ -73,10 +73,14 @@ ROOT = HERE.parents[2]
 #: test that drives `main` can redirect it off the checkout, which the test suite's read guard would otherwise flag
 SEAL_BASE = ROOT / ".lake" / "sealed"
 POLICY = "lean-audit.json"
-#: what a package's work directory holds from the moment its builds are about to run: the package, and whether they run in
-#: the sandbox, and once its sampled recompile differs, that failure too. A run that is killed leaves no report, and this is
-#: then what says whether the modules it compiled may go into the artifact cache (`lean_audit.built`)
+#: what a package's work directory holds from the moment its builds are about to run: the package, whether they run in
+#: the sandbox, and `SAMPLE_PENDING` until its sampled recompile has ended, then that recompile's failures where it
+#: differs. A run that is killed leaves no report, and this is then what says whether the modules it compiled may go into
+#: the artifact cache (`lean_audit.built`)
 BUILDING = "building.json"
+#: what `BUILDING` says until the sample has ended: modules compiled on top of restored ones that nothing has sampled yet,
+#: which `lean_audit.LakeArtifacts.put` refuses
+SAMPLE_PENDING = {"sample": "pending"}
 #: the lock's schema version, which every lock this file writes carries as `format`: bump it with any change to what a lock
 #: holds or how its sections read, and `merge.py`'s `FORMAT` with it, so an older driver leaves a newer lock to git's
 #: conflict rather than merge what it can't read
@@ -6044,7 +6048,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         rep["sandbox"] = sandboxed()
         at = bound(writable(pkg)) if rep["sandbox"] else []
         rep["bound"] = at[1:] or None
-        (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")}))
+        (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")} | SAMPLE_PENDING))
         n, _peak.tree = build_threads(pkg), 0
         if ARTIFACTS and not rep["sandbox"]:
             rep["staged"] = ("not used: this node builds without the sandbox, where nothing samples what a build restores "
@@ -6173,9 +6177,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             got = [Failure("sampled", None, f"sampled: the recompile raised {type(e).__name__}: {e}")]
         finally:
             _BESIDE.pop(pkg.resolve(), None)
-        if got:
-            (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")} |
-                                                    {"failures": got}))
+        (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")} |
+                                                ({"failures": got} if got else {})))
         if own_seal:
             shutil.rmtree(own_seal.dir, ignore_errors=True)
         matched(not got)

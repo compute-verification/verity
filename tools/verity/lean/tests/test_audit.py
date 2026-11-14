@@ -6388,13 +6388,14 @@ def test_before_its_first_build_step_an_audit_leaves_whether_its_builds_run_in_t
     for sandbox in (True, False):
         monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
         assert A.audit(pkg, out, build=True, runs=False)["sandbox"] is sandbox
-        assert seen[-1] == {"package": str(pkg), "sandbox": sandbox, "bound": None}, "a package outside the tree isn't bound"
+        assert seen[-1] == {"package": str(pkg), "sandbox": sandbox, "bound": None} | A.SAMPLE_PENDING, \
+            "a package outside the tree isn't bound"
     with monkeypatch.context() as m:
         m.setattr(A, "TREE", tmp_path)
         for sandbox, bound in ((True, [str(A.FIXED), str(tmp_path.resolve())]), (False, None)):
             m.setattr(A, "sandboxed", lambda: sandbox)
             assert A.audit(pkg, out, build=True, runs=False)["bound"] == bound
-            assert seen[-1] == {"package": str(pkg), "sandbox": sandbox, "bound": bound}
+            assert seen[-1] == {"package": str(pkg), "sandbox": sandbox, "bound": bound} | A.SAMPLE_PENDING
     (pkg / A.POLICY).write_text("{")
     assert A.audit(pkg, out, build=True, runs=False)["failures"] and began.exists(), "a package it never opened keeps its own"
     (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
@@ -6443,7 +6444,8 @@ def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_n
     build's threads, and the verdict waits for it: a sample that differs fails the package, `matched` hears False, no
     facts document is written (`--facts-only`) or stored (`--facts-cache`), and its failure is written beside what the
     build began with (`BUILDING`), which is all a check.py killed before its report leaves for the artifact cache's `put`;
-    one that matches lets both happen and leaves that as the build began."""
+    one that matches lets both happen and leaves that as the build began. Until the sample ends, `BUILDING` says it is
+    pending, which `put` refuses, so a check.py killed during the replay or the sample stores nothing either."""
     pkg = tmp_path / "p"
     pkg.mkdir()
     (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
@@ -6462,7 +6464,7 @@ def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_n
     announced, calls, heard, wrote = [], [], [], []
 
     def sampled(pkg_, roots, work, built, sealed, threads=None, log=print):
-        calls.append((list(announced), built, sealed, threads))
+        calls.append((list(announced), built, sealed, threads, json.loads((work / A.BUILDING).read_text())))
         return ([] if matches else [A.Failure("sampled", "P.B", "sampled: P.B: planted")]), {"modules": ["P.B"]}
 
     monkeypatch.setattr(A, "sandboxed", lambda: True)
@@ -6486,7 +6488,8 @@ def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_n
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False, replay=False, log=lambda *_: None, seals=Seals(),
                   built=lambda: announced.append(True), matched=heard.append,
                   **({"facts_cache": tmp_path / "cache", "facts_reuse": True} if facts_to == "cache" else {"facts_out": out}))
-    assert calls == [([True], {"P.A", "P"}, seal, A.build_threads(pkg))]
+    assert calls == [([True], {"P.A", "P"}, seal, A.build_threads(pkg),
+                      {"package": str(pkg), "sandbox": True, "bound": rep["bound"]} | A.SAMPLE_PENDING)]
     assert heard == [matches] and rep["sampled"] == {"modules": ["P.B"]} and "sampled" in rep["seconds"]
     assert rep["failure_codes"] == ([] if matches else ["sampled"])
     assert wrote == ([] if not matches else [("stored", "key")] if facts_to == "cache" else [("written", out)])

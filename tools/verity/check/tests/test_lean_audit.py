@@ -887,6 +887,18 @@ def test_a_build_whose_sampled_recompile_differs_stores_nothing_though_check_py_
     assert real(LA.LakeArtifacts(tmp_path / "store"), {pkg: SANDBOXED}, log=lambda s: None) == 3, "without it, all three go in"
 
 
+def test_a_build_whose_sample_has_not_ended_stores_nothing_though_check_py_is_killed(tmp_path):
+    """check.py writes that the sample is pending as the build begins and takes it back only once the sample has ended, so
+    a check.py killed during its build, its replay or its sample leaves a word `put` refuses: the modules it compiled are
+    on top of restored ones nothing has sampled yet."""
+    pkg, said = _package(tmp_path / "built"), []
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED | LA.SAMPLE_PENDING}, log=said.append) == 0
+    assert said == [f"lean-audit: {pkg}: check.py ended before the sampled recompile of what its build restored did, so "
+                    "none of the modules compiled on top of those go into the artifact cache"]
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED}, log=lambda s: None) == 3
+    assert AUDIT.SAMPLE_PENDING == LA.SAMPLE_PENDING
+
+
 def test_what_check_py_said_of_a_build_is_its_report_or_what_it_wrote_as_the_build_began(tmp_path):
     out, a, b = tmp_path / "out", tmp_path / "pkg" / "a", tmp_path / "pkg" / "b"
     assert LA.built(out) == {}

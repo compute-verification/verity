@@ -1152,6 +1152,10 @@ class LakeArtifacts:
                     log(f"lean-audit: {pkg}: a module its build didn't compile differs from its recompile (`sampled`), so "
                         "none of the modules compiled on top of it go into the artifact cache")
                     continue
+                if all(rep.get(k) == v for k, v in SAMPLE_PENDING.items()):
+                    log(f"lean-audit: {pkg}: check.py ended before the sampled recompile of what its build restored did, "
+                        "so none of the modules compiled on top of those go into the artifact cache")
+                    continue
                 ws = MK.workspace(pkg)
                 if isinstance(ws, str):
                     continue
@@ -1601,15 +1605,18 @@ RETRIES = (90, 240, 480)
 #: what check.py writes in a package's work directory (`audit-<tag>/` under its `--out`) once it knows whether the package's
 #: builds run in the sandbox, before the first of them (check.py's `BUILDING`)
 BUILDING = "building.json"
+#: what it says until the package's sampled recompile has ended (check.py's `SAMPLE_PENDING`), which `put` refuses
+SAMPLE_PENDING = {"sample": "pending"}
 
 
 def built(out: Path) -> dict[Path, dict]:
     """{package: what check.py said of its build} for each package the check.py with its reports under ``out`` built, or
     began to build: its report in `audit.json`, which says `sandbox` of a package it built, else what it wrote as the build
-    began (`BUILDING`: the package, and whether its builds run in the sandbox, with the failure once its sampled recompile
-    differs), which is all a check.py that was killed leaves, and which is the later of the two when an earlier check.py
-    left its report there. `LakeArtifacts.put` takes either, and refuses both for a sampled failure. Both are check.py's
-    own words: ``out`` is outside every directory a build in the sandbox can write."""
+    began (`BUILDING`: the package, whether its builds run in the sandbox, and `SAMPLE_PENDING` until its sampled
+    recompile has ended, then that recompile's failure where it differs), which is all a check.py that was killed leaves,
+    and which is the later of the two when an earlier check.py left its report there. `LakeArtifacts.put` takes either,
+    and refuses both for a sampled failure, and `BUILDING` while its sample is pending. Both are check.py's own words:
+    ``out`` is outside every directory a build in the sandbox can write."""
     found: dict[Path, tuple[int, dict]] = {}
 
     def said(f: Path) -> tuple[int, dict]:
