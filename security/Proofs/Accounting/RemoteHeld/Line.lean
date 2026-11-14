@@ -44,7 +44,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.RemoteHeld
 import Proofs.Pouw.Prob
-public import Proofs.Properties.Accounting.Remote.Session
+public import Proofs.Properties.Accounting.Remote.Run
 
 /-!
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`), and memory held from it
@@ -53,7 +53,7 @@ At each outcome where the Lean verifier accepts the record's session (so the tra
 the certifiers observed nothing but the verifier's messages entering the node, the receipts' sketch holds and the
 trace's wrong receipts are at most the session's pooled bound at the line's `δ` (`holdsAnd` of the sketch bound, from
 `SketchBoundAt`, `Covered` and `IngressCounted` by `sketchBound_of_covered`, and `Draw.pooledSample` at the records read
-through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversSession` at the record's
+through the coin commitment, `recordCommitted`, so at most the W the line reads: `LineCoversRun` at the record's
 draws, whose receipts on an accepted record are `recordSample`'s sizes, `receipts_of_line`, and the line's check of their
 draws, `incorrect_le_line`), and the line read off the record credits no more bits read than its groups' passes read
 (`readAt_of`): each pass reads every registered block but its wrong receipts (`read_card`), and the groups are one for
@@ -496,7 +496,7 @@ theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
     (Nat.pow_le_pow_right (by norm_num) (by norm_num))
 
 /-- On an accepted record, the trace's wrong receipts below the record's draw's pooled bound at the line's `δ` are
-below the W every line of the record reads (`LineCoversSession`): the line reads each draw's receipts and draws off
+below the W every line of the record reads (`LineCoversRun`): the line reads each draw's receipts and draws off
 the record and refuses any draws but `min(s, U_c)`, the draw's at the session's `samples`, and the receipts are the
 draw's sizes (`receipts_of_line`). -/
 theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.samples κ X)}
@@ -515,7 +515,7 @@ theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCo
     Array.map_ofFn (f := fun t => ((recordSample node rec correct).size t ω : ℕ))
       (g := fun u => (u, min node.params.samples u))
   rw [hws, hR, e2] at hl
-  have hc := Properties.RemoteAudit.lineCoversSession node.samples receiptMax _ κ X (recordSample node rec correct) ω
+  have hc := Properties.RemoteAudit.lineCoversRun node.samples receiptMax _ κ X (recordSample node rec correct) ω
     node.delta _ _ _ _ _ _ _ l hl
   rw [Rat.cast_nnratCast] at hc
   exact hw.trans hc

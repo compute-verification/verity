@@ -32,13 +32,13 @@ samples a round over whole units (tickets `tk`, any sampling design with rationa
 times each unit's sample probability, (L) at `p ∈ [1/e, 1)` per unit at its stage's coin (`StageLuck`) gives
 `Λ = r/ln(1/p)`. -/
 def StageBudget : Prop :=
-  ∀ {C V D : Type} [Fintype C] [Fintype V] [Fintype D] {M s n : ℕ} (W : StageWindow C V D M s n) (stg : V → ℕ)
+  ∀ {C V D : Type} [Fintype C] [Fintype V] [Fintype D] {M s n : ℕ} (W : StageExecutionPhase C V D M s n) (stg : V → ℕ)
     (tk : D → V) (w : V → ℝ) (p r : ℝ),
     2 ≤ s → Real.exp (-1) ≤ p → p < 1 → 0 < r → (∀ u, 0 ≤ w u) → (∀ u, w u ≤ r * prob (fun t => tk t = u)) →
     StageLuck p stg W → RoundGame.BudgetAt (r / Real.log (1 / p)) (W.game stg tk w)
 
 /-- **Lemma C under per-stage coins.** In 𝒫_samp with per-stage coins, `s ≥ 2` samples a round over whole units and work
-weights at most `r` times the sampling design, whose ideal game is the window's (`StageWindow.game`; its share is the
+weights at most `r` times the sampling design, whose ideal game is the window's (`StageExecutionPhase.game`; its share is the
 skipped units' work, the premise (I8) `ProofsSound` reads at that share), under (I1)–(I6) as in `DIdeal`, (I8) and
 `StageLuck` at `p ∈ [1/e, 1)` in place of (I7): for every certificate `π`, outside an event of probability at most `δ`,
 every accepted run satisfies (2.7) with `ε_sample = (r/ln(1/p) − 1/ln(1/p))·(ln(1/δ′)/S)·κ(π)` subtracted. -/
@@ -46,7 +46,7 @@ def CompilerStage : Prop :=
   ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
     [Nonempty R] [Nonempty F] [Nonempty X] {C V D : Type} [Fintype C] [Fintype V] [Fintype D] {M s : ℕ}
     (Z : Model K R T L U F X) (H : Honest K) (S : ℕ) (P : Play (Paths C M × (Fin s → D)) S K T L U)
-    (W : StageWindow C V D M s S) (stg : V → ℕ) (tk : D → V) (w : V → ℝ) (lam : R → ℝ) (p r δ δbind δzk : ℝ)
+    (W : StageExecutionPhase C V D M s S) (stg : V → ℕ) (tk : D → V) (w : V → ℝ) (lam : R → ℝ) (p r δ δbind δzk : ℝ)
     (nπ : ℕ),
     IsCert lam → Z.Wf H.prog → 0 < H.CH → 0 < H.fH → 0 < S → 2 ≤ s → Real.exp (-1) ≤ p → p < 1 → 0 < r →
     0 < δ - S * (δbind + nπ * δzk) → (∀ x, (P.run x).Split) →
@@ -66,7 +66,7 @@ def StageIdeal : Prop :=
   ∀ {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
     [Nonempty R] [Nonempty F] [Nonempty X] {C V D : Type} [Fintype C] [Fintype V] [Fintype D] {M s : ℕ}
     (Z : Model K R T L U F X) (H : Honest K) (S : ℕ) (P : Play (Paths C M × (Fin s → D)) S K T L U)
-    (W : StageWindow C V D M s S) (stg : V → ℕ) (tk : D → V) (w : V → ℝ) (lam : R → ℝ) (p δ δbind δzk : ℝ)
+    (W : StageExecutionPhase C V D M s S) (stg : V → ℕ) (tk : D → V) (w : V → ℝ) (lam : R → ℝ) (p δ δbind δzk : ℝ)
     (nπ : ℕ),
     IsCert lam → Z.Wf H.prog → 0 < H.CH → 0 < H.fH → 0 < S → 2 ≤ s → Real.exp (-1) ≤ p → p < 1 →
     0 < δ - S * (δbind + nπ * δzk) → (∀ x, (P.run x).Split) →
