@@ -48,4 +48,4 @@ The served table of `verity run` doesn't go through `runtime.run`: it runs `serv
   and `verity/protocols/accounting/pouw/verifier/parties.py`: protocols' parties on the runtime, the two sides of the
   first two each in its own file.
 - `tests/deploy_example.py`: a two-party protocol the tests run every way the runtime runs one; `tests/test_deploy.py`
-  and `tests/test_stream.py` are the suite (`uv run tools/verity/check/suites.py verity/runtime`).
+  and `tests/test_stream.py` are the suite (`uv run tools/check/suites.py verity/runtime`).

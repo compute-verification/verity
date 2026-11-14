@@ -204,7 +204,7 @@ def main() -> int:
         best = min(CONFIGS, key=lambda c: sweep[f"{c[0]}x{c[1]}"]["us"])
         launch = timed({"stock": each(reps, lambda x: x.stock()), "rope_alone": each(reps, lambda x: x.stock("rope")),
                         "cache_alone": each(reps, lambda x: x.stock("cache")),
-                        "fused_best": each(reps, lambda x: x.fused(best)),
+                        "fused_best": each(reps, lambda x, best=best: x.fused(best)),
                         "fused_engine": each(reps, lambda x: x.fused(engine_cfg))}, a.sustain, clock,
                        dict.fromkeys(("stock", "rope_alone", "cache_alone", "fused_best", "fused_engine"), n))
         del reps

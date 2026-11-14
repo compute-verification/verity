@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, over a TP Commit's windows, one per rank (a5.py --tp-commit), on a CPU machine: each rank's served
-# window through registration, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
+# window through docket, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
 # Lean's verity-verify-proof are built from this tree, in scratch. A5 takes a TP window as served only under a SHA-512 TP run root
 # (tp.serving_rows.source: sha512): a TP Commit's ranks, the stand-in's too, commit under rows-sha512 under the SHA-512 TP run
 # root (tp.run_root, verity/tp-run-root/v2); an old record's SHA-256 v1 root is refused before the sample.
@@ -12,7 +12,7 @@
 #     A5_CHECKPOINT=DIR opens the registered tensors the bundles don't carry (a MoE partition's expert stacks) from the checkpoint
 #     of record, without its shard sha256 (each tensor read is held to the committed weights root).
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
-#     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
+#     rows, its partition's sampling design); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
 #     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is; the entry
 #     sparse-mla:units is its --units, each key block served as its scores unit and its values units, which read the block's
@@ -71,7 +71,7 @@
 # A5_ADVICE=workload (with A5_WINDOWS=bundles, the stand-in or A5_TP): advice windows. The advice A (I1, the schedule of the
 #   fixed-length workload the Commit served, `advice_windows.advice_of_workload`) and A' (A less its last request) are written
 #   in scratch, each rank's window is committed from its bundle over the stand-in compiler's Programs for A, and for A', its
-#   registration binding the advice's hiding root (`verity-vllm advice-windows`), and a5 derives its own from the record, the
+#   docket binding the advice's hiding root (`verity-vllm advice-windows`), and a5 derives its own from the record, the
 #   advice's opening and the compiler, never the workload (a5.py --advice-opening; --other-advice-opening and --other-windows
 #   its negatives). The advice and its openings are the prover's: never kept.
 #   Another TP Commit than GLM-5.3's: A5_ROW its row (the workload adapters/vllm/workloads/$A5_ROW.json), A5_NAME the
@@ -189,7 +189,7 @@ fi
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
 audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKLOAD empty under --advice
   mkdir -p $O/$1
-  $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
+  $TIME $PY verity/protocols/proofs/spot/prover/audit/window_audit.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
     ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" "${PLAINS[@]}" --out $W/$1 \
     ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
     ${MAIN:+--main $MAIN} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} > $O/$1/a5.log 2> $O/$1/a5.err

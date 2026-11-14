@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate

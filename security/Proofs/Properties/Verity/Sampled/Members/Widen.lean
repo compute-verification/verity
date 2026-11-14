@@ -11,7 +11,7 @@ samples the period's other coins beside the sample's (`Verity.Sampled.Widening`)
 (`Verity.Sampled.Live.extend`). The sample reads only the window's bytes, so the widened audit is the registered one in
 everything its bound reads:
 
-* `JointAuditV5.extend`: the audit with its sample's coins widened by the coins `S`; its members, law, strata and
+* `JointAuditV5.extend`: the audit with its sample's coins widened by the coins `S`; its members, sampling design, strata and
   layout are the registered audit's (`Laid.extend`);
 * `extend_draw`, `extend_design_draw`: the widened audit samples, and each member's part is, what the registered audit
   does at the sample's own coins;

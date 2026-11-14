@@ -99,7 +99,7 @@ def delivery(payload: dict, n: int) -> Message:
 
 
 def test_the_subscriber_runs_the_consumer_and_turns_retry_into_retry_after(world, monkeypatch):
-    monkeypatch.setattr(deps, "production", lambda: world.deps)
+    monkeypatch.setattr(deps, "deployed", lambda: world.deps)
     post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
     payload = world.event(CHAT, post, "EvQ")
     world.slack.fail = {"chat.postMessage"}
@@ -131,7 +131,7 @@ class FakeDelivery:
 
 
 def test_the_drain_handles_each_claimed_message_until_the_topic_is_empty(world, monkeypatch):
-    monkeypatch.setattr(deps, "production", lambda: world.deps)
+    monkeypatch.setattr(deps, "deployed", lambda: world.deps)
     posts = [world.slack.add(CHAT, text=f"question {i}", user=LUKE) for i in range(3)]
     batches, log, asked = [[delivery(world.event(CHAT, p, f"Ev{i}"), 1) for i, p in enumerate(posts[:2])],
                            [delivery(world.event(CHAT, posts[2], "Ev2"), 1)], []], [], []
@@ -147,7 +147,7 @@ def test_the_drain_handles_each_claimed_message_until_the_topic_is_empty(world, 
 
 
 def test_a_retry_is_rescheduled_not_acknowledged_and_the_drain_stops_at_its_budget(world, monkeypatch):
-    monkeypatch.setattr(deps, "production", lambda: world.deps)
+    monkeypatch.setattr(deps, "deployed", lambda: world.deps)
     post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
     world.slack.fail = {"chat.postMessage"}
     log, ticks = [], iter([0.0, 1.0, subscriber.BUDGET_S + 1])

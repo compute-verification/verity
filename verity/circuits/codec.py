@@ -908,7 +908,10 @@ def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, A
         b = d["body"]
         params = tuple((n, _type(t)) for n, t in b["params"])
         ret_type = _type(b["ret_type"])
-        B = Builder(params, ret_type)
+        try:
+            B = Builder(params, ret_type)
+        except ValueError as e:
+            raise ValueError(f"definition {fid!r}: {e}") from e
         nodes = B.nodes
         outs = [arg_type(nd["out"]) for nd in b["nodes"]]           # each node's declared output, checked when the node is built
 

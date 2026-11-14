@@ -9,7 +9,7 @@ before a run is read against them, decided on the form's params, its blobs and t
 * the second stage's cells and counts, as `Run.run` computes them (`cellsOf`), a count of at least `1` and a cell for
   each template;
 * each template's reference statement: its member's (`memberOf`) circuit and public files on the blobs, the pinned
-  tables, and its partition object and registered reads as `flock-verify verify --zk` reads their text (`refOf`),
+  tables, and its partition object and registered reads as `verity-verify-proof verify --zk` reads their text (`refOf`),
   set up as `verifyCmd` sets a statement up (`setupAt`), in Flock's masked scope (`zkOk`), of a length each field's
   encoding holds (`fits`), reading as a member's (`templateOk`), fitting the two-stage scope (`memberOk`) and in the
   scope of Flock's hidden-output proof (`ProvedScope.scopeOkH`);
@@ -71,7 +71,7 @@ def cellsOf (i : Spot.Run.Input) (it : Spot.Run.Interior) : Option (Array Nat ×
 /-- **The requests of a boundary layout**: its proof blocks that are a unit's. -/
 def requests (l : Spot.Slots.SlotOrder) : Nat := (l.blocks.filter fun b => b.unit.isSome).size
 
-/-- **The first stage's law**, as `Select.select` samples on the boundary registration: none for the `All` rule, else
+/-- **The first stage's sampling design**, as `Select.select` samples on the boundary registration: none for the `All` rule, else
 the sampling design it derives over the program's population, or the one the rule names where it derives none. -/
 def firstLaw (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table : Option Json) :
     V (Option Draw.Law) := do
@@ -94,7 +94,7 @@ def lawOk (ns : List Nat) : Option Draw.Law → Bool
       (ws.toList.map (·.floor)).length == ns.length && (ws.toList.map (·.floor)).all (1 ≤ ·) &&
       0 < ((ns.zip (ws.toList.map (·.work))).map fun p => p.1 * p.2).sum && ns.all (1 ≤ ·)
 
-/-- **The first stage's design on the replay layout's strata**: its two rules, the first stage's law and the input
+/-- **The first stage's design on the replay layout's strata**: its two rules, the first stage's sampling design and the input
 class's `All`, one a class of `l`, each well formed over its class's strata sizes in slots. -/
 def designOk (law : Option Draw.Law) (l : Spot.Slots.SlotOrder) : Bool :=
   [law, none].length == l.classes.size &&
@@ -107,7 +107,7 @@ template `t`. -/
 def memberOf (p : SampledTwo.Params) (t : Nat) : Option Spot.OneStageZk.Member :=
   (p.circuits[t]?).bind fun c => p.members.find? (·.own.circuit == c.2.1)
 
-/-- A file read as JSON, as `flock-verify verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
+/-- A file read as JSON, as `verity-verify-proof verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
 def jsonOf (what : String) (b : ByteArray) : Except String Json :=
   match String.fromUTF8? b with
   | none => .error s!"{what}: not UTF-8"
@@ -157,7 +157,7 @@ structure Ref where
   sts : Array Flock.Stmt
 
 /-- **Template `t`'s reference statement**: its member's statement under `--zk` on the blobs, at no sample, with its
-member's public file and registered reads, read and set up as `flock-verify verify --zk` reads and sets it up. -/
+member's public file and registered reads, read and set up as `verity-verify-proof verify --zk` reads and sets it up. -/
 def refOf (p : SampledTwo.Params) (bs : Core.Blobs) (t : Nat) : V Ref := do
   let some m := memberOf p t | throw s!"template {t}: no member's circuit is the one the params name"
   let circuit ← bs.get m.own.circuit "circuit"

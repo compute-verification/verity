@@ -49,7 +49,7 @@ PUBLIC = {
     "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
                                       "one, or derived from its window's seed coin and its id) and the windows' seed coins",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
-                                    "order: its reference, kernels and install, which benchmarks/moe_align checks and times",
+                                    "order: its reference, kernels and install, which benchmarks/kernels/moe_align checks and times",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
@@ -94,10 +94,10 @@ PUBLIC = {
                                  "port's fields, and each carried request's, held to window_advice.follows",
     "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment: each finished request's b.ingress "
                                           "and b.egress rows by size class, a class's layout, record and files (Layout, "
-                                          "record, reopen), which benchmarks/one_stage/two_stage.py registers",
+                                          "record, reopen), which verity/protocols/proofs/spot/device/two_stage.py registers",
     "verity_vllm.pipeline.boundary_stop": "I1: a serve's stop rule on its boundary commitment (Stop), the stop block that "
                                           "computes where a response ends, and a stop class's stop record "
-                                          "(stop_registration, stop_record), which benchmarks/one_stage/two_stage.py "
+                                          "(stop_registration, stop_record), which verity/protocols/proofs/spot/device/two_stage.py "
                                           "registers under the verifier's own rule",
     "verity_vllm.pipeline.boundary_windows": "I1: the boundary commitment as the engine core serves: the hook on the "
                                              "scheduler that commits each window's finished requests by class "
@@ -109,13 +109,13 @@ PUBLIC = {
     "verity_vllm.pipeline.boundary_logits": "I1: a two-stage window's select inputs at serve: rank 0's hook on the sampler "
                                             "(SamplerHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node, which "
-                                            "benchmarks/serve_tax's plugin installs and benchmarks/one_stage/two_stage.py "
+                                            "benchmarks/serve_tax's plugin installs and verity/protocols/proofs/spot/device/two_stage.py "
                                             "opens (load)",
     "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
                                           "(interior, register), the block parameters it registers as values, the "
                                           "verifier's (Supply) and the replay's own (Operand), and the challenger's "
                                           "copies of them (span_values, link_words, link_schemas, sources, history), which "
-                                          "benchmarks/one_stage/two_stage.py registers",
+                                          "verity/protocols/proofs/spot/device/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
@@ -246,7 +246,7 @@ PUBLIC = {
                                             "benchmarks/prove_path and benchmarks/pouw read",
     "verity.protocols.accounting.pouw.prover.serving.pearl_c.grouped": "I1: Pearl-C's grouped call for a fused-MoE layer on an H100 or H200, every "
                                                   "routed expert's rows of one layer in one launch a step (gemm_grouped, group, "
-                                                  "module, ROTATED), which benchmarks/pouw/pearl_c_sm90 checks and times",
+                                                  "module, ROTATED), which verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90 checks and times",
     "verity.protocols.accounting.pouw.prover.serving.pearl_c.manifest": "I1: the Pearl-C device path's manifest as a verifier reads it, and a retained "
                                                    "pass's execution phase re-started from it (manifest_epoch, session_head), "
                                                    "which benchmarks/pouw/pearl_c_vllm's screen reads",

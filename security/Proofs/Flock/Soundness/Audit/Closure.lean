@@ -14,7 +14,7 @@ program.
 
 * `Law.closure L cl`: `L` widened by `cl` on `L`'s coins (`Law.widen`). `mem_closure_draw`: a unit is proved when it is
   sampled or lies in a sampled proof block's closure.
-* `closure_escape`: **the closure sample's escape is the base law's escape of `B` with the units it makes unsound**,
+* `closure_escape`: **the closure sample's escape is the base sampling design's escape of `B` with the units it makes unsound**,
   `(L.closure cl).escape B = L.escape (B ∪ unsoundTiles cl B)`, where `unsoundTiles cl B` are the units whose closure
   meets `B`. So an incorrect proof block that is never sampled on its own is charged to every unit above it.
 * `unsoundWork σ w cl B`, the work of `B ∪ unsoundTiles cl B`: the incorrect proof blocks and the units they make unsound, the set
@@ -54,7 +54,7 @@ theorem mem_closure_draw (L : Law n) (cl : Fin n → Finset (Fin n)) (ω : (L.cl
   show u ∈ L.draw ω ∪ (L.draw ω).biUnion cl ↔ _
   rw [mem_union, mem_biUnion]
 
-/-- **The closure sample's escape** is the base law's escape of `B` with the units it makes unsound. -/
+/-- **The closure sample's escape** is the base sampling design's escape of `B` with the units it makes unsound. -/
 theorem closure_escape (L : Law n) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :
     (L.closure cl).escape B = L.escape (B ∪ unsoundTiles cl B) := by
   show prCoin (fun ω : L.Ω => Disjoint (L.draw ω ∪ (L.draw ω).biUnion cl) B) =

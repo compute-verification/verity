@@ -1,7 +1,7 @@
 """Round 2's reader over the joined record and its ranks' check, as the verifier's `Spot.SecondWindow` and `Spot.Ranks`
 define them: a two-stage run's second-stage sessions held to the joined circuit's record (its ``ranks``, ``wires`` and
-``boundary_reads``, `verity.commitments.windows.interface`) and to each rank's registration, with no interior
-registration. The rule, the codes and why the interior registration's checks go are the Lean's (its module docstrings).
+``boundary_reads``, `verity.commitments.windows.interface`) and to each rank's docket, with no interior
+docket. The rule, the codes and why the interior docket's checks go are the Lean's (its module docstrings).
 
 Nothing is built yet: each function raises naming the check it is to be, and nothing calls one.
 """
@@ -30,7 +30,7 @@ def rank_failures(record: Mapping[str, Any], records: Sequence[Mapping[str, Any]
                   logged: Callable[[str], bool]) -> list[tuple[str, Any]]:
     """`Spot.Ranks.failures`: ``ranks-shape``, ``ranks-window``, ``ranks-run``, ``ranks-members``, ``ranks-units``,
     ``ranks-wires`` and ``ranks-reads`` of the joined ``record`` against its ranks' records, served records and
-    registrations at the serve's ``root``."""
+    dockets at the serve's ``root``."""
     raise NotImplementedError("Spot.Ranks.failures: the ranks' check")
 
 

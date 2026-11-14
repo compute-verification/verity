@@ -105,7 +105,7 @@ PANELS = ("exfiltration", "infiltration", "skipped_work")
 TICKS = (0.984, 0.960)
 #: a request's lifetime over the 600 s window, the share of its K/V alive at an edge: the central, least and most
 LIVE = (0.15, 0.05, 0.5)
-#: SHA-512 at 3.1 and 4.79 G compressions a second, 44 a 4 KiB row (`benchmarks/prove_path/window_cost.py`'s `RATES`)
+#: SHA-512 at 3.1 and 4.79 G compressions a second, 44 a 4 KiB row (`verity/protocols/proofs/spot/prover/cost/window_cost.py`'s `RATES`)
 HASH_RATES = (4096 / 44 * 4.79e9, 4096 / 44 * 3.1e9)
 #: the pause at a replay block's edge, seconds, measured on GLM-5.3 at TP8 over 21 edges (rank 0's copy of its 37.26 GB
 #: KV pool to pinned host memory, each rank's SHA-512 rows of its own, the runner rows and the scheduler state): the

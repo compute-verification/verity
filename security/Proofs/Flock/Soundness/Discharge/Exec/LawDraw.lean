@@ -6,7 +6,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Std.Data.HashMap.Lemmas
 
 /-!
-# How many units the live law samples
+# How many units the live sampling design samples
 
 `Law.execOS`'s sample at `ω` is `univ.filter (· ∈ d.units)` when `runOS` returns `d`, and every unit when the run would
 read past the source's bytes. This file counts the first case: under `ExecStrata σ k S`, a stratified sample that succeeds
@@ -251,7 +251,7 @@ theorem execOS_draw_card_or (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin 
     rw [h]
 
 open Flock in
-/-- **`m_pts` at the live law's sample, on a run that succeeds**: when the sample file `dj B` written for a sample `B` proves
+/-- **`m_pts` at the live sampling design's sample, on a run that succeeds**: when the sample file `dj B` written for a sample `B` proves
 exactly `B`'s units (`hdj`: no closure beyond them), `setupH` at the sampling design's sample sets up at `mPtsOf c.g (∑ s, k s)`, the
 same at every such run (`execOS_draw_card`, `setupH_mPts_of_proved`). -/
 theorem setupH_mPts_execOS {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
@@ -269,7 +269,7 @@ theorem setupH_mPts_execOS {tags : Tags} {cf pf : ByteArray} {coins : Coins} {ta
   exact setupH_mPts_of_proved hc (fun D hD => hdj _ D hD) h
 
 open Flock in
-/-- **`m_pts` at every sample of the live law**, under the same `hdj`: `mPtsOf c.g (∑ s, k s)`, or `mPtsOf c.g n` at a
+/-- **`m_pts` at every sample of the live sampling design**, under the same `hdj`: `mPtsOf c.g (∑ s, k s)`, or `mPtsOf c.g n` at a
 run that would read past the source's bytes, whose sample is every unit (`execOS_draw_card_or`). -/
 theorem setupH_mPts_execOS_or {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} {c : Flock.Circuit}

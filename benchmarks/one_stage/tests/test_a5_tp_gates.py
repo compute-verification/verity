@@ -2,10 +2,10 @@
 node): the transfer-gate unit is the registered AllReduce2_v1 with a port a rank, its sums bit for bit; each rank's chunk
 c<k> reads both ranks' registered partials of request q's collective k at the token rows, under their owners' salts, and
 they open the roots each
-owner's registration names at the positions the verifier's own reads name; the registration passes the verifier's check with every
-transfer-gate unit proved; each rank's provenance is the verifier's read of both registrations; the negatives (a peer's
+owner's docket names at the positions the verifier's own reads name; the docket passes the verifier's check with every
+transfer-gate unit proved; each rank's provenance is the verifier's read of both dockets; the negatives (a peer's
 partial under another root, the rank's own as its peer's, another request's as its peer's, a partial under another TP
-run's domain, the other rank's registration, ports built before the peer registered, and each way of moving a bit through
+run's domain, the other rank's docket, ports built before the peer registered, and each way of moving a bit through
 the received partial) are refused by name; and each refused run's window changes only rank 1's received port of q0c0."""
 
 from __future__ import annotations
@@ -158,7 +158,7 @@ def test_ports_need_every_ranks_registration(tmp_path, parts) -> None:
 @pytest.mark.parametrize("kind", sorted(AT.TRANSFERS))
 def test_a_refused_runs_window_moves_the_bit_through_rank_1s_received_partial_only(tmp_path, parts, kind) -> None:
     """``--altered`` / ``--made-for``'s windows: rank 1's q0c0 ``part0`` (rank 0's embedding partial of request 0, as rank 1
-    received it) made for that read, its sums the rows it read (the circuit holds), the registration's checks passing; only the verifier's
+    received it) made for that read, its sums the rows it read (the circuit holds), the docket's checks passing; only the verifier's
     port refuses it, by `TRANSFERS`' reason, and every other port of both ranks opens."""
     mine, c, regs, wins = committed(tmp_path, parts, altered=kind == "altered", made=None if kind == "altered" else kind)
     for r in AT.RANKS:
@@ -191,7 +191,7 @@ def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_
     the other port's as registered: Lean is to refuse the altered read by its reason, not a port the reads leave out. The
     last leaves its last port out of both the header's registered rows and the reads, a port committed afresh, which Lean
     refuses at `Registered.checkComplete`; the honest member's own public file is left as it was."""
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
     ports = {f"part{j}": {"value": AT.value_name(j, 0, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
              for j in AT.RANKS}
@@ -234,11 +234,11 @@ AFRESH = "registered-reads-leaving-a-port-committed-afresh"
 
 
 def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(tmp_path, monkeypatch) -> None:
-    """Where a chunk's file binds its other ports to the registration's roots (`registered.bind_ports`), a5's negatives add
+    """Where a chunk's file binds its other ports to the docket's roots (`registered.bind_ports`), a5's negatives add
     its first bound port at another root and that port left out, each with every other port as honest: Lean is to refuse
     the one port the negative changes, by its reason. The port committed afresh keeps the bound ports, and with no
     record declaring it registered its reason is the complete check's."""
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
     ports = {f"part{j}": {"value": AT.value_name(j, 0, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
              for j in AT.RANKS}
@@ -269,7 +269,7 @@ def test_a5s_declared_port_negatives_move_a_port_the_interface_declares_into_bou
     and domain, and leave it out, each beside the other registered port, under the record (`--interface`); the file that
     binds ports is verified without the record too. Each is to be refused by its reason; the port committed afresh is
     that declared port here, so its reason is the declared check's, which Lean makes first."""
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
     ports = {p: {"value": f"v-{p}", "root": f"{i}" * 128, "leaves": T, "reads": list(range(T))}
              for i, p in enumerate(("domain", "o1"))}

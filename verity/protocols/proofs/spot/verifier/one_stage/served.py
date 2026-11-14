@@ -9,8 +9,7 @@ the session's statement and coin (`RowsSession.ServedRegistered`), and verifies 
 `Flock.Guarantees.ServedRowsLinked` then gives the committed tree's row at every served read.
 
 **The port form.** A served tree is the registered value of the program parameter whose rows it commits (`value`): its
-`leaves` rows, each `words` leaves of `word_bits` bits (16 or 32), under `root` and `domain`. It enters the registration
-record as one `registered` entry (`registered.ENTRY_KEYS`, plus `word_bits` when it is not 16), which R7 holds to the
+`leaves` rows, each `words` leaves of `word_bits` bits (16 or 32), under `root` and `domain`. It enters the docket as one `registered` entry (`registered.ENTRY_KEYS`, plus `word_bits` when it is not 16), which R7 holds to the
 verifier's own (`registration.check(..., registered=values, outputs=outputs, schemas=schemas, window_root=, held=)`), and
 the verifier's
 `--registered` file as one port per circuit port that reads it (`registered.reads_file`: the value, root, leaves, words,
@@ -63,7 +62,7 @@ from typing import Any, Mapping, Sequence
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from . import partition as P, registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
 
 _HEX64 = re.compile(r"[0-9a-f]{128}")
 #: the row formats a served tree may name, each one the registered form reads
@@ -94,7 +93,7 @@ class ServedTree:
         return cls(e["value"], e["root"], e["leaves"], e["words"], e["domain"], reg.word_bits, row_schema=reg.schema)
 
     def entry(self) -> dict[str, Any]:
-        """The registration record's `registered` entry."""
+        """The docket's `registered` entry."""
         return {"value": self.value, "root": self.root, "leaves": self.leaves, "words": self.words,
                 **G.width_entry(self.word_bits), "domain": self.domain}
 

@@ -25,7 +25,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   first sample replaced by other bytes before the passes (a prover that lost the chunk and receipts what it holds in its
   place). Its proof block's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on
   one stager, so the circuit is lowered once.
-* **What the verifier received** (`scan`): every file the verifier side holds (the registration, partition, program,
+* **What the verifier received** (`scan`): every file the verifier side holds (the docket, partition, program,
   circuit, public file, the session's record and proofs, the sample, the openings it was sent and v0's messages), scanned
   at every offset, raw and as hex, for each sampled chunk and payload cut whole into 16-byte pieces (`leak_scan.cut`, its
   tail included), but the pieces the staged public circuit holds (a run of zero bytes), which it lists. A round fails on
@@ -61,12 +61,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces"))
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import a7  # noqa: E402
 import leak_scan as LS  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
 from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.protocols.accounting.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
