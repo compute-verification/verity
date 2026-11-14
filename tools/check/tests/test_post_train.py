@@ -488,8 +488,8 @@ def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given_at_nice_19():
     assert "nice -n 19 ../../.venv/bin/python -m pytest" in free
     assert "-m 'regression and rebuild' -n 12" in pinned and "-n 4" in free
     assert "VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1" in pinned and "fetch-fixtures" in pinned
-    tier = 'bash ../../tools/verity/check/neutrality_tier.sh fast "$out/neutrality"'
+    tier = 'bash ../../tools/check/neutrality_tier.sh fast "$out/neutrality"'
     assert f"nice -n 19 taskset -c 96-127 {tier}" in pinned and f"nice -n 19 {tier}" in free
     assert pinned.index("pytest.log") < pinned.index(tier), "after the rebuilds, whatever they found"
-    assert (ROOT / "adapters" / "vllm" / "../../tools/verity/check/neutrality_tier.sh").is_file(), "run from adapters/vllm"
+    assert (ROOT / "adapters" / "vllm" / "../../tools/check/neutrality_tier.sh").is_file(), "run from adapters/vllm"
     assert str(PT.NEUTRALITY) == "neutrality/neutrality.json"

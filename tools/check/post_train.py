@@ -98,7 +98,7 @@ VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_R
   --junitxml "$out/junit.xml" > "$out/pytest.log" 2>&1
 rc=$?
 tail -n 40 "$out/pytest.log"
-{pin}bash ../../tools/verity/check/neutrality_tier.sh fast "$out/neutrality" > "$out/neutrality.log" 2>&1
+{pin}bash ../../tools/check/neutrality_tier.sh fast "$out/neutrality" > "$out/neutrality.log" 2>&1
 n=$?
 tail -n 20 "$out/neutrality.log"
 [ $rc -ne 0 ] || rc=$n
