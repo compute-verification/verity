@@ -7,7 +7,7 @@
 # name of the relay takes the whole term: `warden` becomes `network_certifier` and `Warden` `NetworkCertifier`, as a name
 # or one part of one (`network_certifier.py`, `NetworkCertifierParams`, `network_certifier_serve.py`). A test file
 # `test_network_certifier_warden*.py` loses the word rather than repeat the term. The two Lean modules named for the word
-# are named for what they define, the cells (`NetworkCertifier.Cells`), and the link-window's constructor is
+# are named for what they define, the cells (`Certifier.Cells`), and the link-window's constructor is
 # `Kind.networkCertifier`.
 #
 # Only a word that renames a path, a module or a Lean declaration is here, since `move_check.py` certifies no other
@@ -48,16 +48,16 @@
 
 [[words_in]]                              # the link-window's constructor, in the Lean that declares and matches it
 files = ["verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean",
-         "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
-         "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean"]
+         "security/Properties/Certifier/Check/TransferBlocks.lean",
+         "security/Proofs/Properties/Certifier/Check/TransferBlocks.lean"]
 
 [words_in.words]
 "warden" = "networkCertifier"
 
 [words]
 "Kind.warden" = "Kind.networkCertifier"
-"NetworkCertifier/Warden" = "NetworkCertifier/Cells"
-"NetworkCertifier.Warden" = "NetworkCertifier.Cells"
+"Certifier/Warden" = "Certifier/Cells"
+"Certifier.Warden" = "Certifier.Cells"
 "Warden.lean" = "Cells.lean"
 "test_network_certifier_warden" = "test_network_certifier"
 "warden" = "network_certifier"
