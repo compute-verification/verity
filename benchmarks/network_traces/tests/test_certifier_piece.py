@@ -988,8 +988,10 @@ class _Clock:
 #: a made-up name of a served node, a session's peer
 PEER = "some-served-node"
 #: the relay's deployment, as the gate's status gives it once the relay listens and the run's bundle at its end
-DEPLOYMENT = {"windows": 20, "origin_unix": 1.5, "listen": ["127.0.0.1", 40001],
-              "params": {"window": 32, "bucket_ms": 100}}
+#: a relay session's deployment as the gate gives it out, and as its relay wrote it in the witness: with where it
+#: listened, which the gate gives no one
+DEPLOYMENT = {"windows": 20, "origin_unix": 1.5, "params": {"window": 32, "bucket_ms": 100}}
+WRITTEN = DEPLOYMENT | {"listen": ["127.0.0.1", 40001], "upstream": ["127.0.0.1", 40002], "origin_raw": 7.5}
 #: the gate's status of a relay session before its relay listens, once it does, and at an end its check accepted
 WAITING = {"run": RUN, "request": {"device": "warden", "peer": PEER, "client_port": 8012, "windows": 20}, "end": None,
            "active": True, "relay": None}
@@ -1267,7 +1269,7 @@ def test_a_local_gates_relay_session_is_this_trees_gate_its_unit_a_relay_each_wa
                 if listens:
                     d = CP.SS.scratch_host(keep / "local-gate", PEER).certifier / argv[4] / CP.SS.A.WITNESS
                     d.mkdir()
-                    (d / "deployment.json").write_text(json.dumps(DEPLOYMENT))
+                    (d / "deployment.json").write_text(json.dumps(WRITTEN))
         return Unit
 
     monkeypatch.setattr(CP.SS, "pinned", lambda: "unpinned")

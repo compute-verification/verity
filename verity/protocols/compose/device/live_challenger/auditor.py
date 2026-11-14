@@ -249,8 +249,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (`rehearse.log`, its stdout and stderr: free text, whose last line prints the registrations' cost) and its
   tunnels' (`tunnel.log`, what each `ssh` prints: free text, a line for each connection the peer's port refused),
   all the prover's. Its unit publishes to `out/` only what isn't:
-  `deployment.json` (the warden's key, session and schedule), `certificates.jsonl` (the records' certificates
-  alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate alone,
+  `deployment.json` (the warden's key, session and schedule, `DEPLOYMENT_PUBLIC`: where the relay listened and
+  reached the peer, and the origin on the device's raw clock, stay in the witness's copy), `certificates.jsonl`
+  (the records' certificates alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate alone,
   `ROW_CERTIFICATES`), `cells-registrations.jsonl` (each line of `cells.jsonl` as the witness writes it, key for
   key in its order, less the registration's `wiring` and the line's cost, `ROW_REGISTRATIONS`: the keys published
   are the one list `ROW_LINE`, each a hiding commitment, a certificate or the schedule's and the execution phase's
@@ -539,6 +540,13 @@ PROMPTS = "prompts.json"
 #: public counts and the scan's schedule alone. Of a load, `LOAD_RELAY` alone, as `load_relay_public` holds it: its
 #: registrations (`load.json`, each value's whole) stay in `witness/`, as the connection rows' registrations do
 WARDEN_PUBLIC = ("deployment.json", "groups.json")
+#: what `out/` and a session's `status` hold of the relay's `deployment.json`: its key, session and link, the
+#: schedule (`params`, their `digest`, `slack_ms`, `windows`), the start's certificate, the origin as wall time and
+#: the run id. What the file says of the auditor's device stays in `witness/`, where the device's own client reads
+#: it: where the relay listened and where it reached the peer's endpoint (`listen`, `upstream`), and the origin as
+#: the device's raw clock read it (`origin_raw`)
+DEPLOYMENT_PUBLIC = ("key", "session", "link", "params", "digest", "slack_ms", "start", "origin_unix", "windows",
+                     "run_id")
 #: a load's relay's record: in `witness/` as `load_relay.relay_load` writes it, in `out/` as `load_relay_public`
 #: holds it
 LOAD_RELAY = "load-relay.json"
@@ -2036,13 +2044,22 @@ def certifier_status(run: str, host: Host, active: Callable[[str], bool], *, own
     return status | {"relay": session_relay(d, req)} if "client_port" in req else status
 
 
+def public_deployment(path: Path) -> dict | None:
+    """The relay's `deployment.json` at `path` as the gate gives it out, `DEPLOYMENT_PUBLIC`'s keys of it: None of
+    a file that isn't there or isn't a JSON object (one read half-written is not there yet)."""
+    with suppress(OSError, ValueError):
+        doc = json.loads(path.read_text())
+        if isinstance(doc, dict):
+            return {k: doc[k] for k in DEPLOYMENT_PUBLIC if k in doc}
+    return None
+
+
 def session_relay(d: Path, req: dict) -> dict | None:
     """What a relay session's `status` says of its relay once it listens, None before: where a client connects on
-    the peer, and the relay's `deployment.json`, which the run publishes at its end and is in `witness/` until then
-    (a file read half-written is not there yet)."""
+    the peer, and the relay's `deployment.json` as the run publishes it at its end (`public_deployment`), which is
+    in `witness/` until then."""
     for at in (d / "out", d / WITNESS):
-        with suppress(OSError, ValueError):
-            deployment = json.loads((at / "deployment.json").read_text())
+        if (deployment := public_deployment(at / "deployment.json")) is not None:
             return {"client": f"127.0.0.1:{req['client_port']}", "deployment": deployment}
     return None
 
@@ -2838,7 +2855,8 @@ def row_registration(text: str) -> str:
 
 def warden_outcome(out: Path, witness: Path, requests: int | None = None) -> dict:
     """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
-    `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
+    `WARDEN_PUBLIC`'s files copied to `out` (of the deployment, `DEPLOYMENT_PUBLIC`'s keys), `certified.jsonl`'s
+    certificates without the heads and salts they sign
     (`out/certificates.jsonl`), each row registration's certificate without its registration (`ROW_CERTIFICATES`),
     each cells' registration less its private keys (`ROW_REGISTRATIONS`, `row_registration`),
     the check's verdict (`accepted` and `WARDEN_COUNTS`, its `cell_rows` less the registrations' cost, its `failed`
@@ -2851,7 +2869,10 @@ def warden_outcome(out: Path, witness: Path, requests: int | None = None) -> dic
     and counted another number of requests is not accepted here, and the outcome says both numbers
     (``miscounted``), so an accepted end's requests are the request's."""
     for name in WARDEN_PUBLIC:
-        if (witness / name).is_file():
+        if name == "deployment.json":
+            if (deployment := public_deployment(witness / name)) is not None:
+                (out / name).write_text(json.dumps(deployment, indent=1))
+        elif (witness / name).is_file():
             shutil.copyfile(witness / name, out / name)
     if (witness / "certified.jsonl").is_file():
         docs = [json.loads(x) for x in (witness / "certified.jsonl").read_text().splitlines()]

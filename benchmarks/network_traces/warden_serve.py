@@ -135,8 +135,8 @@ and writes no `traffic.json`, `client.log` or `client.json`.
 - *Where a client connects, and what tells it the relay is ready.* `serve` writes `deployment.json` once it listens:
   the listener, the schedule, the session, the key, the run id, `windows` and `origin_unix`, bucket 0's start,
   `--start-in` seconds later. A client opens one connection a request to the listener (through the gate, to the
-  peer's client port, which the gate's `status` names with the deployment) and speaks cells (`warden.cells`,
-  `warden.Shim`). One that connects before the origin waits in the queue.
+  peer's client port, which the gate's `status` names with the deployment less the listener, which the gate gives
+  no one) and speaks cells (`warden.cells`, `warden.Shim`). One that connects before the origin waits in the queue.
 - *The end.* The relay ticks windows · T buckets from the origin and stops; nothing ends it earlier. A connection
   still open then is cut (`warden.Warden.run`): one in the queue gets no cell and is in no record; one admitted at
   bucket s and cut before s + D has its ingress cells in the record and no egress cell but padding, which the audit

@@ -872,6 +872,22 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
             f"{name} window 0's cells aren't registered" for name in ("requests", "responses")}
 
 
+def test_of_a_deployment_the_gate_gives_out_every_key_but_the_three_of_the_auditors_device(tmp_path):
+    """`auditor.DEPLOYMENT_PUBLIC` is the deployment's record less where the relay listened, where it reached the
+    endpoint and the origin on the device's raw clock: a key the record gains is given out only once the gate
+    names it."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    out = tmp_path / "run"
+    out.mkdir()
+    _run(out, tmp_path / "key", [ws.http_request({"prompt": "x"}, "h:1")], [_response([" a"])])
+    record = set(json.loads((out / "deployment.json").read_text()))
+    assert record - set(A.DEPLOYMENT_PUBLIC) == {"listen", "upstream", "origin_raw"}
+    assert set(A.DEPLOYMENT_PUBLIC) <= record and len(set(A.DEPLOYMENT_PUBLIC)) == len(A.DEPLOYMENT_PUBLIC)
+    assert set(A.public_deployment(out / "deployment.json")) == set(A.DEPLOYMENT_PUBLIC)
+    assert A.public_deployment(out / "none.json") is None
+
+
 def _session(tmp_path: Path, windows: int):
     """The gate's `relay-session` command for `windows` execution phases at the scan's w63k4 schedule, parsed, with its
     schedule, and a maker of `n` id requests of the class's most tokens with their id-form answers."""

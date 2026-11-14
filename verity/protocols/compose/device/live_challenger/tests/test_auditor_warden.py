@@ -312,7 +312,8 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
     assert sorted((d / A.WITNESS / "rehearse.log").read_text().splitlines()) == sorted([STDERR, LAST_LINE])
     assert (d / A.WITNESS / "tunnel.log").read_text().splitlines() == [TUNNEL_LINE]
     out = d / "out"
-    assert json.loads((out / "deployment.json").read_text())["upstream"] == url
+    assert json.loads((d / A.WITNESS / "deployment.json").read_text()) == {"upstream": url, "session": "00" * 32}
+    assert json.loads((out / "deployment.json").read_text()) == {"session": "00" * 32}
     assert [json.loads(x) for x in (out / "certificates.jsonl").read_text().splitlines()] == [
         {"certificate": {"digest": "cd" * 64, "signature": "ef"}}, {"refused": ["warden-fails", "egress", 1]}]
     public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
@@ -842,10 +843,13 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
 
     shown = A.public_request(req)
     assert status() == {"run": run, "request": shown, "end": None, "active": True, "relay": None}
-    deployment = {"listen": ["127.0.0.1", 40003], "windows": 20, "origin_unix": 1.5, "session": "00" * 32}
+    public = {"windows": 20, "origin_unix": 1.5, "session": "00" * 32}
+    deployment = public | {"listen": ["127.0.0.1", 40003], "upstream": ["127.0.0.1", 40004], "origin_raw": 9.25}
     (d / A.WITNESS).mkdir(mode=0o700)
     (d / A.WITNESS / "deployment.json").write_text(json.dumps(deployment)[:-9])
     assert status()["relay"] is None
+    (d / A.WITNESS / "deployment.json").write_text(json.dumps(deployment))
+    assert status()["relay"] == {"client": "127.0.0.1:8012", "deployment": public}
     (d / A.WITNESS / "deployment.json").unlink()
 
     seen, forwards = [], []
@@ -865,8 +869,10 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
     assert {k: end["verdict"][k] for k in ("windows", "certified_windows", "certificates")} == {
         k: CHECK["summary"][k] for k in ("windows", "certified_windows", "certificates")}
     assert not (d / A.WITNESS / "client.json").exists() and "deployment.json" in end["files"]
+    assert json.loads((d / A.WITNESS / "deployment.json").read_text()) == deployment
+    assert json.loads((d / "out" / "deployment.json").read_text()) == public
     assert status() | {"active": False} == {"run": run, "request": shown, "end": end, "active": False,
-                                           "relay": {"client": "127.0.0.1:8012", "deployment": deployment}}
+                                           "relay": {"client": "127.0.0.1:8012", "deployment": public}}
     rehearsal_status = json.loads(A.gate(["--ssh", f"status {run_warden(host, token='cd34')[0]}"], host,
                                          certifier_active=lambda r: False)[1])
     assert "relay" not in rehearsal_status
