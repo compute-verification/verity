@@ -3365,7 +3365,6 @@
     {"file": "benchmarks/torch_gpu/sha512_rows/rows.cuh", "count": 1},
     {"file": "benchmarks/training_slowdown/training_slowdown/capture/circuit.py", "count": 17},
     {"file": "benchmarks/training_slowdown/training_slowdown/formalism.py", "count": 22},
-    {"file": "benchmarks/unit_lowering/README.md", "count": 1},
     {"file": "benchmarks/unit_lowering/mem_profile.py", "count": 2},
     {"file": "benchmarks/unit_lowering/tests/test_unit_lowering.py", "count": 2},
     {"file": "benchmarks/verifier_cost/README.md", "count": 22},
