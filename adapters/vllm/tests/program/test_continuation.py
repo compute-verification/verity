@@ -157,17 +157,17 @@ def test_edge_unscheduled_request_is_pending_not_inactive_named_by_the_slot_map(
     assert attested["ok"] and attested["vacuous_by_absence"] == [] and attested["chunked_prefill_attested"] == "not-observed" and attested["prefill_steps_attested"] == [3]
 
 
-def test_r5_rng_advances_iff_run_is_stated_and_the_lag_slot_is_the_one_post_eos_draw():
+def test_r5_rng_advances_iff_run_is_stated_and_the_lag_slot_is_the_one_post_eos_sample():
     """The Definition SAYS it (RNG_STATEMENT) and the rule's accounting names the samples: one per executed slot, exactly one after the
     served EOS under A = 1 (at pos = prompt_len - 1 + n, the ledger's query position), none under A = 0, none at an inactive slot."""
-    assert "iff r_t" in K.RNG_STATEMENT and "one draw" in K.RNG_STATEMENT and "keyed by (seed, pos)" in K.RNG_STATEMENT
+    assert "iff r_t" in K.RNG_STATEMENT and "one sample" in K.RNG_STATEMENT and "keyed by (seed, pos)" in K.RNG_STATEMENT
     asy = K.rng_accounting(K.recurrence([ORD, ORD, EOS[0], 9, None, None], cap=6, A=1, eos=EOS), prompt_len=32)
-    assert asy["draws"] == 4 and asy["draw_slots"] == [1, 2, 3, 4] and asy["draws_after_served_eos"] == 1 and asy["lag_draw_slot"] == 4
-    assert asy["lag_draw_pos"] == 32 - 1 + 3 and asy["inactive_slots_draw_nothing"] == [5, 6]  # pos = prompt_len - 1 + n, n = 3 served (slot 4 at L - 1 + 3)
+    assert asy["samples"] == 4 and asy["sample_slots"] == [1, 2, 3, 4] and asy["samples_after_served_eos"] == 1 and asy["lag_sample_slot"] == 4
+    assert asy["lag_sample_pos"] == 32 - 1 + 3 and asy["inactive_slots_sample_nothing"] == [5, 6]  # pos = prompt_len - 1 + n, n = 3 served (slot 4 at L - 1 + 3)
     syn = K.rng_accounting(K.recurrence([ORD, ORD, EOS[0], None, None, None], cap=6, A=0, eos=EOS), prompt_len=32)
-    assert syn["draws"] == 3 and syn["draws_after_served_eos"] == 0 and syn["lag_draw_slot"] is None and syn["lag_draw_pos"] is None
+    assert syn["samples"] == 3 and syn["samples_after_served_eos"] == 0 and syn["lag_sample_slot"] is None and syn["lag_sample_pos"] is None
     full = K.rng_accounting(K.recurrence([ORD] * 6, cap=6, A=1, eos=EOS))
-    assert full["draws"] == 6 and full["draws_after_served_eos"] == 0 and full["lag_draw_pos"] is None and full["inactive_slots_draw_nothing"] == []
+    assert full["samples"] == 6 and full["samples_after_served_eos"] == 0 and full["lag_sample_pos"] is None and full["inactive_slots_sample_nothing"] == []
 
 
 def test_edge_wrong_profile_fails_by_name_never_a_fitted_explanation():
@@ -307,63 +307,63 @@ def test_derived_invariant_reproduces_the_real_records_executed_lengths_under_th
 # ---------------------------------------------------------------------------------------------------------
 
 
-def test_r5_expected_draw_positions_are_the_run_slots_and_the_ledger_is_compared_by_name():
+def test_r5_expected_sample_positions_are_the_run_slots_and_the_ledger_is_compared_by_name():
     L_ = 32
     # the earlystop shape: 11 served (EOS last), cap 32, A = 1 -> 12 samples at pos 31..42 (slot t at L - 1 + (t - 1), the ledger's pos fact),
-    # the lag sample at 42 (= the lag_draw_pos of record)
-    exp = K.expected_draw_positions([ORD] * 10 + [EOS[0]], cap=32, A=1, eos=EOS, prompt_len=L_)
+    # the lag sample at 42 (= the lag_sample_pos of record)
+    exp = K.expected_sample_positions([ORD] * 10 + [EOS[0]], cap=32, A=1, eos=EOS, prompt_len=L_)
     assert exp["positions"] == list(range(31, 43)) and exp["lag_positions"] == [42] and exp["n"] == 12 and exp["first_forbidden_position"] == 43
     assert exp["served_positions"] == list(range(31, 42))
     # A = 0: no lag sample
-    exp0 = K.expected_draw_positions([ORD] * 10 + [EOS[0]], cap=32, A=0, eos=EOS, prompt_len=L_)
+    exp0 = K.expected_sample_positions([ORD] * 10 + [EOS[0]], cap=32, A=0, eos=EOS, prompt_len=L_)
     assert exp0["positions"] == list(range(31, 42)) and exp0["lag_positions"] == []
     # a cap-exhausting request: cap samples, no lag position, nothing after the cap in either profile
-    full = K.expected_draw_positions([ORD] * 8, cap=8, A=1, eos=EOS, prompt_len=L_)
+    full = K.expected_sample_positions([ORD] * 8, cap=8, A=1, eos=EOS, prompt_len=L_)
     assert full["positions"] == list(range(31, 39)) and full["lag_positions"] == [] and full["first_forbidden_position"] == 39
     # EOS at the last slot: the cap bounds the lag slot (min(n + 1, C)); exactly cap samples
-    at_cap = K.expected_draw_positions([ORD] * 7 + [EOS[0]], cap=8, A=1, eos=EOS, prompt_len=L_)
+    at_cap = K.expected_sample_positions([ORD] * 7 + [EOS[0]], cap=8, A=1, eos=EOS, prompt_len=L_)
     assert at_cap["positions"] == list(range(31, 39)) and at_cap["lag_positions"] == []
     # the ledger: measured exactly -> ok
-    assert K.compare_draw_positions(exp["positions"], list(range(31, 43)))["ok"]
-    # over-cap samples with NO EOS are EXTRA positions by name (never silent)
-    c = K.compare_draw_positions(full["positions"], list(range(31, 40)))
+    assert K.compare_sample_positions(exp["positions"], list(range(31, 43)))["ok"]
+    # samples past the cap with NO EOS are EXTRA positions by name (never silent)
+    c = K.compare_sample_positions(full["positions"], list(range(31, 40)))
     assert not c["ok"] and c["extra"] == [39] and "without r_t" in c["problems"][0]
     # two samples after the served EOS (a second lag sample), a missing served sample, a repeated position, out of order: each named
-    c2 = K.compare_draw_positions(exp["positions"], list(range(31, 44)))
+    c2 = K.compare_sample_positions(exp["positions"], list(range(31, 44)))
     assert c2["extra"] == [43] and not c2["ok"]
-    c3 = K.compare_draw_positions(exp["positions"], [p for p in range(31, 43) if p != 35])
+    c3 = K.compare_sample_positions(exp["positions"], [p for p in range(31, 43) if p != 35])
     assert c3["missing"] == [35] and "without its sampling event" in c3["problems"][0]
-    c4 = K.compare_draw_positions(exp["positions"], list(range(31, 43)) + [40])
+    c4 = K.compare_sample_positions(exp["positions"], list(range(31, 43)) + [40])
     assert c4["repeated"] == [40] and c4["extra"] == [] and not c4["ok"]
-    c5 = K.compare_draw_positions(exp["positions"], list(reversed(range(31, 43))))
+    c5 = K.compare_sample_positions(exp["positions"], list(reversed(range(31, 43))))
     assert not c5["ok"] and "out of order" in c5["problems"][0]
     # A = 0 record with the lag sample present: the extra sample at 42 is named (the RNG advanced without r_t)
-    c6 = K.compare_draw_positions(exp0["positions"], list(range(31, 43)))
+    c6 = K.compare_sample_positions(exp0["positions"], list(range(31, 43)))
     assert c6["extra"] == [42] and not c6["ok"]
     with pytest.raises(ValueError):
-        K.expected_draw_positions([ORD], cap=4, A=2, eos=EOS, prompt_len=L_)
+        K.expected_sample_positions([ORD], cap=4, A=2, eos=EOS, prompt_len=L_)
 
 
 def test_r5_positions_are_the_ledgers_pos_fact_draw_k_at_prompt_len_minus_1_plus_k_stoch_m_0749():
     """One convention on the record: the sample ledger maps sample k (k from 0, slot t = k + 1) to pos = prompt_len - 1 + k, the query
     position whose logits are sampled and the `pos` fact the sampled rows carry (an 8-token prompt's first sample is at pos 7, the llama B8
-    record).  `expected_draw_positions` gives the same numbers -- the ledger imports `recurrence`/`executed_slots` and a disagreement is
+    record).  `expected_sample_positions` gives the same numbers -- the ledger imports `recurrence`/`executed_slots` and a disagreement is
     'two mechanisms'."""
     L_, C = 8, 6
-    exp = K.expected_draw_positions([ORD, ORD, EOS[0]], cap=C, A=1, eos=EOS, prompt_len=L_)
+    exp = K.expected_sample_positions([ORD, ORD, EOS[0]], cap=C, A=1, eos=EOS, prompt_len=L_)
     ledger = [L_ - 1 + k for k in range(4)]  # 3 served + the lag sample = samples k = 0..3
     assert exp["positions"] == ledger == [7, 8, 9, 10] and exp["lag_positions"] == [10] and exp["first_forbidden_position"] == 11
     acc = K.rng_accounting(K.recurrence([ORD, ORD, EOS[0], 9, None, None], cap=C, A=1, eos=EOS), prompt_len=L_)
-    assert acc["lag_draw_pos"] == 10 == exp["lag_positions"][0]
+    assert acc["lag_sample_pos"] == 10 == exp["lag_positions"][0]
     # the ledger's own rule, restated (stoch_recompute.expected_executed_slots): first EOS at t < C -> slots 1..t + min(A, C - t)
     assert K.executed_slots(K.recurrence([ORD, ORD, EOS[0]], cap=C, A=1, eos=EOS)) == list(range(1, 3 + 1 + min(1, C - 3)))
 
 
-def test_f_r17b_40_first_draw_is_at_the_last_prompt_position_qwen_b8_l_1024_first_pos_1023_last_1057_at_cap_35():
+def test_f_r17b_40_first_sample_is_at_the_last_prompt_position_qwen_b8_l_1024_first_pos_1023_last_1057_at_cap_35():
     """The record's device key -- qwen B8 request with L = 1024, cap 35, no EOS: first_pos 1023, last_pos 1057, 388/388
     device_facts_match on exactly those positions.  The map is pos = prompt_len - 2 + t (slot 1 at L - 1)."""
-    exp = K.expected_draw_positions([ORD] * 35, cap=35, A=1, eos=EOS, prompt_len=1024)
+    exp = K.expected_sample_positions([ORD] * 35, cap=35, A=1, eos=EOS, prompt_len=1024)
     assert exp["positions"][0] == 1023 and exp["positions"][-1] == 1057 and exp["n"] == 35 and exp["lag_positions"] == []
     assert exp["positions"] == [1024 - 2 + t for t in range(1, 36)] and exp["first_forbidden_position"] == 1058
     # llama B8, an 8-token prompt: pos 7 first
-    assert K.expected_draw_positions([ORD] * 4, cap=4, A=0, eos=EOS, prompt_len=8)["positions"] == [7, 8, 9, 10]
+    assert K.expected_sample_positions([ORD] * 4, cap=4, A=0, eos=EOS, prompt_len=8)["positions"] == [7, 8, 9, 10]
