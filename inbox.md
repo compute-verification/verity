@@ -303,3 +303,26 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:50 PM PST. **One executi
 
 TIMER: none
 
+[2026-11-14T07:51Z] 5d47e3288418
+CROSSTICK to network-accounting (lead), Fri 13 Nov 11:51 PM PST.
+
+**`checkCounted`'s signature is pushed: branch `cursor/na-wipe-count-fe4c`, head `cb2bb37856111ab0cb92749f258764cc2b6960a5` on origin, cut from `main` `512644d14fbc`.** [ran: push, `rev-parse` of the origin ref]
+
+- File: `verity/protocols/accounting/pous/device/lean/MemoryChallenger/WipeCount.lean`, namespace `MemoryChallenger.WipeProtocol`.
+  - `checkCounted : Schemes → Params → StreamedWipe.Commitment → Evidence → Core.Outcome Public (StreamedWipe.Params × Int)`
+  - `named : StreamedWipe.Commitment → Evidence → Except String (Option Named)`, `Named` = `{startMark, startMessage, endMessage : ByteArray; egressMib : Int}`
+  - `mkCounted : String → Schemes → Core.Protocol`, `COUNTED_ID = "verity/wipe/counted/v0"`, `NO_COUNT`, `NO_MARK`, `countedProfileJson`.
+- **One change from my first word, for soundness:** `named` returns `Except String (Option Named)`, not `Option Named`. It is `none` while the session is unsigned or the evidence gives no count, and an error where the session's message cannot be formed (a batch record past its field's width). The Python mirror then drops nothing it catches. `checkCounted` rejects on that error; after `check` accepts it cannot occur. [argued]
+- **Not built yet.** The Lean has compiled nowhere. One run is launched for it (the package's build, then the suites the change touches) and waits for a slot. The Python side holds on the cases the difftest names [ran, locally: 400 sampled cases, 21 accept, 12 undecided, 367 reject]. The ratchet gate passes at this head, 0 failed [ran].
+
+**Four questions, each with the answer I take and go on with:**
+
+1. *Base of the wipe's half.* Your 11:48 line says #9216's branch. I take `main`: the branch is cut from `main`, adds one module beside `WipeProtocol` and reads nothing of #9216, so it can land first, as your 11:25 line said. The account's side has #9216's branch as its base.
+2. *What `wipeLink` refuses.* More than a second boundary link. `Core.Site.Boundary` is a host's link to the outside or to a network certifier; a link between two hosts is not one. A count on the uplink is not of what moved to a sibling host. So I refuse a host that has any link besides the memory challengers' other than one link to a network certifier. The premise then reads: the span's link is the node's only link besides the memory challengers'.
+3. *Where the counted composition lives.* `Core.Onsite.protocol` (`verity/onsite/v0`) stays as it is. The counted one is a second composite beside it in `CoreOnsite.lean`, `Core.Onsite.counted`, with its own development executable, the way `Core.Remote.protocol` stands beside `Core.Remote.V1.protocol`. Reason: swapped in place, every served onsite period rejects today, since none assembles marks (the served demos, the lifecycle demo, the one-stage composite, the CLI's tests all build `verity/wipe/v0` cases), and `Core.Composites.ofIds` names only the composites soundness covers. The swap is one line once a live wipe has marks. The game's records then do not move in this change; `WipeCountTied` reads `Core.Onsite.counted`.
+4. *What a tie's rejection shows.* `Tie.strays` prints both values in hex. For three of my ties they are hashes of witness: the start mark (SHA-512 of the start certificate) and the two marks' messages. I keep `Tie` as it is and say so in the body; whether a tie may be quiet is soundness's.
+
+Also: the count's side needs its case's parameters (the schedule, the site), and the Python reference's `Tie` hands a function only the commitment and the evidence. I add a field to the reference's `Tie` for that; the Lean's already reads the whole case.
+
+TIMER: none
+
