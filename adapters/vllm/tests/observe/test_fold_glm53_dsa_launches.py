@@ -108,8 +108,8 @@ def _gather(id_, keys):
                   view(15, (1, 4), "int32"), view(16, (2,), "int32")])
 
 
-def _empty(id_, shape, alloc):
-    return _node(id_, "aten.empty.memory_format", EMPTY, [list(shape)], outs=view(alloc, shape))
+def _empty(id_, shape, alloc, dtype="float32"):
+    return _node(id_, "aten.empty.memory_format", EMPTY, [list(shape)], outs=view(alloc, shape, dtype))
 
 
 def _logits(r):
@@ -194,6 +194,9 @@ NORM_OFF_PIN = "fused norm/RoPE source or launch geometry differs from the recor
 NORM_OFF_ROWS, NORM_OFF_SHAPE = "fused norm/RoPE rows or GLM-5.3 dimensions differ", "norm weights or GPT-J rotary table have the wrong shape"
 INDEX_OFF_PIN, INDEX_OFF_SHAPE = "index-K dimensions differ from the recorded GLM-5.3 pin", "index-K inputs have the wrong shape"
 CS, TWO = view(76, (4096, 64), "bfloat16"), [("a", [5]), ("b", [9])]
+# a top-k allocation off its width and strides together, then off one term of its layout alone: its dtype, its width, its strides
+OFF_TOPKS = [view(TOPK_ALLOC, (16, 1024), "int32"), view(TOPK_ALLOC, (16, 2048), "int64"),
+             view(TOPK_ALLOC, (16, 1024), "int32", strides=(2048, 1)), view(TOPK_ALLOC, (16, 2048), "int32", strides=(4096, 1))]
 
 
 def _norm(rows=2, indexer=True, consts=None, warps=4, fn="vllm.models.glm." + D.NORM_KERNEL, **args):
@@ -306,14 +309,13 @@ OFF_STRIDE = (f"index-K cache {view(81, (2, 64, 132), 'uint8')!r} at block size 
     ({"indexer_cache_stride": 136}, (5, 70), OFF_STRIDE, {}),
     ({"indexer_cache_ptr": SHORT_INDEX, "indexer_cache_scale_ptr": view(81, (1, 64, 33))}, (5, 70),
      "a current-token slot is outside the index-K cache", {"slots": (5, 70), "cache_slots": 64}),
-    ({"topk_indices_ptr": view(TOPK_ALLOC, (16, 1024), "int32")}, (5, 70), "topk_indices_ptr is not a contiguous i32 [capacity,2048] view",
-     {"topk": repr(view(TOPK_ALLOC, (16, 1024), "int32"))}),
+    *[({"topk_indices_ptr": v}, (5, 70), "topk_indices_ptr is not a contiguous i32 [capacity,2048] view", {"topk": repr(v)}) for v in OFF_TOPKS],
     ({"topk_indices_ptr": view(99, (16, 2048), "int32")}, (5, 70), "IndexShare layer does not use the indexer layers' top-k allocation",
      {"observed": (99, 0, 2048, (2048, 1)), "established": (TOPK_ALLOC, 0, 2048, (2048, 1))}),
 ], ids=["warps", "constexpr", "pointer", "positions", "rows", "q-width", "q-out-width", "kv-width", "dtype", "q-weight", "kv-weight",
         "table-rank", "table-width", "table-strides", "position-range", "latent-cache", "slots-short", "slot-range", "eps-absent", "eps-text",
         "index-pointer", "index-dim", "index-block", "index-rot", "index-k-width", "index-weight", "index-bias", "index-table-rank",
-        "index-table-width", "index-cache", "index-slot", "topk-layout", "topk-allocation"])
+        "index-table-width", "index-cache", "index-slot", "topk-layout", "topk-dtype", "topk-width", "topk-strides", "topk-allocation"])
 def test_a_fused_norm_rope_off_its_pins_its_views_or_the_step_is_refused_with_what_differs(kw, slots, reason, detail):
     off = D.DsaNormRope().match(_norm(**kw), _ctx(TWO, slots=slots))
     assert isinstance(off, Unsupported) and off.reason == reason and off.consumed == (31,)
@@ -337,6 +339,13 @@ def test_a_fused_norm_rope_s_refusal_names_its_pointer_arguments_and_the_first_e
 Q_PINS = {"NUM_Q_HEADS": 8, "Q_PE_HALF_ROT_DIM": 32, "QL_NOPE_DIM": 512, "QL_NOPE_BLOCK": 512, "INDEX_ROPE_INTERLEAVE": True,
           "QUANTIZE_MQA": False}
 Q_OFF_PIN = "fused-q source or launch geometry differs from the recorded GLM-5.3 pin"
+# (argument, its name in the refusal, the view): each differs from the launch's in one term of the refusal's condition alone
+OFF_Q_VIEWS = [("q_pe_ptr", "q", view(60, (2, 8, 32), "bfloat16")), ("q_pe_out_ptr", "q_out", view(61, (2, 8, 32), "bfloat16")),
+               ("q_pe_ptr", "q", view(60, (2, 8, 64))), ("q_pe_out_ptr", "q_out", view(61, (2, 8, 64))),
+               ("q_pe_cos_sin_ptr", "cs", view(62, (4096, 64))), ("q_pe_cos_sin_ptr", "cs", view(62, (4096, 64, 1), "bfloat16")),
+               ("q_pe_cos_sin_ptr", "cs", view(62, (4096, 32), "bfloat16"))]
+OFF_INDEX_Q = [("index_q_ptr", "q", view(65, (2, 32, 64), "bfloat16")), ("index_weights_ptr", "weights", view(67, (2, 16), "bfloat16")),
+               ("index_q_fp8_ptr", "q_out", view(68, (2, 32, 64), "float8_e4m3fn")), ("index_weights_out_ptr", "weights_out", view(69, (2, 16)))]
 
 
 def _q(rows=2, indexer=True, consts=None, warps=1, fn="vllm.models.glm." + D.Q_KERNEL, **args):
@@ -395,16 +404,16 @@ def test_a_fused_q_of_an_index_share_layer_is_the_rope_rows_alone():
     ({"consts": {"QUANTIZE_MQA": True}}, "fused-q constexprs differ from the recorded GLM-5.3 pin", {"mismatches": {"QUANTIZE_MQA": (True, False)}}),
     ({"q_pe_out_ptr": None}, "fused-q RoPE pointers are not bound", {}),
     ({"pos_ptr": 3}, "positions argument is not a tensor view", {"positions": "3"}),
-    ({"q_pe_cos_sin_ptr": view(62, (4096, 32), "bfloat16")}, "fused-q RoPE views differ from bf16 [M,8,64]",
-     {"cs": repr(view(62, (4096, 32), "bfloat16"))}),
+    *[({arg: v}, "fused-q RoPE views differ from bf16 [M,8,64]", {name: repr(v)}) for arg, name, v in OFF_Q_VIEWS],
     ({"q_pe_ptr": view(60, (2, 8, 64), "bfloat16", strides=(1024, 64, 1))}, "fused-q RoPE views do not flatten to [M*8, 64] head rows",
      {"q": repr(view(60, (2, 8, 64), "bfloat16", strides=(1024, 64, 1)))}),
     ({"index_weights_out_ptr": None}, "indexer-layer fused-q pointers are not bound", {}),
     ({"consts": {"INDEX_Q_HEAD_DIM": 64}}, "index-Q dimensions differ from the recorded GLM-5.3 pin", {}),
-    ({"index_weights_ptr": view(67, (2, 16), "bfloat16")}, "index-Q views have the wrong shape",
-     {"weights": repr(view(67, (2, 16), "bfloat16"))}),
+    *[({arg: v}, "index-Q views have the wrong shape", {name: repr(v)}) for arg, name, v in OFF_INDEX_Q],
     ({"index_weights_head_scale": 0.5}, "index-Q scales differ from D^-0.5 and H^-0.5", {"softmax_scale": 128 ** -0.5, "head_scale": 0.5}),
-], ids=["warps", "constexpr", "rope-pointer", "positions", "rope-views", "head-rows", "index-pointer", "index-dims", "index-shapes", "scales"])
+], ids=["warps", "constexpr", "rope-pointer", "positions", "q-shape", "q-out-shape", "q-dtype", "q-out-dtype", "table-dtype", "table-rank",
+        "rope-views", "head-rows", "index-pointer", "index-dims", "index-q-shape", "index-shapes", "index-q-out-shape", "index-weights-out-shape",
+        "scales"])
 def test_a_fused_q_off_its_pins_or_its_views_is_refused_with_what_differs(kw, reason, detail):
     off = D.DsaQ().match(_q(**kw), _ctx([("a", [5]), ("b", [9])]))
     assert isinstance(off, Unsupported) and off.reason == reason
@@ -447,6 +456,30 @@ def test_an_index_share_copy_is_held_to_its_pointers_then_its_layouts_then_the_s
     assert isinstance(other, Unsupported) and other.reason == "IndexShare conversion does not read the shared top-k allocation"
     assert (other.detail["source"], other.detail["established"]) == ((99, 0, 2048, (2048, 1)), (TOPK_ALLOC, 0, 2048, (2048, 1)))
     assert "page_table" not in D._state(ctx)["modules"][LAYER], "a refused copy records no page table"
+
+
+SHARE_NAMES = {"req_id_ptr": "req", "block_table_ptr": "block_table", "token_indices_ptr": "source", "out_ptr": "out", "valid_count_ptr": "valid"}
+
+
+@pytest.mark.parametrize("pointers", [
+    {"req_id_ptr": view(50, (3,), "int32")}, {"req_id_ptr": view(50, (2,), "int64")},
+    {"block_table_ptr": view(51, (2, 4), "int64")}, {"block_table_ptr": view(51, (8,), "int32")},
+    {"out_ptr": view(52, (2, 1024), "int32")},
+    {"token_indices_ptr": view(TOPK_ALLOC, (2, 1024), "int32"), "out_ptr": view(52, (2, 1024), "int32")},
+    {"out_ptr": view(52, (2, 2048), "int64")},
+    {"token_indices_ptr": view(TOPK_ALLOC, (2, 2048), "int64"), "out_ptr": view(52, (2, 2048), "int64")},
+    {"valid_count_ptr": view(53, (3,), "int32")}, {"valid_count_ptr": view(53, (2,), "int64")},
+    {"token_indices_ptr": view(TOPK_ALLOC, (2, 2048), "int32", strides=(4096, 1))}, {"out_ptr": view(52, (2, 2048), "int32", strides=(4096, 1))},
+], ids=["req-shape", "req-dtype", "table-dtype", "table-rank", "out-shape", "source-shape", "out-dtype", "source-dtype", "valid-shape",
+        "valid-dtype", "source-strides", "out-strides"])
+def test_an_index_share_copy_off_one_term_of_its_pinned_layouts_is_refused_with_its_views(pointers):
+    """Each case is off one term of the refusal's condition and no other (a source of another shape or dtype brings an output of
+    the same, since the two are held to each other first)."""
+    ctx = _ctx(TWO)
+    off = D.DsaIndexShare().match(_share(**pointers), ctx)
+    assert isinstance(off, Unsupported) and off.reason == "IndexShare conversion views differ from the pinned i32 layouts"
+    assert {SHARE_NAMES[arg]: off.detail[SHARE_NAMES[arg]] for arg in pointers} == {SHARE_NAMES[arg]: repr(v) for arg, v in pointers.items()}
+    assert "page_table" not in D._state(ctx)["modules"][LAYER]
 
 
 def test_an_index_share_copy_of_the_shared_top_k_rows_is_staging_and_records_its_page_table():
@@ -557,6 +590,20 @@ def test_a_sparse_mla_on_the_default_path_off_its_layer_s_caches_is_refused_with
     assert {k: off.detail[k] for k in detail} == detail
 
 
+@pytest.mark.parametrize("half,off", [
+    ("k", view(78, (128, 1, 1, 64), "bfloat16", offset=512, strides=(576, 576, 64, 1))),
+    ("k", view(77, (128, 1, 1, 64), "bfloat16", strides=(576, 576, 64, 1))),
+    ("k", view(77, (64, 1, 1, 64), "bfloat16", offset=512, strides=(576, 576, 64, 1))),
+    ("k", view(77, (128, 1, 1, 64), "bfloat16", offset=512, strides=(1152, 576, 64, 1))),
+    ("v", view(77, (128, 1, 1, 512), "bfloat16", strides=(1152, 576, 512, 1))),
+], ids=["allocation", "offset", "slots", "k-row-stride", "v-row-stride"])
+def test_a_sparse_mla_whose_k_or_v_is_off_one_term_of_a_latent_cache_s_halves_is_refused_with_both(half, off):
+    kv = {**_halves(), half: off}
+    r = D.DsaSparseMla().match(_mla(**MLA_DEFAULT, **kv)[0], _before_its_mla())
+    assert isinstance(r, Unsupported) and r.reason == "FA3 k/v are not adjacent views of 576-word latent-cache rows"
+    assert (r.detail["k"], r.detail["v"]) == (repr(kv["k"]), repr(kv["v"]))
+
+
 def test_a_sparse_mla_is_held_to_its_layer_s_index_copy_the_record_target_s_132_sms_and_the_step_s_block_tables():
     node = _mla(**MLA_DEFAULT, **_halves())[0]
     uncopied = D.DsaSparseMla().match(node, _ctx(TWO))
@@ -599,17 +646,41 @@ def test_a_gather_without_a_keys_destination_is_refused_and_stages_no_keys():
     assert off.detail["dst_k"] == "None" and "mqa_keys" not in D._state(ctx)["modules"][LAYER]
 
 
+def _decode_topk(k=2048, out=None):
+    """The decodes' top-k call of width `k`, writing `out` (the top-k allocation's first row when not given)."""
+    return _node(7, "_C.cooperative_topk.default", DECODE_TOPK,
+                 [view(31018, (1, 288), strides=(512, 1)), view(3, (1, 1), "int32"), view(TOPK_ALLOC, (1, 2048), "int32") if out is None else out,
+                  view(4, (1048576,), "uint8"), k, 20])
+
+
 def test_a_top_k_of_another_width_or_of_a_row_past_the_short_row_is_refused():
-    def decode(k):
-        return _node(7, "_C.cooperative_topk.default", DECODE_TOPK,
-                     [view(31018, (1, 288), strides=(512, 1)), view(3, (1, 1), "int32"), view(TOPK_ALLOC, (1, 2048), "int32"),
-                      view(4, (1048576,), "uint8"), k, 20])
-    narrow = D.DsaTopK().match(decode(1024), _ctx([("a", [19])]))
+    narrow = D.DsaTopK().match(_decode_topk(1024), _ctx([("a", [19])]))
     assert isinstance(narrow, Unsupported) and narrow.reason == "top-k output is not contiguous i32 [rows,2048]"
     assert (narrow.detail["output"], narrow.detail["topk"]) == (repr(view(TOPK_ALLOC, (1, 2048), "int32")), 1024)
-    long = D.DsaTopK().match(decode(2048), _ctx([("a", [2048])]))
+    long = D.DsaTopK().match(_decode_topk(), _ctx([("a", [2048])]))
     assert isinstance(long, Unsupported) and long.reason == "DSA top-k row exceeds the short-row shortcut"
     assert {k: long.detail[k] for k in ("position", "keys", "TOPK")} == {"position": 2048, "keys": 2049, "TOPK": 2048}
+
+
+@pytest.mark.parametrize("out", [
+    view(TOPK_ALLOC, (1, 2048), "int64"), view(TOPK_ALLOC, (1, 2048, 1), "int32"), view(TOPK_ALLOC, (1, 1024), "int32"),
+    view(TOPK_ALLOC, (2, 2048), "int32", strides=(4096, 1)),
+], ids=["dtype", "rank", "width", "strides"])
+def test_a_top_k_whose_output_is_off_one_term_of_its_layout_is_refused_with_it(out):
+    off = D.DsaTopK().match(_decode_topk(out=out), _ctx([("a", [19]), ("b", [20])]))
+    assert isinstance(off, Unsupported) and off.reason == "top-k output is not contiguous i32 [rows,2048]"
+    assert (off.detail["output"], off.detail["topk"]) == (repr(out), 2048)
+
+
+def test_another_call_is_none_of_the_dispatch_patterns_whatever_its_output_or_its_library():
+    ctx = _ctx([("a", [19])])
+    zeros = _node(3, "aten.zeros.default", "aten::zeros(SymInt[] size) -> Tensor", [[1, 512]], outs=view(40, (1, 512)))
+    for pattern in (D.DsaMqaAllocation(), D.DsaMqaGather(), D.DsaTopK(), D.DsaSparseMla()):
+        assert pattern.match(zeros, ctx) is None, f"{pattern.name}: an f32 [1, 512] from another op is not its call"
+    assert D.DsaMqaAllocation().match(_empty(3, (1, 512), 40, dtype="int32"), ctx) is None, "an i32 allocation is not the indexer's logits"
+    other = _mla(op="_vllm_fa3_C.fwd_combine.default", **MLA_DEFAULT, **_halves())[0]
+    assert D.DsaSparseMla().match(other, _before_its_mla()) is None, "another op of the FA3 library is not this pattern's"
+    assert D._state(ctx)["modules"][LAYER]["mqa_launches"] == [[0], []], "and none of them takes the step's decode launch"
 
 
 def test_a_row_outside_a_view_is_no_row_of_it():
