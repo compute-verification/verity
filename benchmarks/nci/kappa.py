@@ -22,7 +22,7 @@ only, and it takes no weight gradient or optimizer step. A circuit may run sever
 step's two) and no backward (evolution strategies). Over a schedule kappa is a ratio of sums, the token-weighted harmonic
 mean of its phases' kappa.
 
-A model's shape is benchmarks/rho's (its ``data/models.toml``, read through ``rho.instances``, imported by path); this
+A model's shape is benchmarks/slowdown's (its ``data/models.toml``, read through ``rho.instances``, imported by path); this
 module states only each model's pretraining recipe (``RECIPES``).
 
     python benchmarks/nci/kappa.py       # the breakdown per model and phase, each schedule's kappa, and ROWS'
@@ -34,9 +34,9 @@ import argparse
 import sys
 from pathlib import Path
 
-sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "rho"))
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "slowdown"))
 
-from rho import instances
+from slowdown import instances
 
 #: gates per query-key pair per head besides its products, (forward, backward): max, subtract, exp, sum and normalize;
 #: P (dP - D) and the scale
@@ -309,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
     for name in args.model or MODELS:
         m = MODELS[name]
         head = m["vocab"] * m["d"]
-        print(f"{name}: {m['model']} of benchmarks/rho's models.toml; {m['source']}")
+        print(f"{name}: {m['model']} of benchmarks/slowdown's models.toml; {m['source']}")
         print(f"  N = {active_weights(m):.4g} active weights outside the embedding and LM head ({head:.3g} each); "
               f"2|M| = {counted(m) / 1e9:.1f} GFLOP per token")
         table(m, sorted({s for _, s in m["schedule"]}))
