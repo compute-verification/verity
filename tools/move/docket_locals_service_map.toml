@@ -10,12 +10,12 @@ files = ["verity/protocols/proofs/spot/verifier/service.py"]
 [words_in.words]
 "(order, registration" = "(order, docket"
 "(registration" = "(docket"
-": registration" = ": docket"
 "= registration" = "= docket"
 "[registration" = "[docket"
 "law, registration" = "law, docket"
 "obj, registration" = "obj, docket"
 "registration =" = "docket ="
+"registration, \"" = "docket, \""
 "registration, _" = "docket, _"
 "registration, draw in" = "docket, draw in"
 "registration: str" = "docket: str"
