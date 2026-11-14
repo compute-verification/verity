@@ -92,8 +92,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   member, byte for byte, or the measurement fails, and its seconds are beside the audit's in one record.
 - `cold_sessions.sh` (`cold_sessions.py`): one cold session a member of a kept audit window behind the ZK server, on one
   card (`prove --zk --gpu`, a lease a session, after a check that no other run's lease or compute process is on the card)
-  and on the CPU prover in turn, each on a proof server of its own and the member's own sample from the audit, then Lean's
-  verdict on it beside the next session. Each session's seconds by part (each side's load, the Lean loop's start, the
+  then on the CPU prover (every member on one arm before the next, so the card is held only while the gpu arm runs, until
+  its own end hour `COLD_END_gpu`), each on a proof server of its own and the member's own sample from the audit, then
+  Lean's verdict on it beside the next session. Each session's seconds by part (each side's load, the Lean loop's start, the
   clock's witness, proving and wait, and the ZK server's rest of it), its host and card peak memory, or its refusal's
   text. `COLD_STAGE=probe` checks the window's files and the tools, `build` builds alone and `run` builds and proves.
   `a5.py --gpus` hands an audit's proof server the same devices.
