@@ -1,5 +1,5 @@
 """What an integration hands Verity (`verity.commitments.windows.interface`), against the interface alone: a circuit takes only
-Verity's Definitions, a unit's rows are its Definition's bit rows as Flock stages them, a window tiles the partition and
+the Definitions a catalog registers, a unit's rows are its Definition's bit rows as Flock stages them, a window tiles the partition and
 commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (its bounds where
 the units change inference block, its step and slot and a form of the window's), an integration's outputs are checked
 against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
@@ -27,7 +27,7 @@ import pytest
 
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops import gemm as G
@@ -68,11 +68,11 @@ def window(n: int = 10, cap: int = 4) -> tuple[I.Window, list[np.ndarray], list[
     return win, ins, outs
 
 
-def test_a_circuit_takes_only_verity_definitions():
+def test_a_circuit_takes_only_the_definitions_a_catalog_registers():
     I.Circuit("ok", ((COORD, 3),))
     own = CompositeDefinition("IntegrationOwnIdentity", 1, (), lambda S: ((("x", Array(4, Value(16))),), Array(4, Value(16))),
                               lambda B, S, x: x, register=False)
-    with pytest.raises(ValueError, match="Verity registers"):
+    with pytest.raises(ValueError, match="a catalog registers"):
         I.Circuit("own", ((bind(own), 3),))
     with pytest.raises(ValueError, match="complete binding"):
         I.Circuit("unbound", ((G.ScaledMmS8Coordinate.bind(K=K), 3),))
@@ -81,6 +81,77 @@ def test_a_circuit_takes_only_verity_definitions():
     assert I.Circuit("io", ((COORD, 3),), external=(f"{TID}/o0",)).external == (f"{TID}/o0",)
     with pytest.raises(ValueError, match="no template's port"):
         I.Circuit("io", ((COORD, 3),), external=(f"{TID}/frames",))
+
+
+#: a catalog package outside ``verity``, as an adapter's is
+SERVED = "served_catalog"
+#: what `catalog`'s and `resolve`'s refusals of a Definition no catalog registers say
+NO_CATALOG = "a catalog registers"
+
+
+def defined_in(module: str, name: str) -> CompositeDefinition:
+    """An identity Definition whose code is ``module``'s, not registered."""
+    def body(B, S, x):
+        return x
+
+    body.__module__ = module
+    return CompositeDefinition(name, 1, (), lambda S: ((("x", Array(4, Value(16))),), Array(4, Value(16))), body, register=False)
+
+
+@pytest.fixture
+def register(monkeypatch):
+    """``register(id, d)`` puts Definition ``d`` in the registry under ``id`` for this test alone; the catalog packages the
+    test names are forgotten after it."""
+    named = set(CATALOG_PACKAGES)
+    yield lambda id, d: monkeypatch.setitem(REGISTRY.defs, id, d)
+    CATALOG_PACKAGES.clear()
+    CATALOG_PACKAGES.update(named)
+
+
+def test_a_template_is_the_definition_the_registry_holds_under_its_id(register):
+    """`catalog` and `resolve` refuse an id that is not registered and an id another object registered, whatever its code:
+    each Definition here is a copy of a ``verity`` module's, with that one's code. `resolve` reads its Definition from the
+    registry by id, so it meets another object only when the table holds one under an id that is not its own."""
+    statics = dict(K=K, **G.GEMM_SM120_S8)
+    copy = bind(replace(G.ScaledMmS8Coordinate, name="ScaledMmS8CoordinateCopy", register=False), **statics)
+    twin = replace(G.ScaledMmS8Coordinate, register=False)
+    assert copy.base_id not in REGISTRY and REGISTRY[twin.id] is G.ScaledMmS8Coordinate
+    for fn in (copy, bind(twin, **statics)):
+        with pytest.raises(ValueError, match=NO_CATALOG):
+            I.catalog(fn)
+    with pytest.raises(ValueError, match=NO_CATALOG):
+        I.resolve(descriptor_id(copy))
+    assert I.resolve(TID).defn is G.ScaledMmS8Coordinate
+    register("Alias_v1", twin)
+    with pytest.raises(ValueError, match=NO_CATALOG):
+        I.resolve("Alias_v1" + TID[len(twin.id):])
+
+
+def test_a_catalog_package_s_definition_is_a_template_once_the_package_names_itself(register):
+    """A registered Definition whose code is outside ``verity`` is refused by `catalog` and `resolve` until its package names
+    itself a catalog package (`defs.catalog_package`). Then both take it, from the package itself or a module under it, and
+    still refuse one outside every catalog package, a package whose name only starts with a catalog package's among them."""
+    under, itself, beside, outside = fns = [bind(defined_in(module, name)) for module, name in [
+        (f"{SERVED}.kernels.norm", "ServedUnder"), (SERVED, "ServedItself"), (f"{SERVED}x.kernels", "ServedBeside"),
+        ("integration.own", "IntegrationOwnCatalog")]]
+    for fn in fns:
+        register(fn.id, fn.defn)
+
+    def refused(fn):
+        with pytest.raises(ValueError, match=NO_CATALOG):
+            I.catalog(fn)
+        with pytest.raises(ValueError, match=NO_CATALOG):
+            I.resolve(descriptor_id(fn))
+
+    for fn in fns:
+        refused(fn)
+    catalog_package(SERVED)
+    for fn in (under, itself):
+        I.catalog(fn)
+        assert I.resolve(descriptor_id(fn)) is fn
+    assert [fn for fn, _ in I.Circuit("served", ((under, 3),)).templates] == [under]
+    for fn in (beside, outside):
+        refused(fn)
 
 
 def test_a_units_rows_are_its_definitions_bit_rows():
