@@ -1,6 +1,6 @@
 """FA2 on a target: the stock vllm-flash-attn kernel vLLM launches there, against the attention Definitions a target can bind.
 
-One GPU process writes `<out>/fa2_target_capture.json`, the property record `fa2_target_capture` (`properties.record`).  `ok` = the
+One GPU process writes `<out>/fa2_target_capture.json`, the property record `fa2_target_capture` (`records.property_record`).  `ok` = the
 gate, MUFU, every launch's tile and determinism, the engine, every row equal to fa2_check_inf and v5 and, on its finite heads, to
 v2_hopper, and the target's own binding of every row the checked `Attention_v5` (where the target binds FA2's construction).
 The device gate runs first and nothing else runs when it fails (exit 3):
@@ -47,9 +47,9 @@ from typing import Any
 import numpy as np
 
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.fa_tap_exactness import PAGE
-from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
-from verity_vllm.properties.record import seal as seal_record
+from tests.properties.fa_tap_exactness import PAGE
+from tests.properties.fa_tap_exactness import cases as tap_cases
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-target-capture/v1"
 RECORD = "fa2_target_capture.json"
@@ -314,15 +314,14 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against the three constructions (a worker process: numpy words in, a record out)."""
-    from verity.circuits.defs import bind
     from verity.circuits.evaluation.reference import evaluate
+    from verity.circuits.defs import bind
     from verity.definitions.numerics import derived_rows as DR
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity.definitions.registry import b1, hopper
     from verity.definitions.registry import fa2_check_inf as F2
     from verity.definitions.registry import prims as P
-
     from verity_vllm.program.frontend import targets as TG
-    from verity_vllm.program.frontend.target_profile import TargetProfile
 
     c, D, q, k, v, o, bt = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"]
     tp = TargetProfile.default().with_overrides(compute_capability=tuple(job["cc"]), num_sms=int(job["sms"])) if job.get("cc") else None

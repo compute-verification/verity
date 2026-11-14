@@ -36,7 +36,7 @@ untraced = ["tests/test_bench.py", "tests/test_spot_status.py", "tests/test_stea
 # the bandwidth audit's arms read and build from sources that exist, and the breakdown's arms are its `BandwidthArm`s, which
 # a test builds (it imports the spans module). served_commit's arm gates on the run phases
 # the runner names, which a test checks with a fake committer; it and its stock profiling arm read only the public
-# names of the engine the runner builds, which a test checks on the runner's local-checkpoint engine; its profiling arms
+# names of the engine the harness builds, which a test checks on its local-checkpoint engine; its profiling arms
 # write each run's records after its timed run, which a test checks with the same fakes; and its TP decode
 # driver's phases, batches and gate are tested on recorded shapes. A Pearl-C protocol arm's own gate is the
 # experimental Pearl-C arm's call check, which a test runs on a fake device run; `served_passes.py arm` writes a spec's

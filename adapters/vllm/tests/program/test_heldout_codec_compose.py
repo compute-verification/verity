@@ -22,6 +22,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from verity.circuits.codec import (
@@ -37,7 +38,7 @@ from verity.definitions.registry import b1, b1_tp2, hopper
 
 from tests.program.descriptor_equivalence import Mismatch, compare
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+TINY: dict[str, Any] = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
 # TP=2 needs every sharded axis even: 2 q heads, 2 kv heads, V/2, I/2 (QKV = H + 2*KVH*D = 32 + 64 = 96)
 TINY_TP2 = {**TINY, "KVH": 2, "QKV": 96, "TP": 2}

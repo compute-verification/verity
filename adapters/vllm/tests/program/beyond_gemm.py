@@ -31,11 +31,11 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+from dataclasses import dataclass
 
 from verity_vllm.config import option
 
@@ -154,7 +154,7 @@ def probe_silu(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
         data = np.load(os.path.join(acts_dir, f"layer{li}.npz"))
         x_all, w = data["gate_up_proj.x"], data["gate_up_proj.w"]
         for M in Ms:
-            if x_all.shape[0] < M:
+            if M > x_all.shape[0]:
                 continue
             gu = F.linear(from_words(x_all[:M]), from_words(w))  # natural gate||up rows (any GEMM will do)
             out = torch.empty((M, INTER), dtype=torch.bfloat16, device="cuda")
@@ -290,7 +290,7 @@ def probe_rmsnorm(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
         data = np.load(os.path.join(acts_dir, f"layer{li}.npz"))
         x_all = data["gate_up_proj.x"]  # post-norm hidden rows: natural magnitudes/outlier structure
         for M in Ms:
-            if x_all.shape[0] < M:
+            if M > x_all.shape[0]:
                 continue
             res["cases"].append(one(f"layers.{li}.post_attention_layernorm(natural-ish rows)", x_all[:M], norm_w[f"layers.{li}.post_attention_layernorm"]))
     # synthetic residual-stream-like rows: gaussian with a few outlier channels
@@ -363,7 +363,7 @@ def probe_rope(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
         x_all, w = data["qkv_proj.x"], data["qkv_proj.w"]
         b = data["qkv_proj.b"]
         for M in Ms:
-            if x_all.shape[0] < M:
+            if M > x_all.shape[0]:
                 continue
             qkv = F.linear(from_words(x_all[:M]), from_words(w), from_words(b))
             q = qkv[:, : NQ * HEAD].contiguous()

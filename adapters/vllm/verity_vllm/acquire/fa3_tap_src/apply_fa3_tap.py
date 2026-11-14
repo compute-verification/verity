@@ -20,6 +20,7 @@ the pinned kernel up to the (unused) trailing `vt` parameter:
  5. writes fa3_torch_lib_verity.cpp = the pinned flash_api_torch_lib.cpp + the verity ops (namespace = TORCH_EXTENSION_NAME).
 """
 import os
+import re
 import shutil
 import sys
 

@@ -4,7 +4,7 @@ rtxpro6000 row, the evidence the sm_120 block-FP8 Definitions will cite.
 vLLM runs as that row's engine does with the dense linears pinned to CUTLASS: `VLLM_USE_DEEP_GEMM=0` (TargetProfile `fp8_block_gemm=
 "cutlass"`, target_profile.py `env()`; DeepGEMM off also turns E8M0 off, so every scale is an f32 word), `VLLM_BATCH_INVARIANT=1`,
 custom ops on.  One GPU process writes one JSON verdict line per case (stdout, prefixed `VERDICT `, and `<out>/verdicts.jsonl`), the
-property record `<out>/blackwell_fp8_capture.json` (`blackwell_fp8_capture`, `properties.record`), and last `FP8-SM120 GO` or `NO-GO`.  On a
+property record `<out>/blackwell_fp8_capture.json` (`blackwell_fp8_capture`, `records.property_record`), and last `FP8-SM120 GO` or `NO-GO`.  On a
 device that is not cc 12.0 it writes one `skip` verdict and exits 3; a NO-GO exits 1.
 
   selection  `init_fp8_linear_kernel` at the row's two FP8 linears selects CutlassFp8BlockScaledMMKernel, and TritonFp8BlockScaledMMKernel
@@ -59,7 +59,6 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.circuits.ops import fp32, prims
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.derived_rows import (
     add_rn,
@@ -67,12 +66,13 @@ from verity.definitions.numerics.derived_rows import (
     fma_rn,
     mul_rn,
 )
+from verity.circuits.ops import fp32, prims
 from verity.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as H
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/blackwell-fp8-capture/v1"
 RECORD = "blackwell_fp8_capture.json"
@@ -563,7 +563,7 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
         rec["statics_ok"] = (L["block_shape"] == [Gm, Gm] and L["flags"] == [True, False, False, False, False] and not L["bias"]
                              and L["mul_routed_weight"] == (kind == "w2") and L["top_k"] == (TOP_K if kind == "w13" else 1)
                              and n_pairs == M * TOP_K and L["KB"] == 32 and not L["SWAP"] and L["config"] == H.BATCH_INVARIANT_CONFIG
-                             and (HIDDEN if kind == "w13" else inter) == K and (2 * inter if kind == "w13" else HIDDEN) == N)
+                             and K == (HIDDEN if kind == "w13" else inter) and N == (2 * inter if kind == "w13" else HIDDEN))
         rec["operands_ok"] = bool(fed)
         launches.append(rec)
         sel = torch.as_tensor(used, device="cuda")

@@ -16,7 +16,7 @@ sequentially by this module's orchestrator (`subprocess`), then a torch-free com
                              tensors D2H asynchronously into fresh pinned buffers (stream-ordered right after the module,
                              i.e. before the next layer's in-place `fused_add_rms_norm` overwrites them); after every
                              `engine.step()` the driver synchronises once and hashes.  Output: `hooks.json`, `tokens.json`.
-  (c) `bench/m1_capture.py --no-observer`  fully bare (nothing installed, `vllm_adapter.run_requests`): `tokens.json`.
+  (c) `m1-capture --no-observer`  fully bare (nothing installed, `vllm_adapter.run_requests`): `tokens.json`.
 
 Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M = token rows of the step):
   hidden[s, L]   = `LlamaDecoderLayer.forward` return[0] = the MLP `down_proj` output.
@@ -33,8 +33,8 @@ Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M 
 The observer's snapshot bytes are the *spanned storage bytes* of the view; for these contiguous tensors that is exactly the
 tensor's bytes, which is what (b) hashes (`tensor.contiguous()` bytes; contiguity is recorded and asserted).
 
-Comparison (`--compare DIR`, torch-free; also run automatically by the orchestrator): tokens (a) == (b) == (c) == the accepted
-record (`bench.m1_capture.ACCEPTED_TOKENS`, and `data/logs/m1_ctl_tokens.json` when present); per step the sampled
+Comparison (`--compare --out DIR`, torch-free; also run automatically by the orchestrator): tokens (a) == (b) == (c) == the
+clean control run's (`--accepted-ctl`, by default `data/logs/m1_ctl_tokens.json`; (c)'s own when absent); per step the sampled
 ids of (a)'s `SampleEnd` == (b)'s engine outputs; hashes (a) == (b) for every (step, layer, hidden|residual) + final + logits.
 Writes DIR/noninterference.json and DIR/noninterference.md; exit status 1 on any mismatch.
 
@@ -66,7 +66,7 @@ from verity_vllm.properties.noninterference_families import (
     parallel_residual_boundaries,
     unfused_norm_boundaries,
 )
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 # the decoder-layer module and the final norm under their family's vLLM names: Llama-style
 # `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE families) and GPT-NeoX `gpt_neox.layers.N` /
@@ -172,8 +172,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     prof.apply_env()
     import torch
 
-    from verity_vllm.engine import arrivals as AR
-    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.engine import arrivals as AR, vllm_adapter as va
     from verity_vllm.engine.handle import scheduler_or_none
 
     out = Path(out_dir)
@@ -307,8 +306,8 @@ def _write_tokens(out: Path, wl: dict, tokens: dict, timing: dict, accepted: dic
 def observer_boundary_hashes(a_dir: Path) -> tuple[dict, list[str]]:
     """From (a)'s log + snapshots.json: {step: {"hidden": {L: sha}, "residual": {L: sha}, "final": sha, "logits": sha}}."""
     from verity_vllm.observe.events import DispatchEnter, TritonLaunch
-    from verity_vllm.observe.fold.tree import step_events
     from verity_vllm.observe.log import read_log, split_steps
+    from verity_vllm.observe.fold.tree import step_events
 
     idx = _read_json(a_dir / "snapshots.json")
     by_key: dict[tuple[int, int, str], str] = {}
@@ -690,9 +689,7 @@ def compare_markdown(rep: dict) -> str:
 
 
 def _engine_args(items: list[str]) -> dict:
-    from verity_vllm.engine import (
-        vllm_adapter as va,  # torch import only on the GPU half
-    )
+    from verity_vllm.engine import vllm_adapter as va  # torch import only on the GPU half
     return va.parse_engine_args(items)
 
 

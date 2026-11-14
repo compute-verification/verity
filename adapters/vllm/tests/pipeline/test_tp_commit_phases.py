@@ -4,14 +4,15 @@ no `gpu_lease.*` span.  CPU-only: `tp.commit.main` runs over a stand-in LLM of t
 same timeline as they run, so the file says which step ran inside which span."""
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
+from tests import fake_vllm
 from tests.pipeline import served_ranks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import timeline as T
@@ -87,9 +88,10 @@ def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_f
         return dict(RUN)
 
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
-    vllm = ModuleType("vllm")
-    vllm.__dict__["LLM"] = llm
-    monkeypatch.setitem(sys.modules, "vllm", vllm)
+    # The rank worker arms the serving switches when it is imported, once a process, on the vLLM modules `sys.modules` holds then: before
+    # the stand-in, whose sampler module holds no split for `engine.topp_pin` to pin.
+    importlib.import_module("verity_vllm.pipeline.tp.rank_worker")
+    fake_vllm.install(monkeypatch).set("vllm:LLM", llm)
     monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     for owner, name, value in [(prof, "apply_env", lambda: {}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (va, "load_workload", lambda path, max_tokens: WORKLOAD),

@@ -6,7 +6,7 @@ kernel block 256 over ratio 4), and the block table's row at max_model_len 1,048
 numbers under `vllm/models/deepseek_v4/` unless named.
 
 One GPU process writes `<out>/dsv4_decode_index_row_capture.json`, the property record `dsv4_decode_index_row_capture`
-(`properties.record`), and the kernel's PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one
+(`records.property_record`), and the kernel's PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one
 line per launch and per case, then `DSV4-DECODE-INDEX-ROW GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs
 first and nothing else runs when it fails (exit 3).  A case that raises records its error and fails its cases without stopping
 the others.  The operands are the integers a decode step holds (`requests`), so no model is loaded.  The kernel reads no position:
@@ -76,7 +76,7 @@ from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import dsv4_indices_capture_gpu as IX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-decode-index-row-capture/v1"
 RECORD = "dsv4_decode_index_row_capture.json"
@@ -238,7 +238,7 @@ def selection() -> dict[str, Any]:
                            "sources": sources(Path(vllm.__file__).parent)}
     rec["checks"] = {"attn_cls": cls is F.DeepseekV4FlashMLAAttention, "backend": cls.backend_cls is SM.DeepseekV4FlashMLABackend,
                      "row": F.compute_global_topk_indices_and_lens is CU.compute_global_topk_indices_and_lens,
-                     "block_size": rec["block_sizes"] == [KERNEL_BLOCK] and R.DSV4_DECODE_INDICES["c4"]["BS"] == KERNEL_BLOCK // RATIO,
+                     "block_size": rec["block_sizes"] == [KERNEL_BLOCK] and KERNEL_BLOCK // RATIO == R.DSV4_DECODE_INDICES["c4"]["BS"],
                      "triton": rec["triton"] == TRITON, "sources": rec["sources"]["ok"]}
     rec["ok"] = all(rec["checks"].values())
     return rec

@@ -15,12 +15,7 @@ Usage:
       [--define VERITY_TAP=3 --define VERITY_MAT_SRC=59]
 Writes <build-dir>/build_info.json and <build-dir>/resource_usage.txt.
 """
-import glob
-import hashlib
-import json
-import os
-import subprocess
-import time
+import glob, hashlib, json, os, subprocess, time
 from dataclasses import dataclass
 
 from verity_vllm import settings
