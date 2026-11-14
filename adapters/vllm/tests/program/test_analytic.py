@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.definitions.registry import b1
 
 from verity_vllm.check.fold_compare import DEFAULT_COS_SIN as B0_FIXTURE
 from verity_vllm.program import model as analytic
-from verity.definitions.registry import b1
 
 # the relevant keys of the checkpoints' config.json (HF hub, the pinned revisions)
 SMOLLM2_135M = {"model_type": "llama", "hidden_size": 576, "num_hidden_layers": 30, "num_attention_heads": 9, "num_key_value_heads": 3,
@@ -46,6 +46,14 @@ def test_config_of_untied_and_hand_fields():
     assert fields == ["embed", "layers", "norm", "cos_sin", "lm_head"]
     assert [f for f, _ in analytic.weights_type(b1.B0_CONFIG).fields] == ["embed", "layers", "norm", "cos_sin"]
     assert analytic.weights_type(b1.B0_CONFIG) == b1.weights_type(b1.B0_CONFIG)
+
+
+@pytest.mark.parametrize("qc", [None, {}, False, 0, "", [], ()])
+def test_an_absent_or_empty_quantization_config_is_not_the_int8_profile(qc):
+    """A config.json may hold `quantization_config` as null, an empty mapping or another empty value: none of them is refused, and none
+    is read as a mapping."""
+    assert analytic.is_int8_exact(qc) is False
+    assert analytic.quant_refusal(qc) is None
 
 
 def test_cos_sin_table_shape_and_first_row():
