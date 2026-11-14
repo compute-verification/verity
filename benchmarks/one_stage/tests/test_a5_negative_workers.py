@@ -40,7 +40,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.commitments.windows import history as HW, interface as I, rows as CS
+from verity.commitments.periods import history as HW, interface as I, rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0, window_audit as a5
