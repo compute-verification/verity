@@ -36,7 +36,7 @@ scans' knowledge and collision errors. K takes one of two forms:
   with at most δ beside ε. It is conditional: hesc and hleak await SampledKSLive and P2.
 
 **At a scope's load.** A scope (`scopes`) is a node, one machine of the world fleet's GPUs; the census's reference
-datacenter; or the world, rho's world fleet, which is the census's inference at the fleet's serving MFU. Each machine
+datacenter; or the world, the slowdown calculator's world fleet, which is the census's inference at the fleet's serving MFU. Each machine
 is behind one network certifier. Over a monitoring period a scope serves GPU-seconds × MFU × a GPU's peak FLOP/s /
 (a request's tokens × 2 × the served MACs a token) requests of the served model (`MODEL`), the rule
 `benchmarks/spot_figures/figure1.py`'s `scopes` plans with, each on one connection. Which request that is is one of
@@ -138,7 +138,7 @@ JITTER_BOUND = 2
 JITTER = "J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel)"
 ROOT = Path(__file__).resolve().parents[2]
 CENSUS = ROOT / "benchmarks" / "census"
-#: the files the scale is read from: the census's world, reference datacenter and GPU peak, rho's world fleet and its
+#: the files the scale is read from: the census's world, reference datacenter and GPU peak, the slowdown calculator's world fleet and its
 #: machine's GPUs, and the served model's workload card
 ADVERSARY, DEPLOYMENTS, HARDWARE = (f"benchmarks/census/{name}.json"
                                     for name in ("adversary", "deployments", "hardware"))
@@ -147,7 +147,7 @@ WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
 #: the break-even planner the sampling plan is computed with, and the case of it a request is read on: the proof
 #: server's line at its last step, at the 128k serving plan's request
 PLANNER, PLAN_CASE = "benchmarks/spot_figures/breakeven", "P5+poolwin600"
-#: the served model, rho's world fleet and the census's GPU peak, the H200's dense FP8 rate
+#: the served model, the slowdown calculator's world fleet and the census's GPU peak, the H200's dense FP8 rate
 MODEL, WORLD, PEAK = "GLM-5.3", "world-h200", "h100-sxm5-80gb/e4m3"
 #: a GB's bits, and FP4's bits a parameter
 GB, FP4 = 8 * 10 ** 9, 4
@@ -405,7 +405,7 @@ def datacenter_links() -> int:
 
 
 def world_links() -> int:
-    """The world's links: the machines of rho's world fleet (`RHO`'s ``fleet.world-h200``, the census's inference at
+    """The world's links: the machines of the slowdown calculator's world fleet (`RHO`'s ``fleet.world-h200``, the census's inference at
     the fleet's serving MFU), one network certifier on each machine's uplink."""
     return round(_toml(RHO)["fleet"][WORLD]["count"]["value"])
 
@@ -674,8 +674,8 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
            ingress_buckets: int | None = None) -> dict[str, Input]:
     """Every input of the scaling by requests, each marked (`MARKS`) with its source.
 
-    The scale is read from the files: the world's machines and their serving MFU (rho's world fleet), a machine's
-    GPUs (rho's hardware), the reference datacenter's machines and a GPU's peak (the census), and the weights (the
+    The scale is read from the files: the world's machines and their serving MFU (the slowdown calculator's world fleet), a machine's
+    GPUs (the slowdown calculator's hardware), the reference datacenter's machines and a GPU's peak (the census), and the weights (the
     workload card). The world's requests a year follow from them and a request's tokens and served MACs a token:
     the sampling plan's (``requests`` = ``plan``, read from the planner by `plan`) or the census's tokens at the
     workload card's MACs (``census``); or they are ``world_requests`` where a caller gives them, whatever
