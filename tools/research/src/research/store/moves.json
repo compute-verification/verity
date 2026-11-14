@@ -2709,6 +2709,11 @@
     },
     {
       "paths": {
+        "benchmarks/moe_align/": "benchmarks/kernels/moe_align/"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordText.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/RecordText.lean"
       }
     },

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # served.py: DeepSeek-V4-Pro TP8 eager with the canonical moe_align_block_size on its Marlin MoE path, from the source tree's
 # root on an 8 x H200 node holding the checkpoint:
-#   research run --on NODE --project verity --cwd source -- gpu-lease 8 --wait --mem-gb 64 -- bash benchmarks/moe_align/served.sh
+#   research run --on NODE --project verity --cwd source -- gpu-lease 8 --wait --mem-gb 64 -- bash benchmarks/kernels/moe_align/served.sh
 # ROW (default DeepSeek-V4-Pro's TP8 eager B1, whose request every batch rotates), CHECK_BATCHES (default 1,8), BATCHES (default
 # 1,16,64,256), PAIRS (default 3), TP (default 8), VENV (default /workspace/cp/venv312), GPU_UTIL (default 0.92), ENGINE_ARGS
 # (space-separated K=V, each one more --engine-arg, e.g. max_num_batched_tokens=16384 under the largest batch's), VARY_REPEATS
@@ -9,7 +9,7 @@
 # verified copy of the checkpoint (it holds .verified), bind-mounted on the path manifests/checkpoints.json names when nothing is
 # mounted there. The integration's vLLM plugin loads from a site directory declaring its entry points (stress.py site).
 # DUMMY_LAYERS=N: no checkpoint; the first N layers with dummy weights (served.py --dummy-layers), e.g. TP2 on a node without it:
-#   research run --on NODE --project verity --cwd source -- gpu-lease 2 --wait -- env TP=2 DUMMY_LAYERS=5 bash benchmarks/moe_align/served.sh
+#   research run --on NODE --project verity --cwd source -- gpu-lease 2 --wait -- env TP=2 DUMMY_LAYERS=5 bash benchmarks/kernels/moe_align/served.sh
 # Out: $OUT (research run sets it): versions.json, check.json, decode.jsonl, host.json, summary.json.
 set -euo pipefail
 TREE=$PWD
@@ -30,7 +30,7 @@ trap 'rm -rf "$TMPDIR"' EXIT
 # shellcheck disable=SC1091
 source "${VENV:-/workspace/cp/venv312}/bin/activate"
 export PYTHONPATH=$TREE:$TREE/benchmarks:$TREE/adapters/vllm:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/tools/difftest/python
-python "$TREE/benchmarks/moe_align/stress.py" site --out "$TMPDIR/site" > /dev/null
+python "$TREE/benchmarks/kernels/moe_align/stress.py" site --out "$TMPDIR/site" > /dev/null
 export PYTHONPATH=$TMPDIR/site:$PYTHONPATH
 mkdir -p "$OUT"
 cd "$TREE/adapters/vllm"
