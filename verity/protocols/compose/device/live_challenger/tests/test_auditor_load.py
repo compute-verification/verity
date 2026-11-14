@@ -105,7 +105,7 @@ def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
     assert A.Host().store == store
 
 
-def test_a_store_write_whose_unit_is_stopped_stops_its_writer_and_writes_its_end(host):
+def test_a_store_write_whose_unit_is_stopped_stops_its_writer_and_writes_its_end(host, stop_held):
     """The unit's stop reaches the writer, which here ends only on a signal, and the end says the unit stopped it."""
     host.store.mkdir()
     rc, out = gate(host, ["weights-write", "--shape", "tiny"])

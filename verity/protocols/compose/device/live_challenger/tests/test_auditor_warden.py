@@ -681,7 +681,7 @@ def test_a_relay_sessions_listener_is_the_units_own_from_before_its_ssh_until_th
 
 
 def test_a_relay_session_whose_unit_is_stopped_stops_its_runner_then_its_ssh_then_its_listener_and_writes_its_end(
-        host, tmp_path, monkeypatch):
+        host, tmp_path, monkeypatch, stop_held):
     """The unit's stop (`systemctl stop`, its `RuntimeMaxSec`) sends `certifier-run` alone a SIGTERM
     (`KillMode=mixed`). It goes to the runner, which here ends only on a signal; once the runner has exited the ssh is
     still up and the listener still listens when the ssh is stopped, the listener is closed after, and the end says
@@ -722,7 +722,8 @@ def test_a_relay_session_whose_unit_is_stopped_stops_its_runner_then_its_ssh_the
     assert signal.getsignal(signal.SIGTERM) is before
 
 
-def test_a_relay_session_whose_unit_is_stopped_before_its_tunnel_is_up_runs_nothing_and_writes_its_end(host):
+def test_a_relay_session_whose_unit_is_stopped_before_its_tunnel_is_up_runs_nothing_and_writes_its_end(
+        host, stop_held):
     rc, out = gate(host, SESSION, started=[])
     run = json.loads(out)["run"]
 
