@@ -67,6 +67,12 @@ windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂ 100
 which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. R7 refuses a
 record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
 
+A verifier may give its verdict log (`verdicts`, the pool's form: each record digest it ran, with whether that run
+accepted). R7 then refuses a record with an output value that reads a port of a record the log names refused
+(`portsAccepted`, `R7-output-refused`): no start is carried past a window the verifier refused, a window's history
+included. A record it holds no verdict for is not refused, as for the pool. A registered value an output value reuses
+(`Earlier.value`, the pool's `pin` among them) is not held to it: the pool restarts by its own lag (`Pool.refused`).
+
 Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone,
 unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value, or a tied value's
 (`tiedGates`) (`Partition.readAlone`, `R8-shared-input`): a value another proof block writes that the program takes as an
@@ -138,14 +144,18 @@ structure Pool where
   week : Nat
   deriving Inhabited
 
+/-- **Whether the verdict log `verdicts` names the verifier's run on the record with digest `d` refused**
+(`registration.refused`). A record it holds no verdict for is not refused. -/
+def refusedIn (verdicts : Array (String × Bool)) (d : String) : Bool := verdicts.any fun (r, a) => r == d && !a
+
 /-- **Whether the verifier refused the window `lag` windows of record before this one** (`registration.pool_refused`):
-its verdict log names its run on that record of the log refused. A log shorter than the lag, or a record it holds no
-verdict for, is not refused, so where every run accepted the chain never restarts. -/
+its verdict log names its run on that record of the log refused (`refusedIn`). A log shorter than the lag, or a record
+it holds no verdict for, is not refused, so where every run accepted the chain never restarts. -/
 def Pool.refused (p : Pool) (log : Array Json) : Bool :=
   if p.lag ≤ log.size then
     match log[log.size - p.lag]? with
     | some e => match digestHex e with
-      | .ok d => p.verdicts.any fun (r, a) => r == d && !a
+      | .ok d => refusedIn p.verdicts d
       | .error _ => false
     | none => false
   else false
@@ -205,6 +215,9 @@ structure Verifier where
   and R7 holds to the chain (`poolChained`), and whose reset R6 holds the window to name, once a week; none for a
   program that carries none -/
   pool : Option Pool := none
+  /-- its verdict log, the pool's form: each record digest it ran, with whether that run accepted, which R7 holds an
+  output value's earlier port to (`portsAccepted`); empty when it gives none -/
+  verdicts : Array (String × Bool) := #[]
   /-- run Inputs, by parameter name, whose rows a later check ties to the registrations that computed them, which R8 lets
   through though several proof blocks read them, on that later check alone (`tiedThrough`) -/
   tied : Array String := #[]
@@ -481,6 +494,14 @@ def poolChained (rec : Json) (v : Verifier) : Bool :=
     | some e, some (d, r) => jeq (getD e "domain") (Json.str d) && jeq (getD e "root") (Json.str r)
     | _, _ => false
 
+/-- R7's verdicts (`registration._ports_refused`): no output value reads a port of a record the verifier's verdict log
+names refused (`refusedIn`); `R7-output-refused` otherwise. An output value that reuses a registered value is not held
+to it. -/
+def portsAccepted (v : Verifier) : Bool :=
+  v.outputs.all fun (_, d, e) => match e with
+    | .port _ => !refusedIn v.verdicts d
+    | .value _ => true
+
 /-- R3's index of the record's roots, each root's port canonicalized once: the last root naming each canonical port, and
 how many distinct ports the roots name, a port with no canonical form counting as one of its own (`jeq` equals it to
 nothing). -/
@@ -609,6 +630,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
         v.schemas)
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
+    c := kept (portsAccepted v) c "R7-output-refused"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -683,6 +705,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
         v.schemas)
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
+    c := kept (portsAccepted v) c "R7-output-refused"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c

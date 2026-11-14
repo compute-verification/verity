@@ -16,7 +16,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
   window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); for a v2 record its registered
   values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
-  rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input
+  rule or its reset restarts it, for a verifier with a pool (`PoolChained`), and no output value's earlier port in a
+  record the verifier's verdict log names refused (`OutputPortsAccepted`); and under a template query, no run Input
   its proof blocks don't each read alone (`R8`); and in the per-member form each member's one count of link points
   (`RL`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
@@ -276,6 +277,12 @@ def PoolChained (rec : Json) (v : Registration.Verifier) : Prop :=
     Registration.poolOpen rec v p = some (d, r) ∧
     jeq (getD e "domain") (.str d) = true ∧ jeq (getD e "root") (.str r) = true
 
+/-- R7's verdicts (`Registration.portsAccepted`): no output value reads a port of a record the verifier's verdict log
+(`verdicts`) names refused, so no start is carried past a window the verifier refused. A record the log holds no
+verdict for is not refused; an output value that reuses a registered value is not held to it. -/
+def OutputPortsAccepted (v : Registration.Verifier) : Prop :=
+  ∀ o ∈ v.outputs, ∀ p, o.2.2 = .port p → (o.2.1, false) ∉ v.verdicts
+
 /-- R7's roots at the values the verifier pinned (`Registration.checkRegistered`'s `R7-held`), which R7 implies: of the
 verifier's own entries (`Registration.ownEntries`), each value it pinned before the record (`pinned`, the first root it
 pins the value to) and neither fills (`supplied`) nor takes from an earlier run (`outputs`) has that root in the record's
@@ -298,11 +305,11 @@ def RL (v : Registration.Verifier) : Prop :=
     LinkPoints.refused law n v.members = .ok #[]
 
 /-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed law as derived; R7, its pool
-chain and its pinned roots (`PinnedHeld`) when the verifier expects values registered; and the per-member form's
-members' link points (`RL`). -/
+chain, its verdicts (`OutputPortsAccepted`) and its pinned roots (`PinnedHeld`) when the verifier expects values
+registered; and the per-member form's members' link points (`RL`). -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
-    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ R8 v ∧ RL v
+    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ OutputPortsAccepted v ∧ PinnedHeld rec v) ∧ R8 v ∧ RL v
 
 /-! ## The sample: the registered law over the registered population -/
 
