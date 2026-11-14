@@ -199,7 +199,7 @@ import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from fractions import Fraction
@@ -328,7 +328,7 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     units = [d for d, _ in defs.values()]
     one = "templates" not in params
     digests = tuple(P.program_digest(Program(u)) for u in units)
-    schemas = {m.port(p): m.schema(p) for m in mine.members for p, _w in m.all_rows}
+    schemas = {m.port(p): m.schema(p) for m in mine.members for p in CS.port_leaves(m)}
     strata = [s["template"] for s in D.derive(mine.program, mine.query, mine.law, mine.work_table).get("strata") or ()]
     taken = program_values(mine.program)
     public = [("population", "N, the window's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
@@ -759,34 +759,16 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     """What the per-member form holds each member's public file to (`members.population_why`), read off the verifier's
     window ``mine`` and the docket ``rec``: the docket's strata and each member's slice of the record
     (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
-    scheme), or Lean's reason why there is none. A member's public file names a root for each of its ports, so the
-    record does too, a wired port with no tree of its own under its reader's name at its writer's root
-    (`rows.wired_ports`). A window's row tables' root (`rows.TABLE_PORT`) is the window's and no member's: the
-    per-member form refuses such a window, and this audit, its stand-in there, holds that root by
-    `tables.check_row_tables` and reads the slices of the record's other roots."""
+    scheme), or Lean's reason why there is none. A member's public file names a root for each of its ports, a wired
+    port with no tree of its own at its writer's root (`rows.Committed.frame_entry`), which the record names under its
+    writer's name alone, so the per-member form refuses such a member (``roots``). A window's row tables' root
+    (`rows.TABLE_PORT`) is the window's and no member's: the per-member form refuses such a window, and this audit, its
+    stand-in there, holds that root by `tables.check_row_tables` and reads the slices of the record's other roots."""
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
     try:
         return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record)
     except (P.QueryRefused, ValueError) as e:
         return str(e)
-
-
-def bound_reads(file: Mapping[str, Any], m: CS.Member, ports: Iterable[str], roots: Mapping[str, Mapping[str, Any]],
-                want: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-    """Member ``m``'s ``--registered`` file ``file`` with each of its header's ``ports`` the file names no read for bound
-    (`REG.bind_ports`) to the port's own tree: the root the docket holds for ``<member>/<port>`` (``roots``, its
-    entries by port) and the domain the verifier's window derives for it (``want``), which the audit's check before the
-    sample held the header's to (``header``, the per-member form's rule). A wired port with no tree of its own
-    (`rows.Member.wired_trees`) has none: its rows are leaves of its writer's output tree, which the verifier's file names
-    it a read of, each unit at its writer unit's leaf (`rows.Binding.held_leaves`: `rows.own_reads`, the two-stage
-    audit's `verifier_reads`), the read the Lean verifier holds each session to. The window and the docket name
-    that tree under the reader's name too (``want``'s entry says so, ``wired``: `rows.wired_ports`), and a root under
-    that name is its writer's, no tree of the port's own. So it is never bound, and a file that leaves it out is refused
-    (ValueError, `REG.bind_ports`'s)."""
-    ports = list(ports)
-    own = {p: {"root": roots[q]["root"], "domain": want[q]["domain"]} for p in ports
-           if (q := m.port(p)) in roots and q in want and "wired" not in want[q]}
-    return REG.bind_ports(file, ports, own)
 
 
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served: Path, source: Callable[[dict], dict], port: int,
@@ -951,7 +933,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         if mm["m"].key in reads:
             m = mm["m"]
-            own = bound_reads(reads[m.key], m, mm["header"]["frame_v3"]["roots"], roots, want)
+            fv_roots = mm["header"]["frame_v3"]["roots"]
+            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[mine.held(m, p)]["root"],
+                                                              "domain": want[mine.held(m, p)]["domain"]} for p in fv_roots})
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
             mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
             if iface is not None:
