@@ -96,10 +96,10 @@ theorem pair_mem {l : List Spot.OneStageZk.StatementFiles} {t : ℕ} {st : Spot.
     (st, s) ∈ l.flatMap fun st => st.sessions.toList.map fun s => (st, s) := by
   have h1 : (l.flatMap fun st => st.sessions.toList.map fun s => (st, s)).map Prod.fst =
       l.flatMap fun st => st.sessions.toList.map fun _ => st := by
-    simp [List.map_flatMap, Function.comp_def]
+    simp only [List.map_flatMap, List.map_map, Function.comp_def]
   have h2 : (l.flatMap fun st => st.sessions.toList.map fun s => (st, s)).map Prod.snd =
       l.flatMap (·.sessions.toList) := by
-    simp [List.map_flatMap, Function.comp_def]
+    simp only [List.map_flatMap, List.map_map, Function.comp_def, List.map_id']
   rw [← h1, List.getElem?_map] at hst
   rw [← h2, List.getElem?_map] at hs
   cases hq : (l.flatMap fun st => st.sessions.toList.map fun s => (st, s))[t]? with
