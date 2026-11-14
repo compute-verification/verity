@@ -63,7 +63,7 @@ def test_an_mla_layer_is_one_whose_bf16_cache_holds_the_latents_words_a_row(attr
     ({"cache": torch.zeros(2, 4, BT.WORDS + 1, dtype=torch.bfloat16)}, "(auto, torch.bfloat16, (2, 4, 577))"),
     ({"cache": torch.zeros(2, 2, 4, BT.WORDS, dtype=torch.bfloat16)}, "(auto, torch.bfloat16, (2, 2, 4, 576))"),
 ])
-def test_a_cache_is_refused_for_its_words_type_its_latents_width_its_row_or_its_rank_each_alone(attrs, cache):
+def test_a_cache_is_refused_for_its_words_type_its_latents_width_its_rows_length_or_its_dimensions_alone(attrs, cache):
     why = (f"MLA layer {NAME}: its cache {cache} doesn't hold DsaLatentRow_v1's 576 bf16 words a row; serve with "
            f"--kv-cache-dtype auto")
     with pytest.raises(ValueError, match=f"^{re.escape(why)}$"):
