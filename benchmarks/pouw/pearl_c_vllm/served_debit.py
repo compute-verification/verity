@@ -618,7 +618,7 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
                      f"{len(rows)} inputs, {sum(r['failures'] for r in rows)} rejected tiles; the worst input's 95% "
                      f"simultaneous upper limit {worst['upper']:.4g} ({worst['bound_method']})",
                      [("inputs", len(rows), "count"), ("failures", sum(r["failures"] for r in rows), "count"),
-                      ("cited_upper", worst["upper"], "share")])
+                      ("compute-accounting/served-inert-work.cited-upper", worst["upper"], "share")])
     return 0 if ok else 1
 
 

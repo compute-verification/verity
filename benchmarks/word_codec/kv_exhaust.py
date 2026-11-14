@@ -474,7 +474,7 @@ def write_result(res: dict, libs, out_dir: Path) -> None:
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if not run_dir or not run_id:
         return
-    ms = [{"name": "read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
+    ms = [{"name": "memory-accounting/kv-codec.read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
     for lib in libs:
         for name, cell in res["libs"][lib.name].get("exhaust", {}).items():
             for form, rows in cell["forms"].items():

@@ -7,7 +7,7 @@ What committing values costs under each commitment scheme, on the host and on th
   and tree phases timed apart; one opening per scheme is checked through its `verify_path`.
 - `hiding_leaf_cost.py`: per row, the hm96 hiding leaves against unsalted ones: stored and hashed bytes, compressions,
   in-circuit AND and XOR gates, and single-core host time.
-- `serving_commit_cost.py`: a cell's `commit.seconds`, the serving hook committing the first `--n` instances of an input set
+- `serving_commit_cost.py`: a cell's commitment seconds (`proofs/serving-commit.seconds`), the serving hook committing the first `--n` instances of an input set
   afresh (`frame-v3-sha512` with `hm96-sha512/v1` row leaves), with two rows recomputed by core as its validation.
 - `interior_commit_peak.py`: the most memory an interior's commitment holds, made whole and made into its window
   directory (`rows.commit`'s `into`), a process each over the same rows, valid where the two commitments are equal.
