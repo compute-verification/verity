@@ -253,6 +253,22 @@ def resolved(supplied: Any, history: Mapping[str, Any] | None) -> Any:
     return HT.resolve(roots, supplied)
 
 
+def with_history(supplied: Any, history: Mapping[str, Any] | None, leaf_layer: str | None) -> Any:
+    """``supplied`` with each ``history`` source the bytes of the root or domain id `history.roots_of` computes for its
+    table from the members' public bodies `leaf_layer` binds; `HistoryRefused` where it can't."""
+    if history is None:
+        return supplied
+    if not isinstance(history, Mapping) or set(history) != {"digests", "held", "registered", "tables"}:
+        raise HistoryRefused("the keys of the history tables are not digests, held, registered, tables")
+    if leaf_layer is None:
+        raise HistoryRefused("history tables are read from members' public bodies the leaf layer binds: the verifier "
+                             "names no leaf_layer")
+    try:
+        return HT.resolve(HT.roots_of(leaf_layer, history), supplied)
+    except ValueError as e:
+        raise HistoryRefused(str(e)) from e
+
+
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
@@ -334,16 +350,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     if verdicts is not None:
         _verdicts(verdicts)
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
-    if history is not None:
-        if not isinstance(history, Mapping) or set(history) != {"digests", "held", "registered", "tables"}:
-            raise HistoryRefused("the keys of the history tables are not digests, held, registered, tables")
-        if leaf_layer is None:
-            raise HistoryRefused("history tables are read from members' public bodies the leaf layer binds: the verifier "
-                                 "names no leaf_layer")
-        try:
-            supplied = HT.resolve(HT.roots_of(leaf_layer, history), supplied)
-        except ValueError as e:
-            raise HistoryRefused(str(e)) from e
+    supplied = with_history(supplied, history, leaf_layer)
     sup = G.sources(supplied if supplied is not None else {})
     if supplied is not None and not registered:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
