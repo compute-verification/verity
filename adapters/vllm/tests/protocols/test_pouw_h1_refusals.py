@@ -2499,9 +2499,10 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     kernels that don't build, here with no nvcc, a warning says that they hash with `hiding_rows` and why; once they
     are built for the current device, the GPU path is taken. The z table's kernel is asked for only where the
     values' kernels are there, and where it doesn't build a warning says that the z tables hash apart from their
-    values. Both build with `pouw_device`'s nvcc. The z table's kernel is built for the current device after the
-    values' device library is asked for there, and once: a device that has it (here a stand-in) is given it again,
-    with nothing built and nothing said."""
+    values. Both build with `pouw_device`'s nvcc. The z table's kernel is built after the values' device library is
+    asked for on the current device, with that nvcc and for the device's compute capability (the build is a stand-in
+    that builds nothing), and once: a device that has it (here a stand-in) is given it again, with nothing built and
+    nothing said."""
     built: list[tuple] = []
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     assert TBD.available.__wrapped__() is False and RGD.zy_available.__wrapped__() is False
@@ -2523,16 +2524,28 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
                                                "the path))")]
     monkeypatch.setattr(TBD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
     assert TBD.available.__wrapped__() is True and built == [(0, TBD.device_lib, "rt_midstates", TBD.STREAMS)]
+    asked: list[tuple] = []
+
+    def builds_nothing(tool, sources, flags, name):
+        asked.append((tool, tuple(sources), flags[-1], name))
+        raise OSError("the stand-in builds nothing")
+
+    monkeypatch.setattr(RGD.RTD, "_build", builds_nothing)
     monkeypatch.setattr(torch.cuda, "get_device_capability", {0: (12, 0)}.__getitem__)
     with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(RuntimeError: no nvcc "):
         assert RGD.zy_available.__wrapped__() is False
-    assert built[1:] == [(0, RGD.device_lib, "rr_midstates")]
+    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: "/a/toolchain/nvcc")
+    with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(OSError: the stand-in builds nothing\)"):
+        assert RGD.zy_available.__wrapped__() is False
+    assert built[1:] == [(0, RGD.device_lib, "rr_midstates")] * 2
+    assert asked == [("/a/toolchain/nvcc", tuple(RGD.ZY_DEVICE_SOURCES), "-gencode=arch=compute_120,code=sm_120",
+                      "libzy_commit_cuda.so")]
     held = (object(), object(), 9)
     monkeypatch.setitem(RGD._ZY_LIBS, 0, held)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert RGD._zy(torch) is held and RGD.zy_available.__wrapped__() is True
-    assert len(built) == 2
+    assert len(built) == 3 and len(asked) == 1
 
 
 @pytest.mark.parametrize(("row", "one_view"), [(Affine("p", 0, 5, 3), True), (Strided("n", 3, 7, 1, 0, 0, 2), True),
