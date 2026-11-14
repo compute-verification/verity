@@ -12,6 +12,7 @@ public import Flock.Desc
 public import Flock.Comp
 public import Flock.PortRoots
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 
 /-!
 # SPOT[Flock]'s two-stage verifier
