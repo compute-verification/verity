@@ -406,7 +406,6 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps
-    from verity_vllm.program.workload import EDGE_PORTS
     from tests.program.predict.test_steps import CACHE_ON
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})
@@ -442,8 +441,8 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
         ["prefix", "prefix_ik", "prefix_iks", "last_token"], ["prefix", "last_token"]]
     assert wls[2].edge.outs == wls[2].edge.ins[:1] == wls[3].edge.ins, "the idle window hands A's fields on as they came in"
     for adv, wl in ((out, wls[1]), (idle, wls[2]), (into, wls[3])):
-        assert E.fields(adv, TOPK) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
-                                       for p, g in EDGE_PORTS}, "the advice's side holds the fields the Program's edge returns"
+        assert E.fields(adv, TOPK) == {v.name: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if v.history in [h for h, _, _ in gs])
+                                       for v in E.VALUES if not v.fp8}, "the advice's side holds the fields the Program's edge returns"
     rids = {w: [r.request_id for r in wls[w].requests] for w in (2, 3)}
     for w, held in ((2, [2, 1, 1, 2]), (3, [1, 1, 1, 1])):
         params = dict(wls[w].fn.signature()[0])
@@ -473,7 +472,6 @@ def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps
-    from verity_vllm.program.workload import EDGE_PORTS
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, engine={"long_prefill_token_threshold": 4, "max_num_batched_tokens": 16}, model={"hf_config": hf})
     assert reg.phi.engine["enable_prefix_caching"] is False
@@ -504,8 +502,8 @@ def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path
     assert [[t.leaves for t in field_types(dict(wls[w].fn.signature()[0])["edge.kv"])] for w in (2, 3)] == [
         [4 * 4 * 576], [4 * 8 * 576]], "every layer's latent rows so far"
     for adv, wl in zip(windows, wls[1:]):
-        assert E.fields(adv, TOPK) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
-                                       for p, g in EDGE_PORTS}, "the advice's side holds the fields the Program's edge returns"
+        assert E.fields(adv, TOPK) == {v.name: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if v.history in [h for h, _, _ in gs])
+                                       for v in E.VALUES if not v.fp8}, "the advice's side holds the fields the Program's edge returns"
 
 
 @pytest.mark.slow

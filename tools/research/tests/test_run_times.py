@@ -156,6 +156,18 @@ def test_a_command_is_read_for_its_kind_its_pool_and_whom_it_is_for():
     assert (run_records.asked_by(QUICK), run_records.asked_by(DIRECT), run_records.asked_by(["x", "--by"])) == ("proofs", None, None)
 
 
+def test_a_command_from_a_tree_with_the_check_at_tools_check_is_read_as_one_from_tools_verity_check():
+    """A tree whose check is at tools/check/ names tools/check/slot.py, check.py and suites.py: each is read for the same kind and
+    pool as at tools/verity/check/, and a look-alike path for neither."""
+    moved = [[a.replace("tools/verity/check/", "tools/check/") for a in c] for c in (QUICK, SHARD)]
+    assert moved != [QUICK, SHARD] and [run_records.kind(c) for c in moved] == ["quick suites", "check shards"]
+    assert [run_records.pool(c) for c in moved] == ["research", "check"]
+    for slot in ("x/tools/check/slot.py.bak", "tools/checks/slot.py"):
+        odd = ["python3", slot, "--", "uv", "run", "python", slot.replace("slot.py", "check.py"), "--keep-going"]
+        assert (run_records.kind(odd), run_records.pool(odd)) == ("other", run_records.NO_POOL), slot
+    assert run_records.kind(["bash", "-lc", "uv run tools/checks/suites.py --quick"]) == "other"
+
+
 def test_percentiles_are_by_kind_machine_and_pool():
     def row(i, kind, machine, pool, wait_min):
         return {"run": f"r{i}", "kind": kind, "machine": machine, "pool": pool, "outcome": "started", "wait_s": wait_min * 60.0,

@@ -437,10 +437,6 @@ files = ["benchmarks/one_stage/served_verdicts.sh"]
 words = { "step 3's law" = "step 3's sampling design" }
 
 [[words_in]]
-files = ["adapters/vllm/tests/pipeline/test_row_tables_stream.py"]
-words = { "Law" = "SamplingDesign", "selection_law" = "selection_sampling_design" }
-
-[[words_in]]
 files = ["adapters/vllm/tests/program/predict/test_weights_tie.py"]
 words = { "params_law" = "params_sampling_design" }
 
@@ -469,10 +465,6 @@ files = ["verity/protocols/accounting/certifier/*/test_scan_zk.py"]
 words = { "params_law" = "params_sampling_design" }
 
 [[words_in]]
-files = ["tools/verity/cli/verity_cli/served_table.py"]
-words = { "Law" = "SamplingDesign" }
-
-[[words_in]]
 files = ["tools/verity/cli/tests/test_onsite_served.py"]
 words = { "Law" = "SamplingDesign" }
 
@@ -482,7 +474,7 @@ words = { "Law" = "SamplingDesign", "selection_law" = "selection_sampling_design
 
 [[words_in]]
 files = ["verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py"]
-words = { "Law" = "SamplingDesign", "selection_law" = "selection_sampling_design" }
+words = { "selection_law" = "selection_sampling_design" }
 
 [[words_in]]
 files = ["tests/test_lean_vocabulary.py"]
