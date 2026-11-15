@@ -131,7 +131,7 @@ class FakeStore:
 def store(tmp_path: Path, monkeypatch) -> FakeStore:
     """A store holding the two references' runs, which `references.json` is pointed at; no `research run` around
     the command; and the kit's writer stamping with `STAMP` rather than asking this machine."""
-    for name in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
+    for name in ("RESEARCH_RUN_DIR", "OUT", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
                  "HOST_GIB", "LEAF_CTAS", "PLAN", "LOCAL_WORK", "LOCAL_ROW", "VLLM_PY", "GPU", "GPU_LEASE_DIR",
                  *WINDOWED):
         monkeypatch.delenv(name, raising=False)
@@ -1023,6 +1023,18 @@ def test_a_local_session_under_a_research_run_writes_no_result(store, capsys, wo
     assert doc["run"] == RUN and doc["local"] == M.LOCAL
     assert json.loads((tmp_path / "rundir" / "out" / "memory.json").read_text()) == doc
     assert not (tmp_path / "rundir" / "result.json").exists()
+
+
+def test_a_local_session_with_out_writes_its_document_there_and_no_measurement(store, capsys, work, tmp_path,
+                                                                               monkeypatch):
+    """Outside a research run, OUT names where the document is written, the file the README names; a --local
+    session is no audit, so its result holds no measurement."""
+    monkeypatch.setenv("OUT", str(tmp_path / "mine"))
+    assert bench(store, "--local", run=Machine()) == 0
+    _, doc, _ = printed(capsys)
+    assert json.loads((tmp_path / "mine" / "memory.json").read_text()) == doc and doc["local"] == M.LOCAL
+    result = tmp_path / "mine" / "result.json"
+    assert not result.exists() or json.loads(result.read_text()).get("measurements", []) == []
 
 
 @pytest.mark.parametrize("card, row", [("NVIDIA H200, 9.0", M.LOCAL_ROWS["9.0"]),

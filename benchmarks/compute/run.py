@@ -103,7 +103,6 @@ from typing import Any, NamedTuple
 
 from verity.device import Site, load_card, rate
 from verity_bench import kit
-from verity_config.settings import SHARED
 
 __all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
            "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
@@ -607,15 +606,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
-    print(text(doc))
-    line = json.dumps(doc)
-    print(line)
-    if out := SHARED.OUT:
-        Path(out).mkdir(parents=True, exist_ok=True)
-        (Path(out) / "compute.json").write_text(line + "\n")
-        writer = kit.writer(out)
-        for m in measured:
-            writer.measurement(**m, mark="measured")
+    kit.report("compute", text(doc), doc, measured)
     return 0
 
 

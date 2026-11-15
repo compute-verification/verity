@@ -47,11 +47,12 @@ Beside the number it prints two references, each from its run in the store with 
 its record states: PoUS's state bound over a card's memory, and the share a wipe left foreign at most.
 `references.json` names their runs; a reference that can't be read prints its reason in place of a number, and so
 does one whose error is 1 or more. Under `research run` the printed document is
-also `$RESEARCH_RUN_DIR/out/memory.json`; a run that ran `--loopback` keeps a loopback's document there whatever it
-prints afterwards, since that document is how `--from` knows the run's session for a loopback.
+also `$RESEARCH_RUN_DIR/out/memory.json`, and outside one `$OUT/memory.json` where `OUT` is set (`kit.report`); a
+run that ran `--loopback` keeps a loopback's document there whatever it prints afterwards, since that document is how
+`--from` knows the run's session for a loopback.
 
-Under `research run` an accepted session of a node run or of `--from` also writes the run's result,
-`$RESEARCH_RUN_DIR/result.json`, the file `research` reads a run's result from, through the harness kit's writer
+There an accepted session of a node run or of `--from` also writes the run's result,
+`$RESEARCH_RUN_DIR/result.json` (where `research` reads it) or `$OUT/result.json`, through the harness kit's writer
 (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
 alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), the same number under
 `METRIC`, the id this directory's `metrics.toml` holds it to on the console's Metrics tab, with its `TARGET` (and, unbound,
@@ -675,20 +676,6 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     return out
 
 
-def result(held: Path, measured: list[dict]) -> None:
-    """Appends `measured` to the result of the run whose directory is `held`, `held/result.json`, through the harness
-    kit's writer, which stamps each with this run, its commit and this host. The writer is given the run's directory
-    itself, not its `out/`: a run has one result, and that file is where `research` reads it. A result holds one
-    measurement a name, so a run that prints a second session keeps its first one's result, and says so."""
-    names = ", ".join(m["name"] for m in measured)
-    try:
-        writer = kit.writer(held)
-        for m in measured:
-            writer.measurement(**m, mark="measured")
-    except ValueError as e:
-        print(f"memory: the result ({names}) is not written: {e}", file=sys.stderr)
-
-
 def text(doc: dict) -> str:
     """The printed lines of a document: the number and how its error reads, what it was measured on, and the
     references."""
@@ -791,16 +778,15 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         print(f"memory: {e}", file=sys.stderr)
         return 2
     doc["beside"] = beside(store_of)
-    print(text(doc))
-    line = json.dumps(doc)
-    print(line)
+    # a loopback certifies nothing and a --local session is no audit, so neither writes a result; a result holds one
+    # measurement a name, so a run that prints a second session keeps its first one's result
+    printed, measured = text(doc), [] if doc["loopback"] or doc["local"] else amounts(doc, ledger)
+    try:
+        kit.report("memory", printed, doc, measured, document=not kept)
+    except ValueError as e:
+        print(f"memory: the result ({', '.join(m['name'] for m in measured)}) is not written: {e}", file=sys.stderr)
     if kept:
         print("memory: this run ran the loopback, and its out/memory.json stays the loopback's document", file=sys.stderr)
-    elif held:
-        (Path(held) / "out").mkdir(parents=True, exist_ok=True)
-        (Path(held) / "out" / "memory.json").write_text(line + "\n")
-    if held and not doc["loopback"] and not doc["local"]:
-        result(Path(held), amounts(doc, ledger))
     return 0
 
 

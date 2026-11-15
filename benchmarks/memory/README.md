@@ -13,7 +13,8 @@ uv sync --all-packages --extra torch-cpu
 uv run verity bench memory --local
 ~~~
 
-One Linux machine with one NVIDIA GPU of compute capability 9.0 (H100, H200) or 12.0 (RTX PRO 6000), the CUDA toolkit
+Both from the clone's root. One Linux machine with one NVIDIA H200 or RTX PRO 6000 (the cards the tree has a row and
+a data sheet for; another needs both, named with `LOCAL_ROW` and `LOCAL_NODE`), the CUDA toolkit
 (`nvcc`, under `/usr/local/cuda*` or `CUDA_HOME`), Lean's `elan` (`tools/verity/lean/setup.sh`; `lake` on the PATH or in
 `~/.elan/bin`) and about 20 GB of disk. vLLM serves Llama 3.2 1B (in int8) on the GPU while a memory audit runs
 against it, and the audit's verifier and the random challenges it sends (its coins) run as processes beside it. The
@@ -28,6 +29,14 @@ second line of the text and the JSON's `local` say so. Lower is better: 0 would 
 read rate over the session was certified as spent reading the audited store. The target is 0.14 at an error of at most
 2^-100.
 
+The share is of the one card's read rate and its host's, at the figures of the tree's data sheets: the verifier's node
+is one card of the card's node sheet (`hardware/nodes/`), handed to it as `--node`. The text's next lines name the
+card and the sheet with the SHA-256 of the tree's data sheets (`hardware/`) and of the verifier
+(`verity/protocols/accounting/poub/verifier/`), the JSON's `machine`; a result whose digests are not `main`'s was
+measured against another verifier or other figures, and is not comparable. One line says what the session ran with,
+from the verifier's record, the JSON's `parameters`: where its coins came from, the store's rows, the openings a window,
+δ a window, the windows and their length, and the lateness allowed.
+
 - **What it needs from you:** nothing of ours. The first run makes a Python environment with the pinned vLLM and the
   checkpoint in `LOCAL_WORK` (default `~/.cache/verity/bench-memory`), by `adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`:
   the vLLM wheel from vLLM's index, torch from PyTorch's, and `unsloth/Llama-3.2-1B` at a pinned revision from
@@ -36,8 +45,9 @@ read rate over the session was certified as spent reading the audited store. The
   prints "no number: the bootstrap failed" and the bootstrap's log names the download. `VLLM_PY` names an environment
   of your own instead, `LOCAL_ROW` another row (a card of another capability needs one: `verity-vllm workload`), `GPU`
   the card. With no `gpu-lease` installed, the tree's own lease program keeps its locks in `LOCAL_WORK`.
-- **Where the result goes:** the text and the JSON on stdout; the session's records (the verifier's `verifier.json`,
-  every process's log) in a new directory under `LOCAL_WORK/runs/`, which stderr names. The two reference numbers
+- **Where the result goes:** the text and the JSON on stdout, and with `OUT=DIR` the JSON in `DIR/memory.json`; the
+  session's records (the verifier's `verifier.json`, every process's log) in a new directory under `LOCAL_WORK/runs/`,
+  which stderr names. The two reference numbers
   printed beside a node's number are runs in our evidence store, so `--local` prints them as not read, with that reason.
 - **What you may change, to do better:** the prover's side, which is all of what the audit treats as untrusted: how
   the store is read in each pass and when (`verity/protocols/accounting/poub/prover/node_store/serving.py`, the store's
@@ -118,9 +128,12 @@ the share a wipe left foreign at most (the bound its run's label states). Each p
 the same rule. A reference that can't be read prints its reason in place of a number, and the session's number still
 prints.
 
-Under `research run`, an accepted session of a node run or of `--from` also writes the run's result,
-`$RESEARCH_RUN_DIR/result.json`, where `research` reads a run's result, through the harness kit's writer
-(`benchmarks/harness/verity_bench/kit.py`), in the five fields every resource's benchmark reports. Each is read from
+The command prints and writes through the harness kit's report (`kit.report`, `benchmarks/harness/README.md`), as
+`verity bench compute` does: under `research run` it writes the printed document to
+`$RESEARCH_RUN_DIR/out/memory.json`, outside one where `OUT` names a directory to `$OUT/memory.json`, and with
+neither nothing. Where it writes, an accepted session of a node run or of `--from` also writes the run's result,
+`$RESEARCH_RUN_DIR/result.json` (where `research` reads a run's result) or `$OUT/result.json`, through the kit's
+writer, in the five fields every resource's benchmark reports. Each is read from
 the verifier's record alone, and its `inputs` name the recorded run and the record's keys it came from: `metric` (the
 printed number in its unit); `verified` (the bytes the verifier certified read over the session's span, its
 `certified_bytes`); `capacity at spec` and `capacity at measured` (for each reading the ledger holds, the data sheet's
@@ -150,12 +163,13 @@ and says so on stderr.
 - `run.py`: the command.
 - `references.json`: the two references' runs.
 - `tests/`: the printer, the four ways in and the references, against records built in the tests, a stand-in for the
-  store and one for the processes; no session runs in the suite (`uv run tools/check/suites.py
-  benchmarks/memory`).
+  store and one for the processes; no session runs in the suite (from this directory, `uv run --project ../.. pytest
+  tests`; or `uv run tools/check/suites.py benchmarks/memory` from the clone's root).
 
 **Reads and writes:** reads a run's `out/verifier.json` (a gate run's, under `out/host/`) and the references' runs
 from the evidence store; under `research run` writes an accepted session's amounts to the run's result,
-`$RESEARCH_RUN_DIR/result.json`, and the printed document to `$RESEARCH_RUN_DIR/out/memory.json`, and `--loopback`
+`$RESEARCH_RUN_DIR/result.json`, and the printed document to `$RESEARCH_RUN_DIR/out/memory.json` (outside one, with
+`OUT` set, `$OUT/result.json` and `$OUT/memory.json`), and `--loopback`
 leaves `run.sh`'s records beside the document. A run that ran `--loopback` keeps a loopback's document there whatever
 it prints afterwards: it is how `--from` knows that run's session for a loopback. **Backs:** no Lean guarantee or
 claim; the number is the ledger's γ of one session, which PoUB's own analysis bounds.
