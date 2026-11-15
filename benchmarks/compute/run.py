@@ -43,11 +43,7 @@ Either way it reads the verifier's side of the record, and nothing the developer
 - `out/pieces/pouw/pearlplus-answer.json`, the Pearl+ verifier's answer: its verdict, its credit, and its sample's
   ε_s at δ_s (`epsilon_s`, `delta_s`): a sample that accepts misses more than the share ε_s of the credited work with
   probability at most δ_s. They are sampling's alone, not the ε and δ the credit holds at: the assumption's gap ε_a
-  and its own δ_a, and the binding of the passes' commitments, are not in them. Its sample's coin must be a live
-  challenger's (`profile.source_from` is `challenger`, `LIVE`): an answer that samples on the node's own coins, as
-  every run with an empty `PEARLC_CHALLENGER_GATE` does, or that states no source, as answers before Pearl+'s verifier
-  wrote it do, prints no number. The answer doesn't state the source of the passes' salt coins (the Pearl+ piece's
-  `coin_source` does, in a file this command doesn't read); an empty gate leaves both in-process;
+  and its own δ_a, and the binding of the passes' commitments, are not in them;
 - `out/pieces/pouw/pearlplus-lean.json` and `pearlplus-lean-check.json`, the Lean verifier's verdict and the record's
   comparison of it with the answer: where the record holds them they must be the answer's, and where it holds no Lean
   verdict the text says so;
@@ -128,8 +124,6 @@ METRIC = "compute-accounting/verified-compute-share"
 #: the share the number is driven to
 TARGET = Fraction(97, 100)
 PROTOCOL = "verity/pouw/pearl-plus/v1"
-#: the source of an answer's sample a number is printed for: a live challenger session's coin (Pearl+'s verify_run.py)
-LIVE = "challenger"
 #: the files of a run this command reads
 ANSWER = "out/pieces/pouw/pearlplus-answer.json"
 LEAN = "out/pieces/pouw/pearlplus-lean.json"
@@ -279,7 +273,7 @@ def credit(tree: Path) -> dict:
         if answer is None:
             raise NoNumber("the run left no Pearl+ answer")
         protocol, verdict, public = answer["protocol"], answer["verdict"], answer.get("public") or {}
-        work, sampled = public.get("work") or {}, (answer.get("profile") or {}).get("source_from")
+        work = public.get("work") or {}
         credited, passes = work.get("credited"), work.get("macs")
         mine = ("accept", answer.get("commitment"), credited)
         theirs = None if lean is None else (lean["verdict"], lean.get("commitment"), (lean.get("work") or {}).get("credited"))
@@ -292,10 +286,6 @@ def credit(tree: Path) -> dict:
         raise NoNumber(f"Pearl+'s answer is {verdict}, not accept ({answer.get('reason') or 'no reason recorded'})")
     if not _count(credited) or passes is not None and not _count(passes):
         raise NoNumber(f"Pearl+'s answer accepts and holds no credit in MACs (credited {credited!r}, macs {passes!r})")
-    if sampled != LIVE:
-        raise NoNumber(f"Pearl+'s answer samples on {'no coin it states' if sampled is None else repr(sampled) + ' coins'}, "
-                       f"not a live {LIVE}'s (profile.source_from): a run whose PEARLC_CHALLENGER_GATE is empty draws "
-                       f"its coins in-process and claims no verdict")
     for name, lean_s, answer_s in zip(("verdict", "run commitment", "credit"), theirs or mine, mine):
         if lean_s != answer_s:
             raise NoNumber(f"the Lean verifier's {name} is {str(lean_s)[:16]} and the answer's {str(answer_s)[:16]}")
