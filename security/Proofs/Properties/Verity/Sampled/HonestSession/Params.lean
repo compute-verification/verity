@@ -8,6 +8,7 @@ public import Proofs.Properties.Verity.Sampled.Accepts
 public import Proofs.Flock.Recursive.FirewallObj
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
+import Proofs.Flock.VBridge.Family.Names
 import Proofs.Pouw.Period.Sort
 import Base.Bytes
 import Flock.Scan
@@ -424,29 +425,76 @@ on it; this exposes the inner `sortStrings` over the tree's structurally-reducib
 private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
     Spot.keys? (Lean.Json.obj kvs) = some (Spot.sortStrings (kvs.toArray.map (·.1))) := rfl
 
-/-- `"1/2".splitOn "/" = ["1", "2"]`, stepped through `String.splitOnAux`'s equation (the walk cannot evaluate
-`String.splitOn`, which is not kernel-reducible); fed to the walk so `Core.Ratio.ofString "1/2" _` reduces (its `natOf`
-and `gcd` the walk then runs in the kernel). The one split the parameters' `delta` needs. -/
+/-- A one-character numeral's `toNat?`, via `Flock.Scan.toNat?_digits` on its single digit (the kernel cannot reduce
+`String.toNat?` on a byte-backed literal). -/
+private theorem toNat_one : ("1" : String).toNat? = some 1 := by
+  rw [show ("1" : String) = String.ofList ['1'] from by
+        rw [← show ("1" : String).toList = ['1'] from by decide, String.ofList_toList],
+      Flock.Scan.toNat?_digits ['1'] (by decide) (by decide)]
+  decide
+
+private theorem toNat_two : ("2" : String).toNat? = some 2 := by
+  rw [show ("2" : String) = String.ofList ['2'] from by
+        rw [← show ("2" : String).toList = ['2'] from by decide, String.ofList_toList],
+      Flock.Scan.toNat?_digits ['2'] (by decide) (by decide)]
+  decide
+
+/-- `toNat!` from `toNat?`: on a valid numeral the `isNat` guard holds, so the panicking branch never runs. -/
+private theorem toNat!_one : ("1" : String).toNat! = 1 := by
+  have h := toNat_one
+  unfold String.toNat? String.Slice.toNat? at h
+  unfold String.toNat! String.Slice.toNat!
+  split at h
+  · rename_i hi; rw [if_pos hi]; exact Option.some.inj h
+  · exact absurd h (by simp)
+
+private theorem toNat!_two : ("2" : String).toNat! = 2 := by
+  have h := toNat_two
+  unfold String.toNat? String.Slice.toNat? at h
+  unfold String.toNat! String.Slice.toNat!
+  split at h
+  · rename_i hi; rw [if_pos hi]; exact Option.some.inj h
+  · exact absurd h (by simp)
+
+/-- `"1/2".splitOn "/" = ["1", "2"]`, via `FlockVBridge.Names.splitOn_sep` (the one-byte separator reduces `String.splitOn`
+to `List.splitOn` on the characters, which `String.splitOn` is not kernel-reducible on). The one split `delta` needs. -/
 private theorem split_half : "1/2".splitOn "/" = ["1", "2"] := by
-  show String.splitOnAux "1/2" "/" 0 0 0 [] = ["1", "2"]
-  repeat (rw [String.splitOnAux.eq_1]; simp (config := {decide := true}) only [ite_true, ite_false])
+  have hsplit : (['1', '/', '2'] : List Char).splitOn '/' = [['1'], ['2']] := by
+    rw [show (['1', '/', '2'] : List Char) = ['1'] ++ '/' :: ['2'] from rfl]
+    rw [show (['1'] ++ '/' :: ['2'] : List Char).splitOn '/' = ['1'] :: (['2'].splitOn '/') from by
+          simp only [List.splitOn_eq_splitOnP]
+          exact List.splitOnP_append_cons_of_forall_mem (by decide) '/' (by decide) ['2']]
+    rw [show (['2'] : List Char).splitOn '/' = [['2']] from by
+          rw [List.splitOn_eq_splitOnP, List.splitOnP_eq_singleton]
+          all_goals decide]
+  rw [FlockVBridge.Names.splitOn_sep "/" '/' rfl rfl rfl rfl (by decide) "1/2",
+      show "1/2".toList = ['1', '/', '2'] from by decide, hsplit]
+  decide
 
-/-- `Core.Ratio.natOf` on the one-character numerals the parameters' `delta` holds. Proved on each literal on its own so
-the `decide` stays a one-character guard (`isEmpty`/`all isDigit`/`length`/`toNat!`), never the whole ratio parse's
-monad bind and `gcd` at once (that `decide` does not terminate in practice). -/
-private theorem natOf_one : Core.Ratio.natOf "1" "delta" = .ok 1 := by decide
+/-- `Core.natOf` on the one-character numerals `delta` holds. The guard (`isEmpty`/`all isDigit`/`length`) is discharged by
+`String.all_bool_eq` on the single character, and `toNat!` by `toNat!_one`/`toNat!_two`. -/
+private theorem natOf_one : Core.natOf "1" "delta" = .ok 1 := by
+  unfold Core.natOf
+  split
+  · rw [toNat!_one]
+  · rename_i h
+    exact absurd (by rw [String.all_bool_eq, show ("1" : String).toList = ['1'] from by decide]; decide) h
 
-private theorem natOf_two : Core.Ratio.natOf "2" "delta" = .ok 2 := by decide
+private theorem natOf_two : Core.natOf "2" "delta" = .ok 2 := by
+  unfold Core.natOf
+  split
+  · rw [toNat!_two]
+  · rename_i h
+    exact absurd (by rw [String.all_bool_eq, show ("2" : String).toList = ['2'] from by decide]; decide) h
 
-/-- `Core.Ratio.ofString "1/2" "delta" = .ok ⟨1, 2⟩`: the parameters' `delta`. Fed to the walk whole (the ratio parse's
-`natOf` reads `String.all`/`length`/`front`, which the walk's weak-head step cannot drive), so `ruleAt` rewrites the
-`Core.Ratio.ofString` call before it is unfolded. `split_half` clears the one `splitOn`; `natOf_one`/`natOf_two` clear the
-two `natOf` reads, so the remaining `decide` sees only the two concrete naturals, the `≤` and the `gcd`. -/
+/-- `Core.Ratio.ofString "1/2" "delta" = .ok ⟨1, 2⟩`: the parameters' `delta`. `split_half` clears the one `splitOn`;
+`natOf_one`/`natOf_two` clear the two `natOf` reads, so the remaining `rfl` sees only the two concrete naturals, the `≤`
+and the `gcd`. -/
 private theorem ratio_half : Core.Ratio.ofString "1/2" "delta" = .ok ⟨1, 2⟩ := by
   unfold Core.Ratio.ofString
   rw [split_half]
-  simp only [natOf_one, natOf_two]
-  decide
+  simp only [natOf_one, natOf_two, bind, Except.bind]
+  rfl
 
 /-! ## v2's parameters, with every field named -/
 
