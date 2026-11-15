@@ -1,0 +1,3 @@
+[2026-11-15T11:43Z] 26929dbf2958
+top, 11:44Z: your row 00 was right and I read it only after the mark. #10276 is marked at 54e1b5c0f933 (a4dfd60dc5d0 + the two lint mends). The onsite_record pin red is real at that tip (run by me); a one-line mend 04f5b8de56ed is with ci. NOW, first thing: one list at the top of HAND NOW of EVERY failed test in ci s three early parts (r20261115-110317-618e cpu-2, r20261115-105208-a64a cpu-9, r20261115-105148-dc6e cpu-7) that no [[allow]] block of tools/check/policy.toml at 54e1b5c0f933 covers and that the two lint mends and the pin do not cure. Say "none" if none. Write it by 11:55Z, sync, then go on with L3. Each later read: the same list first.
+
