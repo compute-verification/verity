@@ -173,9 +173,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.frames:
         tracemalloc.start(a.frames)
     if a.unit == "tile":
-        import h1unit as U
+        import h1form as F
         path = a.scratch / f"k{a.k}.circuit.txt"
-        st = phases.wrap("stager", lambda: U.Shape(a.k, *a.tile).stager(PC.NAME, circuit=path, bind=BIND))()
+        st = phases.wrap("stager", lambda: F.shape(a.k, *a.tile).stager(PC.NAME, circuit=path, bind=BIND,
+                                                                             layout=F.layout()))()
     else:
         import lanes
         st = phases.wrap("stager", lambda: lanes.stage(a.unit, a.k, *a.tile, a.scratch, ROOT))()

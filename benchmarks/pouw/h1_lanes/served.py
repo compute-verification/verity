@@ -57,7 +57,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 sys.path.insert(0, str(HERE))
 
-import h1unit as U  # noqa: E402
+from verity.protocols.accounting.pouw.prover.lowering import h1unit as U  # noqa: E402
+
+import h1form as F  # noqa: E402
 import leaf as L  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
@@ -481,7 +483,7 @@ def prepare(a: argparse.Namespace) -> None:
     honest = [tg for tg, _ln, neg in js if neg is None]
     plan = {"checks": {tg: {**by[tg], "expect": EXPECT.get(tg, "ACCEPT")} for tg, _l, _n in js}, "honest": honest}
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
-    summary = {"k": k, "tile": U.tile(), "unit": unit, "window": op["window"], "draw_root": op["draw_root"],
+    summary = {"k": k, "tile": F.tile(), "unit": unit, "window": op["window"], "draw_root": op["draw_root"],
                "lane_program": ctx.prog, "registration": d, "produced": record["produced"], "unit_ok_on_words": unit_ok,
                "roots": {"a": a_root.hex(), "b": b_root.hex(), "zy": op["ports"]["zy"]["entry"]["root"]},
                "lanes": lanes, "ands": by[js[0][0]]["ands"], "ok": {tg: by[tg]["ok"] for tg in by},
