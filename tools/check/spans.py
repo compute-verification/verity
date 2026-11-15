@@ -16,13 +16,19 @@ is made, so a watcher sees the check live; each step opens a child span as its p
 `steps.jsonl` gets its record (a step that never started, a skip, is one completed line); the root completes when the run
 ends.  So the steps running now are the open children, each since its own start (`research status RUN` reads them).  `trace_id` is the recorded run's id (`RESEARCH_RUN_ID`), so the store's custody
 ties the trace to the Attempt; outside a recorded run it is a local id, and the file is still written for humans.
+
+A check in its own scope inside a `research run` also keeps what that scope used in the run's slot record (`ScopeWatch`):
+systemd removes the scope with the check, and the run's own sampler reads the cgroup it was started in, not the scope.
 """
 from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import threading
 import time
 import uuid
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -46,23 +52,124 @@ def _scalar(v) -> bool:
 
 #: the check's own scope unit, set by slot.py on a `scope=1` slot (slot.SCOPE_ENV)
 SCOPE_ENV = "CHECK_SCOPE_UNIT"
+#: the run's slot record, relative to RESEARCH_RUN_DIR (slot.py's RUN_SLOT), which `ScopeWatch` adds `used` to
+RUN_SLOT = "slot.json"
+#: how often `ScopeWatch` reads the scope, and the span its busiest cores are averaged over and its record rewritten
+WATCH_EVERY_S = 10
+CORES_WINDOW_S = 60
+GIB = 2 ** 30
+
+
+def own_scope(root: Path = Path("/")) -> Path | None:
+    """The cgroup this process runs in, when that is the check's own scope (SCOPE_ENV names it); else None, since a shared
+    session scope's numbers are other runs' too."""
+    unit = SETTINGS.get(SCOPE_ENV)
+    if not unit:
+        return None
+    try:
+        line = next(ln for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::"))
+    except (OSError, StopIteration):
+        return None
+    d = root / "sys/fs/cgroup" / line[3:].strip().strip("/")
+    return d if d.name == f"{unit}.scope" else None
 
 
 def check_memory(root: Path = Path("/")) -> dict:
-    """`mem_peak_gb` (the check's high-water mark so far, memory.peak) and `mem_current_gb` of the cgroup this process runs in,
-    when that is the check's own scope (SCOPE_ENV names it); else nothing, since a shared session scope's numbers are other
-    runs' too. GB are 10^9 bytes, one decimal."""
-    unit = SETTINGS.get(SCOPE_ENV)
-    if not unit:
+    """`mem_peak_gb` (the check's high-water mark so far, memory.peak) and `mem_current_gb` of the check's own scope
+    (`own_scope`); else nothing. GB are 10^9 bytes, one decimal."""
+    if (d := own_scope(root)) is None:
         return {}
     try:
-        line = next(ln for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::"))
-        d = root / "sys/fs/cgroup" / line[3:].strip().strip("/")
-        if d.name != f"{unit}.scope":
-            return {}
         return {f"mem_{k}_gb": round(int((d / f"memory.{k}").read_text().strip()) / 1e9, 1) for k in ("peak", "current")}
-    except (OSError, StopIteration, ValueError):
+    except (OSError, ValueError):
         return {}
+
+
+class ScopeWatch:
+    """What the check's own scope used while it ran, as `used` in the run's slot record (RUN_SLOT), which outlives the scope:
+
+        cores_max                  CPU seconds over seconds, at the busiest CORES_WINDOW_S
+        anon_max_gib               `anon` of memory.stat at its highest: memory without the page cache
+        current_max_gib            memory.current at its highest, and `file` of memory.stat (the page cache) at that reading
+        file_at_current_max_gib
+        peak_gib                   memory.peak: the kernel's high-water mark, page cache counted
+        cpu_s, samples, every_s    the CPU seconds in all, how many readings, and how often one is taken
+
+    `sample` reads the scope every WATCH_EVERY_S on a thread of its own (`start`), and `write` puts the figures in the record
+    every CORES_WINDOW_S and at `stop`, so a check that is killed keeps what it had used a minute before. GiB are 2^30 bytes,
+    as a slot's mem= is. A reading that fails is skipped, and a record that can't be written never stops the check."""
+
+    def __init__(self, scope: Path, record: Path, clock=time.monotonic):
+        self.scope, self.record, self.clock = scope, record, clock
+        self.window: deque[tuple[float, float]] = deque()
+        self.used: dict = {"cores_max": None, "anon_max_gib": 0.0, "current_max_gib": 0.0, "file_at_current_max_gib": 0.0,
+                           "peak_gib": 0.0, "cpu_s": 0.0, "samples": 0, "every_s": WATCH_EVERY_S}
+        self.stopped = threading.Event()
+        self.thread: threading.Thread | None = None
+
+    @classmethod
+    def start(cls, root: Path = Path("/")) -> ScopeWatch | None:
+        """A watch of the check's own scope on its thread; None outside one or outside a `research run`."""
+        if (scope := own_scope(root)) is None or not (run_dir := SETTINGS.RESEARCH_RUN_DIR):
+            return None
+        watch = cls(scope, Path(run_dir) / RUN_SLOT)
+        watch.thread = threading.Thread(target=watch.run, name="scope-watch", daemon=True)
+        watch.thread.start()
+        return watch
+
+    def sample(self) -> None:
+        t = self.clock()
+        stat = {k: int(v) for k, v in (ln.split() for ln in (self.scope / "memory.stat").read_text().splitlines()
+                                       if len(ln.split()) == 2 and ln.split()[1].isdigit())}
+        cpu = int(next(ln.split()[1] for ln in (self.scope / "cpu.stat").read_text().splitlines()
+                       if ln.startswith("usage_usec "))) / 1e6
+        current = int((self.scope / "memory.current").read_text().strip())
+        peak = int((self.scope / "memory.peak").read_text().strip())
+        u = self.used
+        self.window.append((t, cpu))
+        while len(self.window) > 1 and t - self.window[1][0] >= CORES_WINDOW_S:
+            self.window.popleft()
+        t0, cpu0 = self.window[0]
+        if t - t0 >= CORES_WINDOW_S:
+            u["cores_max"] = max(u["cores_max"] or 0.0, round((cpu - cpu0) / (t - t0), 1))
+        u["anon_max_gib"] = max(u["anon_max_gib"], round(stat.get("anon", 0) / GIB, 1))
+        if current / GIB > u["current_max_gib"]:
+            u["current_max_gib"], u["file_at_current_max_gib"] = round(current / GIB, 1), round(stat.get("file", 0) / GIB, 1)
+        u.update(peak_gib=max(u["peak_gib"], round(peak / GIB, 1)), cpu_s=round(cpu, 1), samples=u["samples"] + 1)
+
+    def write(self) -> None:
+        """`used` into the record, beside what slot.py wrote there."""
+        try:
+            doc = json.loads(self.record.read_text())
+        except (OSError, ValueError):
+            doc = {}
+        tmp = self.record.with_name(f".{self.record.name}.{os.getpid()}")
+        try:
+            tmp.write_text(json.dumps({**(doc if isinstance(doc, dict) else {}), "used": dict(self.used)}) + "\n")
+            os.replace(tmp, self.record)
+        except OSError:
+            pass
+
+    def run(self) -> None:
+        written = self.clock()
+        while not self.stopped.wait(WATCH_EVERY_S):
+            try:
+                self.sample()
+            except (OSError, ValueError, StopIteration):
+                continue
+            if self.clock() - written >= CORES_WINDOW_S:
+                self.write()
+                written = self.clock()
+
+    def stop(self) -> None:
+        self.stopped.set()
+        if self.thread:
+            self.thread.join()
+        try:
+            self.sample()
+        except (OSError, ValueError, StopIteration):
+            pass
+        self.write()
 
 
 class SpanLog:
@@ -79,6 +186,7 @@ class SpanLog:
         self.opened: dict[str, tuple[str, str]] = {}
         self.path.unlink(missing_ok=True)
         self._write(self.root_id, None, "check", self.root_start, None, None, {})
+        self.watch = ScopeWatch.start()
 
     def open(self, name: str) -> None:
         """The step's open child span, as its process starts; `step` completes it."""
@@ -107,6 +215,8 @@ class SpanLog:
         if not self.closed:
             self.closed = True
             self._write(self.root_id, None, "check", self.root_start, _now_utc(), status, check_memory())
+            if self.watch:
+                self.watch.stop()
 
     def _write(self, span_id: str, parent: str | None, name: str, start: str, end: str | None, status: str | None,
                attributes: dict) -> None:
