@@ -328,6 +328,24 @@ theorem pubI_n_pf (hC : CircuitFileFacts) : pubI.n = nUnits := by
 theorem pubO_domain_pf (hC : CircuitFileFacts) : pubO.fv3Bytes "domain_ids" "y" = .ok domY := by
   rw [pubO_eq hC]; kernel_rfl'
 
+/-! ## The drawn walk.
+
+The sample draws the one unit of the population of one. The only tainted term the walk builds is the new header's
+`publicDigest` (`canonUtf8`); abstract its value to `s5` and block `canonUtf8`. The new header is the loaded header with
+`unit_draw`, `instances`, `population`, `units` reset (`setObjVal!`); the `instances` count and the drawn `indices`
+reduce to `1` and `#[0]` by the kernel, so `hcu` states them that way. -/
+
+fwd_def drawnPF drawn_pf (c : Flock.Circuit) (sSha sCls s3' s4' s5 : String)
+    (hports : c.ports = #[yPort]) (hg : c.g = 1) (hupv : c.upv = 1) (hout : c.outWords = 0)
+    (hce : c.classSha.isEmpty = false)
+    (hcu : canonUtf8 (((((hdrF sSha sCls).setObjVal! "unit_draw" draw₀).setObjVal! "instances"
+        (Lean.toJson (1 : Nat))).setObjVal! "population" (Lean.toJson (1 : Nat))).setObjVal!
+        "units" (HmRow.unitsEntry c #[0])) = .ok s5) :
+    HmRow.drawn c (pubPF c sSha sCls s3' s4') draw₀ by
+  [hports, hg, hupv, hout, hce, hcu]
+  block [canonUtf8]
+  shallow []
+
 /-- `HmIn.checkOwn` over no public input port, no own recomputation: the match `(none, isEmpty = true)` returns, whatever
 the population value. -/
 theorem checkOwn_ok_pf : HmIn.checkOwn {} pubI none = .ok () := rfl
