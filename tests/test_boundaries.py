@@ -1728,7 +1728,7 @@ ORDER_TREE = {
     "verity/circuits/at_load.py": "from verity.runtime import toy\n",
     "verity/circuits/in_function.py": "def f():\n    import verity.runtime.toy\n",
     "verity/circuits/in_string.py": "TOOL = 'verity.runtime.toy:run'\n",
-    "tests/verity/circuits/test_a.py": "import verity.runtime.toy\n",
+    "verity/circuits/tests/test_a.py": "import verity.runtime.toy\n",
     "verity/circuits/at_load.circuit-check.py": "import verity.runtime.toy\n",
     "verity/commitments/__init__.py": "",
     "verity/commitments/crypto/__init__.py": "",
@@ -1762,14 +1762,14 @@ ORDER_TREE = {
     "verity/protocols/accounting/pouw/verifier/check.py": ("from verity.circuits import at_load\nfrom verity.commitments.crypto import lms\n\n\n"
                                                 "def f():\n    from verity.protocols.accounting.pouw.prover import build\n"),
     "verity/protocols/accounting/pouw/verifier/lean/scripts/vectors.py": "import verity.protocols.accounting.pouw.prover.build\n",
-    "tests/verity/protocols/accounting/pouw/verifier/test_check.py": "import verity.protocols.accounting.pouw.prover.build\n",
+    "verity/protocols/accounting/pouw/verifier/tests/test_check.py": "import verity.protocols.accounting.pouw.prover.build\n",
     "verity/protocols/accounting/pouw/verifier/check/interop.py": "import verity.protocols.proofs.flock.prover.stage\n",
     "verity/protocols/accounting/pouw/device/__init__.py": "",
     "verity/protocols/accounting/pouw/device/serve.py": "from verity.protocols.accounting.pouw.verifier import check\n",
     "verity/protocols/accounting/pouw/device/party.py": "from verity.protocols.accounting.pouw.device import serve\n",
     "verity/protocols/accounting/pouw/prover/__init__.py": "",
     "verity/protocols/accounting/pouw/prover/build.py": "from verity.protocols.accounting.pouw.verifier import check\n",
-    "tests/verity/protocols/accounting/pouw/prover/test_build.py": "from verity.protocols.accounting.pouw.device import serve\n",
+    "verity/protocols/accounting/pouw/prover/tests/test_build.py": "from verity.protocols.accounting.pouw.device import serve\n",
 }
 
 
@@ -1824,7 +1824,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
         "verity/commitments/crypto", "verity/commitments", "verity", prover, "examples", "."]
     party = f"{device}/party.py"
     split = places | _places([{"paths": [party]}])
-    assert [_place(f, split) for f in ("tests/verity/circuits/test_a.py", f"{check}/interop.py", party, f"{device}/serve.py",
+    assert [_place(f, split) for f in ("verity/circuits/tests/test_a.py", f"{check}/interop.py", party, f"{device}/serve.py",
                                        "verity/commitments/merkle.py", "verity/errors.py", "tools/lazy.py")] == [
         "verity/circuits", verifier, party, device, None, None, None]
     assert [_distribution(f, listing) for f in ("verity/protocols/proofs/flock/prover/stage.py", "verity/protocols/proofs/flock/verifier/interface.py",
@@ -1856,7 +1856,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     marked = _place_loads(loads, listing._replace(places=places | _places([{"paths": ["verity/runtime"], "trusted": True}])))
     assert [sorted(x) for x in marked["verity/runtime"]] == [["verity/circuits"], ["verity/circuits"], [
         "verity/circuits/at_load.circuit-check.py", "verity/circuits/at_load.py", "verity/circuits/in_function.py",
-        "verity/circuits/in_string.py", "tests/verity/circuits/test_a.py"]], marked["verity/runtime"]
+        "verity/circuits/in_string.py", "verity/circuits/tests/test_a.py"]], marked["verity/runtime"]
     parted = _place_loads(loads, listing._replace(places=split))
     assert list(parted) == sorted([*found, party]), list(parted)
     assert [sorted(x) for x in parted[device]] == [sorted(x) for x in found[device]], parted[device]
