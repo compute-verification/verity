@@ -145,6 +145,12 @@ def marker_ids(tree: ast.Module) -> frozenset[int]:
                      and any(isinstance(t, ast.Name) and t.id == "__models__" for t in node.targets) for c in ast.walk(node.value))
 
 
+def export_ids(tree: ast.Module) -> frozenset[int]:
+    """ids of the strings a module's ``__all__`` names: its own identifiers, which state no fact the identifier doesn't."""
+    return frozenset(id(c) for node in tree.body if isinstance(node, ast.Assign)
+                     and any(isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets) for c in ast.walk(node.value))
+
+
 def docstrings(tree: ast.Module) -> Iterator[tuple[str, str, int]]:
     """(symbol, docstring, line) for the module and every class and function."""
     doc = ast.get_docstring(tree, clean=False)
