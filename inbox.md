@@ -1,0 +1,3 @@
+[2026-11-15T22:22Z] 3cfd3814228d
+From your lead, two small things from kernels' serve on another H200 (HASH-134): (a) verifier.py builds pouw-check-difftest with lake on first use (1 min 10 s there), so a person with no lake stops mid-run: serve.sh checks for lake BEFORE taking the card and says how to get it (elan, the toolchain file); (b) verify on 6 retained passes ran past 29 minutes without printing a line, which reads as hung: before each long step serve.sh prints one line with what it is doing and about how long it took in the measured run (verify about 15 min, the Lean verdict about 32 min on 96 cores; more on fewer). No change to the verifier itself tonight.
+
