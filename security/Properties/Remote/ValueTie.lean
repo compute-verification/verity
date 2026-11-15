@@ -1,6 +1,7 @@
 module
 
 public import Properties.Verity.Game
+public import Properties.Verity.Tied
 public import Properties.Pouw.PearlPlusTie
 
 /-!
@@ -23,9 +24,10 @@ Pearl+ are `Properties.Pouw.PearlPlus`'s, read by name and restated nowhere here
   compiled verifier on a W that registers the weights while the claim fails on them, with probability at most the
   error. The claim (`Phases.TiedUpTo`) is, at each of those phases, on the transcript SPOT's extractor reads
   off the prover (`Commit.TiedBy`): every served y of a tile that the run's table ties at W's entries, bound in that
-  transcript with its A row, holds the tied gates' output; and where the registered file's circuit complies with the
-  inference-only policy, the tied circuit's blocks hold `Γ` on their registered rows with the untied cells' y counted
-  as fresh input (`Tying.CompliesBut`). And over those phases
+  transcript with its A row, holds the tied gates' output; and at each inference-only case of the phase's counted
+  exchange whose declaration is the committed circuit (`LaysOutAs`) and complies with the policy at the case's own `Γ`
+  and `α`, the tied circuit's blocks hold that `Γ` on their registered rows with the untied cells' y counted as fresh
+  input (`Tying.CompliesBut`). And over those phases
   ∏ (1 − wrong share) is at least 1 − ε, the wrong share (`Properties.Pouw.PearlPlus.Run.wrongShare`) the ticket weight
   of the tiles the table does not tie. `Phases.FleetYIsTheGates` is the same claim pooled across sequences, at
   `FleetYAtWIsTheCall`'s threshold.
@@ -39,6 +41,23 @@ Pearl+ are `Properties.Pouw.PearlPlus`'s, read by name and restated nowhere here
   (`PeriodYAtWIsTheCall`, or `FleetYAtWIsTheCall`) with its two conditions on the runs (`Runs.CommittedBeforeCoin`,
   `Runs.DrawIsTickets`), `ecr/sha-512` at the two finders, and what makes the period one (`Phases.WellFormed`). Uniform
   coins are the probability's own, and the challenger's log and its signature enter through `Runs.DrawIsTickets`.
+
+**The inference-only cases.** The policy conjunct of `Commit.TiedBy` reads the inference-only cases
+(`Verity.PolicyCase`) of the phase's counted exchange, `(P.out x k).sent`. Nothing here makes that exchange an
+outcome of `Vocab.game` under the commit's strategy, so nothing ties these cases to the outcome that
+`Vocab.Holds … .inferenceOnly` judges. The conjunct's antecedent, that the case's declaration complies at the case's
+own `Γ` and `α` (`Nci.CompliesRate … d`), is its own hypothesis and is not discharged by the clause. The conjunct says
+nothing where no inference-only case's declaration is the committed circuit (`LaysOutAs`), the one case of the two that
+can arise at remote, whose composite has an inference-only component. Nothing proves `LaysOutAs` of any case today: it
+is the gap the clause's docstring names (`Vocab.Holds`: its two missing checks, the case's wires the committed
+record's and the case's unit the committed `Γ`'s), stated once.
+
+**What is open before any statement here is a guarantee:**
+
+* the statements' proofs: none is proved here;
+* `LaysOutAs` of the inference-only cases: the check the clause lacks, not done;
+* `Phases.out` derived from the commit's strategy and the game's coins (`Vocab.game`), in place of a field of the
+  period constrained only by `Phases.Plays`: not done.
 
 **Two commitments, one value.** A served y is under SPOT's commitment, which the extractor's transcript is
 read from, and under Pearl+'s, whose values the run's table holds (`Properties.Pouw.PearlPlus.Run.table`). The claim is
@@ -158,16 +177,37 @@ end Tying
 
 variable {ι : Type} {dev : Device ι} {α : Type} [Fintype α]
 
+/-- **The case's declaration is the committed circuit**, with the registered inputs `theta`: the declaration `d` an
+inference-only case lays out is the committed files' circuit, gate for gate, and its registered inputs are `theta`.
+Nothing proves it of any case today: it is the gap `Vocab.Holds`'s inference-only clause names (the case's wires the
+committed record's, and the case's unit the committed `Γ`'s), stated once. -/
+def LaysOutAs (V : Vocab dev α) (params : ByteArray) (files : Array ByteArray)
+    (theta : Finset (Fin (V.circuitOf params files).N)) (d : RegisteredCircuit) : Prop :=
+  ∃ h : d.D = V.circuitOf params files, d.θ.map (finCongr (congrArg Circuit.N h)).toEmbedding = theta
+
 /-- **An execution phase's play at remote, as the one vocabulary reads it**: the parameters, the committed files and the
-commitment, the prover's strategy in the game after them (`Verity.Vocab.game`), and the tied circuit of the committed
-circuit with its registered inputs at the vocabulary's cut (`Verity.Vocab.cut`), whose y no registered input is. -/
+commitment, the prover's strategy in the game after them (`Verity.Vocab.game`), and the cut of the committed circuit,
+its registered inputs and its tied circuit, with no y gate among the committed files' constants or the registered
+inputs.
+
+The cut, the registered inputs and the tying are fields of the play only so that every statement over a `Commit` holds
+at every choice of them. They are not something the prover is trusted to choose: a reader instantiates the
+registration's own. -/
 structure Commit (V : Vocab dev α) where
   params : ByteArray
   files : Array ByteArray
   commitment : ByteArray
   strategy : Game.Strategy (V.game params files commitment)
+  /-- the cut's layout of the committed circuit: its cells, each one's y an input row of a cut linear -/
+  cut : Cut (V.circuitOf params files)
+  /-- **no y gate is a constant** of the committed files -/
+  cut_consts : ∀ g ∈ cut.y, (V.read params files).consts g = none
+  /-- the committed circuit's registered inputs -/
+  theta : Finset (Fin (V.circuitOf params files).N)
+  /-- **y's gates are outside `theta`**: a served y is a prover value until the tie holds it, never registered -/
+  theta_cut : Disjoint cut.y theta
   /-- the tied circuit of the phase's committed circuit -/
-  tying : Tying (V.circuitOf params files) (V.theta params files) (V.cut params files)
+  tying : Tying (V.circuitOf params files) theta cut
 
 namespace Commit
 
@@ -187,21 +227,33 @@ def BoundAt (g : Fin (V.circuitOf c.params c.files).N) : Prop :=
 /-- **The cell `e` is one the claim reads**, at the run `R`: it is credited in a tile the run's table ties at W's
 entries (`CreditedTied`), and its y gates and the gates of its A row are bound in the served transcript. -/
 def Reads (R : Properties.Pouw.PearlPlus.Run) (e : Cell) : Prop :=
-  CreditedTied R e ∧ (∀ g ∈ (V.cut c.params c.files).yAt e, c.BoundAt g) ∧ ∀ a ∈ c.tying.row e, c.BoundAt a
+  CreditedTied R e ∧ (∀ g ∈ c.cut.yAt e, c.BoundAt g) ∧ ∀ a ∈ c.tying.row e, c.BoundAt a
 
-/-- **The phase is tied by the run `R`**: the served transcript extends to one of the tied circuit, the added gates
-evaluated on the weights' registered rows, in which
+/-- **The phase is tied by the run `R`**, the inference-only cases read from the sent messages `s` at the composite
+`K`: the served transcript extends to one of the tied circuit, the added gates evaluated on the weights' registered
+rows, in which
 
 * every y the claim reads (`Reads`: of a cell the tie ties, credited in a tile the run's table ties at W's entries,
   bound in the served transcript with the gates of its A row) holds the tied gates' output; and
-* where the registered file's circuit complies with the inference-only policy at the published `Γ` and `α`
-  (`Verity.Vocab.declaration`), the tied circuit does with each block held to `Γ` on its registered rows and the
-  untied cells' y counted as fresh input (`Tying.CompliesBut`). -/
-def TiedBy (R : Properties.Pouw.PearlPlus.Run) : Prop :=
+* at each inference-only case of `s` (`Verity.PolicyCase`) whose declaration `d` is the committed circuit with the
+  registered inputs `theta` (`LaysOutAs`) and complies with the policy at the case's own `Γ` and `α`
+  (`Properties.Remote.VerifierOwn`), the tied circuit does with each block held to that `Γ` on its registered rows and
+  the untied cells' y counted as fresh input (`Tying.CompliesBut`).
+
+At remote `s` is the phase's counted exchange's, `(P.out x k).sent` (`Phases.TiedAt`). Nothing here makes that
+exchange an outcome of `Vocab.game` under the commit's strategy, so nothing ties these cases to the outcome that
+`Vocab.Holds … .inferenceOnly` judges. The conjunct's antecedent (`Nci.CompliesRate … d`) is its own hypothesis and is
+not discharged by the clause. The conjunct says nothing where no inference-only case's declaration is the committed
+circuit (`LaysOutAs`), the one such case that can arise at remote, whose composite has an inference-only component;
+nothing proves `LaysOutAs` of any case today: it is the gap the clause's docstring names, stated once. -/
+def TiedBy (K : Verity.Registration.Composite) (s : Sent) (R : Properties.Pouw.PearlPlus.Run) : Prop :=
   ∃ X' : c.tying.tied.D.Trace, c.tying.Extends c.served X' ∧ c.tying.Evaluated X' ∧
-    (∀ e ∈ c.tying.cells, c.Reads R e → ∀ g ∈ (V.cut c.params c.files).yAt e, c.tying.IsGates X' g) ∧
-    (Nci.CompliesRate (V.gates c.params) (V.fresh c.params) (V.declaration c.params c.files) →
-      c.tying.CompliesBut (V.gates c.params) (V.fresh c.params) (c.tying.untiedCells X'))
+    (∀ e ∈ c.tying.cells, c.Reads R e → ∀ g ∈ c.cut.yAt e, c.tying.IsGates X' g) ∧
+    ∀ p r ev, PolicyCase K s p r ev → ∀ (j' : Lean.Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
+      NciCheck.Properties.Expands (NciCheck.Protocol.instanceOf p ev) j' → NciCheck.Properties.Parses j' i →
+      Properties.Remote.VerifierOwn p i → LaysOutAs V c.params c.files c.theta d →
+      Nci.CompliesRate i.gamma ((i.num : ℝ) / i.den) d →
+      c.tying.CompliesBut i.gamma ((i.num : ℝ) / i.den) (c.tying.untiedCells X')
 
 /-- **A y the claim reads is not shown at W's entries** by the rows `S`, at the run `R` (`Tying.ShownAt` in the served
 transcript). -/
@@ -312,8 +364,10 @@ noncomputable def finder [Fintype Ω] [Nonempty Ω] (q : ℕ) : _root_.Claims.Fi
   out x := (Properties.Pouw.PearlPlus.collisionIn (P.hashed x)).map Properties.Pouw.PearlPlus.msgPair
   cost _ := q
 
-/-- **Phase `k` is tied** on the period's coins `x`: by its run (`Commit.TiedBy`). -/
-def TiedAt (x : Fin n → Ω) (k : Fin n) : Prop := (P.commit x k).TiedBy (P.runs.run x k)
+/-- **Phase `k` is tied** on the period's coins `x`: by its run (`Commit.TiedBy`), the inference-only cases read
+from the phase's counted exchange at remote. -/
+def TiedAt (x : Fin n → Ω) (k : Fin n) : Prop :=
+  (P.commit x k).TiedBy .remote (P.out x k).sent (P.runs.run x k)
 
 /-- **Phase `k` and every earlier phase of its sequence are tied** on the period's coins `x`. -/
 def TiedPrefix (x : Fin n → Ω) (k : Fin n) : Prop :=

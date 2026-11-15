@@ -12,8 +12,8 @@ proved, from the call's A row and the weight's row. This module is that circuit,
 definition; that its gates compute Pearl+'s product at W's entries is `Verity.ValueTie.Tying.AtW`.
 
 * **The cut** (`Cut`): the registered file's cells and each one's y, input gates of the circuit, 32 bits a cell, one
-  cell a gate. It is the vocabulary's (`Verity.Vocab.cut`), whose registered inputs `θ` hold no y gate
-  (`Verity.Vocab.theta_cut`): a served y is a prover value until the tie holds it.
+  cell a gate. At remote it is the play's (`Verity.ValueTie.Commit.cut`), whose registered inputs `θ` hold no y gate
+  (`Verity.ValueTie.Commit.theta_cut`): a served y is a prover value until the tie holds it.
 * **The circuit** (`Tying`): the registered file's circuit embedded gate for gate, every y gate computed, every other
   gate as served; the gates it adds are each cell's tie, reading only the cell's A row (served gates), the weights
   (added inputs, registered) and the cell's own tie gates.
