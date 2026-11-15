@@ -6,7 +6,7 @@ squares is the kernel's own reduction (`cuda_rmsnorm._pure_scale`, and for the f
 v3's batches, v1's words) and an apply unit is the kernel's own
 epilogue (`cuda_rmsnorm._out`) on its elements, so N / G apply units return the kernel's outputs word for word. The fused
 apply redoes the residual add on its G elements, so the cut adds N residual adds to the fused kernel's gates and none to
-the pure kernel's (`adapters/vllm/verity_vllm/definitions/tests/test_cuda_rmsnorm_split.py`). Their Boolean versions are
+the pure kernel's (`tests/adapters/vllm/verity_vllm/definitions/test_cuda_rmsnorm_split.py`). Their Boolean versions are
 `boolean_norms_split`'s units of the same names, `_v2`.
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ from verity_vllm.definitions.registry.prims import BF16, F32
 
 _EXACT = ("exact-model-tested: `RMSNormCudaVector8_v1` and `RMSNormFusedCudaVector8_v1{N, EPS, BLOCK}` cut at their scale; "
           "the sum of squares and N / G apply units return their outputs word for word "
-          "(`adapters/vllm/verity_vllm/definitions/tests/test_cuda_rmsnorm_split.py`)")
+          "(`tests/adapters/vllm/verity_vllm/definitions/test_cuda_rmsnorm_split.py`)")
 
 
 @composite("RMSNormSumSqCudaVector8", 1, ["N", "EPS", "BLOCK"],

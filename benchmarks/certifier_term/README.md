@@ -107,7 +107,7 @@ still, those rows' terms among it.
 
 The suite beside the runner (`tests/`) holds the result to the calculator's document and to the kit's schema. What
 the command prints without `--out`, and the calculator's numbers, are held where the calculator's tests are,
-`benchmarks/network_traces/tests/test_certifier_term.py`.
+`tests/benchmarks/network_traces/test_certifier_term.py`.
 
 ## The rows
 

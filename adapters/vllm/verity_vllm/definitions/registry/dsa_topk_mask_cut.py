@@ -366,7 +366,7 @@ def _pick_calls(B, S, *ports):
 
 DsaTopKDigitPickV2 = CompositeDefinition("DsaTopKDigitPick", 2, ("M", "K", "TOPK"), _pick_sig, _pick_calls, doc=_pick_calls.__doc__,
                                          conformance="exact-model-tested: held to DsaTopKDigitPick_v1 and to the cut's twin by "
-                                                     "adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+                                                     "tests/adapters/vllm/tests/program/test_dsa_long_row_calls.py")
 
 
 def _compare(S):

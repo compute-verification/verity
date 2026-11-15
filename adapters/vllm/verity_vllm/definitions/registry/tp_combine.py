@@ -34,7 +34,7 @@ straight into the unit that reduces it (a combine's grain is its producer unit's
   more than a chunk (the MoE's residual add: a token's 6,144 elements as one row, `ResidualAdd_v2{N=6144}`, or as its column
   blocks' rows, 16 of `ResidualAdd_v2{N=384}`), reaches the chunk units through `RowChunks_v1{N,C}`, a copy of it as N / C
   output rows. Unchunked, a token's row of 6,144 is past one Flock block: the fused call's unit by its ANDs alone, and every
-  all-reduce of it with its rows' slots (adapters/vllm/verity_vllm/definitions/tests/test_tp_combine.py).
+  all-reduce of it with its rows' slots (tests/adapters/vllm/verity_vllm/definitions/test_tp_combine.py).
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ __all__ = ["AllReduceCustomRow", "AllReduceMultimemRow", "AllReduceResidualMnnvl
            lambda S: ((("col", Array(int(S.WORLD), BF16)), ("res", BF16)), BF16),
            conformance="not-yet-established: one coordinate of AllReduceResidualMnnvl_v1, the r of the exact-model-tested "
                        "AllReduceRmsNormMnnvl_v1, node for node; not captured on its own "
-                       "(adapters/vllm/verity_vllm/definitions/tests/test_tp_combine.py)")
+                       "(tests/adapters/vllm/verity_vllm/definitions/test_tp_combine.py)")
 def AllReduceResidualMnnvlCoordinate(B, S, col, res):
     """One coordinate of `AllReduceResidualMnnvl_v1`: ``r = AllReduceMnnvlCoordinate_v1(col) + res`` (`Bf16AddF2fp_v1`), the
     fused kernel's new residual, which is all its norm reads of the coordinate."""
@@ -75,7 +75,7 @@ def _at_refuse(S: dict) -> str | None:
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.C, BF16))), ("res", Array(S.N, BF16))), Array(S.C, BF16)),
            conformance="not-yet-established: elements [AT*C, (AT+1)*C) of AllReduceResidualMnnvl_v1, the r of the "
                        "exact-model-tested AllReduceRmsNormMnnvl_v1, node for node; not captured on its own "
-                       "(adapters/vllm/verity_vllm/definitions/tests/test_tp_combine.py)",
+                       "(tests/adapters/vllm/verity_vllm/definitions/test_tp_combine.py)",
            refuse=_at_refuse)
 def AllReduceResidualMnnvlAt(B, S, parts, res):
     """`AllReduceResidualMnnvl_v1{WORLD,N,SHOT}`'s r on its elements [AT·C, (AT+1)·C): that Definition at width C on the ranks'
@@ -123,7 +123,7 @@ def _cut(runs, N: int, row: int) -> list[tuple[int, int, object]]:
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))),), Array(S.N, BF16)),
            conformance="not-yet-established: row ROW of the exact-model-tested AllReduceMultimem_v1{SIZE=ROWS*N}, its vectors' "
                        "Calls of the same AllReduceMultimemVector_v1; not captured on its own "
-                       "(adapters/vllm/verity_vllm/definitions/tests/test_tp_combine.py)")
+                       "(tests/adapters/vllm/verity_vllm/definitions/test_tp_combine.py)")
 def AllReduceMultimemRow(B, S, parts):
     """Row ROW of `AllReduceMultimem_v1{WORLD,SIZE=ROWS*N,TREES,FTZ}`, the call's flattened [ROWS, N]: each run of
     `multimem_runs` over the call cut to the row, one `AllReduceMultimemVector_v1{TREE}` per 16-byte vector (a row of whole
@@ -144,7 +144,7 @@ def AllReduceMultimemRow(B, S, parts):
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))),), Array(S.N, BF16)),
            conformance="not-yet-established: row ROW of the exact-model-tested AllReduceCustom_v1{SIZE=ROWS*N}, its elements' "
                        "Calls of the same AllReduceCustomCoordinate_v1; not captured on its own "
-                       "(adapters/vllm/verity_vllm/definitions/tests/test_tp_combine.py)")
+                       "(tests/adapters/vllm/verity_vllm/definitions/test_tp_combine.py)")
 def AllReduceCustomRow(B, S, parts):
     """Row ROW of `AllReduceCustom_v1{WORLD,SIZE=ROWS*N,STAGE}`, the call's flattened [ROWS, N]: each run of `custom_owners`
     over the call cut to the row, one `AllReduceCustomCoordinate_v1{START=owner}` per element."""

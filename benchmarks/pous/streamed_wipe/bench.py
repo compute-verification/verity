@@ -38,7 +38,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT), str(ROOT / "verity/protocols/accounting/pous/verifier/tests")]
+sys.path[:0] = [str(ROOT), str(ROOT / "tests/verity/protocols/accounting/pous/verifier")]
 
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw  # noqa: E402
 from verity.protocols.accounting.pous.device import wipe_challenger as WC  # noqa: E402

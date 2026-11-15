@@ -44,7 +44,7 @@ untraced = [
 inputs = ["tools/verity/lean/README.md", "tools/check/common.py", "tools/check/lean_slot.py",
           "tools/check/slot.py", "tools/check/verdicts.py", "tools/check/settings.py",
           "tools/verity/graph/verity_graph/contract.py",
-          "tools/verity/graph/tests/key_vectors.json", "tools/verity/cli/verity_cli/__init__.py",
+          "tests/tools/verity/graph/key_vectors.json", "tools/verity/cli/verity_cli/__init__.py",
           "tools/lean/setup.sh", "tools/research/src/research/store/moves.json",
           "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py"]
 # check runs it as three parts by test id (`lean-suites:verity-lean-audit:K/3`, `suites.py`'s `id_part_of`), each collecting

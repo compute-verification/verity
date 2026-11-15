@@ -32,7 +32,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "adapters/vllm/verity_vllm/definitions/registry", "adapters/vllm/verity_vllm/definitions/__init__.py",
           "adapters/vllm/verity_vllm/definitions/evidence.json", "adapters/vllm/verity_vllm/definitions/evidence.py",
           "security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
-          "adapters/vllm/tests/regression/store_io.py",
+          "tests/adapters/vllm/tests/regression/store_io.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py",
           "tools/research/src/research/cli.py", "tools/research/src/research/waitcap.py", "tools/research/src/research/clone.py", "tools/research/src/research/compare.py",
           "tools/research/src/research/env.py", "tools/research/src/research/record.py", "tools/research/src/research/remote.py",
@@ -42,8 +42,8 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "tools/research/src/research/treelock.py",
           "tools/research/src/research/pipefail.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
-          "verity/protocols/proofs/flock/prover/tests/data/captured-101/slices/silumul-v1-i8192",
-          "verity/protocols/proofs/flock/prover/tests/data/captured-101/slices/rope-head-d64",
-          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/regression/__init__.py"]
+          "tests/verity/protocols/proofs/flock/prover/data/captured-101/slices/silumul-v1-i8192",
+          "tests/verity/protocols/proofs/flock/prover/data/captured-101/slices/rope-head-d64",
+          "tests/adapters/vllm/tests/__init__.py", "tests/adapters/vllm/tests/regression/__init__.py"]
 # Each xdist worker starts its own evaluator; `verity_difftest.build` takes its lock, so the workers build one at a time.
 parallel = true

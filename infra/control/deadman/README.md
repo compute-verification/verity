@@ -16,4 +16,4 @@ Console deploys it in its Vercel team (a Pro plan: Hobby crons run once a day), 
 | `CRON_SECRET` | a fresh random string; Vercel's cron sends it as `Authorization: Bearer ...` |
 | `DEADMAN_HOST` | optional: the row's host, default `vy-control-verity` |
 
-Standard library only, so no `requirements.txt`. Tests: `infra/ops/tests/test_deadman.py`.
+Standard library only, so no `requirements.txt`. Tests: `tests/infra/ops/test_deadman.py`.

@@ -18,7 +18,7 @@ each variable of a prefix this registry owns (`OWNED`: the ``CHECK_*`` knobs and
 declare and nothing else in the tree reads (`ELSEWHERE`): `check.py` and `suites.py` refuse to start with one, so a misspelt or
 retired knob fails the run instead of being ignored.
 
-The check package reads ``os.environ`` here.  The reads left outside are ``tools/check/tests/test_settings.py``'s
+The check package reads ``os.environ`` here.  The reads left outside are ``tests/tools/check/test_settings.py``'s
 `DIRECT`, which only shrinks: `slot.py` and `lean_slot.py` run alone, their source sent to a machine as ``python3 -``
 (``check.py --slots``, ``research.auto``, ``research.remote``), `common.py` is in every Lean package's audit key
 (`lean_audit.py`), and the read guard (``guard/``) loads in every test process before anything else; each variable they read
@@ -112,7 +112,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_REGRESSION", str, None, VALUE, "1: adapters/vllm's reference regression runs; check sets it in a recorded "
       "run, as do the quick tier and suites.py inside a `research run`"),
     S("VERITY_SKIP_STORE", str, None, DEBUG, "1: the store-backed tests skip, for a hand run without the store"),
-    S("VERITY_TEST_CACHE", str, None, WHERE, "the suites' kept passes; unset, $XDG_CACHE_HOME/verity/tests",
+    S("VERITY_TEST_CACHE", str, None, WHERE, "the suites' kept passes; unset, $XDG_CACHE_HOME/tests/verity",
       "a kept pass is reused only under its inputs' hash"),
     S("VERITY_TEST_CACHE_MIN_S", str, None, WHERE, "keep per-test passes only of tests whose call took at least this many "
       "seconds (`suites.py --per-test-min-s`)", "which passes are kept, not what they say"),

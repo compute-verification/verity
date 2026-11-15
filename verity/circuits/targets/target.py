@@ -33,7 +33,7 @@ multiple of 16.
   chain whose intermediate transition saturates is rejected at the next step.  The pinned simulator masks the
   exponent instead and is not the reference there.
 * **Statement.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``,
-  ``benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0``) whose family digest is :data:`FAMILY_DIGEST`.
+  ``tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0``) whose family digest is :data:`FAMILY_DIGEST`.
 
 Transition unit versus proof block
 ==================================
@@ -72,7 +72,7 @@ Outside FIRST
   (:data:`verity.circuits.silicon.models.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
   accumulator).  Whether a given GEMM kernel launch (split-K, stream-K, different tile orders) realises exactly this
-  chain is a frontend binding question; ``benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0``'s
+  chain is a frontend binding question; ``tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0``'s
   K = 1536 input is one captured case where it did.
 
 Draft targets
@@ -166,7 +166,7 @@ __all__ = [
 
 #: The tensor-core gate families' names and versions.  Each ``veritor.*`` spelling is baked into a ``*_FAMILY_DIGEST``
 #: pin, fixtures and recorded runs, so it stays; a new family takes a fresh id outside ``veritor.*``
-#: (``verity/circuits/tests/test_targets_frozen_families.py``).
+#: (``tests/verity/circuits/test_targets_frozen_families.py``).
 TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
 #: The family-name prefix of FIRST's vocabulary on another BF16 pipeline.
 TC_BF16_NAME_PREFIX = "veritor.tc-bf16."

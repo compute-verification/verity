@@ -67,7 +67,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 MEMORY_CHALLENGER = ROOT / "verity" / "protocols" / "accounting" / "pous" / "device" / "timed_audit.py"
 SALT = bytes(range(24))
-VECTORS = ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "fixtures" / "vectors.json"
+VECTORS = ROOT / "tests" / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "fixtures" / "vectors.json"
 LATE_EXTRA_NS = 50_000
 """How far past the limit the late control holds an answer (the red team's limit + 50 µs)."""
 PINNED = {"band-chain/d12/v1": ("band/64kb/segment", "band-segment-w", None),
@@ -383,7 +383,7 @@ def _nvcc_version() -> str | None:
 
 
 def vector_bytes(label: str, n: int) -> bytes:
-    """The pinned vectors' input stream (`verity/protocols/accounting/pous/verifier/tests/pous_vectors.py`'s `_bytes`)."""
+    """The pinned vectors' input stream (`tests/verity/protocols/accounting/pous/verifier/pous_vectors.py`'s `_bytes`)."""
     return hashlib.shake_256(b"verity-pous/vectors/" + label.encode()).digest(n)
 
 

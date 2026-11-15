@@ -88,7 +88,7 @@ export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$
 
 D=$S/stage; N=32; K=${K:-16}
 if [ "${ZK:-1}" = 0 ]; then ZF=(); else ZF=(--zk); fi
-python3 verity/protocols/proofs/flock/prover/tests/served_registered.py --out $D --schema ${SCHEMA:-v1} > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
+python3 tests/verity/protocols/proofs/flock/prover/served_registered.py --out $D --schema ${SCHEMA:-v1} > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 $B statement "${ZF[@]}" --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1
 if [ "${ZK:-1}" = 0 ]; then
