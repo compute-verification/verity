@@ -283,9 +283,10 @@ def main() -> int:
 
     import torch
     import vllm
-    from verity_vllm.engine import handle
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
+
+    from verity_vllm.engine import handle
 
     tu = Topup(a.topup_lib)
     green, step_stream, new_stream = None, None, None
@@ -444,7 +445,7 @@ def main() -> int:
     # stream (execute_model returns None when sample_tokens finishes the step)
     ex_orig, st_orig = runner.execute_model, getattr(runner, "sample_tokens", None)
 
-    def mark() -> "torch.cuda.Event":
+    def mark() -> torch.cuda.Event:
         e = torch.cuda.Event(enable_timing=True)
         e.record()
         return e

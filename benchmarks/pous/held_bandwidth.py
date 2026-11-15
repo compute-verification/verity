@@ -52,11 +52,11 @@ sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/
 
 import bandwidth as B
 
-from verity.protocols.accounting.pous.verifier import period
-from verity.protocols.accounting.pous.verifier import verifier as V
-from verity.protocols.accounting.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
+from verity.protocols.accounting.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
+from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.verifier import verifier as V
 
 UNIT, BLOCK, DIGEST = p2.UNIT_BLOCKS, p2.BLOCK_BYTES, receipts.DIGEST_BYTES
 SALT, PER_LEAF = receipts.SALT_BYTES, receipts.PER_LEAF

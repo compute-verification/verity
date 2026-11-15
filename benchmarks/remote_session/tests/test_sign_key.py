@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/a
 
 import device
 import sign_key
+
 from verity.commitments import randomness
 from verity.protocols.accounting.poub.verifier import receipts
 

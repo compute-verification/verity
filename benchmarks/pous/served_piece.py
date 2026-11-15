@@ -112,15 +112,15 @@ from typing import Any
 
 import torch
 
-from verity.runtime.stream import Side
+from verity.commitments import advice
+from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
-from verity.commitments import advice
-from verity.commitments.identity import canonical_json_bytes
+from verity.runtime.stream import Side
 from verity_vllm import protocols as PO
 
 if str(Path(__file__).resolve().parent) not in sys.path:

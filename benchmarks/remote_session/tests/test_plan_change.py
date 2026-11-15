@@ -12,9 +12,9 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/poub/prover/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.protocols.accounting.poub.verifier import receipts as rb  # noqa: E402
-
 import prover  # noqa: E402
+
+from verity.protocols.accounting.poub.verifier import receipts as rb  # noqa: E402
 
 TOP = (1 << 64) - 1
 

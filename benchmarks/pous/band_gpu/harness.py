@@ -392,6 +392,7 @@ def vector_gate(name: str, backend: Backend, params: Any, pinned: dict[str, Any]
     is pinned at the registered point, so a band run at another in-degree encodes it at the registered `d`
     (`backend.encode_at`); the run's own `d` is gated against `verity.protocols.accounting.pous.verifier` by `reference_gate`."""
     import torch
+
     from verity.protocols.accounting.pous.verifier import schemes
 
     vector, label, count = PINNED[name]
@@ -808,10 +809,10 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     """One harness run (the module docstring's steps).  `backend`, `base` (the scheme's geometry before `W` sizes it) and
     `vectors` replace the GPU kernels, the registered geometry and the pinned vectors (the CPU tests)."""
     import torch
-    from verity.protocols.accounting.pous.verifier import schemes
-    from verity.protocols.accounting.pous.verifier.verifier import leaf_hash
 
     from verity.protocols.accounting.pous.device.timed_audit import scheme_of
+    from verity.protocols.accounting.pous.verifier import schemes
+    from verity.protocols.accounting.pous.verifier.verifier import leaf_hash
 
     base = base or schemes.get(a.scheme).params
     if getattr(a, "band_d", 0):

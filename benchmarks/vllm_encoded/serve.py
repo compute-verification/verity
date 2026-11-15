@@ -597,10 +597,11 @@ def main() -> None:
         ap.error("--no-autotune is a compiled mode")
 
     import vllm
-    from verity_vllm.engine import handle
-    from verity_vllm.engine.hooks import Hooks
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
+
+    from verity_vllm.engine import handle
+    from verity_vllm.engine.hooks import Hooks
 
     hooks = Hooks(tag="ra-vllm-encoded")
     install = Install(args)
@@ -618,8 +619,8 @@ def main() -> None:
         hook_runner(hooks, install)
     binder = None
     if args.store:
-        from verity_vllm.protocols.poub.binder import Binder, Every
         from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
+        from verity_vllm.protocols.poub.binder import Binder, Every
         window = {}
         if args.store_window:
             from verity.protocols.accounting.poub.verifier.audit import NoiseTiles

@@ -29,10 +29,10 @@ sys.path.insert(0, str((ROOT / "verity/protocols/accounting/poub/prover/p2_stage
 import bandwidth as B  # noqa: E402
 from p2_v1 import bandwidth_toy as BT  # noqa: E402
 
+from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_parties, receipts
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import verifier as V
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_parties, receipts
 
 SEED = hashlib.sha512(b"test_pous_p2_bandwidth/seed").digest()
 

@@ -28,21 +28,21 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
-import pytest
-
-from pous_fakes import Clock
 import pous_test_signer as ts
+import pytest
 import wipe_judge
 import wipe_side
-from verity.runtime.stream import Side
+from pous_fakes import Clock
+
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.prover import wipe_store as WS
-from verity.protocols.accounting.pous.verifier.period import decided_by
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
+from verity.protocols.accounting.pous.verifier.period import decided_by
+from verity.runtime.stream import Side
 
 TEST_ID = mc.TEST_PREFIX + W.PROTOCOL
 SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))

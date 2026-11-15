@@ -374,7 +374,7 @@ def test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_rec
     held = (delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.hiding(r))
             + Fraction(ledger.binding(r)))
     slack = Fraction(r.passes, 2 ** audit.SLACK_LOG2)
-    assert ledger.delta_parts(r)["slack"] == slack and D == held + slack
+    assert ledger.delta_parts(r)["slack"] == slack and held + slack == D
     assert D - Fraction(sum(k) - sum(sampled), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
     with pytest.raises(ValueError, match=r"window 0 drew 70 of its 80 receipts, not min\(60, 80\)"):
         dataclasses.replace(r, samples=60)

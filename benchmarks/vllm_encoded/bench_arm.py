@@ -182,7 +182,7 @@ class _Installed:
 
         self.green_lib = SimpleNamespace(so=ctypes.CDLL(str(Path(self.libs["topup_lib"]).resolve())))
         self.green, self.step_stream, self.new_stream = green.partition(self.green_lib, torch, fill_sms)
-        import stack as S   # benchmarks.vllm_encoded.serve put HERE first; the install imports this module
+        import stack as S  # benchmarks.vllm_encoded.serve put HERE first; the install imports this module
 
         if Path(S.__file__).resolve().parent != HERE:
             raise RuntimeError(f"the stack module is {S.__file__}, not {HERE / 'stack.py'}")

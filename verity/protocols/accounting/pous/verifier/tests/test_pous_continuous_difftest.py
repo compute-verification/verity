@@ -43,6 +43,11 @@ from pous_continuous_model import (
 )
 from pous_fakes import Clock
 
+from verity.protocols.accounting.pous.device.continuous import (
+    ContinuousMemoryChallenger,
+    Reply,
+    run_continuous,
+)
 from verity.protocols.accounting.pous.verifier import band
 from verity.protocols.accounting.pous.verifier.audit import (
     UnsignedRounds,
@@ -50,11 +55,6 @@ from verity.protocols.accounting.pous.verifier.audit import (
     run_timed,
 )
 from verity.protocols.accounting.pous.verifier.codec import encode_segments
-from verity.protocols.accounting.pous.device.continuous import (
-    ContinuousMemoryChallenger,
-    Reply,
-    run_continuous,
-)
 from verity.protocols.accounting.pous.verifier.verifier import VerifierKey
 
 ROOT = Path(__file__).resolve().parents[6]

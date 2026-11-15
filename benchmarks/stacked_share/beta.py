@@ -360,9 +360,9 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
     (default: a value a Call of the window makes that a later step reads). ``registered``: root inputs the Build binds as
     run inputs that are fixed before the coins all the same (the census's 8B Build binds its weights so): their values
     carry no bits and no product reads them as data, so a weight's MACs stay linear maps."""
-    from verity.circuits.program import RUN, input_id, is_input
     from verity.circuits import stacking as P
     from verity.circuits.census import census, step_of
+    from verity.circuits.program import RUN, input_id, is_input
 
     if str(REDTEAM) not in sys.path:
         sys.path.insert(0, str(REDTEAM))

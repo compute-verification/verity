@@ -55,8 +55,21 @@ from __future__ import annotations
 import hashlib
 
 from verity.protocols.accounting.poub.verifier.codec import (  # noqa: F401  the store codec's, which this module's users take
-    BIND_INDEX, DOMAIN, P512, P1024, SEED_BYTES, Field, Key, Sloth, binding, decode_word, derive, encode_word, rho,
-    rho_inv)
+    BIND_INDEX,
+    DOMAIN,
+    P512,
+    P1024,
+    SEED_BYTES,
+    Field,
+    Key,
+    Sloth,
+    binding,
+    decode_word,
+    derive,
+    encode_word,
+    rho,
+    rho_inv,
+)
 
 LOW_MIN = 8
 

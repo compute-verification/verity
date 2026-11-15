@@ -15,8 +15,8 @@ import threading
 
 import pytest
 
-from verity.protocols.accounting.poub.prover import period_prover as PP
 from verity.protocols.accounting.poub.prover import audit_prover
+from verity.protocols.accounting.poub.prover import period_prover as PP
 from verity.protocols.accounting.poub.verifier import audit, verifier_party
 from verity.protocols.accounting.poub.verifier import coins as C
 from verity.protocols.accounting.poub.verifier import period as P
