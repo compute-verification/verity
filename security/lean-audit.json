@@ -29179,8 +29179,8 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (instHMod.hMod (Flock.Bridge.samplingDesignK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -29638,13 +29638,13 @@
     "Eq (Verity.Advice.Committed.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.Compose": {
-    "SetLike.instMembership.mem P.committed g": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (P.incorrect X) Finset.instEmptyCollection.emptyCollection": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (P.incorrect X) Finset.instEmptyCollection.emptyCollection": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "SetLike.instMembership.mem P.committed g": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.ComposeCone": {
+    "Disjoint (P.incorrect X) (P.cone T)": "Disjoint taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "SetLike.instMembership.mem T t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "SetLike.instMembership.mem P.committed t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Disjoint (P.incorrect X) (P.cone T)": "Disjoint taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "SetLike.instMembership.mem P.committed t": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.ContainsImplements": {
     "∀ (g : Fin t.D.N), Eq (t.D.isInput g) Bool.true → SetLike.instMembership.mem d.θ (M.emb g) → SetLike.instMembership.mem t.θ g": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -33549,13 +33549,13 @@
    }
   },
   "Definitions.Core.FirstHit": {
-   "digest": "c12ed4083a7101e6f2a3f2ec20ec961d62908eeddb39c39419b78a948c152397",
+   "digest": "d14b7555b48c9aa09755e4830267fa0c4593d11b976cd20d70e42bf9707618c7",
    "definitions": {
     "Verity.FirstHit.classFinderAt": "1149e6634be571e3d8d44bfb6b2e650b3bcfb09787d7b992afbf75fcbc9f6509",
     "Verity.FirstHit.clsOf": "e39003c3518f494f20a99e2e140f0ce770f549d62c045ed2afec925b8e7d4021",
     "Verity.FirstHit.firstIdx": "a89db9e9a7b0472e8461ac411da0e08adfefbda659451d619a11ce1f659e706a",
     "Verity.FirstHit.loopCostAt": "8d34714c937c040d3929f3066d6c368bdc0fa9a46fbc7e6185afdf0a34459939",
-    "Verity.FirstHit.outOfAt": "380656b070cf2cfe2005a2202b30a7c3083ebdb0ebe05868056c8400b1678603",
+    "Verity.FirstHit.outOfAt": "a14671265dba96094fada0207a57d21ad168607ff7dfe11a5e9acf5243a5b051",
     "Verity.FirstHit.sampleFinderAt": "a62db64dd0111de912f16b0f40557c2839893e1d5ccc561d492785dc9f572941"
    }
   },
@@ -53422,9 +53422,9 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass": {
-   "digest": "63632d6210b8232b15e47d8e2d2b6d45820c02a9052b172696cd6f765594c0c1",
+   "digest": "11c8a595157638cb213ad574e4656c6ebe28a6fe54f37ad2eb261cbca1faad4f",
    "definitions": {
-    "Claims.SamplingGeneric.Compiled.finderXCls": "c6c3592e44aea39e80093ccae49b47f466a556e7d1a3558fbfa91242aaa81d8b",
+    "Claims.SamplingGeneric.Compiled.finderXCls": "0fb93c441b2aae01b940b2fa7ee4cbd30bd713f6428939e72824e23255b90a12",
     "Claims.SamplingGeneric.CompiledTwo.finderICls": "a49ab8c654d29fd74a4cd1811e9bb6d2402d403aedd2f00400e0bfba716fdb40"
    }
   },
