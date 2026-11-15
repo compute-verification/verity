@@ -205,13 +205,12 @@ def cpu_machines(root: Path) -> list[str]:
 def here() -> str | None:
     """The machine this runs on: the name the research run that started it recorded (its job.json's `run.remote.machine`), else
     the host's name."""
+    if not settings.is_set("RESEARCH_RUN_DIR"):
+        return socket.gethostname()
     try:
-        if settings.is_set("RESEARCH_RUN_DIR"):
-            job = json.loads((Path(settings.RESEARCH_RUN_DIR) / "job.json").read_text(encoding="utf-8"))
-            return job["run"]["remote"]["machine"]
+        return json.loads((Path(settings.RESEARCH_RUN_DIR) / "job.json").read_text(encoding="utf-8"))["run"]["remote"]["machine"]
     except (KeyError, OSError, ValueError, TypeError):
-        pass
-    return socket.gethostname()
+        return socket.gethostname()
 
 
 def read_here() -> list[str]:
