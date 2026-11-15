@@ -27,7 +27,8 @@ TREE = {
     "verity/a/mod.py": "X = 1\n",
     "verity/a/pyproject.toml": '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["."]\n\n[tool.verity.tests]\n'
                                'untraced = ["tests/test_a.py"]\n',
-    "verity/a/tests/test_a.py": "from verity.a import mod\n\n\ndef test_a():\n    assert mod.X\n",
+    "verity/a/tests/test_a.py": "from pathlib import Path\n\nfrom verity.a import mod\n\nCODE = Path(__file__).parent / \"../..\" / \"a\" / \"mod.py\"\n\n\n"
+                                "def test_a():\n    assert mod.X and CODE.is_file()\n",
     "adapters/dist/pyproject.toml": '[project]\nname = "dist"\nversion = "0"\nrequires-python = ">=3.12"\n\n'
                                     '[project.optional-dependencies]\nx = []\n\n[build-system]\nrequires = ["hatchling"]\n'
                                     'build-backend = "hatchling.build"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
@@ -109,6 +110,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     files = tomllib.loads((r / TR.FILES_MAP).read_text())
     assert files["paths"] == {"adapters/dist/tests/": "tests/adapters/dist/tests/", "tools/plain/tests/": "tests/tools/plain/",
                               "verity/a/tests/": "tests/verity/a/"}
+    assert files.get("split") == {"verity/a/tests/test_a.py: verity": {"to": "verity", "why": TR.SPLIT_WHY}}
     suites = tomllib.loads((r / TR.SUITES_MAP).read_text())
     assert suites["paths"] == {"tools/plain/pyproject.toml": "tests/tools/plain/pyproject.toml",
                                "verity/a/pyproject.toml": "tests/verity/a/pyproject.toml"}
@@ -124,6 +126,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
         git(r, "commit", "-q", "-m", m)
     left = [f for f in git(r, "ls-files").split() if "/tests/" in f and not f.startswith(("tests/", "tools/move/"))]
     assert left == []
+    assert '"../../../verity"' in (r / "tests/verity/a/test_a.py").read_text()
     a = tomllib.loads((r / "tests/verity/a/pyproject.toml").read_text())
     assert a["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": ["../../../verity/a"]}
     assert a["tool"]["verity"]["tests"] == {"untraced": ["test_a.py"], "inputs": ["verity/a"]}
