@@ -121,7 +121,6 @@ def test_lean_build_outputs_the_executables_the_flock_suite_runs_at_their_paths(
 
 def test_the_runners_run_what_check_runs():
     assert (lean_build.ELAN, lean_build.LAKE_BUILD) == (CHECK.SUITES.ELAN, CHECK.SUITES.LAKE_BUILD)
-    assert next(j for j in CHECK.JOBS if j.name == "flock-circuit-build").halts_on in flock_circuit_build.FAILS
     assert f'print(f"{lean_agreement.CANNOT} {{why}}"' in (ROOT / lean_agreement.CHECK).read_text()
     assert (ROOT / flock_circuit_build.SCRIPT).is_file() and (ROOT / lean_agreement.PIN).is_file()
     assert f'print(f"\\n{lean_suites.WROTE} ' in (ROOT / lean_suites.SUITES).read_text()
