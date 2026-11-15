@@ -342,7 +342,7 @@ private def insLt (a : String) : List String → List String
 /-- Insertion sort of a `String` list by `<`; kernel-reducible (see `insLt`). -/
 private def sortLt (l : List String) : List String := l.foldr insLt []
 
-private theorem insLt_perm (a : String) : ∀ l : List String, insLt a l ~ a :: l
+private theorem insLt_perm (a : String) : ∀ l : List String, (insLt a l).Perm (a :: l)
   | [] => .refl _
   | b :: l => by
     simp only [insLt]
@@ -350,7 +350,7 @@ private theorem insLt_perm (a : String) : ∀ l : List String, insLt a l ~ a :: 
     · exact .refl _
     · exact ((insLt_perm a l).cons b).trans (List.Perm.swap a b l)
 
-private theorem sortLt_perm : ∀ l : List String, sortLt l ~ l
+private theorem sortLt_perm : ∀ l : List String, (sortLt l).Perm l
   | [] => .refl _
   | a :: l => by
     simp only [sortLt, List.foldr]
