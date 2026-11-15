@@ -97,7 +97,7 @@ Two kinds of committed run:
   gates its model's compiler of record lists (`GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
   --compiler-name N --compiler-digest D`` registers the
   window's advice under.
-* **weights-registration** (the committer): a served run's weights registration (`weights_docket_of_serve`), each
+* **weights-registration** (the committer): a served run's weights registration (`weights_registration_of_serve`), each
   weight committed under the committer's secret salts once its shards check against the checkpoint's manifest, and the
   rotary table at the engine's served words once they are within the analytic table's bound (``--tables``), the
   document ``verity-vllm advice --weights-of-record`` records in each window's registration; its roots are what
@@ -207,7 +207,7 @@ from typing import Any
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path")
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.protocols.proofs.spot.prover.audit.records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, docket_roots  # noqa: E402, F401
+from verity.protocols.proofs.spot.prover.audit.records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -1301,7 +1301,7 @@ def committer_key(path: Path) -> bytes:
     return key
 
 
-def weights_docket_of_serve(a: argparse.Namespace) -> dict[str, Any]:
+def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
     circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, sampled under ``--key``
     (`committer_key`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
@@ -1375,7 +1375,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
     each held to the root the window's registration (``advice/w<K>/registration.json``) records for its parameter
-    (`docket_roots`). With ``--window-registration`` (H1's W of the window, `h1_tie` with no key), the class's
+    (`registration_roots`). With ``--window-registration`` (H1's W of the window, `h1_tie` with no key), the class's
     circuit reads H1's tables, the circuit an H1-tied window-commit commits."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
@@ -1397,7 +1397,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
     Path(a.out).write_bytes(IF.circuit_bytes(doc))
     c = AW.codec_of()
-    roots = docket_roots(json.loads((Path(a.serve_run) / "advice" / f"w{a.window}" / "registration.json").read_text()))
+    roots = registration_roots(json.loads((Path(a.serve_run) / "advice" / f"w{a.window}" / "registration.json").read_text()))
     return {"bits": int(c.total_bits(c.decode(data))), "count": IF.input_count(doc, pins=pins, roots=roots),
             "seconds": {"circuit": round(lowered, 1), "record": round(time.time() - t0 - lowered, 1)}}
 
@@ -2061,7 +2061,7 @@ def main(argv: list[str] | None = None, window_rows: Callable[[Any, Any], Sequen
                  "weights-registration"):
         commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice,
                     "class-circuit": class_circuit_of_serve, "serve-phi": serve_phi, "class-size": class_size_of_advice,
-                    "window-commit": functools.partial(window_commit_of_advice, window_rows=window_rows), "weights-registration": weights_docket_of_serve}
+                    "window-commit": functools.partial(window_commit_of_advice, window_rows=window_rows), "weights-registration": weights_registration_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:
