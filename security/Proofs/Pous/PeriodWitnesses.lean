@@ -107,16 +107,23 @@ theorem certifiedPrivateKey_spec :
   Classical.choose_spec (Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
     (I := PousCheck.Prim.zeros 16) (zeros_size 16) (PousCheck.Prim.zeros 64))
 
+theorem certifiedDigests_le :
+    64 ≤ (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt).size :=
+  size_le_of_table (by
+    rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests]
+    exact PousCheck.Properties.SecurityProofs.Accepts.digestTable_size
+      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _) _)
+
 noncomputable def certifiedRecordMessage : ByteArray :=
   Classical.choose (message_honest certifiedPublic.root
-    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))
+    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedDigests_le)
 
 theorem certifiedRecordMessage_spec :
     MemoryChallenger.message (honestCommitment certifiedPublic.root) MemoryChallenger.COMPLETE
       (honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) =
         .ok certifiedRecordMessage :=
   Classical.choose_spec (message_honest certifiedPublic.root
-    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))
+    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedDigests_le)
 
 noncomputable def certifiedLmsMessage : ByteArray :=
   Flock.Sha512.hash (MemoryChallenger.field MemoryChallenger.MEMORY_CHALLENGER_TAG.toUTF8 ++
