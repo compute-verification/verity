@@ -55,36 +55,36 @@ def test_a_check_in_its_own_scope_records_its_memory_and_a_shared_scope_records_
     assert all(list(line) == FROZEN_KEYS for line in got)
 
 
-def scope_files(cg: Path, usage_s: float, anon_gib: float, file_gib: float, peak_gib: float) -> None:
+def scope_files(cg: Path, usage_s: float, anon_gib: float, file_gib: float) -> None:
     cg.mkdir(parents=True, exist_ok=True)
     (cg / "cpu.stat").write_text(f"usage_usec {int(usage_s * 1e6)}\nuser_usec 1\n")
     (cg / "memory.stat").write_text(f"anon {int(anon_gib * 2 ** 30)}\nfile {int(file_gib * 2 ** 30)}\nshmem 0\n")
-    (cg / "memory.current").write_text(f"{int((anon_gib + file_gib) * 2 ** 30)}\n")
-    (cg / "memory.peak").write_text(f"{int(peak_gib * 2 ** 30)}\n")
 
 
-def test_a_scope_watch_keeps_the_busiest_minute_the_highest_anon_and_the_peak_in_the_slot_record(tmp_path):
-    """The figures outlive the scope in the run's slot.json, beside what slot.py wrote: cores over the busiest 60 s (not an
-    average over the check), `anon` at its highest, the page cache at the highest memory.current, and memory.peak."""
+def test_a_scope_watch_keeps_the_busiest_minute_and_the_highest_anon_in_the_slot_record(tmp_path):
+    """The figures outlive the scope in the run's slot.json, beside what slot.py wrote: cores over the busiest 60 s, not an
+    average over a step, and `anon` at its highest, not at a step's end."""
     cg, record = tmp_path / "check-b-r1.scope", tmp_path / "slot.json"
     record.write_text(json.dumps({"state": "held", "slot": "b", "reserves_gib": 340}) + "\n")
     now = [0.0]
     watch = SPANS.ScopeWatch(cg, record, clock=lambda: now[0])
-    for t, usage, anon, file, peak in ((0, 0, 4, 1, 10), (30, 60, 30, 2, 40), (60, 600, 80, 9, 100), (70, 610, 20, 70, 120),
-                                       (130, 1000, 10, 2, 120)):
+    for t, usage, anon, file in ((0, 0, 4, 1), (30, 60, 30, 2), (60, 600, 80, 9), (70, 610, 20, 70), (130, 1000, 10, 2)):
         now[0] = t
-        scope_files(cg, usage, anon, file, peak)
-        watch.sample()
+        scope_files(cg, usage, anon, file)
+        watch.tick()
+    (cg / "cpu.stat").unlink()
+    watch.tick()
     watch.write()
     doc = json.loads(record.read_text())
     assert {k: doc[k] for k in ("state", "slot", "reserves_gib")} == {"state": "held", "slot": "b", "reserves_gib": 340}
-    assert doc["used"] == {"cores_max": 10.0, "anon_max_gib": 80.0, "current_max_gib": 90.0, "file_at_current_max_gib": 70.0,
-                           "peak_gib": 120.0, "cpu_s": 1000.0, "samples": 5, "every_s": SPANS.WATCH_EVERY_S}
+    unread = doc["used"].pop("unread")
+    assert doc["used"] == {"cores_max": 10.0, "anon_max_gib": 80.0, "samples": 5, "every_s": SPANS.WATCH_EVERY_S, "missed": 1}
+    assert unread.startswith("FileNotFoundError: "), "a reading that failed says why in the record, and the check goes on"
 
 
 def test_a_scope_watch_starts_only_in_the_checks_own_scope_inside_a_run(tmp_path, monkeypatch):
     cg = tmp_path / "sys/fs/cgroup/user.slice/user-1001.slice/user@1001.service/app.slice/check-b-r1.scope"
-    scope_files(cg, 1, 1, 1, 1)
+    scope_files(cg, 1, 1, 1)
     (tmp_path / "proc/self").mkdir(parents=True)
     (tmp_path / "proc/self/cgroup").write_text("0::/user.slice/user-1001.slice/user@1001.service/app.slice/check-b-r1.scope\n")
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)

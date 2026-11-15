@@ -17,8 +17,9 @@ is made, so a watcher sees the check live; each step opens a child span as its p
 ends.  So the steps running now are the open children, each since its own start (`research status RUN` reads them).  `trace_id` is the recorded run's id (`RESEARCH_RUN_ID`), so the store's custody
 ties the trace to the Attempt; outside a recorded run it is a local id, and the file is still written for humans.
 
-A check in its own scope inside a `research run` also keeps what that scope used in the run's slot record (`ScopeWatch`):
-systemd removes the scope with the check, and the run's own sampler reads the cgroup it was started in, not the scope.
+A check in its own scope inside a `research run` also keeps, in the run's slot record, what a step's end can't show: its
+busiest minute and its highest `anon` (`ScopeWatch`). systemd removes the scope with the check, and the run's own sampler
+reads the cgroup it was started in, not the scope.
 """
 from __future__ import annotations
 
@@ -73,37 +74,23 @@ def own_scope(root: Path = Path("/")) -> Path | None:
     return d if d.name == f"{unit}.scope" else None
 
 
-def check_memory(root: Path = Path("/")) -> dict:
-    """`mem_peak_gb` (the check's high-water mark so far, memory.peak) and `mem_current_gb` of the check's own scope
-    (`own_scope`); else nothing. GB are 10^9 bytes, one decimal."""
-    if (d := own_scope(root)) is None:
-        return {}
-    try:
-        return {f"mem_{k}_gb": round(int((d / f"memory.{k}").read_text().strip()) / 1e9, 1) for k in ("peak", "current")}
-    except (OSError, ValueError):
-        return {}
-
-
 class ScopeWatch:
-    """What the check's own scope used while it ran, as `used` in the run's slot record (RUN_SLOT), which outlives the scope:
+    """What the check's own scope used at its most, as `used` in the run's slot record (RUN_SLOT), which outlives the scope:
 
-        cores_max                  CPU seconds over seconds, at the busiest CORES_WINDOW_S
-        anon_max_gib               `anon` of memory.stat at its highest: memory without the page cache
-        current_max_gib            memory.current at its highest, and `file` of memory.stat (the page cache) at that reading
-        file_at_current_max_gib
-        peak_gib                   memory.peak: the kernel's high-water mark, page cache counted
-        cpu_s, samples, every_s    the CPU seconds in all, how many readings, and how often one is taken
+        cores_max        CPU seconds over seconds, at the busiest CORES_WINDOW_S
+        anon_max_gib     `anon` of memory.stat at its highest: memory without the page cache
+        samples, every_s how many readings, and how often one is taken
 
-    `sample` reads the scope every WATCH_EVERY_S on a thread of its own (`start`), and `write` puts the figures in the record
-    every CORES_WINDOW_S and at `stop`, so a check that is killed keeps what it had used a minute before. GiB are 2^30 bytes,
-    as a slot's mem= is. A reading that fails is counted (`tick`), and a record that can't be read or written is said on
-    stderr and never stops the check."""
+    A step's end in spans.jsonl shows the scope as it is then, after the step's busiest minute and its highest memory have
+    passed, so these are read between: `sample` reads the scope every WATCH_EVERY_S on a thread of its own (`start`), and
+    `write` puts the figures in the record every CORES_WINDOW_S and at `stop`, so a check that is killed keeps what it had
+    used a minute before. GiB are 2^30 bytes, as a slot's mem= is. A reading that fails is counted (`tick`), and a record
+    that can't be read or written is said on stderr and never stops the check."""
 
     def __init__(self, scope: Path, record: Path, clock=time.monotonic):
         self.scope, self.record, self.clock = scope, record, clock
         self.window: deque[tuple[float, float]] = deque()
-        self.used: dict = {"cores_max": None, "anon_max_gib": 0.0, "current_max_gib": 0.0, "file_at_current_max_gib": 0.0,
-                           "peak_gib": 0.0, "cpu_s": 0.0, "samples": 0, "every_s": WATCH_EVERY_S}
+        self.used: dict = {"cores_max": None, "anon_max_gib": 0.0, "samples": 0, "every_s": WATCH_EVERY_S}
         self.stopped = threading.Event()
         self.thread: threading.Thread | None = None
 
@@ -119,12 +106,9 @@ class ScopeWatch:
 
     def sample(self) -> None:
         t = self.clock()
-        stat = {k: int(v) for k, v in (ln.split() for ln in (self.scope / "memory.stat").read_text().splitlines()
-                                       if len(ln.split()) == 2 and ln.split()[1].isdigit())}
+        anon = next(int(ln.split()[1]) for ln in (self.scope / "memory.stat").read_text().splitlines() if ln.startswith("anon "))
         cpu = int(next(ln.split()[1] for ln in (self.scope / "cpu.stat").read_text().splitlines()
                        if ln.startswith("usage_usec "))) / 1e6
-        current = int((self.scope / "memory.current").read_text().strip())
-        peak = int((self.scope / "memory.peak").read_text().strip())
         u = self.used
         self.window.append((t, cpu))
         while len(self.window) > 1 and t - self.window[1][0] >= CORES_WINDOW_S:
@@ -132,10 +116,7 @@ class ScopeWatch:
         t0, cpu0 = self.window[0]
         if t - t0 >= CORES_WINDOW_S:
             u["cores_max"] = max(u["cores_max"] or 0.0, round((cpu - cpu0) / (t - t0), 1))
-        u["anon_max_gib"] = max(u["anon_max_gib"], round(stat.get("anon", 0) / GIB, 1))
-        if current / GIB > u["current_max_gib"]:
-            u["current_max_gib"], u["file_at_current_max_gib"] = round(current / GIB, 1), round(stat.get("file", 0) / GIB, 1)
-        u.update(peak_gib=max(u["peak_gib"], round(peak / GIB, 1)), cpu_s=round(cpu, 1), samples=u["samples"] + 1)
+        u.update(anon_max_gib=max(u["anon_max_gib"], round(anon / GIB, 1)), samples=u["samples"] + 1)
 
     def tick(self) -> None:
         """One `sample`; one that fails is counted in `used` (`missed`, and the last error as `unread`), not raised."""
@@ -172,6 +153,23 @@ class ScopeWatch:
             self.thread.join()
         self.tick()
         self.write()
+
+
+def check_memory(root: Path = Path("/")) -> dict:
+    """`mem_peak_gb` (the check's high-water mark so far, memory.peak) and `mem_current_gb` of the cgroup this process runs in,
+    when that is the check's own scope (SCOPE_ENV names it); else nothing, since a shared session scope's numbers are other
+    runs' too. GB are 10^9 bytes, one decimal."""
+    unit = SETTINGS.get(SCOPE_ENV)
+    if not unit:
+        return {}
+    try:
+        line = next(ln for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::"))
+        d = root / "sys/fs/cgroup" / line[3:].strip().strip("/")
+        if d.name != f"{unit}.scope":
+            return {}
+        return {f"mem_{k}_gb": round(int((d / f"memory.{k}").read_text().strip()) / 1e9, 1) for k in ("peak", "current")}
+    except (OSError, StopIteration, ValueError):
+        return {}
 
 
 class SpanLog:
