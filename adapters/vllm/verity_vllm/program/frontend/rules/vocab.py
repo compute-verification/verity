@@ -1,15 +1,11 @@
-"""Kind vocabularies: the registered definitions a derivation mode binds semantic roles to (GUIDANCE §43.2).
-
-A rule never names a kind directly; it asks `ctx.kind(role, **statics)`. The vocabulary of the (mode, profile)
-answers with a bound registered definition or `None` (-> `Unsupported(numerics_unregistered)`). Provenance records
-the vocabulary's name and version, so "which kernels does this program claim" is pinned per derivation.
+"""The vLLM adapter's kind vocabularies: its eager profiles (`b1-eager`, `-v2`, `-v3`, `dense2-eager-v1`), added to
+`verity_torch.frontend.rules.vocab.PROFILES`, which `vocabulary_for` reads; `Vocabulary`, reference mode's vocabulary and
+`vocabulary_for` are `verity_torch.frontend.rules.vocab`'s.
 """
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 from verity.circuits.defs import bind as ir_bind
 from verity.definitions.registry import act as _act
@@ -44,7 +40,6 @@ from verity.definitions.registry import moe as _moe
 from verity.definitions.registry import pad_prims as PP
 from verity.definitions.registry import pouw_rows as _pouw_rows
 from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as RP
 from verity.definitions.registry import sparse_mla as _sparse_mla
 from verity.definitions.registry import sparse_mla_split as _sparse_mla_split
 from verity.definitions.registry import (
@@ -56,43 +51,7 @@ from verity.definitions.registry.dsv4_decode_indices import gather_i32
 
 from verity_torch import dsa_table as _dsa_table
 from verity_vllm.program.frontend import targets as _targets
-from verity_torch.frontend.rules import ref_kinds as R
-
-
-@dataclass
-class Vocabulary:
-    name: str
-    mode: str
-    profile: str | None
-    kinds: dict[str, Callable[..., object]] = field(default_factory=dict)
-    notes: dict[str, str] = field(default_factory=dict)
-
-    @property
-    def version(self) -> str:
-        rows = []
-        for role in sorted(self.kinds):
-            rows.append(f"{role}:{self.notes.get(role, '')}")
-        return hashlib.sha256("\n".join([self.name, self.notes.get("_pin", "")] + rows).encode()).hexdigest()[:16]
-
-    def kind(self, role: str, **statics):
-        binder = self.kinds.get(role)
-        if binder is None:
-            return None
-        try:
-            return binder(**statics)
-        except TypeError:
-            return None
-
-    def has(self, role: str) -> bool:
-        return role in self.kinds
-
-    def to_json(self) -> dict:
-        d = {"name": self.name, "version": self.version, "mode": self.mode, "profile": self.profile,
-             "roles": {r: self.notes.get(r, "") for r in sorted(self.kinds)}}
-        pin = self.notes.get("_pin")
-        if pin is not None:
-            d["pin"] = pin
-        return d
+from verity_torch.frontend.rules.vocab import PROFILES, REFERENCE_CPU_F32, Vocabulary, vocabulary_for
 
 
 def _int8():
@@ -184,49 +143,6 @@ PROFILE_B1_EAGER = Vocabulary(
 # CPU is measured over a tested domain (docs/data/ref-prims/), never assumed. The vocabulary version pins NUMERIC's
 # `REF_VOCAB_VERSION` and `ref_vocab_digest()` (a hash over every reference kind's evaluator/body source).
 
-
-def _ref_doc(d) -> str:
-    return (d.doc or "").split("\n")[0].strip()
-
-
-REFERENCE_CPU_F32 = Vocabulary(
-    "reference-ref-prims", "reference", None,
-    kinds={
-        "linear": lambda K, N, DT, BIAS: ir_bind(RP.LinearRef, K=K, N=N, DT=DT, BIAS=bool(BIAS)),
-        "add": lambda N, DT: ir_bind(RP.AddRef, N=N, DT=DT),
-        "mul": lambda N, DT: ir_bind(RP.MulRef, N=N, DT=DT),
-        "relu": lambda N, DT: ir_bind(RP.ReluRef, N=N, DT=DT),
-        "silu": lambda N, DT: ir_bind(RP.SiluRef, N=N, DT=DT),
-        "gelu": lambda N, DT, APPROX: ir_bind(RP.GeluRef, N=N, DT=DT, APPROX=APPROX),
-        "layer_norm": lambda N, EPS, DT: ir_bind(RP.LayerNormRef, N=N, EPS=EPS, DT=DT),
-        "rmsnorm": lambda N, EPS, DT: ir_bind(RP.RMSNormRef, N=N, EPS=EPS, DT=DT),
-        "layer_norm_value": lambda N, DT: ir_bind(_vi.LayerNormRefV2, N=N, DT=DT),
-        "rmsnorm_value": lambda N, DT: ir_bind(_vi.RMSNormRefV2, N=N, DT=DT),
-        "softmax": lambda N, DT: ir_bind(RP.SoftmaxRef, N=N, DT=DT),
-        "embedding": lambda V, H, DT: ir_bind(RP.EmbeddingRef, V=V, H=H, DT=DT),
-        "argmax": lambda V, DT: ir_bind(RP.ArgmaxRef, V=V, DT=DT),
-        "i64_to_i32": lambda: RP.I64ToI32,
-        "eager_attention": lambda T, NH, KVH, D, DT, SCALE_OP: ir_bind(RP.EagerAttentionRef, T=T, NH=NH, KVH=KVH, D=D, DT=DT, SCALE_OP=SCALE_OP),
-        "rope_heads": lambda NHEADS, D, DT: ir_bind(RP.RoPEHeadsRef, NHEADS=NHEADS, D=D, DT=DT),
-        "bf16_to_f32": lambda N: ir_bind(R.DeriveRefBf16ToF32, N=N),
-        "f32_to_bf16": lambda N: ir_bind(R.DeriveRefF32ToBf16Rn, N=N),
-    },
-    notes={
-        "linear": "LinearRef_v1{K,N,DT,BIAS}: " + _ref_doc(RP.LinearRef),
-        "add": "AddRef_v1{N,DT}: " + _ref_doc(RP.AddRef), "mul": "MulRef_v1{N,DT}: " + _ref_doc(RP.MulRef),
-        "relu": "ReluRef_v1{N,DT}: " + _ref_doc(RP.ReluRef), "silu": "SiluRef_v1{N,DT}: " + _ref_doc(RP.SiluRef),
-        "gelu": "GeluRef_v1{N,DT,APPROX}: " + _ref_doc(RP.GeluRef), "layer_norm": "LayerNormRef_v1{N,EPS,DT}: " + _ref_doc(RP.LayerNormRef),
-        "rmsnorm": "RMSNormRef_v1{N,EPS,DT}: " + _ref_doc(RP.RMSNormRef),
-        "layer_norm_value": "LayerNormRef_v2{N,DT}(x, g, b, eps): LayerNormRef_v1's body with eps an input",
-        "rmsnorm_value": "RMSNormRef_v2{N,DT}(x, w, eps): RMSNormRef_v1's body with eps an input", "softmax": "SoftmaxRef_v1{N,DT}: " + _ref_doc(RP.SoftmaxRef),
-        "embedding": "EmbeddingRef_v1{V,H,DT}: " + _ref_doc(RP.EmbeddingRef), "argmax": "ArgmaxRef_v1{V,DT}: " + _ref_doc(RP.ArgmaxRef),
-        "i64_to_i32": "I64ToI32_v1: " + _ref_doc(RP.I64ToI32),
-        "eager_attention": "EagerAttentionRef_v1{T,NH,KVH,D,DT,SCALE_OP}: " + _ref_doc(RP.EagerAttentionRef),
-        "rope_heads": "RoPEHeadsRef_v1{NHEADS,D,DT}: " + _ref_doc(RP.RoPEHeadsRef),
-        "bf16_to_f32": "batched Bf16ToF32_v1 (exact widening; derive-lane composite over the registered primitive)",
-        "f32_to_bf16": "batched F32ToBf16Rn_v1 (RNE narrowing; derive-lane composite over the registered primitive)",
-        "_pin": f"{RP.REF_VOCAB_VERSION} digest {RP.ref_vocab_digest()}",
-    })
 
 # -- profile "b1-eager-v2": the same Ampere eager profile over the v2 skeleton (`Serve_v2`/`Serve_v3`: `Gemm_v2{K,N,DOT}`,
 # `Attention_v2{..,BN,DOT,INV}`, the `NORM` bundle) + the `pad-serve@1` kinds of the padded circuit (`serve3.py`) ------------
@@ -740,17 +656,8 @@ PROFILE_DENSE2_EAGER_V1 = Vocabulary("dense2-eager-v1", "profile", "dense2-eager
                                      kinds=dict(PROFILE_B1_EAGER_V3.kinds), notes=dict(PROFILE_B1_EAGER_V3.notes))
 
 
-PROFILES = {"b1-eager": PROFILE_B1_EAGER, "b1-eager-v2": PROFILE_B1_EAGER_V2, "b1-eager-v3": PROFILE_B1_EAGER_V3,
-            "dense2-eager-v1": PROFILE_DENSE2_EAGER_V1, None: PROFILE_B1_EAGER}
-
-
-def vocabulary_for(mode: str, profile: str | None) -> Vocabulary:
-    if mode == "reference":
-        return REFERENCE_CPU_F32
-    v = PROFILES.get(profile)
-    if v is None:
-        raise ValueError(f"unknown profile {profile!r}; known: {sorted(k for k in PROFILES if k)}")
-    return v
+PROFILES.update({"b1-eager": PROFILE_B1_EAGER, "b1-eager-v2": PROFILE_B1_EAGER_V2, "b1-eager-v3": PROFILE_B1_EAGER_V3,
+            "dense2-eager-v1": PROFILE_DENSE2_EAGER_V1, None: PROFILE_B1_EAGER})
 
 
 __all__ = ["Vocabulary", "PROFILE_B1_EAGER", "PROFILE_B1_EAGER_V3", "REFERENCE_CPU_F32", "vocabulary_for", "PROFILES"]
