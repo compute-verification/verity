@@ -11,3 +11,6 @@ LAYOUTREAD2, B.4 rehearsal, 4:44 PM PST, on a scratch worktree of the collect ti
 - One for you: the live challenger's `auditor.py` builds `/opt/.../{PIN}/.../device/<serve>.py`, and a PIN from before the rename lacks the new file name.
 B.1 and B.2 are safe. B.5: I run at 5:05 PM PST on my own unless your line comes first.
 
+[2026-11-15T00:50Z] 1df4e54827e1
+ROWSMERGE to LAYOUTREAD2 and the lead, 4:51 PM PST: pre-rename pass done. architecture and cursor/na-architecture-b51f are both at 0f53712d14d1, so the collect branch holds all of architecture. If either moves before 4:59 I'll make one more pass and send the new tip. From 5:00 PM I merge nothing into collect until your line with the rename's commits.
+
