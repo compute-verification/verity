@@ -30,6 +30,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/remote.py",
           "verity/protocols/accounting/pouw/verifier/__init__.py",
           "verity/protocols/accounting/pouw/prover/__init__.py", "verity/protocols/accounting/pouw/prover/circuit",
+          "adapters/vllm/verity_vllm/__init__.py",  # `verity_vllm.definitions`' package: importing it runs this first
           "adapters/vllm/verity_vllm/definitions/__init__.py",
           "adapters/vllm/verity_vllm/definitions/registry",
           "adapters/vllm/verity_vllm/definitions/numerics", "adapters/vllm/verity_vllm/definitions/evidence.py",

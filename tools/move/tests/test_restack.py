@@ -1384,6 +1384,18 @@ def test_a_corrected_line_is_read_by_both_readers_before_the_commit_s_own(repo, 
                                                      (later, RS.LINE_SCRIPT["Layout-move"], ran)]
 
 
+def test_a_commit_its_entry_says_is_no_move_is_read_as_none_by_both_readers_and_crosses_as_a_plain_commit(repo, lines):
+    """A commit whose move line no script reproduces (its map narrowed by hand) is no move: nothing runs or checks it."""
+    later = commit(repo, "a rename by a copy of its map narrowed by hand" + LINE, {"README.md": "readme, renamed by hand\n"})
+    found = (later, RS.LINE_SCRIPT["Layout-move"], ("--map", "tools/move/layout_map.toml"))
+    assert RS.moves_on("main", "pr", str(repo)) == [found]
+    correct(lines, {later: {"move": False, "reason": "Its map was narrowed by hand."}})
+    assert RS.move_line(later, str(repo)) is None
+    assert RS.moves_on("main", "pr", str(repo)) == []
+    r = RS.carry("pr", RS.moves_on("main", "pr", str(repo)), "main", cwd=str(repo), main="main", found=True)
+    assert r["status"] == "no-moves"
+
+
 @pytest.mark.parametrize("entry, fix", [
     ({"id": "f7b30e1f7ce9", "line": "Move: tools/move/m.toml", "reason": "r"}, "the commit's 40-hex id"),
     ({"line": "Move: tools/move/m.toml --lock", "reason": "r"}, "is no move line"),
@@ -1393,7 +1405,11 @@ def test_a_corrected_line_is_read_by_both_readers_before_the_commit_s_own(repo, 
     ({"reason": "r"}, "a `line`, a `hand` or both"),
     ({"line": "Move: tools/move/m.toml", "reason": "r", "why": "x"}, "and nothing else"),
     ({"hand": "README.md", "reason": "r"}, "is no list of paths"),
-    ({"hand": [], "reason": "r"}, "is no list of paths")])
+    ({"hand": [], "reason": "r"}, "is no list of paths"),
+    ({"move": True, "reason": "r"}, "or `move = false` alone"),
+    ({"move": False, "line": "Move: tools/move/m.toml", "reason": "r"}, "or `move = false` alone"),
+    ({"move": False, "hand": ["README.md"], "reason": "r"}, "or `move = false` alone"),
+    ({"move": False}, "has no `reason`")])
 def test_a_malformed_entry_is_refused_with_the_fix(repo, lines, entry, fix):
     correct(lines, {entry.pop("id", RS.rev("move", str(repo))): entry})
     with pytest.raises(SystemExit, match=re.escape(fix)):
