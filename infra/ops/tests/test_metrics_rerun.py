@@ -195,6 +195,51 @@ def test_a_command_one_parked_row_shares_with_another_is_not_launched(tmp_path):
             "is parked (top/parked): a parked number is rerun only by hand") in pod.lines
 
 
+def past_default(tmp_path, option):
+    """A row whose command takes ``option`` and an identical one without it, each with no reading."""
+    asks = row("training/asks", f"research run --on auto {option} -- uv run python benchmarks/asks/run.py")
+    plain = row("training/plain", "research run --on auto -- uv run python benchmarks/plain/run.py")
+    cfg = setup(tmp_path, {"benchmarks/asks": [asks], "benchmarks/plain": [plain]})
+    return cfg, Pod(ages={"training/asks": None, "training/plain": None})
+
+
+def past_default_line(options):
+    return (f"skip training/asks: training/asks has no reading; but its command asks for more than the default job "
+            f"({options}): such a number is rerun by its owner")
+
+
+@pytest.mark.parametrize("option", ["--mem-gb 16", "--timeout 600", "--pool network"])
+def test_a_number_whose_command_asks_past_the_default_job_is_left_to_its_owner(tmp_path, option):
+    cfg, pod = past_default(tmp_path, option)
+    state, _ = run(cfg, pod)
+    assert [e["metrics"] for e in state["launches"]] == [["training/plain"]]
+    assert pod.lines.count(past_default_line(option)) == 1
+
+
+@pytest.mark.parametrize("option", ["--mem-gb 16", "--timeout=600"])
+def test_a_dry_run_judges_a_command_past_the_default_job_the_same(tmp_path, option):
+    cfg, pod = past_default(tmp_path, option)
+    state, _ = run(cfg, pod, dry_run=True)
+    assert pod.launched == [] and state["launches"] == []
+    assert past_default_line(option.replace("=", " ")) in pod.lines
+    assert any(ln.startswith("would launch training/plain on vy-nebius-cpu-12: ") for ln in pod.lines)
+    assert not any(ln.startswith("would launch training/asks") for ln in pod.lines)
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_a_planned_command_past_the_default_job_is_not_launched_though_the_plan_lists_its_machine(tmp_path, dry_run):
+    """The shape of the network scans' rows: a machine of the plan's choosing and more than the default job. The default job
+    is judged first, so the plan's machine doesn't launch it."""
+    scan = row("network-accounting/scan", "research run --on NODE --mem-gb 128 --timeout 10800 -- bash benchmarks/scan/run.sh")
+    cfg = setup(tmp_path, {"benchmarks/scan": [scan]})
+    cfg.plan.write_text(free("vy-nebius-cpu-9", ["network-accounting/scan"]))
+    pod = Pod(ages={"network-accounting/scan": None})
+    state, _ = run(cfg, pod, dry_run=dry_run)
+    assert pod.launched == [] and state["launches"] == []
+    assert ("skip network-accounting/scan: network-accounting/scan has no reading; but its command asks for more than the "
+            "default job (--mem-gb 128, --timeout 10800): such a number is rerun by its owner") in pod.lines
+
+
 def test_at_most_max_launches_a_pass_and_the_rest_are_said(tmp_path):
     files = {f"benchmarks/b{n}": [row(f"benchmarks/n{n}", f"research run --on auto -- bash benchmarks/b{n}/run.sh")] for n in range(3)}
     cfg = setup(tmp_path, files, max=2)
@@ -430,12 +475,12 @@ def test_a_row_that_does_not_split_is_refused_and_the_pass_goes_on(tmp_path):
 
 
 def test_an_on_equals_auto_row_takes_the_loops_machine(tmp_path):
-    cfg = setup(tmp_path, {"benchmarks/b": [row("benchmarks/b", "research run --on=auto --timeout=600 -- bash benchmarks/b/run.sh")]})
+    cfg = setup(tmp_path, {"benchmarks/b": [row("benchmarks/b", "research run --on=auto --cwd=clone -- bash benchmarks/b/run.sh")]})
     pod = Pod()
     run(cfg, pod)
     (argv,) = pod.launched
     assert argv[:4] == ["research", "run", "--on", "vy-nebius-cpu-12"] and not any(a.startswith("--on=") for a in argv)
-    assert argv[argv.index("--timeout") + 1] == "600"
+    assert argv[argv.index("--cwd") + 1] == "clone"
 
 
 def test_a_run_whose_state_cannot_be_read_stays_in_flight(tmp_path):

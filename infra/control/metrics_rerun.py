@@ -20,6 +20,8 @@ that finds it held does nothing and says so. Then:
                 that is no `research run` is run under one;
               - its `research run` options are all in ALLOWED, each with a value of its form: no option names a path of the
                 pod (`--send`, `--source DIR`), so a row can't ship one of the pod's files to a machine;
+              - it asks for no more than the default job: a row whose `research run` takes any of PAST_DEFAULT (`--mem-gb`,
+                `--timeout`, `--pool`) is rerun by its owner, whether or not the plan lists a machine for it;
               - it names no placeholder but its machine's (a run id such as FIRE_RUN, which only its owner picks);
               - none of its numbers has a launch of this loop's still in flight, or one that ran and ended less than that
                 number's `every` ago, whatever the door says (the record);
@@ -32,7 +34,7 @@ that finds it held does nothing and says so. Then:
               - it has a machine. A command that asks for GPUs (`--gpus`) or names any machine but `auto` (`--on NODE`,
                 `--on vy-...`) runs only on a machine the plan (`--plan`) lists for one of its numbers now, the machine it
                 names when it names one, and that none of this loop's launches is in flight on. Any other runs on `--on`,
-                in its row's `--pool`, else in `--pool`. Never `auto`, never a small-disk machine (SMALL_DISK);
+                in `--pool`. Never `auto`, never a small-disk machine (SMALL_DISK);
               - this pass has launched fewer than `--max`;
               - the stop file (`--stop`) is absent, read again just before each launch: it stops every launch (a dry run
                 judges all the same).
@@ -91,6 +93,8 @@ TREES = ("benchmarks", "demos", "infra", "tools")      # where a metrics.toml ma
 SKIP = {".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"}
 LOOPS = "infra/control/"                                # a row whose command's script is here is a loop's, which sends it itself
 PARKED = "top/parked"                                   # a row whose goal is this is parked work, rerun only by hand
+#: the loop launches only the default job: a row whose `research run` takes any of these asks for more, and its owner reruns it
+PAST_DEFAULT = ("--mem-gb", "--timeout", "--pool")
 SCRIPT = re.compile(rf"(?:^|\s)((?:{'|'.join(TREES)})/\S+\.(?:sh|py))(?:\s|$)")
 EVERY = re.compile(r"^([1-9][0-9]*)([mhd])$")
 UNIT_S = {"m": 60, "h": 3600, "d": 86400}
@@ -272,7 +276,7 @@ def planned(opts: list[tuple[str, str | None]]) -> bool:
 def argv_for(opts: list[tuple[str, str | None]], work: list[str], wrapped: bool, machine: str, pool: str | None) -> tuple[str, ...]:
     rest = [x for n, v in opts if n != "--on" for x in ((n,) if v is None else (n, v))]
     head = ["research", "run", "--on", machine]
-    if pool and get(opts, "--pool") is None:
+    if pool:
         head += ["--pool", pool]
     if get(opts, "--project") is None:
         head += ["--project", "verity"]
@@ -417,6 +421,10 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
         except Refused as x:
             skip(f"{why}; but {x}")
             continue
+        if past := [f"{n} {v}" for n, v in opts if n in PAST_DEFAULT]:
+            skip(f"{why}; but its command asks for more than the default job ({', '.join(past)}): such a number is rerun "
+                 "by its owner")
+            continue
         if wrapped and get(opts, "--on") is None:
             skip(f"{why}; but its command is a local run (a `research run` without --on), which runs where it is launched, "
                  "and the loop runs no workload on the pod")
@@ -437,7 +445,6 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
             skip(f"{why}; but held: its command failed twice running ({mine[-2]['run']}, {mine[-1]['run']}) under this "
                  f"declaration, and is launched again once its rows in {job.where} change")
             continue
-        pool = get(opts, "--pool")
         if planned(opts):
             named = get(opts, "--on")
             free = [p["machine"] for p in plan if p["from"] <= now < p["until"] and p["machine"] not in SMALL_DISK
@@ -447,9 +454,9 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
                 what = "asks for GPUs" if get(opts, "--gpus") else f"names its machine ({named})"
                 skip(f"{why}; but it {what}, and the plan ({cfg.plan}) lists no machine free for it now")
                 continue
-            machine = free[0]
+            machine, pool = free[0], None
         else:
-            machine, pool = cfg.on, pool or cfg.pool
+            machine, pool = cfg.on, cfg.pool
         if launched >= cfg.max:
             skip(f"{why}; but this pass has made its {cfg.max} launches (--max)")
             continue
@@ -673,7 +680,7 @@ def parse(argv: list[str] | None = None) -> tuple[Settings, argparse.Namespace]:
     ap.add_argument("--stop", required=True, type=Path, help="while this file exists, nothing is launched")
     ap.add_argument("--plan", required=True, type=Path, help="the week's GPU plan: [[free]] machine, from, until, metrics")
     ap.add_argument("--on", required=True, type=machine, metavar="MACHINE", help="a CPU command's machine")
-    ap.add_argument("--pool", required=True, help="a CPU command's pool on that machine, unless its row names one")
+    ap.add_argument("--pool", required=True, help="a CPU command's pool on that machine")
     ap.add_argument("--every", required=True, type=float, metavar="S", help="seconds between passes")
     ap.add_argument("--max", type=int, default=2, help="launches a pass at most")
     ap.add_argument("--url", default=URL, help="origin")
