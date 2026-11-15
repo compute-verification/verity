@@ -22,8 +22,8 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, runs
-from verity.definitions.registry import b1
-from verity.definitions.registry.topp_geometry import registered_splits, splits_for
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for
 
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check.test_batch_decomp_e2e import (
@@ -271,7 +271,7 @@ def component(req, d, witness=None):
 
 
 def p_attention_tgrouped(node, ctx):
-    """The PRODUCTION emission order (`patterns.AttentionScope.match`): one Compute per DISTINCT T = position+1 over the batch's rows
+    """The SERVED emission order (`patterns.AttentionScope.match`): one Compute per DISTINCT T = position+1 over the batch's rows
     in first-occurrence order, rows = the rows sharing that T (a running decode at position p and an arriving prefill's row p land
     in one group, created when the decode row is seen). The toy default (`p_attention`) emits per row in row order and therefore
     never shows M-ARRIVAL-ORDER; this variant reproduces it on CPU with the same fold code path (`fold._compute_emit` per group)."""
@@ -784,7 +784,7 @@ def test_record_serving_a_request_the_program_did_not_declare_fails_g1(memory, t
     assert set(res["request_ids"]["unknown_ids"]) == {U1["id"]}   # the record's UUID is not in the Program's table -> undeclared
 
 
-# ------------------------------------------------- arrival order: the production emission order on CPU
+# ------------------------------------------------- arrival order: the served emission order on CPU
 
 # r0's decode at engine step 1 is position 3 (T=4); a prefill of LP 5 arriving at step 1 has a position-3 row -> AttentionScope's
 # T=4 group is created by r0's row first, so rX's position-3 attention is emitted before its positions 0..2 (the pod fixture:
@@ -983,7 +983,7 @@ def test_from_gprog_recomputes_the_build_digest_from_the_descriptor_and_refuses_
 
 def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_path):
     """A `vllm-build/v1` records the building pod's absolute component paths (`/workspace/cp/<sweep>/<row>/
-    build_request_LP<lp>_T<t>`).  Staged elsewhere (another pod; pod_match_v2.sh's symlinked attempt dir) those paths dangle while the
+    build_request_LP<lp>_T<t>`).  Staged elsewhere (another pod; an attempt dir of symlinks to the staged dirs) those paths dangle while the
     same dirs sit beside the artifact -- the v2 acquisition's B64 GM-01 died on exactly this FileNotFoundError.  from_gprog resolves them
     beside `<row>/build_workload/workload_program.json`, records what moved, and leaves an existing path / a path missing at both places
     alone (the loader's error must still name the recorded path)."""
@@ -1012,7 +1012,7 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
     assert r["derived"]["1024,127"] == str(row / "build_request_LP1024_T127")
     assert r["derived"]["7,3"] == str(present) and r["derived"]["5,1"] == derived["5,1"]
     assert r["base"] == str(row)
-    # pod_match_v2.sh's layout: the attempt dir holds SYMLINKS to the staged build_* dirs; abspath (not realpath) keeps the artifact's
+    # a staged layout: the attempt dir holds SYMLINKS to the staged build_* dirs; abspath (not realpath) keeps the artifact's
     # own directory as the base, so the symlinked siblings are the ones found
     attempt = tmp_path / "attempt"
     attempt.mkdir()
@@ -1025,7 +1025,7 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
 
 
 def test_impl_module_defaults_to_the_match_of_record_and_names_what_runs(monkeypatch):
-    """MATCH_IMPL unset -> `fast` (the Match of record, row_pod.sh's export); `record` still selects the audit
+    """MATCH_IMPL unset -> `fast` (the Match of record, the row driver's export); `record` still selects the audit
     checker explicitly; an unknown name is an error.  The CLI banner names the implementation before the run."""
     monkeypatch.delenv(gm.IMPL_ENV, raising=False)
     assert gm.IMPL_DEFAULT == "fast"
@@ -1315,7 +1315,7 @@ def test_default_criterion_is_dag_and_the_sequence_verdict_is_kept_beside_it(mem
     assert ("G3", "FAIL") in alt["checks"] and "alternate_verdict" not in alt        # the alternate is one level deep
     # the verdict of record is untouched by the alternate: the primary checks all PASS
     assert res["failed_checks"] == [] and all(k["status"] == "PASS" for k in res["checks"])
-    # X-09's batch decomposition (the evidence inside, and row_pod's per-request comparator) applies the same criterion of record:
+    # X-09's batch decomposition (the evidence inside, and the row driver's per-request comparator) applies the same criterion of record:
     # the displaced request is canonical-equal by the live-cone DAG multiset, its sequence inequality stays recorded
     x = res["x09"]
     assert x["verdict"] == "PASS" and x["within_step_criterion"] == "dag"
@@ -1521,7 +1521,7 @@ def _driver_stop_at(oracle, rid, n_answer, eos_step):
 
 def _driver_claims(oracle, rid=None, lag=None, **fields):
     """The driver's tokens.json record-schema claims: doc.lag.value (the resolved fact as the driver wrote it) and per request the
-    served_output_len / executed_prefix_len / cap_exhausted fields m1_capture writes."""
+    served_output_len / executed_prefix_len / cap_exhausted fields match_capture writes."""
     tp = os.path.join(oracle, "capture", "tokens.json")
     tk = json.loads(Path(tp).read_text())
     if lag is not None:
@@ -1745,7 +1745,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert _r(resp, "r1")["served_output_len"] == 2 and _r(resp, "r1")["executed_prefix_len"] == 3 and _r(resp, "r1")["cap_exhausted"] is True
     assert _r(resp, "r1")["finish"] == "length" and resp["lag"]["exercised"] is False      # not an EOS stop: the lag rule is not what failed
 
-    # (11) the record schema (m1_capture's tokens.json): doc.lag.value + per-request served_output_len / executed_prefix_len are the driver's
+    # (11) the record schema (match_capture's tokens.json): doc.lag.value + per-request served_output_len / executed_prefix_len are the driver's
     # CLAIMS from the same recorded fact; claims that agree pass, a tokens.json lag disagreeing with the header is "not one attested execution",
     # a length claim disagreeing with the rows is named with both lengths
     gpc, oraclec = assemble([R0, R1_LAG], tmp_path / "claims", lag=1)
@@ -2108,7 +2108,7 @@ def test_g6_puts_the_scheduled_state_and_the_lag_row_on_the_record(memory, tmp_p
 
 @pytest.mark.slow
 def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is_asked_for_and_labelled(memory, tmp_path):
-    """capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association legs cannot run);
+    """capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association checks cannot run);
     tokens_optional=True (CLI --tokens-optional) accepts it LABELLED checks[G6].tokens_json=false -- mechanism/fixture runs only."""
     gp, oracle = assemble([R0, R1], tmp_path, lag=0)
     _set_async_scheduling(oracle, False)
@@ -2304,12 +2304,12 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
 
 @pytest.mark.parametrize("impl,workers", [("record", "1"), ("fast", "1"), pytest.param("fast", "3", marks=pytest.mark.slow)])
 def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path, monkeypatch, impl, workers):
-    """row_pod runs cb_a.batch_decomp in its own process (match.compare) and GM-01 runs the same decompose()
-    again inside check() (the x09 block) -- 365 s twice at B8 1024/128.  `--decomp-out` writes the document GM-01's own X-09 run
+    """Outside the shared Match pipeline the row's driver runs cb_a.batch_decomp in its own process (match.compare) and GM-01 runs the same decompose()
+    again inside check() (the x09 block), the same work twice.  `--decomp-out` writes the document GM-01's own X-09 run
     produced, in batch_decomp's CLI schema: key for key what a standalone decompose() over the same fold and components returns
-    (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (row_pod's derive-and-rerun)."""
+    (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (the row driver's derive-and-rerun)."""
     monkeypatch.setenv(GMF.FLAG, impl)
-    monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 legs return the per-request entries: the document must not depend on W
+    monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 workers return the per-request entries: the document must not depend on W
     gp, oracle = assemble([R0, R1_LATE, R2_LATE], tmp_path)
     gpp = tmp_path / "gp.json"
     gpp.write_text(json.dumps(gp))
@@ -2342,7 +2342,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     assert not ({"derived_available", "missing_derived", "extra_derived", "pipeline"} & set(recflow["x09"]))
     assert {k: v for k, v in recflow["x09"].items() if k != "seconds"} == {k: v for k, v in gmdoc["x09"].items()
                                                                           if k not in ("seconds", "derived_available", "missing_derived", "extra_derived", "pipeline")}
-    if workers == "1":   # as row_pod runs it: `python -m ...` (the record path runs in __main__, the fast path imports the module again)
+    if workers == "1":   # as the row's driver runs it: `python -m ...` (the record path runs in __main__, the fast path imports the module again)
         import subprocess
         import sys as _sys
         dout2 = tmp_path / "decomp_m.json"
@@ -2362,7 +2362,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     rc = cli.main(["global-match", "--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
     doc = json.loads(dout.read_text())
     assert rc == 4 and doc["verdict"] == "MISSING_DERIVED" and doc["missing_derived"]
-    # row_pod derives the named shape and reruns with --derived: the same global Program (G1-G8 unchanged), X-09 complete again
+    # the row's driver derives the named shape and reruns with --derived: the same global Program (G1-G8 unchanged), X-09 complete again
     monkeypatch.setenv(GMF.FLAG, impl)
     rc = cli.main(["global-match", "--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag",
                   "--derived", dropped])
@@ -2377,8 +2377,8 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
 
 
 def test_fold_encodes_its_program_once_and_program_json_carries_that_descriptor(memory, tmp_path):
-    """`_finish` encodes the Program for the digest; `persist_program` used to encode and digest it AGAIN (36 s +
-    a second digest at B8 1024/128).  Now the FoldResult carries the descriptor and program.json's `program` IS it: its digest (the
+    """`_finish` encodes the Program for the digest, and `persist_program` does not encode and digest it again:
+    the FoldResult carries the descriptor and program.json's `program` IS it: its digest (the
     codec's canonical bytes) equals the fold's, and a result without a descriptor (older producer) still encodes and cross-checks."""
     from verity.circuits import codec
 

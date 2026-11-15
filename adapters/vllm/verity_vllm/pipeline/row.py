@@ -13,7 +13,7 @@
 A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``; world ``--world``, else the manifest's
 ``sweep.tp``), any other the single-GPU stages (``row_stages``).  The stage flags are the fields of ``BuildConfig``,
 ``MatchConfig``, ``CommitConfig`` and ``RunEnv``; each also reads the environment variable it names.  ``--protocols``
-(``PROTOCOLS``) runs the row with protocol options beside sampled proofs (`verity_vllm.protocols`): a set it cannot
+(``PROTOCOLS``) runs the row with protocol options beside SPOT (`verity_vllm.protocols`): a set it cannot
 run is refused here, before any stage, for single-GPU and TP rows alike (exit 3), and so is a row of record that is not done only at
 its public cap (``PRECHECK_FAIL_DONE_SOURCE``, ``config.done_source_refusal``).
 
@@ -190,7 +190,7 @@ def run_row(o: Run | Stage, stages: str) -> int:
     try:
         protocols = PO.at_row(o.protocols, doc, world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
     except PO.Refused as e:
-        print(f"[row] REFUSE (fail-closed): {e}", flush=True)
+        cli.write(f"[row] REFUSE (fail-closed): {e}")
         return 3
     if o.env.verity_tree and os.path.realpath(o.env.verity_tree) != os.path.realpath(ROOT):   # refuse before writing anything
         print(f"PRECHECK_FAIL_SOURCE_IDENTITY: row at {os.path.realpath(ROOT)} but $VERITY_TREE={o.env.verity_tree} names another tree",
@@ -244,6 +244,5 @@ def main(o: Any) -> int:
         return run_store(RESEARCH, "row chain").chain(o, st.env.sweep_dir)
     if isinstance(o, Shed):
         return run_store(RESEARCH, "row shed").shed(o)
-    print(fa_version(o.workload, o.target))
-    sys.stdout.flush()
+    cli.write(fa_version(o.workload, o.target))
     return 0

@@ -35,7 +35,7 @@ from tests.query.test_boolean_manifest import _write  # noqa: E402
 def served(tmp_path_factory):
     """TINY's greedy serve, derived as serving derives it and written as the Build writes a request Program dir."""
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
 
     with torch.device("meta"):
         m = ex.GreedyServe(TINY, 1)

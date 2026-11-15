@@ -35,7 +35,7 @@ def disk_full(*_a, **_k):
     raise OSError(errno.ENOSPC, "No space left on device")
 
 
-def test_a_guard_whose_disk_is_full_still_trips_at_its_cap_and_terminates(budgets, monkeypatch, capsys):
+def test_a_guard_whose_disk_is_full_still_trips_at_its_limit_and_terminates(budgets, monkeypatch, capsys):
     monkeypatch.setattr(G, "save_state", disk_full)
     monkeypatch.setattr(G, "_append", disk_full)
     api = FakeRunPod([pod("a", "vy-a-1", 2.0, 60), pod("b", "vy-a-2", 2.0, 30)])
@@ -82,7 +82,7 @@ def test_an_unreadable_budgets_file_keeps_its_limit(budgets, guard_dir):
     assert G.run(c, api, clock=clock, sleep=sleep, iterations=1) == 0
     (budgets / "budgets.toml").write_text("[budgets\n")
     assert G.run(c, api, clock=clock, sleep=sleep, iterations=3) == 0
-    assert api.deleted == ["a"], "$4/h x 1 h >= $3 an hour on: the cap in force is the last good file's"
+    assert api.deleted == ["a"], "$4/h x 1 h >= $3 an hour on: the limit in force is the last good file's"
     assert "does not parse" in json.loads((guard_dir / "guard-budgets.json").read_text())["budgets"]["error"]
 
 
@@ -106,7 +106,7 @@ def test_each_poll_terminates_before_it_logs():
     order = []
     real_terminate = api.terminate
     api.terminate = lambda pid: (order.append(("terminate", pid)), real_terminate(pid))
-    b = B.parse(TOML.replace("cap_usd = 3,", "cap_usd = 0,"))
+    b = B.parse(TOML.replace("limit_usd = 3,", "limit_usd = 0,"))
     G.poll(api, b, cfg(), state, T0, lambda m: order.append(("log", m.split()[0])))
     assert order[0] == ("terminate", "a") and [o[1] for o in order[1:]] == ["TRIPPED:", "TERMINATED", "1"]
 

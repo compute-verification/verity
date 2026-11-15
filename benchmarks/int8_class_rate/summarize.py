@@ -1,5 +1,5 @@
 """The reading of run.sh's runs: per operand class, the maximum sustained int8 rate over every attempt (kernel, encoding,
-round) and card, alone and beside SHA-512 at each ratio, against θ = 4096 MACs a SM-clock · 132 SMs · 1830 MHz.
+round) and card, alone and beside SHA-512 at each ratio, against θ = rate.tensor · sm.count · clock.tensor (H200).
 
     python3 summarize.py OUT_DIR... [--json FILE]
 
@@ -12,7 +12,12 @@ import argparse
 import json
 from pathlib import Path
 
-SMS, MACS_PER_SMCLK, CLOCK_MHZ = 132, 4096, 1830
+from verity.device import load_card, number
+
+_H200 = load_card("h200-sxm-141gb")
+SMS = int(number(_H200["sm"]["count"]))
+MACS_PER_SMCLK = int(number(_H200["rate"]["tensor"]))
+CLOCK_MHZ = int(number(_H200["clock"]["tensor"]))
 THETA = MACS_PER_SMCLK * SMS * CLOCK_MHZ * 1e6 / 1e12
 CLASSES = ("s8", "s2", "u2", "u4", "zero")
 

@@ -1,4 +1,4 @@
-"""`verity_flock.derive`, the prover's mirror of the verifier's `derive`: a flat unit's rows are `ir_lower.netlist`'s byte
+"""`verity_flock.derive`, the prover's mirror of the verifier's `derive`: a flat unit's rows are `ir_lower.circuit_description`'s byte
 for byte; generated reads are `Flock.Lookup.buildV2`'s (`lookup_v2_vectors.json`'s digests); on hand-built and random statements (placed and
 inline calls and reads, exports, nested placement, the unit's parts), the rows solved in logical order compute
 `circuit_types.evaluate`, every row holds, and the logical order is topological. `derive_vectors.json` pins both orders for
@@ -241,8 +241,8 @@ def test_generated_reads_are_lean_buildv2():
         assert D.rows_digest(d, n, lo, bits) == want[label], label
 
 
-def test_flat_units_are_ir_lowers_netlists():
-    pytest.importorskip("verity.definitions.registry.prims")
+def test_flat_units_are_ir_lowers_circuit_descriptions():
+    pytest.importorskip("verity_vllm.definitions.registry.prims")
     from verity_flock import ir_lower as IL
     from verity_flock import lowerings
     from verity_flock import subcircuit_templates as TM
@@ -256,7 +256,7 @@ def test_flat_units_are_ir_lowers_netlists():
         cut = lambda g: tuple(itertools.accumulate(len(b) for _, _, b in g))[:-1]  # noqa: E731
         lay = LY.BlockLayout(t.digest(), None, cut(low.layout.in_groups), cut(low.layout.out_groups), ("derive",), (), ())
         dv = D.Derivation({t.digest(): t}, [lay], 0, {})
-        assert D.netlist(dv.unit, low.name) == IL.netlist(low.layout, low.name), template
+        assert D.circuit_description(dv.unit, low.name) == IL.circuit_description(low.layout, low.name), template
 
 
 # --- vectors --------------------------------------------------------------------------------------------------------------
@@ -285,9 +285,9 @@ def vector(case) -> dict:
     inner = {}
     for j, lay in enumerate(layouts):
         if j != unit:
-            text = D.netlist(dv.physical(j), lay.digest()[:16])
+            text = D.circuit_description(dv.physical(j), lay.digest()[:16])
             inner[lay.digest()] = {"rows": dv.physical(j).size, "sha512": h(text)}
-    unit_text = D.netlist(dv.unit, layouts[unit].digest()[:16])
+    unit_text = D.circuit_description(dv.unit, layouts[unit].digest()[:16])
     return {"name": name, "archive": _archive(types, layouts, unit, tables),
             "physical": {"layouts": inner, "unit": {"rows": dv.unit.size, "sha512": h(unit_text)},
                          "delta": h(D.delta_text(dv))},
@@ -299,9 +299,9 @@ def vector_cases():
 
 
 def vectors() -> dict:
-    return {"about": "derive vectors: each archive (flock-verify layout's format) with the SHA-512 of the rows the "
+    return {"about": "derive vectors: each archive (verity-verify-proof layout's format) with the SHA-512 of the rows the "
                      "prover's derive (verity_flock.derive) gives it: each inner layout's physical rows and the unit's own "
-                     "region as flock-ir-unit/v2 text with READ lines (derive.netlist), the unit's parts and Δ "
+                     "region as flock-ir-unit/v2 text with READ lines (derive.circuit_description), the unit's parts and Δ "
                      "(derive.delta_text), and the logical list (derive.logical_text). Written by test_derive.py --write.",
             "cases": [vector(c) for c in vector_cases()]}
 

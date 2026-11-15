@@ -31,6 +31,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 #: the metric's names across nsys versions and metric sets, first match wins (lower case, a prefix)
 SM_ACTIVE = ("sms active", "sm active")
@@ -156,7 +157,7 @@ def report(db_path: Path, card, prefix: str = "") -> dict:
         rs = ranges(db, prefix)
         kernels = db.execute("SELECT COUNT(*) FROM CUPTI_ACTIVITY_KIND_KERNEL").fetchone()[0] if _has(
             db, "CUPTI_ACTIVITY_KIND_KERNEL") else 0
-        out = {}
+        out: dict[str, dict[str, Any]] = {}
         ts, vs = sm_active(db) if rs else ([], [])
         for r in rs:
             span = r.span
@@ -252,7 +253,9 @@ def kernel_table(db_path: Path, prefix: str | None = None, steps: str | int | No
         def inside(t: int | None) -> bool:
             if prefix is None:
                 return True
-            i = bisect.bisect_right(opens, t) - 1 if t is not None else -1
+            if t is None:
+                return False
+            i = bisect.bisect_right(opens, t) - 1
             return i >= 0 and t <= span[i][1]
 
         launched: dict[tuple[int | None, int], int] = {}

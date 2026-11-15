@@ -170,7 +170,7 @@ def test_layout_is_the_reference_layout(seed, read, cls, table, monkeypatch):
     got, want = IL.layout(C, *names, [1], [2]), _reference(P, *names, [1], [2])
     assert (got.const, got.in_groups, got.out_groups, got.counts) == (want.const, want.in_groups, want.out_groups, want.counts)
     assert _rows(got.rows_a) == _rows(want.rows_a) and _rows(got.rows_b) == _rows(want.rows_b)
-    assert IL.netlist(got, "t") == IL.netlist(want, "t")
+    assert IL.circuit_description(got, "t") == IL.circuit_description(want, "t")
     ands = [v for v in P.live() if P.kind[v] == "and"]
     assert all(isinstance(C.data[v][0].s, tuple if cls is CS._UnitCircuit else frozenset) for v in ands)
     if read == "library":
@@ -180,7 +180,7 @@ def test_layout_is_the_reference_layout(seed, read, cls, table, monkeypatch):
         assert any(wired & P.data[v][0].s or wired & P.data[v][1].s for v in ands)
 
 
-def _reference_netlist(lay, name, cut=None, leaves=None) -> str:
+def _reference_circuit_description(lay, name, cut=None, leaves=None) -> str:
     head = [IL.FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
@@ -189,7 +189,7 @@ def _reference_netlist(lay, name, cut=None, leaves=None) -> str:
     lines = [" ".join(map(str, head))]
     for a, b in zip(lay.rows_a, lay.rows_b):
         lines.append(" ".join(map(str, [len(a), *IL._cols_of(a), len(b), *IL._cols_of(b)])))
-    return "\n".join(lines) + "\n" + IL.netlist_pins(cut, leaves)
+    return "\n".join(lines) + "\n" + IL.circuit_description_pins(cut, leaves)
 
 
 class _Whole(str):
@@ -200,16 +200,16 @@ class _Whole(str):
 
 
 @pytest.mark.parametrize("rows", [1, 3, 64, 1 << 16])
-def test_the_netlist_and_its_digest_go_in_pieces(rows, table, monkeypatch):
-    """`netlist` joins its rows :data:`ir_lower.NETLIST_ROWS` at a time (with an inline read's array rows and the pins) into
-    the text the one-piece netlist wrote, and `digest` encodes it :data:`ir_lower.HASH_CHUNK` characters at a time."""
+def test_the_circuit_description_and_its_digest_go_in_pieces(rows, table, monkeypatch):
+    """`circuit_description` joins its rows :data:`ir_lower.CIRCUIT_DESCRIPTION_ROWS` at a time (with an inline read's array rows and the pins) into
+    the text the one-piece circuit description wrote, and `digest` encodes it :data:`ir_lower.HASH_CHUNK` characters at a time."""
     import hashlib
 
-    monkeypatch.setattr(IL, "NETLIST_ROWS", rows)
+    monkeypatch.setattr(IL, "CIRCUIT_DESCRIPTION_ROWS", rows)
     monkeypatch.setattr(IL, "HASH_CHUNK", 7 * rows)
     lay = IL.layout(_circuit(rows, True), ["in0", "in1", "in2"], ["out0", "out1", "out2"])
     assert any(isinstance(r, np.ndarray) for r in lay.rows_a)
     for pins in ((None, None), ({"words": 2}, None), (None, {"in": [[0, 1]]}), ({"words": 1}, {"in": []})):
-        text = IL.netlist(lay, "t", *pins)
-        assert text == _reference_netlist(lay, "t", *pins)
+        text = IL.circuit_description(lay, "t", *pins)
+        assert text == _reference_circuit_description(lay, "t", *pins)
         assert IL.digest(_Whole(text)) == hashlib.sha256(text.encode()).hexdigest()

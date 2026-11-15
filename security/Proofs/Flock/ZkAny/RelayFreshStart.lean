@@ -11,7 +11,7 @@ after the history so far (`Loop.freshOf`) is a masking state. The loop readied t
 table's statement, name, level 0 and algebraic phase are there (`roundPlace_first_ok`), and the model's placeholder for
 the stream is one wherever the rep's frame starts at the table's statement (`Drive.start`):
 
-* `ofDraws_of_sizes`, `tab_of_drawn`: a level 0 is sampled at `m` from a packed table and samples of the sizes `m`'s
+* `ofSamples_of_sizes`, `tab_of_sampled`: a level 0 is sampled at `m` from a packed table and samples of the sizes `m`'s
   schedule takes, and one sampled at a statement's `m` gives a table where the statement commits under `hm96Sha512`.
 * `placeholder_of`: so the placeholder is one where the rep's frame starts and its zero level 0 gives a table.
 * `freshOf_of`: `Loop.freshOf` is a masking state where the placeholder and its algebraic phase are, rep 0's
@@ -31,46 +31,52 @@ the stream is one wherever the rep's frame starts at the table's statement (`Dri
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed)
+open _root_.Flock.ZkServer.Session (State Placed)
 open _root_.Flock (V F128 SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Sessions Rep Release)
-open _root_.Flock.Firewall.Frame (Cfg Masker Place)
+open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Place)
+
+variable {wideLeaf : Bool}
 
 /-- **Level 0's padded codeword has a row for each tree position.** -/
 theorem linkRows_size (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128) (extra lanePad : Nat → Nat → F128) :
-    (_root_.Flock.Firewall.Link.rows lv tPad g extra lanePad).size = 2 ^ lv.d := by
-  unfold _root_.Flock.Firewall.Link.rows
+    (_root_.Flock.ZkServer.Link.rows lv tPad g extra lanePad).size = 2 ^ lv.d := by
+  unfold _root_.Flock.ZkServer.Link.rows
   split
-  · simp [_root_.Flock.Firewall.Link.rowsFft]
-  · simp [_root_.Flock.Firewall.Link.rowsDirect]
+  · simp [_root_.Flock.ZkServer.Link.rowsFft]
+  · simp [_root_.Flock.ZkServer.Link.rowsDirect]
 
 /-- **A built level 0 has a row for each tree position.** -/
-theorem buildRows_size (m : Nat) (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128)
+theorem buildRows_size (wide : Bool) (m : Nat) (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128)
     (extra pads : Array (Array F128)) (salts : ByteArray) :
-    (_root_.Flock.Firewall.Level0.build m lv tPad g extra pads salts).rows.size = 2 ^ lv.d := by
+    (_root_.Flock.ZkServer.Level0.build wide m lv tPad g extra pads salts).rows.size = 2 ^ lv.d := by
   exact linkRows_size _ _ _ _ _
 
 /-- **A level 0 is sampled at `m`** from a packed table and samples of the sizes `m`'s `--zk` schedule takes. -/
-theorem ofDraws_of_sizes {m : Nat} {s : _root_.Flock.Schedule} {tp : Nat}
-    (hz : _root_.Flock.Zk.schedule m = .ok (s, tp)) {g : Array F128} {d : ByteArray}
+theorem ofSamples_of_sizes {m : Nat} {s : _root_.Flock.Schedule} {tp : Nat}
+    (hz : _root_.Flock.Zk.schedule wideLeaf m = .ok (s, tp)) {g : Array F128} {d : ByteArray}
     (hg : g.size = 2 ^ ((s.levels.getD 0 default).lanes + (s.levels.getD 0 default).cols))
-    (hd : d.size = _root_.Flock.Firewall.Level0.drawSize (s.levels.getD 0 default) tp) :
-    ∃ l, _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l := by
-  unfold _root_.Flock.Firewall.Level0.ofDraws
+    (hd : d.size = _root_.Flock.ZkServer.Level0.sampleSize (s.levels.getD 0 default) tp) :
+    ∃ l, _root_.Flock.ZkServer.Level0.ofSamples wideLeaf m g d = .ok l := by
+  unfold _root_.Flock.ZkServer.Level0.ofSamples
   simp only [hz, hg, hd, buildRows_size, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, bind, Except.bind,
     pure, Except.pure]
   all_goals exact ⟨_, rfl⟩
 
-/-- **A level 0 sampled at a statement's `m` gives a table** where the statement commits under `hm96Sha512`. -/
-theorem tab_of_drawn {stm : Stmt} (hmk : stm.merkle = _root_.Flock.MerkleScheme.hm96Sha512) {g : Array F128}
-    {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
-    (hl : _root_.Flock.Firewall.Level0.ofDraws stm.m g d = .ok l) :
-    ∃ t, _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l = .ok t := by
-  obtain ⟨hm, -, ⟨s, hz, -⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl
+/-- **A level 0 sampled at a statement's `m` and version gives a table** where the statement commits under
+`hm96Sha512`. -/
+theorem tab_of_sampled {stm : Stmt} (hmk : stm.merkle = _root_.Flock.MerkleScheme.hm96Sha512) {g : Array F128}
+    {d : ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
+    (hl : _root_.Flock.ZkServer.Level0.ofSamples stm.wideLeaf stm.m g d = .ok l) :
+    ∃ t, _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l = .ok t := by
+  obtain ⟨hm, -, ⟨s, hz, -⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofSamples_ok hl
   have e1 : (_root_.Flock.Setup.ofCircuit stm).merkle = _root_.Flock.MerkleScheme.hm96Sha512 := hmk
   have e2 : (_root_.Flock.Setup.ofCircuit stm).m = stm.m := rfl
-  unfold _root_.Flock.Firewall.Finish.tabOfLevel0
-  simp only [e1, e2, hm, hz, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure, Except.pure]
+  have e3 : (_root_.Flock.Setup.ofCircuit stm).wideLeaf = stm.wideLeaf := rfl
+  have hw : l.wideLeaf = stm.wideLeaf := _root_.Flock.ZkServer.Level0.ofSamples_wideLeaf hl
+  unfold _root_.Flock.ZkServer.Finish.tabOfLevel0
+  simp only [e1, e2, e3, hm, hw, hz, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure,
+    Except.pure]
   all_goals exact ⟨_, rfl⟩
 
 /-- Where the left of two related results is a value, the right is one too, related to it. -/
@@ -84,14 +90,14 @@ theorem relV_ok_left {α β : Type} {S : α → β → Prop} {x : V α} {y : V �
 /-- **Rep stream `k`'s placeholder is one** where the rep's frame starts at the stream's table's statement and the
 statement's zero level 0 gives a table. -/
 theorem placeholder_of {spec : SessionSpec} {sts : Array Stmt} {k : Nat} (link : Array F128) {stm : Stmt}
-    (hk : sts[k / 2]! = stm) {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.Firewall.Frame.MaskSlot}
-    (hst : _root_.Flock.Firewall.Drive.start stm = .ok (lay, mask)) {sch : _root_.Flock.Schedule} {tp : Nat}
-    (hz : _root_.Flock.Zk.schedule stm.m = .ok (sch, tp)) {l : _root_.Flock.Firewall.Level0.Level0}
-    (hl : _root_.Flock.Firewall.Level0.ofDraws stm.m
+    (hk : sts[k / 2]! = stm) {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.ZkServer.Frame.MaskSlot}
+    (hst : _root_.Flock.ZkServer.Drive.start stm = .ok (lay, mask)) {sch : _root_.Flock.Schedule} {tp : Nat}
+    (hz : _root_.Flock.Zk.schedule stm.wideLeaf stm.m = .ok (sch, tp)) {l : _root_.Flock.ZkServer.Level0.Level0}
+    (hl : _root_.Flock.ZkServer.Level0.ofSamples stm.wideLeaf stm.m
       (Array.replicate (2 ^ ((sch.levels.getD 0 default).lanes + (sch.levels.getD 0 default).cols)) 0)
-      (Loop.zeros (_root_.Flock.Firewall.Level0.drawSize (sch.levels.getD 0 default) tp)) = .ok l)
-    {t : _root_.Flock.Firewall.Finish.Tab}
-    (ht : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l = .ok t) :
+      (Loop.zeros (_root_.Flock.ZkServer.Level0.sampleSize (sch.levels.getD 0 default) tp)) = .ok l)
+    {t : _root_.Flock.ZkServer.Finish.Tab}
+    (ht : _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l = .ok t) :
     ∃ c' dom xs hi, Loop.placeholder spec sts k link = .ok (c', t, dom, xs, hi) := by
   unfold Loop.placeholder
   simp only [hk, hst, hz, hl, ht, bind, Except.bind, pure, Except.pure]
@@ -101,18 +107,18 @@ theorem placeholder_of {spec : SessionSpec} {sts : Array Stmt} {k : Nat} (link :
 algebraic phase are, and at rep 1 rep 0's algebraic phase ended and the placeholder's frame takes its coins. -/
 theorem freshOf_of (x : Msg) (cs : List FlockDeploy.Coin) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     {sts : Array Stmt} {q : Nat} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : cs.length = q + 1)
-    {c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
+    {c' : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray}
     (hph : Loop.placeholder spec sts (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 (Loop.wordsAt x cs 0) =
       .ok (c', t, dom, xs, hi)) {alg : Array (ByteArray × Nat)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (h1 : (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 % 2 ≠ 0 → ∃ n0,
       (Loop.roundsOf spec sts).getD ((ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q).1 - 1) 0 = n0 ∧
-      alg.size ≤ n0 ∧ ∃ st', _root_.Flock.Firewall.Frame.step c' {}
+      alg.size ≤ n0 ∧ ∃ st', _root_.Flock.ZkServer.Frame.step c' {}
         (.prior (((Array.range n0).map fun j => Loop.wordsAt x cs (q - n0 + j + 1)).extract 0 alg.size
             |>.foldl (· ++ ·) #[]).size
-          (_root_.Flock.Firewall.Frame.wordBytes
+          (_root_.Flock.ZkServer.Frame.wordBytes
             (((Array.range n0).map fun j => Loop.wordsAt x cs (q - n0 + j + 1)).extract 0 alg.size
               |>.foldl (· ++ ·) #[]))) = (.ok, st')) :
     ∃ m, Loop.freshOf x cs = .ok m := by
@@ -131,15 +137,15 @@ theorem freshOf_of (x : Msg) (cs : List FlockDeploy.Coin) {s0 : FlockDeploy.Ins}
     exact ⟨_, rfl⟩
 
 /-- **The frame's step on an earlier rep's coins** that does not end the rep takes them. -/
-theorem step_prior_ok {c : Cfg} {st : _root_.Flock.Firewall.Frame.State} {k : Nat} {b : ByteArray}
-    (h : (_root_.Flock.Firewall.Frame.step c st (.prior k b)).1.ends = false) :
-    ∃ st', _root_.Flock.Firewall.Frame.step c st (.prior k b) = (.ok, st') := by
-  rcases hs : _root_.Flock.Firewall.Frame.step c st (.prior k b) with ⟨a, st'⟩
+theorem step_prior_ok {c : Cfg} {st : _root_.Flock.ZkServer.Frame.State} {k : Nat} {b : ByteArray}
+    (h : (_root_.Flock.ZkServer.Frame.step c st (.prior k b)).1.ends = false) :
+    ∃ st', _root_.Flock.ZkServer.Frame.step c st (.prior k b) = (.ok, st') := by
+  rcases hs : _root_.Flock.ZkServer.Frame.step c st (.prior k b) with ⟨a, st'⟩
   have h' : a.ends = false := by
     rw [hs] at h
     exact h
   have ha : a = .ok ∨ a.ends = true := by
-    simp only [_root_.Flock.Firewall.Frame.step] at hs
+    simp only [_root_.Flock.ZkServer.Frame.step] at hs
     split at hs
     · exact .inr (by cases hs; rfl)
     · split at hs
@@ -152,11 +158,11 @@ theorem step_prior_ok {c : Cfg} {st : _root_.Flock.Firewall.Frame.State} {k : Na
 
 /-- **A frame's run on an earlier rep's coins took them**: the run did not end, so its step on them answered `ok`. -/
 theorem repRun_prior_ok {k : Nat} {b : ByteArray} {q : Rep} (h : RepRun [.prior k b] [] q) :
-    ∃ st', _root_.Flock.Firewall.Frame.step q.cfg {} (.prior k b) = (.ok, st') := by
-  have h1 : _root_.Flock.Firewall.Frame.run q.cfg {} [.prior k b] = (q.st, false) := h.1
+    ∃ st', _root_.Flock.ZkServer.Frame.step q.cfg {} (.prior k b) = (.ok, st') := by
+  have h1 : _root_.Flock.ZkServer.Frame.run q.cfg {} [.prior k b] = (q.st, false) := h.1
   rw [run_cons] at h1
   apply step_prior_ok
-  cases he : (_root_.Flock.Firewall.Frame.step q.cfg {} (.prior k b)).1.ends with
+  cases he : (_root_.Flock.ZkServer.Frame.step q.cfg {} (.prior k b)).1.ends with
   | false => rfl
   | true =>
     rw [he] at h1
@@ -169,7 +175,7 @@ of `stream`, the rep's frame is at the model's configuration and starts at the t
 `roundPlace` readies the round, `Loop.freshOf` after the history so far is a masking state. The rep's frame is fresh
 (`FreshAt`); `roundPlace` read the table's statement and level 0, which the loop drew (`BuiltAt`), and `withAlg`'s
 algebraic phase on it (`withAlg_alg`). The statement commits under `hm96Sha512` (`Loop.tabs_of_live`), so the
-placeholder's zero level 0 gives a table (`tab_of_drawn`), of the loop's table's shape (`Sched.tabOfLevel0_alike`),
+placeholder's zero level 0 gives a table (`tab_of_sampled`), of the loop's table's shape (`Sched.tabOfLevel0_alike`),
 and the placeholder is one (`placeholder_of`) whose algebraic phase is one as `withAlg`'s (`Sched.rounds_alike`). At
 rep 1 rep 0's frame holds as many coins as the phase has rounds (`roundPlace_prior_size`), the history's words for
 rep 0's rounds (rep 0's stream seen, its `RepJ`), and the readied frame took them (`roundPlace_prior`,
@@ -181,7 +187,7 @@ theorem fresh_of_slot {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     (hlive : ZKMal.Masked.Live M.x)
     {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
@@ -189,9 +195,9 @@ theorem fresh_of_slot {T : ZKMal.CoinLayer.TableData}
     (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
     (hsn : seen.contains stream = false)
     (hpc : ∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c))
-    (hsk : ∀ p, frameAt σ.R sid i r = some p → ∃ lm, _root_.Flock.Firewall.Drive.start sts[i]! = .ok lm)
+    (hsk : ∀ p, frameAt σ.R sid i r = some p → ∃ lm, _root_.Flock.ZkServer.Drive.start sts[i]! = .ok lm)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
     ∃ m, M.L.fresh M.x (M.hist σ.c) = .ok m := by
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
   obtain ⟨hk0, hmem⟩ := round_rep hsl hF hJ hrep hlt hD.names
@@ -260,12 +266,12 @@ theorem fresh_of_slot {T : ZKMal.CoinLayer.TableData}
   rw [hstmb] at hmk
   obtain ⟨⟨lay, mask⟩, hds⟩ := hsk p hfa
   rw [hstmb] at hds
-  obtain ⟨l1, hl1⟩ := ofDraws_of_sizes hsch
+  obtain ⟨l1, hl1⟩ := ofSamples_of_sizes hsch
     (g := Array.replicate (2 ^ ((sch.levels.getD 0 default).lanes + (sch.levels.getD 0 default).cols)) 0)
-    (d := Loop.zeros (_root_.Flock.Firewall.Level0.drawSize (sch.levels.getD 0 default) tp)) (by simp)
+    (d := Loop.zeros (_root_.Flock.ZkServer.Level0.sampleSize (sch.levels.getD 0 default) tp)) (by simp)
     (Loop.zeros_size _)
-  obtain ⟨t1, ht1⟩ := tab_of_drawn hmk hl1
-  obtain ⟨t0, ht0⟩ := tab_of_drawn hmk hdb
+  obtain ⟨t1, ht1⟩ := tab_of_sampled hmk hl1
+  obtain ⟨t0, ht0⟩ := tab_of_sampled hmk hdb
   have hk2 : sts[(2 * i + r) / 2]! = stm := by
     rw [hdiv]
     exact hstmb
@@ -276,9 +282,9 @@ theorem fresh_of_slot {T : ZKMal.CoinLayer.TableData}
     rw [hk1]
     exact hph
   have hTA : Sched.TabAlike t0 t1 := by
-    obtain ⟨s', tp', hs', hg'⟩ := Count.ofDraws_gsize hdb
+    obtain ⟨s', tp', hs', hg'⟩ := Count.ofSamples_gsize hdb
     have hss' : s' = sch := (Prod.mk.inj (Except.ok.inj (hs'.symm.trans hsch))).1
-    obtain ⟨-, -, ⟨s0', hz0, hlv0⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hdb
+    obtain ⟨-, -, ⟨s0', hz0, hlv0⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofSamples_ok hdb
     have hd0 : 64 * 2 ^ l0.lv.d < 2 ^ 64 := by
       rw [hlv0]
       exact (Count.sched_bounds hz0).2 0
@@ -289,8 +295,8 @@ theorem fresh_of_slot {T : ZKMal.CoinLayer.TableData}
     have hA := Sched.tabOfLevel0_alike (_root_.Flock.Setup.ofCircuit stm) hdb hl1 hgs hd0
     rw [ht0, ht1] at hA
     exact hA
-  have hcap0 := cap_of_drawn hdb ht0
-  have hc : l0.root.size = (_root_.Flock.Firewall.Finish.flat t1.cm0.cap).size := by
+  have hcap0 := cap_of_sampled hdb ht0
+  have hc : l0.root.size = (_root_.Flock.ZkServer.Finish.flat t1.cm0.cap).size := by
     rw [← hcap0]
     exact hTA.2.2.2.2.1
   have hcn : l0.root.size < 2 ^ 64 := by
@@ -308,13 +314,13 @@ theorem fresh_of_slot {T : ZKMal.CoinLayer.TableData}
     rw [hspec, hpr, hdiv, hmod, hname]
   have hdom := (Loop.sizesOk_at (hJ.sizes hsent) (rep_lt_size hmem)).2.1
   have hRA := Sched.rounds_alike (_root_.Flock.Setup.ofCircuit stm) sch.k0 l0.root
-    (_root_.Flock.Firewall.Finish.flat t1.cm0.cap) _ hc hdg hcn hdom hmb
+    (_root_.Flock.ZkServer.Finish.flat t1.cm0.cap) _ hc hdg hcn hdom hmb
   rw [hdm] at ha
   obtain ⟨alg, hal0, -⟩ := relV_ok_left hRA ha
   obtain ⟨ht1st, hz1⟩ := Count.tabOfLevel0_sched ht1
   have ht1sch : t1.sch = sch := (Prod.mk.inj (Except.ok.inj (hz1.symm.trans hsch))).1
   obtain ⟨-, -, -, -, hdom', -⟩ := Loop.placeholder_ok hph
-  have hal : _root_.Flock.Firewall.Skeleton.rounds t1.st t1.sch.k0 (_root_.Flock.Firewall.Finish.flat t1.cm0.cap)
+  have hal : _root_.Flock.ZkServer.Skeleton.rounds t1.st t1.sch.k0 (_root_.Flock.ZkServer.Finish.flat t1.cm0.cap)
       dom' = .ok alg := by
     rw [ht1st, ht1sch, hdom']
     exact hal0
@@ -381,7 +387,7 @@ theorem freshStart_deployed {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     (hlive : ZKMal.Masked.Live M.x) {sid : Nat} {stream : String} {n : Nat} :
     FreshStart M sid spec sts stream n := by

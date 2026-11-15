@@ -1,10 +1,10 @@
 """forge-after: V*'s three forgeries that the prover's ZK server stops before release (coef, dirs, message), made after an
-honest firewalled prove instead, and put to the Lean verifier.
+honest prove through the ZK server instead, and put to the Lean verifier.
 
     python3 benchmarks/recursion_e2e/forge_after.py --work FLOCK_WORK --tag TAG --run-out LEAN_OUT [--bin NAME=PATH ...] [--kinds K,..]
 
 ``run.py``'s ``forge-after`` step runs it after the lean step (``--run-out``: that step's out/, whose ``lean/own-<stmt>.txt``
-it reuses) with 85's flock-verify; ``forge_after.sh`` runs it over an earlier run's data.
+it reuses) with the Lean verifier 85 built; ``forge_after.sh`` runs it over an earlier run's data.
 
 A forgery staged before proving (`rec_vstage --forge`) puts a wrong row in the prover's ``inst.bin``, and the ZK server refuses
 to release a proof of it, so Lean never sees a release. Here the release is an honest one pod 85 already proved behind the
@@ -18,7 +18,7 @@ the row's own salt, so that the proved row and the verifier's registered row dif
   read paths, and the port's root in ``registered.json``. Only the release's binding is left to refuse it.
 
 Each case, and each statement's unmodified copy (the control, which must accept), is verified as pod 85's STEP=lean
-verifies it (`flock-verify verify --zk --registered` with its ``--rec-*`` flags), with each binary given. The run's
+verifies it (the Lean verifier's `verify --zk --registered` with its ``--rec-*`` flags), with each binary given. The run's
 ``out/lean/own-<stmt>.txt`` holds 85's own flags for the binary it built; another binary's are derived here as 85 derives
 them. Nothing under FLOCK_WORK is written. Writes ``$OUT/forge-after.json`` and prints one line per verify.
 """
@@ -204,7 +204,7 @@ def main() -> int:
     ap.add_argument("--work", required=True, type=Path)
     ap.add_argument("--tag", required=True)
     ap.add_argument("--run-out", required=True, type=Path, help="the out/ of the run whose lean step verified FLOCK_WORK")
-    ap.add_argument("--bin", action="append", default=[], help="NAME=PATH: a flock-verify; NAME=run uses the run's own flags")
+    ap.add_argument("--bin", action="append", default=[], help="NAME=PATH: a Lean verifier binary; NAME=run uses the run's own flags")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--kinds", default=",".join(CASES), help=f"of {', '.join(CASES)} (comma or space separated)")
     a = ap.parse_args()

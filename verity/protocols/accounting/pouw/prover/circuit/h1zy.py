@@ -17,7 +17,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   which f32 rounding doesn't commute with, and its bf16 bias add maps -0 to +0. So it is a Definition of its own,
   `PouwZyDequant_v2`, circuits' three Boolean pieces in that order (`S32ToF32Rn_v2`, two `F32Mul_v4`, `F2fpBf16_v2`, the
   epilogue of `ScaledMmS8Coordinate_v2`), its word view `PouwZyDequant_v1` on their words (`dequant`). Every NaN is 0x7FFF
-  (``cvt.rn.bf16.f32``); torch's CPU cast gives 0x7FC0, the one encoding where the CPU oracle and the GPU differ.
+  (``cvt.rn.bf16.f32``); the device library's CPU cast gives 0x7FC0, the one encoding where the CPU oracle and the GPU differ.
 * **The scales.** A unit's A row is its K codes and then its f32 s_a, little-endian (its A table leaf, `ROW`), and its
   B row the K weight codes and then their f32 s_w: each scale is committed with its row, so a unit reads the A row's scale
   at the A row's position and the weight row's at the weight row's (`Accounting.Served.DequantOf`: s_a with the A row, s_w
@@ -36,7 +36,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   accepted proof. The ok rows are the verifier's own registered value ``ok`` (h1_prove's `register_ok`: row u the
   word 1 under unit u's public salt), and each unit's ok port ``o1`` reads it at the unit's row through ``--registered``,
   so Lean opens each ok row against that root rather than reading ok off the public file alone (``CheckedSessionSound``,
-  `security/Proofs/Accounting/TS/CheckedSound.lean`, binds ok only through a port of ``own``). A lane's and a combine's ok take the same
+  `security/Proofs/Pouw/TS/CheckedSound.lean`, binds ok only through a port of ``own``). A lane's and a combine's ok take the same
   form: each statement's ok port (``o0``, its one output) reads the verifier's own ``ok``, one row of the word 1 a
   statement under its public salt, beside the ``partials`` ports.
 * **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a sampled leaf is proved as its 32
@@ -122,7 +122,8 @@ lane and combine, and J10-R's lane, lane chunks and combine (`chunkPorts`, `comb
 """
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits import ports as _ports
@@ -285,7 +286,7 @@ def _unit_ports(S: Any) -> Any:
 
 PouwH1TileZy = CompositeDefinition(
     "PouwH1TileZy", 1, ("TILE",), _signature, _body, conformance="protocol-defined",
-    refuse=lambda b: _refuse_tile(b, TILES + J10R_TILES), register=H.SG is not None, ports=_unit_ports,
+    refuse=lambda b: _refuse_tile(b, TILES + J10R_TILES), ports=_unit_ports,
     doc="The H1 tile with its z/y record checked (`circuit.h1zy`): TILE on the A and B rows' codes, the salt, position and "
         "roots (a J10-R TILE's then its call and blocks) gives z and the receipt; the unit returns the receipt and ok, 1 "
         "exactly when the record's z is z and its y is PouwZyDequant_v2 of z at each cell's row scale s_a and column scale "
@@ -473,7 +474,7 @@ def _lane_ports(S: Any) -> Any:
 
 PouwH1LaneZy = CompositeDefinition(
     "PouwH1LaneZy", 1, ("TILE",), _lane_signature, _lane_body, conformance="protocol-defined", refuse=_refuse_lane,
-    register=H.SG is not None, ports=_lane_ports,
+    ports=_lane_ports,
     doc="One lane of TILE's R × C leaf (`circuit.h1zy`): the lane's 4 A rows and 8 B rows (by row and column slot), the "
         "leaf's R admit bits, its whole z/y record, the lane's committed partial, the leaf's salt, position and roots, and "
         "the public lane index, a 16-bit word. Its noise is the leaf's seed_j stream at its rows' and columns' blocks and its "
@@ -495,7 +496,7 @@ def _refuse_lane_j10r(b: dict) -> str | None:
 
 PouwH1LaneZy2 = CompositeDefinition(
     "PouwH1LaneZy", 2, ("TILE",), _lane_signature, _lane_body, conformance="protocol-defined", refuse=_refuse_lane_j10r,
-    register=H.SG is not None, ports=_lane_ports,
+    ports=_lane_ports,
     doc="v1's lane over J10-R (`circuit.h1zy`): one lane of TILE's R × C leaf, TILE PouwH1Tile_v5, with v1's parameters "
         "and the unit's call and blocks after its roots, before the lane index. Its noise is seed_c's (PouwCallSeeds_v2 "
         "at the call's first position) at its rows' and columns' blocks, each counter the leaf's row or column offset "
@@ -518,7 +519,7 @@ def _combine_body(B: Any, S: Any, partials: Coll, receipt: Coll) -> Coll:
 
 PouwH1Combine = CompositeDefinition(
     "PouwH1Combine", 1, ("TILE",), _combine_signature, _combine_body, conformance="protocol-defined",
-    refuse=_refuse_lane, register=H.SG is not None,
+    refuse=_refuse_lane,
     doc="The receipt check of TILE's leaf over its lanes' committed partials (`circuit.h1zy`): ok is 1 exactly when, word "
         "by word, the XOR over the lanes in lane order of each partial's word (PouwXor32_v2) is the leaf's committed "
         "receipt's. It reads only the leaf's layout, so it is one Definition over v1's and v3's lanes.")
@@ -548,7 +549,7 @@ def _combine2_body(B: Any, S: Any, partials: Coll, receipt: Coll, oks: Coll) -> 
 
 PouwH1Combine2 = CompositeDefinition(
     "PouwH1Combine", 2, ("TILE",), _combine2_signature, _combine2_body, conformance="protocol-defined",
-    refuse=lambda b: _refuse_lane(b, J10R_LANE_TILES), register=H.SG is not None,
+    refuse=lambda b: _refuse_lane(b, J10R_LANE_TILES),
     doc="v1's receipt check folding the leaf's statements' oks (`circuit.h1zy`), TILE J10-R's PouwH1Tile_v5: v1's "
         "partials and receipt, then oks, each lane's and lane chunk's ok row in statement order (lane by lane, a lane's "
         "chunks in chain order), a 16-bit word. ok is 1 exactly when the partials' XOR is the receipt and every ok row is "
@@ -565,7 +566,7 @@ def _leaf(tile: Any) -> int:
     if k < 1:
         raise ValueError(f"K = {k}: a leaf's lanes and combine are staged only at a positive K")
     if r % 16:
-        raise ValueError(f"R = {r}: a lane reads the leaf's R admit bits as one row, and C-Flock takes only a row of whole "
+        raise ValueError(f"R = {r}: a lane reads the leaf's R admit bits as one row, and Flock takes only a row of whole "
                          f"16-bit words (class_statement.unit_lowering): a leaf's lanes and combine are staged only at an R "
                          f"that is a multiple of 16, as the served 32 × 32 leaf's is")
     return k
@@ -587,7 +588,7 @@ def combine(tile: Any) -> Any:
     k = _leaf(tile)
     n = 8 * H.Layout(4, 8, k).sets
     if n + 17 <= 128:
-        raise ValueError(f"K = {k}: the combine reads only a lane's partials and the receipt, {n}-byte rows, but C-Flock "
+        raise ValueError(f"K = {k}: the combine reads only a lane's partials and the receipt, {n}-byte rows, but Flock "
                          f"proves a statement only with a row that compresses before its last block, at least 112 bytes: "
                          f"K = {LEAST_K} is the least K the combine is proved at")
     return bind(PouwH1Combine2 if tile.defn.id in J10R_TILES else PouwH1Combine, TILE=tile)
@@ -762,7 +763,7 @@ def _chunk_body(B: Any, S: Any, *args: Coll) -> Coll:
 
 PouwH1LaneZyChunk = CompositeDefinition(
     "PouwH1LaneZyChunk", 1, ("TILE", "CHUNKS", "CHUNK"), _chunk_signature, _chunk_body, conformance="protocol-defined",
-    refuse=_refuse_chunk, register=H.SG is not None, ports=_lane_ports,
+    refuse=_refuse_chunk, ports=_lane_ports,
     doc="Chunk CHUNK of CHUNKS of one lane of TILE's R × C leaf along K (`circuit.h1zy`): the lane's 4 A rows and 8 B rows "
         "at the chunk's K / CHUNKS entries with each row's scale, what the chunk before hands on (CARRY, past the first), "
         "the leaf's salt, position and roots and the public lane index; the last chunk also the leaf's R admit bits, its "
@@ -774,7 +775,7 @@ PouwH1LaneZyChunk = CompositeDefinition(
 
 PouwH1LaneZyChunk2 = CompositeDefinition(
     "PouwH1LaneZyChunk", 2, ("TILE", "CHUNKS", "CHUNK"), _chunk_signature, _chunk_body, conformance="protocol-defined",
-    refuse=lambda b: _refuse_chunk(b, "PouwH1Tile_v5"), register=H.SG is not None, ports=_lane_ports,
+    refuse=lambda b: _refuse_chunk(b, "PouwH1Tile_v5"), ports=_lane_ports,
     doc="v1's lane chunk over J10-R (`circuit.h1zy`): chunk CHUNK of CHUNKS of one lane of TILE's R × C leaf, TILE "
         "PouwH1Tile_v5 over GemmAccumulatorS8_v2, with v1's parameters and the unit's call and blocks after its roots, "
         "before the lane index. Its noise is the whole lane's under J10-R, seed_c's (PouwCallSeeds_v2 at the call's first "
@@ -853,7 +854,7 @@ def _tile_chunks_body(B: Any, S: Any, a: Coll, b: Coll, zy: Coll, *public: Coll)
 
 PouwH1TileZyChunks = CompositeDefinition(
     "PouwH1TileZyChunks", 1, ("UNIT", "CHUNKS"), _tile_chunks_signature, _tile_chunks_body, conformance="protocol-defined",
-    refuse=_refuse_tile_chunks, register=H.SG is not None, ports=_unit_ports,
+    refuse=_refuse_tile_chunks, ports=_unit_ports,
     doc="UNIT (h1zy's PouwH1TileZy_v1 over an R × C PouwH1Tile_v1 at K) on its rows as CHUNKS = n chunk rows each "
         "(`circuit.h1zy`): its n R A rows and n C B rows, row i's chunk c at n i + c its K / n codes from c K / n and the "
         "row's f32 scale, then UNIT's record, salt, position and roots. Each whole row is its chunks' codes in turn and "
@@ -879,7 +880,7 @@ def _refuse_tile_chunks_j10r(b: dict) -> str | None:
 
 PouwH1TileZyChunks2 = CompositeDefinition(
     "PouwH1TileZyChunks", 2, ("UNIT", "CHUNKS"), _tile_chunks_signature, _tile_chunks_body, conformance="protocol-defined",
-    refuse=_refuse_tile_chunks_j10r, register=H.SG is not None, ports=_unit_ports,
+    refuse=_refuse_tile_chunks_j10r, ports=_unit_ports,
     doc="v1's unit on chunk rows over J10-R (`circuit.h1zy`): UNIT h1zy's PouwH1TileZy_v1 over an R × C PouwH1Tile_v5 or "
         "_v6 at K, on its n R A and n C B chunk rows (row i's chunk c at n i + c, its K / n codes from c K / n and the "
         "row's f32 scale), then UNIT's record, salt, position, roots, call and blocks. Each whole row is its chunks' codes "
@@ -1175,8 +1176,8 @@ def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]],
                and check([zy[0][u] for u in cells], [zy[1][u] for u in cells], got["z"], sa, sw))
 
 
-__all__ = ["BF16", "CARRY", "CHUNKED", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "J10R", "J10R_LANE_TILES", "LANE", "LEAST_K",
-           "OK_WORD", "PUBLIC", "PUBLIC_J10R", "S32", "S8",
+__all__ = ["BF16", "BIT", "CARRY", "CHUNKED", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "J10R", "J10R_LANE_TILES", "LANE",
+           "LEAST_K", "M32", "OK_WORD", "PUBLIC", "PUBLIC_J10R", "S32", "S8",
            "PouwAndBit", "PouwH1Combine", "PouwH1Combine2", "PouwH1LaneZy", "PouwH1LaneZy2", "PouwH1LaneZyChunk",
            "PouwH1LaneZyChunk2", "PouwH1TileZy", "PouwH1TileZyChunks", "PouwH1TileZyChunks2", "PouwMuxBit",
            "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "J10R_TILES", "TILES",

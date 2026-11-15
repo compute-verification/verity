@@ -1,5 +1,5 @@
 """What `tp-commit` (`verity_vllm.pipeline.tp.commit`) does with its options before its first measured run: the communicator size it
-builds its engine with, the negatives and the replay config every rank's committer is made with, the environment it puts on the
+builds its engine with, the negatives, the envelope and the replay config every rank's committer is made with, the environment it puts on the
 record, and the refusals that end it before a rank commits: a deferred replay with no manifest, two spellings of the ranks' Builds,
 a manifest whose rank Program no Build vouches for, names another Program or is of another world, a flip with no index and another
 rank's shard with no checkpoint.  With them, the rank's Program digest as `build_program_digest` reads it from a Build dir.
@@ -26,8 +26,8 @@ from verity_vllm.query.manifest.format import components_fold_digest
 pytest.importorskip("torch")
 
 WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4},
-                         {"request_id": "q1", "prompt_token_ids": [4, 5], "arrive_step": 1, "seed": 7}],
-            "sampling": {"max_tokens": 2, "seed": 3}, "sha256": "w", "execution": "bi-eager"}
+                         {"request_id": "q1", "prompt_token_ids": [4, 5], "max_tokens": 2, "arrive_step": 1, "seed": 7}],
+            "sampling": {"seed": 3}, "sha256": "w", "execution": "bi-eager"}
 RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "step_tokens_out": [1, 1, 1, 1], "generated_tokens": 4, "prompt_tokens": 3,
        "tokens": {"q0": [5, 6, 7, 8]}}
 A, B, C = "a" * 128, "b" * 128, "c" * 128
@@ -160,8 +160,14 @@ def test_every_rank_s_committer_is_made_with_the_negatives_as_parsed(commit, fla
     assert (llm.made["request_order"], llm.made["request_ids"]) == (["q0", "q1"], {"q0": "r0", "q1": "r1"})
     assert (llm.made["arrivals"], llm.made["n_requests"]) == ({"r0": 0, "r1": 1}, 2)
     limits = [v for k, v in llm.made.items() if k not in ("arrivals", "request_ids") and isinstance(v, dict) and set(v) == {"r0", "r1"}]
-    assert limits == [{"r0": 4, "r1": 2}]                # each request's token limit by its id: its own, else the sampling's
+    assert limits == [{"r0": 4, "r1": 2}]                # each request's own token limit by its id
     assert llm.made["replay"] is None and llm.made["required_manifest"] is None and llm.made["program_digest"] == {"0": None, "1": None}
+
+
+def test_every_rank_s_committer_is_made_with_the_workload_s_envelope(commit):
+    """What a rank sizes its arena from: the engine's largest batch, the workload's longest prompt and its largest token limit."""
+    llm, _ = commit("--max-num-seqs", "5")
+    assert llm.made["envelope"] == {"batch": 5, "max_prompt": 3, "max_new": 4, "max_num_batched_tokens": None, "max_model_len": None}
 
 
 def test_a_flip_of_one_weight_reaches_the_ranks_parsed_and_one_with_no_index_is_refused(commit):

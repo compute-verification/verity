@@ -25,7 +25,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import run_root as RT
@@ -70,7 +70,7 @@ def test_a_ranks_window_over_its_committed_values_binds_the_tp_run_root(tmp_path
     from verity_vllm.pipeline import replay_bundle as RB
     from verity_vllm.pipeline import serving_rows as SRW
 
-    monkeypatch.setattr(T, "I", 32)            # SiluMul's in0 (2I words) is one whole SHA-512 block
+    monkeypatch.setattr(T, "INTER", 32)            # SiluMul's in0 (2I words) is one whole SHA-512 block
     c = served_rope.commit(tmp_path)
     (pf := tmp_path / "silu.json").write_text(json.dumps({"templates": [SILU], "law": "subset:1"}))
     r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
@@ -125,7 +125,7 @@ def served_tp(tmp_path_factory):
     pytest.importorskip("torch")
     from tests.pipeline import served_tp as ST
 
-    return ST.commit(tmp_path_factory.mktemp("served-tp"), world=2, inter=256, law="subset:2")
+    return ST.commit(tmp_path_factory.mktemp("served-tp"), world=2, inter=256, sampling_design="subset:2")
 
 
 def _registered(c, rank: int) -> dict:
@@ -254,7 +254,7 @@ def deferred_tp(tmp_path_factory):
     from tests.pipeline import served_tp as ST
 
     root = tmp_path_factory.mktemp("deferred-tp")
-    c = ST.commit(root / "tp", world=2, inter=256, law="subset:2", deferred=True)
+    c = ST.commit(root / "tp", world=2, inter=256, sampling_design="subset:2", deferred=True)
     c["windows"] = root / "stand-in"
     c["made"] = {r: SRT.from_bundle(c["commit"], r, c["partition"], c["windows"] / f"rank{r}", workers=1) for r in range(2)}
     return c

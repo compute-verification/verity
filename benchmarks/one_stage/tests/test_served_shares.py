@@ -44,7 +44,7 @@ def test_full_prefill_step_declares_its_ideal_work(tmp_path):
     assert tensor["clock_mhz"] == 1830 and tensor["ideal_s"] == pytest.approx(8.617e-3, rel=1e-3)
     assert got["wall_s"] == pytest.approx(0.0274)
     assert tensor["declared"] == pytest.approx(8.617e-3 / 0.0274, rel=1e-3)
-    assert got["readings"]["boost"]["declared"] < tensor["declared"]
+    assert got["readings"]["sm"]["declared"] < tensor["declared"]
     assert got["macs"]["linears"] == 8192 * 16 * (3072 * 2048 + 2048 * 2048 + 16384 * 2048 + 2048 * 8192)
     assert got["macs"]["lm_head"] == 8 * 2048 * 128256
     assert sum(tensor["terms"].values()) == pytest.approx(tensor["declared"]) and tensor["terms"]["linears"] > 0.9 * tensor["declared"]

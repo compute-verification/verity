@@ -35,7 +35,7 @@ def test_padding_is_elided_and_packing_enforced():
         row_digest((b"aa", None, None, None), params)
 
 
-def test_digest_binds_link_window_status_and_params():
+def test_digest_binds_phase_status_and_params():
     grid = ((b"x", None),)
     params = GridParams(buckets=1, allocation=2, frame_bytes=1)
     base = record_digest("l", 0, grid, COMPLETE, params)

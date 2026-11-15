@@ -449,7 +449,7 @@ def leaf_row(sh: Shape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]], 
 # -- the leaves and the trees ----------------------------------------------------------------------------------------------------
 
 def prf_salt(ks: bytes, pos: int) -> bytes:
-    """commit_gpu's salt PRF (`benchmarks/pouw/commit_gpu/reference.py`): leaf `pos`'s hm96 salt under the prover's private
+    """commit_gpu's salt PRF (`verity/commitments/cuda/commit_gpu/reference.py`): leaf `pos`'s hm96 salt under the prover's private
     key `ks`, three SHA-512 blocks."""
     return b"".join(hashlib.sha512(ks + pos.to_bytes(8, "big") + r.to_bytes(8, "big")).digest() for r in range(3))
 
@@ -856,10 +856,11 @@ def check_last(sh: Shape, seeds: Mapping[str, bytes], i: int, j: int, ins: Seque
     return int((tS - t0 - seg) & M16 == 0 and (o - sum(map(mul, Ad, Bd))) & M32 == 0)
 
 
-__all__ = ["DEVICES", "K_LIMIT", "NOISE", "PAD", "STREAMS", "Shape", "TAG", "TILE", "Tree", "PouwDitherBlock",
-           "PouwDitherFirst", "PouwDitherLast", "PouwDitherLastOk", "PouwDitherOnlyOk", "PouwDitherOutDot",
-           "PouwDitherOutDot0", "PouwDitherStep", "block_bits", "block_definition", "block_inputs", "block_widths",
-           "cell_values", "check_block", "check_last", "checkpoint_digest", "commit", "dithers", "dot_steps", "fill_seeds",
-           "leaf_h", "leaf_row", "noise_a", "noise_b", "operand_domain", "operand_row", "operand_tree", "opens", "out_at",
-           "out_dot", "pad_rows", "perms", "prf_salt", "prg", "row_bytes", "salts", "seeds", "step_ok", "tree", "values",
-           "values_buffer", "word_at", "wrap8"]
+__all__ = ["DEVICES", "FILL_SEEDS_TAG", "K_LIMIT", "M16", "M32", "NOISE", "PAD", "STREAMS", "Shape", "TAG", "TILE",
+           "Tree", "PouwDitherBlock", "PouwDitherFirst", "PouwDitherLast", "PouwDitherLastOk", "PouwDitherOnlyOk",
+           "PouwDitherOutDot", "PouwDitherOutDot0", "PouwDitherOutDot0Word", "PouwDitherOutDotWord", "PouwDitherStep",
+           "block_bits", "block_definition", "block_inputs", "block_widths", "cell_values", "check_block", "check_last",
+           "checkpoint_digest", "commit", "dithers", "dot_steps", "fill_seeds", "leaf_h", "leaf_row", "noise_a",
+           "noise_b", "operand_domain", "operand_row", "operand_tree", "opens", "out_at", "out_dot", "pad_rows",
+           "perms", "prf_salt", "prg", "row_bytes", "salts", "seeds", "step_ok", "tree", "values", "values_buffer",
+           "word_at", "wrap8"]

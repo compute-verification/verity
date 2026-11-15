@@ -62,11 +62,14 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
+
+from . import settings
 
 SCHEMA = "research/monitors-{}/v1"
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
@@ -299,9 +302,10 @@ def booked(text: str) -> list[list]:
         f = body.split()
         try:
             s = datetime.fromisoformat(f[0])
-            s = (s if s.tzinfo else s.replace(tzinfo=timezone.utc)).timestamp()
+            s = (s if s.tzinfo else s.replace(tzinfo=UTC)).timestamp()
             out.append([s, s + 60 * float(f[1] if len(f) > 1 else 30), who.strip()[:80]])
-        except (IndexError, ValueError):
+        except (IndexError, ValueError) as e:
+            print(f"monitors: a window line skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
     return out
 
@@ -437,7 +441,8 @@ def held_back(waiters: list[dict], usable: Callable[[dict], int], now: float) ->
     for w in waiters:
         try:
             waited = now - epoch(w["since"])
-        except (KeyError, ValueError):
+        except (KeyError, ValueError) as e:
+            print(f"monitors: a waiter without a time skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if waited >= MIN_WAIT_S and int(w.get("n") or 1) <= usable(w):
             return w, waited
@@ -528,7 +533,8 @@ def fast_preemptions(lines: list[str], now: float) -> list[dict]:
         v = fields(m[7])
         try:
             t, since = epoch(m[1]), epoch(v["since"])
-        except (KeyError, ValueError):
+        except (KeyError, ValueError) as e:
+            print(f"monitors: a preempted line without a time skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if now - t > PREEMPT_WINDOW_S or not 0 <= t - since <= PREEMPT_WITHIN_S or (v.get("pid"), m[3]) in seen:
             continue
@@ -590,7 +596,7 @@ def units(node: str) -> Callable[[Ctx], list[Finding]]:
             span = f"`{sessions[0]}`" + (f" to `{sessions[-1]}`" if len(sessions) > 1 else "")
             out.append(Finding("system:session-*.scope", f"*{name}: {len(sessions)} login session scope"
                                f"{'s have' if len(sessions) > 1 else ' has'} failed* ({span}): those logins (ssh, and the runs sent "
-                               "over it) got no scope of their own, so no per-run memory cap. `journalctl -u UNIT` names the cause; once it's fixed, "
+                               "over it) got no scope of their own, so no per-run memory limit. `journalctl -u UNIT` names the cause; once it's fixed, "
                                "`systemctl reset-failed 'session-*.scope'`.",
                                cleared=f"*Cleared:* no failed login session scope on {name.lower()}."))
         return out
@@ -711,13 +717,18 @@ def redirected_base(url: str, key: str) -> str:
     """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
     anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
     import urllib.error
+    import urllib.parse
     import urllib.request
+
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"the public export's URL is not an http or https URL (scheme {scheme!r})")
 
     class Stay(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **k):
             return None
 
-    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD",  # noqa: S310 (http or https, checked above)
+                                 headers={"User-Agent": "research-store-fetch"})
     try:
         urllib.request.build_opener(Stay).open(req, timeout=30).close()
     except urllib.error.HTTPError as e:
@@ -871,7 +882,8 @@ def submitter(ctx: Ctx, rid: str) -> str | None:
     """Who sent run `rid`: its request's `submitted_by`, else the `--by` its command passes (check's slot.py)."""
     try:
         req = json.loads(_read(ctx.path(REQUESTS) / rid / "request.json") or "{}")
-    except ValueError:
+    except ValueError as e:
+        print(f"monitors: run {rid}'s request.json is not JSON, so its sender is not known ({e})", file=sys.stderr, flush=True)
         return None
     if req.get("submitted_by"):
         return str(req["submitted_by"])
@@ -944,7 +956,7 @@ def answering(ctx: Ctx) -> list[Finding]:
 WORKSPACE = "/workspace"
 DISK_FULL_PCT = 85.0        # resource_probe's HARD /workspace line: no new check starts past it
 INODES_FULL_PCT = 80.0      # resource_probe's inode_pct
-#: twice tools/verity/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
+#: twice tools/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
 #: stand past INODES_FULL_PCT for days and that finding pages only once
 INODES_FREE_PAGE = 800_000
 FORECAST_S = 6 * 3600       # page while the line reaches FULL within this
@@ -1040,7 +1052,7 @@ def unit_states(ctx: Ctx, scope: str, names: list[str]) -> dict[str, dict[str, s
     """`systemctl show`'s load, unit-file and active state of each of `names` in `scope` (`systemd`, or research's user manager)."""
     argv = ["systemctl", *(["--user"] if scope == "user-systemd" else []), "show", "--no-pager",
             "-p", "LoadState", "-p", "UnitFileState", "-p", "ActiveState", "-p", "SubState", *names]
-    env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+    env = {**os.environ, "XDG_RUNTIME_DIR": settings.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
     r = ctx.run(argv, capture_output=True, text=True, timeout=ctx.bound(30), env=env)
     if r.returncode:
         raise RuntimeError(f"`{' '.join(argv[:3])}` exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
@@ -1087,7 +1099,8 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
     for d in sorted(ctx.path(RUNS).glob(f"r{day}-*")):
         try:
             req = json.loads(_read(ctx.path(REQUESTS) / d.name / "request.json") or "{}")
-        except ValueError:
+        except ValueError as e:
+            print(f"monitors: run {d.name}'s request.json is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if not is_full_check(req) or (d / "refused.json").exists():
             continue
@@ -1123,8 +1136,8 @@ FAILED_RECENT_S = 6 * 3600
 CLASSIFY_S = 120
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
-#: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the after-landing run, so
-#: the step it killed did not fail
+#: drive's reason when it cancels a landed candidate's check (drive.py, in the platform repository): its deferred steps run in the
+#: after-landing run, so the step it killed did not fail
 DRIVE_LANDED_CANCEL = "deferred steps run in the post-landing run"
 BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
@@ -1133,7 +1146,7 @@ FAILING = (r"\b(?:FAILED|ERROR) \S+::\S+", r"(?i)\berror(?:\[\w+\])?:", r"\bFAIL
 #: the most of a failed ratchet gate's lines (`reds.RATCHET_FAILED_RE`) a row carries: a train's merges, and a few more
 RATCHET_LINES = 40
 #: the check's jobs and their owners
-CI_TOML = "tools/verity/check/ci.toml"
+CI_TOML = "tools/check/ci.toml"
 
 # A machine's failed checks: `python3 -` runs this there, with __ARGS__ its paths and limits. It prints {"rows": one a run,
 # "waiting": each live ticket in slot.py's line (one another process holds locked: slot.py's `waiting`)}.
@@ -1339,18 +1352,36 @@ def _open_prs(ctx: Ctx, row: dict) -> list[tuple[int, str]]:
     return [(p["number"], p.get("headRefName") or "") for p in got]
 
 
-def _jobs(ctx: Ctx, sha: str | None) -> list:
-    """ci.toml's job tables at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
-    import tomllib
-
-    def at(ref: str) -> list:
-        return tomllib.loads(ctx.sh(["gh", "api", "-H", "Accept: application/vnd.github.raw",
-                                     f"repos/{REPO_SLUG}/contents/{CI_TOML}?ref={ref}"], timeout=30)).get("job") or []
+def _raw(ctx: Ctx, path: str, sha: str | None) -> str:
+    """The file ``path`` at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
+    def at(ref: str) -> str:
+        return ctx.sh(["gh", "api", "-H", "Accept: application/vnd.github.raw", f"repos/{REPO_SLUG}/contents/{path}?ref={ref}"],
+                      timeout=30)
 
     try:
         return at(sha or "main")
     except RuntimeError:
         return at("main")
+
+
+def _jobs(ctx: Ctx, sha: str | None) -> list:
+    """ci.toml's job tables at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's."""
+    import tomllib
+
+    return tomllib.loads(_raw(ctx, CI_TOML, sha)).get("job") or []
+
+
+def step_job(step: str) -> str:
+    """The ci.toml job of a check step's name (check.py's `steps.jsonl`): the job itself, or `JOB:PART` for a part of a split job."""
+    return step.partition(":")[0]
+
+
+def _off_gate(ctx: Ctx, sha: str | None) -> tuple[str, ...]:
+    """policy.toml's `off_gate` at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's;
+    RuntimeError or `policy.PolicyError` when it can't be read."""
+    from . import policy
+
+    return policy.parse(_raw(ctx, policy.PATH, sha), f"{policy.PATH} at {(sha or 'main')[:12]}").off_gate
 
 
 def _hm(utc: str | None) -> str:
@@ -1419,13 +1450,22 @@ def on_main(ctx: Ctx, sha: str | None) -> bool:
 
 
 def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
-    """Cancel a check whose step failed while a ticket waits for a check slot on its machine (running on to find more
-    failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled. A suites.py
-    run's failed suite only rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's
-    (a suite can fail for its machine's sake while the run's other steps are worth keeping)."""
+    """Cancel a check whose step on the merge gate failed while a ticket waits for a check slot on its machine (running on to
+    find more failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled.
+    A step whose job policy.toml's `off_gate` lists at the run's commit (`_off_gate`) holds no candidate, so its failure cancels
+    nothing; when the policy can't be read, nothing is cancelled and the post says so. A suites.py run's failed suite only
+    rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's (a suite can fail for
+    its machine's sake while the run's other steps are worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
         return None
     if on_main(ctx, row.get("sha")):
+        return None
+    try:
+        off = _off_gate(ctx, row.get("sha"))
+    except Exception as e:  # noqa: BLE001  (an unread policy cancels nothing)
+        why = f"{type(e).__name__}: {str(e)[:120]}".replace("`", "'")
+        return f"Not cancelled, though a ticket waits for its slot: policy.toml's `off_gate` is unread ({why})."
+    if step_job(row["step"]) in off:
         return None
     who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
@@ -1438,8 +1478,9 @@ def failed_checks(ctx: Ctx) -> list[Finding]:
     """Each check run through slot.py on a Nebius machine with a failed step (while it still runs, under --keep-going), or that
     ended non-zero or was killed, in the last FAILED_RECENT_S: one post in the merge thread, leading with the lane of each open
     PR it checks (the handle its branch suffix names in the registry), of each merge a failed ratchet gate fails, the owner of
-    the failed job and the lander (`failed_check`). One still running whose step failed is
-    cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it comes later)."""
+    the failed job and the lander (`failed_check`). One still running whose step on the merge gate failed (not policy.toml's
+    `off_gate`) is cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it
+    comes later)."""
     reg, memo, errors, out = _registry(), ctx.memo.setdefault("runs", {}), [], []
     for machine, host in CHECK_MACHINES:
         script = failed_reader(ctx.now)
@@ -1509,11 +1550,11 @@ MONITORS: list[Monitor] = [
     Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S, n2="units"),
     Monitor("memory-pressure", "infra", "page", "machine", memory_pressure,
             "Find what is growing (`systemd-cgtop -m` on the machine; the alert names the biggest runs) and tell its sender; a "
-            "run past its scope's cap is OOM-killed whole, so pressure that holds means the caps or the slice's headroom are too "
+            "run past its scope's limit is OOM-killed whole, so pressure that holds means the limits or the slice's headroom are too "
             "loose for what runs there.", for_s=300, clear_s=300),
     Monitor("oom-kills", "infra", "warn", "machine", oom_kills,
-            "Tell the run's sender why it died (the alert names both) and what its scope's cap is; if a check, size its "
-            "parallelism from memory (check.py's memory_gb) rather than raising the cap.", events=True),
+            "Tell the run's sender why it died (the alert names both) and what its scope's limit is; if a check, size its "
+            "parallelism from memory (check.py's memory_gb) rather than raising the limit.", events=True),
     Monitor("answering", "infra", "page", "machine", answering,
             "`nebius compute instance get` for its state; preserve what it can (its runs' custody), then restart it "
             "(`nebius compute instance stop` and `start`), and tell the owners of the runs it had.", for_s=180, clear_s=120),
@@ -1527,7 +1568,7 @@ MONITORS: list[Monitor] = [
             "unit); `systemctl enable --now UNIT` once its cause is fixed. A unit off there by design goes in EXPECTED_OFF in research/monitors.py with "
             "the reason, or out of that machine's `nodes` in deploy.toml.", every_s=300, for_s=300, clear_s=300),
     Monitor("lost-checks", "infra", "warn", "machine", lost_checks,
-            "Read each lost check's failure.json; fix the cause on the machine (memory caps, disk, the runner) and tell its "
+            "Read each lost check's failure.json; fix the cause on the machine (memory limits, disk, the runner) and tell its "
             "sender to resend it.", every_s=3600, events=True),
     Monitor("drift", "infra", "warn", "relay", deploy_drift,
             "`research deploy drift --on N` for the detail; install main's version (`research deploy install N --by WHO "
@@ -1570,7 +1611,8 @@ MONITORS: list[Monitor] = [
             "line's head is a waiter no run passes (slot.py's line rule: one that would start if the runs that passed it "
             "ended, a priority one, or one whose ticket names no ask), and it holds those behind; where they don't, set "
             "`peaks=` on them. Lean: the machine's Lean slots. "
-            "Peers: put every CPU machine in the /etc/vy/peers of each machine it names, with the key accepted.",
+            "Peers: `research deploy roll /etc/vy/peers --by WHO` (a dry run; `--apply` does it) writes each machine's "
+            "/etc/vy/peers from the register of machines and has it take the key from every machine its list names.",
             every_s=120, clear_s=300),
 ]
 BY_ID = {m.id: m for m in MONITORS}
@@ -1654,8 +1696,11 @@ def message(ev: dict, tag: Callable[[str], str] = lambda h: "@" + h) -> str:
 
 
 def webhook_post(url: str, text: str) -> None:
-    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=10) as r:
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"${WEBHOOK_ENV} is not an http or https URL (scheme {scheme!r})")
+    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(),  # noqa: S310 (http or https, checked above)
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 (http or https, checked above)
         r.read()
 
 
@@ -1887,7 +1932,8 @@ class Source:
 def _event(line: str) -> dict:
     try:
         ev = json.loads(line)
-    except ValueError:
+    except ValueError as e:
+        print(f"monitors: an event line is not JSON, read as empty ({e})", file=sys.stderr, flush=True)
         return {}
     return ev if isinstance(ev, dict) else {}
 
@@ -2000,7 +2046,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     from . import slack
 
     reg = slack.load_registry(slack.registry_path())
-    api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=dry)
+    api = slack.Slack(settings.get("SLACK_BOT_TOKEN"), dry_run=dry)
     alerts, front, routes = slack.channel_id_for(reg, "agent-alerts"), slack.channel_id_for(reg, slack.FRONT_DOOR), slack.Routes()
 
     def tag(h: str) -> str:
@@ -2050,7 +2096,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
 # ---- the command line -----------------------------------------------------------------------------------------------------------
 
 def _ctx_for(ns: argparse.Namespace, now: float, act: bool = False) -> Callable[[dict], Ctx]:
-    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=os.environ.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
+    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=settings.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
                             node_state=getattr(ns, "node_state", STATE), machine=getattr(ns, "machine", None) or os.uname()[1],
                             peers=tuple(getattr(ns, "peer", None) or ()))
 
@@ -2105,7 +2151,7 @@ def run_once(ns: argparse.Namespace, where: str, state_path: Path, alerts: Path,
     try:
         state = load(state_path)
         evs = step(state, select(where, ns.only), _ctx_for(ns, now, act=True), now, AlertDir(alerts), by=ns.by,
-                   webhook=os.environ.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
+                   webhook=settings.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
                    pass_s=PASS_S if where in ("node", "machine") else None)
         save(state_path, state)
         return state, evs

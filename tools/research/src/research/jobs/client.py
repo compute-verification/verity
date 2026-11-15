@@ -5,7 +5,7 @@ hold have their own variables and files, so they can't collide:
     research jobs     `$JOBS_TOKEN`, else ~/.research/jobs/token: the coordinator's, which adds jobs
     research worker   `$JOBS_WORKER_TOKEN`, else ~/.research/jobs/dispatch-{name}.token: the dispatcher's `jobs:work` token
 Each file is one line, mode 600.  A token is sent as `Authorization: Bearer`, never printed, and never put
-in an argv.  The site is `$JOBS_URL`, default the production control app.
+in an argv.  The site is `$JOBS_URL`, default the deployed control app.
 """
 from __future__ import annotations
 
@@ -13,10 +13,12 @@ import json
 import os
 import stat
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Callable
 
+from .. import settings
 from . import model
 
 DEFAULT_URL = "https://website-docs-sage.vercel.app"
@@ -57,7 +59,9 @@ def load_token(environ: dict[str, str] | None = None, path: Path | None = None, 
 
 class HTTPClient:
     def __init__(self, url: str | None = None, token: str | None = None):
-        self.url = (url or os.environ.get(URL_ENV) or DEFAULT_URL).rstrip("/")
+        self.url = (url or settings.get(URL_ENV) or DEFAULT_URL).rstrip("/")
+        if (scheme := urllib.parse.urlsplit(self.url).scheme) not in ("http", "https"):
+            raise ValueError(f"the Job queue's URL (${URL_ENV}) is not an http or https URL (scheme {scheme!r})")
         self._token = token if token is not None else load_token()
 
     def __repr__(self) -> str:
@@ -65,11 +69,11 @@ class HTTPClient:
 
     def call(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(self.url + path, data=data, method=method,
+        req = urllib.request.Request(self.url + path, data=data, method=method,  # noqa: S310 (http or https, checked in __init__)
                                      headers={"Authorization": f"Bearer {self._token}", "Content-Type": "application/json",
                                               "User-Agent": "research-jobs"})
         try:
-            with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
+            with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:  # noqa: S310 (http or https, checked in __init__)
                 raw = r.read()
                 return r.status, json.loads(raw) if raw else {}
         except urllib.error.HTTPError as e:

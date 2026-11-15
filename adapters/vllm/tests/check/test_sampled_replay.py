@@ -13,12 +13,12 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
-from verity.definitions.numerics import derived_rows as D
-from verity.definitions.numerics import rows as RK
-from verity.definitions.registry import b1
-from verity.definitions.registry import moe as R
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.hopper import HopperBF16WgmmaDot16
+from verity_vllm.definitions.numerics import derived_rows as D
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import moe as R
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.hopper import HopperBF16WgmmaDot16
 
 from verity_vllm.check.replay import compare as CMP
 from verity_vllm.check.replay import coverage as COV
@@ -28,16 +28,16 @@ from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import linkage as LK
 from verity_vllm.check.replay import opening as OP
 from verity_vllm.check.replay import population as POP
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay import sample as SM
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import program_view as PV
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
+from verity_vllm.records import replay_codes as RC
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
-V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
+V, H, INTER, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
 IMPL = ("model.layers.0.input_layernorm",)  # an observed implementation path: the Program's wrapper prefix is `model.`
 
 
@@ -94,11 +94,11 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     rope = rope or attn
     fields = [("model.model.embed_tokens.weight", V * H, f"Array<{V},Array<{H},Value<16>>>"),
               ("model.model.layers.0.input_layernorm.weight", H, f"Array<{H},Value<16>>"),
-              ("model.model.layers.0.mlp.gate_up_proj.weight", 2 * I * H, f"Array<{2 * I},Array<{H},Value<16>>>"),
-              ("model.model.layers.0.mlp.down_proj.weight", H * I, f"Array<{H},Array<{I},Value<16>>>"),
+              ("model.model.layers.0.mlp.gate_up_proj.weight", 2 * INTER * H, f"Array<{2 * INTER},Array<{H},Value<16>>>"),
+              ("model.model.layers.0.mlp.down_proj.weight", H * INTER, f"Array<{H},Array<{INTER},Value<16>>>"),
               ("model.model.norm.weight", H, f"Array<{H},Value<16>>")]
     if bias:
-        fields.insert(3, ("model.model.layers.0.mlp.gate_up_proj.bias", 2 * I, f"Array<{2 * I},Value<16>>"))
+        fields.insert(3, ("model.model.layers.0.mlp.gate_up_proj.bias", 2 * INTER, f"Array<{2 * INTER},Value<16>>"))
     if scale:
         fields.append(("model.normalizer", 1, "Value<16>"))
     QKV = (NH + 2 * KVH) * DH
@@ -124,7 +124,7 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     W = lambda n: [["p", wp, woff[n][0], woff[n][1]]]  # noqa: E731
     vfields = [("eps", int(np.float32(float.fromhex(json.loads(EPS)["f64"])).view(np.uint32)))]
     if attn:
-        from verity.definitions.registry import b1
+        from verity_vllm.definitions.registry import b1
         vfields.append((f"scale_log2_d{DH}", b1.scale_log2_bits(DH)))
     VAL = {n: [["p", 1, k, k + 1]] for k, (n, _b) in enumerate(vfields)}
     norm_t, norm_f = (f"RMSNormTriton_v3{{N={H}}}", f"RMSNormFusedCuda_v4{{N={H}}}") if registered else \
@@ -160,14 +160,14 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
                               [["n", q_, (NH + KVH) * DH, QKV] for _k, q_ in kv_rows], *([VAL[f"scale_log2_d{DH}"]] if registered else [])])
                     add(f"Gemm_v1{{K={NH * DH},N={H}}}", f"model.model.layers.0.self_attn.o_proj/triton_launch_{s}o[{k}]",
                         [[["n", at, 0, NH * DH]], W("model.model.layers.0.self_attn.o_proj.weight")])
-            gu = add(f"Gemm_v1{{K={H},N={2 * I}}}", f"model.model.layers.0.mlp.gate_up_proj/triton_launch_{s}a[{k}]",
+            gu = add(f"Gemm_v1{{K={H},N={2 * INTER}}}", f"model.model.layers.0.mlp.gate_up_proj/triton_launch_{s}a[{k}]",
                      [[["n", ln, 0, H]], W("model.model.layers.0.mlp.gate_up_proj.weight")])
             if bias:                                                   # the epilogue row: consumes the Gemm's (interior) output + the bias slice
-                gu = add(f"BiasAdd_v1{{N={2 * I}}}", f"model.model.layers.0.mlp.gate_up_proj/bias_add_{s}[{k}]",
-                         [[["n", gu, 0, 2 * I]], W("model.model.layers.0.mlp.gate_up_proj.bias")])
-            act = add(f"SiluMul_v1{{I={I}}}", f"model.model.layers.0.mlp.act_fn/silu_and_mul_{s}[{k}]", [[["n", gu, 0, 2 * I]]])
-            dn = add(f"Gemm_v1{{K={I},N={H}}}", f"model.model.layers.0.mlp.down_proj/triton_launch_{s}b[{k}]",
-                     [[["n", act, 0, I]], W("model.model.layers.0.mlp.down_proj.weight")])
+                gu = add(f"BiasAdd_v1{{N={2 * INTER}}}", f"model.model.layers.0.mlp.gate_up_proj/bias_add_{s}[{k}]",
+                         [[["n", gu, 0, 2 * INTER]], W("model.model.layers.0.mlp.gate_up_proj.bias")])
+            act = add(f"SiluMul_v1{{I={INTER}}}", f"model.model.layers.0.mlp.act_fn/silu_and_mul_{s}[{k}]", [[["n", gu, 0, 2 * INTER]]])
+            dn = add(f"Gemm_v1{{K={INTER},N={H}}}", f"model.model.layers.0.mlp.down_proj/triton_launch_{s}b[{k}]",
+                     [[["n", act, 0, INTER]], W("model.model.layers.0.mlp.down_proj.weight")])
             nm = add(norm_f, f"model.model.norm/fused_add_rms_norm_{s}[{k}]",
                      [[["n", dn, 0, H]], [["n", e, 0, H]], W("model.model.norm.weight"), *eps_arg])     # residual = the embedding (one layer)
             norm_rows.append(nm)
@@ -355,7 +355,7 @@ def test_honest_program_replays_bit_exactly_across_all_strata(world):
     assert rep["sample"]["seed_source"] == "caller"
     rep2 = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3)
     assert rep2["strata"] == rep["strata"] and rep2["sample"] == rep["sample"]
-    assert rep["evaluators"]["Gemm_v1"].startswith("verity.definitions.numerics.derived_rows.dot_bf16")
+    assert rep["evaluators"]["Gemm_v1"].startswith("verity_vllm.definitions.numerics.derived_rows.dot_bf16")
 
 
 def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_nothing(world):
@@ -381,7 +381,7 @@ def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_not
         "the plan's picks are the replay's, request by request and step by step"
 
 
-def test_a_population_prepared_before_the_seed_draws_and_reads_the_same(world):
+def test_a_population_prepared_before_the_seed_samples_and_reads_the_same(world):
     bmap, committed = world.bmap_and_reader()
     progs = _programs(world)
     seen: dict[str, list] = {"cold": [], "warm": []}
@@ -405,7 +405,7 @@ def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world)
         k = (0, "model.layers.0.mlp.gate_up_proj/out")
         b = bytearray(store[k])
         e = next(x for x in entries if x["identity"]["request_id"] == "r1" and x["name"] == k[1] and x["identity"]["step"] == 0)
-        pos = (e["element_offset"] + 1 * 2 * I + 5) * 2      # r1, prompt row 1, element 5
+        pos = (e["element_offset"] + 1 * 2 * INTER + 5) * 2      # r1, prompt row 1, element 5
         b[pos] ^= 0x01
         store[k] = bytes(b)
     bmap, committed = world.bmap_and_reader(mutate=mutate)
@@ -878,7 +878,7 @@ def test_hopper_honest_program_replays_bit_exactly_gemm_v2_in_the_population(hop
     assert fams == {"Embedding_v1", "RMSNormTriton_v1", "Gemm_v2", "SiluMul_v1", "RMSNormFusedCuda_v2", "TokenSelect_v1"}
     assert "Gemm_v1" not in fams and rep["population"]["not_evaluable"] == {} and rep["unreplayable"] == []
     assert rep["timing"]["per_family_n"]["Gemm_v2"] == 2 * (2 * (LP + T) + (1 + T))        # gate_up + down per token row, logits per step, x2 requests
-    assert rep["evaluators"]["Gemm_v2"].startswith("verity.definitions.numerics.derived_rows.dot_bf16_for(DOT)")
+    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.definitions.numerics.derived_rows.dot_bf16_for(DOT)")
     assert "Gemm_v2" not in rep["applicability"]["families_not_yet"]
     # a Gemm_v2 VU's recorded inputs are ONE committed identity (the norm output row) + ONE registered weight slice: explicit, resolvable
     pi = IX.ProgramIndex(plain.inst)
@@ -923,7 +923,7 @@ def test_hopper_flipped_committed_input_byte_fails_named_at_the_gemm_v2_row(hopp
     bmap, committed = plain.bmap_and_reader(mutate=mutate)
     rep = SR.sampled_replay(_programs(plain), bmap, committed, _weights(plain), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
-    m = [x for x in rep["mismatch"] if x["spec"].startswith(f"Gemm_v2{{K={H},N={2 * I},")]
+    m = [x for x in rep["mismatch"] if x["spec"].startswith(f"Gemm_v2{{K={H},N={2 * INTER},")]
     assert m and all(x["request_id"] == "r1" and x["step"] == 0 and x["row"] == 1 for x in m), rep["mismatch"]
     assert "F_V(committed inputs) != committed output" in rep["why"] and "Gemm_v2" in rep["why"]
     assert not any(x["request_id"] == "r0" for x in rep["mismatch"])
@@ -942,7 +942,7 @@ def test_hopper_program_over_ampere_committed_bytes_is_told_apart_where_the_adde
     progs = {rid: _hopper_program(world.inst) for rid in world.prompts}
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(progs, bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
-    assert rep["evaluators"]["Gemm_v2"].startswith("verity.definitions.numerics.derived_rows.dot_bf16_for(DOT)")
+    assert rep["evaluators"]["Gemm_v2"].startswith("verity_vllm.definitions.numerics.derived_rows.dot_bf16_for(DOT)")
     if rep["result"] is False:
         assert rep["grade"] == "mismatch" and all(x["spec"].startswith(("Gemm_v2{", "SiluMul", "RMSNormFusedCuda", "TokenSelect")) for x in rep["mismatch"])
     else:
@@ -1021,7 +1021,7 @@ def test_model_weights_provider_serves_an_int32_table_as_its_u32_words():
 # --- RoPE_v1: an evaluator, not a NOT_YET label -----------------------------------------------------------------
 
 def test_rope_v1_is_registered_and_the_rows_are_in_the_population_not_named_away(rope_world):
-    assert "RoPE_v1" in RK.EVALUATORS and "RoPE_v1" not in RC.NOT_YET and RK.EVALUATORS["RoPE_v1"].startswith("verity.definitions.numerics.derived_rows.rope_rows")
+    assert "RoPE_v1" in RK.EVALUATORS and "RoPE_v1" not in RC.NOT_YET and RK.EVALUATORS["RoPE_v1"].startswith("verity_vllm.definitions.numerics.derived_rows.rope_rows")
     pi = rope_world.pi
     vus, ne, nef = POP.population(pi, "r0")
     ropes = [v for v in vus if v["spec"].startswith("RoPE_v1")]
@@ -1042,7 +1042,7 @@ def test_rope_v1_honest_program_replays_bit_exactly_with_the_cache_row_read_from
     rs = {k: v for k, v in rep["strata"].items() if k.startswith("RoPE_v1")}
     assert rs and all(v["evaluated"] >= 1 and v["evaluated"] == v["sampled"] for v in rs.values()), rs
     assert not any(k.startswith("RoPE_v1") for k in rep.get("strata_unevaluated") or {}) and not rep["mismatch"]
-    assert rep["evaluators"]["RoPE_v1"].startswith("verity.definitions.numerics.derived_rows.rope_rows")
+    assert rep["evaluators"]["RoPE_v1"].startswith("verity_vllm.definitions.numerics.derived_rows.rope_rows")
 
 
 def test_rope_v1_flipped_committed_output_word_fails_named_at_the_rope_row(rope_world):
@@ -1117,7 +1117,7 @@ def test_attention_rows_are_registered_units_of_the_population_and_the_interior_
     """Attention_v3 / Attention_v2 are EVALUATORS (the row is the Q_module_v1 unit), not NOT_YET labels: every attention row
     is a VU of the population; the record names the AttnBlock-interior mechanism (Q_fine_v1 units) the replay does not read, with the count."""
     assert all(f in RK.EVALUATORS and f not in RC.NOT_YET for f in ("Attention_v3", "Attention_v2"))
-    assert RK.EVALUATORS["Attention_v2"].startswith("verity.definitions.numerics.derived_rows.attention_rows") and "Fa3InvSum_v1" in RK.EVALUATORS["Attention_v2"]
+    assert RK.EVALUATORS["Attention_v2"].startswith("verity_vllm.definitions.numerics.derived_rows.attention_rows") and "Fa3InvSum_v1" in RK.EVALUATORS["Attention_v2"]
     assert "MAN-09c" in RK.EVALUATORS["RoPE_v1"]                                    # the cos_sin bound travels with the row
     n_att = sum(1 for r in attn_world.pi.rows if r["spec"].startswith("Attention_v3"))
     assert n_att == LP + T
@@ -1187,7 +1187,7 @@ def test_attention_v3_honest_program_replays_bit_exactly_from_the_committed_kv_h
     assert any(k.startswith("Attention_v3{NB=1,last=partial,") and "|last|" in k for k in at), sorted(at)
     assert not any("{T=" in k for k in at) and {k.split("|")[3] for k in at} == {"prefill", "first-decode", "last"}, sorted(at)
     assert not any(k.startswith("Attention_v3") for k in rep.get("strata_unevaluated") or {}) and not rep["mismatch"]
-    assert rep["evaluators"]["Attention_v3"].startswith("verity.definitions.numerics.derived_rows.attention_rows")
+    assert rep["evaluators"]["Attention_v3"].startswith("verity_vllm.definitions.numerics.derived_rows.attention_rows")
 
 
 def test_attention_stratum_key_keeps_the_block_count_and_the_full_or_partial_last_block_apart_and_nothing_else():
@@ -1418,8 +1418,8 @@ def _moe_program():
     fields = [("model.model.embed_tokens.weight", V * H, f"Array<{V},Array<{H},Value<16>>>"),
               ("model.model.layers.0.input_layernorm.weight", H, f"Array<{H},Value<16>>"),
               ("model.model.layers.0.mlp.gate.weight", E_MOE * H, f"Array<{E_MOE},Array<{H},Value<16>>>"),
-              ("model.model.layers.0.mlp.experts.routed_experts.w13_weight", E_MOE * 2 * I * H, f"Array<{E_MOE},Array<{2 * I},Array<{H},Value<16>>>>"),
-              ("model.model.layers.0.mlp.experts.routed_experts.w2_weight", E_MOE * H * I, f"Array<{E_MOE},Array<{H},Array<{I},Value<16>>>>"),
+              ("model.model.layers.0.mlp.experts.routed_experts.w13_weight", E_MOE * 2 * INTER * H, f"Array<{E_MOE},Array<{2 * INTER},Array<{H},Value<16>>>>"),
+              ("model.model.layers.0.mlp.experts.routed_experts.w2_weight", E_MOE * H * INTER, f"Array<{E_MOE},Array<{H},Array<{INTER},Value<16>>>>"),
               ("model.model.norm.weight", H, f"Array<{H},Value<16>>")]
     off, woff = 0, {}
     for n, c, _t in fields:
@@ -1447,11 +1447,11 @@ def _moe_program():
                      [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")])
             lg = add(f"Gemm_v1{{K={H},N={E_MOE}}}", f"model.model.layers.0.mlp.gate/triton_launch_{s}g[{t}]", [[["n", ln, 0, H]], W("model.model.layers.0.mlp.gate.weight")])
             rt = add(f"MoeRouterTopK_v1{{E={E_MOE},TOPK={TOPK},VPT={VPT}}}", f"{X}/topk_softmax_{s}[{t}]", [[["n", lg, 0, E_MOE]]])
-            ups = [add(f"MoeExpertGemm_v1{{E={E_MOE},K={H},N={2 * I}}}", f"{X}/triton_launch_{s}u[{t * TOPK + k}]",
+            ups = [add(f"MoeExpertGemm_v1{{E={E_MOE},K={H},N={2 * INTER}}}", f"{X}/triton_launch_{s}u[{t * TOPK + k}]",
                        [[["n", ln, 0, H]], [["n", rt, TOPK + k, TOPK + k + 1]], W("model.model.layers.0.mlp.experts.routed_experts.w13_weight")]) for k in range(TOPK)]
-            acts = [add(f"SiluMul_v1{{I={I}}}", f"{X}/silu_and_mul_{s}[{t * TOPK + k}]", [[["n", ups[k], 0, 2 * I]]]) for k in range(TOPK)]
-            dns = [add(f"MoeExpertGemmW_v1{{E={E_MOE},K={I},N={H}}}", f"{X}/triton_launch_{s}d[{t * TOPK + k}]",
-                       [[["n", acts[k], 0, I]], [["n", rt, TOPK + k, TOPK + k + 1]], [["n", rt, k, k + 1]], W("model.model.layers.0.mlp.experts.routed_experts.w2_weight")])
+            acts = [add(f"SiluMul_v1{{I={INTER}}}", f"{X}/silu_and_mul_{s}[{t * TOPK + k}]", [[["n", ups[k], 0, 2 * INTER]]]) for k in range(TOPK)]
+            dns = [add(f"MoeExpertGemmW_v1{{E={E_MOE},K={INTER},N={H}}}", f"{X}/triton_launch_{s}d[{t * TOPK + k}]",
+                       [[["n", acts[k], 0, INTER]], [["n", rt, TOPK + k, TOPK + k + 1]], [["n", rt, k, k + 1]], W("model.model.layers.0.mlp.experts.routed_experts.w2_weight")])
                    for k in range(TOPK)]
             sm = add(f"MoeSum_v1{{TOPK={TOPK},H={H}}}", f"{X}/moe_sum_{s}[{t}]", [[["n", d, 0, H] for d in dns]])
             nm = add(f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}", f"model.model.norm/fused_add_rms_norm_{s}[{t}]",
@@ -1489,10 +1489,10 @@ def test_moe_plane_rows_are_addressed_at_their_planes_and_the_honest_program_rep
     assert d["op_path"] == "moe/L0" and d["members"] == [("router_w", TOPK, "f32"), ("router_ids", TOPK, "i32")] and d["row"] == 0 and d["plane_kind"] == "router"
     ups = [r for r in pi.rows if r["spec"].startswith("MoeExpertGemm_v1") and pi.describe(r)["step"] == 0]
     assert [pi.describe(r)["row"] for r in ups] == list(range(LP * TOPK))          # pair-major p = t*TOPK + k
-    assert pi.describe(ups[3])["members"] == [("up", 2 * I, "bf16")]
+    assert pi.describe(ups[3])["members"] == [("up", 2 * INTER, "bf16")]
     act = next(r for r in pi.rows if r["spec"].startswith("SiluMul") and "experts" in r["name"])
-    assert pi.describe(act)["members"] == [("act", I, "bf16")] and pi.describe(act)["op_path"] == "moe/L0"
-    assert pi.member_at(int(act["args"][0][0][1]), 0, 2 * I)[1:] == ("up", 0, 2 * I, "bf16")
+    assert pi.describe(act)["members"] == [("act", INTER, "bf16")] and pi.describe(act)["op_path"] == "moe/L0"
+    assert pi.member_at(int(act["args"][0][0][1]), 0, 2 * INTER)[1:] == ("up", 0, 2 * INTER, "bf16")
     sm = pi.describe(next(r for r in pi.rows if r["spec"].startswith("MoeSum")))                # The module's returned tensor
     assert sm["op_path"] == "model.layers.0.mlp.experts" and sm["members"] == [("out", H, "bf16")]
     assert [(c["op_path"], c["member"], c["of"]) for c in sm["copies"]] == [("moe/L0", "sum", "out")]      # ... and its plane copy
@@ -1561,7 +1561,7 @@ def test_moe_plane_faults_fail_named_at_the_pair_or_token(moe_world):
     plane its checked copy: a flipped plane word fails the MoeSum VU (copy), a flipped `out` word also the norm reading it."""
     w = moe_world
     p = 3                                                                          # pair 3 = token 1, slot 1 (LP = 2, TOPK = 2)
-    rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r1", 0, "act", p * I + 5))
+    rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r1", 0, "act", p * INTER + 5))
     assert rep["result"] is False
     bad = {(m["spec"].split("{")[0], m["request_id"], m["step"], m["op_path"], m["row"]) for m in rep["mismatch"]}
     assert ("SiluMul_v1", "r1", 0, "moe/L0", p) in bad and ("MoeExpertGemmW_v1", "r1", 0, "moe/L0", p) in bad, bad
@@ -1573,7 +1573,7 @@ def test_moe_plane_faults_fail_named_at_the_pair_or_token(moe_world):
     rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r0", 0, "out", 1 * H + 2, op_path=exp), targets=(f"{exp}@0", "model.norm@0"))
     bad = {(m["spec"].split("{")[0], m["request_id"], m["step"], m["op_path"], m["row"]) for m in rep["mismatch"]}
     assert rep["result"] is False and ("MoeSum_v1", "r0", 0, exp, 1) in bad and ("RMSNormFusedCuda_v2", "r0", 0, "model.norm", 1) in bad, bad
-    rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r0", 0, "up", p * 2 * I + 7))
+    rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r0", 0, "up", p * 2 * INTER + 7))
     bad = {(m["spec"].split("{")[0], m["request_id"], m["step"], m["op_path"], m["row"]) for m in rep["mismatch"]}
     assert rep["result"] is False and ("MoeExpertGemm_v1", "r0", 0, "moe/L0", p) in bad and ("SiluMul_v1", "r0", 0, "moe/L0", p) in bad, bad
     rep = _moe_evaluate_all(w, lambda st, en: _plane_word(st, en, "r1", 0, "router_ids", 1 * TOPK + 0))    # token 1 slot 0 -> another expert
@@ -1610,7 +1610,7 @@ def test_moe_plane_alias_check_is_a_fact_of_the_record_honest_true_aliased_false
     bmap, committed = w.bmap_and_reader()
     ac = POP.moe_plane_alias_check(OP.CommittedStore(bmap, committed))
     assert ac["result"] is True and ac["identical_n"] == 0 and ac["compared"] >= 2 and ac["per_layer"] == {"L0": {"compared": ac["compared"], "identical": 0}}, ac
-    assert ac["plane_words"] == {"up": sorted({2 * I * LP * TOPK, 2 * I * TOPK}), "down": sorted({H * LP * TOPK, H * TOPK})}, ac["plane_words"]   # prefill / decode rows
+    assert ac["plane_words"] == {"up": sorted({2 * INTER * LP * TOPK, 2 * INTER * TOPK}), "down": sorted({H * LP * TOPK, H * TOPK})}, ac["plane_words"]   # prefill / decode rows
     rep = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=1, seed=5, workers=0)
     assert rep["moe_planes"]["alias_check"]["result"] is True and rep["result"] is True
     bmap, committed = w.bmap_and_reader(mutate=lambda st, en: _alias_up_to_down(st, en, "r1", 0))
@@ -1718,10 +1718,10 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
 
 
 def test_moe_evaluators_equal_the_registered_definitions():
-    """The numpy / scalar-primitive evaluators of the MoE families are the registered `verity.definitions.registry.moe`
+    """The numpy / scalar-primitive evaluators of the MoE families are the registered `verity_vllm.definitions.registry.moe`
     Definitions (the bodies moe_kernel_xcheck checked against the real kernels): bit-equal to the reference evaluator on random
     words -- router (renormalize False / True, a tie), sum, up and down expert GEMMs (the gather by the committed expert id)."""
-    from verity.definitions.numerics.serve3_reference import materialize
+    from verity_vllm.definitions.numerics.serve3_reference import materialize
 
     def ref(fn, inputs):
         P = Program(fn)
@@ -1761,7 +1761,7 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     is staged: the first builder stops half-way through its write until five more have found the library missing and reached its lock."""
     import multiprocessing as mp
 
-    from verity.definitions.numerics import _jit
+    from verity_vllm.definitions.numerics import _jit
 
     lib = tmp_path / "libtwin.so"
     src = tmp_path / "twin.cpp"

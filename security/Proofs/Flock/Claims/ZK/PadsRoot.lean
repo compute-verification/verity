@@ -7,23 +7,23 @@ import all Init.Data.Nat.Power2.Basic
 /-!
 # The frame's pads root is the masked prover's
 
-At a rep's start the Lean frame commits the pads it drew (`Flock.Firewall.Frame.padsRoot`): `treeRoot` of the leaves
+At a rep's start the Lean frame commits the pads it drew (`Flock.ZkServer.Frame.padsRoot`): `treeRoot` of the leaves
 `H(H(c_h(j) ‖ c_μ(j)), salt j)`, a level at a time. The masked prover commits its tape's pads with `innerCommitP`, whose
 root is `layerOf`'s of the same leaves at its own salts (`FlockComplete.innerCommitP_root_layerOf`). On the tape of the
 frames' samples they are one root:
 
 * `treeRoot_layerOf`: `treeRoot` of `2^d` leaves is `layerOf`'s root, so `padsRoot` is `layerOf`'s root of the frame's
   leaves (`padsRoot_layerOf`), over `codeLen` columns (`ofBytes_cols`).
-* `padsRoot_tapeOfDraws`: at frame rep `rep i r`'s samples of `drawBytes` bytes, the frame's `padsRoot` is the root
-  `innerCommitP` commits table `i`'s rep `r`'s pads under on `tapeOfDraws`: the pads are the frame's
-  (`padsOf_tapeOfDraws`) and so are the leaf salts (`innerSalt_fit`).
+* `padsRoot_tapeOfSamples`: at frame rep `rep i r`'s samples of `sampleBytes` bytes, the frame's `padsRoot` is the root
+  `innerCommitP` commits table `i`'s rep `r`'s pads under on `tapeOfSamples`: the pads are the frame's
+  (`padsOf_tapeOfSamples`) and so are the leaf salts (`innerSalt_fit`).
 -/
 
 @[expose] public section
 
 namespace Claims.ZKServer
 
-open _root_.Flock.Firewall.Frame (Draws drawBytes codeLen SALT treeRoot padsRoot)
+open _root_.Flock.ZkServer.Frame (Draws sampleBytes codeLen SALT treeRoot padsRoot)
 
 /-- `treeRoot`'s loop from level `h` of `layerOf`'s tree of depth `d`, with fuel for the `d - h` levels above it, is the
 tree's root. -/
@@ -68,7 +68,7 @@ theorem layerOf_congr (nd : ByteArray → ByteArray → ByteArray) (d : ℕ) {lf
 theorem ofBytes_cols (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
     ((Draws.ofBytes l b).h ++ (Draws.ofBytes l b).padH).size.nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE =
       codeLen l := by
-  simp [Draws.ofBytes, _root_.Flock.Firewall.Frame.words, codeLen]
+  simp [Draws.ofBytes, _root_.Flock.ZkServer.Frame.words, codeLen]
 
 /-- **The frame's pads root is `layerOf`'s root** of its leaves: column `j`'s leaf under the samples' `j`-th salt. -/
 theorem padsRoot_layerOf (l : _root_.Flock.Zk.PadLayout) (d : Draws) :
@@ -83,18 +83,18 @@ theorem padsRoot_layerOf (l : _root_.Flock.Zk.PadLayout) (d : Draws) :
   unfold padsRoot
   rw [hD, Nat.log2_two_pow, treeRoot_layerOf]
 
-/-- **The frame's pads root is the masked prover's**: at frame rep `rep i r`'s samples of `drawBytes` bytes, the frame's
+/-- **The frame's pads root is the masked prover's**: at frame rep `rep i r`'s samples of `sampleBytes` bytes, the frame's
 `padsRoot` is the root `innerCommitP` commits table `i`'s rep `r`'s pads under, on the tape of the frames' samples. -/
-theorem padsRoot_tapeOfDraws (t : FlockComplete.TapeZk) (lay : ℕ → _root_.Flock.Zk.PadLayout) (B : ℕ → ByteArray)
-    (rep : ℕ → ℕ → ℕ) (i r : ℕ) (hs : (B (rep i r)).size = drawBytes (lay (rep i r)))
+theorem padsRoot_tapeOfSamples (t : FlockComplete.TapeZk) (lay : ℕ → _root_.Flock.Zk.PadLayout) (B : ℕ → ByteArray)
+    (rep : ℕ → ℕ → ℕ) (i r : ℕ) (hs : (B (rep i r)).size = sampleBytes (lay (rep i r)))
     {ic : FlockComplete.InnerCommit}
     (h : (FlockComplete.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
-      (FlockComplete.padsOf (tapeOfDraws t lay B rep) i r (lay (rep i r)))
-      ((tapeOfDraws t lay B rep).innerSalt i r) : _root_.Flock.V FlockComplete.InnerCommit) = .ok ic) :
+      (FlockComplete.padsOf (tapeOfSamples t lay B rep) i r (lay (rep i r)))
+      ((tapeOfSamples t lay B rep).innerSalt i r) : _root_.Flock.V FlockComplete.InnerCommit) = .ok ic) :
     padsRoot (lay (rep i r)) (Draws.ofBytes (lay (rep i r)) (B (rep i r))) = ic.root := by
   rw [FlockComplete.innerCommitP_root_layerOf h,
-    padsOf_tapeOfDraws t lay B rep i r (by rw [hs]; exact tau_le_drawBytes _), padsRoot_layerOf]
-  simp only [drawsPads]
+    padsOf_tapeOfSamples t lay B rep i r (by rw [hs]; exact tau_le_sampleBytes _), padsRoot_layerOf]
+  simp only [samplesPads]
   rw [ofBytes_cols]
   refine congrArg (fun a => a[0]!) (layerOf_congr _ _ (fun j hj => ?_) _)
   have hj' : j < codeLen (lay (rep i r)) := by
