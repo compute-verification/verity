@@ -132,6 +132,8 @@ strings = [
     '"$CR_PATH" = warden ]',
     "warden-registration",
     "/warden-run",
+    "case $e in warden|warden:*)",                    # a5_tp.sh refuses the old stand-in name and names the new one
+    "${e#warden}",
 ]
 
 [rewrite]

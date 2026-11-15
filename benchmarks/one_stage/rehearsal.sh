@@ -433,7 +433,7 @@ check() {
   { git -C "$TREE" rev-parse HEAD 2> /dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}"; hostname -s; nproc; grep MemTotal /proc/meminfo; } > "$OUT/tree.txt"
   step sync 20m uv sync -q --all-packages --extra torch-cpu || { echo "no environment: nothing else ran" | tee -a "$S"; exit 1; }
   PY=$TREE/.venv/bin/python
-  export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
+  export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/research/src
 
   mkdir -p "$scratch/filter"
   step filter 2m bash "$SELF" filter-test "$scratch/filter"

@@ -2,7 +2,7 @@
 heads at serving time in the circuit prover's row format and hands over the docket, the verifier's public file,
 the prover's file and the unit index; nothing else changes.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a2.py --served DIR --template-set DIR --m0-pythonpath PATH --bin flock-circuit \\
       --lean verity-verify-proof --out DIR [--k 256] [--delta 2^-20]
 

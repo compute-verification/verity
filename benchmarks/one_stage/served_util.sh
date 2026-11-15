@@ -82,7 +82,7 @@ if [ "${1:-}" != leased ]; then
   mkdir -p "$D"
   if [ "$ARM" != graphs ] && [ "$ARM" != async ]; then
     (cd "$TREE/adapters/vllm" && HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
-      PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src \
+      PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src \
       "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
     prc=$?
     [ "$prc" = 0 ] && [ -f "$PRED/predicted.json" ] \
