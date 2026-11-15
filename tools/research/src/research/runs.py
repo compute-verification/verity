@@ -11,7 +11,7 @@ import json
 import os
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +64,7 @@ def disk_floor_refusal(path: Path, environ: dict[str, str] | None = None) -> str
 
 def new_run_id(now: float | None = None) -> str:
     """Sortable, human-typable: r20260921-171502-3f9a.  Identifies this attempt; two identical repetitions get two ids."""
-    t = datetime.fromtimestamp(time.time() if now is None else now, tz=timezone.utc)
+    t = datetime.fromtimestamp(time.time() if now is None else now, tz=UTC)
     return f"r{t:%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
 
 

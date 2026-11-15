@@ -43,7 +43,7 @@ import json
 import subprocess
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Callable, Iterable, NamedTuple
 
@@ -78,11 +78,11 @@ class Lease(NamedTuple):
 
 
 def hour(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:00Z")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:00Z")
 
 
 def hour_t(h: str) -> float:
-    return datetime.strptime(h, "%Y-%m-%dT%H:00Z").replace(tzinfo=timezone.utc).timestamp()
+    return datetime.strptime(h, "%Y-%m-%dT%H:00Z").replace(tzinfo=UTC).timestamp()
 
 
 def _unmeasured(r: tuple) -> float:
