@@ -37,10 +37,12 @@ checks it didn't pass, and one whose attempt carries no verdict can't be told an
 timed outside the harness's point or before it, has no verdict of its own and is judged by `CHECKS` alone, whatever
 the other four say. `report_why` judges a report.
 
-A row whose card was on another NUMA node than its CPUs still prices its type. It is known as one where it records
-its card's node (`CARD_NUMA`) and its CPUs (`cores.numa_nodes`) aren't on that node alone, or, where it records no
-card's node, where its run is listed in `OFF_NODE`; any other row doesn't record it (`off_node`). The table's notes and
-the proving totals' inputs count the priced rows of each kind with the share of the proving time they hold
+A row whose card was on another NUMA node than its CPUs still prices its type. Where a row records its card's node
+(`CARD_NUMA`), it is off that node when its CPUs (`cores.numa_nodes`) aren't on that node alone, and on it otherwise.
+Where it records none, its run decides by `OFF_NODE`'s scan of the runs' own host records: off where the scan lists
+the run, on where the scan read the run and doesn't list it, and not recorded where the scan didn't read it
+(`off_node`). The table's notes and the proving totals' inputs count the priced rows of each kind with the share of
+the proving time they hold, and the rows priced from the single-session card, whose table records no CPUs
 (`prove.report`'s `off_node`).
 
 A type is priced at the stated prover count (`--provers`), from the rows at that count only, and at
@@ -130,8 +132,9 @@ OWN_VERDICT = "its own steady-state verdict"
 #: a row's field for the NUMA node of the card its provers ran on, as the harness's timed step reads it inside the
 #: lease (null where the node doesn't say), held to the row's `cores.numa_nodes`
 CARD_NUMA = "card_numa_node"
-#: the runs known to have timed their rows with the card on another NUMA node than their CPUs, for rows that don't
-#: record `CARD_NUMA`: each run's card and CPUs with their nodes, and in `source` what was scanned to find them
+#: a scan of the runs' own host records, for rows that don't record `CARD_NUMA`: the runs it read (`covered`: every
+#: run from `first` to `last` save those `unread` lists), those of them whose card was on another NUMA node than
+#: their CPUs (`runs`, each with both nodes), and in `source` what was read (`OffNodeScan`)
 OFF_NODE = Path(__file__).resolve().parent / "data" / "off_node.json"
 #: what a row holds, beside what those checks read, for the command to price it, by the script's names (`stage.word`,
 #: the census type it was staged for, names its block type, and `stage.definition`, the form staged, where it has no
@@ -341,30 +344,59 @@ def _node(x: Any) -> TypeGuard[int]:
     return isinstance(x, int) and not isinstance(x, bool) and x >= 0
 
 
+_RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
+
+
+@dataclass(frozen=True)
+class OffNodeScan:
+    """A scan of runs' own host records (`OFF_NODE`): it read every run from `first` to `last`, by run id (an id
+    orders runs by their start), save those in `unread`, and found the card on another NUMA node than its CPUs in
+    those in `off`."""
+
+    first: str
+    last: str
+    unread: frozenset[str]
+    off: frozenset[str]
+
+    def of(self, run: str) -> bool | None:
+        """Whether `run`'s card was off its CPUs' node by the scan, None where the scan didn't read `run`."""
+
+        if run in self.off:
+            return True
+        return False if self.first <= run <= self.last and run not in self.unread else None
+
+
 @cache
-def off_node_runs(path: Path = OFF_NODE) -> frozenset[str]:
-    """The runs `OFF_NODE` lists, each refused unless its card's node and its CPUs' are two NUMA nodes."""
+def off_node_scan(path: Path = OFF_NODE) -> OffNodeScan:
+    """`OFF_NODE`'s scan, refused unless its range is two run ids in order, every run it lists unread is inside that
+    range, and every run it lists off is inside it, read, with a card's node and CPUs' nodes that aren't that one."""
 
-    runs = json.loads(path.read_text())["runs"]
+    doc = json.loads(path.read_text())
+    covered, runs = doc["covered"], doc["runs"]
+    first, last, unread = covered["first"], covered["last"], frozenset(covered["unread"])
+    if not (_RUN_ID.fullmatch(first) and _RUN_ID.fullmatch(last) and first <= last):
+        raise ValueError(f"{path}: `covered` isn't two run ids in order: {first!r} to {last!r}")
+    if outside := sorted(r for r in unread if not (_RUN_ID.fullmatch(r) and first <= r <= last)):
+        raise ValueError(f"{path}: `covered.unread` lists runs outside {first} to {last}: {', '.join(outside)}")
     for run, x in runs.items():
-        if not (_node(x.get("card_numa_node")) and _node(x.get("cpu_numa_node"))
-                and x["card_numa_node"] != x["cpu_numa_node"]):
-            raise ValueError(f"{path}: run {run} lists no card's NUMA node and another CPUs' NUMA node")
-    return frozenset(runs)
+        if not (_RUN_ID.fullmatch(run) and first <= run <= last and run not in unread):
+            raise ValueError(f"{path}: run {run} is no run the scan read ({first} to {last}, save `unread`)")
+        card, cpus = x.get("card_numa_node"), x.get("cpu_numa_nodes")
+        if not (_node(card) and isinstance(cpus, list) and cpus and all(_node(n) for n in cpus) and cpus != [card]):
+            raise ValueError(f"{path}: run {run} lists no card's NUMA node and CPUs' NUMA nodes other than it alone")
+    return OffNodeScan(first, last, unread, frozenset(runs))
 
 
-def off_node(row: Mapping[str, Any], run: str, known: frozenset[str] | None = None) -> bool | None:
-    """Whether a row's card was on another NUMA node than its CPUs, or None where that isn't recorded: a row that
-    records its card's node (`CARD_NUMA`) is off when its CPUs' (`cores.numa_nodes`) aren't that one node, and isn't
-    recorded where either is null or absent; a row that doesn't is off where its run is `known` (`off_node_runs`), and
-    isn't recorded otherwise."""
+def off_node(row: Mapping[str, Any], run: str, scan: OffNodeScan | None = None) -> bool | None:
+    """Whether a row's card was on another NUMA node than its CPUs, None where that isn't recorded. A row that records
+    its card's node (`CARD_NUMA`) and its CPUs' (`cores.numa_nodes`) is off when they aren't that one node and on
+    otherwise. A row that doesn't (or records null) is as its run is by the scan (`off_node_scan`): off where it lists
+    the run, on where it read it and doesn't, and not recorded where it didn't read it."""
 
-    if CARD_NUMA in row:
-        card, cpus = row[CARD_NUMA], _field(row, "cores.numa_nodes")
-        if not (_node(card) and isinstance(cpus, list) and cpus and all(_node(n) for n in cpus)):
-            return None
+    card, cpus = row.get(CARD_NUMA), _field(row, "cores.numa_nodes")
+    if _node(card) and isinstance(cpus, list) and cpus and all(_node(n) for n in cpus):
         return cpus != [card]
-    return True if run in (off_node_runs() if known is None else known) else None
+    return (off_node_scan() if scan is None else scan).of(run)
 
 
 def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES,
@@ -908,7 +940,8 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     with none has those words as its `why`. The prover GPUs a serving GPU are the
     proving total over the stated serving rate, so their mark is the weaker of the two's (`STRENGTH`), first among
     their inputs, then proving's words and the serving rate's. Both proving totals then say how many of the priced
-    steady-state rows ran with their card off their CPUs' NUMA node and how many don't record it (`off_node_line`):
+    steady-state rows ran with their card off their CPUs' NUMA node, how many on it and how many don't record it
+    (`off_node_line`):
     a statement about the rows they rest on, which moves neither value nor mark. The figure at the exfiltration run of record's design
     (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records. The figures of
     `TARGETED` carry `GPUS_PER_SERVING_GPU_TARGET` as their `target`, and, where they have a value, its check against
@@ -1015,12 +1048,18 @@ def _missing_share(m: Mapping[str, Any]) -> str:
 
 
 def off_node_line(off: Mapping[str, Any]) -> str:
-    """How many of the steady-state rows that price a type ran with their card off their CPUs' NUMA node, and how many
-    don't record it, each with its share of the proving time (`prove.report`'s `off_node`)."""
+    """How many of the steady-state rows that price a type ran with their card off their CPUs' NUMA node, how many on
+    it and how many don't record it, each with its share of the proving time, then the rows priced from the
+    single-session card, whose table records no CPUs (`prove.report`'s `off_node`)."""
+
+    def share(kind: Mapping[str, Any]) -> str:
+        return f"{kind['time_share'] or 0.0:.4%}"
 
     return (f"card off its CPUs' NUMA node: {off['off']['rows']} of {off['rows']} priced steady rows, "
-            f"{off['off']['time_share'] or 0.0:.4%} of the proving time; not recorded: {off['not_recorded']['rows']} rows, "
-            f"{off['not_recorded']['time_share'] or 0.0:.4%}")
+            f"{share(off['off'])} of the proving time; on its node by the runs' own records: {off['on']['rows']} rows, "
+            f"{share(off['on'])}; not recorded: {off['not_recorded']['rows']} rows, {share(off['not_recorded'])}; "
+            f"priced from the single-session card, whose table records no CPUs: {off['single']['rows']} rows, "
+            f"{share(off['single'])}")
 
 
 def _above_line(above: Mapping[str, Any], partial: bool) -> str:
