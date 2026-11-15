@@ -193,6 +193,31 @@ meta def matchArgs (l e : Expr) : M Bool := do
     unless Kernel.isDefEqGuarded (← getEnv) (← getLCtx) a b do return false
   return true
 
+/-- A maximal subterm of `e` the sort taint does not cover whose weak-head form is a different constructor application:
+the first one, left to right, descending only through tainted subterms. Its use is the argument of a sort (`keys?`,
+`sortStrings`) that a field read (`getD`/`field?` of a literal object) produced — untainted under the tainted sort, and a
+`.obj …` once reduced — so a rule keyed on that constructor (`keys?_obj`) can then rewrite the sort away. -/
+meta partial def findReducible (e : Expr) : M (Option Expr) := do
+  if ← exprTainted e then
+    for a in e.getAppArgs do
+      if let some s ← findReducible a then return some s
+    return none
+  if e.isFVar || e.isMVar || e.isSort || e.isLit || e.getAppFn.isFVar then return none
+  let v ← kwhnf e
+  if v != e && (← isCtorApp v) then return some e
+  return none
+
+/-- `(e', p : e = e')` by reducing one such subterm (`findReducible`) to its weak-head form; `none` when none reduces.
+The reduction is a kernel defeq step, so this is sound wherever the rules and projections are stuck. -/
+meta def normStep (e : Expr) : M (Option (Expr × Expr)) := do
+  let some s ← findReducible e | return none
+  let s' ← kwhnf s
+  let ea ← kabstract e s
+  unless ea.hasLooseBVars do return none
+  let motive := Expr.lam `y (← inferType s) ea .default
+  let pf ← mkCongrArg motive (← hint (← mkEqRefl s) (← mkEq s s'))
+  return some (ea.instantiate1 s', pf)
+
 mutual
 
 /-- Close a side condition of a rule: an assumption, an equation the kernel checks (after the rules rewrite both
@@ -586,7 +611,9 @@ meta partial def decideCond (c inst : Expr) : M (Bool × Expr) := do
     if let some r ← attempt cur pc then return r
     let s ← match ← projStep cur with
       | some s => pure (some s)
-      | none => rewriteIn cur
+      | none => match ← rewriteIn cur with
+        | some s => pure (some s)
+        | none => normStep cur
     let some (c2, p) := s | break
     pc := some (← match pc with | some q => mkEqTrans q p | none => pure p)
     cur := c2

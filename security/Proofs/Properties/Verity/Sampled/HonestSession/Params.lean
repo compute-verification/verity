@@ -411,6 +411,13 @@ array) that `sortStrings_of_sorted` then rewrites away. -/
 private theorem keys?_mkObj (o : List (String × Lean.Json)) :
     Spot.keys? (Lean.Json.mkObj o) = some (Spot.sortStrings ((Std.TreeMap.Raw.ofList o).toArray.map (·.1))) := rfl
 
+/-- `keys?` of a `.obj`, as its definitional equation. Keyed on the `.obj` constructor (not `mkObj`), for the objects a
+field read extracts from a literal: `getD (mkObj …) k` reduces (in the kernel, which the walk reaches through `normStep`
+once the sort taint stops it) to the stored `.obj <tree>`, never back to a syntactic `mkObj`, so `keys?_mkObj` cannot fire
+on it; this exposes the inner `sortStrings` over the tree's structurally-reducible key array for `sortStrings_of_sorted`. -/
+private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
+    Spot.keys? (Lean.Json.obj kvs) = some (Spot.sortStrings (kvs.toArray.map (·.1))) := rfl
+
 /-! ## v2's parameters, with every field named -/
 
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
@@ -471,7 +478,7 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     rw [hgp] at hdp
     rw [hgk] at hU
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_mkObj, sortStrings_of_sorted, sortStrings_eq_sortLt]
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_mkObj, keys?_obj, sortStrings_of_sorted, sortStrings_eq_sortLt]
       block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
