@@ -252,7 +252,11 @@ def check_notes_push() -> Check:
         return Check("notes-push", FINDING, f"the notes clone {root} has no origin: notes committed here reach nobody (a checkout "
                                             "may be local on purpose, a notes clone may not)",
                      f"`git -C {root} remote add origin {notes_sync.NOTES_URL}`")
-    opts, where = notes_sync.remote_target(root)
+    try:
+        opts, where = notes_sync.remote_target(root)
+    except notes_sync.NoToken as e:
+        return Check("notes-push", FINDING, f"the notes clone {root} has nothing to push with: {e}",
+                     "run this again in a minute: the GitHub broker's token needs no secret")
     source, said = notes_sync.token_source()
     fix = {"broker": "the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access",
            "env": f"{notes_sync.TOKEN_ENV} was refused (expired or revoked), and the GitHub broker gave no token to use instead "

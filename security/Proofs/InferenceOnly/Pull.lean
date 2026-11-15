@@ -17,6 +17,8 @@ it keeps the fresh inputs of `c` that a piece reads out of `d`'s θ (`freshInput
 
 @[expose] public section
 
+open Slowdown
+
 namespace InferenceOnly.SecurityProofs
 
 open Verity

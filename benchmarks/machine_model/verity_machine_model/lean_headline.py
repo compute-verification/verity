@@ -50,7 +50,7 @@ __all__ = ["BULK_FLOORS", "CATCH_ALL", "E", "EPS", "EPS_M", "LN2", "LN_P", "LN_P
            "P_OPERAND", "Q", "ROOT", "SM120", "VECTOR", "VEC_64", "branches", "coef", "design_skip", "exact",
            "exact_logs", "instance", "load", "main", "measured", "mload", "price", "stars", "write"]
 
-OUT = ROOT / "security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
+OUT = ROOT / "security" / "Definitions" / "Pouw" / "Headline" / "Sm120.lean"
 OUT_M = OUT.with_name("Sm120Measured.lean")
 
 Q = Fraction(1, 2)                 # A6's floors: two words a lane, so q = q_T = ½ and b_T = 0 (SheetScalarRouteHalf)

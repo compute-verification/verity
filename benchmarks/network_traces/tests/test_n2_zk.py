@@ -95,12 +95,21 @@ def _released(doc: dict, at: Path) -> tuple[int, str]:
     return got.returncode, got.stdout + got.stderr
 
 
-def test_the_summary_holds_its_released_keys_and_the_rest_goes_to_the_witness(tmp_path):
+def _public_lines(out: str) -> list[str]:
+    return [line.split(" ", 2)[2] for line in out.splitlines() if line.startswith("N2ZK ")]
+
+
+def test_the_summary_holds_its_released_keys_and_the_rest_goes_to_the_witness(tmp_path, capsys):
     """The public summary holds only keys its list of released_keys.json declares; the run's path, the device, the
     timings, the reference's failed parts and which execution phases the signer refused are written to ``--witness``
-    alone, which the list refuses, and without it nowhere."""
+    alone, which the list refuses, and without it nowhere. The printed log is the summary's split too: the failed
+    parts go to ``n2.log`` beside the witness."""
     run = gate_run(tmp_path / "g")
+    capsys.readouterr()
     doc, witness = _summary(run, tmp_path)
+    said = "\n".join(_public_lines(capsys.readouterr().out))
+    assert "execution phases, words" in said and "failed parts" not in said
+    assert "failed parts" in (tmp_path / "witness" / "n2" / "n2.log").read_text()
     assert _released(doc, tmp_path / "public") == (0, "released keys: 1 files checked by key, 0 with a key not declared "
                                                       "public; 0 not yet checked; 0 with no keys\n")
     assert {m["certifier_refused"] for m in doc["members"].values()} == {False} and "issuer_refused" not in str(doc)
@@ -114,9 +123,10 @@ def test_the_summary_holds_its_released_keys_and_the_rest_goes_to_the_witness(tm
     assert "issuer_refused" not in (tmp_path / "again" / "summary.json").read_text()
 
 
-def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_it_fell(tmp_path, monkeypatch):
+def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_it_fell(tmp_path, monkeypatch, capsys):
     """When the signer refused an execution phase, the public summary is each member's flag alone, with no window
-    count, so nothing public says where the refusal fell; the witness holds the members whole."""
+    count, so nothing public says where the refusal fell; the witness holds the members whole, and the log's
+    per-phase lines go to the witness's ``n2.log``."""
     run, real = gate_run(tmp_path / "g"), n2.phases
 
     def refused_at(w: int):
@@ -126,15 +136,18 @@ def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_i
             return rd
         return phases
 
-    seen = []
+    seen, printed = [], []
     for w in (0, 1):
         monkeypatch.setattr(n2, "phases", refused_at(w))
+        capsys.readouterr()
         doc, witness = _summary(run, tmp_path / str(w))
+        printed.append(_public_lines(capsys.readouterr().out))
+        assert "execution phases" in (tmp_path / str(w) / "witness" / "n2" / "n2.log").read_text()
         assert doc["members"] == {k: {"certifier_refused": True} for k in doc["members"]} and "windows" not in doc["link"]
         assert witness["members"]["honest"]["issuer_refused"] == [w] and witness["link"]["windows"]
         assert _released(doc, tmp_path / str(w) / "record")[0] == 0
         seen.append(doc)
-    assert seen[0] == seen[1]
+    assert seen[0] == seen[1] and printed[0] == printed[1] and not any("phases" in x for x in printed[0])
 
 
 def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):

@@ -1,5 +1,5 @@
 """The H1 tile unit as a Flock statement, and the execution phase's commitments it is opened against: what the committer, the
-prover and the verifier of `recorded.py` share.
+prover and the verifier of ``benchmarks/pouw/h1_prove/recorded.py`` share.
 
 * **The unit** is `circuit.h1zy.PouwH1TileZy` over `circuit.h1tile.PouwH1Tile{EXACT=GemmAccumulatorS8_v2{K, sm120}, R, C,
   PAIRS=the full grid}` (`h1window.tile_unit`): the H1 tile on its rows' codes, with its z/y record checked.
@@ -110,33 +110,36 @@ OK = np.array(CC.OK_ROW, np.uint16)
 OK_VALUE = "ok"
 
 
-def tile() -> str:
-    """The H1 tile under the unit: ``H1_TILE`` v1 (`h1tile.PouwH1Tile`, z the exact A Bᵀ) or v3 (`h1tile.PouwH1Tile3`, the
-    one stream: z = O' - sum_d 128^d D_d of the folded words, with its wrap correction and dither peel; A Bᵀ too)."""
-    import os
-    t = os.environ.get("H1_TILE", "v1")
-    if t not in ("v1", "v3"):
-        raise ValueError(f"H1_TILE={t!r}: v1 or v3")
+#: the H1 tiles a unit is over (`tile`)
+TILES = ("v1", "v3")
+
+
+def tile(t: str = "v1") -> str:
+    """The H1 tile under the unit, ``t``: v1 (`h1tile.PouwH1Tile`, z the exact A Bᵀ) or v3 (`h1tile.PouwH1Tile3`, the one
+    stream: z = O' - sum_d 128^d D_d of the folded words, with its wrap correction and dither peel; A Bᵀ too). A
+    benchmark passes its ``H1_TILE``."""
+    if t not in TILES:
+        raise ValueError(f"the H1 tile {t!r}: v1 or v3")
     return t
 
 
-#: the structural statement's layout mode under ``H1_TMPL=structural`` (struct_lower's costs and the structural verdicts
-#: are measured at it)
+#: the structural statement's layout mode, ``structural`` (struct_lower's costs and the structural verdicts are measured
+#: at it)
 LAYOUT = "iv/hybrid/4"
-#: ``H1_TMPL``'s values for the flat statement (also unset or empty) and for the structural one at `LAYOUT`
+#: the forms `layout` takes for the flat statement (also None or empty) and for the structural one at `LAYOUT`
 FLAT, STRUCTURAL = "flat", "structural"
 
 
-def layout() -> str | None:
-    """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
-    circuit description in the file); ``structural``, the templated statement at `LAYOUT` (``flock-circuit/tmpl``,
-    `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another layout mode
-    (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier takes either with its
-    ``--registered`` reads: the statement check and the knowledge-soundness form read a templated statement's template
-    (`ProvedScope.scopeOkT`, `KsScope`), and the soundness proof is at the flat circuit it unrolls to."""
-    import os
+def layout(form: str | None = None) -> str | None:
+    """The statement's layout mode for ``form`` (a benchmark passes its ``H1_TMPL``): None, empty or ``flat``, None: the
+    flat statement (``flock-circuit``, the unit's circuit description in the file); ``structural``, the templated
+    statement at `LAYOUT` (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template
+    (`stager`); another layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier takes
+    either with its ``--registered`` reads: the statement check and the knowledge-soundness form read a templated
+    statement's template (`ProvedScope.scopeOkT`, `KsScope`), and the soundness proof is at the flat circuit it unrolls
+    to."""
     from verity_flock import tmpl as TM
-    m = os.environ.get("H1_TMPL") or FLAT
+    m = form or FLAT
     if m == FLAT:
         return None
     if m == STRUCTURAL:
@@ -455,12 +458,17 @@ class Shape:
     """One H1 tile unit's shape: R A rows and C B rows at contraction K. With ``j10r`` the unit is J10-R's
     (`h1tile.PouwH1Tile5` under `h1window.tile_unit`, chunked as `h1window.program` declares it), whose public row also
     holds its call and blocks (`core_check.PUBLIC_ROW_J10R_BITS`), and its statement's rows are named by
-    `h1window.window_ports` (``a_k<K>_<i>``, ``b_k<K>_<j>``), the ports core's `credit.registered_file` reads."""
+    `h1window.window_ports` (``a_k<K>_<i>``, ``b_k<K>_<j>``), the ports core's `credit.registered_file` reads. ``tile``
+    is the H1 tile under a unit that is not J10-R's (`tile`)."""
 
     k: int
     r: int = TILE[0]
     c: int = TILE[1]
     j10r: bool = False
+    tile: str = "v1"
+
+    def __post_init__(self) -> None:
+        tile(self.tile)
 
     @cached_property
     def layout(self) -> Layout:
@@ -502,11 +510,11 @@ class Shape:
                 + [FC._port("o0", self.receipt_words, 16 * self.receipt_words), FC._port("o1", len(OK), 16 * len(OK))])
 
     def unit(self) -> Any:
-        """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`; J10-R's with ``j10r``)."""
+        """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by ``tile``; J10-R's with ``j10r``)."""
         from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
         if self.j10r:
             return HW._chunked(self.k, HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile5))
-        return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)
+        return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if self.tile == "v3" else None)
 
     def definition(self) -> Any:
         """The statement's Definition: the execution phase's template at K (`h1window.template`, one call of `unit`), the one its
@@ -521,15 +529,15 @@ class Shape:
         return program, HW.query(program)
 
     def stager(self, name: str, circuit: Path | None = None, bind: dict | None = None,
-               flat: bool = False) -> UnitStager:
+               layout: str | None = None) -> UnitStager:
         """The unit's `UnitStager` on K's statement rows (`h1window.statement_rows`, under this harness's ports): its circuit,
         built once and written to ``circuit``, bound to ``bind`` (``{"partition", "program"}``: the execution phase's partition and
-        Program, `Shape.window`), templated from struct_lower or flat as `layout` says (`stager`), or with ``flat`` the
-        flat statement whatever ``H1_TMPL`` says. A J10-R statement's rows are `h1window.statement_rows`' own
-        (`h1window.window_ports`' names, credit's)."""
+        Program, `Shape.window`), templated from struct_lower at the layout mode ``layout`` (`layout`'s) or, with None, the
+        flat statement (`stager`). A J10-R statement's rows are `h1window.statement_rows`' own (`h1window.window_ports`'
+        names, credit's)."""
         template = self.definition()
         rows = HW.statement_rows(template) if self.j10r else HW.statement_rows(template, ports(template))
-        return stager(template, name, rows, HW.STATEMENT_OUT_ROWS, None if flat else layout(), circuit=circuit, bind=bind)
+        return stager(template, name, rows, HW.STATEMENT_OUT_ROWS, layout, circuit=circuit, bind=bind)
 
 
 # -- words ------------------------------------------------------------------------------------------------------------------
@@ -742,7 +750,7 @@ def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[d
 
 
 __all__ = ["A_TABLES_TAG", "HW", "LAYOUT", "M32", "OK", "OK_VALUE", "OUT_PORTS", "PROVER", "PUBLIC", "PUB_BITS",
-           "SALT_BYTES", "STREAM", "Shape", "TILE", "V2", "bound_root", "check_known", "commit_strings", "dequant",
+           "SALT_BYTES", "STREAM", "Shape", "TILE", "TILES", "V2", "bound_root", "check_known", "commit_strings", "dequant",
            "domain", "forge_statement", "known_ok", "layout", "levels", "ok_salt", "open_root", "path", "ports",
            "program_tables", "pub_salt", "pub_words", "receipt_words", "record_words", "records", "register",
            "register_ok", "registered_domain", "registered_levels", "registered_of", "registered_reads", "row_words",
