@@ -179,46 +179,95 @@ theorem certified_setup_accepts (hP : Pous.P2.Assumptions.PrimeP16448)
   simpa [certifiedCommitment, certifiedStore, certifiedPublic, certifiedSalt] using
     PousCheck.Properties.SecurityProofs.Accepts.check_honest hP (zeros_size 24) hk certifiedSetupState_spec
 
-set_option maxRecDepth 10000 in
+/-! The certified store, its digest table and its root are closed terms, and their bodies are at hand to whoever
+checks this module with every import's bodies: a step that leaves the kernel two syntactically different but equal
+closed terms under a projection or a `BEq` can send it into building the store or hashing it. So each such step below
+is a lemma over free variables (a salt, a store, a block, a table, a key), and its instance at the certified values
+states its terms as the certified declarations state them. -/
+
+theorem setupDigests_size (salt : ByteArray) :
+    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests salt).size =
+      P2.Params.deployed.blocks * Merkle.DIGEST := by
+  rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests]
+  exact PousCheck.Properties.SecurityProofs.Accepts.digestTable_size
+    (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _) _
+
+theorem beq_some_getD {o : Option ByteArray} {x : ByteArray} (h : o = some x) :
+    (o == some (o.getD .empty)) = true := by
+  subst h
+  rw [Option.getD_some]
+  exact beq_self_eq_true _
+
+/-- The root of setup's leaves under any salt is the root its published output records. -/
+theorem root_setup_beq (salt : ByteArray) (st0 : Identity.Sha512.State) :
+    (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed salt
+        (PousCheck.Properties.SecurityProofs.Accepts.setupDigests salt)) ==
+      some ((Merkle.root (PousCheck.Properties.SecurityProofs.Accepts.vkRun salt st0
+        (PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix salt))
+        (fun _ => PousCheck.Properties.SecurityProofs.Accepts.segPayload) P2.Params.deployed.segments).2).getD
+          .empty)) = true := by
+  rw [PousCheck.Properties.SecurityProofs.Accepts.honest_leaves]
+  exact beq_some_getD (PousCheck.Properties.SecurityProofs.Accepts.root_setup salt)
+
+theorem certifiedPublic_blocks : certifiedPublic.blocks = P2.Params.deployed.blocks := by
+  rw [certifiedPublic]
+
+theorem certifiedPublic_saltSize : certifiedPublic.salt.size = PousCheck.Run.SALT := by
+  simp [certifiedPublic, certifiedSalt, PousCheck.Run.SALT, zeros_size]
+
+theorem certifiedPublic_root :
+    (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed certifiedPublic.salt
+      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) == some certifiedPublic.root) = true := by
+  simp only [certifiedPublic]
+  exact root_setup_beq certifiedSalt certifiedSetupState
+
+/-- The memory challenger's LMS check accepts the session's message `m` signed at leaf 0 of the key `k` derives. -/
+theorem lmsVerify_of {k : Lms.PrivateKey} {m : ByteArray} {σ : Lms.Signature}
+    (hk : Lms.key Lms.deployed (PousCheck.Prim.zeros 16) (PousCheck.Prim.zeros 64) = .ok k)
+    (hσs : Lms.signAt k 0 (Flock.Sha512.hash (MemoryChallenger.field MemoryChallenger.MEMORY_CHALLENGER_TAG.toUTF8 ++
+      PousCheck.Prim.zeros 16 ++ MemoryChallenger.field (MemoryChallenger.field honestSid) ++
+      MemoryChallenger.field m)) = .ok σ)
+    (hσv : Lms.verify Lms.deployed k.publicKey (Flock.Sha512.hash
+      (MemoryChallenger.field MemoryChallenger.MEMORY_CHALLENGER_TAG.toUTF8 ++ PousCheck.Prim.zeros 16 ++
+        MemoryChallenger.field (MemoryChallenger.field honestSid) ++ MemoryChallenger.field m)) σ = .ok true) :
+    MemoryChallenger.lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true := by
+  obtain ⟨hIs, hps, hpI⟩ := MemoryChallenger.Attest.Properties.SecurityProofs.pub_spec hk
+  have hdec := (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed _ _ k 0 _ σ rfl hk
+    hσs).2
+  unfold MemoryChallenger.lmsVerify MemoryChallenger.memoryChallengerMessage
+  simp only [hps, hpI, hIs, hdec, ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind, pure, Except.pure]
+  exact hσv
+
+/-- `Run.check` accepts the honest session's record on a published setup `pub` and a table `digests` that agree: 105
+rounds at block 0 with `digests`' row 0, bound to `pub.root`, its message `m` signed with `σ` at leaf 0 of the key
+`k`, which is the one trusted. -/
+theorem runCheck_honestRecord (pub : SetupProtocol.Public) (digests : ByteArray) (k : Lms.PrivateKey)
+    (m : ByteArray) (σ : Lms.Signature) (hb : pub.blocks = P2.Params.deployed.blocks)
+    (hs : pub.salt.size = PousCheck.Run.SALT) (hd : digests.size = P2.Params.deployed.blocks * Merkle.DIGEST)
+    (hr : (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed pub.salt digests) == some pub.root) = true)
+    (hm : MemoryChallenger.message (honestCommitment pub.root) MemoryChallenger.COMPLETE (honestRounds digests) =
+      .ok m)
+    (hv : MemoryChallenger.lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true) :
+    PousCheck.Run.check [k.publicKey] pub digests
+      ⟨⟨honestCommitment pub.root, MemoryChallenger.COMPLETE, honestRounds digests, MemoryChallenger.LMS,
+        k.publicKey, σ.encode⟩, honestCommitment pub.root, honestOpenings⟩ honestSid = .ok () := by
+  unfold PousCheck.Run.check
+  refine checkAt_of (by rw [hb]; exact beq_self_eq_true _) (by simp [hs])
+    (by simp [hd, PousCheck.Run.DEPLOYED]) hr (beq_self_eq_true _) (beq_self_eq_true _)
+    (by simp [honestCommitment]) (beq_self_eq_true _) (beq_self_eq_true _) (beq_self_eq_true _) ?_
+  exact MemoryChallenger.Properties.SecurityProofs.verdict_accepted_of (p := Lms.deployed) (m := m)
+    (by simp [MemoryChallenger.SCHEMES]) (by simp) hm hv
+    (MemoryChallenger.Properties.SecurityProofs.commitment_beq_self _) rfl
+    (by simp [honestRounds, honestCommitment]) (rounds_honest pub.root digests)
+
 theorem certified_run_accepts :
     PousCheck.Run.check [certifiedPrivateKey.publicKey] certifiedPublic
       (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedRecord honestSid = .ok () := by
-  obtain ⟨hIs, hps, hpI⟩ :=
-    MemoryChallenger.Attest.Properties.SecurityProofs.pub_spec certifiedPrivateKey_spec
-  have hdec := (Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed _ _
-    certifiedPrivateKey 0 certifiedLmsMessage certifiedSignature rfl certifiedPrivateKey_spec
-    certifiedSignature_spec.1).2
-  have hv : MemoryChallenger.lmsVerify Lms.deployed certifiedPrivateKey.publicKey honestSid
-      certifiedRecordMessage certifiedSignature.encode = .ok true := by
-    unfold MemoryChallenger.lmsVerify MemoryChallenger.memoryChallengerMessage
-    simp only [hps, hpI, hIs, hdec, ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind, pure, Except.pure]
-    exact certifiedSignature_spec.2
-  have hd : (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt).size =
-      P2.Params.deployed.blocks * Merkle.DIGEST := by
-    rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests]
-    exact PousCheck.Properties.SecurityProofs.Accepts.digestTable_size
-      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _) _
-  unfold PousCheck.Run.check
-  unfold certifiedRecord
-  refine checkAt_of (beq_self_eq_true _)
-    (by simp [certifiedPublic, certifiedSalt, PousCheck.Run.SALT, zeros_size])
-    (by simp [hd, PousCheck.Run.DEPLOYED])
-    ?_ (beq_self_eq_true _) (beq_self_eq_true _)
-    (by simp [certifiedRecord, honestCommitment]) (beq_self_eq_true _)
-    (beq_self_eq_true _) (beq_self_eq_true _) ?_
-  · show (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed certifiedSalt
-      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) == some certifiedPublic.root) = true
-    rw [certifiedPublic, PousCheck.Properties.SecurityProofs.Accepts.honest_leaves,
-      PousCheck.Properties.SecurityProofs.Accepts.root_setup]
-    exact beq_self_eq_true _
-  · exact MemoryChallenger.Properties.SecurityProofs.verdict_accepted_of
-      (p := Lms.deployed) (m := certifiedRecordMessage)
-      (by simp [certifiedRecord, MemoryChallenger.SCHEMES]) (by simp [certifiedRecord])
-      certifiedRecordMessage_spec hv
-      (MemoryChallenger.Properties.SecurityProofs.commitment_beq_self _) rfl
-      (by simp [certifiedRecord, honestRounds, honestCommitment])
-      (rounds_honest certifiedPublic.root
-        (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))
+  rw [certifiedRecord]
+  exact runCheck_honestRecord certifiedPublic (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)
+    certifiedPrivateKey certifiedRecordMessage certifiedSignature certifiedPublic_blocks certifiedPublic_saltSize
+    (setupDigests_size certifiedSalt) certifiedPublic_root certifiedRecordMessage_spec
+    (lmsVerify_of certifiedPrivateKey_spec certifiedSignature_spec.1 certifiedSignature_spec.2)
 
 /-- The strings an audit's play hashes at the coin `ω`: the store's key-stream inputs under its salt (`storeStrings`),
 and the strings `RunBreak` and `TableBreak` read. -/
@@ -259,34 +308,35 @@ theorem certifiedStore_shaped
     PousCheck.Properties.SecurityProofs.beOfNat_size]
   rfl
 
+/-- Block 0 of a shaped store, the first of its flattened blocks, is block 0 of its segment 0. -/
+theorem flat_zero_of_some {C : Array (Array ByteArray)} (hC : Shaped C) {seg : Array ByteArray} {b : ByteArray}
+    (hseg : C[0]? = some seg) (hb : seg[0]? = some b) : (flat C)[0]! = b := by
+  have hflat := Pous.EndToEnd.SecurityProofs.flat_getElem? hC 0 0 (by decide)
+  simp only [Nat.zero_mul, Nat.zero_add, hseg, Option.bind_some, hb] at hflat
+  exact Pous.EndToEnd.SecurityProofs.getElem!_of_some hflat
+
+theorem honestEncoding_getElem?_zero (pre : ByteArray) :
+    (PousCheck.Properties.SecurityProofs.Accepts.honestEncoding pre)[0]? =
+      some (PousCheck.Properties.SecurityProofs.Accepts.honestSegment pre 0) := by
+  have h : 0 < (PousCheck.Properties.SecurityProofs.Accepts.honestEncoding pre).size := by
+    rw [PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size]
+    decide
+  rw [Array.getElem?_eq_getElem h, PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_get pre 0 h]
+
+theorem honestSegment_getElem?_zero (pre : ByteArray) (s : Nat) :
+    (PousCheck.Properties.SecurityProofs.Accepts.honestSegment pre s)[0]? =
+      some (PousCheck.Properties.SecurityProofs.Accepts.honestBlock pre s 0) := by
+  have h : 0 < (PousCheck.Properties.SecurityProofs.Accepts.honestSegment pre s).size := by
+    rw [PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size]
+    decide
+  rw [Array.getElem?_eq_getElem h, PousCheck.Properties.SecurityProofs.Accepts.honestSegment_get pre s 0 h]
+
 theorem certifiedStoreBlock_eq
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     certifiedStoreBlock =
       PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix certifiedSalt) 0 0 := by
-  have hflat := Pous.EndToEnd.SecurityProofs.flat_getElem? (certifiedStore_shaped hk) 0 0 (by decide)
-  have hseg : certifiedStore[0]? =
-      some (PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt) 0) := by
-    rw [Array.getElem?_eq_getElem (by
-      change 0 < (PousCheck.Properties.SecurityProofs.Accepts.honestEncoding (keyPrefix certifiedSalt)).size
-      rw [PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size]
-      decide)]
-    congr 1
-    exact PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_get _ 0 (by
-      change 0 < (PousCheck.Properties.SecurityProofs.Accepts.honestEncoding (keyPrefix certifiedSalt)).size
-      rw [PousCheck.Properties.SecurityProofs.Accepts.honestEncoding_size]
-      decide)
-  have hblock :
-      (PousCheck.Properties.SecurityProofs.Accepts.honestSegment (keyPrefix certifiedSalt) 0)[0]? =
-        some (PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix certifiedSalt) 0 0) := by
-    rw [Array.getElem?_eq_getElem (by
-      rw [PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size]
-      decide)]
-    congr 1
-    exact PousCheck.Properties.SecurityProofs.Accepts.honestSegment_get _ _ _ (by
-      rw [PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size]
-      decide)
-  simp only [Nat.zero_mul, Nat.zero_add, hseg, Option.bind_some, hblock] at hflat
-  rw [certifiedStoreBlock, Pous.EndToEnd.SecurityProofs.getElem!_of_some hflat]
+  rw [certifiedStoreBlock, certifiedStore]
+  exact flat_zero_of_some (certifiedStore_shaped hk) (honestEncoding_getElem?_zero _) (honestSegment_getElem?_zero _ 0)
 
 theorem certifiedStoreBlock_size
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
@@ -297,17 +347,46 @@ theorem certifiedStoreBlock_size
     PousCheck.Properties.SecurityProofs.beOfNat_size]
   rfl
 
+/-- Under any salt, the memory challenger's digest of honest block 0 is row 0 of setup's digest table. -/
+theorem honestBlock_digest_row (salt : ByteArray) :
+    MemoryChallenger.blockDigest (PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix salt) 0 0) =
+      PousCheck.Run.row (PousCheck.Properties.SecurityProofs.Accepts.setupDigests salt) 0 := by
+  rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests,
+    PousCheck.Properties.SecurityProofs.Accepts.digestTable_row
+      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _)
+      P2.Params.deployed.blocks 0 (by decide)]
+  simp only [Nat.zero_div, Nat.zero_mod]
+  rfl
+
 theorem certifiedStoreBlock_digest
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     MemoryChallenger.blockDigest certifiedStoreBlock =
       PousCheck.Run.row (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) 0 := by
-  rw [certifiedStoreBlock_eq hk, PousCheck.Properties.SecurityProofs.Accepts.setupDigests,
-    PousCheck.Properties.SecurityProofs.Accepts.digestTable_row
-      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _)
-      P2.Params.deployed.blocks 0 (by decide)]
-  rfl
+  rw [certifiedStoreBlock_eq hk]
+  exact honestBlock_digest_row certifiedSalt
 
 noncomputable def certifiedObserved : MemoryChallenger.Properties.Observed := ⟨0, 0, certifiedStoreBlock⟩
+
+/-- The challenger's record of `n ≤ 105` timely answers with a block `b` of the deployed size whose digest is row 0
+of a table `d`: `n` honest rounds of `d`, complete at 105. -/
+theorem recorded_prefix_of {b d : ByteArray} (hb : b.size = P2.Params.deployed.blockBytes)
+    (hd : MemoryChallenger.blockDigest b = PousCheck.Run.row d 0) :
+    ∀ n, n ≤ 105 →
+      (List.replicate n (⟨0, 0, b⟩ : MemoryChallenger.Properties.Observed)).foldl
+          (MemoryChallenger.Properties.Recorded.round honestCoins PousCheck.Run.DEPLOYED.limitNs
+            P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryChallenger.Properties.Recorded) =
+        ⟨(Array.range n).map (honestRound d), if n = 105 then some MemoryChallenger.COMPLETE else none⟩
+  | 0, _ => by simp
+  | n + 1, hn => by
+      rw [List.replicate_succ', List.foldl_append, recorded_prefix_of hb hd n (by omega)]
+      simp only [List.foldl_cons, List.foldl_nil]
+      have hn105 : n ≠ 105 := by omega
+      simp only [hn105, ↓reduceIte]
+      have hidx : (Array.replicate 105 0)[n]! = 0 := by
+        rw [getElem!_pos _ n (by simp; omega)]
+        simp
+      simp [MemoryChallenger.Properties.Recorded.round, hb, honestCoins, MemoryChallenger.CoinTree.k, hidx, hd,
+        honestRound, MemoryChallenger.Round.elapsedNs, Array.range_succ]
 
 theorem honest_recorded_prefix
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
@@ -317,27 +396,23 @@ theorem honest_recorded_prefix
             P2.Params.deployed.blockBytes) (⟨#[], none⟩ : MemoryChallenger.Properties.Recorded) =
         ⟨(Array.range n).map
             (honestRound (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)),
-          if n = 105 then some MemoryChallenger.COMPLETE else none⟩
-  | 0, _ => by simp
-  | n + 1, hn => by
-      rw [List.replicate_succ', List.foldl_append, honest_recorded_prefix hk n (by omega)]
-      simp only [List.foldl_cons, List.foldl_nil]
-      have hn105 : n ≠ 105 := by omega
-      simp only [hn105, ↓reduceIte]
-      have hidx : (Array.replicate 105 0)[n]! = 0 := by
-        rw [getElem!_pos _ n (by simp; omega)]
-        simp
-      simp [MemoryChallenger.Properties.Recorded.round, certifiedObserved, certifiedStoreBlock_size hk,
-        honestCoins, MemoryChallenger.CoinTree.k, hidx, certifiedStoreBlock_digest hk, honestRound,
-        MemoryChallenger.Round.elapsedNs, Array.range_succ]
+          if n = 105 then some MemoryChallenger.COMPLETE else none⟩ :=
+  recorded_prefix_of (certifiedStoreBlock_size hk) (certifiedStoreBlock_digest hk)
+
+/-- The challenger's honest run bound to any root with a block `b` of the deployed size whose digest is row 0 of a
+table `d` records the 105 honest rounds of `d`, complete. -/
+theorem challengerRun_recorded_of (root : ByteArray) {b d : ByteArray} (hb : b.size = P2.Params.deployed.blockBytes)
+    (hd : MemoryChallenger.blockDigest b = PousCheck.Run.row d 0) :
+    (honestChallengerRun root b).recorded = ⟨honestRounds d, some MemoryChallenger.COMPLETE⟩ := by
+  unfold MemoryChallenger.Properties.Run.recorded honestChallengerRun
+  simpa [honestRounds] using recorded_prefix_of hb hd 105 le_rfl
 
 theorem honestChallengerRun_recorded
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
     (honestChallengerRun certifiedPublic.root certifiedStoreBlock).recorded =
       ⟨honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
-        some MemoryChallenger.COMPLETE⟩ := by
-  unfold MemoryChallenger.Properties.Run.recorded honestChallengerRun
-  simpa [certifiedObserved, honestRounds] using honest_recorded_prefix hk 105 le_rfl
+        some MemoryChallenger.COMPLETE⟩ :=
+  challengerRun_recorded_of certifiedPublic.root (certifiedStoreBlock_size hk) (certifiedStoreBlock_digest hk)
 
 theorem certified_signed
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt))

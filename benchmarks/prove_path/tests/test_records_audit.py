@@ -16,7 +16,7 @@
   (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
   states them; one whose program takes values only tied to the earlier docket that registered them first
   (`tie_of`), its readers' reads registered at that record's roots, and the verifier's tie tests' own tie
-  (`spot/verifier/tests/window_tie.py`) is that one on their toys;
+  (`window_tie.py`) is that one on their toys;
 * the workload side's copy of the Lean verifier's ``--registered`` port (`spot/prover/registered_reads.py`) is the
   verifier's own;
 * a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
@@ -708,14 +708,14 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
 
 @pytest.mark.slow
 def test_the_verifier_tie_tests_tie_is_the_audits_on_their_toys():
-    """test_pearltie and test_remotetie, in the verifier's suite, tie and resolve with `window_tie` beside them, which loads
+    """test_pearltie and test_remotetie tie and resolve with `window_tie` beside them, which loads
     no file of the audit: on test_pearltie's toy, its tie to W and to the flipped W' is `tie_of`'s with no prefix, and every
     template of both toys' circuits resolves under its id as `catalog_resolve` resolves it. The tie reads the circuit
     record's declarations alone (`interface.declarations`), the circuit's own, as its ``circuit.json`` carries them. In a
     fresh process, where the ``settings`` the verifier's tests import is their own registry."""
     code = f"""
 import sys
-sys.path[:0] = [{str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests")!r}, {str(HERE.parent)!r}]
+sys.path[:0] = [{str(HERE)!r}, {str(HERE.parent)!r}]
 import records_audit as RA
 from verity.circuits.codec import descriptor_id
 import json

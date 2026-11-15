@@ -83,12 +83,13 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           # test_kept_scan's window classes are the vLLM integration's (`program.predict.window_circuit`), which import
           # across its package and the PyTorch adapter's; demo_stub's `verity-vllm advice`, the encodings' replay and
           # compile_slice_zk's compiler read the vLLM package too. Both packages are listed whole, as they move often. SPOT's
-          # prove_path, which test_kept_scan runs, reads its sources' list. test_certifier_term runs `verity bench
-          # certifier_term`'s runner, test_block_certifier holds the block certifier to the block record's period-0
-          # fixture, and test_certifier_piece holds the CLI's served_table to scan_zk's scan class.
+          # prove_path, which test_kept_scan imports with the records_audit it imports, reads its sources' list.
+          # test_certifier_term runs `verity bench certifier_term`'s runner, test_block_certifier holds the block certifier to
+          # the block record's period-0 fixture, and test_certifier_piece holds the CLI's served_table to scan_zk's scan class.
           "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
           "benchmarks/certifier_term/run.py",
           "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json",
+          "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
           "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py"]
 # network-rows, the compiled audit of the network certifier's records, which test_certifier_piece builds in its package
 # (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_network_certifier_zk

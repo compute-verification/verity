@@ -37,7 +37,7 @@ wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
 LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
 sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc) PYTHONPATH=$M0PATH
 # a local challenger session's pin is held to main's first-parent line: a run's clone has the shipped tree as its origin,
 # which holds main as its own main or origin/main

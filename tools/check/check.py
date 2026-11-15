@@ -479,16 +479,18 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     # whose train line takes such shards and, placed there by the train minimum, a larger ask would never start
     (("lean-agreement",), 460),
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
-    (("circuit-check",), 340),                                   # circuit-check granted the slot once alone: 292 + 15%
-    (("pytest:adapters/vllm/verity_vllm/definitions", "lean-suites:verity-vllm:1/3"), 170),   # its test beside the parallel suites: 144 + 15%
+    # circuit-check granted the slot once alone: 292 + 15%; beside it, what `cc_mem_gb` leaves lean-suites holds vLLM's two
+    # thirds and the rest of lean-suites (105 + 15%)
+    (("circuit-check",), 340),
+    # ci.toml's groups of lean-suites where no row above holds them: twice (`groups` gives lean-suites half the slot) what the
+    # group's parts held running alone, + 15%, which their workers fit at their worker_gb
+    (("lean-suites:verity-flock:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
+    (("lean-suites:verity-flock:3/6",), 270),                    # beside lean-build, Flock's other four sixths: 115
+    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's other two thirds: 105
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 130),                                      # lean-build and the Flock suite alone: 110 + 15%
     (("pytest",), 160),                                          # pytest's other suites alone: 134 + 15%
-    # the Rust build beside two vLLM parts and the rest of lean-suites: lean-suites' half (`groups`), less its one-process
-    # suites' reserve, gives the parts about nine workers (`suites.py`'s `wide_workers`), which end them inside the shard's
-    # longest one-process suite
-    (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 200),
     (("flock-circuit-build",), 50),                              # the Rust build and tests, the rest of lean-suites: 40 + 15%
 )
 
@@ -1897,7 +1899,7 @@ OPT_IN = {
             "tests/pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
         "VERITY_VLLM_HISTORY_E2E": (
             "tests/pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
-    "verity/protocols/proofs/spot/prover": {"VERITY_SLOW": (
+    "benchmarks/prove_path": {"VERITY_SLOW": (
         "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
         "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
 }
@@ -1920,7 +1922,8 @@ def opt_in(out: Path, step: str, args: list[str]) -> int:
     if step not in ("pytest", "lean-suites", "all"):
         print(f"check: --opt-in OUT STEP: STEP is pytest, lean-suites or all, not {step!r}", file=sys.stderr)
         return 2
-    names = {s.path: s.name for s in SUITES.select(SUITES.discover(), list(OPT_IN))}
+    suites = SUITES.discover()
+    names = {path: SUITES.select(suites, [path])[0].name for path in OPT_IN}
     d = out / OPT_IN_DIR
     d.mkdir(parents=True, exist_ok=True)
     rc = 0

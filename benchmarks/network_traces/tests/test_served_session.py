@@ -283,9 +283,8 @@ def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network
     published, q = tmp_path / "published", tmp_path / "q"
     published.mkdir()
     shutil.copyfile(reply, published / "start.json")
-    got = subprocess.run([sys.executable, "-m", SS.LEAK_GUARD, str(published), str(q), "--gates",
-                          str(kept / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
-                         capture_output=True, text=True)
+    got = subprocess.run(SS.guard_argv(published, q, "--gates", kept / "fetch.tar.gz", "--dry", "--report",
+                                       tmp_path / "report.json"), capture_output=True, text=True, cwd=SS.TREE)
     assert got.returncode == 3, got.stdout + got.stderr
     assert [d["path"] for d in json.loads((tmp_path / "report.json").read_text())["found"]] == ["start.json"]
     doc = json.loads((q / "leak-guard.json").read_text())

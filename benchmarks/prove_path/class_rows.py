@@ -93,6 +93,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     sys.path.insert(0, str(Path.cwd() / "adapters/vllm"))
+    sys.path.insert(0, str(Path.cwd() / "adapters/torch"))
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
     from verity.commitments.periods import interface as IF

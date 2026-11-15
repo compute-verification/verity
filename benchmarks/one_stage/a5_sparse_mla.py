@@ -25,7 +25,7 @@ step 16's rows as the served partition (``glm53_sparse_mla_tp8_step16.json``) na
 rows' writers on 64 columns, and per head, five scores units, forty values units and forty split ends on 64 columns, and
 eight combines.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--zk-server flock-zk-server] [--units] --main FILE --out DIR
 """

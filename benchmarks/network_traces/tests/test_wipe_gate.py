@@ -140,7 +140,7 @@ def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network
     shutil.copyfile(reply, published / "start.json")
     held = subprocess.run([sys.executable, "-m", "benchmarks.network_traces.leak_guard", str(published), str(q), "--gates",
                            str(keep / RUN / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, cwd=ROOT)
     assert held.returncode == 3, held.stdout + held.stderr
     (piece,) = [p for f in json.loads((q / "leak-guard.json").read_text())["found"] for p in f["pieces_found"]]
     assert (piece["witness"], piece["keypath"]) == (f"{RUN}/witness/stalls.json", ["unit"])
