@@ -12,9 +12,8 @@ alone (`DefReads`, the decoder's invariant `DecodeReads`); and two Definitions s
 entries, whose callees are one Definition in turn, are one Definition (`ReadsPin`). `entriesPin_of_reads` joins them by
 strong induction on the decoder's index: a node's callee sits at a smaller index, and `key` reaches it.
 
-`ReadsPin` is proved in `Proofs.Properties.InferenceOnly.DigestReadsPin` (`readsPin`). `DecodeReads` is stated and
-not yet proved: the decoder's invariant over `getDef`, `composite` and `staticFns`, carried as `BodiesOk`'s `Inv` is
-(`GetSpec`, `CompSpec`, `StatSpec` by induction on the fuel), with `composite`'s node loop read field by field.
+`ReadsPin` is proved in `Proofs.Properties.InferenceOnly.DigestReadsPin` (`readsPin`), and `DecodeReads` in
+`Proofs.Properties.InferenceOnly.DigestDecodeReads` (`decodeReads`, with `entriesPin` and `digestPins`).
 -/
 
 public section
@@ -109,8 +108,8 @@ def DefReads (j : Json) (P : Prog) (i : Nat) (d : Defn) : Prop :=
   P.index[d.key]? = some i ∧ (PrimReads j d ∨ CompReads j P i d)
 
 /-- **The decoder builds each Definition from its entry and its callees.** For a Program text that decodes and
-parses, the index names each Definition by its key, and each Definition is what `DefReads` says. Stated and not yet
-proved: the invariant over `getDef`, `composite` and `staticFns`, carried as `BodiesOk`'s `Inv` is. -/
+parses, the index names each Definition by its key, and each Definition is what `DefReads` says (`decodeReads`, in
+`Proofs.Properties.InferenceOnly.DigestDecodeReads`). -/
 def DecodeReads : Prop :=
   ∀ (text : String) (j : Json) (P : Prog), Flock.Program.decode text.toUTF8 = .ok P → Flock.JsonParse.parse text = .ok j →
     (∀ (c : String) (i : Nat), P.index[c]? = some i → i < P.defs.size ∧ (P.defs[i]!).key = c) ∧

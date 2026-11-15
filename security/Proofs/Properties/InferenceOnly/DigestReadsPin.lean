@@ -386,7 +386,7 @@ theorem partsRel_unique {L : Bool → Nat → Option Nat} : ∀ {ps : List Json}
       simp only [List.getElem_cons_succ] at this
       exact this]
 
-theorem buildNode_congr {fid : String} {k : Nat} {form : Form} {c c' : Defn} {args : Array Arg}
+theorem buildNode_congr {fid : String} {k : Nat} {form : Flock.Program.Form} {c c' : Defn} {args : Array Arg}
     {axes : Array (Option Nat)} {n nxs : Nat} (h1 : c.key = c'.key) (h2 : c.params = c'.params) (h3 : c.ret = c'.ret) :
     buildNode fid k form c args axes n nxs = buildNode fid k form c' args axes n nxs := by
   obtain ⟨key, id, prim, params, ret, binding, body, gates, pl, ol⟩ := c
@@ -511,7 +511,7 @@ theorem node_view {P : Prog} {d : Defn} {cs ts : Array Json} {types outs : Array
   · have hsz : ((ajs.zip rows[k]!).map (canonArg ts)).size = ajs.size := by simp [hrs]
     refine ⟨(ajs.zip rows[k]!).map (canonArg ts), raw, canonNode_args hno _ _, by rw [hsz, hraw], hB, fun a ha => ?_⟩
     rw [hsz] at ha
-    have hel : ((ajs.zip rows[k]!).map (canonArg ts))[a]! = canonArg ts (ajs[a]!, rows[k]![a]!) := by
+    have hel : ((ajs.zip rows[k]!).map (canonArg ts))[a]! = canonArg ts (ajs[a]!, (rows[k]!)[a]!) := by
       rw [getElem!_pos _ a (by rw [hsz]; exact ha), getElem!_pos ajs a ha, getElem!_pos rows[k]! a (by omega)]
       simp
     rw [hel]
@@ -520,7 +520,7 @@ theorem node_view {P : Prog} {d : Defn} {cs ts : Array Json} {types outs : Array
     rw [getObjValD_of hajs] at hwa
     have hao : IsObj ajs[a]! := isObj_of_wf (wf_arr_get hwa ha) (getObjVal_of_D rfl (by
       intro h; rw [h, intJ_null] at ht; cases ht))
-    refine ⟨?_, hdim, rows[k]![a]!, qs, canonArg_refs hao _, ?_, hrel, hseq⟩
+    refine ⟨?_, hdim, (rows[k]!)[a]!, qs, canonArg_refs hao _, ?_, hrel, hseq⟩
     · rw [canonArg_type hao, hty]
       exact ofJson_atJ htypes (getNat_of_intJ ht h0) (by omega)
     · exact hrw _ (getElem!_mem (by omega)) _ (getElem!_mem (by omega))
