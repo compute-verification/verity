@@ -306,7 +306,7 @@ def Mark.refusal (p : Params) (m : Mark) : Option String :=
 
 /-- What a missing certificate means, in each reason that reports one. -/
 def noneCertified : String :=
-  "the network attester certifies no record of an execution phase it faulted or refused a connection in, and a span \
+  "the network certifier certifies no record of an execution phase it faulted or refused a connection in, and a span \
     that holds one is rejected"
 
 /-- The reason of a span that shows too few execution phases. -/

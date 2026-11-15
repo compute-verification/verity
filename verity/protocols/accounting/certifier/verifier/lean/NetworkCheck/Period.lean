@@ -75,7 +75,7 @@ that still name `"key"`, `"session"` or `"sessions"`, naming the entry to write)
 most 65,535 UTF-8 bytes), the period's `m ≥ 1` execution phases, the class circuit, the SHA-512 of the Program of the one
 window circuit the workload's class registers, which every tied compute audit runs (`held`); the scan's Program, its
 descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
-attester's one fixed schedule (`network_attester.NetworkAttesterParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
+attester's one fixed schedule (`network_certifier.NetworkAttesterParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
 execution phase is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and
 `Schedule.executionPhasePrograms`; its `max_tokens_cap` when it has one, a u32 below `egress_cells`, under which a
@@ -169,7 +169,7 @@ schedule it runs under, and the certificate the key signed for both once, before
   (`<link>-fails`, egress) at `w − a`, each the key's of the entry `w` picks and verifying in its session, so an
   execution phase missing any record's certificate is refused, and the network attester certifies no record of an
   execution phase in which it refused a
-  connection (traffic past the window's Program slots, `network_attester`'s "Admission"), so such an execution phase is refused; its two registrations, ingress then egress, are what `network_certifier_rows.check_registration` reads:
+  connection (traffic past the window's Program slots, `network_certifier`'s "Admission"), so such an execution phase is refused; its two registrations, ingress then egress, are what `network_certifier_rows.check_registration` reads:
   the execution phase's value, link, end and window, in its session's numbers (`w − a`, as the certifier wrote them),
   the schedule's digest (a registration under another schedule is
   refused), the schedule's rows, words, word bits, row format and layout (its first bucket `(w − a) · T`), the
@@ -308,7 +308,7 @@ phase's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · 
   `eps`, the answer's δ in its audit's.
 * `max_tokens_cap`, present when the schedule has a response cap and absent when it has none, is that cap: each
   response the network attester released in the period has at most its request's `max_tokens` tokens, and every
-  request it released has `max_tokens` at most the cap (`network_attester`'s "The response cap",
+  request it released has `max_tokens` at most the cap (`network_certifier`'s "The response cap",
   `NetTiming.Guarantees.ResponseCapped`). The schedule's digest, which every registration binds, binds it
   (`Schedule.digest`), and the check publishes the schedule's (`Properties.NetworkPeriod.RowsCapPublished`).
 * `start` is 0 where the period's first execution phase is the run's first, whose start the check holds to the empty

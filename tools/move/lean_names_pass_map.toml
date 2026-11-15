@@ -50,6 +50,7 @@ files = ["*.json", "*.py", "*.md", "*.toml", "*.sh", "*.txt"]
 "Accounting." = "ResourceAccounting."
 
 # The network attester in the Lean's prose; a string literal keeps its bytes ([keep]): a verifier's message.
+# `network_certifier` stays: in the Lean it names the Python modules, which keep their names.
 [[words_in]]
 files = ["*.lean"]
 [words_in.words]
@@ -58,7 +59,6 @@ files = ["*.lean"]
 "network certifiers" = "network attesters"
 "network certifier" = "network attester"
 "Network certifier" = "Network attester"
-"network_certifier" = "network_attester"
 
 # --- 3. The older words left in the Lean's names.
 [[words_in]]
@@ -74,7 +74,7 @@ files = ["security/Proofs/Flock/EndToEnd/Period/Union.lean", "security/Proofs/Fl
 patterns = [
     '[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',
     '(?:Pous|Flock|Soundness|FlockSoundness)[./]Accounting\b',
-    '"(?:[^"\\\n]|\\.)*network certifier(?:[^"\\\n]|\\.)*"',
+    '"(?:(?!NetworkCertifier)(?:[^"\\\n]|\\.|\\\n))*[Nn]etwork certifier(?:(?!NetworkCertifier)(?:[^"\\\n]|\\.|\\\n))*"',
     '\*\*Accounting\.\*\*',
 ]
 

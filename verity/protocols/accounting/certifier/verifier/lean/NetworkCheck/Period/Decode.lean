@@ -54,7 +54,7 @@ def rowSchema : String := "hm96-sha512/row/v2"
 /-- The cell kinds (`PAD`, `DATA`, `END`, `FAIL`, `REFUSED`) and the fail reasons the schedule's digest binds. -/
 def cellKinds : List Nat := [0, 1, 32, 33, 34]
 def failReasons : List String := ["late", "limit", "upstream", "ingress", "malformed", "format"]
-/-- The fail reason a schedule with a response cap adds after `failReasons` (`network_attester.REASONS`' last): a request past
+/-- The fail reason a schedule with a response cap adds after `failReasons` (`network_certifier.REASONS`' last): a request past
 the cap, or whose `max_tokens` doesn't parse. -/
 def capReason : String := "cap"
 /-- The egress form (`NetworkAttesterParams.egress`) of every schedule the check reads: the egress record's id form. A schedule
@@ -77,7 +77,7 @@ structure Audit where
   units : Nat
   entries : Array (String × Nat × String)
 
-/-- The network attester's schedule when it functions as an active network attester (`network_attester.NetworkAttesterParams`). -/
+/-- The network attester's schedule when it functions as an active network attester (`network_certifier.NetworkAttesterParams`). -/
 structure Schedule where
   bucketMs : Nat
   cellBytes : Nat
@@ -285,7 +285,7 @@ def isDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit |
 def rowsParamsKeys : List String :=
   ["audits", "cells", "circuit", "first", "jitter", "keys", "link", "lms", "program", "scan", "schedule", "windows"]
 
-/-- The keys every schedule has (`network_attester.INTEGER_FIELDS`). -/
+/-- The keys every schedule has (`network_certifier.INTEGER_FIELDS`). -/
 def scheduleKeys : List String :=
   ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes", "queue",
     "slots", "window"]

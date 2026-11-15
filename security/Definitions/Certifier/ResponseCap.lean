@@ -5,7 +5,7 @@ public import Definitions.Certifier.Cells
 /-!
 # The response cap: each response at most its request's `max_tokens` tokens
 
-Definitions only. A run may register a response cap `cap` with its schedule (`network_attester.NetworkAttesterParams.max_tokens_cap`,
+Definitions only. A run may register a response cap `cap` with its schedule (`network_certifier.NetworkAttesterParams.max_tokens_cap`,
 which the schedule's parameters digest, and so every record head, binds), in the id egress form, where each data cell
 is one id event, a token, and the end of the stream holds only the trailer (`io_tie`). The network attester then reads
 each request's `max_tokens` from its first ingress cell, at the place `id_form.id_request` fixes for it

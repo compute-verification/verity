@@ -315,7 +315,7 @@ class IngressTie:
     def __post_init__(self) -> None:
         if type(self.params) is not NetworkAttesterParams or not (isinstance(self.link, str) and self.link) or \
                 type(self.session) is not bytes:
-            raise ValueError("an ingress tie is on a named link, of a network certifier.NetworkCertifierParams and a session")
+            raise ValueError("an ingress tie is on a named link, of a network certifier.NetworkAttesterParams and a session")
         Q.Shape(self.params.cell_bytes, self.params.lanes, self.params.slots)
 
     @property

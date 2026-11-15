@@ -258,7 +258,7 @@ def check(card: dict) -> dict:
         try:
             NetworkAttesterParams(**value["schedule"])
         except (TypeError, ValueError) as e:
-            errors.append(f"certifier.value.schedule: not a network certifier schedule (NetworkCertifierParams): {e}")
+            errors.append(f"certifier.value.schedule: not a network certifier schedule (NetworkAttesterParams): {e}")
     if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
         in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])
         if value["served_macs_per_token"] < in_blocks * (1 - 1e-9):

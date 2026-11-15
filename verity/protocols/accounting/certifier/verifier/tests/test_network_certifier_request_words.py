@@ -1,4 +1,4 @@
-"""The network certifier's request words (`NetworkCertifierParams.request_words`, `content_rows`' "The words row" and "A
+"""The network certifier's request words (`NetworkAttesterParams.request_words`, `content_rows`' "The words row" and "A
 request's words", `connection_rows`), driven tick by tick on `test_network_certifier`'s harness. A schedule
 with them has a fourth table a class, `words.i`: row r is the `max_tokens` and the count of prompt ids of the r-th
 release filed in the class, as the network certifier reads them from the request's bytes, whatever its server

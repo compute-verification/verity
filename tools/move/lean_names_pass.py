@@ -154,10 +154,11 @@ def ontology() -> list[str]:
             lines += words_in(both([f]), {o: NEW + o[len(WORD):] for o in sorted(own[f])})
     lines += [f"# Outside the Lean, the root's names at the start of a dotted name."]
     lines += words_in(OTHER_FILES, {WORD + ".": NEW + "."})
-    lines += ["# The network attester in the Lean's prose; a string literal keeps its bytes ([keep]): a verifier's message."]
+    lines += ["# The network attester in the Lean's prose; a string literal keeps its bytes ([keep]): a verifier's message.",
+              "# `network_certifier` stays: in the Lean it names the Python modules, which keep their names."]
     lines += words_in(["*.lean"], {"network certifiers'": "network attesters'", "network certifier's": "network attester's",
                                    "network certifiers": "network attesters", "network certifier": "network attester",
-                                   "Network certifier": "Network attester", "network_certifier": "network_attester"})
+                                   "Network certifier": "Network attester"})
     return lines
 
 
@@ -190,7 +191,7 @@ TAIL = """[keep_paths]
 patterns = [
     '[\\w.-]+(?:/[\\w.-]+)*/v\\d+(?:\\.\\d+)*\\b',
     '(?:Pous|Flock|Soundness|FlockSoundness)[./]Accounting\\b',
-    '"(?:[^"\\\\\\n]|\\\\.)*network certifier(?:[^"\\\\\\n]|\\\\.)*"',
+    '"(?:(?!NetworkCertifier)(?:[^"\\\\\\n]|\\\\.|\\\\\\n))*[Nn]etwork certifier(?:(?!NetworkCertifier)(?:[^"\\\\\\n]|\\\\.|\\\\\\n))*"',
     '\\*\\*Accounting\\.\\*\\*',
 ]
 

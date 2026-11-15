@@ -1,4 +1,4 @@
-"""The network certifier with lengths rows (`NetworkCertifierParams.lengths`, `network_certifier`'s "The lengths rows"), driven tick by tick
+"""The network certifier with lengths rows (`NetworkAttesterParams.lengths`, `network_certifier`'s "The lengths rows"), driven tick by tick
 on `test_network_certifier`'s harness. Each test holds a schedule with lengths rows to one rule of that section
 and the same schedule without them to what it did before they were a parameter."""
 

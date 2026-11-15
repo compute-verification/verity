@@ -201,7 +201,7 @@ NAMED_TERMS = ledger.NAMED_TERMS
 prices and the line doesn't assume (the ledger's). Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
     "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
-    "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
+    "network certifiers' record (no counted ingress over the credited passes, ResourceAccounting.Remote.Held.Assumptions."
     "Covered under certifier-coverage and IngressCounted at δ_net under trusted-device), which this line didn't check; "
     "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
     "entered it over the credited span"),

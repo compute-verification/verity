@@ -9,7 +9,7 @@ public import Mathlib.Data.Fin.VecNotation
 # The network attester's record as rows: a row a bucket, each frame naming its connection
 
 Definitions only. The record the deployed network attester writes, as a `RecordFormat` format
-(`Definitions.Certifier.Tap`): the egress record of `verity/protocols/accounting/certifier/verifier/network_attester.py`, whose rows
+(`Definitions.Certifier.Tap`): the egress record of `verity/protocols/accounting/certifier/verifier/network_certifier.py`, whose rows
 `verity/protocols/accounting/certifier/verifier/network_certifier_rows.py` commits. Bucket `b`'s row holds the frames of every connection live in
 it, connection by connection in ordinal order (`conns`), each frame naming its connection (`bucketFrames`): `r` padding
 frames a bucket from the connection's admission to `adm c + D`, then its lane's cells in their bucket, in order. The

@@ -86,7 +86,7 @@ def lowerHex (s : String) : Bool :=
 key in lower-case hex, and `key` is that string. The one reading of a certifier's registered key. -/
 def keyRefusal (c : Core.Site.Loc) (key : String) : Option String :=
   if !lowerHex c.key then
-    some s!"network attester {c.id} registers the key {c.key}, which is not lower-case hex; a network attester \
+    some s!"network certifier {c.id} registers the key {c.key}, which is not lower-case hex; a network certifier \
       registers its LMS public key in lower-case hex"
   else if c.key != key then
     some s!"the key {key} is not network certifier {c.id}'s registered key, {c.key}"
@@ -102,7 +102,7 @@ def registered (S : Core.Site) (head link key : String) : V Registered := do
   let some k := S.links.find? (·.id == link)
     | throw s!"link {link}: no link of the registered hardware; {rightLinks S}"
   unless S.Joins k .certifier .host do
-    throw s!"link {link}: it joins {endName S k.ends.1} and {endName S k.ends.2}, not a network attester and a host; \
+    throw s!"link {link}: it joins {endName S k.ends.1} and {endName S k.ends.2}, not a network certifier and a host; \
       {rightLinks S}"
   let (c, host) := if S.kind? k.ends.1 = some .certifier then k.ends else (k.ends.2, k.ends.1)
   let some x := S.loc? c | throw s!"link {link}: network certifier {c} is not registered"
@@ -187,8 +187,8 @@ private def links : String := "the network certifiers' links there are [up0, up2
 -- a link to an end nothing registers
 #guard refusal { site with links := [{ id := "up0", ends := ("cert0", "node9"), β := some 1, latency := 1 }] }
     "up0" key0 ==
-  some "link up0: it joins certifier cert0 and node9, which is not registered, not a network attester and a host; \
-    the network attesters' links there are []"
+  some "link up0: it joins certifier cert0 and node9, which is not registered, not a network certifier and a host; \
+    the network certifiers' links there are []"
 -- the outside is the outside, whatever is registered under its name
 #guard refusal { site with locs := site.locs ++ [{ id := outside, kind := .host }],
                            links := { id := "up5", ends := ("cert0", outside), β := some 9, latency := 1 } ::
@@ -206,7 +206,7 @@ private def links : String := "the network certifiers' links there are [up0, up2
 #guard refusal site "up2" "00" == some s!"link up2: the key 00 is not network certifier cert1's registered key, {key1}"
 -- a registered key that is not lower-case hex: the example's own, an upper-case one, an odd one, none
 #guard refusal ⟨[], exampleLocs "k0", exampleLinks⟩ "up0" "k0" ==
-  some "link up0: network attester cert0 registers the key k0, which is not lower-case hex; a network attester \
+  some "link up0: network certifier cert0 registers the key k0, which is not lower-case hex; a network certifier \
     registers its LMS public key in lower-case hex"
 #guard ["AB", "abc", "", "0g"].all fun bad =>
   (refusal ⟨[], exampleLocs bad, exampleLinks⟩ "up0" bad).isSome
