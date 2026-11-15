@@ -4,7 +4,7 @@
 name = "verity-vllm-tests"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ["verity-vllm[research,torch]"]
+dependencies = ["verity-vllm[research]"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]

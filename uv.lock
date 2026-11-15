@@ -2993,11 +2993,11 @@ name = "verity-torch-tests"
 version = "0.0.0"
 source = { virtual = "tests/adapters/torch/tests" }
 dependencies = [
-    { name = "verity-torch", extra = ["torch"] },
+    { name = "verity-torch" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-torch", extras = ["torch"], editable = "adapters/torch" }]
+requires-dist = [{ name = "verity-torch", editable = "adapters/torch" }]
 
 [[package]]
 name = "verity-vllm"
@@ -3035,11 +3035,10 @@ version = "0.0.0"
 source = { virtual = "tests/adapters/vllm/tests" }
 dependencies = [
     { name = "verity-vllm", extra = ["research"] },
-    { name = "verity-vllm", extra = ["torch"], marker = "extra == 'extra-11-verity-vllm-torch' or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-vllm", extras = ["research", "torch"], editable = "adapters/vllm" }]
+requires-dist = [{ name = "verity-vllm", extras = ["research"], editable = "adapters/vllm" }]
 
 [[package]]
 name = "z3-solver"
