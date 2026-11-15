@@ -30,6 +30,8 @@ from ..graph import RUNNERS, GraphError
 from ..runners import circuit_binding as RB
 
 CHECKER = "tools/verity/circuit_check"
+#: circuit-check's suite, whose `[tool.verity.tests] inputs` its guard holds it to
+SUITE = "tools/verity/circuit_check/tests/pyproject.toml"
 SOURCE = f"{CHECKER}/src/circuit_check"
 TARGETS = f"{SOURCE}/targets.py"
 SIDECARS = f"{SOURCE}/sidecars.py"
@@ -56,9 +58,9 @@ def _declared(root: Path) -> list[str]:
     """What circuit-check's suite declares it reads of the tree (``[tool.verity.tests] inputs``, which the suite's guard holds it
     to)."""
     try:
-        return tomllib.loads((root / CHECKER / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
+        return tomllib.loads((root / SUITE).read_text())["tool"]["verity"]["tests"]["inputs"]
     except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
-        raise GraphError(f"{CHECKER}/pyproject.toml: no [tool.verity.tests] inputs ({e})") from e
+        raise GraphError(f"{SUITE}: no [tool.verity.tests] inputs ({e})") from e
 
 
 def base(root: Path, files: list[str]) -> list[str]:
@@ -207,7 +209,7 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
     found = bindings(root, files)
     if missing := sorted({f for f, _ in found.values()} - set(ins)):
         raise GraphError(f"binding files outside what circuit-check's suite declares it reads: {', '.join(missing[:5])} (add "
-                         f"them to {CHECKER}/pyproject.toml's [tool.verity.tests] inputs)")
+                         f"them to {SUITE}'s [tool.verity.tests] inputs)")
     reads = [{"task": CATALOG, "output": RECORDS["name"]}]
     shared = [*ins, f"{RUNNERS}/circuit_binding.py"]          # the catalog's and coverage's runners import the binding runner
     where = places(root, files)
