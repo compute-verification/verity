@@ -23,6 +23,12 @@ _DATE = (rf"(?:(?P<wd>{_WEEKDAY}),?\s+)?(?:(?P<d1>\d{{1,2}})\s+(?P<m1>{_MON})|(?
 _PAC = r"(?P<ph>\d{1,2}):(?P<pm>\d{2})\s*(?P<ap>[AP]M)\s+P[DS]T\s+\("
 _UTC_TIME = re.compile(rf"(?<![\w:.-])(?:(?P<iso>(?P<Y>\d{{4}})-(?P<M>\d{{2}})-(?P<D>\d{{2}})T(?P<H>\d{{2}}):(?P<N>\d{{2}})(?::(?P<S>\d{{2}}))?Z)"
                        rf"|(?:{_DATE})?(?:{_PAC}(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})Z\)|(?P<bh>\d{{1,2}}):(?P<bm>\d{{2}})Z))(?![\w-])")
+#: a word just before a time that makes it a deadline (`by 20:00Z`, `ETA 4:00 AM PST`), not when the line was written
+DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}
+#: a stamp: `2:28 AM PST`, `Sun 15 Nov 2:28 AM PST`, `10:28Z`, `10:28 UTC`; `_CLOCKISH` is anything that looks like a clock
+_STAMP = re.compile(rf"(?<![\w:.-])(?:{_DATE})?(?P<t>(?P<ph>\d{{1,2}}):(?P<pm>\d{{2}})\s*(?P<ap>[AP]M)\s+P[DS]?T"
+                    rf"|(?P<zh>\d{{1,2}}):(?P<zm>\d{{2}})(?:Z|\s+UTC))(?![\w-])")
+_CLOCKISH = re.compile(r"(?<![\w:.-])\d{1,2}:\w\w")
 
 
 def _utc(t: dt.datetime | str | float) -> dt.datetime:
@@ -87,3 +93,45 @@ def slack_dates(text: str, now: dt.datetime | None = None) -> str:
         out += [_UTC_TIME.sub(token, text[i:m.start()]), m[0]]
         i = m.end()
     return "".join(out) + _UTC_TIME.sub(token, text[i:])
+
+
+def stamp_ahead(text: str, now: dt.datetime) -> str | None:
+    """The refusal of a post whose first line is stamped later than `now`'s minute, else None. The stamp is the line's first
+    clock time, Pacific (`2:28 AM PST`) or UTC (`10:28Z`), on the date written before it, else on the day nearest `now` (so a
+    stamp across midnight is read on its own day). A line with no time, a deadline (`by 20:00Z`) or a time it can't read
+    (`10:5x PM PST`, an hour past 12) passes: a doubt never blocks a post."""
+    line = (text or "").lstrip().split("\n", 1)[0]
+    m, first = _STAMP.search(line), _CLOCKISH.search(line)
+    if not m or first.start() != m.start("t") or any(w.strip("*_,()").lower() in DEADLINE_WORDS
+                                                     for w in line[:m.start()].split()[-1:]):
+        return None
+    g, u0 = m.groupdict(), _utc(now).replace(second=0, microsecond=0)
+    pac = g["ph"] is not None
+    if pac and PACIFIC is None:
+        return None
+    zone = PACIFIC if pac else UTC
+    try:
+        if pac:
+            if not 1 <= int(g["ph"]) <= 12:
+                return None
+            hour, minute = int(g["ph"]) % 12 + (12 if g["ap"].upper() == "PM" else 0), int(g["pm"])
+        else:
+            hour, minute = int(g["zh"]), int(g["zm"])
+        mon = g["m1"] or g["m2"]
+        if mon:
+            month, day = _MONTHS.index(mon[:3].lower()) + 1, int(g["d1"] or g["d2"])
+            days = [dt.date(y, month, day) for y in ([int(g["y"])] if g["y"] else [u0.year - 1, u0.year, u0.year + 1])]
+        else:
+            today = u0.astimezone(zone).date()
+            days = [today + dt.timedelta(days=k) for k in (-1, 0, 1)]
+        stamp = min((dt.datetime(d.year, d.month, d.day, hour, minute, tzinfo=zone).astimezone(UTC) for d in days),
+                    key=lambda c: abs(c - u0))
+    except ValueError:
+        return None
+    if stamp <= u0:
+        return None
+    local = u0.astimezone(zone)
+    clock = ((f"{local:%a} " if g["wd"] else "") + f"{local.day} {local:%b} " if mon else "") + (
+        f"{local:%I:%M %p}".lstrip("0") + f" {local.tzname()}" if pac else f"{local:%H:%M}Z")
+    told = "TZ=America/Los_Angeles date" if pac else "date -u"
+    return f"the first line says {m[0].strip()} and it is {clock}: write the time `{told}` gives now, or leave the time out"

@@ -111,12 +111,17 @@ from zoneinfo import ZoneInfo
 
 try:
     from . import vocabulary, waitcap
-    from .timefmt import both, slack_dates
+    from .timefmt import DEADLINE_WORDS, both, slack_dates, stamp_ahead
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
     class vocabulary:  # research/vocabulary.py's table isn't beside a single file: nothing is flagged
         @staticmethod
         def retired(text: str) -> list[tuple[str, str]]:
             return []
+
+    DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}   # timefmt's
+
+    def stamp_ahead(text: str, now: Any) -> str | None:
+        return None
 
     def both(t: Any) -> str:
         return f"{datetime.fromtimestamp(float(t), UTC):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
@@ -915,8 +920,14 @@ def _footer(tags: tuple[str, ...] = ()) -> str:
 
 
 HEADER_TIME_RE = re.compile(r"^\W{0,4}((?:(?:<[^>\s]+>|[@*_\w().,-]+) ){0,4}?)\*?([01]?\d|2[0-3]):([0-5]\d)Z\*?(?=[:,)]| \(| [-\u2014])")
-DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}
 STAMP_SLACK_S = 120                                              # a hand-typed time this close to the send time is left alone
+
+
+def not_ahead(text: str) -> str:
+    """`text`, unless its first line is stamped ahead of the clock (`timefmt.stamp_ahead`): then the refusal, with the fix."""
+    if why := stamp_ahead(text, _now()):
+        raise SlackError(why)
+    return text
 
 
 def stamp_time(text: str, now: datetime) -> str:
@@ -1800,7 +1811,7 @@ def _body(ns: argparse.Namespace) -> str:
         text = sys.stdin.read()
     if not text.strip():
         raise SlackError("empty message")
-    return text.rstrip()
+    return not_ahead(text.rstrip())
 
 
 def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
@@ -2193,7 +2204,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             i = lin.edit(issue, ns.title, ns.due, brief, ns.parent, send=not ns.dry_run)
             print(("dry-run: would set " if ns.dry_run else f"{issue} set ") + linear.said(i))
             return 0
-        text = need(value or brief, "the TEXT (or --file BODY.md)")
+        text = not_ahead(need(value or brief, "the TEXT (or --file BODY.md)"))
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             warn_unrouted(text, reg, author)

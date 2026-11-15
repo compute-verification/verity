@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from research.timefmt import both, slack_dates
+from research.timefmt import both, slack_dates, stamp_ahead
 
 UTC = dt.UTC
 NOW = dt.datetime(2026, 9, 30, 20, 41, tzinfo=UTC)
@@ -89,6 +89,51 @@ def test_slack_dates_leaves_ids_code_links_and_non_times_alone(text):
 def test_slack_dates_rewrites_around_protected_spans():
     assert (slack_dates("`2026-09-30T22:00Z` then 2026-09-30T22:00Z", NOW)
             == f"`2026-09-30T22:00Z` then {_token('2026-09-30T22:00Z')}")
+
+
+SUN_0225 = dt.datetime(2026, 11, 15, 10, 25, 30, tzinfo=UTC)                           # Sun 15 Nov, 2:25:30 AM PST
+SAT_2358 = dt.datetime(2026, 11, 15, 7, 58, 10, tzinfo=UTC)                            # Sat 14 Nov, 11:58 PM PST
+SUN_0001 = dt.datetime(2026, 11, 15, 8, 1, 10, tzinfo=UTC)                             # Sun 15 Nov, 12:01 AM PST
+PT_FIX = "write the time `TZ=America/Los_Angeles date` gives now, or leave the time out"
+
+
+@pytest.mark.parametrize("now, text, says", [
+    (SUN_0225, "lean (lead), Sun 15 Nov 2:28 AM PST: the run is up",
+     "the first line says Sun 15 Nov 2:28 AM PST and it is Sun 15 Nov 2:25 AM PST: " + PT_FIX),
+    (SUN_0225, "lean/AREAS, 2:26 AM PST: one minute ahead", "the first line says 2:26 AM PST and it is 2:25 AM PST: " + PT_FIX),
+    (SUN_0225, "lean (lead), 2:28 AM PST (10:28Z): x", "the first line says 2:28 AM PST and it is 2:25 AM PST: " + PT_FIX),
+    (SUN_0225, "ci 10:26Z: posts", "the first line says 10:26Z and it is 10:25Z: write the time `date -u` gives now, or leave "
+                                   "the time out"),
+    (SUN_0225, "ci, 15 Nov 10:40 UTC: x", "the first line says 15 Nov 10:40 UTC and it is 15 Nov 10:25Z: write the time "
+                                          "`date -u` gives now, or leave the time out"),
+    (SUN_0225, "lean, Mon 16 Nov 1:00 AM PST: x",
+     "the first line says Mon 16 Nov 1:00 AM PST and it is Sun 15 Nov 2:25 AM PST: " + PT_FIX),
+    (SAT_2358, "lean (lead), 12:01 AM PST: x", "the first line says 12:01 AM PST and it is 11:58 PM PST: " + PT_FIX),
+    (dt.datetime(2026, 11, 15, 23, 58, 10, tzinfo=UTC), "ci 00:01Z: x",
+     "the first line says 00:01Z and it is 23:58Z: write the time `date -u` gives now, or leave the time out"),
+])
+def test_a_first_line_stamped_ahead_of_the_clock_is_refused_with_the_stamp_the_clock_and_the_fix(now, text, says):
+    """The lean lane's stamps ran up to 17 minutes ahead of the clock, kept right only by hand: one minute ahead is refused."""
+    assert stamp_ahead(text, now) == says
+
+
+@pytest.mark.parametrize("now, text", [
+    (SUN_0225, "lean (lead), 2:25 AM PST: the clock's own minute"),
+    (SUN_0225, "lean (lead), Sun 15 Nov 2:24 AM PST: behind"),
+    (SUN_0225, "lean, 1:55 AM PST (09:55Z): behind"),
+    (SUN_0225, "ci 10:25Z: the clock's own minute"),
+    (SUN_0225, "lean/STAMP: the PR is up, no time"),
+    (SUN_0225, "lean 2:2x AM PST: minutes not known"),
+    (SUN_0225, "lean, 2:2x AM PST: the run ends 3:00 AM PST"),            # the first clock time can't be read: no later one
+    (SUN_0225, "the run finishes by 3:00 AM PST"), (SUN_0225, "lean: ETA 4:00 AM PST"), (SUN_0225, "node 2 reboots at 22:00Z"),
+    (SUN_0225, "lean/STAMP, the PR is up\n3:00 AM PST on the second line"),
+    (SUN_0225, "lean 13:05 PM PST: no such hour"), (SUN_0225, "ci 25:00Z: no such hour"),
+    (SUN_0225, "freeze 2026-11-15T12:00Z"), (SUN_0225, "lean, Sat 14 Nov 11:59 PM PST: yesterday"),
+    (SUN_0001, "lean (lead), 11:59 PM PST: last night, across midnight"),
+    (dt.datetime(2026, 11, 16, 0, 1, 10, tzinfo=UTC), "ci 23:59Z: across UTC midnight"),
+])
+def test_a_stamp_at_or_behind_the_clock_no_stamp_and_a_doubt_all_pass(now, text):
+    assert stamp_ahead(text, now) is None
 
 
 def test_research_imports_without_a_tz_database_and_prints_utc_alone():
