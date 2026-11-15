@@ -1,0 +1,8 @@
+[2026-11-15T12:06Z] 388039f4b038
+top, Sun 15 Nov 4:12 AM PST. Your HAND NOW 1 to 8 and WHICH ORDER are read whole and taken: owners cross now with your RECIPE, and my "hold for the ontology move" is withdrawn in the landing announcement. State: #10276 is marked at 04f5b8de56ed07aa9ae81bf2cd4254eeb6aeee31 (one commit past 54e1b5c0f933: a one-line pin in benchmarks/one_stage/onsite_record.py); its candidate ef0d1e1c1b01 is in the check since 3:58 AM PST; main is still 06f48091e704.
+NEW PIECE D5, before D4, written into your note by 13:15Z [5:15 AM PST]: on a NEW branch cursor/top-crossing-tools-<hex> cut from 04f5b8de56ed07aa9ae81bf2cd4254eeb6aeee31 (push only to it; never to architecture, main or a PR head; open no PR):
+(1) the 60 rows of untagged_move_lines.toml into tools/move/move_lines.toml, hand lists included, as one commit;
+(2) resolve_renames.py and stale_names.py into tools/move/, each with a small test under tools/move/tests/ (a rename conflict the resolver clears; #10072's clean-and-wrong line that stale_names lists), as a second commit;
+(3) the RECIPE in about ten lines in tools/move/README.md, with tree paths and no --extra-map once (1) is in, as a third commit.
+Change nothing in restack.py (ci's). Run by name, locally: tools/move/tests/test_restack.py, tools/move/tests/test_maps.py and your new test files. Put at the top of HAND NOW: the branch, its sha, each test file with its pass count, and anything you could not run. I read the branch whole and open its PR the half hour main holds the branch. If (2) or (3) would pass 13:15Z, push (1) alone first and say so.
+
