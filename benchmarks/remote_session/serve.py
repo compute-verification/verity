@@ -337,10 +337,22 @@ def read_json(path: Path) -> dict | None:
     return doc if isinstance(doc, dict) else None
 
 
+def node_record(doc: dict) -> dict:
+    """A whole-node prover's record (`node.py`'s prover.json, a session a plan word) as one session's: accepted only
+    when it has sessions and each was, else the first one that wasn't, or the error it ended on."""
+    sessions = doc["sessions"]
+    out = {k: doc[k] for k in ("error",) if doc.get(k)}
+    if (bad := next((s for s in sessions if s.get("accepted") is not True), None)) is not None:
+        return {**out, "accepted": False, "failure": bad.get("failure")}
+    return {**out, "accepted": True} if sessions and not out else out
+
+
 def verdict_main(a: argparse.Namespace) -> int:
     record = read_json(a.record) if a.record else None
     if record is not None and isinstance(record.get("prover"), dict) and "accepted" not in record:
         record = record["prover"]
+    if record is not None and isinstance(record.get("sessions"), list) and "accepted" not in record:
+        record = node_record(record)
     both = a.verifier_rc is not None
     rc, line = verdict(a.prover_rc, (read_json(a.out / "verifier.json") or {}) if both else None, record,
                        a.window_ms, a.verifier_rc or 0)
