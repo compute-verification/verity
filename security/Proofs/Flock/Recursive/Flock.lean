@@ -504,27 +504,27 @@ end ZkOuter
 /-- **The sampling design of a public verifier's units**: the full sample, the live subset sampling design of all `nv` units over `[0, nv)` on a
 byte source (`live`, `--draw subset:<units>`, as V* is staged), and the model's uniform `nv`-subset it escapes no more
 often than (`model`, which misses no unit). -/
-structure VLaw (nv : ℕ) : Type 1 where
+structure VSamplingDesign (nv : ℕ) : Type 1 where
   Ω : Type
   [fintypeΩ : Fintype Ω]
   [nonemptyΩ : Nonempty Ω]
   Lb : Fin 1 → ℕ
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
 
-attribute [instance] VLaw.fintypeΩ VLaw.nonemptyΩ
+attribute [instance] VSamplingDesign.fintypeΩ VSamplingDesign.nonemptyΩ
 
-namespace VLaw
+namespace VSamplingDesign
 
-variable {nv : ℕ} (samplingDesign : VLaw nv)
+variable {nv : ℕ} (samplingDesign : VSamplingDesign nv)
 
 /-- The live full sample on the source's bytes. -/
 abbrev live : SamplingDesign nv := SamplingDesign.execOS (n := nv) samplingDesign.src (.subset nv) nv
 
 /-- The model's full sample. It reads nothing of the sampling design but its unit count; the argument is there so that
 `(Vs j).samplingDesign.model` names it. -/
-abbrev model (_samplingDesign : VLaw nv) : SamplingDesign nv := SamplingDesign.subset nv nv le_rfl
+abbrev model (_samplingDesign : VSamplingDesign nv) : SamplingDesign nv := SamplingDesign.subset nv nv le_rfl
 
-end VLaw
+end VSamplingDesign
 
 /-- **A public verifier**: its circuit `c` over `nv` units, proved in sessions of `J` tables, and its sampling design. -/
 structure VStmt : Type 1 where
@@ -534,7 +534,7 @@ structure VStmt : Type 1 where
   c : Flock.Circuit
   hU : Built c.unit
   hscope : Layout.scopeOk c = true
-  samplingDesign : VLaw nv
+  samplingDesign : VSamplingDesign nv
 
 namespace VStmt
 
