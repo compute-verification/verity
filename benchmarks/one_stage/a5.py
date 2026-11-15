@@ -2230,8 +2230,7 @@ def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
     (a development run's sessions, each on a tree of its own, which the auditor's verifier refuses), in a step of one
     rank (the session's release log holds one rank's sessions, in the order they ran). A window of several ``members``
     closes each tree there too (`closes_trees`)."""
-    return (streamed(a) and not plain(a) and os.environ.get("FLOCK_CHALLENGER") != "0"
-            and len(a.coins.ranks()) == 1)
+    return streamed(a) and not plain(a) and not a0.challenger_off() and len(a.coins.ranks()) == 1
 
 
 def stage_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
