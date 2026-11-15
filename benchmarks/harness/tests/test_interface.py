@@ -1,16 +1,19 @@
 """The core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface") as the kit holds it:
-`record_dir` reads a directory with nothing of research's and a run id only through it, `ran_with` takes only the fixed
-words, and `report` prints the line after the first, says where it is not an audit and gives no number for a run the
-Lean verifier didn't accept. The section's table is held too: each listed directory's README has the three parts, and
-its command calls `kit.report` with `ran_with` and `accepted`."""
+`record_dir` reads a directory with nothing of research's and a run id only through it, past its withdrawals,
+`ran_with` takes only the fixed words and the deployed challenger's only verified, and `report` prints the line after
+the first, says where it is not an audit and where its record is made up, and gives no number for a run the Lean
+verifier didn't accept. The section's table is held too: each listed directory's README has the three parts, its
+command calls `kit.report` with `ran_with` and `accepted`, and each measurement name its source gives is a row of its
+`metrics.toml` with a goal."""
 from __future__ import annotations
 
 import ast
 import json
 import re
 import sys
+import tomllib
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 from verity_bench import kit
@@ -32,16 +35,43 @@ def table(readme: str) -> list[dict[str, str]]:
     return [dict(zip(head, (c.strip().strip("`") for c in x.strip("|").split("|")))) for x in lines[2:]]
 
 
+def measurement_names(tree: ast.Module) -> list[str]:
+    """The measurement names a source gives: the `name` of each dict literal that also has a `value` (a measurement
+    `kit.report` takes), as a string constant or a module-level constant of one; any other as its source text in
+    angle brackets, which no row's id is."""
+    constants = {t.id: node.value.value for node in tree.body if isinstance(node, ast.Assign)
+                 and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+                 for t in node.targets if isinstance(t, ast.Name)}
+    names = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            keys = {k.value: v for k, v in zip(node.keys, node.values) if isinstance(k, ast.Constant)}
+            if {"name", "value"} <= keys.keys():
+                v = keys["name"]
+                names.append(v.value if isinstance(v, ast.Constant) and isinstance(v.value, str) else
+                             constants.get(v.id, f"<{v.id}>") if isinstance(v, ast.Name) else f"<{ast.unparse(v)}>")
+    return names
+
+
 def unfollowed(directory: Path) -> list[str]:
-    """What a directory lacks of the interface: a heading of its README's three parts, or a `kit.report` call in its
-    own Python files given both `ran_with` and `accepted`."""
+    """What a directory lacks of the interface: a heading of its README's three parts, a `kit.report` call in its own
+    Python files given both `ran_with` and `accepted`, or a row of its `metrics.toml`, with a `goal`, for each
+    measurement name those files give (and at least one)."""
     readme = (directory / "README.md").read_text() if (directory / "README.md").is_file() else ""
     lacks = [h for h in HEADINGS if not re.search(rf"^{re.escape(h)}\s*$", readme, re.M)]
-    calls = [node for py in sorted(directory.glob("*.py")) for node in ast.walk(ast.parse(py.read_text()))
+    trees = [ast.parse(py.read_text()) for py in sorted(directory.glob("*.py"))]
+    calls = [node for tree in trees for node in ast.walk(tree)
              if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "report"
              and isinstance(node.func.value, ast.Name) and node.func.value.id == "kit"]
     if not any({"ran_with", "accepted"} <= {k.arg for k in c.keywords} for c in calls):
         lacks.append("a kit.report(..., ran_with=..., accepted=...) call")
+    toml = directory / "metrics.toml"
+    rows = {r["id"]: r for r in tomllib.loads(toml.read_text()).get("metric", [])} if toml.is_file() else {}
+    names = sorted({n for tree in trees for n in measurement_names(tree)})
+    if not names:
+        lacks.append("a measurement under a row of metrics.toml")
+    lacks += [f"a row of metrics.toml for the measurement {n}" for n in names if n not in rows]
+    lacks += [f"a goal on metrics.toml's row {n}" for n in names if n in rows and not rows[n].get("goal")]
     return lacks
 
 
@@ -58,12 +88,24 @@ def test_the_holder_tells_a_command_that_follows_from_one_that_does_not(tmp_path
     for d in (good, bad):
         d.mkdir()
     (good / "README.md").write_text("# good\n\n" + "\n\n".join(f"{h}\n\nwords" for h in HEADINGS) + "\n")
-    (good / "run.py").write_text("from verity_bench import kit\n\ndef main():\n    return kit.report('good', 't', {}, "
+    (good / "run.py").write_text("from verity_bench import kit\n\nMETRIC = 'good/share'\n\ndef main():\n"
+                                 "    measured = [{'name': METRIC, 'value': 1.0, 'unit': 'share'},\n"
+                                 "                {'name': 'good/rate', 'value': 2.0, 'unit': 'Hz', 'member': 'clock.sm'}]\n"
+                                 "    return kit.report('good', 't', {}, measured, "
                                  "ran_with=kit.ran_with('local challenger', 'development'), accepted=True)\n")
+    (good / "metrics.toml").write_text('[[metric]]\nid = "good/share"\ngoal = "good/goal"\n\n'
+                                       '[[metric]]\nid = "good/rate"\ngoal = "good/goal"\n')
     (bad / "README.md").write_text("# bad\n\n## What you may change\n")
     (bad / "run.py").write_text("from verity_bench import kit\n\ndef main():\n    kit.report('bad', 't', {})\n")
     assert unfollowed(good) == []
-    assert unfollowed(bad) == [*HEADINGS[1:], "a kit.report(..., ran_with=..., accepted=...) call"]
+    assert unfollowed(bad) == [*HEADINGS[1:], "a kit.report(..., ran_with=..., accepted=...) call",
+                               "a measurement under a row of metrics.toml"]
+    (bad / "run.py").write_text("from verity_bench import kit\n\ndef main(r):\n    kit.report('bad', 't', {}, "
+                                "[{'name': 'bad/share', 'value': 1.0}, {'name': f'free at {r}', 'value': 2.0}, "
+                                "{'name': 'bad/aside', 'value': 3.0}], ran_with=None, accepted=True)\n")
+    (bad / "metrics.toml").write_text('[[metric]]\nid = "bad/share"\n')
+    assert unfollowed(bad) == [*HEADINGS[1:], "a row of metrics.toml for the measurement <f'free at {r}'>",
+                               "a row of metrics.toml for the measurement bad/aside", "a goal on metrics.toml's row bad/share"]
     readme = f"x\n\n{SECTION}\n\nwords\n\n| command | directory | owner |\n|---|---|---|\n| `verity bench good` | `good` | infra |\n\n## Next\n"
     assert table(readme) == [{"command": "verity bench good", "directory": "good", "owner": "infra"}]
 
@@ -77,7 +119,7 @@ def no_research(monkeypatch):
 
 def test_a_directory_is_its_record_and_imports_nothing_of_researchs(tmp_path, monkeypatch):
     no_research(monkeypatch)
-    assert kit.record_dir(tmp_path) == tmp_path and kit.record_dir(str(tmp_path)) == tmp_path
+    assert kit.record_dir(tmp_path) == (tmp_path, []) and kit.record_dir(str(tmp_path)).path == tmp_path
 
 
 @pytest.mark.parametrize("arg", ["no/such/dir", "r2000-bad", f"{RUN}x"])
@@ -96,8 +138,12 @@ def test_a_run_id_without_research_is_refused_naming_the_fix(monkeypatch):
                             "run's record directory, or install research (uv sync --all-packages)")
 
 
-def stand_in_research(monkeypatch, attempts: dict, fetched: Path) -> list:
-    """research's store client, as `record_dir` reads it: an attempt's run record, fetched to `fetched`."""
+FILES = ["out/a.json", "out/b.json", "out/pieces/1.bin", "out/pieces/2.bin"]
+
+
+def stand_in_research(monkeypatch, attempts: dict, fetched: Path, withdrawals: dict | None = None) -> list:
+    """research's store client, as `record_dir` reads it: an attempt's run record holding `FILES`, the labels a
+    withdrawal leaves on a target (`withdrawals`, a target's reasons), pulled first, and a fetch to `fetched`."""
     asked = []
 
     class StoreError(Exception):
@@ -109,33 +155,74 @@ def stand_in_research(monkeypatch, attempts: dict, fetched: Path) -> list:
                 raise StoreError("the store is down")
             return attempts.get(run)
 
+        def listing(self, art):
+            return [{"path": f} for f in FILES]
+
+        def labels(self, target, key=None):
+            assert key == "withdrawn"
+            return [SimpleNamespace(key=key, value=v, by="infra") for v in (withdrawals or {}).get(target, [])]
+
         def fetch(self, art, *, paths=None):
-            asked.append((art, paths))
+            asked.append(("fetch", art, paths))
             return fetched
 
-    module = ModuleType("research.store.local")
-    module.LocalStore, module.StoreError = LocalStore, StoreError
-    monkeypatch.setitem(sys.modules, "research.store.local", module)
+    local, sync, vocab = (ModuleType(f"research.store.{m}") for m in ("local", "labels_sync", "vocab"))
+    local.LocalStore, local.StoreError = LocalStore, StoreError
+    sync.read_through = lambda store, targets, warn: asked.append(("pull", targets))
+    vocab.WITHDRAWN = "withdrawn"
+    for module in (local, sync, vocab):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
     return asked
 
 
 def test_a_run_id_is_fetched_through_research_to_its_records_directory(tmp_path, monkeypatch):
     asked = stand_in_research(monkeypatch, {RUN: {"outputs": {"run_record": f"art:{RUN}"}}, "r20000101-000000-bbbb": {}},
                               tmp_path)
-    assert kit.record_dir(RUN, paths=["out/a.json"]) == tmp_path and asked == [(f"art:{RUN}", ["out/a.json"])]
+    assert kit.record_dir(RUN, paths=["out/a.json"]) == (tmp_path, [])
+    assert asked == [("pull", [RUN, f"art:{RUN}"]), ("fetch", f"art:{RUN}", ["out/a.json"])]
+    with pytest.raises(kit.NoRecord, match="its record holds none of out/z.json"):
+        kit.record_dir(RUN, paths=["out/z.json"])
     with pytest.raises(kit.NoRecord, match="the evidence store holds no record of it"):
         kit.record_dir("r20000101-000000-bbbb")
     with pytest.raises(kit.NoRecord, match=r"can't give its record \(the store is down\)"):
         kit.record_dir("r20000101-000000-dead")
 
 
+@pytest.mark.parametrize(("target", "reason", "paths"), [
+    (f"art:{RUN}", "private values were published", ["out/a.json"]),                       # withdrawn whole
+    (RUN, "private values were published", ["out/a.json"]),                                # the run's own label
+    (f"art:{RUN}", "private values were published (only out/pieces)", ["out/pieces/1.bin"]),  # a part holding a file read
+    (f"art:{RUN}", "private values were published (only out/b.json, out/a.json)", ["out/a.json"]),
+    (f"art:{RUN}", "private values were published (only the sealed bundle)", ["out/a.json"]),  # names no file of it
+    (f"art:{RUN}", "private values were published (only out/pieces)", None),                 # every file is read
+])
+def test_a_run_withdrawn_whole_or_where_it_is_read_is_refused_before_anything_is_fetched(tmp_path, monkeypatch, target,
+                                                                                       reason, paths):
+    asked = stand_in_research(monkeypatch, {RUN: {"outputs": {"run_record": f"art:{RUN}"}}}, tmp_path, {target: [reason]})
+    with pytest.raises(kit.NoRecord) as e:
+        kit.record_dir(RUN, paths=paths)
+    assert str(e.value) == f"{RUN} was withdrawn ({reason!r}, by infra): nothing of it is fetched"
+    assert [a for a in asked if a[0] == "fetch"] == []
+
+
+def test_a_withdrawal_of_only_other_files_is_reported_and_printed_beside_the_number(tmp_path, monkeypatch, out, capsys):
+    reason = "the private value of a coin can be recovered (only out/pieces, out/b.json)"
+    stand_in_research(monkeypatch, {RUN: {"outputs": {"run_files": f"art:{RUN}"}}}, tmp_path, {f"art:{RUN}": [reason]})
+    record = kit.record_dir(RUN, paths=["out/a.json"])
+    assert record == (tmp_path, [f"{reason!r}, by infra"])
+    assert kit.report("x", "x: 0.25", DOC, withdrawn=record.withdrawn) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[:2] == ["x: 0.25", f"  part of the run's record was withdrawn, none of it a file read here: {reason!r}, by infra"]
+    assert json.loads(lines[-1]) == DOC | {"withdrawn": [f"{reason!r}, by infra"]}
+
+
 # ---- ran_with
 
 
 def test_ran_with_is_one_line_in_the_fixed_words_and_its_object():
-    assert kit.ran_with("deployed challenger", "deployed") == (
+    assert kit.ran_with("deployed challenger", "deployed", verified=True) == (
         "ran with: coins deployed challenger; parameters deployed",
-        {"coins": "deployed challenger", "parameters": "deployed", "detail": None})
+        {"coins": "deployed challenger", "parameters": "deployed", "detail": None, "verified": True})
     line, said = kit.ran_with("in-process", "development", "2^-40 at 64 draws")
     assert line == "ran with: coins in-process; parameters development (2^-40 at 64 draws)"
     assert said["detail"] == "2^-40 at 64 draws" and kit.COINS == ("deployed challenger", "local challenger", "in-process")
@@ -143,6 +230,18 @@ def test_ran_with_is_one_line_in_the_fixed_words_and_its_object():
         kit.ran_with("challenger, local", "deployed")
     with pytest.raises(ValueError, match="'deployed', 'development'"):
         kit.ran_with("local challenger", "not stated")
+
+
+def test_the_deployed_challengers_coins_are_taken_only_verified_against_a_pinned_key():
+    for args in (("deployed challenger", "deployed"), ("deployed challenger", "development", "signed")):
+        with pytest.raises(ValueError) as e:
+            kit.ran_with(*args)
+        assert str(e.value) == ("coins 'deployed challenger' is taken only with verified=True, which a command passes "
+                                "only when it itself checked the challenger's signature against a pinned key: a record's "
+                                "own word about its coins is never enough for an audit")
+    with pytest.raises(ValueError, match="verified is True or False"):
+        kit.ran_with("deployed challenger", "deployed", verified="yes")
+    assert kit.ran_with("local challenger", "deployed", verified=True)[1]["verified"] is True
 
 
 # ---- report
@@ -169,18 +268,50 @@ def said(capsys, out: Path) -> tuple[list[str], dict, dict]:
     return lines[:-1], doc, {m["name"]: m for m in json.loads((out / "result.json").read_text())["measurements"]}
 
 
-@pytest.mark.parametrize(("coins", "parameters", "audit"), [("deployed challenger", "deployed", True),
-                                                            ("deployed challenger", "development", False),
-                                                            ("local challenger", "deployed", False),
-                                                            ("in-process", "development", False)])
+@pytest.mark.parametrize(("coins", "parameters", "verified", "audit"), [("deployed challenger", "deployed", True, True),
+                                                                        ("deployed challenger", "development", True, False),
+                                                                        ("local challenger", "deployed", True, False),
+                                                                        ("local challenger", "deployed", False, False),
+                                                                        ("in-process", "development", False, False)])
 def test_the_ran_with_line_follows_the_first_and_the_kit_says_where_it_is_not_an_audit(
-        coins, parameters, audit, out, capsys):
-    pair = kit.ran_with(coins, parameters, "64 draws")
+        coins, parameters, verified, audit, out, capsys):
+    pair = kit.ran_with(coins, parameters, "64 draws", verified=verified)
     assert kit.report("x", "x: 0.25\n  more", DOC, MEASURED, ran_with=pair, accepted=True) == 0
     text, doc, got = said(capsys, out)
     assert text == ["x: 0.25", pair[0], *([] if audit else ["a measurement, not an audit"]), "  more"]
     assert list(doc) == [*DOC, "ran_with", "audit"] and doc["ran_with"] == pair[1] and doc["audit"] is audit
     assert got["a/metric"]["value"] == 0.25
+
+
+@pytest.mark.parametrize("said", [{"coins": "deployed challenger", "parameters": "deployed", "detail": None},
+                                  {"coins": "deployed challenger", "parameters": "deployed", "detail": None,
+                                   "verified": False}])
+def test_a_pair_not_made_by_ran_with_is_refused_so_a_records_word_is_no_audit(said, out):
+    with pytest.raises(ValueError):
+        kit.report("x", "x: 0.25", DOC, ran_with=("ran with: coins deployed challenger; parameters deployed", said))
+    assert not out.exists()
+
+
+def test_a_made_up_record_says_so_under_the_audit_line_and_every_measurement_carries_it(out, capsys):
+    pair = kit.ran_with("deployed challenger", "deployed", verified=True)
+    measured = [MEASURED[0] | {"extra": {"rests_on": "a fixture"}}, {"name": "b", "value": None, "unit": "MAC",
+                                                                      "why": "none"}]
+    assert kit.report("x", "x: 0.25\n  more", DOC, measured, ran_with=pair, accepted=True, made_up=True) == 0
+    text, doc, got = said(capsys, out)
+    assert text == ["x: 0.25", pair[0], "a measurement, not an audit", "a made-up record, not a run's", "  more"]
+    assert doc == DOC | {"ran_with": pair[1], "audit": False, "made_up": True}
+    assert [(m["mark"], m["inputs"][0], m["made_up"]) for m in got.values()] == [("modeled", "modeled", True)] * 2
+    assert got["a/metric"]["rests_on"] == "a fixture"
+    with pytest.raises(ValueError, match="marked 'modeled'"):
+        kit.report("y", "y", DOC, MEASURED, made_up=True, mark="measured")
+
+
+def test_a_made_up_record_without_ran_with_says_so_under_the_first_line(out, capsys):
+    assert kit.report("x", "x: no number\n  more", DOC, MEASURED, made_up=True, accepted=False, why="refused") == 1
+    text, doc, got = said(capsys, out)
+    assert text == ["x: no number: refused", "a made-up record, not a run's", "x: no number", "  more"]
+    assert doc["made_up"] is True and "audit" not in doc
+    assert (got["a/metric"]["value"], got["a/metric"]["mark"], got["a/metric"]["made_up"]) == (None, "modeled", True)
 
 
 def test_a_record_that_predates_the_field_says_not_stated_and_is_no_audit(out, capsys):
