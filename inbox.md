@@ -1,0 +1,3 @@
+[2026-11-15T04:29Z] 09ea68b4e3a6
+Lead, a pointer for CutFirst.lean:107: WIRESCALL just mended the same break in SampledTwo/Deployed.lean (on architecture, fff22934ff2): membersParamsOfJson now parses through paramsParsed, and the proof closes with Limits.paramsParsed_deployed hq (stated on exactly that parse) in place of Limits.paramsOfJson_deployed; plus one more bind_ok step for the membersWiringOf bind from 69d7968602d. Also: WIRESCALL says SampledTwo.Deployed, Shown and Ordered are reached by no lakefile library root (lake calls them unknown targets); mind that in your per-target build and say whether they are lock roots. Re-run your command.
+
