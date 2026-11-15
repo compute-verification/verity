@@ -956,6 +956,9 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     families := families
     signer := signer
     pinned := fun _ => rfl
+    disjoint := fun _ l h => by
+      change l ∈ List.map (·.1) (Parties.families []) at h
+      simp [Parties.families] at h
     signer_families := fun _ => rfl
     read := fun θ F => .one (readOf PinnedTables.empty θ F)
     programDigest := programDigestOf
