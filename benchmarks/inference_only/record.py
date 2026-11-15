@@ -60,6 +60,9 @@ OUT_FILES = {"verdicts": "record/verdicts.json", "policy": "inference-only-polic
 #: reads where no `--program`, `--circuit` and `--log` name them; the log one record a line, its first first
 REGISTERED = {"program": "registered/program.json", "circuit": "registered/circuit.json",
               "log": "registered/log.jsonl"}
+#: the option naming the class whose count (`block-counts-<class>.json`, its class's commas as dashes) a record is read
+#: at, where it holds counts of more than one
+CLASS_OPTION = "--served-class"
 #: the data file naming the served run of record, which the command reads where no `--served` names a record
 OF_RECORD = Path(__file__).resolve().parent / "served_of_record.toml"
 POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
@@ -86,22 +89,55 @@ class Refused(Exception):
 
 @dataclass(frozen=True)
 class Files:
-    """A run's `out/`, and the Program, circuit record and registration log it registered."""
+    """A run's `out/`, the Program, circuit record and registration log it registered, and the class whose count is
+    read where it holds more than one (`CLASS_OPTION`)."""
 
     out: Path
     program: Path
     circuit: Path
     logs: tuple[Path, ...]
+    served_class: str | None = None
 
 
 def files_of(served: Path, program: Path | None = None, circuit: Path | None = None,
-             logs: tuple[Path, ...] = ()) -> Files:
+             logs: tuple[Path, ...] = (), served_class: str | None = None) -> Files:
     """A served run's files: ``served`` its `out/` or the run directory holding one, and the Program, circuit record and
-    log ``program``, ``circuit`` and ``logs``, else the out/'s `REGISTERED`."""
+    log ``program``, ``circuit`` and ``logs``, else the out/'s `REGISTERED`; ``served_class`` the class whose count is
+    read."""
     out = served / "out" if not (served / OUT_FILES["verdicts"]).exists() and (served / "out").is_dir() else served
     if program is None:
-        return Files(out, out / REGISTERED["program"], out / REGISTERED["circuit"], (out / REGISTERED["log"],))
-    return Files(out, program, circuit, tuple(logs))
+        program, circuit, logs = out / REGISTERED["program"], out / REGISTERED["circuit"], (out / REGISTERED["log"],)
+    return Files(out, program, circuit, tuple(logs), served_class)
+
+
+def run_of(files: Files, verdicts: Mapping[str, Any]) -> str:
+    """The run a record is of: the run its verdicts name, else its directory's name (its out/'s, the directory
+    holding it)."""
+    if isinstance(run := verdicts.get("run"), str) and run:
+        return run
+    return (files.out.parent if files.out.name == "out" else files.out).resolve().name
+
+
+def _class_of(count: Path) -> str:
+    """The class a count file is of, as `CLASS_OPTION` names it: `block-counts-4-27-2.json` is 4,27,2."""
+    return count.name.removeprefix("block-counts-").removesuffix(".json").replace("-", ",")
+
+
+def made_with(verdicts: Mapping[str, Any]) -> str:
+    """One line: the coins and the parameters PoUW's piece says it was made with, as the record states them: the
+    challenger's live session its coins came from (`coins.check.session`, which the piece writes only for live coins),
+    and its parameter set (`scheme`); or that the record names none."""
+    row = (verdicts.get("protocols") or {}).get("work")
+    piece = (row.get("piece") or row.get("development")) if isinstance(row, dict) else None
+    piece = piece if isinstance(piece, dict) else {}
+    live = piece["coins"].get("check") if isinstance(piece.get("coins"), dict) else None
+    session = live.get("session") if isinstance(live, dict) else None
+    scheme = piece.get("scheme")
+    coins = (f"PoUW's coins from the challenger's live session {session!r}" if isinstance(session, str) and session else
+             "the record names no live challenger session for PoUW's coins")
+    params = (f"its parameters {scheme!r}" if isinstance(scheme, str) and scheme else
+              "the record names no parameters for PoUW's piece")
+    return f"Made with, as the record states it: {coins}; {params}."
 
 
 def of_record(path: Path | None = None) -> Path | None:
@@ -153,8 +189,15 @@ def read(files: Files) -> dict[str, Any]:
     `(c, k, n)` the policy's own, and whether it holds its Program (`program`). A file that isn't there is named as one
     the run did not write, but the Program, without which the check can't run (`NO_PROGRAM`)."""
     counts = sorted(files.out.glob(OUT_FILES["count"]))
-    if len(counts) > 1:
-        raise Refused(f"{files.out}: a record holds one {OUT_FILES['count']}, the count's limits; it holds {len(counts)}")
+    found = ", ".join(_class_of(p) for p in counts) or "none"
+    if files.served_class is not None:
+        counts = [p for p in counts if _class_of(p) == files.served_class]
+        if not counts:
+            raise Refused(f"{files.out}: {CLASS_OPTION} {files.served_class}: the record holds no count of that class; "
+                          f"it holds counts of the classes {found}")
+    elif len(counts) > 1:
+        raise Refused(f"{files.out}: the record holds counts of {len(counts)} classes, {found}: name the one to read "
+                      f"with {CLASS_OPTION} CLASS")
     named = {"circuit record": files.circuit,
              **{("registration log" if p.suffix == ".jsonl" else f"record {k} of a registration log"): p
                 for k, p in enumerate(files.logs)},

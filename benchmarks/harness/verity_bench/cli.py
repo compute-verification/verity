@@ -17,6 +17,7 @@ from verity_bench import (
     lean_verify,
     overhead,
     overhead_records,
+    proof_layers,
     prove_records,
     served_render,
     served_table,
@@ -28,9 +29,9 @@ from verity_bench import (
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
+from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served
 from verity_bench.vllm.result import write
-from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
 
@@ -313,6 +314,11 @@ def _prove_parser(commands: Any) -> None:
     lean_verify.add_arguments(timed)
     timed.set_defaults(run=lean_verify.run, command_parser=timed)
 
+    layers = commands.add_parser("prove-layers", help="the proof system by layer (Flock, with zero knowledge, with "
+                                                      "sampling, with recursion), a row each read from its run's output")
+    proof_layers.add_arguments(layers)
+    layers.set_defaults(run=proof_layers.run, command_parser=layers)
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="verity-bench")
@@ -384,7 +390,8 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
     """`metrics`: a runner's metric ids, each for what its command's table names, which the command records in a
     research run's result: for `prove` a total of its table (`prove_records.FIGURES`), for `overhead table` the γ of a
-    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`)."""
+    row (`overhead_records.measurements`), for `served-table` a row's ``SPEC/POINT`` (`served_render.measurements`), for
+    `prove-layers` a figure a proof block (`proof_layers.FIGURES`)."""
 
     args = _parser().parse_args(argv)
     args.metrics = dict(metrics or {})

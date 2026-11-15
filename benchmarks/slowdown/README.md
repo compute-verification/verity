@@ -259,8 +259,7 @@ JSON all name the slowdown, once called the overhead; a result's or a family's `
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is what Lean's
 `Slowdown.Guarantees.SlowdownRemote` bounds (`remoteSlowdown`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s
 slowdown `D`; the padded size ratio `|A| / T_0` (`Slowdown.padded`, `Estimate.padded`, the JSON's `padded`) is the
-intermediate, not the slowdown. The one key that keeps the older name is the board's `"rho"`
-(`nci.bracket.search`), which `tests/test_attacks.py` reads.
+intermediate, not the slowdown.
 
 ## Extending
 
