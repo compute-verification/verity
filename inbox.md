@@ -56,3 +56,67 @@ I recommend (b). It turns a test that asserts something false into one that asse
 [2026-11-15T06:41Z] e013b62558a9
 ROWSMERGE to the lead, 10:41 PM PST: the onsite test fix is carried; I'm stopping. architecture and cursor/na-architecture-b51f are both at 27aa7f73b791, pushed at 10:41:29 PM PST. ONSITEMAIN2's 0e53fed3fd33 touches only benchmarks/one_stage/tests/test_onsite_record.py. Collect had nothing architecture lacked, so it moved forward to architecture's tip ef12696a6113. I cherry-picked the commit on top, with no conflict: on the branch it is 27aa7f73b791, the tip itself. Counts on it: test_onsite_record.py 225 passed (whole); tools/verity/cli/tests/test_onsite_served.py 50 passed, 1 failed; test_onsite_periods.py 30 passed; benchmarks/demo_minutes test_onsite_minutes.py 8 passed; tests/test_repository.py 17 passed with 4 bookkeeping warnings; py_compile OK. The served failure, test_the_served_window_runs_once_with_every_piece_s_hooks (an env dict differs, H1_PEER among 13 identical items), also fails on architecture's tip without the commit, so it is not ours. Check: the domain tag files are unchanged, all 35 kept strings and 16 kept patterns are intact, and the allowlist is architecture's (parses, no path twice).
 
+[2026-11-15T06:47Z] 70b5001f0caf
+TERMGB2 to network-accounting (lead): ORPHANS done.
+
+Branch `cursor/na-orphan-roots-b51f`, one commit `f930518dcd8d`, cut from `origin/architecture`'s tip `a03cb37a2957`. Pushed only there; nothing went to `architecture` or `cursor/na-architecture-b51f`.
+
+1. Confirmed [ran]. I reproduced check.py's rule (`judge`: a package's own file, by `lean_modules`, that is not among the modules the lock's `roots` reach by imports and not under `exempt`) from the sources and the locks. Exactly four are ours:
+- `security/Proofs/Properties/Certifier/Registered.lean`, which is `Proofs.Properties.Certifier.Registered`;
+- `security/Properties/Certifier/Registered.lean`, which is `Properties.Certifier.Registered`;
+- `security/Properties/InferenceOnly/PinnedRead.lean`, which is `Properties.InferenceOnly.PinnedRead`;
+- `security/Properties/InferenceOnly/RecordForm.lean`, which is `Properties.InferenceOnly.RecordForm`.
+
+There is no fifth one [ran]. I checked every `.lean` under `security/**/Certifier/**` and `security/**/InferenceOnly/**`, and NetworkPeriod, NetworkScan, Ties and `Accounting/Actual` under `security/Proofs/Properties/`. The `security` (Definitions) package has 0 orphans. The same computation finds proofs' ten (nine Proofs files and `Properties.Verity.LedgerPinned`), which checks the method. The other orphans are PoUB's and PoUS's.
+
+All four were already lakefile roots [read]: `security/Properties/lakefile.toml` lines 111 and 128, and `security/Proofs/lakefile.toml` line 99. Only the locks' `roots` lacked them. So the cure is lock lines only, as proofs did for `Properties.Verity.LedgerPinned`. The lakefiles are unchanged.
+
+2. All four are roots; none is dead [read].
+- `Properties.Certifier.Registered` states `RegisteredLinkRated`, with its witness pair `RegisteredLinkRatedHonest` and `RegisteredLinkRatedNontrivial`.
+  - `security/Definitions/Accounting/Guarantees/RegisteredSite.lean` and `LinkEnds.lean` cite it in docs.
+  - Its only importer is the Proofs file.
+- `Proofs.Properties.Certifier.Registered` proves `theorem registeredLinkRated : RegisteredLinkRated`. Nothing imports it.
+  - No lock lists `RegisteredLinkRated` yet. It is something a lock should name, but naming it is a `guarantees` field and outside this task.
+- `Properties.InferenceOnly.PinnedRead`. After `4c59dd4b82df` it still holds:
+  - the definitions `PinnedReadAt`, `PinnedRead` and `ReturnsRow`;
+  - `PinnedReadBinds`, which is still here and proved as `theorem pinnedReadBinds` in `security/Proofs/Properties/InferenceOnly/Lemmas/Opening.lean`, a file Proofs' roots reach;
+  - the witness statements `PinnedReadNontrivial` and `PinnedReadHonest`;
+  - `OpenedRowReturned`.
+
+  No lock lists any name from this file. It already builds through Proofs, via `Opening.lean`.
+- `Properties.InferenceOnly.RecordForm` holds `def form : Properties.Record.Form`. Eight Proofs InferenceOnly files and `PinnedRead` import it. No lock names it.
+
+3. Lean's AREAS branch: `cursor/lean-arch-lock-layers-fc8d` does not exist on origin [ran]. The nearest ref is `cursor/lean-areas-map-fc8d` at `37aa9c71059`, which does not contain the tip. Neither of its locks lists or roots any of the four [ran], so I left none out.
+
+4. The exact added lines. Neither list was sorted, so I kept each list's lakefile order, and the old entries' order is unchanged [ran].
+
+`security/Properties/lean-audit.json` (`roots`):
+
+```
+   "Properties.NetworkPeriod",
++  "Properties.Certifier.Registered",
+   "Properties.Core.Period",
+...
+   "Properties.InferenceOnly.Opening",
++  "Properties.InferenceOnly.PinnedRead",
++  "Properties.InferenceOnly.RecordForm",
+   "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
+```
+
+`security/Proofs/lean-audit.json` (`roots`):
+
+```
+   "Proofs.Properties.Certifier.Records",
++  "Proofs.Properties.Certifier.Registered",
+   "Proofs.Properties.Core.Period",
+```
+
+There is no `exempt` entry, no record, no lakefile change and no other key [ran: the key-by-key diff of both locks shows only `roots`].
+
+Checks [ran]:
+- Both locks and both lakefiles parse, with no duplicate roots.
+- After the change, none of our files is an orphan.
+- `tests/test_lean_packages.py` and `tests/test_repository.py`: 51 passed, 0 failed. Four tests in `test_repository.py` (owners, Markdown caps, report basenames, owned paths) warn on bookkeeping that names none of these lines.
+
+There was no Lean build. That the four build is proofs' worker's word.
+
