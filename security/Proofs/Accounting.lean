@@ -63,7 +63,7 @@ public import Proofs.Pouw.PerRunStop
 public import Proofs.Compose.RemoteHeld
 public import Proofs.Compose.RemoteHeld.Meets
 public import Proofs.Compose.RemoteHeld.OverTime
-public import Proofs.Compose.RemoteHeld.Draw
+public import Proofs.Compose.RemoteHeld.Sample
 public import Proofs.Compose.RemoteHeld.DrawMeets
 public import Proofs.Compose.RemoteHeld.Binding
 public import Proofs.Compose.RemoteHeld.Sketch

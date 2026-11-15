@@ -33,8 +33,8 @@ open private Poub.Session.live Poub.Session.cover from Poub.Session
 
 namespace Properties.Poub.Line.Honest
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions
 
 attribute [local irreducible] zeroRoot
 

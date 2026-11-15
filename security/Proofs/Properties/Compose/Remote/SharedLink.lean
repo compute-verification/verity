@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Compose.Remote.Shared
-import Proofs.Properties.Compose.Remote.Draw
+import Proofs.Properties.Compose.Remote.Sample
 import Proofs.Properties.Compose.Remote.Window
 
 /-!

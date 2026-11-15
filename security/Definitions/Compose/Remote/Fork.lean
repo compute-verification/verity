@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Compose.Remote.Draw
+public import Definitions.Compose.Remote.Sample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 # The receipts' fork game (trusted)
 
 What the receipts' binding term (`Receipts.binding`) is bounded by: two runs of the session from window `t`'s cut on
-independent openings coins (`cont t`, `Remote.Draw`), and what each break of them costs. `Receipts.held` is the
+independent openings coins (`cont t`, `Remote.Sample`), and what each break of them costs. `Receipts.held` is the
 plurality of the rows a receipt shows (`Receipts.Shows`) over those continuations, so a move squared is at most a fork.
 
 * `Receipts.Broken D prf rest t ω ζ`: **the fork's break**. Some receipt window `t` opens in both runs, `ω` and
@@ -59,7 +59,7 @@ plurality of the rows a receipt shows (`Receipts.Shows`) over those continuation
 
 @[expose] public section
 
-namespace Accounting.Remote.Draw
+namespace Accounting.Remote.Sample
 
 open scoped ENNReal
 
@@ -128,4 +128,4 @@ noncomputable def finder [Fintype X] [Nonempty X] (D : Run n m s κ X) (prf : Fi
 
 end Receipts
 
-end Accounting.Remote.Draw
+end Accounting.Remote.Sample
