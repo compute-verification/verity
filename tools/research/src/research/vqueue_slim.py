@@ -78,7 +78,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
-from . import quick_tier
+from . import quick_tier, suite_layout
 from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP,
                       NOT_STARTED, OWN_TRAIN, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
@@ -130,7 +130,8 @@ STORE_SAYS = re.compile(r"^\s*tamper: |the evidence store is not reachable", re.
 #: would leave without a memory limit (`telemetry.cgroup.uncapped`), in its wording before and after its rename
 MACHINE_SAYS = re.compile(r"refused to start the workload: this machine (?:limits|caps) each login session")
 #: the code that decides every suite's verdict, which every suite's key holds (`suites.RUNNER`)
-SUITE_RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard")
+SUITE_RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard",
+                "tools/research/src/research/suite_layout.py")
 #: a Lean file's imports: each module of each `import` line (`public`, `meta`, `private` and `all` as Lean 4 writes them),
 #: and each file it reads as it is compiled (`include_str`, relative to it)
 IMPORT_RE = re.compile(r"^\s*(?:public\s+|private\s+)?(?:meta\s+)?import\s+(?:all\s+)?([^\n]+)", re.M)
@@ -1010,14 +1011,14 @@ def suite_reads(repo: Path, commit: str, suite: str) -> tuple[frozenset[str] | N
     """(every path suite ``suite`` (its directory) may read at ``commit``, the directories among them), as `suites.py`'s
     `inputs_of` allows its guard: its directory and its declared inputs; unless it declares `inputs_only`, what each workspace
     package it depends on ships (`_ships`), its dependencies, extras and dependency groups and theirs but their groups
-    (`suites.closure`); the workspace's pyproject.toml, `SUITE_RUNNER` and `ENV`.  (None, none) for the repository's own
-    suite, whose directory is the tree."""
+    (`suites.closure`), each with its tests under the root's `tests/` (`suite_layout.mirrors`); the workspace's
+    pyproject.toml, `SUITE_RUNNER` and `ENV`.  (None, none) for the repository's own suite, whose directory is the tree."""
     suite = suite.strip("/") or "."
     if suite == ".":
         return None, frozenset()
     data = suite_pyproject(repo, commit, suite)
     tests = data.get("tool", {}).get("verity", {}).get("tests", {})
-    out = {suite, *map(str, tests.get("inputs") or ()), "pyproject.toml", *SUITE_RUNNER, *ENV}
+    ins = {suite, *map(str, tests.get("inputs") or ())}
     if tests.get("inputs_only") is not True:
         pkgs, seen = _members(repo, commit), set()
         todo = [n for n in _requires(data) if n in pkgs]
@@ -1026,9 +1027,11 @@ def suite_reads(repo: Path, commit: str, suite: str) -> tuple[frozenset[str] | N
                 continue
             seen.add(n)
             todo += [r for r in _requires(suite_pyproject(repo, commit, pkgs[n]), groups=False) if r in pkgs]
-        out |= {p for n in seen if pkgs[n] != suite for p in _ships(repo, commit, pkgs[n])}
+        ins |= {p for n in seen if pkgs[n] != suite for p in _ships(repo, commit, pkgs[n])}
     r = _git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{tree}}", check=False)
     files = [p for p, _ in _files(repo, r.stdout.strip())] if not r.returncode else []
+    out = ins | suite_layout.mirrors(ins, lambda p: _is_file(files, p) or _is_dir(files, p))
+    out |= {"pyproject.toml", *SUITE_RUNNER, *ENV}
     return frozenset(out), frozenset(p for p in out if "*" not in p and "?" not in p and _is_dir(files, p))
 
 
@@ -1040,8 +1043,12 @@ def _is_dir(files: list[str], path: str) -> bool:
     return i < len(files) and files[i].startswith(path.rstrip("/") + "/")
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
+def _is_file(files: list[str], path: str) -> bool:
+    """Whether ``path`` is a file of the tree whose files (in git's order) are ``files``."""
+    import bisect
+
+    i = bisect.bisect_left(files, path)
+    return i < len(files) and files[i] == path
 
 
 def _requires(data: dict, groups: bool = True) -> list[str]:
@@ -1050,16 +1057,16 @@ def _requires(data: dict, groups: bool = True) -> list[str]:
     project = data.get("project", {})
     reqs = [*project.get("dependencies", []), *(r for extra in project.get("optional-dependencies", {}).values() for r in extra)]
     reqs += [r for g in data.get("dependency-groups", {}).values() if groups for r in g if isinstance(r, str)]
-    return [_norm(m[0]) for r in reqs if (m := re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r))]
+    return [suite_layout.norm(m[0]) for r in reqs if (m := re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r))]
 
 
 def _members(repo: Path, commit: str) -> dict[str, str]:
     """{distribution: directory} of the workspace packages at ``commit`` (`suites.members`), the root's own under "."."""
     root = suite_pyproject(repo, commit, ".")
-    out = {_norm(n): "." for n in [root.get("project", {}).get("name")] if isinstance(n, str)}
+    out = {suite_layout.norm(n): "." for n in [root.get("project", {}).get("name")] if isinstance(n, str)}
     for path in root.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
         if isinstance(n := suite_pyproject(repo, commit, path).get("project", {}).get("name"), str):
-            out[_norm(n)] = path
+            out[suite_layout.norm(n)] = path
     return out
 
 
