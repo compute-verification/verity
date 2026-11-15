@@ -21,7 +21,7 @@ namespace InferenceOnly.Assumptions
 
 open Verity
 
-/-- **Coverage** (the draft's `κ(T)`): the counted work `x` is at least a fraction `κ` of the reference circuit `r`'s
+/-- **Coverage** (the draft's `κ(T)`): the counted work `x` is at least a fraction `κ` of the reference training algorithm `r`'s
 computed gates, `κ · size(r) ≤ x`. A threading's counted multiplications count `x = 2 |M|`, and the cover theorem's
 certified products `x = |P|`. A training run whose counted work is a small share of its gates is slowed in proportion to
 that share. -/

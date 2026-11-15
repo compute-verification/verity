@@ -39,7 +39,7 @@ LOG = Path("/workspace/monitoring/slot-only.jsonl")
 #: in the repository, which is how every reader of a run's command knows slot.py. A run that names a pool takes its slot by
 #: this copy where the machine has one (`node_copy`), so the waiters of a pool's line are held to one copy's rules, whatever
 #: tree each run ships
-NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
+NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/check/slot.py"
 #: slot.py as a run's command names it: a shipped tree's, or the machine's own
 SLOT_PATHS = ("tools/check/slot.py", NODE_SLOT)
 #: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's

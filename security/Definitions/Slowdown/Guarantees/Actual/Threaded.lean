@@ -9,7 +9,7 @@ public import Definitions.Slowdown.Dark
 
 Tier 3's bound on the monitored servers (`benchmarks/nci/tiers.py`, "Memory cap on the residual"): a server's window
 reads its starting state plus what enters during it, `K = R + r ω`, and holds at most `K Λ(K) / b_a` counted
-multiplications of a threaded reference circuit `c`, where `Λ = Threading.bound` is the inference-only policy's Theorem 1 over threads
+multiplications of a threaded reference training algorithm `c`, where `Λ = Threading.bound` is the inference-only policy's Theorem 1 over threads
 (`Slowdown.Guarantees.ThreadedReads`). Every gate placed on the servers counts, declared or not: the windows divide the
 actual circuit's region, and `c` need only be contained in it.
 
@@ -24,7 +24,7 @@ capacity `β_X`, and `Γ ≥ Φ_X ω` its gates a window.
   multiplications the declaration computes obey the cap, and every other one is a dark gate,
   `|M| ≤ |dark| + n ⌈t/ω⌉ K Λ(K) / b_a`.
 
-The `Slots` forms (`ThreadedRuntimeSlots`, `ThreadedRateSlots`, `ThreadedRuntimeDarkSlots`) take the reference circuit's
+The `Slots` forms (`ThreadedRuntimeSlots`, `ThreadedRateSlots`, `ThreadedRuntimeDarkSlots`) take the reference training algorithm's
 weights incompressible per parameter slot (`Slowdown.Assumptions.WeightsIncompressibleSlots`), so that a window spanning
 several optimizer steps on a parameter is charged for it once, with the same bounds.
 
@@ -43,7 +43,7 @@ open Verity InferenceOnly Finset
 
 /-- **The memory cap over threads** (tier 3's server-window bound). For an actual circuit `A` meeting causality,
 unit-priced compute rate and links at the developer's pairwise disjoint locations `X i`, a window `ω > 0`, a horizon
-`t`, and a reference circuit `c` that the developer's declaration over `[0, t)` contains, threaded by `T` with
+`t`, and a reference training algorithm `c` that the developer's declaration over `[0, t)` contains, threaded by `T` with
 `T.Threaded Γ K d e` and `WeightsIncompressible` at `(Γ, K)`, `K = R + r ω`: when each location does at most `Γ` gates
 a window (`Φ_{X i} ω ≤ Γ`), its link capacity is at most `r`, and its state at the start of each window
 `[kω, (k + 1)ω)` that begins before `t` is at most `R`, the counted multiplications number at most `K Λ(K) / b_a` per
@@ -118,7 +118,7 @@ def ThreadedRuntimeDark : Prop :=
       (T.M.card : ℝ) ≤
         M.dark.card + (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) / b_a
 
-/-- **The memory cap over threads, per parameter slot.** `ThreadedRuntime` with the reference circuit's weights
+/-- **The memory cap over threads, per parameter slot.** `ThreadedRuntime` with the reference training algorithm's weights
 incompressible per parameter slot of a slot map `σ` (`Slowdown.Assumptions.WeightsIncompressibleSlots`) at `(Γ, K)`, so that
 a window spanning several optimizer steps on a parameter is charged for it once: the same bound,
 `b_a |T.M| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |T.M| / (n K Λ(K)) − 1)`.

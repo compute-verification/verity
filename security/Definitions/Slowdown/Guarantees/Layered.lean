@@ -6,10 +6,10 @@ public import Definitions.Slowdown.Assumptions.Layered
 /-!
 # The inference-only policy over threads: keyed circuits are threaded
 
-The premise of the thread draft's Theorems 1 and 2 (`Threading.Threaded`) holds for every keyed reference circuit
+The premise of the thread draft's Theorems 1 and 2 (`Threading.Threaded`) holds for every keyed reference training algorithm
 (`Layered`), at every `c` and at every `S` below the width of `E + 1` lookup columns, with `(d, e)` read off the
 circuit's structure. At Kimi K2's shapes, written in `Dot16` steps, under the named conjecture that the reference
-circuit is keyed there (`Assumptions.ReferenceLayered`), that is `(10, 2328)` for `S ≤ 2·10⁷`, counting steps
+training algorithm is keyed there (`Assumptions.ReferenceLayered`), that is `(10, 2328)` for `S ≤ 2·10⁷`, counting steps
 (`ReferenceThreaded`).
 -/
 
@@ -21,7 +21,7 @@ namespace Slowdown.Guarantees
 
 open Verity
 
-/-- **Keyed circuits are threaded**: a keyed reference circuit whose roots have fan-in `d`, whose values each reach at
+/-- **Keyed circuits are threaded**: a keyed reference training algorithm whose roots have fan-in `d`, whose values each reach at
 most `e` counted multiplications and whose lookups each reach at most `eLk`, with lookup columns `b` bits wide, is
 `(d − E, e + E · eLk)`-threaded at every `c` and every `S < (E + 1) · b`: a small subcircuit reads too little to hold
 more than `E` of a thread's lookups, and one that reads fewer than `d − E` values of a thread holds none of its roots. -/
@@ -41,8 +41,8 @@ def LayeredTraining : Prop :=
       κ * b_a * r.D.size r.D.computed ≤
         2 * α * T.bound (α * Γ) b_w (d - E) (e + E * eLk) * dcl.D.size dcl.D.computed
 
-/-- **The reference circuit is threaded, at Kimi K2's shapes**: `ThreadedOfLayered` at `ReferenceLayered`'s parameters.
-Every `S ≤ 2·10⁷` is below `7 + 1` bf16 embedding columns (`8 · 163840 · 16 = 20971520` bits), so a reference circuit
+/-- **The reference training algorithm is threaded, at Kimi K2's shapes**: `ThreadedOfLayered` at `ReferenceLayered`'s parameters.
+Every `S ≤ 2·10⁷` is below `7 + 1` bf16 embedding columns (`8 · 163840 · 16 = 20971520` bits), so a reference training algorithm
 keyed at `(d₀, e, e_lk) = (17, 2328, 0)` is `(17 − 7, 2328 + 7 · 0) = (10, 2328)`-threaded at every `c`. -/
 def ReferenceThreaded : Prop :=
   ∀ (c : RegisteredCircuit) (T : Threading c), Assumptions.ReferenceLayered c T →

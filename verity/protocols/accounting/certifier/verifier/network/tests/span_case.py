@@ -213,12 +213,13 @@ def _other_schedule(r: random.Random, s: Schedule) -> Schedule:
 
 
 def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], bytes] | None = None,
-          alone: bool = False) -> dict:
+          alone: bool = False, record: int | None = None) -> dict:
     """A span with the one change `m` (`EXPECT`), sampled from `seed`. `between` is what runs between the two marks,
     in place of their sampled messages: it is handed the network certifier's mark source, which marks the start
     message it is called on and returns the start certificate's bytes (`Certificate.encode`), and it returns the end
     message, which the end mark is then on. `alone`: the registered hardware's host has the link as its one link
-    (`site`)."""
+    (`site`). `record`: the egress record (its index in `span.records`) whose certificate a change to one execution
+    phase's certificates replaces, in place of a sampled one; a `cert-link` change then always replaces it."""
     if m not in EXPECT:
         raise ValueError(f"a change is one of {MUTATIONS}, not {m!r}")
     r = random.Random(f"network-span {m} {seed}")
@@ -312,6 +313,7 @@ def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], by
     phases += [phase(w, [dataclasses.replace(c, window=w) for c in certificates(LAST)], head(LAST))
                for w in range(LAST + 1, last + 1)]
     k, j = r.randrange(len(phases)), r.randrange(2)
+    j = j if record is None else record
     w, name = start + k, span.records(link)[j][1]
     if m == "missing":
         del phases[k]
@@ -340,9 +342,9 @@ def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], by
     elif m in ("cert-link", "cert-phase", "cert-ingress", "cert-session", "cert-key", "cert-forged"):
         cs = certificates(w)
         if m == "cert-link":
-            cs = r.choice([
-                cs[::-1], cs[:j] + [certificates(w, on=elsewhere)[j]] + cs[j + 1:],
-                cs[:j] + [own.sign(marks_link(link), EGRESS, w, r.randbytes(DIGEST_BYTES))] + cs[j + 1:]])
+            swaps = [cs[:j] + [certificates(w, on=elsewhere)[j]] + cs[j + 1:],
+                     cs[:j] + [own.sign(marks_link(link), EGRESS, w, r.randbytes(DIGEST_BYTES))] + cs[j + 1:]]
+            cs = r.choice(swaps if record is not None else [cs[::-1], *swaps])
         elif m == "cert-phase":
             cs[j] = certificates(w + 1)[j]
         elif m == "cert-ingress":

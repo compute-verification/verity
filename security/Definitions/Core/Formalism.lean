@@ -119,7 +119,7 @@ structure Partition.IsCK (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B)
   card : ∀ u, (P.gates u).card ≤ c
   reads : ∀ u, (d.unregistered (P.gates u)).card ≤ k
 
-/-- **The size ratio** of `B` inference blocks of budget `c` relative to a reference circuit of size `T₀`: `c · B / T₀`,
+/-- **The size ratio** of `B` inference blocks of budget `c` relative to a reference training algorithm of size `T₀`: `c · B / T₀`,
 each inference block priced at `c` gates. -/
 noncomputable def slowdown (c B : ℕ) (T₀ : ℝ) : ℝ := ((c * B : ℕ) : ℝ) / T₀
 
