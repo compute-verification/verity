@@ -408,7 +408,7 @@ the JSON files whose lists aren't written yet (`not_yet` in the declared data) b
 extension. A JSON file under no list and no `not_yet` glob fails as an undeclared key does. A file with no keys (a
 binary, a log, free text) can't be read this way and is only counted. The check is linear in the bytes it reads.
 
-**The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
+**The relay path** (`CR_PATH=warden`, `chain_record.NETWORK_CERTIFIER`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `network_certifier_chain.py`), and a proxy rehearsal's run, whose records came
 through the older certifier's proxy in front of the endpoint, is refused by name wherever it is given: that code is
 gone, and kept records of its runs are refused by the form that stays. The certificates step reruns
@@ -550,5 +550,5 @@ K also rests on these conditions:
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.
 
-The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
+The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `NETWORK_CERTIFIER_STUBBED` and
 `POOLED_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

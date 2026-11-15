@@ -23,7 +23,7 @@ inputs = ["verity/protocols/accounting/certifier/device/load_relay.py", "verity/
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/coins.py",
           "verity/protocols/proofs/spot/device/remote.py",
-          # test_auditor_network_certifier holds a warden run's published files to the certifier's manifest (its verifier's
+          # test_auditor_network_certifier holds a network certifier run's published files to the certifier's manifest (its verifier's
           # `parties.py`), a deployment-layer party over SPOT's; test_auditor_network_certifier_serve runs the certifier prover's
           # `scan_zk`, which proves through SPOT's service
           "verity/config.py", "verity/party.py", "verity/protocol.py",

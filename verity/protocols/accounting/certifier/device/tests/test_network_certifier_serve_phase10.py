@@ -379,7 +379,7 @@ def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path
     run = _drive(tmp_path / "run", key, process=True, transport=_egress_rows(edit()))
     first = run["failed"] or run["close_error"]
     assert type(first) is RuntimeError
-    assert f"{RC.EGRESS} window 0: the rows rebuilt aren't the grid the warden closed" in str(first)
+    assert f"{RC.EGRESS} window 0: the rows rebuilt aren't the grid the network certifier closed" in str(first)
     assert type(run["close_error"]) is RuntimeError
     heads = _heads(tmp_path / "run")
     assert (RC.LINK, "egress", 0) not in heads and (RC.LINK, "ingress", 0) in heads

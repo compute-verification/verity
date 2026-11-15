@@ -162,7 +162,7 @@ def test_the_lean_verdict_is_the_pythons(tmp_path):
     assert rejected >= len(cases) - 30
 
 
-def test_a_network_certifier_phase_reads_the_wardens_digest_and_no_sync(tmp_path):
+def test_a_network_certifier_phase_reads_the_network_certifiers_digest_and_no_sync(tmp_path):
     """On a network certifier link the Lean holds both ends' grids to the network certifier's parameters digest and
     reads no sync, as the Python does: syncs missing or off Σ_sync change neither verdict; the link under another
     network certifier's digest is a reject by both; and a network certifier case the Python never makes (a digest of another length or none, an end with a profile, two
@@ -180,7 +180,7 @@ def test_a_network_certifier_phase_reads_the_wardens_digest_and_no_sync(tmp_path
     assert lean == python and not python["accepted"]
     c.lw = lw
     case = lw.lean_case(c.draw, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
-    assert case["kind"] == "warden" and case["warden"] == plain.WARDEN_DIGEST.hex()
+    assert case["kind"] == "warden" and case["warden"] == plain.NETWORK_CERTIFIER_DIGEST.hex()
     assert SVC.LA.SERVER.call("link-window", case)["accepted"]
     grid = case["ingress"]["grid"]
     for edit in ({"warden": case["warden"][:-2]}, {"warden": case["warden"] + "00"}, {"warden": None},
@@ -204,7 +204,7 @@ def test_an_advised_phase_is_refused_by_name(tmp_path):
     for advised in ({**case, "kind": "advised"}, {**case, "kind": "advised", **view}):
         with pytest.raises(ValueError, match="an advised link is refused"):
             SVC.LA.SERVER.call("link-window", advised)
-    with pytest.raises(ValueError, match="plain, served or a warden's, not shaped"):
+    with pytest.raises(ValueError, match="plain, served or a network certifier's, not shaped"):
         SVC.LA.SERVER.call("link-window", {**case, "kind": "shaped"})
 
 

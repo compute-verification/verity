@@ -156,7 +156,7 @@ def network_certifier_trace(root):
     return d
 
 
-def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp_path, mod):
+def test_summary_orders_arrivals_along_the_wire_and_writes_the_network_certifiers_views(tmp_path, mod):
     summary = mod("summary")
     d = network_certifier_trace(tmp_path)
     t = summary.summarize(tmp_path)["traces"]["w"]
@@ -168,11 +168,11 @@ def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp
                             "ingress_cells": 2, "egress_cells": 1, "failed": None}
     o = t["arrival_order"]
     got = {k: (v["requests"], v["inversions_vs_engine"], v["inversions_vs_previous"]) for k, v in o.items() if k != "pairs"}
-    assert got == {"client send": (4, 3, None), "warden arrival": (4, 3, 0), "warden admission": (4, 3, 0),
-                   "warden release": (4, 0, 3), "server accept": (4, 3, 3), "server headers": (4, 3, 0),
+    assert got == {"client send": (4, 3, None), "network certifier arrival": (4, 3, 0), "network certifier admission": (4, 3, 0),
+                   "network certifier release": (4, 0, 3), "server accept": (4, 3, 3), "server headers": (4, 3, 0),
                    "server body": (4, 0, 3), "vLLM arrival": (4, 0, 0), "engine add": (4, 0, 0),
                    "engine first scheduled": (4, 0, 0)}
-    assert o["pairs"] == 6 and math.isclose(o["warden admission"]["lag_s"]["max"], 0.05)
+    assert o["pairs"] == 6 and math.isclose(o["network certifier admission"]["lag_s"]["max"], 0.05)
     w = t["warden"]
     assert (w["connections"], w["failed"], w["ingress_buckets"]["max"], w["check"]) == (4, {}, 4, None)
     assert t["views"] == ["w.admitted", "w.released"]
@@ -186,7 +186,7 @@ def test_summary_orders_arrivals_along_the_wire_and_writes_the_wardens_views(tmp
             assert math.isclose(r["send_unix"] + r["chunks"][0][0], reqs[x]["send_unix"] + 1.5, abs_tol=1e-6)
         assert (tmp_path / f"w.{view}" / "steps.jsonl").read_text() == (d / "steps.jsonl").read_text()
     text = (tmp_path / "README.md").read_text()
-    assert "## The warden" in text and "## Arrival order" in text and "| warden release | 4 | 0 | 3 |" in text
-    assert "D counted from the warden's release a (the ingress end)." in text
+    assert "## The network certifier" in text and "## Arrival order" in text and "| network certifier release | 4 | 0 | 3 |" in text
+    assert "D counted from the network certifier's release a (the ingress end)." in text
     assert "| w | 0-1 / 2 / 3 | 2 | 1 / 0 / 0 / 0 / 1 / 0 / 0 / 0 | 1 | 2.0 / 2.0 | None | None |" in text
     assert (w["ticks"]["over_slack"], w["client_loop"]["stalls"], w["egress_base"]) == (1, 0, "release a (the ingress end)")

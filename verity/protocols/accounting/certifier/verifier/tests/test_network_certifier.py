@@ -532,7 +532,7 @@ def test_a_host_without_a_raw_clock_starts_no_network_certifier(monkeypatch):
     assert (device.ticks, device.lateness, waits, device._pacer, device.records) == (0, [], [], None, [])
 
 
-def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
+def test_a_paced_network_certifiers_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
     """With `paced`, each connection's cells reach its socket from the pacer, the bytes the loop writes unpaced. On the
     injected clock a bucket's time (origin 0, on the host's raw clock, the pacer's) has long passed when its tick hands
     it, so each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window

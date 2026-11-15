@@ -461,9 +461,9 @@ class NetworkCertifierProfile:
 
     def __post_init__(self) -> None:
         if type(self.windows) is not int or self.windows < 1:
-            raise ValueError(f"a warden link has one or more windows, not {self.windows!r}")
+            raise ValueError(f"a network certifier link has one or more windows, not {self.windows!r}")
         if type(self.digest) is not bytes or len(self.digest) != HC.DIGEST_BYTES:
-            raise ValueError(f"a warden's parameters digest is {HC.DIGEST_BYTES} bytes")
+            raise ValueError(f"a network certifier's parameters digest is {HC.DIGEST_BYTES} bytes")
 
 
 @dataclass(frozen=True)
@@ -488,7 +488,7 @@ class TransferBlocks:
         if self.network_certifier is None:
             raise ValueError("a link is the network certifier's: TransferBlocks(network_certifier=NetworkCertifierProfile(windows, digest))")
         if self.ingress_params != self.params:
-            raise ValueError("a warden link's two ends are on the warden's one grid")
+            raise ValueError("a network certifier link's two ends are on the network certifier's one grid")
 
     @property
     def ingress_params(self) -> GridParams:

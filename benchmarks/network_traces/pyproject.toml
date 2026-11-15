@@ -45,7 +45,7 @@ untraced = [
 # prove_subprotocol (with the population a7 reads), Flock's proof-format reader (redigest, with the modules it loads
 # beside it) and SPOT's template audit and challenger session; test_scan_zk_challenger's stream verifies with the Lean
 # package core_spot's verifier, whose lakefile is the package it builds.
-# demo_stub's endpoint records are read as the warden path's endpoint step reads them: `verity-vllm advice` (with the
+# demo_stub's endpoint records are read as the network certifier path's endpoint step reads them: `verity-vllm advice` (with the
 # step trace and the records it imports, the engine handle the step trace finds a scheduler through, the registry it
 # wraps the scheduler through with the ranks its parts run by, and its CLI, which served_session's endpoint step runs it
 # through) and network-e2e's chain. certifier_piece is the network certifier's piece of one_stage's served_verdicts,

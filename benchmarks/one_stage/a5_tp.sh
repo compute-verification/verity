@@ -270,18 +270,18 @@ else
         *) echo "STANDIN $e: network_certifier, network_certifier:altered, network_certifier:pad, network_certifier:pad-named or network_certifier:swapped"; exit 3;; esac
       [ "${A5_CHALLENGER:-}" = local ] || { echo "STANDIN $e draws through its stream: set A5_CHALLENGER=local"; exit 3; }
       N=${e/:/-}; mkdir -p $O/$N
-      if [ -n "${A5_WARDEN_RUN:-}" ] && [ ! -d $W/warden-run ]; then
-        mkdir -p $O/warden-run && cp $A5_WARDEN_RUN/{deployment.json,cells.jsonl,check.json} $O/warden-run/ || exit 8
-        ln -s $A5_WARDEN_RUN $W/warden-run
+      if [ -n "${A5_WARDEN_RUN:-}" ] && [ ! -d $W/network-certifier-run ]; then
+        mkdir -p $O/network-certifier-run && cp $A5_WARDEN_RUN/{deployment.json,cells.jsonl,check.json} $O/network-certifier-run/ || exit 8
+        ln -s $A5_WARDEN_RUN $W/network-certifier-run
       fi
-      if [ ! -d $W/warden-run ]; then
-        (cd benchmarks/network_traces && $PY network_certifier_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
+      if [ ! -d $W/network-certifier-run ]; then
+        (cd benchmarks/network_traces && $PY network_certifier_serve.py rehearse --fake --out $W/network-certifier-run --requests 6 --rate 1 --tail 5 \
           --max-tokens 64 --prompt-max 2048 --start-in 2) > $O/warden-rehearse.log 2>&1; r=$?
-        mkdir -p $O/warden-run && cp $W/warden-run/{deployment.json,cells.jsonl,check.json} $O/warden-run/
+        mkdir -p $O/network-certifier-run && cp $W/network-certifier-run/{deployment.json,cells.jsonl,check.json} $O/network-certifier-run/
         [ $r = 0 ] || { tail -20 $O/warden-rehearse.log; $PY -c 'import json, sys; print(*json.load(open(sys.argv[1])).get("problems", []), sep="\n")' \
-          $O/warden-run/check.json; exit 8; }
+          $O/network-certifier-run/check.json; exit 8; }
       fi
-      $TIME $PY benchmarks/one_stage/a5_network_certifier.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" \
+      $TIME $PY benchmarks/one_stage/a5_network_certifier.py --run $W/network-certifier-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" \
         --challenger local --main $MAIN "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_WARDEN_UNITS:+--units $A5_WARDEN_UNITS} \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err

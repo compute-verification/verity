@@ -735,7 +735,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
              "trusted-device": f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the "
                              f"network certifier ran on {host}, not the developer's {node}",
              "links": [{"name": "certified", "from": host, "to": node, "counted": True,
-                        "via": "the warden's tunnel to the endpoint's port"},
+                        "via": "the network certifier's tunnel to the endpoint's port"},
                        {"name": "gate", "from": node, "to": host, "counted": False,
                         "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
              "uncounted": f"every link of {node}'s but the certified one"}
@@ -754,7 +754,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
                                        servers={k: S.piece_server(k, d.parent) for k in [*S.PIECES, "wipe"]})
         clause[name] = line["reason"].split("; the network certifier: ", 1)[1]
     assert clause["gated"].startswith(
-        f"accept (K counts the relayed link alone, {host} to {node} through the warden's tunnel to the endpoint's "
+        f"accept (K counts the relayed link alone, {host} to {node} through the network certifier's tunnel to the endpoint's "
         f"port; every link of {node}'s but the certified one is uncounted and uncertified; "
         f"trusted-device {gated['trusted-device']}; ")
     assert clause["local"].startswith(f"accept (trusted-device {local['trusted-device']}; ")
@@ -6012,7 +6012,7 @@ FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3"
 
 IDS = "--protocol ids --id-payload 503"
 #: the runner's refusal of a front in front of an endpoint that is off the id form
-OFF_IDS = ("PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under "
+OFF_IDS = ("PREFLIGHT: the certifier front sends id-form requests, which serve-openai answers only under "
            f"SERVE_ARGS='{IDS}'")
 SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "$2"'
 

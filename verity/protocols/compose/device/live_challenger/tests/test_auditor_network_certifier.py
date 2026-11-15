@@ -142,24 +142,24 @@ def test_the_least_minutes_are_two_seconds_a_request_three_minutes_and_the_key_m
     assert [A.network_certifier_minutes(n) for n in (4, 60, 61, 100, 400)] == [A.network_certifier_minutes(n, 20) for n in
                                                                     (4, 60, 61, 100, 400)] == [8, 10, 10, 11, 21]
     for h in (10, 20):
-        assert all(A.network_certifier_minutes(n + 30, h) == A.network_certifier_minutes(n, h) + 1 for n in range(4, A.WARDEN_REQUESTS[1] - 29))
+        assert all(A.network_certifier_minutes(n + 30, h) == A.network_certifier_minutes(n, h) + 1 for n in range(4, A.NETWORK_CERTIFIER_REQUESTS[1] - 29))
 
 
 def test_one_network_certifier_session_takes_the_gates_most_requests_at_height_13_in_an_hour(host):
     """The gate's most requests, 1700, at height 13 (8192 one-time keys) take 60 minutes, a scan rehearsal's on its own
     prompts too: one session of about 57 minutes of arrivals and tail, the whole-node wipe's 745 execution phases and more
     (`wipe_gate.sh`)."""
-    assert A.WARDEN_REQUESTS[1] == A.WARDEN_PROMPT_REQUESTS[1] == 1700 and A.network_certifier_minutes(1700, 13) == 60
+    assert A.NETWORK_CERTIFIER_REQUESTS[1] == A.NETWORK_CERTIFIER_PROMPT_REQUESTS[1] == 1700 and A.network_certifier_minutes(1700, 13) == 60
     for token, argv in (("ab12", []), ("cd34", ["--scan", "--prompts", "--tokens", "24"])):
         rc, out = gate(host, REQUEST + argv + ["--requests", "1700", "--minutes", "60", "--height", "13"],
-                       stdin=json.dumps([[1]] * A.WARDEN_PROMPTS[1]).encode(), started=[], token=token)
+                       stdin=json.dumps([[1]] * A.NETWORK_CERTIFIER_PROMPTS[1]).encode(), started=[], token=token)
         assert rc == 0, out
         assert {k: json.loads(out)[k] for k in ("requests", "minutes", "height")} == \
             {"requests": 1700, "minutes": 60, "height": 13}
 
 
 def test_a_network_certifier_key_signs_five_a_phase_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
-    """A network certifier window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
+    """A network certifier window takes `NETWORK_CERTIFIER_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
     after one for the session's start, so height 12's 4096 sign the start and 819 windows, exactly, and 1031 (55 minutes
     of the scan's 3.2 s windows) take 13; a load's heads come first, and one head more than fits takes the next
     height. 1559 requests at the gate's rate are `network_certifier_windows` 1031 and fit 55 minutes at height 13, which the gate
@@ -240,7 +240,7 @@ LAST_LINE = ("ACCEPTED: 100/100 ended, 0 refused, failed []; cell rows 4/4 regis
 STDERR = "the endpoint closed connection 3 early"
 #: a stand-in for `network_certifier_serve.py rehearse`'s files, of a run whose every execution phase was certified: public,
 #: then witness, then what it prints
-WARDEN_FILES = (
+NETWORK_CERTIFIER_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({DEPLOYMENT!r}))\n'
     f'(out / "endpoints.json").write_text(json.dumps({{"upstream": url}}))\n'
     f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {COST!r}}}) + "\\n")\n'
@@ -256,7 +256,7 @@ WARDEN_FILES = (
 REFUSED_LINES = {"cells.jsonl": {"refused": [LINK, "ingress", 1], "withheld": True, "cost": COST},
                  "rows.jsonl": {"refused": [LINK, "egress", 1], "cost": COST},
                  "certified.jsonl": {"refused": [f"{LINK}-fails", "egress", 1]}}
-#: after `WARDEN_FILES`, the same run with one execution phase the signer refused
+#: after `NETWORK_CERTIFIER_FILES`, the same run with one execution phase the signer refused
 REFUSED_PHASE = "".join(f'with (out / {name!r}).open("a") as f:\n    f.write({json.dumps(line) + chr(10)!r})\n'
                         for name, line in REFUSED_LINES.items())
 #: the check of such a run: it does not accept, and each of its counts of the certified is one fewer
@@ -291,7 +291,7 @@ def speaking_tunnel(said: Path) -> list[str]:
                                   f"finally:\n    open({str(said)!r}, 'w').close()\nsignal.pause()"]
 
 
-def run_network_certifier(host, source=WARDEN_FILES, seen=None, token="ab12") -> tuple[str, dict]:
+def run_network_certifier(host, source=NETWORK_CERTIFIER_FILES, seen=None, token="ab12") -> tuple[str, dict]:
     """The rehearsal run through a tunnel that has said its line before the rehearsal starts: `up` waits on the
     tunnel's opening of the FIFO."""
     rc, out = gate(host, REQUEST, started=[], token=token)
@@ -323,7 +323,7 @@ def end_text(d) -> str:
 
 def test_a_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
     seen = []
-    run, end = run_network_certifier(host, WARDEN_FILES, seen)
+    run, end = run_network_certifier(host, NETWORK_CERTIFIER_FILES, seen)
     d = host.certifier / run
     (req, work, url), = seen
     assert work == d / A.WITNESS and url.startswith("http://127.0.0.1:") and req["device"] == "warden"
@@ -365,7 +365,7 @@ def test_an_accepted_end_served_the_requests_its_request_asked_for(host, tmp_pat
     in the end, and the run ends nonzero in one word, the two numbers in the witness alone. A check that refused is
     refused as it stands, and a relay session, whose request asks for no number, is held to none."""
     check = CHECK | {"summary": CHECK["summary"] | {"requests": 4, "ended": 4}}
-    run, end = run_network_certifier(host, WARDEN_FILES.replace(repr(CHECK), repr(check)))
+    run, end = run_network_certifier(host, NETWORK_CERTIFIER_FILES.replace(repr(CHECK), repr(check)))
     assert json.loads((host.certifier / run / "request.json").read_text())["requests"] == 100
     assert (end["rc"], end["ended"], end["verdict"]["accepted"]) == (2, "miscounted", False)
     assert set(end["files"]) == {"deployment.json"}, "a run that isn't accepted publishes none of its lines"
@@ -398,7 +398,7 @@ def test_the_ends_failed_list_holds_the_gates_fixed_words_and_none_of_a_clients(
     said = "ConnectionResetError: the endpoint hung up on the third request"
     check = CHECK | {"accepted": False, "problems": [f"client connection 2: {said}"],
                      "summary": CHECK["summary"] | {"ended": 2, "failed": ["cut", said]}}
-    run, end = run_network_certifier(host, WARDEN_FILES.replace(repr(CHECK), repr(check)))
+    run, end = run_network_certifier(host, NETWORK_CERTIFIER_FILES.replace(repr(CHECK), repr(check)))
     d = host.certifier / run
     assert end["verdict"]["failed"] == ["cut", "error"] and "problems" not in end["verdict"]
     assert end["verdict"]["accepted"] is False
@@ -450,7 +450,7 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
     assert rc == 0 and json.loads(st)["end"] == end
 
 
-#: each file a network certifier run publishes to `out/` (`WARDEN_PUBLIC`, and `network_certifier_outcome`'s `certificates.jsonl`,
+#: each file a network certifier run publishes to `out/` (`NETWORK_CERTIFIER_PUBLIC`, and `network_certifier_outcome`'s `certificates.jsonl`,
 #: `ROW_CERTIFICATES` and `ROW_REGISTRATIONS`) by the certifier's message that carries it to the verifier
 PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "certificates.jsonl": NC.CERTIFICATE,
              "cells-certificates.jsonl": NC.CERTIFICATE, "rows-certificates.jsonl": NC.CERTIFICATE,
@@ -460,7 +460,7 @@ PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "certificates.jsonl": NC.CERTIFIC
 def test_the_certifiers_manifest_declares_exactly_the_files_a_network_certifier_run_publishes():
     """Every file a network certifier run publishes is one of the certifier's messages to the verifier, and the verifier's channel
     carries those messages and the out side's record, nothing else."""
-    assert set(A.WARDEN_PUBLIC) | {"certificates.jsonl", *A.ROW_CERTIFICATES.values(),
+    assert set(A.NETWORK_CERTIFIER_PUBLIC) | {"certificates.jsonl", *A.ROW_CERTIFICATES.values(),
                                    *A.ROW_REGISTRATIONS.values()} == set(PUBLISHED)
     (to_verifier,) = (c.messages for c in NC.MANIFEST.channels if c.receiver == NC.VERIFIER)
     assert sorted(to_verifier) == sorted({*PUBLISHED.values(), NC.OUT_RECORD})
@@ -540,9 +540,9 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
         A.row_registration(good, {})
     with pytest.raises(A.Unruled, match="the line holds the key 'withheld'"):
         A.row_registration(json.dumps({"withheld": True, "cost": COST}), GIVEN)
-    bad = WARDEN_FILES.replace("(out / \"rows.jsonl\")", f"(out / \"cells.jsonl\").write_text({good + chr(10)!r} + "
+    bad = NETWORK_CERTIFIER_FILES.replace("(out / \"rows.jsonl\")", f"(out / \"cells.jsonl\").write_text({good + chr(10)!r} + "
                                f"{line + chr(10)!r})\n(out / \"rows.jsonl\")", 1)
-    assert bad != WARDEN_FILES
+    assert bad != NETWORK_CERTIFIER_FILES
     run, end = run_network_certifier(host, bad)
     d = host.certifier / run
     said = ended_why(host, end)
@@ -587,7 +587,7 @@ def test_a_certificates_line_out_of_form_publishes_none_of_the_runs_lines(host, 
     with pytest.raises(A.Unruled, match=why):
         (A.certified_certificate if name == "certified.jsonl" else A.row_certificate)(line, GIVEN)
     assert A.certified_certificate({"salt_c": SALT_C, "certificate": CERTIFICATE}, GIVEN) == {"certificate": CERTIFICATE}
-    bad = WARDEN_FILES + (f'with (out / {name!r}).open("a") as f:\n    f.write({json.dumps(line) + chr(10)!r})\n')
+    bad = NETWORK_CERTIFIER_FILES + (f'with (out / {name!r}).open("a") as f:\n    f.write({json.dumps(line) + chr(10)!r})\n')
     run, end = run_network_certifier(host, bad)
     d = host.certifier / run
     said = ended_why(host, end)
@@ -610,7 +610,7 @@ def test_a_run_that_is_not_accepted_publishes_no_line_and_no_count_a_refused_exe
     the counts. The verdict decides and not the lines: the certified lines alone under a check that does not accept
     publish nothing either. A refused line under a check that accepts is a witness no run writes, and ends the run
     `unruled` and not accepted, with the same verdict as the first run's."""
-    refused = WARDEN_FILES.replace(repr(CHECK), repr(REFUSED_CHECK)) + REFUSED_PHASE
+    refused = NETWORK_CERTIFIER_FILES.replace(repr(CHECK), repr(REFUSED_CHECK)) + REFUSED_PHASE
     assert refused.count(repr(REFUSED_CHECK)) == 1
     run, end = run_network_certifier(host, refused, token="a001")
     d = host.certifier / run
@@ -630,10 +630,10 @@ def test_a_run_that_is_not_accepted_publishes_no_line_and_no_count_a_refused_exe
                               "cell_rows": {"registered": 4, "of": 4}}
     assert set(end["files"]) == {"deployment.json"} | LINE_FILES
 
-    run, end = run_network_certifier(host, WARDEN_FILES.replace(repr(CHECK), repr(REFUSED_CHECK)), token="a003")
+    run, end = run_network_certifier(host, NETWORK_CERTIFIER_FILES.replace(repr(CHECK), repr(REFUSED_CHECK)), token="a003")
     assert end["verdict"]["accepted"] is False and set(end["files"]) == {"deployment.json"}
 
-    run, end = run_network_certifier(host, WARDEN_FILES + REFUSED_PHASE, token="a004")
+    run, end = run_network_certifier(host, NETWORK_CERTIFIER_FILES + REFUSED_PHASE, token="a004")
     assert (end["rc"], end["ended"], end["verdict"]) == (2, "unruled", NOT_ACCEPTED)
     assert set(end["files"]) == {"deployment.json"}
     assert ended_why(host, end) == f"certified.jsonl line 2: {A.REFUSED_LINE}; out/ holds none of the run's lines"
@@ -649,14 +649,14 @@ def test_an_end_is_accepted_only_when_all_its_lines_are_out(host, tmp_path):
     session, whose request asks for no number. The same witness with every line ruled is accepted, with all four
     files and the counts."""
     unruled = {
-        "a refused line": WARDEN_FILES + REFUSED_PHASE,
-        "neither a certificate nor a refusal": WARDEN_FILES + (
+        "a refused line": NETWORK_CERTIFIER_FILES + REFUSED_PHASE,
+        "neither a certificate nor a refusal": NETWORK_CERTIFIER_FILES + (
             f'with (out / "certified.jsonl").open("a") as f:\n'
             f'    f.write({json.dumps({"salt_c": SALT_C}) + chr(10)!r})\n'),
-        "a certificate out of form": WARDEN_FILES + (
+        "a certificate out of form": NETWORK_CERTIFIER_FILES + (
             f'with (out / "certified.jsonl").open("a") as f:\n'
             f'    f.write({json.dumps({"certificate": CERTIFICATE | {"link": "another"}}) + chr(10)!r})\n'),
-        "a registration out of form": WARDEN_FILES + (
+        "a registration out of form": NETWORK_CERTIFIER_FILES + (
             f'with (out / "cells.jsonl").open("a") as f:\n    f.write({_of(root="ab" * 65) + chr(10)!r})\n'),
     }
     for i, (case, source) in enumerate(unruled.items()):
@@ -707,7 +707,7 @@ def test_no_line_is_published_beside_a_deployment_that_doesnt_fix_its_forms(host
     assert A.deployment_forms(host.root / "none.json") == {}
     (host.root / "deployment.json").write_text(json.dumps(DEPLOYMENT))
     assert A.deployment_forms(host.root / "deployment.json") == GIVEN
-    run, end = run_network_certifier(host, WARDEN_FILES.replace(repr(DEPLOYMENT), repr({"session": "00" * 32}), 1))
+    run, end = run_network_certifier(host, NETWORK_CERTIFIER_FILES.replace(repr(DEPLOYMENT), repr({"session": "00" * 32}), 1))
     assert end["rc"] == 2 and end["ended"] == "unruled" and set(end["files"]) == {"deployment.json"}
     assert end["verdict"] == NOT_ACCEPTED
     assert "certified.jsonl line 1: the line's certificate's link is held to what the run's deployment.json gives" in \
@@ -781,7 +781,7 @@ def test_of_the_word_that_an_execution_phase_has_no_head_the_rehearsal_publishes
     execution phase has no head stays whole in `witness/`. `out/` holds its certificate in the fields a head's has,
     the link's egress in the word's execution phase: each value is one the word's public record holds, and the
     line's cost and the key the line holds the word under are in neither `out/` nor the end."""
-    source = WARDEN_FILES + ('with (out / "rows.jsonl").open("a") as f:\n'
+    source = NETWORK_CERTIFIER_FILES + ('with (out / "rows.jsonl").open("a") as f:\n'
                              f'    f.write(json.dumps({{{A.ROWS_NO_HEAD!r}: {NO_HEAD!r}, "cost": {WORD_COST!r}}}) + "\\n")\n')
     run, _ = run_network_certifier(host, source)
     d = host.certifier / run
@@ -841,7 +841,7 @@ def test_a_rehearsal_past_its_minutes_is_stopped_and_one_that_ran_runs_no_second
     assert all((host.certifier / run / A.WITNESS / f).is_file() for f in ("tunnel.log", "rehearse.log"))
     with pytest.raises(A.Refused, match="has run already"):
         A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
-                        command=rehearsal(WARDEN_FILES), wait=lambda proc, s: proc.wait())
+                        command=rehearsal(NETWORK_CERTIFIER_FILES), wait=lambda proc, s: proc.wait())
     for argv in (["status", "c20261024T110000Z-ffff"], ["fetch", "c20261024T110000Z-ffff"], ["status", "c../../etc"]):
         rc, out = A.gate(argv, host)
         assert rc == 3 and json.loads(out)["refused"]
@@ -1083,7 +1083,7 @@ def test_the_longest_relay_session_is_an_hour_at_the_scans_tick_and_the_gates_mi
             w -= 1
         return w, A.session_minutes(w, height or A.network_certifier_height(w), T * tick), w * T * tick / 1000
 
-    assert A.SESSION_WINDOWS == (1, A.network_certifier_windows(A.WARDEN_REQUESTS[1])) == (1, 1119)
+    assert A.SESSION_WINDOWS == (1, A.network_certifier_windows(A.NETWORK_CERTIFIER_REQUESTS[1])) == (1, 1119)
     assert A.SCAN_BUCKET_MS == (100, 4000) and T == 32 and A.CERTIFIER_MINUTES[1] == 170
     assert {tick: longest(tick) for tick in (100, 200, 250, 279, 280, 1000, 4000)} == {
         100: (1119, 63, 3580.8), 200: (1119, 123, 7161.6), 250: (1119, 153, 8952.0), 279: (1119, 170, 9990.432),
@@ -1098,7 +1098,7 @@ def test_the_longest_relay_session_is_an_hour_at_the_scans_tick_and_the_gates_mi
     assert longest(100, 20)[:2] == (1119, 67)
     assert (A.session_minutes(1119, 13), A.session_minutes(1119, 20)) == (63, 67)
     # a rehearsal's execution phases hold its tail, so the same 1119 as a session's leave the check a minute more
-    assert A.network_certifier_minutes(A.WARDEN_REQUESTS[1], 13) == 60 and A.network_certifier_height(1119) == 13
+    assert A.network_certifier_minutes(A.NETWORK_CERTIFIER_REQUESTS[1], 13) == 60 and A.network_certifier_height(1119) == 13
     assert [A.session_minutes(1, h) for h in (10, 20)] == [4, 8]
 
 
@@ -1156,7 +1156,7 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
     (d / A.WITNESS / "deployment.json").unlink()
 
     seen, forwards = [], []
-    files = WARDEN_FILES.replace('(out / "client.json").write_text("{}")\n', "").replace(
+    files = NETWORK_CERTIFIER_FILES.replace('(out / "client.json").write_text("{}")\n', "").replace(
         repr(DEPLOYMENT), repr(deployment))
     assert repr(deployment) in files and "client.json" not in files
     end = A.certifier_run(host, run, pinned=PIN,
@@ -1401,7 +1401,7 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
 
     seen = []
     counted = CHECK | {"summary": CHECK["summary"] | {"requests": req["requests"], "ended": req["requests"]}}
-    grouped = WARDEN_FILES.replace(repr(CHECK), repr(counted)) + (
+    grouped = NETWORK_CERTIFIER_FILES.replace(repr(CHECK), repr(counted)) + (
         '(out / "groups.json").write_text(json.dumps({"groups": [{"group": 0}]}))\n')
     end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal(grouped, seen), wait=lambda proc, s: proc.wait())
@@ -1433,7 +1433,7 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
       for bad in (b"", b"x", b"[]", b"[[]]", b"[1]", b"[[1.0]]", b"[[131072]]", b"[[-1]]", b"[[true]]", b'[["1"]]',
                   b'{"p": [[1]]}', b"\xff", json.dumps([[1]] * 401).encode(), json.dumps([[0] * 1025]).encode(),
                   json.dumps([[1], [0] * 2048]).encode())],
-    (["--scan", "--prompts"], b" " * A.WARDEN_PROMPTS_BYTES + b"[[1]]", "--prompts: over 1048576 bytes on stdin"),
+    (["--scan", "--prompts"], b" " * A.NETWORK_CERTIFIER_PROMPTS_BYTES + b"[[1]]", "--prompts: over 1048576 bytes on stdin"),
     (["--scan", "--prompts", "--window-per-group"], json.dumps([[1]] * 5).encode(),
      "--window-per-group: 5 prompts, past a group's 4 (the scan's lanes)"),
     (["--scan", "--scan-class", "w63k4"], b"[[1]]", "--scan-class: the scan's class of the --prompts"),
@@ -1452,7 +1452,7 @@ def test_the_gate_refuses_prompts_it_cant_check_and_writes_nothing(host, argv, s
 
 
 def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
-    """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`WARDEN_PROMPT_IDS`; `test_network_certifier_serve` holds
+    """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`NETWORK_CERTIFIER_PROMPT_IDS`; `test_network_certifier_serve` holds
     it to `scan_zk.CLASS.KI`): the scan refuses a request of more, so the gate takes exactly KI and refuses KI + 1 at
     input."""
     assert A.prompts_of(json.dumps([[0] * 1024, [1]]).encode()) == [[0] * 1024, [1]]
@@ -1464,7 +1464,7 @@ def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_
     """`--scan-class w63k4` is recorded (``scan_class``) only when given, takes a prompt of its KI = 32 ids and 4 tokens
     out (its 5 egress cells less the trailer), and runs the network certifier at the scan's schedule with its 5 egress cells, every
     other flag the class of record's (`test_network_certifier_serve` holds each class's schedule to `scan_zk.py schedule --class`).
-    A request without it is the class of record's: its bounds are `WARDEN_PROMPT_IDS` and `WARDEN_PROMPT_TOKENS`."""
+    A request without it is the class of record's: its bounds are `NETWORK_CERTIFIER_PROMPT_IDS` and `NETWORK_CERTIFIER_PROMPT_TOKENS`."""
     rc, out = gate(host, SCAN + ["--scan-class", "w63k4", "--window-per-group", "--tokens", "4", "--minutes", "4"],
                    stdin=json.dumps([[0] * 32] * 4).encode(), started=[])
     assert rc == 0, out
@@ -1479,7 +1479,7 @@ def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_
     assert both[::2] == A.SCAN_SCHEDULE[::2] and dict(zip(both[::2], both[1::2])) == \
         dict(zip(A.SCAN_SCHEDULE[::2], A.SCAN_SCHEDULE[1::2])) | {"--bucket-ms": "4000", "--egress-cells": "5"}
     assert A.scan_bounds("w63k4") == ((1, 32), (1, 4))
-    assert A.scan_bounds() == A.scan_bounds(A.SCAN_CLASS) == (A.WARDEN_PROMPT_IDS, A.WARDEN_PROMPT_TOKENS)
+    assert A.scan_bounds() == A.scan_bounds(A.SCAN_CLASS) == (A.NETWORK_CERTIFIER_PROMPT_IDS, A.NETWORK_CERTIFIER_PROMPT_TOKENS)
 
     rc, out = gate(host, SCAN + ["--minutes", "4"], stdin=b"[[1]]", started=[], token="cd34")
     assert rc == 0, out

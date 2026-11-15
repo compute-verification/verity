@@ -297,7 +297,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--T", type=int, default=600, help="the window, in the trace's certified buckets: its tick's τ_b, "
                                                           "100 ms without the tick")
     ap.add_argument("--ingress", choices=INGRESS, default="client",
-                    help="the certified order's stand-in: the client's send (client; on a .released view, the warden's "
+                    help="the certified order's stand-in: the client's send (client; on a .released view, the network certifier's "
                          "release), or the engine's own arrival stamp (network_certifier: no deviations)")
     ap.add_argument("--jobs", type=int, default=0, help="processes (default: one a trace, up to the cores)")
     ap.add_argument("--out", type=Path, required=True, help="the table's JSON")

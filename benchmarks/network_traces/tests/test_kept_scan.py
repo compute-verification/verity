@@ -177,7 +177,7 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
     assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
     late, _ = kept_scan(serve_dir, CLASS, USERS[3:])
-    with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another warden run or execution phase"):
+    with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another network certifier run or execution phase"):
         SZ.v3c_state(tmp_path, rec, [list(r) for r in late])
 
 
@@ -188,7 +188,7 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
         kept_scan(serve_dir, CLASS, ["user-0", "user-9"])
     with pytest.raises(ValueError, match="execution phases are 32 buckets, not a window of class .*'s 16"):
         kept_scan(serve_dir, WindowClass(4, 32, 4, lanes=4, every=16), USERS[:3])
-    with pytest.raises(ValueError, match="doesn't serve the warden at these parameters"):
+    with pytest.raises(ValueError, match="doesn't serve the network certifier at these parameters"):
         kept_scan(serve_dir, WindowClass(8, 32, 2, lanes=4, every=16), USERS[:3])
     with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
         kept_scan(serve_dir, WindowClass(8, 4, 4, lanes=4, every=16), USERS[:3])
@@ -207,7 +207,7 @@ def test_a_kept_run_that_wont_read_or_whose_io_or_phases_arent_whole_is_refused_
     record kept as execution phase 2 leaves its ingress execution phases 0 and 2."""
     two = shutil.copytree(serve_dir, tmp_path / "two")
     shutil.copytree(two / CP.PRIVATE / "RUN", two / CP.PRIVATE / "RUN2")
-    with pytest.raises(ValueError, match="the certifier front's kept run: 2 warden runs kept"):
+    with pytest.raises(ValueError, match="the certifier front's kept run: 2 network certifier runs kept"):
         kept_scan(two, CLASS, USERS[:3])
     undigested = _kept(tmp_path / "digest", _served(), deployment=lambda dep: dep | {"digest": "00" * 64})
     with pytest.raises(ValueError, match="the certifier front's kept run: .*deployment.json's digest isn't its param"):
