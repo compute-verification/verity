@@ -16,7 +16,7 @@ function that imports it when called, so importing this module stays cheap.
 | `PARAM` | `verity_vllm.check.weights_of_record` | `PARAM` (I7: the Program parameter the window circuit's weights are) | built.py, tests |
 | `Unexpressible` | `verity_vllm.program.predict.common` | `Unexpressible` (I7: a lowering the composer refuses, with its reason) | built.py, tests |
 | `class_circuit` | `verity_vllm.program.predict.window_circuit` | `class_circuit` (I7: a window class's circuit) | built.py, tests |
-| `gate_table` | `verity_vllm.definitions.boolean`, after `verity_vllm.definitions` registers the adapter's registry | `gate_table`, its registry registered on import (the served circuits' Boolean gates a primitive) | built.py |
+| `gate_table` | `verity.circuits.ops.boolean.versions`, after `verity_vllm.definitions` registers the adapter's registry | `gate_table`, its registry registered on import (the served circuits' Boolean gates a primitive) | built.py |
 | `dense_generic` | `verity_vllm.engine.profiles.dense_generic` | `checkpoint_entries`, `MANIFEST`, `pinned_hf_config` (I1: the checkpoints the manifests pin, and a pin's config) | policy.py, tests |
 | `b1` | `verity_vllm.definitions.registry.b1` | `weights_type` (I7: a model configuration's weights' record type) | policy.py |
 """
@@ -51,6 +51,6 @@ def class_circuit(registered: Any, cls: Any) -> Any:
 def gate_table(fns: Any) -> tuple[dict[str, int], list[str]]:
     """The Boolean gates of each primitive ``fns`` reach, and the primitives the table doesn't price."""
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
-    from verity_vllm.definitions.boolean import gate_table as table
+    from verity.circuits.ops.boolean.versions import gate_table as table
 
     return table(fns)
