@@ -7767,7 +7767,8 @@ def test_a_move_refused_in_one_package_writes_no_lock_of_the_run(tmp_path, monke
     refuse.clear()
     copy = shutil.copyfile
     with monkeypatch.context() as broken:
-        broken.setattr(A.shutil, "copyfile", lambda a, b: copy(a, b) if Path(b).parent.name == "s" else 1 / 0)
+        broken.setattr(A.shutil, "copyfile", lambda a, b, **kw: 1 / 0 if (Path(b).name, Path(b).parent.name) == (
+                       f".{A.POLICY}.moved", "q") else copy(a, b, **kw))
         with pytest.raises(ZeroDivisionError):
             A.main(argv)
     assert {d: (d / A.POLICY).read_text() for d in (s, q)} == before
