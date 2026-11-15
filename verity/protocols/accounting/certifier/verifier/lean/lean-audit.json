@@ -45,10 +45,11 @@
     "NetworkCheck.ScanOk",
     "NetworkCheck.Period.ConnectionRows",
     "NetworkCheck.Period.Start",
-    "NetworkCheck.Period.Decode"
+    "NetworkCheck.Period.Decode",
+    "Spot.Record"
    ],
    "except": [],
-   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the inference-only check's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), no Mathlib and nothing of Security; and the scan's ok-bit constants (a schedule's members and the roots of their ok rows), which a registration is held to; the period's check is code: v4's certificate decoder, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security; the period's check is code: v4's certificate decoder, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), no Mathlib and nothing of Security"
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), SPOT's record (the sample a registration states, `Spot.Record.profileSample`, and one-stage's bound of it, which an answer is held to), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, the inference-only check's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), and the scan's ok-bit constants (a schedule's members and the roots of their ok rows), which a registration is held to; no Mathlib and nothing of Security"
   },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
