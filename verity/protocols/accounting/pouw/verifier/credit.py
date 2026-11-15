@@ -297,7 +297,7 @@ PERIOD_PIN_FIELD = "pinned"
 #: pin, never from main's head, so main moving on never refuses a window fresh at its open). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
-#: the period-open's field holding the rows of record's fixed length: ``{max_tokens, stop}``,
+#: the period-open's field holding the workloads of record's fixed length: ``{max_tokens, stop}``,
 #: each request's public max_tokens in admission order and the stop mode `window.STOP_FIXED` (ignore_eos, circuits'
 #: ``public-cap`` done source), signed before any window, so it is the verifier's own and never the prover's
 LENGTH_FIELD = "length"
