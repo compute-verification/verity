@@ -14,17 +14,17 @@ import pytest
 import torch
 from torch import nn
 from verity.circuits.codec import encode_program, program_digest
-from verity_vllm.definitions.registry import b1
+from verity_torch.frontend.rules.base import RuleSet
 
+from verity_vllm.definitions.registry import b1
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import seed_rule as SEED
 from verity_vllm.program.frontend import vllm_meta as vm
-from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.export_ops import CollectiveBus, ensure_ops
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
-from verity_torch.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_bindings.collectives import AllReduce2Rule
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 PROF = {"mode": "profile", "profile": "b1-eager-v3"}
 LP, T = 3, 2

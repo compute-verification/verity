@@ -22,10 +22,15 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity_vllm.program.frontend.vllm_derive import derive_report
-from verity_vllm.program.frontend.rules import vllm_bindings as VB
-from verity_vllm.program.frontend.rules.vllm_bindings import MEAN_PINS, clear_observations, observe_export_facts, vllm_ruleset
 from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.program.frontend.rules import vllm_bindings as VB
+from verity_vllm.program.frontend.rules.vllm_bindings import (
+    MEAN_PINS,
+    clear_observations,
+    observe_export_facts,
+    vllm_ruleset,
+)
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 BF = torch.bfloat16

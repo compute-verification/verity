@@ -8,15 +8,15 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
-from verity_vllm.program.predict import node_window as NW
-from verity_vllm.program.predict import node_window_embed as NE
-from verity_vllm.program.predict import node_window_reads as NR
-from verity_vllm.program.predict.build import Unexpressible
+from verity.commitments.periods import interface as IF
 
 from tests.program.predict.test_node_window import LP, glm_request
 from tests.program.predict.test_node_window_ranks import FAMILIES as LOWERED
 from tests.program.predict.test_node_window_select import FAMILIES as SELECT
-from verity.commitments.periods import interface as IF
+from verity_vllm.program.predict import node_window as NW
+from verity_vllm.program.predict import node_window_embed as NE
+from verity_vllm.program.predict import node_window_reads as NR
+from verity_vllm.program.predict.build import Unexpressible
 
 FAMILIES = {**SELECT, **NE.FAMILIES}
 BLOCKS, OUTPUTS = 6144 // NE.WIDTH, 2

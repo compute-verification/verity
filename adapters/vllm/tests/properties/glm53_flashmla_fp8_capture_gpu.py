@@ -72,14 +72,14 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.kernels import tc as CK
-from verity_vllm.definitions.numerics import derived_rows as DRW
-from verity_vllm.definitions.numerics import flashmla_dsv32_twin as V
-from verity_vllm.definitions.numerics import flashmla_twin as T
 
 from tests.properties import dsv4_flashmla_capture_gpu as D
 from tests.properties import dsv4_marlin_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.definitions.numerics import derived_rows as DRW
+from verity_vllm.definitions.numerics import flashmla_dsv32_twin as V
+from verity_vllm.definitions.numerics import flashmla_twin as T
 from verity_vllm.records.property_record import digest_of
 
 SCHEMA = "verity-vllm/glm53-flashmla-fp8-capture/v1"
@@ -412,10 +412,9 @@ def sass(out: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------------------------------------------- the GPU side
 def selection() -> dict[str, Any]:
     """What vLLM's sparse backend would do with 8 heads and an FP8 cache, and whose interface it calls."""
+    import vllm.third_party.flashmla.flash_mla_interface as FI
     from vllm.v1.attention.backends.mla import flashmla_sparse as FS
     from vllm.v1.attention.ops import flashmla as VF
-
-    import vllm.third_party.flashmla.flash_mla_interface as FI
 
     sup = VF.is_flashmla_sparse_supported()
     sha = hashlib.sha256(Path(FI.__file__).read_bytes()).hexdigest()
@@ -711,6 +710,7 @@ def definition_token(job: dict[str, Any]) -> dict[str, Any]:
     rec = {"case": job["case"], "token": job["token"], "words": 0, "differ": 0, "first": None}
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
+
     from verity_vllm.definitions.registry import flashmla_dsv32 as R
 
     outdir, t = Path(job["dir"]), job["token"]

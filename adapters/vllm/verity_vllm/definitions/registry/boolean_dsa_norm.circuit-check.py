@@ -12,6 +12,7 @@ def _glm53_served_roots() -> list[Any]:
     holds a ``digests`` pin, which keeps it in ``--all``; its description is rows of Calls, and its Flock block is read off them
     (`verity_flock.circuit.unit_block`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsa_norm
 
     rows = (boolean_dsa_norm.DsaRMSNormSumSqV3, boolean_dsa_norm.DsaRMSNormV3)
@@ -24,6 +25,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `DsaLatentRow_v2` over that smallest norm and GLM-5.3's k_pe head (64); and the units written as Calls at the same
     bindings, `DsaRMSNorm_v3`, `DsaRMSNormSumSq_v3` and `DsaRMSNormApply_v3`."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsa_norm
 
     return [

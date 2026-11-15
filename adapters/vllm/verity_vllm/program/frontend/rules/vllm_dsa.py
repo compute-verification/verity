@@ -38,10 +38,6 @@ import numpy as np
 import torch
 from verity.circuits.refs import Coll, PartLog, Refs, array_of, concat
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.registry import dsa
-from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
-
 from verity_torch.frontend.derive import Alloc, StaticIndex, refuse
 from verity_torch.frontend.rules.base import (
     InPlaceRule,
@@ -50,6 +46,11 @@ from verity_torch.frontend.rules.base import (
     StateRule,
 )
 from verity_torch.frontend.rules.common import known, refuse_cached_prefix, shape
+from verity_torch.frontend.strided_views import _tensor_type
+
+from verity_vllm.definitions.registry import dsa
+from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_target_profile,
@@ -58,7 +59,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     launch_keys_of,
 )
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity_torch.frontend.strided_views import _tensor_type
 
 aten = torch.ops.aten
 BF16, F32, E4M3 = torch.bfloat16, torch.float32, torch.float8_e4m3fn

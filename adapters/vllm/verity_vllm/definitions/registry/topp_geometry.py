@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 SPLIT_MAX_BATCH = 64      # vLLM `_SPLIT_MAX_BATCH`: the split pipeline serves sampler batches up to this size (no top-k)
 SPLIT_MAX_SPLITS = 32     # `_SPLIT_MAX_SPLITS`
 

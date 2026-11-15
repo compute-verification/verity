@@ -6,7 +6,6 @@ from __future__ import annotations
 import torch
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
-
 from verity_torch.frontend.derive import Alloc, refuse
 from verity_torch.frontend.rules.base import OpRule, RuleInfo
 from verity_torch.frontend.rules.common import (
@@ -17,6 +16,8 @@ from verity_torch.frontend.rules.common import (
     rows_of,
     shape,
 )
+from verity_torch.frontend.strided_views import _tensor_type
+
 from verity_vllm.program.frontend.rules.vllm_bindings.attention import (
     UnifiedAttentionWithOutputRule,
 )
@@ -26,7 +27,6 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _norm_attn,
     attn_kind_for,
 )
-from verity_torch.frontend.strided_views import _tensor_type
 
 #: `engine.int8_attention_vllm.Int8AttentionImpl`, by name: the frontend reads the instantiated layers, never the engine
 INT8_ATTENTION_IMPL = "Int8AttentionImpl"

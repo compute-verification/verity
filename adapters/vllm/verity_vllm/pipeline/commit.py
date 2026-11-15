@@ -64,8 +64,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from verity_vllm import protocols as PO
-from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
+from verity_vllm.acquire.sources import hidden_source as HS
+from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.config import UsageError, group, option, workload_arg
 from verity_vllm.engine import engine_profile as prof
 
@@ -73,15 +74,23 @@ prof.apply_env()
 
 import torch  # noqa: E402
 
-from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
+from verity_vllm.commit import opened as OV  # noqa: E402
+from verity_vllm.commit import step_rows as SR
+from verity_vllm.engine import arrivals as AR  # noqa: E402
+from verity_vllm.engine import served as SV
+from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.engine.handle import Steps, scheduler_or_none  # noqa: E402
-from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
-from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
-from verity_vllm.commit import opened as OV, step_rows as SR  # noqa: E402
-from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline import boundary_plan as BP  # noqa: E402
+from verity_vllm.pipeline import c2_replay as C2
+from verity_vllm.pipeline import commit_coins as CC  # noqa: E402
+from verity_vllm.pipeline import commit_plan as CP
+from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.pipeline import remote_session as RS
+from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
+from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
 from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
-from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
+from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 
 if TYPE_CHECKING:
     from verity_vllm.acquire.sources import call_boundary_plan as CBP
@@ -392,7 +401,11 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
                      "and plugin:<module>:<factory>")
 
 
-from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
+from verity_vllm.check.commit_rules import (  # noqa: E402
+    REQUIRED_CLASSES_DEFAULT,
+    class_coverage,
+    required_classes_default,
+)
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp  # noqa: E402
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03 fail-closed verdict)
 
@@ -472,8 +485,10 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     workload requests/steps/ranks), the identity-coverage verdict, and openings sampled from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
-    from verity_vllm.commit import binding as B, executed_prefix as EP, partition as PT
     from verity_vllm.check import commit_tokens as CT
+    from verity_vllm.commit import binding as B
+    from verity_vllm.commit import executed_prefix as EP
+    from verity_vllm.commit import partition as PT
 
     # the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
     # gprog's workload digest or the labelled components fold).  The committer's own digest seeds the step roots and is recorded beside
@@ -1142,7 +1157,10 @@ def main(args: Options) -> None:
     out, wl, engine_args, kinds, multi, coins = cfg.out, cfg.wl, cfg.engine_args, cfg.kinds, cfg.multi, cfg.coins
     oracle_producers, cb_plan = cfg.oracle_producers, cfg.cb_plan
     if args.required_manifest:
-        from verity_vllm.query.manifest.bind import coverage_check as manifest_coverage_check, source_ports
+        from verity_vllm.query.manifest.bind import (
+            coverage_check as manifest_coverage_check,
+        )
+        from verity_vllm.query.manifest.bind import source_ports
     moe_attached = False
     coms: dict[str, Any] = {}
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device

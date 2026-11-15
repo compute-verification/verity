@@ -19,23 +19,23 @@ import numpy as np
 import pytest
 from verity.circuits import cut
 from verity.circuits import partition_object as PO
+from verity.circuits import word as W
 from verity.circuits.codec import canonical_json
 from verity.circuits.cut import call_scope
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.layout import resolve
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.circuits.partition import INPUT_UNIT, validate_unit_cut
 from verity.circuits.program import Program
 from verity.circuits.query_ast import oracle_gateset, oracle_out
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.circuits import word as W
-from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-from verity_vllm.definitions.registry import fp8_moe_experts as XM
-from verity_vllm.definitions.registry import moe
-from verity_vllm.definitions.registry import sampling as SM
 
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.definitions.registry import fp8_moe_experts as XM
+from verity_vllm.definitions.registry import moe
+from verity_vllm.definitions.registry import sampling as SM
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.query import program_view as PV

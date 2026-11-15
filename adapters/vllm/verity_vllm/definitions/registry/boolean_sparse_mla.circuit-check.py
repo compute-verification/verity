@@ -12,6 +12,7 @@ def _glm53_served_roots() -> list[Any]:
     (`SparseMlaHeadKeysWire_v2`) the chain serves.  One over `targets.MAX_GATES` holds a ``digests`` pin, which keeps it in
     ``--all``; its description is rows of Calls, and its Flock block is read off them (`verity_flock.circuit.unit_block`)."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_sparse_mla
 
     S = {k: boolean_sparse_mla.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
@@ -38,6 +39,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_sparse_mla
 
     return [

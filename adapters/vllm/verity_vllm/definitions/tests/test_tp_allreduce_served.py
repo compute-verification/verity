@@ -11,6 +11,7 @@ from pathlib import Path
 
 from verity.circuits.codec import program_digest
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.registry import tp_allreduce as TA
 
 SIDECAR = Path(TA.__file__).with_name("tp_allreduce.circuit-check.py")

@@ -41,13 +41,25 @@ import math
 import struct
 
 from verity.circuits.defs import PrimitiveDefinition, bind, composite
-from verity.circuits.refs import tuple_of
-from verity.circuits.ops.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
-from verity_vllm.definitions.registry import ref_prims as RP
-from verity.circuits.types import Array, Tuple, Value
 from verity.circuits.ops.fp32 import F32AddFtz, F32Mul
 from verity.circuits.ops.mufu import DivFullRcp, DivFullScaleA
 from verity.circuits.ops.prims import Bf16ToF32, const
+from verity.circuits.ops.scalar import (
+    BF16,
+    BIT,
+    F32,
+    I32,
+    BitNot,
+    BitOr,
+    F32Eq,
+    I32Add,
+    SelectF32,
+    SelectI32,
+)
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
+
+from verity_vllm.definitions.registry import ref_prims as RP
 
 SEMANTIC_ID = "sampling/GumbelTokenSelect@v1"
 
@@ -439,6 +451,7 @@ def topp_keep(x_f32, p: float, splits: int):
     That is each GPU thread's own early return, and the kernels' result wherever no collective follows the divergent return; the
     same reading defines the rest."""
     import numpy as np
+
     from verity_vllm.definitions.registry import topp_split as _TS
     S = _splits_of(splits)
     if S is None:

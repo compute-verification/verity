@@ -179,6 +179,7 @@ def row_families() -> set[str]:
 
 def boolean_table() -> tuple[dict[str, list], dict[str, list], list[str]]:
     from verity.circuits.ops.boolean.versions import _load
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     return _load()
@@ -186,6 +187,7 @@ def boolean_table() -> tuple[dict[str, list], dict[str, list], list[str]]:
 
 def made_on_demand(fid: str) -> Any:
     from verity.circuits.ops.boolean.versions import made_on_demand
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     return made_on_demand(fid)
@@ -193,6 +195,7 @@ def made_on_demand(fid: str) -> Any:
 
 def boolean_version() -> tuple[Any, type[Exception]]:
     from verity.circuits.ops.boolean.versions import NoBooleanVersion, boolean_version
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     return boolean_version, NoBooleanVersion

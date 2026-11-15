@@ -14,13 +14,15 @@ from fractions import Fraction
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.types import Array, Tuple
-from verity_vllm.definitions.registry import glibc_pow_data as D, host_f64 as H, torch_optim as TO
+
+from verity_vllm.definitions.registry import glibc_pow_data as D
+from verity_vllm.definitions.registry import host_f64 as H
+from verity_vllm.definitions.registry import torch_optim as TO
 
 U32, U64 = np.uint32, np.uint64
 M64 = (1 << 64) - 1

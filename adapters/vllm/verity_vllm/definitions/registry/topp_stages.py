@@ -31,13 +31,13 @@ from dataclasses import dataclass, field
 from functools import cache
 
 import numpy as np
-
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.ops.fp32 import F32AddFtz
 from verity.circuits.ops.prims import Bf16ToF32
 from verity.circuits.ops.scalar import BF16, F32, I32
 from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.registry import topp_keep_builder as K
 from verity_vllm.definitions.registry.dead_free import live_replay
 from verity_vllm.definitions.registry.sampling import GumbelNoiseLane, GumbelStreamKey

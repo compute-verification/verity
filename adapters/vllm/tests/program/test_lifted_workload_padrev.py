@@ -10,8 +10,6 @@ from verity.circuits import Program
 from verity.circuits.codec import encode_program
 from verity.circuits.defs import REGISTRY
 from verity.circuits.types import Array, Value
-from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry import lifted as L
 
 from tests.program import test_lifted_mixed as PM
 from tests.program.test_lifted_mixed import (
@@ -27,6 +25,8 @@ from tests.program.test_lifted_mixed import (
     _requests,
     _run,
 )
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import lifted as L
 from verity_vllm.program import workload as W
 from verity_vllm.program.lifting import lifted_compose
 
@@ -39,7 +39,9 @@ def component():
 
 
 def _weights_type():
-    from verity_vllm.definitions.registry.b1 import weights_type  # the TINY weights Record
+    from verity_vllm.definitions.registry.b1 import (
+        weights_type,  # the TINY weights Record
+    )
     return weights_type(TINY)
 
 

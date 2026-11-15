@@ -52,14 +52,14 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
+
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import fa3_split_twins as TW
 from verity_vllm.definitions.registry import attention_vocab, hopper
 from verity_vllm.definitions.registry import fa3_check_inf as F3
 from verity_vllm.definitions.registry import fa3_split as FS
-
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fa3-prefill-capture/v3"
@@ -287,7 +287,6 @@ def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.definitions.numerics import fa2_relation
     from verity_vllm.definitions.numerics import fa3_model as FM
-
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.frontend.rules import vllm_dsa_dense
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3

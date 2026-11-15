@@ -19,13 +19,10 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.circuits.ops.boolean import versions as SW
-from verity_vllm.definitions.numerics import fp8_moe_rows as MR
 from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import versions as SW
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
-from verity_vllm.definitions.registry import boolean_fp8_moe as BM
-from verity_vllm.definitions.registry import fp8_moe as M
 
 from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_fp8_moe import (
@@ -36,6 +33,9 @@ from tests.program.test_fp8_moe import (
     _twin_agrees,
     _wide,
 )
+from verity_vllm.definitions.numerics import fp8_moe_rows as MR
+from verity_vllm.definitions.registry import boolean_fp8_moe as BM
+from verity_vllm.definitions.registry import fp8_moe as M
 
 #: the entry of vLLM d9105ea80's fused_moe/configs/E=256,N=256,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json
 #: each batch size M looks up (the nearest key, fused_moe.py:1442-1447): (BLOCK_SIZE_M, BLOCK_SIZE_N, num_warps)

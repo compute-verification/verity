@@ -55,10 +55,29 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Iterable, Sequence
 
-from verity.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, BodyNode, PrimitiveDefinition, SpecializedDefinition, bind,
-                    composite)
-from verity.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat, tuple_of
+from verity.circuits.defs import (
+    REGISTRY,
+    BodyNode,
+    Builder,
+    CompositeDefinition,
+    FunctionDefinition,
+    PrimitiveDefinition,
+    SpecializedDefinition,
+    bind,
+    composite,
+)
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    Explicit,
+    Refs,
+    Strided,
+    concat,
+    tuple_of,
+)
 from verity.circuits.types import Array, RecordType, Tuple, Type, Value
+
 from verity_vllm.definitions.registry import b1, operand_widths
 
 LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names

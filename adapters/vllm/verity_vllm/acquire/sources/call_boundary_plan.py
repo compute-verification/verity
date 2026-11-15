@@ -684,6 +684,7 @@ def _run(plan: Plan, levels: tuple, recipes: tuple, R: int, sv: Mapping[int, np.
          weight: Callable[[str], np.ndarray]) -> dict[int, np.ndarray]:
     """Position -> [R, leaves] of the Calls of `recipes` over R rows; `sv` the step-shared Values ("s") they read."""
     from verity.circuits.evaluation import evaluate_batch
+
     from verity_vllm.definitions.numerics import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
 
     vals: dict[int, np.ndarray] = {}
@@ -718,6 +719,7 @@ def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:
     from verity.circuits.evaluation import kernels
     from verity.circuits.evaluation.batch import type_dtype, type_shape
     from verity.circuits.evaluation.reference import signature_of, statics_of
+
     from verity_vllm.definitions.numerics.kernel_registry import Declined, instance
     from verity_vllm.definitions.numerics.rows import KERNEL
 

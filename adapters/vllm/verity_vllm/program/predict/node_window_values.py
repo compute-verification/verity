@@ -28,7 +28,6 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import Strided, runs
@@ -287,9 +286,10 @@ class Tables:
         got = self.held.get(name)
         if got is not None:
             return got
-        from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-        from verity_vllm.pipeline import expert_rows as XR
         from verity.protocols.accounting.pouw.prover.serving import registered_commit
+        from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
+        from verity_vllm.pipeline import expert_rows as XR
 
         t = self.by[name]
         m = _TABLE.match(t.param)

@@ -20,13 +20,13 @@ from verity.circuits.codec import lookup_primitive
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.reference import statics_of
+from verity.circuits.ops.prims import F2fpBf16
+
 from verity_vllm.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.definitions.numerics import rows as RK
-from verity.circuits.ops.prims import F2fpBf16
 from verity_vllm.definitions.registry import flashmla as F
 from verity_vllm.definitions.registry import marlin_moe as MM
 from verity_vllm.definitions.registry.prims import Bf16MulBf16, F32Add
-
 from verity_vllm.program.frontend.rules.vllm_marlin_moe import MARLIN_SERVED
 
 DOT = MM.DOT

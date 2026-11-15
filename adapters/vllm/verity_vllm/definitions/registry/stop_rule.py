@@ -43,9 +43,20 @@ from types import SimpleNamespace
 
 from verity.circuits.defs import composite
 from verity.circuits.ops.prims import const
-from verity.circuits.ops.scalar import U16, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectI32, U32Hi16
+from verity.circuits.ops.scalar import (
+    U16,
+    BitAnd,
+    BitNot,
+    BitOr,
+    I32Add,
+    I32Eq,
+    I32Le,
+    SelectI32,
+    U32Hi16,
+)
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry.dsa import I32Sub
 from verity_vllm.definitions.registry.prims import I32

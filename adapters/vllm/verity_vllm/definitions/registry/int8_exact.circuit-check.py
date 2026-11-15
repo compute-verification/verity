@@ -10,6 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     one KV head's 3-key window at d = 32; one row of 33 keys (P V' over two k steps, the second zero-padded); and the primitives no
     composite here reaches whole."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import int8_exact as X
 
     scale = 32 ** -0.5

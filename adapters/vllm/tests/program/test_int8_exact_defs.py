@@ -12,9 +12,9 @@ import pytest
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
 from verity_vllm.definitions.registry import int8_exact as X
 from verity_vllm.definitions.registry.prims import bits_of, f32_of
-
 from verity_vllm.engine import int8_attention as IA
 from verity_vllm.engine import int8_exact as E
 
@@ -98,6 +98,7 @@ def test_the_replay_linear_is_the_definition_and_the_served_linear(K, N, seed):
     quantized rows (a zero row among them) and against the Definition, there and on codes the quantizer never makes (-128),
     with DOT spelt as the spec text, a bare id and the bound primitive; another DOT is declined by name."""
     from verity.circuits.ops import gemm
+
     from verity_vllm.definitions.numerics import int8_rows as Q
     from verity_vllm.definitions.numerics import rows
     from verity_vllm.definitions.numerics.kernel_registry import Declined
@@ -131,6 +132,7 @@ def test_the_replay_linear_scales_by_the_token_first(Y, sx, sw):
     """Rows whose bf16 word tells the epilogue's order apart (searched: about 4 in 10^6 random ones do): the replay's word is the
     Definition's, (Y sx) sw, and not (Y sw) sx."""
     from verity.circuits.ops import gemm
+
     from verity_vllm.definitions.numerics import derived_rows as D
     from verity_vllm.definitions.numerics import int8_rows as Q
 
@@ -147,6 +149,7 @@ def test_the_replay_s8_chain_clamps_each_step():
     """`s8_chain` is the `BlackwellS8ImmaDot32_v1` chain step for step where a step clamps: 4,097 steps of 32 x (-128)^2 past
     2^31 - 1, then 64 of -(128 x 127) back down, one long row against its negation."""
     from verity.circuits.ops import prims as CP
+
     from verity_vllm.definitions.numerics import int8_rows as Q
 
     K = (4097 + 64) * 32
@@ -272,6 +275,7 @@ def test_the_registered_table_forms_are_v1_reading_exp2_lut127():
     `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2` compute v1's words, and a Program of them holds no table."""
     from verity.circuits import operations as O
     from verity.circuits.program import Program
+
     from verity_vllm.definitions.registry import tables as T
 
     table = X.exp2_lut127_words()

@@ -7,10 +7,10 @@ import json
 import os
 
 import numpy as np
-from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as R
 
 from tests import fake_vllm
 from tests.properties import glm53_cuda_rmsnorm_capture_gpu as X
+from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as R
 from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.pipeline.cli import MACHINE
 from verity_vllm.records.property_record import REGISTRY, digest_of

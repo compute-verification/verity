@@ -17,11 +17,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, self_check
-from verity_vllm.definitions.numerics import flashmla_twin as T
+
 from verity_vllm.definitions.numerics import flashmla_dsv32_twin as TV
+from verity_vllm.definitions.numerics import flashmla_twin as T
 from verity_vllm.definitions.registry import flashmla as F
 from verity_vllm.definitions.registry import flashmla_dsv32 as V
 
@@ -319,8 +319,9 @@ def test_the_twin_is_the_reference(target):
 
 
 def test_the_twin_claims_only_the_hopper_step():
-    from verity_vllm.definitions.numerics import kernel_registry as KR
     from verity.circuits.ops.prims import AmpereBF16TcDot16
+
+    from verity_vllm.definitions.numerics import kernel_registry as KR
 
     assert KR.covers(bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 1), **HEAD), T.KERNEL) is None
     assert KR.covers(bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 1), **{**HEAD, "DOT": AmpereBF16TcDot16}),

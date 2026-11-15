@@ -7,6 +7,7 @@ under other applicability conditions is refused with every differing field named
 import json
 
 import pytest
+
 from verity_vllm.program.frontend.target_profile import (
     ApplicabilityError,
     ArtifactIdentity,

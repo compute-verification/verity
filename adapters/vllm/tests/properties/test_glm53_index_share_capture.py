@@ -11,9 +11,9 @@ import types
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics import dsa_norm_rows as NR
 
 from tests.properties import glm53_index_share_capture_gpu as IS
+from verity_vllm.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 FR = IS.FR

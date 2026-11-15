@@ -42,10 +42,10 @@ from typing import Any
 
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.types import RecordType
-
 from verity_torch.correspondence.runtime import NAMESPACE, SCHEMA, correspondence_digest
-from verity_vllm.pipeline.build_instances import write_instances
 from verity_torch.prune import kept_records
+
+from verity_vllm.pipeline.build_instances import write_instances
 
 from .build import BuildResult, _Decoder, build_program, decoder
 from .common import Unexpressible, kind

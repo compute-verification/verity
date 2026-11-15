@@ -22,12 +22,17 @@ from functools import partial
 from typing import Any, Callable, Sequence
 
 import numpy as np
-
 from verity.circuits.evaluation.batch import type_dtype, type_shape
+
 from verity_vllm.definitions.evidence import EVIDENCE
-from verity_vllm.definitions.numerics.kernel_registry import Declined, prim_static, register, register_rows
-from verity_vllm.definitions.numerics.moe_router_rows import moe_router_topk
 from verity_vllm.definitions.numerics import value_rows as VR
+from verity_vllm.definitions.numerics.kernel_registry import (
+    Declined,
+    prim_static,
+    register,
+    register_rows,
+)
+from verity_vllm.definitions.numerics.moe_router_rows import moe_router_topk
 
 #: spec family -> the registry reference that evaluates its relation (recorded in every report)
 EVALUATORS = {
@@ -209,6 +214,7 @@ def gumbel_topp_token_select(statics: dict[str, Any], operands: list[np.ndarray]
     arrive as the committed / Const encodings; every operand is checked against the signature's leaf count before the walk (a slice
     that is not exactly one f32 word is a fault of the Program's wiring, named here, never a silent truncation)."""
     from verity.circuits.evaluation import evaluate
+
     from verity_vllm.definitions.registry import sampling_topp_difftest as DT
     V = int(statics["V"])
     if len(operands) != len(_GUMBEL_TOPP_OPERANDS):
@@ -671,7 +677,20 @@ def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any]
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import b1, dead_free, fa2_check_inf, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
+
+    from verity_vllm.definitions.registry import (
+        b1,
+        dead_free,
+        fa2_check_inf,
+        fa3_check_inf,
+        fp8,
+        gemm_bias,
+        hopper,
+        moe,
+        moe_pad,
+        sampling,
+        topp_words,
+    )
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -763,10 +782,19 @@ _row("MoeFfnFixedL_v1", partial(moe_ffn_fixed, router_gemm=False), ("out",))
 _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
-from verity_vllm.definitions.numerics import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
 from verity_vllm.definitions.numerics import (  # noqa: E402
-    act_rows, batched_gemm_rows, cublas_gemm_rows, deepgemm_rows, dsa_norm_rows, dsv4_rows, glm53_rows, int8_rows, moe_align_rows,
-    softcap_rows, stop_rows,
+    act_rows,
+    batched_gemm_rows,
+    cublas_gemm_rows,
+    deepgemm_rows,
+    dense_rows,  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
+    dsa_norm_rows,
+    dsv4_rows,
+    glm53_rows,
+    int8_rows,
+    moe_align_rows,
+    softcap_rows,
+    stop_rows,
 )
 
 
@@ -783,6 +811,7 @@ for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_ex
 EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
 register_rows(int8_rows, EVALUATORS, _row)
 from verity_vllm.definitions.numerics import marlin_moe_rows  # noqa: E402
+
 marlin_moe_rows.register_rows(EVALUATORS, _row)
 register_rows(deepgemm_rows, EVALUATORS, _row)
 moe_align_rows.register_rows(EVALUATORS, _row)

@@ -10,6 +10,7 @@ def _boolean_roots() -> list[Any]:
     `registry.dsv4_moe`'s); their pieces with statics are reached through them.  `MufuLg2Mantissa_v2`, `Ex2Approx_v2`,
     `Dsv4HashWeight_v2`, `Dsv4SqrtSoftplus_v2` and their pieces are static-free."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import boolean_dsv4_moe as BD
 
     return [

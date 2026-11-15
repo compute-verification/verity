@@ -6,9 +6,9 @@ import json
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics import cpu_model as CM
 
 from verity_vllm.config import ROOT
+from verity_vllm.definitions.numerics import cpu_model as CM
 from verity_vllm.pipeline import cli
 from verity_vllm.program import gemm_target_correspondence as G
 

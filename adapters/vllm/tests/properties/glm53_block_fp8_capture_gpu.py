@@ -89,6 +89,15 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.kernels.tc import group_sum_total_batch
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.circuits.silicon.cast import e4m3_to_f32_word
+from verity.circuits.silicon.models import (
+    AMPERE_BF16_M16N8K16,
+    HOPPER_BF16_M16N8K16,
+)
+
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.definitions.numerics import derived_rows as D
 from verity_vllm.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity_vllm.definitions.numerics.deepgemm_twins import (
@@ -103,21 +112,12 @@ from verity_vllm.definitions.numerics.fp8_moe_rows import (
     TWIN_DOT_OF,
     moe_expert_fp8_block_row,
 )
-from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity_vllm.definitions.registry import act as ACT
 from verity_vllm.definitions.registry import deepgemm as DG
 from verity_vllm.definitions.registry import fp8_moe as MO
 from verity_vllm.definitions.registry import fp8_moe_experts as MX
 from verity_vllm.definitions.registry import moe as MOE_R
 from verity_vllm.definitions.registry.fp8_moe import sm90_dot
-from verity.circuits.silicon.cast import e4m3_to_f32_word
-from verity.circuits.silicon.models import (
-    AMPERE_BF16_M16N8K16,
-    HOPPER_BF16_M16N8K16,
-)
-
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
 from verity_vllm.records.property_record import seal as seal_record
 
@@ -590,6 +590,7 @@ def moe_launches(work: Path, phase: str, name: str, inter: int, M: int, hot: int
     returns (launch records, comparison jobs)."""
     import torch
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
+
     from verity_vllm.definitions.registry.fp8_moe import check_statics
 
     probe = phase == "mmav2"

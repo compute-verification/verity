@@ -104,16 +104,23 @@ from __future__ import annotations
 from typing import NamedTuple
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import ZERO32, const
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
-from verity_vllm.definitions.registry.tp_allreduce_nodes import (NODE_FILE, NODE_RECORDS, multimem_tree, multimem_trees, node_key,
-                                                               nvls_tree, stated_node)
+from verity_vllm.definitions.registry.tp_allreduce_nodes import (
+    NODE_FILE,
+    NODE_RECORDS,
+    multimem_tree,
+    multimem_trees,
+    node_key,
+    nvls_tree,
+    stated_node,
+)
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
            "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
