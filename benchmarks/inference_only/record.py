@@ -124,18 +124,19 @@ def _class_of(count: Path) -> str:
 
 
 def made_with(verdicts: Mapping[str, Any]) -> str:
-    """One line: the coins and the parameters PoUW's piece says it was made with (its `coin_source`, its draw's `from`
-    and its `scheme`), each as the record states it, or that the record does not say."""
+    """One line: the coins and the parameters PoUW's piece says it was made with (its `coin_source`, where its sample's
+    coins came from, `coins.draw.from`, and its `scheme`), each as the record states it, or that the record does not
+    say."""
     row = (verdicts.get("protocols") or {}).get("work")
     piece = (row.get("piece") or row.get("development")) if isinstance(row, dict) else None
     piece = piece if isinstance(piece, dict) else {}
     source, scheme = piece.get("coin_source"), piece.get("scheme")
-    draw = piece["coins"].get("draw") if isinstance(piece.get("coins"), dict) else None
-    draw = draw.get("from") if isinstance(draw, dict) else None
+    sample = piece["coins"].get("draw") if isinstance(piece.get("coins"), dict) else None
+    sample = sample.get("from") if isinstance(sample, dict) else None
     if not source and not scheme:
         return ("Made with, as the record states it: the record does not say which coins or parameters PoUW's piece "
                 "was made with.")
-    coins = (f"PoUW's coins from {source!r}" + (f", its draw from {draw!r}" if draw else "") if source else
+    coins = (f"PoUW's coins from {source!r}" + (f", its sample's from {sample!r}" if sample else "") if source else
              "the record does not say which coins PoUW's piece was made with")
     params = (f"its parameters {scheme!r}" if scheme else
               "the record does not say which parameters PoUW's piece was made with")

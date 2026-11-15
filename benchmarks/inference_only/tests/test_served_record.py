@@ -263,7 +263,7 @@ def test_the_first_lines_say_which_coins_and_parameters_the_record_states(case, 
     """One line says which coins and parameters PoUW's piece was made with where the record states them, its accept
     of record's piece or a development row's, and says the record does not where it doesn't."""
     piece = {"coin_source": "challenger", "coins": {"draw": {"from": "challenger"}}, "scheme": "development"}
-    said = ("Made with, as the record states it: PoUW's coins from 'challenger', its draw from 'challenger'; its "
+    said = ("Made with, as the record states it: PoUW's coins from 'challenger', its sample's from 'challenger'; its "
             "parameters 'development'.")
     assert R.made_with({"protocols": {"work": {"piece": piece}}}) == said
     assert R.made_with({"protocols": {"work": {"development": piece}}}) == said
