@@ -38,7 +38,7 @@ def dry_run(tmp_path: Path, words: tuple[str, ...] = ("--dry-run",), **given: st
     result, the words of the prover's run it printed and the words of each `research run` it started, in order (the
     probe, then the fire)."""
     r, origin, bin_, home = tmp_path / "repo", tmp_path / "origin.git", tmp_path / "bin", tmp_path / "home"
-    pin = r / "verity/protocols/accounting/pouw/verifier/lean/check/models.json"
+    pin = r / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"
     for d in (pin.parent, r / "benchmarks/remote_session", bin_, home):
         d.mkdir(parents=True)
     pin.write_text(json.dumps({"TINY": {"repo": "org/tiny", "revision": "abc123"}}))

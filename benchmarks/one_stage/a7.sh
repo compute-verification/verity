@@ -15,7 +15,7 @@
 # their witness rows bound to canonical commitments, and the ledger takes them as its requirement link
 # (`audit.RequirementLink`): its ε the most share of the linked credit the units its sample leaves unproved can carry, its
 # δ the sample's. Checks 1-3 and 5 on each sampled receipt are proved, not opened, in a second statement, by the opening
-# unit (`verity.protocols.accounting.poub.verifier.commitments.gates.block_check`).
+# unit (`verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates.block_check`).
 set -uo pipefail
 export HZ_CONFIGS=a7 HZ_MEM_GB=${A7_MEM_GB:?}
 [ -n "${A7_CACHE:-}" ] && export HZ_CACHE=$A7_CACHE

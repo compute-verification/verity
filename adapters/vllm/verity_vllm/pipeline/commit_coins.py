@@ -3,7 +3,7 @@ and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
   the Commit reserves a challenge phase on the auditor's challenger gate (`ChallengerGate`: ``reserve --peer NAME --scheme SCHEME --families
-  families(runs)``, `verity/protocols/compose/device/live_challenger/auditor.py` on the auditor device, under the caller's own gate key). Once its
+  families(runs)``, `verity/protocols/compose/verifier/live_challenger/auditor.py` on the auditor device, under the caller's own gate key). Once its
   first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
   root v2, `tp.run_root`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
   binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
@@ -37,15 +37,15 @@ from collections.abc import Callable, Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
-from verity.protocols.proofs.spot.device import challenger as Ch
-from verity.protocols.proofs.spot.device import remote
-from verity.protocols.proofs.spot.device.challenger import (
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proofs.spot.verifier.challenger import remote
+from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     CoinError,
     LiveOpening,
     live_reason,
 )
 
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     challenger_carried,
     connect_window,
     lms_verify,

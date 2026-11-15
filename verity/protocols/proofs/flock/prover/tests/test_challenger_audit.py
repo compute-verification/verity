@@ -40,7 +40,7 @@ from typing import Any
 import pytest
 import verity_difftest as D
 from verity.commitments import coin_tree as CT, hm96
-from verity.protocols.proofs.spot.device import challenger as C, remote as R
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C, remote as R
 
 from verity_flock import challengers as CH, rec_live as RL
 

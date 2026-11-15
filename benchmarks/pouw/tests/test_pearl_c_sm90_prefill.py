@@ -22,12 +22,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.accounting.pouw.verifier import audit
-from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.verifier import audit
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parent
-KERNEL = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+KERNEL = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 
 
 def load(name: str, path: Path):

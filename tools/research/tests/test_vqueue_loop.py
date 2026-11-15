@@ -4691,8 +4691,8 @@ def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_au
     assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") is None
 
 
-@pytest.mark.parametrize("path, takes", [("verity/protocols/accounting/pouw/verifier/lean/check/models.json", False),
-                                         ("verity/protocols/accounting/pouw/verifier/lean/models.json", True)])
+@pytest.mark.parametrize("path, takes", [("verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json", False),
+                                         ("verity/protocols/resource_accounting/compute/pouw/verifier/lean/models.json", True)])
 def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits_itself_and_one_beside_it_does_not(
         env, monkeypatch, path, takes):
     """An audit reads every file of its package (`lean_audit.inputs`), one a module reads with `include_str` among them, as
@@ -4701,7 +4701,7 @@ def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits
     file beside the package's directory takes its base's."""
     from research.landing import AFTER_LANDING
 
-    pkg = "verity/protocols/accounting/pouw/verifier/lean/check"
+    pkg = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
     env.put(1, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
     env.put(2, {path: "{}\n"})
     loop, runs = _check(env, monkeypatch, batch=1, depth=2)
@@ -4713,8 +4713,8 @@ def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits
     assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") == (lean if takes else None)
 
 
-@pytest.mark.parametrize("path, takes", [("verity/protocols/accounting/pouw/verifier/lean/check/models.json", False),
-                                         ("verity/protocols/accounting/pouw/verifier/lean/check/README.md", True)])
+@pytest.mark.parametrize("path, takes", [("verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json", False),
+                                         ("verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/README.md", True)])
 def test_under_gate_check_a_candidate_deleting_only_a_file_an_audit_reads_audits_itself(env, monkeypatch, path, takes):
     """The candidate's tree no longer lists a file its member deletes, and the audit's declaration says of a path what it
     says of a file there: the member's change is judged in that tree's files with the paths it changes, so the candidate on
@@ -4722,7 +4722,7 @@ def test_under_gate_check_a_candidate_deleting_only_a_file_an_audit_reads_audits
     whose member only deletes the package's README takes its base's."""
     from research.landing import AFTER_LANDING
 
-    pkg = "verity/protocols/accounting/pouw/verifier/lean/check"
+    pkg = "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
     _main_to(env, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/models.json": "{}\n", f"{pkg}/README.md": "# pouw\n"})
     env.put(1, {f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
     env.put(2, {path: None})
@@ -5116,9 +5116,9 @@ OFF_TREE = {"tools/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circu
                 ("pytest", "ci"), ("circuit-check", "circuits"), ("ratchet-gate", "vllm"), ("flock-rust-tests", "proofs"))),
             Q.REGISTRY.as_posix(): json.dumps({"handles": [
                 *({"handle": h} for h in ("ci", "circuits", "vllm", "lane-1", "lane-2")),
-                {"handle": "heads", "owns": ["verity/protocols/accounting/certifier/"]},
+                {"handle": "heads", "owns": ["verity/protocols/resource_accounting/network/"]},
                 {"handle": "artifacts", "owns": ["fixtures/"]}]}),
-            "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n",
+            "verity/protocols/resource_accounting/network/verifier/head_check.circuit-check.json": json.dumps({HEAD: {"digest": "sha512:h"}}) + "\n",
             "fixtures/head.json": json.dumps({HEAD: "no pin"}) + "\n"}
 #: a change meeting circuit-check's inputs (`queue.forces_cold`), and one that doesn't
 CIRCUITS, OTHER = {"verity/circuits/rope.py": "# rope\n"}, {"a.txt": "1\n"}
@@ -5313,7 +5313,7 @@ def test_under_gate_check_a_circuit_check_target_its_base_passed_rings_its_pins_
     too); one no pins file pins, or only one the registry gives no owner, rings the lane of each member whose change meets
     circuit-check's inputs (#2's, not #1's), and the step's owner in ci.toml (circuits) where one such member has no lane in
     the registry (#3) or none meets them."""
-    second = {"own pins": {"verity/protocols/accounting/certifier/verifier/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
+    second = {"own pins": {"verity/protocols/resource_accounting/network/verifier/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
               "unowned pins": {"verity/circuits/rope.circuit-check.json": json.dumps({ROPE: {}}) + "\n"},
               "job": {"b.txt": "2\n"}}.get(who, CIRCUITS)
     prs = [OTHER, second, *([{"verity/circuits/x.py": "# x\n"}] * (who == "stranger"))]

@@ -74,15 +74,15 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.prover.network_certifier_zk import WardenRowIdentity, flip  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC  # noqa: E402
+from verity.protocols.resource_accounting.network.prover.network_certifier_zk import WardenRowIdentity, flip  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Certificate  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.grid import BlockGrid  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.network_certifier import END, NetworkCertifierParams  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.certificate import Certificate  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_certifier import END, NetworkCertifierParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
@@ -444,7 +444,7 @@ def main(argv=None) -> int:
     if a.altered and a.made_for:
         ap.error("one refused statement a run: --altered or --made-for")
     import a5
-    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     out = a.out

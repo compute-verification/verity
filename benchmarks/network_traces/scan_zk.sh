@@ -81,7 +81,7 @@ fi
 if [ -n "${SC_REHEARSE:-}" ]; then
   log "sczk: rehearsing the network certifier at scan_zk's schedule"
   # shellcheck disable=SC2046
-  "$PY" -m verity.protocols.accounting.certifier.device.network_certifier_serve rehearse --fake --ids --out "$W/warden" \
+  "$PY" -m verity.protocols.resource_accounting.network.attester.network_certifier_serve rehearse --fake --ids --out "$W/warden" \
     --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
     ${SC_FIRST_MS:+--first-ms "$SC_FIRST_MS"} ${SC_PROMPT_MAX:+--prompt-max "$SC_PROMPT_MAX"} \
     ${SC_MAX_TOKENS:+--max-tokens "$SC_MAX_TOKENS"} \

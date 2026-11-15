@@ -19,7 +19,7 @@ any other answer, 2 on none.
 
 ``answer``: the session of `served_bandwidth.sh`, over a store of the node's own on its disk.
 
-The PoUB session's record (`verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py session`'s ``session.json``) as a core answer
+The PoUB session's record (`verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py session`'s ``session.json``) as a core answer
 in ``DIR/answer.json`` (`answer`): the verifier's answer, held to the verifier's own record of it where the session has
 one, in the core interface's form (`p2_parties.core_answer`), with γ against ``R``. The session runs on the card after
 window K was served, beside it: serving is not hooked, so its reads are the session's own, not the engine's reads of the
@@ -40,7 +40,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from verity.protocols.accounting.poub.verifier import ledger, p2_parties  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import ledger, p2_parties  # noqa: E402
 
 #: an H200's specified HBM read rate, bytes a second
 H200_BYTES_PER_S = 4_800_000_000_000

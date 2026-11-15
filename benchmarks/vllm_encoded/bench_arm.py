@@ -235,7 +235,7 @@ class _Installed:
             HERE / "serve.py",
             HERE / "stack.py",
             HERE / "step_spans.py",
-            HERE.parents[1] / "verity/protocols/accounting/poub/prover/word_codec/paged.cu",
+            HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.cu",
             HERE.parent / "kv_filler" / "green.py",
             *(Path(self.libs[name]) for name in ("wt_lib", "reader_lib", "paged_lib", "topup_lib")),
         ])

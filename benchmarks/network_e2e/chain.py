@@ -1,5 +1,5 @@
 """The network chain's steps after N2 and the proofs, over varied traffic: the advice (I1 v0,
-`verity.protocols.accounting.certifier.verifier.advice`), its bits per execution phase (v0's `bits_by_window` beside the derived rules'
+`verity.protocols.resource_accounting.network.verifier.advice`), its bits per execution phase (v0's `bits_by_window` beside the derived rules'
 residual, `encodings/derived.py`) and the prove path's audit of a committed run's step units compiled from that advice
 (`benchmarks/prove_path`). Each stage's result says what it stood on; `stubs` lists what is still a stand-in.
 
@@ -49,8 +49,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-from verity.protocols.accounting.certifier.prover import window_chain as WC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import window_chain as WC  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import advice as I1  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments import advice as AC  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402

@@ -13,16 +13,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Epoch,
     Workload,
     transcript_domain,
 )
-from verity.protocols.accounting.pouw.verifier.core_check import MANIFEST_SCHEMA
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul
-from verity.protocols.accounting.pouw.verifier.serving import Schedule, SchemeId
+from verity.protocols.resource_accounting.compute.pouw.verifier.core_check import MANIFEST_SCHEMA
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul
+from verity.protocols.resource_accounting.compute.pouw.verifier.serving import Schedule, SchemeId
 
 from verity_torch.pouw.pearl_c import served_y_device as SY
 from verity_torch.pouw.pearl_c.host import (
@@ -40,8 +40,8 @@ from verity_torch.pouw.pearl_c.host import (
     write_manifest,
 )
 from verity_torch.pouw.pearl_c.host import behind as host_behind
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.kernel import Kernel
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.manifest import session_head
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.kernel import Kernel
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import session_head
 from verity_torch.pouw.pearl_c.screen import excluded, excluded_host
 
 #: a retained whole capture's stages (`whole_calls.WholeCalls._stages`): each (weight, m₁₆)'s A words, A tree and y

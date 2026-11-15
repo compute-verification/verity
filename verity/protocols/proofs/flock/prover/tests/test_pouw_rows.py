@@ -1,5 +1,5 @@
-"""PoUW's tile-check rows (`verity.protocols.accounting.pouw.prover.circuit.leaves`) are Flock's rows byte for byte: every row's vector of
-``verity/protocols/accounting/pouw/verifier/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port Flock stages
+"""PoUW's tile-check rows (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.leaves`) are Flock's rows byte for byte: every row's vector of
+``verity/protocols/resource_accounting/compute/pouw/verifier/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port Flock stages
 for the row (`circuit._port`: ``n_words`` u16 leaves, a bit row of ``16 n_words`` bits under ``hm96-sha512/row/v2`` or
 ``hm96-sha512/row-seg/v1``), gives the pinned row bytes, digest, commit string (`circuit._commit_strings`) and tree leaf;
 one vector of each row version and a tile's give the same commit string and tree leaf from the Lean verifier's own row
@@ -26,11 +26,11 @@ from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_S
                                         sha512_row_v2_digest)
 from verity.circuits.types import Tuple
 from verity_flock import circuit as FC
-from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
 from verity.protocols.experimental.pearl_c4.prover import pc4
-from verity.protocols.accounting.pouw.prover.circuit import pc8
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8
 
-POUW_TESTS = Path(__file__).resolve().parents[4] / "accounting" / "pouw" / "verifier" / "tests"
+POUW_TESTS = Path(__file__).resolve().parents[4] / "resource_accounting" / "compute" / "pouw" / "verifier" / "tests"
 PC4_TESTS = Path(__file__).resolve().parents[4] / "experimental" / "pearl_c4" / "tests"
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 _spec = importlib.util.spec_from_file_location("pouw_rows_vectors", POUW_TESTS / "pouw_rows_vectors.py")
@@ -432,7 +432,7 @@ def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.types import Array, Value
     from verity_flock import class_statement as CS
-    from verity.protocols.accounting.pouw.prover.circuit.anchors import public_ports
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors import public_ports
 
     spec = importlib.util.spec_from_file_location("pearl_c4_regions_vectors", PC4_TESTS / "pearl_c4_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)

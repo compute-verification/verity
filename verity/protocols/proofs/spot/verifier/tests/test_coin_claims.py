@@ -11,7 +11,7 @@ import random
 import pytest
 
 from verity.commitments import claim_ids
-from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
 
 A3 = "uniform/io-getrandombytes"

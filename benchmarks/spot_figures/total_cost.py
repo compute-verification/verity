@@ -97,7 +97,7 @@ import cards as spot_cards
 import figure1 as f1
 import second_stage
 from verity.protocols.proofs.spot.prover import plancheck
-from verity.protocols.proofs.spot.device import challenger
+from verity.protocols.proofs.spot.verifier.challenger import challenger
 from verity.protocols.proofs.spot.prover.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
                                             two_stage_price, two_stage_statements)
 

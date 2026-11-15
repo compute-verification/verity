@@ -24,16 +24,16 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity.protocols.accounting.pouw.prover.circuit import live as L
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import credit as CR
-from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.verifier import verifier
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.proofs.spot.device import challenger as LC
-from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.challenger import LiveOpening, LiveRecord
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import live as L
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveOpening, LiveRecord
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
@@ -46,15 +46,15 @@ from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import credit_gate as CG
 from verity_torch.pouw import credit_gate_device as CGD
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
-from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
-from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
 K = 64
 #: the window's T

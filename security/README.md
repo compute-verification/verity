@@ -71,7 +71,7 @@ incorrect set of the trace the extractor recovers.
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
      `NetworkCertifierSound`, `WipeSound`), each open until proved (PoUW's:
-     `verity/protocols/accounting/pouw/verifier/`). Remote: the first two, `WiresSound`, `GateARow`.
+     `verity/protocols/resource_accounting/compute/pouw/verifier/`). Remote: the first two, `WiresSound`, `GateARow`.
 
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
 declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes
@@ -487,7 +487,7 @@ to) and build or run Lean in a package's Lake environment. No outside package re
 - The NCP pin's command in `tools/check/pins.py` builds and runs Lean in `security`'s environment.
 - Generators: `machine-model lean-headline` and `machine-model --device DEVICE sheet --lean`
   (the second prints `Sheets/`); `verity/circuits/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
-  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/accounting/pouw/verifier/lean/scripts/`.
+  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/resource_accounting/compute/pouw/verifier/lean/scripts/`.
 
 ## The lock
 
@@ -575,7 +575,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network certifiers and memory
   challengers are onsite's.
 - **Not the remote composite.** `Accounting.Remote` and `Properties.Poub.Remote` are PoUB
-  (`verity/protocols/accounting/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
+  (`verity/protocols/resource_accounting/memory/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
   of onsite only.
 
 ## Building and checking

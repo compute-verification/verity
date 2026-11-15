@@ -40,7 +40,7 @@ peak RSS summed over the ZK server's processes) and each arm's log and piece dir
 
 ## The Python modules
 
-H1's lowering is the prover's (`verity/protocols/accounting/pouw/prover/lowering/`): `h1unit.py`, the tile unit as a
+H1's lowering is the prover's (`verity/protocols/resource_accounting/compute/pouw/prover/lowering/`): `h1unit.py`, the tile unit as a
 Flock statement and the commitments it is opened against, which the committer, prover and verifier share; `stagers.py`,
 the stagers `drawn.py` hands the sampled prover; and `live.py`, the live units' lowering and the verifier's own files of
 them. `h1form.py` hands it this harness's ``H1_TILE`` and ``H1_TMPL`` (`benchmarks/pouw/settings.py`) as arguments.

@@ -1,5 +1,5 @@
 """The proof system's challenger in Lean (`Spot.Challenger`, the verifier) against its Python mirror
-(`verity.protocols.proofs.spot.device.challenger`), through `spot-difftest`'s challenger pieces: a coin
+(`verity.protocols.proofs.spot.verifier.challenger.challenger`), through `spot-difftest`'s challenger pieces: a coin
 commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`; and the challenger's signed record
 (`Spot.ChallengerRecord`): the verifier's key and a record as `from_json` reads them, with `record_message`, and
 `trusted_reason`.
@@ -72,7 +72,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.protocols.proofs.spot.device import challenger as Ch, coins as T
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as T
 from verity.protocols.proofs.spot.verifier.one_stage.verifier import EXE as VERIFIER
 from verity.commitments import coin_tree as CT
 from verity.commitments.identity import canonical_json_text

@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import sheets  # noqa: E402
 from verity.device import load_card, load_node  # noqa: E402
-from verity.protocols.accounting.poub.verifier import timing  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
 
 
 def test_the_sheets_figures_are_timings():

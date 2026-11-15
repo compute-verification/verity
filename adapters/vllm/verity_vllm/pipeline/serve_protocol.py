@@ -11,8 +11,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.accounting.certifier.prover.workload import FRAME_HEADER, id_event, id_request
-from verity.protocols.accounting.certifier.verifier import release as REL
+from verity.protocols.resource_accounting.network.prover.workload import FRAME_HEADER, id_event, id_request
+from verity.protocols.resource_accounting.network.verifier import release as REL
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 

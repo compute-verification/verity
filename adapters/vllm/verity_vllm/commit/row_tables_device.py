@@ -1,5 +1,5 @@
 """`row_tables.step_roots` on the GPU: a step's row tables hashed by
-`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu` on a side stream, behind an event on the serving
+`verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cu` on a side stream, behind an event on the serving
 stream, so the serving loop records the step's root when it is ready, without a host sync.
 
 `step_roots` takes what `row_tables.step_roots` takes, with ``codes`` and ``scales`` CUDA tensors that hold until the result is
@@ -15,7 +15,7 @@ the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitme
 computes the domain ids, the rows' rank order and the tables' layout (`plan`).  `host_step` runs the same functions on the CPU
 (`row_table_host.cpp`, built with the system C++ compiler), the twin the CPU tests hold to `row_tables.step_roots` on machines
 without a GPU.  The kernels' builds, libraries and device streams are PoUW's, which this module takes from
-`verity.protocols.accounting.pouw.prover.serving`'s exports (`row_table_host_lib`, `hm_tables`, ...) and
+`verity.protocols.resource_accounting.compute.pouw.prover.serving`'s exports (`row_table_host_lib`, `hm_tables`, ...) and
 `verity_torch.pouw`'s (`RowTableLibrary`).
 """
 from __future__ import annotations
@@ -33,22 +33,22 @@ from verity.commitments import row_table as RT
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     ROW_TABLE_SEG_BYTES as SEG_BYTES,
 )
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     ROW_TABLE_TAB_WORDS as TAB_WORDS,
 )
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     RowTableArgs as Args,
 )
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     hm_tables,
     leaf_prefixes,
     table_width,
     u64_words,
 )
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     row_table_host_lib as host_lib,
 )
 from verity_torch.pouw import RowTableLibrary as DeviceLibrary

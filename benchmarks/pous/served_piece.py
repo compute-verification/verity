@@ -113,12 +113,12 @@ from typing import Any
 import torch
 
 from verity.runtime.stream import Side
-from verity.protocols.accounting.pous.device import challenger_session as CS
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.prover import challenger_prover as CR
-from verity.protocols.accounting.pous.verifier import period
-from verity.protocols.accounting.pous.verifier import run as R
-from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
+from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.resource_accounting.memory.pous.verifier import period
+from verity.protocols.resource_accounting.memory.pous.verifier import run as R
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 from verity_vllm import protocols as PO
@@ -679,7 +679,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("window", type=int)
     ap.add_argument("out", type=Path)
     ap.add_argument("--hf-home", type=Path, required=True, help="the HF cache the serve read its snapshot from")
-    ap.add_argument("--p2-lib", help="libp2v1.so's directory (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh's lib/)")
+    ap.add_argument("--p2-lib", help="libp2v1.so's directory (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--node", help="the developer's node, as the session names it (default: this host's name)")
     ap.add_argument("--private", type=Path, help="where the private record goes (default SERVE_DIR/private/pous/wK)")

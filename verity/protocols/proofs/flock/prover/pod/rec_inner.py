@@ -285,7 +285,7 @@ def tree_held(challenger: Path, sessions: list[Path]) -> dict:
     """Each rec_live session directory of ``sessions`` held to the release log in ``challenger`` (`rec_live.tree_held_reason`):
     its live-coin part's record (``public.json``) and its coin tree (a stopped session's ``coin_tree.json``, else its session
     record's ``coin_tree``)."""
-    from verity.protocols.proofs.spot.device import remote as R
+    from verity.protocols.proofs.spot.verifier.challenger import remote as R
 
     held = []
     for d in sessions:

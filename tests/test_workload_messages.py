@@ -17,9 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 LIST = Path(__file__).resolve().parent / "workload_messages.toml"
 MODULES = {
     "spot": "verity.protocols.proofs.spot.prover.workload",
-    "pouw": "verity.protocols.accounting.pouw.prover.workload",
-    "pous": "verity.protocols.accounting.pous.prover.workload",
-    "certifier": "verity.protocols.accounting.certifier.prover.workload",
+    "pouw": "verity.protocols.resource_accounting.compute.pouw.prover.workload",
+    "pous": "verity.protocols.resource_accounting.memory.pous.prover.workload",
+    "certifier": "verity.protocols.resource_accounting.network.prover.workload",
 }
 #: The two messages declared in today's direction, prover to workload, against the architecture's, each with the
 #: direction the architecture gives it.

@@ -46,7 +46,7 @@ pytestmark = pytest.mark.slow
 @pytest.fixture(scope="module")
 def run(tmp_path_factory) -> tuple[Path, Path, dict]:
     """The serve dir, ``verify``'s document's path and the document, accepted."""
-    from verity.protocols.accounting.pouw.verifier import verifier as PV
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
 
     tmp = tmp_path_factory.mktemp("lean")
     with pytest.MonkeyPatch.context() as mp:
@@ -156,8 +156,8 @@ def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(
     `window.LIVE_SCHEME`) adds ``--of-record``; both after the rule on a tile over its inert-work bound and the test
     instance and before the passes, which stay last."""
     import shutil
-    from verity.protocols.accounting.pouw.verifier import window as Wd
-    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
     d, verify, doc = run
     (wfile := tmp_path / "w.json").write_text("{}")
@@ -290,7 +290,7 @@ def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch
     import os
     import subprocess
 
-    from verity.protocols.accounting.pouw.verifier import verifier as PV
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
 
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):

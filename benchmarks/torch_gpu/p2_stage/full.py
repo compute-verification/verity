@@ -54,7 +54,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py").parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kernels" / "s8_linear"))
 import gemm as G  # noqa: E402
 import layout as L  # noqa: E402
@@ -95,7 +95,7 @@ class Audit:
 
     def __init__(self, args: argparse.Namespace, lay: L.StoreLayout) -> None:
         import sketch as K
-        from verity.protocols.accounting.poub.verifier import receipts as R
+        from verity.protocols.resource_accounting.memory.poub.verifier import receipts as R
 
         self.K, self.R = K, R
         self.store_units = lay.params.blocks_per_segment * lay.params.segments // K.PER
@@ -376,7 +376,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_store/store.py layout)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest, with digests")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
-    ap.add_argument("--generator", default="verity.protocols.accounting.pous.prover.served_weights", help="the seeded generator, without --w")
+    ap.add_argument("--generator", default="verity.protocols.resource_accounting.memory.pous.prover.served_weights", help="the seeded generator, without --w")
     ap.add_argument("--shape", default="h200", help="its shape")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     ap.add_argument("--encoded", type=Path, required=True, help="the encoded store's directory, read only")

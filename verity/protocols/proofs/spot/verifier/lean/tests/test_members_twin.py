@@ -42,7 +42,7 @@ import pytest
 
 import verity_difftest as D
 from verity.commitments import coin_tree as CT
-from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import (
     closing as CL,
     draw as DR,

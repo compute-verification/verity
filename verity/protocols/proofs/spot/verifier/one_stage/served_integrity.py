@@ -44,7 +44,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity.protocols.proofs.spot.device.challenger import ChallengerKey
+from verity.protocols.proofs.spot.verifier.challenger.challenger import ChallengerKey
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R
 
 PROTOCOL = R.PROTOCOL

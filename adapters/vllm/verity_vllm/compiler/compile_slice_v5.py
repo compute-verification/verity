@@ -99,7 +99,7 @@ from verity_vllm.compiler import replay_chain as RC, replay_step as RS
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean.trace import part as _part
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.accounting.certifier.verifier.head_check import _coll, _Consts, ands
+from verity.protocols.resource_accounting.network.verifier.head_check import _coll, _Consts, ands
 
 STATICS = V4.STATICS + ("NRB", "NRK")
 #: the statics a step reads: ReplayStep_v1's, the window's shape and the slot row's widths

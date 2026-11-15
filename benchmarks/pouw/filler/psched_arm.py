@@ -56,7 +56,7 @@ class PhaseSched:
                       "sched:graph-fork-join", "sched:node-priority", "prefill:none"],
         "hypothesis": "decode's attention leaves the tensor pipe idle on the step's SMs: a fixed count of short filler "
                       "tiles forked into it adds 0.05-0.34 coverage a point at <= 5% slowdown"})
-    sources: tuple = ("verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu", "benchmarks/pouw/filler/pscore.cu",
+    sources: tuple = ("verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "benchmarks/pouw/filler/pscore.cu",
                       "benchmarks/pouw/filler/psched_arm.py", "benchmarks/pouw/filler/psched_score.py")
     filler: A.Filler | None = A.Filler(W=8, NC=4, S=2048, chunk_log2=19)
     choice: str = ("an offline table of 18 (B, L) points (split, phase W and tiles) from two psched runs; a lookup, a green "

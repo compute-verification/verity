@@ -85,11 +85,11 @@ def test_the_whole_store_pass_asks_a_leaf_pass_for_its_receipts_and_puts_the_mod
 def test_every_path_rows_sh_names_is_in_the_tree():
     script = (ROOT / "benchmarks/remote_session/rows.sh").read_text()
     names = dict(re.findall(r"\b(RS|PR)=(\S+)", script))
-    assert names == {"RS": "benchmarks/remote_session", "PR": "verity/protocols/accounting/poub/prover"}
+    assert names == {"RS": "benchmarks/remote_session", "PR": "verity/protocols/resource_accounting/memory/poub/prover"}
     paths = {m.group(1).replace("$RS", names["RS"]).replace("$PR", names["PR"])
              for m in re.finditer(r"((?:\$RS|\$PR|verity|benchmarks|tools)/[\w./-]+)", script)}
     paths = {p.rstrip(".") for p in paths if ".lake/" not in p}
-    assert {"verity/protocols/accounting/poub/prover/remote_session/session.cu",
-            "verity/protocols/accounting/poub/prover/remote_session/prover.py",
-            "verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py"} <= paths
+    assert {"verity/protocols/resource_accounting/memory/poub/prover/remote_session/session.cu",
+            "verity/protocols/resource_accounting/memory/poub/prover/remote_session/prover.py",
+            "verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py"} <= paths
     assert sorted(p for p in paths if not (ROOT / p).exists()) == []

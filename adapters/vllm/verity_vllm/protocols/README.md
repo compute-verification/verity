@@ -13,7 +13,7 @@ module. From the package itself: `Context`, `Refused`, `WeightsView`, `adapter`,
 `at_commit`, `commit_guard`, `own_auditor`, `weights_view`, `register_weights` and `into_verdict`. From `interface`:
 `Context`, `Option` and `Target`. From `linear.api`: `Arm`, `Control`, `LinearSite`, `PassSpec` and `Stack`; from
 `linear.vllm_site`: `attach` and `discover`. From `poub`, which attaches PoUB's node store
-(`verity.protocols.accounting.poub.prover.node_store`) to the engine: `Binder`, `Every`, `WeightRegion` and
+(`verity.protocols.resource_accounting.memory.poub.prover.node_store`) to the engine: `Binder`, `Every`, `WeightRegion` and
 `model_weights` of `binder`, and `CommitSession` of `remote`, which `pipeline.remote_session` reaches through `driver`.
 From
 `spot`: `NAME` and `DEFAULT_SCHEME`, by which serve-openai's Pearl+ Commit windows name its entry

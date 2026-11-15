@@ -8,7 +8,7 @@ import fold_root_check as fr
 import fold_root_sweep as sw
 import pytest
 
-from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as rf
+from verity.protocols.resource_accounting.compute.pouw.verifier.receipts import receipt_folds as rf
 
 
 def test_root_kernel_matches_brute_force(tmp_path):

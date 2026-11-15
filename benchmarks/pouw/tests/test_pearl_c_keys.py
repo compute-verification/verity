@@ -8,8 +8,8 @@ import hashlib
 
 import pytest
 from conftest import load
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 
 KERNELS = {kernel: load(f"{kernel}/fixture.py") for kernel in ("pearl_c_sm120", "pearl_c_sm90")}
 M, N, K = 128, 128, 1024

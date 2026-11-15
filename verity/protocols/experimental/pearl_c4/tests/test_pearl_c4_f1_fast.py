@@ -11,7 +11,7 @@ import pytest
 import pearl_c4_vectors as V
 import test_pouw_pearl_c4 as T
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as W
 import clear_work as CW
 from verity.protocols.experimental.pearl_c4.prover import f1_fast as Q
 
