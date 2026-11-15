@@ -236,7 +236,7 @@ theorem laidRows_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)
     {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2) :
     LaidRows l ((st.c.nets.getD n default).2.inWords * Flock.WORD)
-      fun j => blockBit (L.model regs) z o ((st.c.rangeOf n).slot s + j) := by
+      fun j => chunkBit (L.model regs) z o ((st.c.rangeOf n).slot s + j) := by
   have R := RowRanges.ofL L F.parse F.check
   have hnn := R.rowNet_lt hn
   obtain ⟨hm, hk, -, hsl⟩ := R.range hnn
@@ -248,8 +248,8 @@ theorem laidRows_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)
     fun off ho => (hat off ho).lt R.bound hm
   refine ⟨?_, fun off hlo hoff => ?_⟩
   · have hx := hxlt _ hfit
-    show blockBit (L.model regs) z o ((st.c.rangeOf n).slot s + l.constPos) = true
-    rw [blockBit_of_lt _ z o hx]
+    show chunkBit (L.model regs) z o ((st.c.rangeOf n).slot s + l.constPos) = true
+    rw [chunkBit_of_lt _ z o hx]
     by_cases hp : (st.c.rangeOf n).slot s + l.constPos = st.pin
     · have hpin : (⟨(st.c.rangeOf n).slot s + l.constPos, hx⟩ : Fin (2 ^ (L.model regs).kLog)) = (L.model regs).pin :=
         Fin.ext hp
@@ -299,7 +299,7 @@ theorem laidRows_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)
           ((((r.getD off #[]).toList.map ((st.c.rangeOf n).slot s + ·)).count j.val +
             (constPairs st.c st.pin).count ((st.c.rangeOf n).slot s + off, j.val) : ℕ) : ZMod 2)) →
         FlockSoundness.bit (M.mulVec ((L.model regs).block z o) ⟨(st.c.rangeOf n).slot s + off, hx⟩) =
-          xorRow (fun j => blockBit (L.model regs) z o ((st.c.rangeOf n).slot s + j)) (r.getD off #[]) := by
+          xorRow (fun j => chunkBit (L.model regs) z o ((st.c.rangeOf n).slot s + j)) (r.getD off #[]) := by
       intro r M hlt hM
       simp only [Matrix.mulVec, dotProduct, hM, hC, Nat.add_zero]
       rw [sum_count_nat _ hlt]
@@ -307,8 +307,8 @@ theorem laidRows_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)
     have h := congrArg FlockSoundness.bit (hz.1 o ⟨(st.c.rangeOf n).slot s + off, hx⟩
       (not_unitIn_of_rowNet L F hn (hat _ ho)))
     rw [bit_mul] at h
-    show _ = blockBit (L.model regs) z o ((st.c.rangeOf n).slot s + off)
-    rw [blockBit_of_lt _ z o hx]
+    show _ = chunkBit (L.model regs) z o ((st.c.rangeOf n).slot s + off)
+    rw [chunkBit_of_lt _ z o hx]
     refine Eq.trans ?_ h
     exact congrArg₂ (· && ·) (hmv l.ra (L.model regs).A₀ (hcols _ _ ha) fun j => (hE j.val).1).symm
       (hmv l.rb (L.model regs).B₀ (hcols _ _ hb) fun j => (hE j.val).2).symm
@@ -318,7 +318,7 @@ every block of a satisfying witness of the untyped statement. -/
 theorem shaSlot_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.shaNet 0) :
-    LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.shaNet g i + j) := by
+    LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => chunkBit (L.model regs) z o (st.c.slotCol st.c.shaNet g i + j) := by
   have R := RowRanges.ofL L F.parse F.check
   have h := laidRows_flat_ex L F hz o (Or.inl rfl) (R.slot_lt_count (Or.inl rfl) hg hi) (shaNet_ofRows R.rowNets)
   rw [shaNet_inRows R.rowNets] at h
@@ -327,14 +327,14 @@ theorem shaSlot_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))
 theorem shaSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.shaNet 0) :
-    LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.shaNet g i + j) :=
+    LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => chunkBit (L.model regs) z o (st.c.slotCol st.c.shaNet g i + j) :=
   shaSlot_flat_ex L F (hz.ex _) o hg hi
 
 /-- **Template instance `g`'s `hm96` slot `i` holds the verifier's `hm96` rows**, past its 4096 input rows. -/
 theorem hmSlot_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.hmNet 0) :
-    LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g i + j) := by
+    LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => chunkBit (L.model regs) z o (st.c.slotCol st.c.hmNet g i + j) := by
   have R := RowRanges.ofL L F.parse F.check
   have h := laidRows_flat_ex L F hz o (Or.inr rfl) (R.slot_lt_count (Or.inr rfl) hg hi) (hmNet_ofRows R.rowNets)
   rw [hmNet_inRows R.rowNets] at h
@@ -344,7 +344,7 @@ theorem hmSlot_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))}
 theorem hmSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.hmNet 0) :
-    LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g i + j) :=
+    LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => chunkBit (L.model regs) z o (st.c.slotCol st.c.hmNet g i + j) :=
   hmSlot_flat_ex L F (hz.ex _) o hg hi
 
 /-- A column at a slot of a net other than `n` is not at `n`'s slots. -/
@@ -463,7 +463,7 @@ theorem inBit_copyL (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits 
     (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off])
     (hf : (rowCopies st.c st.pin ++ wireCopiesOf st.c (HmRow.rowWires st.c.ports st.c.shaNet st.c.hmNet).toList).filter
       (fun e => e.1 = x) = [(x, src)]) :
-    blockBit (L.model regs) z o x = blockBit (L.model regs) z o src := by
+    chunkBit (L.model regs) z o x = chunkBit (L.model regs) z o src := by
   have R := RowRanges.ofL L F.parse F.check
   have hF := flatPairs_countL L F hrw hn hat hl hoff hf
   have hδ : ∀ j, deltaEntry st.da x j = (((if j = x then 1 else 0) + (if j = src then 1 else 0) : ℕ) : ZMod 2) ∧

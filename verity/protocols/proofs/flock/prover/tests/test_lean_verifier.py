@@ -1002,7 +1002,7 @@ BIT_ROW_LENGTHS = [0, 8, 1024, 2048] + [8 * b - r for b in (1, 111, 112, 127, 12
 BIT_ROW_BC = r"""import Flock
 open Flock HmRow
 
-/-- A bit row's `b ‖ c` from the verifier's constants: block `k`'s column `t` (`blockBit`: byte `o`, bit `b`) is `constBit`'s
+/-- A bit row's `b ‖ c` from the verifier's constants: block `k`'s column `t` (`chunkBit`: byte `o`, bit `b`) is `constBit`'s
 constant, else the row's bit `8 (128 k + o) + b`; the blocks compressed from `midstateOf`, the digest under hm96's default
 key with `salt`. -/
 def bcOf (l : Nat) (row salt : String) : String := Id.run do
@@ -1014,7 +1014,7 @@ def bcOf (l : Nat) (row salt : String) : String := Id.run do
   for k in [0:(p.bytes + 17 + 127) / 128] do
     let mut blk := ByteArray.mk (Array.replicate 128 0)
     for t in [0:1024] do
-      let (o, b) := blockBit t
+      let (o, b) := chunkBit t
       let v := match constBit p tl k t with
         | some c => c
         | none => ((row.get! (128 * k + o)).toNat >>> b) % 2 == 1
@@ -1102,7 +1102,7 @@ def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_bit_row_constants_complete_core_s_v2_commit_strings(tmp_path):
     """The message a bit row's Δ constants leave (`HmRow.constBit` past the row's bits: its last byte's fill, then SHA-512's
-    padding `tailOf`, placed by `blockBit`), compressed from `midstateOf`, gives core's ``b || c`` over
+    padding `tailOf`, placed by `chunkBit`), compressed from `midstateOf`, gives core's ``b || c`` over
     ``sha512_row_v2_digest`` at every residue of the length."""
     import random
 

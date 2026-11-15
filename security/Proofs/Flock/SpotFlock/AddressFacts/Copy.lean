@@ -300,9 +300,9 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
             (FlockSoundness.Typed.msgCol a.st.c (r.n h % a.st.c.g) q' b t)
           = FlockSoundness.bit (T.block (_root_.Flock.Readable.zOf r.p.sts.size r.wF 0 T.m) o ⟨_, hy⟩) :=
             (bit_block_zOf r.p r.wF 0 hk' o ⟨_, hy⟩).symm
-        _ = FlockSoundness.Discharge.Hm.blockBit T (_root_.Flock.Readable.zOf r.p.sts.size r.wF 0 T.m) o
+        _ = FlockSoundness.Discharge.Hm.chunkBit T (_root_.Flock.Readable.zOf r.p.sts.size r.wF 0 T.m) o
             (FlockSoundness.Typed.msgCol a.st.c (r.n h % a.st.c.g) q' b t) := by
-            unfold FlockSoundness.Discharge.Hm.blockBit
+            unfold FlockSoundness.Discharge.Hm.chunkBit
             rw [dif_pos hy]
         _ = FlockSoundness.bit (_root_.Flock.Readable.zOf r.p.sts.size r.wF 0 T.m
             (FlockSoundness.Discharge.HiddenExec.siteAddrH a o
