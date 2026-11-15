@@ -30,7 +30,7 @@ them, and of nothing a server or a prover says. This is the one statement of the
   with lengths rows, failing the connection as `malformed` at the first that doesn't read). Bytes that don't read
   so are no released request's, and `request_words` refuses them: a request the rule doesn't read is never
   released.
-- `max_tokens` is the u32 the request's first cell holds at `active.MAX_TOKENS_AT`, in `active.ID_DIGITS`
+- `max_tokens` is the u32 the request's first cell holds at `id_form.MAX_TOKENS_AT`, in `id_form.ID_DIGITS`
   characters after the key `{"max_tokens":`, which the reading holds to that place
   (`id_form.id_request_max_tokens`). Every released request has it, so the rule has no default to apply. It is the
   number the device reads at ingress under the response cap and holds the response to, so it is from 1 to the cap:
