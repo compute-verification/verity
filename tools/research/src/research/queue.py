@@ -413,6 +413,9 @@ RENAME, MOVE_CHECK, RESTACK = "tools/move/rename.py", "tools/check/move_check.py
 #: what those scripts import from their own checkout: `tools/move/`'s other scripts (rename.py's `layout`), and the pins list
 #: move_check.py reads to tell a pin's rewritten digest from an edit
 MOVE_DIR, MOVE_PINS = "tools/move/", "tools/check/pins.py"
+#: the corrections to move commits' own records that `restack.py` reads from beside itself (its `MOVE_LINES`), before a
+#: commit's move line: so wherever it runs, the table of the same commit is written next to it (`restack_files`)
+MOVE_LINES = "tools/move/move_lines.toml"
 #: how long a restack job runs at most (`Queue._launch_restack`): `timeout` interrupts `restack.py` then, so it removes its
 #: scratch worktrees, and kills it a minute on; a job with no exit written `RESTACK_LOST_S` after its start died (its process
 #: gone, or its pid another's after a restart of the pod)
@@ -1226,14 +1229,20 @@ def scripts_at(repo: Path, at: str, paths: Iterable[str], suffix: str = ".py") -
 
 
 def move_scripts(repo: Path, at: str) -> dict[str, str]:
-    """{path: blob} of what judges a move at ``at``: `tools/move/`'s scripts (its maps are the moves' data, not code),
-    `move_check.py` and the pins list it reads."""
-    return scripts_at(repo, at, (MOVE_DIR, MOVE_CHECK, MOVE_PINS))
+    """{path: blob} of what judges a move at ``at``: `tools/move/`'s scripts (its maps are the moves' data, not code), the
+    corrections `restack.py` reads (`MOVE_LINES`, which change what it does), `move_check.py` and the pins list it reads."""
+    return {**scripts_at(repo, at, (MOVE_DIR, MOVE_CHECK, MOVE_PINS)), **scripts_at(repo, at, (MOVE_LINES,), "")}
 
 
-#: the scripts of `tools/move/` as `vqueue.meets` reads a change's files: a member below a move that changes one holds it back
-#: (`Queue._scripts_below`)
-MOVE_SCRIPTS = (f"{MOVE_DIR}*.py",)
+def restack_files(repo: Path, at: str) -> dict[str, str]:
+    """{path: blob} of ``at``'s `restack.py` and its corrections (`MOVE_LINES`), each where ``at`` has it: what every run of
+    `restack.py` the queue or carry starts is written out from (`write_scripts`), so the script reads the table beside it."""
+    return scripts_at(repo, at, (RESTACK, MOVE_LINES), "")
+
+
+#: the scripts of `tools/move/` and the corrections `restack.py` reads, as `vqueue.meets` reads a change's files, as
+#: `move_scripts` counts them: a member below a move that changes one holds it back (`Queue._scripts_below`)
+MOVE_SCRIPTS = (f"{MOVE_DIR}*.py", MOVE_LINES)
 
 
 def path_rows(text: str) -> list[tuple[str, str]]:
@@ -2712,14 +2721,14 @@ class Queue:
 
     def _launch_restack(self, head: str, mv: Move, of: str, tries: int = 1, since: float | None = None) -> bool:
         """Start `restack.py HEAD --move-commit MOVE --script rename.py --script-arg=--map --script-arg=MAP --json`, the landing
-        branch's copy run in the clone, in the background (`RESTACK_JOB`, `landing.detach`), unless this sync starts none or
+        branch's copy with its corrections beside it (`restack_files`) run in the clone, in the background (`RESTACK_JOB`, `landing.detach`), unless this sync starts none or
         `restack_jobs` run: whether it started.  It runs the move's base's `tools/move/` scripts, which `_regenerated` held to
         the landing branch's when it made the move.  A landing branch without the script is the restack's failure."""
         key = f"{head}:{mv.commit}"
         if not self._restack_starts or len(self._restacking) >= self.restack_jobs:
             return False
-        script = _git(self.workdir, "show", f"{self.base}:{RESTACK}", check=False)
-        if script.returncode:
+        files = restack_files(self.workdir, self.base)
+        if RESTACK not in files:
             self._restacks[key] = {"why": f"`{self.into}` has no {RESTACK}"}
             return False
         from .landing import LAUNCHES, detach
@@ -2727,8 +2736,7 @@ class Queue:
         root = Path(tempfile.gettempdir()) / LAUNCHES
         root.mkdir(parents=True, exist_ok=True)
         out = tempfile.mkdtemp(prefix="restack-", dir=root)
-        path = Path(out, "restack.py")
-        path.write_text(script.stdout, errors="surrogateescape")
+        path = write_scripts(self.workdir, files, Path(out)) / RESTACK
         argv = ["sh", "-c", RESTACK_JOB, "sh", out, sys.executable, str(path), head, "--move-commit", mv.commit, "--script", RENAME,
                 "--script-arg=--map", f"--script-arg={mv.map}", "--main", "refs/remotes/origin/main", "--json"]
         now = self.now()
@@ -4270,17 +4278,31 @@ def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[
     return _own_onto(repo, onto, x), ""
 
 
+def move_lines_at(repo: Path, at: str) -> dict[str, dict]:
+    """``at``'s corrections to move commits' records (`MOVE_LINES`), by commit id: none where it has no table, or one that
+    doesn't parse, which `restack.py` refuses itself."""
+    r = _git(repo, "show", f"{at}:{MOVE_LINES}", check=False)
+    try:
+        data = tomllib.loads(r.stdout) if not r.returncode else {}
+    except tomllib.TOMLDecodeError:
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, dict)}
+
+
 def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]]]:
     """(commit, its parents) of each move ``onto`` has and ``head`` lacks, oldest first: each commit that isn't a merge with a
-    move line (`MOVE_LINE_RE`), as `tools/move/restack.py`'s `moves_on` finds those it carries a branch across, on whichever
-    parent of `main`'s merges it landed."""
-    log = _git(repo, "log", "--topo-order", "--reverse", "--no-merges", "-E", "--grep=^(Move|Layout-move): tools/move/",
-               "--format=%H %P%x00%B%x1e", onto, f"^{head}", check=False).stdout
+    move line (`MOVE_LINE_RE`), its entry's in ``onto``'s corrections where it has one (`move_lines_at`) and none whose entry
+    says `move = false`, as `tools/move/restack.py`'s `moves_on` finds those it carries a branch across, on whichever parent
+    of `main`'s merges it landed."""
+    lines = move_lines_at(repo, onto)
+    log = _git(repo, "log", "--topo-order", "--reverse", "--no-merges", "--format=%H %P%x00%B%x1e", onto, f"^{head}",
+               check=False).stdout
     found = []
     for rec in filter(None, (s.strip() for s in log.split("\x1e"))):
         line, _, body = rec.partition("\x00")
-        if MOVE_LINE_RE.search(body):
-            commit, *parents = line.split()
+        commit, *parents = line.split()
+        entry = lines.get(commit, {})
+        if entry.get("move") is not False and MOVE_LINE_RE.search(str(entry.get("line") or body)):
             found.append((commit, parents))
     return found
 
@@ -4447,7 +4469,7 @@ def map_one(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]]
     directory, and ``env`` for its merges, or (None, why) for what it raised."""
     try:
         with scratch() as d:
-            restack = write_scripts(repo, scripts_at(repo, onto, [RESTACK]), Path(d)) / MOVE_DIR
+            restack = write_scripts(repo, restack_files(repo, onto), Path(d)) / MOVE_DIR
             return mapped_change(repo, head, onto, moves, restack, env)
     except (QueueError, OSError, subprocess.SubprocessError) as e:
         return None, f"{type(e).__name__}: {e}"
@@ -4576,7 +4598,7 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
     word or the two changes, with "new" when restack.py was clean."""
     with scratch() as d:
         try:
-            restack = write_scripts(repo, scripts_at(repo, main, [RESTACK]), Path(d)) / RESTACK
+            restack = write_scripts(repo, restack_files(repo, main), Path(d)) / RESTACK
         except (QueueError, OSError) as e:
             return {"why": f"{type(e).__name__}: {e}"}
         if not restack.is_file():

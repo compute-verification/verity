@@ -68,7 +68,7 @@ theorem executionPhaseReads_members (I : ExecutionPhaseInstance d α) (k : Verit
     (hR : RegisteredHolds I.base) : I.ExecutionPhaseReads k sentEvidenceAt (statementFiles statementTable) := by
   intro θ F W hW c σ z hv hl ht hfs hsd
   have hθ := (play_ends I.base θ F c σ z).1
-  have hset : MembersSetUp I.base (CoinTape.run (I.base.game θ F c) σ z).params F W := by
+  have hset : MembersSetUp I.base I.pinned (CoinTape.run (I.base.game θ F c) σ z).params F W := by
     rw [hθ]
     exact (I.executionPhases_some hW).2
   have h := executionPhaseRead_members hF hR hset hv hl ht hfs hsd

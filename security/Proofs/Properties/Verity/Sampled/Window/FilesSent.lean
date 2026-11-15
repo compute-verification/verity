@@ -84,25 +84,25 @@ the play, a member's file v2 reads on the blobs sent at other bytes than its reg
 else the binding's read finder's output (`Binding.readFinder`), at the binding's read finder's calls: the collision
 looks the blobs sent up by the SHA-512 the read computes of each, and the registered files by the digests the
 parameters register. -/
-noncomputable def executionPhaseReadFinder (V : Vocab d α) (dev : Exchange → Properties.Challenger.History) (θ : ByteArray)
+noncomputable def executionPhaseReadFinder (V : Vocab d α) (T : PinnedTables) (dev : Exchange → Properties.Challenger.History) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Claims.Finder where
   S := Verity.Game.Tape (V.game θ F c) σ
-  out t := (filesCollision V (Verity.Game.Tape.out _ σ t)).or ((Binding.readFinder V dev θ F c σ).out t)
-  cost t := (Binding.readFinder V dev θ F c σ).cost t
+  out t := (filesCollision V (Verity.Game.Tape.out _ σ t)).or ((Binding.readFinder V T dev θ F c σ).out t)
+  cost t := (Binding.readFinder V T dev θ F c σ).cost t
 
-theorem executionPhaseReadFinder_out (V : Vocab d α) (dev : Exchange → Properties.Challenger.History) (θ : ByteArray)
+theorem executionPhaseReadFinder_out (V : Vocab d α) (T : PinnedTables) (dev : Exchange → Properties.Challenger.History) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (t : Verity.Game.Tape (V.game θ F c) σ) :
-    (executionPhaseReadFinder V dev θ F c σ).out t =
-      (filesCollision V (Verity.Game.Tape.out _ σ t)).or ((Binding.readFinder V dev θ F c σ).out t) :=
+    (executionPhaseReadFinder V T dev θ F c σ).out t =
+      (filesCollision V (Verity.Game.Tape.out _ σ t)).or ((Binding.readFinder V T dev θ F c σ).out t) :=
   rfl
 
 /-- **Where the binding's read finder outputs a collision, the window's does.** -/
-theorem executionPhaseReadFinder_of (V : Vocab d α) (dev : Exchange → Properties.Challenger.History) (θ : ByteArray)
+theorem executionPhaseReadFinder_of (V : Vocab d α) (T : PinnedTables) (dev : Exchange → Properties.Challenger.History) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (t : Verity.Game.Tape (V.game θ F c) σ)
-    (h : ∃ u v, (Binding.readFinder V dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v) :
-    ∃ u v, (executionPhaseReadFinder V dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v := by
+    (h : ∃ u v, (Binding.readFinder V T dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v) :
+    ∃ u v, (executionPhaseReadFinder V T dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v := by
   rw [executionPhaseReadFinder_out]
   cases hf : filesCollision V (Verity.Game.Tape.out _ σ t) with
   | some uv =>
@@ -112,10 +112,10 @@ theorem executionPhaseReadFinder_of (V : Vocab d α) (dev : Exchange → Propert
 
 /-- **A run whose blobs sent hold a member's file at other bytes than its registered file is one where the window's
 read finder succeeds** (`FilesSent`, `filesCollision`): the two files' SHA-512s are the member's digest. -/
-theorem finder_of_files (V : Vocab d α) (dev : Exchange → Properties.Challenger.History) (θ : ByteArray)
+theorem finder_of_files (V : Vocab d α) (T : PinnedTables) (dev : Exchange → Properties.Challenger.History) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (t : Verity.Game.Tape (V.game θ F c) σ) (h : ¬ FilesSent V (Verity.Game.Tape.out _ σ t)) :
-    ∃ u v, (executionPhaseReadFinder V dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v := by
+    ∃ u v, (executionPhaseReadFinder V T dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v := by
   rw [executionPhaseReadFinder_out]
   cases hf : filesCollision V (Verity.Game.Tape.out _ σ t) with
   | some uv =>
@@ -133,33 +133,33 @@ a member's file at other bytes than its registered file (`FilesSent`), is at mos
 finder's collision plus the forger's forgery**, under `Binding.logged_le`'s premises: the window's read finder
 outputs a collision wherever the binding's does (`executionPhaseReadFinder_of`) and wherever `FilesSent` fails
 (`finder_of_files`). -/
-theorem logged_files_le (V : Vocab d α) (k : Verity.Registration.Composite)
+theorem logged_files_le (V : Vocab d α) (T : PinnedTables) (k : Verity.Registration.Composite)
     (dev : Exchange → Properties.Challenger.History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binding.Binds V k Binding.readsV2 dev θ)
     (hs : Binding.SignsPlay V dev θ F c) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧
-        ¬ (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent ∧ FilesSent V o)) (V.game θ F c) σ ≤
-      ENNReal.ofReal ((executionPhaseReadFinder V dev θ F c σ).Pr Verity.sha512Msg) +
+        ¬ (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent ∧ FilesSent V o)) (V.game θ F c) σ ≤
+      ENNReal.ofReal ((executionPhaseReadFinder V T dev θ F c σ).Pr Verity.sha512Msg) +
         ENNReal.ofReal ((Binding.forger V dev θ F c σ).Pr Verity.lmsVerify) := by
   rw [Verity.Game.prob_eq_prCoin]
   calc Verity.Game.prCoin (fun t => V.Verdict k .sampled (Verity.Game.Tape.out _ σ t) ∧
           ¬ (Binding.Logged Binding.readsV2 (Verity.Game.Tape.out _ σ t) ∧
-            TablesSent (Verity.Game.Tape.out _ σ t).sent ∧ FilesSent V (Verity.Game.Tape.out _ σ t)))
+            TablesSent T (Verity.Game.Tape.out _ σ t).sent ∧ FilesSent V (Verity.Game.Tape.out _ σ t)))
       ≤ Verity.Game.prCoin (fun t =>
-          (∃ u v, (executionPhaseReadFinder V dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v) ∨
+          (∃ u v, (executionPhaseReadFinder V T dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v) ∨
             (Binding.forger V dev θ F c σ).Forges Verity.lmsVerify t) := by
         refine Verity.Game.prCoin_mono fun t ⟨hv, hn⟩ => ?_
         by_cases hf : FilesSent V (Verity.Game.Tape.out _ σ t)
         swap
-        · exact .inl (finder_of_files V dev θ F c σ t hf)
+        · exact .inl (finder_of_files V T dev θ F c σ t hf)
         by_cases hl : Binding.Logged Binding.readsV2 (Verity.Game.Tape.out _ σ t)
-        · exact .inl (executionPhaseReadFinder_of V dev θ F c σ t
-            (Binding.finder_of_tables V dev θ F c σ t fun ht => hn ⟨hl, ht, hf⟩))
+        · exact .inl (executionPhaseReadFinder_of V T dev θ F c σ t
+            (Binding.finder_of_tables V T dev θ F c σ t fun ht => hn ⟨hl, ht, hf⟩))
         have hθ := (Binding.play_reaches (Verity.Game.Tape.reaches_out _ σ t)).1
         rcases hb _ hθ hv hl with ⟨x, hx, hk, hbr⟩ | ⟨u, v, huv, hne, hh⟩
-        · exact (Binding.finders_of_break V dev θ F c σ t hs hx hk hbr).imp_left
-            (executionPhaseReadFinder_of V dev θ F c σ t)
-        · exact .inl (executionPhaseReadFinder_of V dev θ F c σ t (Binding.finder_of_open V dev θ F c σ t huv ⟨hne, hh⟩))
+        · exact (Binding.finders_of_break V T dev θ F c σ t hs hx hk hbr).imp_left
+            (executionPhaseReadFinder_of V T dev θ F c σ t)
+        · exact .inl (executionPhaseReadFinder_of V T dev θ F c σ t (Binding.finder_of_open V T dev θ F c σ t huv ⟨hne, hh⟩))
     _ ≤ _ := Verity.Game.prCoin_or_le _ _
     _ = _ := congrArg₂ (· + ·) (Verity.Game.prCoin_eq_ofReal_pr _) (Verity.Game.prCoin_eq_ofReal_pr _)
 
@@ -167,24 +167,24 @@ theorem logged_files_le (V : Vocab d α) (k : Verity.Registration.Composite)
 sampled verdict's acceptance at a play whose blobs sent hold a pinned table or a member's file at other bytes than
 its registered file is at most as likely as the window's read finder's collision, at plays where those that hold
 them aren't accepted (`finder_of_tables`, `finder_of_files`). -/
-theorem verdict_le_files (V : Vocab d α) (k : Verity.Registration.Composite)
+theorem verdict_le_files (V : Vocab d α) (T : PinnedTables) (k : Verity.Registration.Composite)
     (dev : Exchange → Properties.Challenger.History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c))
     (h : ∀ t : Verity.Game.Tape (V.game θ F c) σ, V.Verdict k .sampled (Verity.Game.Tape.out _ σ t) →
-      TablesSent (Verity.Game.Tape.out _ σ t).sent → FilesSent V (Verity.Game.Tape.out _ σ t) → False) :
+      TablesSent T (Verity.Game.Tape.out _ σ t).sent → FilesSent V (Verity.Game.Tape.out _ σ t) → False) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
-      ENNReal.ofReal ((executionPhaseReadFinder V dev θ F c σ).Pr Verity.sha512Msg) := by
+      ENNReal.ofReal ((executionPhaseReadFinder V T dev θ F c σ).Pr Verity.sha512Msg) := by
   rw [Verity.Game.prob_eq_prCoin]
   calc Verity.Game.prCoin (fun t => V.Verdict k .sampled (Verity.Game.Tape.out _ σ t))
       ≤ Verity.Game.prCoin (fun t =>
-          ∃ u v, (executionPhaseReadFinder V dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v) := by
+          ∃ u v, (executionPhaseReadFinder V T dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v) := by
         refine Verity.Game.prCoin_mono fun t hv => ?_
         by_cases hf : FilesSent V (Verity.Game.Tape.out _ σ t)
         swap
-        · exact finder_of_files V dev θ F c σ t hf
-        by_cases ht : TablesSent (Verity.Game.Tape.out _ σ t).sent
+        · exact finder_of_files V T dev θ F c σ t hf
+        by_cases ht : TablesSent T (Verity.Game.Tape.out _ σ t).sent
         · exact (h t hv ht hf).elim
-        exact executionPhaseReadFinder_of V dev θ F c σ t (Binding.finder_of_tables V dev θ F c σ t ht)
+        exact executionPhaseReadFinder_of V T dev θ F c σ t (Binding.finder_of_tables V T dev θ F c σ t ht)
     _ = _ := Verity.Game.prCoin_eq_ofReal_pr _
 
 end Verity.Sampled

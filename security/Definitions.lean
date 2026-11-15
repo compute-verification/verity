@@ -38,7 +38,7 @@ public import Definitions.Certifier
 public import Definitions.Certifier.Guarantees.SampledAudit
 public import Definitions.Certifier.Guarantees.SampledCharge
 public import Definitions.Certifier.WindowCharge
-public import Definitions.Certifier.Warden
+public import Definitions.Certifier.Cells
 public import Definitions.Certifier.ResponseCap
 public import Definitions.Certifier.Marks
 public import Definitions.Certifier.Tap

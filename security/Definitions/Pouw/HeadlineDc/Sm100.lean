@@ -12,10 +12,10 @@ this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
 * `classes`: the 52 instruction classes of the DS-100 census, in the order `Fin 52` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
 * `ds100`, `sheet`: the B200's data sheet (DS-100), `benchmarks/machine_model/data/devices/sm_100/sheet.toml` as
-  `security/Definitions/Registration/Sheets/B200.lean` states it: f_max 1965 MHz (the driver's reported maximum (the data
-  sheet gives no clock)); each tensor class's dense MACs a warp instruction (sm_100's tcgen05 MMA whole (`m·n·k`), a 2:4
-  sparse form at its dense twin's, its mma.sync whole, DMMA's at the f64 peak) and its operand type's dense MACs an SM
-  clock; the Nsight Compute pipes ALU, IMAD, SHFL and UNIFORM, each at its width (the Programming Guide's, and the
+  `security/Definitions/Registration/Sheets/B200.lean` states it: f_max 1965 MHz (the driver's reported maximum (the
+  data sheet gives no clock)); each tensor class's dense MACs a warp instruction (sm_100's tcgen05 MMA whole (`m·n·k`),
+  a 2:4 sparse form at its dense twin's, its mma.sync whole, DMMA's at the f64 peak) and its operand type's dense MACs
+  an SM clock; the Nsight Compute pipes ALU, IMAD, SHFL and UNIFORM, each at its width (the Programming Guide's, and the
   uniform datapath's the census's measured UP line, which no document states); no shared-memory row (DS-100 prices
   none). An MMA class the sheet rates on no peak (b1) and the memory, atomic and control classes are their issue slot
   alone (A2). Its machine reproduces every DS-100 coefficient.
@@ -29,7 +29,7 @@ this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
   level's bytes counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T =
   ½`, `b_T = 0`; 32768 committed words a unit of honest work (an UTCIMMA_M128_N256 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold (the fold
-  routes' cheapest mix, by share of the words: cp-red2 65/72, cp-red8 7/72), no filler, and ε_skip's skippable work at
+  routes' cheapest mix, by share of the words: cp-red2 65/72, cp-red8 7/72), no filler, and ε_skip's free compute at
   FFMA's price, 0.698060% of ♭'s bound (`eps_budget.design_skip` on DS-100).
 * `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.666667 + DS_alu 0.333333).
 * `checks`: the checks a window, one a round (Theorem S's S).
@@ -160,7 +160,7 @@ def flatWords : Sparse := [(35, 1, 1)]
 cp-red8 7/72. -/
 def flatFold : Sparse := [(0, 1601, 3), (8, 512, 1), (22, 62, 3)]
 
-/-- ♭'s skippable work a unit, at FFMA's price. -/
+/-- ♭'s free compute a unit, at FFMA's price. -/
 def flatSkip : Sparse := [(7, 745063066358, 99301939663)]
 
 /-- The floor program ♭, labelled. -/
