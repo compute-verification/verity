@@ -1547,8 +1547,8 @@ def poll(conversation: str, repo: str) -> bool:
     with open(mark, "a"):
         os.utime(mark)
     with open(os.path.join(INBOX, conversation + ".pull.log"), "a") as log:
-        subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox.py"), "pull",
-                          conversation, "--repo", repo], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+        subprocess.Popen([sys.executable, "-E", "-S", os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox.py"),
+                          "pull", conversation, "--repo", repo], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                          env={**os.environ, "AGENT_INBOX": INBOX}, start_new_session=True)
     return True
 

@@ -41,15 +41,21 @@ GUARD_ROOT = "/opt/agent-guard/"
 _GUARD_FILE = re.compile(re.escape(GUARD_ROOT) + r"[A-Za-z0-9_-][A-Za-z0-9_.-]*")
 #: a word with nothing the shell expands, quotes, joins or redirects, and no path
 _PLAIN = re.compile(r"[A-Za-z0-9_.,:=+%@-]+")
-#: the one wrapper a hook may run the guard through instead (`sh -c GUARD_WRAPPER guard NAME`), held here word for word so
-#: that a change to its text reopens the finding until this check vouches for the new one. It runs `GUARD_ROOT`'s hook.sh
+#: the one wrapper a hook may run the guard through instead (`/bin/sh -c GUARD_WRAPPER guard NAME`), held here word for word
+#: so that a change to its text reopens the finding until this check vouches for the new one. It fixes PATH to root's
+#: directories and unsets what could make a program it starts load another file (PYTHON*, GIT_*, BASH_ENV, LD_*, the git
+#: guard's switches), names every shell by full path, then runs `GUARD_ROOT`'s hook.sh
 #: when it and NAME are readable, and no file of the checkout's working tree otherwise: on a Cursor cloud VM (/exec-daemon)
 #: without them it refuses every call but the one shell command that restores the copy, and on any other machine (a desktop
 #: agent's laptop) it runs origin/main's committed hook.sh out of git, which checking out a branch doesn't change.
 GUARD_WRAPPER = (
-    'g=/opt/agent-guard; [ -r $g/hook.sh ] && [ -r $g/$1 ] && exec sh $g/hook.sh "$1"; '
+    'PATH=/usr/local/bin:/usr/bin:/bin; export PATH; '
+    'v=$(awk "BEGIN{for(k in ENVIRON)if(k~/^(PYTHON|GIT_)[A-Za-z0-9_]*$/)print k}") || exit 2; '
+    'unset ENV BASH_ENV CDPATH LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT VERITY_REAL_GIT VERITY_GIT_GUARD '
+    'AGENT_GUARD_GIT_HOOKS AGENT_GUARD_CHAIN_HOOKS $v; '
+    'g=/opt/agent-guard; [ -r $g/hook.sh ] && [ -r $g/$1 ] && exec /bin/sh $g/hook.sh "$1"; '
     '[ -d /exec-daemon ] || { h=$(git show origin/main:tools/agent-guard/hook.sh 2>/dev/null) '
-    '&& exec sh -c "$h" origin/main "$1"; }; '
+    '&& exec /bin/sh -c "$h" origin/main "$1"; }; '
     'r="git -C /workspace fetch -q origin main && git -C /workspace show origin/main:tools/agent-guard/boot.sh '
     '| bash -s -- /workspace"; e=$(cat); '
     'case $1:$e in sh*:*\\"command\\"*\\"command\\"*) ;; '
@@ -104,13 +110,13 @@ def no_public_address(root: Path, finding: Mapping) -> tuple[bool, str]:
 def outside_checkout(command: str, names: set[str]) -> bool:
     """Whether a hook's shell `command` runs the guard from outside the checkout: it splits into plain words (nothing the
     shell expands, joins or redirects), the first a file directly under `GUARD_ROOT`, and no other word is a path, `.` or names
-    one of the checkout's top-level `names`; or it is `sh -c GUARD_WRAPPER guard NAME` exactly, for a hook file NAME. Anything
-    else, a command that won't split included, counts as inside."""
+    one of the checkout's top-level `names`; or it is `/bin/sh -c GUARD_WRAPPER guard NAME` exactly, for a hook file NAME.
+    Anything else, a command that won't split included, counts as inside."""
     try:
         first, *rest = shlex.split(command)
     except ValueError:
         return False
-    if first == "sh" and rest[:3] == ["-c", GUARD_WRAPPER, "guard"] and len(rest) == 4:
+    if first == "/bin/sh" and rest[:3] == ["-c", GUARD_WRAPPER, "guard"] and len(rest) == 4:
         return bool(_HOOK_NAME.fullmatch(rest[3])) and rest[3] not in names
     if not _GUARD_FILE.fullmatch(first):
         return False

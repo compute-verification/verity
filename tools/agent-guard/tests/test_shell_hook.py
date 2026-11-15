@@ -37,7 +37,8 @@ def answer(command: str, **env: str) -> dict:
 
 def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     (entry,) = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["beforeShellExecution"]
-    assert entry["command"].startswith("sh -c 'g=/opt/agent-guard;") and entry["command"].endswith(" guard shell_hook.py")
+    assert entry["command"].startswith("/bin/sh -c 'PATH=/usr/local/bin:/usr/bin:/bin; export PATH;")
+    assert entry["command"].endswith(" guard shell_hook.py")
     assert entry["failClosed"] is True and "matcher" not in entry
 
 

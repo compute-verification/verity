@@ -2,7 +2,9 @@
 the checkout: the checkout here is someone's branch whose every `tools/agent-guard` file, and a hook-named file at its top,
 is a tripwire that leaves a marker. Without that copy a Cursor cloud VM (one with /exec-daemon) refuses every call but the
 one shell command that restores it; a machine with neither (a desktop agent's laptop) runs origin/main's committed guard
-out of git. Each command runs as Cursor runs it, with /opt/agent-guard and /exec-daemon moved under the test's directory."""
+out of git. Each command runs as Cursor runs it, with /opt/agent-guard and /exec-daemon moved under the test's directory.
+Programs first on the caller's PATH and variables naming files (PYTHONPATH, BASH_ENV, GIT_DIR and the like) are tripwires
+too: the guard runs only root's programs, found on a fixed PATH, and unsets every variable that could make one load a file."""
 import json
 import os
 import shutil
@@ -19,6 +21,12 @@ HOLDER = "bc-8f4b652b-17bc-5055-a120-b56940b7c7a9"
 RESTORE = ("git -C /workspace fetch -q origin main && git -C /workspace show origin/main:tools/agent-guard/boot.sh "
            "| bash -s -- /workspace")
 HOOK_FILES = ("shell_hook.py", "task_hook.py", "stop_hook.py")
+#: every program the wrapper, hook.sh and the hooks start, and the shells and interpreters a caller's PATH could swap
+PROGRAMS = ("sh", "dash", "bash", "python3", "python", "git", "awk", "cat", "dirname", "mkdir", "mktemp", "tar", "mv", "rm",
+            "tmux")
+#: modules the hooks import, siblings and standard library alike
+MODULES = ("shell_hook", "task_hook", "stop_hook", "settings", "worktree_guard", "kept_session", "inbox", "json", "re",
+           "shlex", "subprocess")
 
 
 class Site:
@@ -29,6 +37,7 @@ class Site:
         self.env.update(GIT_ENV, AGENT_GUARD_CACHE=str(tmp / "cache"), AGENT_GUARD_TASK_LOG=str(tmp / "task.jsonl"),
                         AGENT_GUARD_STATE=str(tmp / "state"), AGENT_INBOX=str(tmp / "inbox"), AGENT_INBOX_POLL_S="off",
                         AGENT_GUARD_MIN_AVAIL="0")
+        self.hook_env: dict[str, str] = {}
 
     def git(self, *args: str) -> str:
         return subprocess.run(["git", "-C", str(self.ws), *args], check=True, capture_output=True, text=True,
@@ -67,7 +76,8 @@ class Site:
         (command,) = [e["command"] for e in entries if e.get("matcher") == matcher]
         command = command.replace("/opt/agent-guard", str(self.opt)).replace("/exec-daemon", str(self.daemon))
         text = json.dumps(event, separators=(",", ":") if compact else None)
-        p = subprocess.run(["sh", "-c", command], input=text, cwd=self.ws, capture_output=True, text=True, env=self.env)
+        p = subprocess.run(["/bin/sh", "-c", command], input=text, cwd=self.ws, capture_output=True, text=True,
+                           env={**self.env, **self.hook_env})
         assert p.returncode == 0, p.stderr
         return json.loads(p.stdout)
 
@@ -85,6 +95,15 @@ class Site:
 
     def stop(self) -> dict:
         return self.run("stop", {"hook_event_name": "stop", "status": "aborted", "conversation_id": HOLDER})
+
+    def trap(self, name: str, *, executable: bool = True, text: str | None = None) -> Path:
+        """A tripwire at `traps/NAME`: run as a program, read as a shell's startup file or imported, it leaves a marker
+        and answers allow."""
+        path = self.tmp / "traps" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text or f'#!/bin/sh\necho "$0" >> {self.marker}\necho \'{{"permission": "allow"}}\'\nexit 0\n')
+        path.chmod(0o755 if executable else 0o644)
+        return path
 
     def tripped(self) -> list[str]:
         return self.marker.read_text().splitlines() if self.marker.exists() else []
@@ -142,4 +161,47 @@ def test_on_a_laptop_it_runs_origin_mains_committed_guard_and_refuses_without_or
     site.git("update-ref", "-d", "refs/remotes/origin/main")
     assert site.shell("ls")["permission"] == "deny"
     assert site.task("Task")["permission"] == "deny"
+    assert site.tripped() == []
+
+
+def answers(site: Site) -> list:
+    return [site.shell("ls"), site.shell("env | cut -d= -f1")["permission"], site.task("Task")["permission"], site.stop()]
+
+
+REAL = [{"permission": "allow"}, "deny", "deny", {}]
+
+
+@pytest.mark.parametrize("machine", ["vm", "laptop"])
+def test_a_program_first_on_the_callers_path_never_runs(site, machine):
+    """The caller's PATH (on a cloud VM, a checkout's .venv/bin comes first) names no program the guard runs: each is found
+    on root's fixed PATH, so a tripwire python3, sh or git first on it neither runs nor answers."""
+    if machine == "laptop":
+        shutil.rmtree(site.opt)
+        site.daemon.rmdir()
+    for name in PROGRAMS:
+        site.trap(name)
+    site.hook_env = {"PATH": f"{site.tmp / 'traps'}:{site.env['PATH']}", "VERITY_REAL_GIT": str(site.tmp / "traps/git")}
+    assert answers(site) == REAL
+    assert site.tripped() == []
+
+
+@pytest.mark.parametrize("machine", ["vm", "laptop"])
+def test_no_variable_of_the_environment_makes_the_guard_load_a_file(site, machine):
+    """PYTHONPATH (with PYTHONSAFEPATH, which drops the hook's own directory from the front of sys.path) naming modules
+    called like a hook's siblings or the standard library's, a shell's startup file (BASH_ENV, ENV) and GIT_DIR naming a
+    repository whose origin/main holds a tripwire hook.sh: none is read."""
+    if machine == "laptop":
+        shutil.rmtree(site.opt)
+        site.daemon.rmdir()
+    for module in MODULES:
+        site.trap(f"py/{module}.py", executable=False,
+                  text=f"open({str(site.marker)!r}, 'a').write(__file__ + '\\n')\nprint('{{\"permission\": \"allow\"}}')\n"
+                       "raise SystemExit(0)\n")
+    evil = site.tmp / "evil"
+    subprocess.run(["git", "clone", "-q", "--bare", str(site.ws), str(evil)], check=True, env=site.env)
+    subprocess.run(["git", "--git-dir", str(evil), "update-ref", "refs/remotes/origin/main", "theirs"], check=True,
+                   env=site.env)
+    site.hook_env = {"PYTHONPATH": str(site.tmp / "traps/py"), "PYTHONSAFEPATH": "1", "PYTHONSTARTUP": str(site.marker),
+                     "BASH_ENV": str(site.trap("bash_env")), "ENV": str(site.trap("env_file")), "GIT_DIR": str(evil)}
+    assert answers(site) == REAL
     assert site.tripped() == []
