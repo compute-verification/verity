@@ -1370,6 +1370,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     SourceNotReady; `<identity>/` is never created by a failed ship.  The machine side (`launch_request`) enforces `require_ready_source`."""
     from . import launcher
 
+    launcher.tree(git_dir)                   # refuses a trusted tree that is the shipped one, inside it or around it
     env = launcher.git_env()
     st = subprocess.run(launcher.git("status", "--porcelain", "--untracked-files=all"), cwd=git_dir, capture_output=True, text=True, env=env)
     if st.returncode != 0:

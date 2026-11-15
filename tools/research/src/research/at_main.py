@@ -47,14 +47,15 @@ from typing import IO, Callable
 if __package__:
     from . import settings
 else:
-    #: the shim's script form has no package to import `research.settings` from: its `get`, which for a declared name (each
-    #: one this file reads is) is ``os.environ.get`` at the call
+    #: the shim's script form has no package to import `research.settings` from: its `get` and `has`, which for a declared
+    #: name (each one this file reads is) are ``os.environ.get`` and ``in os.environ`` at the call
     settings = SimpleNamespace(get=lambda name, default=None: os.environ.get(name, default))
+    settings.has = lambda name: settings.get(name) is not None
 
 PATHS = ("tools/research", "infra/ops", "infra/cluster")
 OPT_OUT = "RESEARCH_AT_CHECKOUT"
-#: research.launcher's trusted tree: set, the copy that runs is the one it names, and no other is re-executed (`-m research`
-#: would put the working directory, a launch's --source tree, first on the new process's sys.path)
+#: research.launcher's trusted tree: set (present, even blank), the copy that runs is the one it names, and no other is
+#: re-executed (`-m research` would put the working directory, a launch's --source tree, first on the new process's sys.path)
 TRUSTED = "RESEARCH_LAUNCHER_TREE"
 #: what one command gives to setting up origin/main's copy, every git call and the wait for the cache's lock together,
 #: before it runs the checkout's own: many times a checkout of this repository on a busy machine, and short enough that
@@ -439,7 +440,7 @@ def reexec(argv: list[str], repo: Path | None = None, cache: Path | None = None,
             except (OSError, RuntimeError) as e:
                 print(f"research: {name} could not run, and the command goes on: {' '.join(str(e).split())}", file=sys.stderr)
     repo = repo or Path(__file__).resolve().parents[4]
-    if settings.get(OPT_OUT) or settings.get(TRUSTED) or not (repo / ".git").exists():
+    if settings.get(OPT_OUT) or settings.has(TRUSTED) or not (repo / ".git").exists():
         return
     cache = cache or caches()
     end = clock() + SETUP_S

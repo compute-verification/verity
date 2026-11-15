@@ -12,11 +12,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import sys
+
 import pytest
 
-from research import asker, at_main, auto, cli, remote, suite_size
+from research import asker, at_main, auto, cli, launcher, remote, suite_size
 
 ENV = "RESEARCH_LAUNCHER_TREE"
+LAUNCHER_PY = "tools/research/src/research/launcher.py"
 SETUP_GIT = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t",
              "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 SUITES = ["uv", "run", "tools/check/suites.py", "--changed", "main", "--quick"]
@@ -39,11 +42,26 @@ def script(path: Path, marks: Path, name: str, tail: str = "") -> Path:
     return path
 
 
+def git(at: Path, *args: str) -> str:
+    return subprocess.run(["git", *args], cwd=at, env=SETUP_GIT, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def checkout(at: Path) -> None:
+    """``at`` committed, with its HEAD as its own origin/main."""
+    for args in (["init", "-q", "-b", "lane"], ["add", "-A"], ["commit", "-q", "-m", "tree"], ["update-ref", "refs/remotes/origin/main", "HEAD"]):
+        git(at, *args)
+
+
+@pytest.fixture(autouse=True)
+def unchecked():
+    getattr(launcher, "_CHECKED", {}).clear()
+
+
 @pytest.fixture
 def trees(tmp_path, monkeypatch):
     """(source, trusted, marks): the source a committed git checkout whose programs, hooks, fsmonitor and filter each mark
-    `marks`, with the global git config defining the filter its `.gitattributes` names; the trusted tree stubs of the same
-    programs that mark nothing."""
+    `marks`, with the global git config defining the filter its `.gitattributes` names; the trusted tree a clean checkout
+    at its origin/main with stubs of the same programs that mark nothing."""
     marks, source, trusted = tmp_path / "marks", tmp_path / "source", tmp_path / "trusted"
     marks.mkdir()
     write(source, {
@@ -58,10 +76,10 @@ def trees(tmp_path, monkeypatch):
         "tools/check/slot.py": "TRIPWIRE_SLOT = 1\n",
         "tools/check/lean_slot.py": "TRIPWIRE_LEAN_SLOT = 1\n",
         cli.LEAN_AUDIT: trip(marks, "lean-audit") + "def url_file(dest):\n    return None\n",
+        LAUNCHER_PY: trip(marks, "source-launcher"),
         ".gitattributes": "* filter=trip\n",
     })
-    for args in (["init", "-q", "-b", "lane"], ["add", "-A"], ["commit", "-q", "-m", "tripwire"]):
-        subprocess.run(["git", *args], cwd=source, env=SETUP_GIT, check=True, capture_output=True)
+    checkout(source)
     hooks = source / ".git" / "hooks"
     script(hooks / "pre-push", marks, "pre-push")
     script(hooks / "post-checkout", marks, "post-checkout")
@@ -80,7 +98,9 @@ def trees(tmp_path, monkeypatch):
         "tools/check/lean_slot.py": "TRUSTED_LEAN_SLOT = 1\n",
         cli.LEAN_AUDIT: "import json, pathlib\nSHARED = 'lean-artifacts/'\ndef url_file(dest):\n"
                         "    p = pathlib.Path(dest) / 'lean-deps-urls.json'\n    p.write_text(json.dumps({'k': 'trusted'}))\n    return p\n",
+        LAUNCHER_PY: "",
     })
+    checkout(trusted)
     return source, trusted, marks
 
 
@@ -152,7 +172,7 @@ def test_the_pool_probe_carries_the_trusted_trees_slot_programs_and_share(trees,
     assert b"TRIPWIRE_SLOT" in unset and b"TRIPWIRE_LEAN_SLOT" in unset and b"SHARE = '0-1'" in unset
 
 
-def ship(source: Path, root: Path) -> None:
+def ship(source: Path, root: Path, expect: type[BaseException] = remote.SourceNotReady) -> None:
     """`remote.ship_source` of ``source`` as far as it goes with no machine: the probe finds no tree, the commit is pushed
     over `ext::` into a bare repository here (the "ssh" is `sh -c`), the machine's checkout fails, and the archive stream's
     feed runs into nothing before the machine refuses it."""
@@ -171,7 +191,7 @@ def ship(source: Path, root: Path) -> None:
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(remote, "ssh_run", ssh_run)
         mp.setattr(remote, "ssh_stream", ssh_stream)
-        with pytest.raises(remote.SourceNotReady):
+        with pytest.raises(expect):
             remote.ship_source(["sh", "-c"], str(root), source)
 
 
@@ -221,3 +241,117 @@ def test_research_is_not_re_executed_from_the_sources_working_directory(trees, t
     monkeypatch.delenv(ENV)
     at_main.reexec(["--version"], repo, tmp_path / "cache", execve)
     assert marked(marks) == ["research-shadow"]
+
+
+def _nested_trusted(source, trusted, tmp_path):
+    shutil.copytree(trusted, source / "nested", symlinks=True)
+    return str(source / "nested"), source
+
+
+def _around(source, trusted, tmp_path):
+    shutil.copytree(source, trusted / "lane", symlinks=True)
+    return str(trusted), trusted / "lane"
+
+
+def _link_into(source, trusted, tmp_path):
+    (tmp_path / "link").symlink_to(source)
+    return str(tmp_path / "link"), source
+
+
+def _branch(source, trusted, tmp_path):
+    git(trusted, "commit", "-q", "--allow-empty", "-m", "a lane's commit")
+    return str(trusted), source
+
+
+def _dirty(source, trusted, tmp_path):
+    (trusted / "tools/check/slot.py").write_text("MODIFIED = 1\n")
+    return str(trusted), source
+
+
+def _untracked(source, trusted, tmp_path):
+    (trusted / "infra/cluster/src/cluster/extra.py").write_text("")
+    return str(trusted), source
+
+
+def _no_launcher(source, trusted, tmp_path):
+    (trusted / LAUNCHER_PY).unlink()
+    return str(trusted), source
+
+
+def _not_a_checkout(source, trusted, tmp_path):
+    shutil.rmtree(trusted / ".git")
+    return str(trusted), source
+
+
+#: (value and the launch's source, from (source, trusted, tmp_path); what the refusal says)
+UNTRUSTED = {
+    "relative": (lambda s, t, p: (".", s), "is not an absolute path"),
+    "relative-to-a-good-tree": (lambda s, t, p: ("../trusted", s), "is not an absolute path"),
+    "blank": (lambda s, t, p: ("", s), "is blank, and set"),
+    "whitespace": (lambda s, t, p: ("  ", s), "is blank, and set"),
+    "missing": (lambda s, t, p: (str(p / "nowhere"), s), "is not an existing directory"),
+    "empty-dir": (lambda s, t, p: (str(p), s), "lacks what the launcher runs from it: tools/research/src/research/launcher.py"),
+    "no-launcher-py": (_no_launcher, f"lacks what the launcher runs from it: {LAUNCHER_PY}"),
+    "not-a-checkout": (_not_a_checkout, "is not a git checkout with an origin/main"),
+    "the-source": (lambda s, t, p: (str(s), s), "is the --source tree"),
+    "a-symlink-to-the-source": (_link_into, "is the --source tree"),
+    "inside-the-source": (_nested_trusted, "is inside the --source tree"),
+    "around-the-source": (_around, "is around the --source tree"),
+    "on-a-branch": (_branch, "is stale: its HEAD"),
+    "a-modified-slot-py": (_dirty, "is stale: what the launcher runs from it is changed or untracked there (tools/check/slot.py)"),
+    "an-untracked-module": (_untracked, "is stale: what the launcher runs from it is changed or untracked there"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(UNTRUSTED))
+def test_an_untrusted_value_is_refused_before_anything_runs_and_nothing_falls_back_to_the_source(case, trees, tmp_path,
+                                                                                                    monkeypatch, capsys):
+    """Each value the variable can't be trusted with refuses `research run` in one line naming the variable, the problem and
+    the cure, exit 2, before placement (which here marks `launched`); and every reader of the tree refuses it too, so no
+    path runs the source's programs in its place: no tripwire marks."""
+    source, trusted, marks = trees
+    value, src = UNTRUSTED[case][0](source, trusted, tmp_path)
+    said = UNTRUSTED[case][1]
+    monkeypatch.chdir(src)
+    monkeypatch.setenv(ENV, value)
+    monkeypatch.setattr(cli, "_auto_placement", lambda ns, opts: (marks / "launched").touch() or "placed")
+    assert cli._cmd_run(["--on", "auto", "--source", str(src), "--", *SUITES], []) == 2
+    err = capsys.readouterr().err
+    assert err.startswith(f"research: ${ENV}={value!r} {said}") and err.count("\n") == 1, err
+    assert "absolute path" in err or "unset" in err
+    refused = pytest.raises(SystemExit, match=rf"\${ENV}=")
+    spec = {"project": "verity", "kind": "agent-test", "node": "vy-nebius-2"}
+    for call in (lambda: remote.queue_placement(src, "r1", spec), lambda: suite_size.size(src, SUITES, None),
+                 lambda: cli.lean_records_urls(src, RECORDS),
+                 lambda: auto.read(src, 4, reach=lambda n: ["ssh", n], run=lambda a, d: (marks / "probe").touch(), node_only=True)):
+        with refused:
+            call()
+    ship(src, tmp_path / "machine", SystemExit)
+    monkeypatch.setattr(at_main, "behind", lambda repo, end=None: ("0" * 40, 1))
+    monkeypatch.setattr(at_main, "tree", lambda repo, main, cache, end=None: tmp_path / "main-tree")
+    monkeypatch.setattr(at_main, "prune", lambda cache, keep, end: None)
+    (tmp_path / "install" / ".git").mkdir(parents=True)
+    at_main.reexec(["--version"], tmp_path / "install", tmp_path / "cache", lambda exe, argv, env: (marks / "reexec").touch())
+    assert marked(marks) == []
+
+
+def test_unset_at_main_re_executes_origin_mains_copy_exactly_as_before(tmp_path, monkeypatch):
+    """The queue's loop runs `research` through `at_main` every tick: with the variable absent, a checkout behind origin/main
+    re-executes origin/main's copy with the same interpreter, argv and environment as before the variable existed. It
+    passes on the code before this change too; it is here so no later change moves it."""
+    monkeypatch.delenv(ENV, raising=False)
+    monkeypatch.delenv(at_main.OPT_OUT, raising=False)
+    monkeypatch.setenv("PYTHONPATH", "/elsewhere")
+    wt = tmp_path / "cache" / "wt"
+    monkeypatch.setattr(at_main, "behind", lambda repo, end=None: ("a" * 40, 3))
+    monkeypatch.setattr(at_main, "tree", lambda repo, main, cache, end=None: wt)
+    monkeypatch.setattr(at_main, "prune", lambda cache, keep, end: None)
+    (tmp_path / "repo" / ".git").mkdir(parents=True)
+    calls = []
+    at_main.reexec(["queue", "vqueue", "--once"], tmp_path / "repo", tmp_path / "cache", lambda *a: calls.append(a))
+    path = f"{wt / 'tools/research/src'}{os.pathsep}/elsewhere"
+    assert calls == [(sys.executable, [sys.executable, "-m", "research", "queue", "vqueue", "--once"],
+                      {**os.environ, at_main.OPT_OUT: "1", "PYTHONPATH": path})]
+    monkeypatch.setenv(at_main.OPT_OUT, "1")
+    at_main.reexec(["status"], tmp_path / "repo", tmp_path / "cache", lambda *a: calls.append(a))
+    assert len(calls) == 1

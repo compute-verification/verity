@@ -376,6 +376,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "(research/pipefail.py)")
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    from . import launcher
+
+    if why := launcher.refusal(ns.source):
+        print(why, file=sys.stderr)
+        return 2
     if not ns.claimed and not ns.allow_pipe and (why := pipefail.refusal(command)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 2

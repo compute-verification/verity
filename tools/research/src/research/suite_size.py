@@ -93,7 +93,7 @@ def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
     list its suites without importing its code: the run then takes the kind's size."""
     from . import launcher
 
-    if launcher.tree():
+    if launcher.tree(source):
         print(f"suite_size: the suites a --changed run touches are not listed under ${launcher.ENV} (the source's suites.py "
               "doesn't run here), so it takes the kind's size unless it gives --mem-gb and --timeout", file=sys.stderr, flush=True)
         return None
