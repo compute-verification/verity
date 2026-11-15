@@ -1824,6 +1824,8 @@ class Run:
             out = _add_inputs(out, add)
         for old, new in conf.get("testpaths_replace", {}).items():
             out = _replace_list_item(out, "testpaths", old, new)
+        if prefix := conf.get("strip_suite_relative"):
+            out = _strip_suite_relative(out, prefix)
         for n in merged:
             dep = re.compile(r'"' + re.escape(n) + r'(\[[^\]]*\])?"')
             if dep.search(out):
@@ -2140,6 +2142,29 @@ def _add_inputs(text: str, add: list[str], first: bool = False) -> str:
         (items.rstrip() + (", " if items.strip() else "") + ins)
     new_body = body[: m.start("items")] + new_items + body[m.end("items"):]
     return text.replace(body, new_body, 1)
+
+
+#: the lists of a suite's `[tool.verity.tests]` whose paths are written from the suite's directory: {table: keys}
+SUITE_RELATIVE = {"tool.verity.tests": ("untraced",), "tool.verity.tests.reads": ("tests",)}
+
+
+def _strip_suite_relative(text: str, prefix: str) -> str:
+    """Each path of the suite-relative lists (`SUITE_RELATIVE`) that starts with `prefix`, without it: what a suite lists once
+    its test path `prefix` is its directory (`[pyproject] strip_suite_relative`, beside `testpaths_replace`)."""
+    out, table, key = [], None, None
+    for line in text.splitlines(keepends=True):
+        code = line.split("#", 1)[0]
+        if key is None and (m := re.match(r"^\s*\[\[?\s*([^\[\]]+?)\s*\]\]?\s*$", code)):
+            table = m.group(1)
+        elif key is None and (m := re.match(r"^\s*(\w+)\s*=\s*\[", code)) and m.group(1) in SUITE_RELATIVE.get(table, ()):
+            key = m.group(1)
+            code = code[m.end():]
+        if key is not None:
+            line = re.sub(r'(["\'])' + re.escape(prefix), r"\1", line)
+            if "]" in code:
+                key = None
+        out.append(line)
+    return "".join(out)
 
 
 def _replace_list_item(text: str, key: str, old: str, new: list[str]) -> str:
