@@ -27,8 +27,8 @@ from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.pipeline import serve_day as SD
 from verity_vllm.pipeline import serve_h1 as SH
 from verity_vllm.pipeline import serve_tie as TIE
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
 
 #: what the tie hears of a sealed window (`serve_commit.CommitWindows`' seal line)
 SEALED = {"run_id": "t/w", "run_root": "ab" * 64, "row_dir": "windows/w"}

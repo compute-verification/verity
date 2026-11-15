@@ -55,8 +55,8 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_builder import Row
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
-from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import ROW_ALIGN
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 
 #: the scheme the remote demo's Pearl+ serves under, on the H200
 SCHEME = "pearl-c-h100-v1-h3"

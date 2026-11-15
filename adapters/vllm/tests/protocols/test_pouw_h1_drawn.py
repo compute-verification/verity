@@ -41,10 +41,10 @@ from tests.protocols.test_pouw_h1_commit import ROWS, STEPS, K, Model
 from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.protocols.pouw.h1 import drawn as DRAWN
-from verity_vllm.protocols.pouw.h1 import drawn_rows as DR
-from verity_vllm.protocols.pouw.h1 import prover as PV
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1 import drawn as DRAWN
+from verity.protocols.accounting.pouw.prover.serving.h1 import drawn_rows as DR
+from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 V1 = Value(1)
 J10R_UNIT = HW.tile_unit
