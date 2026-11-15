@@ -48,7 +48,7 @@ from typing import TYPE_CHECKING, TypeGuard
 import pytest
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]  # adapters/vllm
+ROOT = HERE.parents[3] / "adapters" / "vllm"  # adapters/vllm
 REPO = ROOT.parents[1]
 #: (base, directory): the package, each file keyed by its path from its base; and the packages scanned at the directory's
 #: top, where only some are

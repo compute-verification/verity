@@ -11,7 +11,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-spec = importlib.util.spec_from_file_location("stage_under_test", HERE.parent / "stage.py")
+spec = importlib.util.spec_from_file_location("stage_under_test", HERE.parents[2] / "tools" / "move" / "stage.py")
 ST = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ST)
 spec = importlib.util.spec_from_file_location("stage_move_check", ROOT / ST.MOVE_CHECK)

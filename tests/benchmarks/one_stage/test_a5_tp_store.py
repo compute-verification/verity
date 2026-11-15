@@ -59,7 +59,7 @@ def _job(tmp: Path, custody: bool = True) -> tuple[dict[str, str], dict[str, byt
 
 
 def _run(env: dict[str, str]) -> subprocess.CompletedProcess:
-    return subprocess.run(["bash", str(HERE.parent / "a5_tp.sh")], cwd=REPO, env=env, capture_output=True, text=True)
+    return subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "a5_tp.sh")], cwd=REPO, env=env, capture_output=True, text=True)
 
 
 def test_a_dry_session_stores_its_circuits_and_tables_by_sha512_and_labels_the_run(tmp_path):

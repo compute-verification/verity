@@ -21,7 +21,7 @@ import pytest
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import EXE
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 
 import a0  # noqa: E402
 import server_rate as SR  # noqa: E402

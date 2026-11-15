@@ -27,7 +27,7 @@ from verity_vllm.query.manifest.format import MOE_FP8_PLANES
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "glm_moe_dsa"
-MAP = HERE.parents[1] / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
+MAP = HERE.parents[4] / "adapters" / "vllm" / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
 
 CMAP = CM.load(MAP)
 CONFIG_BYTES = (FIX / "config.json").read_bytes()

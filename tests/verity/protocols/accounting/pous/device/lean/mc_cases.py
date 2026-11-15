@@ -28,7 +28,7 @@ from verity.commitments.crypto import lms
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
 HERE = Path(__file__).resolve().parent
-PACKAGE = HERE.parent
+PACKAGE = HERE.parents[6] / "verity" / "protocols" / "accounting" / "pous" / "device" / "lean"
 ROOT = Path(__file__).resolve().parents[7]
 
 

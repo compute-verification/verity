@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-SERVE = HERE.parent / "serve.py"
+SERVE = HERE.parents[2] / "benchmarks" / "remote_session" / "serve.py"
 sys.path[:0] = [str(HERE.parents[2]), str(HERE.parents[2] / "adapters" / "vllm")]
 
 

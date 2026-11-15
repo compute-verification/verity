@@ -9,7 +9,7 @@ import pytest
 from verity.device import load_card, number
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "nci"))
 
 import kappa  # noqa: E402
 import tiers as T  # noqa: E402

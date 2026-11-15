@@ -24,7 +24,7 @@ def _load(path: Path, name: str):
     return m
 
 
-W = _load(HERE.parent / "warm.py", "lean_warm_under_test")
+W = _load(HERE.parents[3] / "tools" / "verity" / "lean" / "warm.py", "lean_warm_under_test")
 LA, V = W.tools(ROOT)
 
 BASE = "b" * 40

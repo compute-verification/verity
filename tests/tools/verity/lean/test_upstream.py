@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_upstream", HERE.parent / "upstream.py")
+spec = importlib.util.spec_from_file_location("lean_upstream", HERE.parents[3] / "tools" / "verity" / "lean" / "upstream.py")
 U = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(U)
 

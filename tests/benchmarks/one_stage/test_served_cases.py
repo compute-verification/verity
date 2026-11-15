@@ -55,7 +55,7 @@ from verity.circuits.types import Array, Value as Bits
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import served_cases as SC  # noqa: E402
 from v1_case import RP, v1_case  # noqa: E402
 
@@ -1174,7 +1174,7 @@ def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deploym
 def test_the_hand_off_lists_the_records_by_the_patterns_the_walk_reads():
     """`SC.RECORDS` and the hand-off's list of the serve's docket records (`served_verdicts.sh`'s
     `handoff_inputs`) are two copies of the same patterns, in the same order."""
-    text = (HERE.parent / "served_verdicts.sh").read_text()
+    text = (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
     said = re.findall(r"""printf '%s\\n' ((?:\S+/registration\.json ?)+)\)""", text)
     assert [tuple(x.split()) for x in said] == [SC.RECORDS]
 

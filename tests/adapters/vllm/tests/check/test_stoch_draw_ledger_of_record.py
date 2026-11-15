@@ -11,7 +11,7 @@ import pytest
 
 from verity_vllm.check.replay.stoch_recompute import sample_accounting
 
-EVID = Path(__file__).resolve().parents[2] / "out" / "gen" / "sweep" / "evidence" / "stoch"
+EVID = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "out" / "gen" / "sweep" / "evidence" / "stoch"
 
 
 @pytest.mark.parametrize("row, att, n_rows, V", [

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "codec_tensor"))
 
 import wide as W  # noqa: E402
 
@@ -63,7 +63,7 @@ def test_fields():
 
 
 def test_kernel_constants_match():
-    src = (HERE.parent / "wt.cu").read_text()
+    src = (HERE.parents[2] / "benchmarks" / "codec_tensor" / "wt.cu").read_text()
     for f in W.FIELDS.values():
         m = re.search(rf"#(?:el)?if WT_FIELD == {f.n}\nconstexpr int NBITS = {f.n}, TW = (\d+);\nconstexpr u32 CF = (\d+);",
                       src)

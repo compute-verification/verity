@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-MOVE = Path(__file__).resolve().parents[1]
+MOVE = Path(__file__).resolve().parents[3] / "tools" / "move"
 sys.path.insert(0, str(MOVE))
 
 

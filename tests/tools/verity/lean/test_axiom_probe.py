@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("axiom_probe_for_tests", HERE.parent / "axiom_probe.py")
+spec = importlib.util.spec_from_file_location("axiom_probe_for_tests", HERE.parents[3] / "tools" / "verity" / "lean" / "axiom_probe.py")
 AP = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(AP)
 
