@@ -236,7 +236,7 @@ def test_a_package_its_sources_stopped_before_its_build_fails_the_run_and_leaves
     cache, deps = tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps"
     put: list[list[str]] = []
     monkeypatch.setattr(LA.LakeArtifacts, "put",
-                        lambda self, reports, since=None, log=print: put.append(sorted(p.name for p in reports)) or 0)
+                        lambda self, reports, since=None, log=print, staged=None: put.append(sorted(p.name for p in reports)) or 0)
 
     def go(n: int) -> tuple[int, list[str], dict, list[str]]:
         out, said = tmp_path / f"run{n}" / "lean-audit", []
@@ -816,7 +816,7 @@ def test_without_the_sandbox_nothing_is_restored_and_nothing_kept(tmp_path, monk
     monkeypatch.setattr(LA, "sandboxed", lambda: False)
     calls = []
     monkeypatch.setattr(LA.LakeArtifacts, "take", lambda self, urls, log=print: calls.append("take") or 0)
-    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: calls.append("put") or 0)
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print, staged=None: calls.append("put") or 0)
     logged = []
     out = tmp_path / "out2"
     rc = LA.run(out, tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps", log=logged.append,
@@ -852,7 +852,7 @@ def test_what_a_failed_or_a_killed_audit_compiled_goes_into_the_artifact_cache_o
     its report, or, where it left none, what it wrote in the package's work directory as the build began."""
     root = _tree(tmp_path, monkeypatch)
     put_with = []
-    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: put_with.append(
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print, staged=None: put_with.append(
         {p.name: {k: v for k, v in rep.items() if k != "package"} for p, rep in reports.items()}) or 0)
     assert _run(tmp_path, 1)[0] == 1, "b fails: it reads a file outside its inputs"
     assert put_with == [{"a": {"sandbox": True, "failures": []},
@@ -873,7 +873,7 @@ def test_a_build_whose_sampled_recompile_differs_stores_nothing_though_check_py_
     whose `put` refuses it."""
     root = _tree(tmp_path, monkeypatch)
     real, handed = LA.LakeArtifacts.put, []
-    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: handed.append(
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print, staged=None: handed.append(
         {p.name: {k: v for k, v in rep.items() if k != "package"} for p, rep in reports.items()}) or 0)
     sampled = {"sandbox": True, "failures": ["sampled: P: the build's olean differs from its recompile"]}
     (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace(
@@ -1748,7 +1748,7 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
 
     put_with = []
 
-    def put(self, reports, since=None, log=print):
+    def put(self, reports, since=None, log=print, staged=None):
         put_with.append({p.name: rep for p, rep in reports.items()})
         self.added = [(f"keys/{'1' * 64}.json", ["e" * 16 + ".olean"])]
         return 1
