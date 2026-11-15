@@ -1,0 +1,10 @@
+{
+ "Definitions.Certifier": "Definitions.Network",
+ "NetworkCertifier": "NetworkAttester",
+ "NetworkCheck.TransferBlocks.Kind.networkCertifier": "NetworkCheck.TransferBlocks.Kind.networkAttester",
+ "Proofs.Certifier": "Proofs.Network",
+ "Proofs.Properties.Certifier": "Proofs.Properties.Network",
+ "Properties.Certifier": "Properties.Network",
+ "Properties.CertifierDevice": "Properties.NetworkAttester",
+ "Verity.Vocab.NetworkCertifierSound": "Verity.Vocab.NetworkAttesterSound"
+}

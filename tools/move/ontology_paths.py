@@ -38,6 +38,16 @@ INCLUDE = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifes
            "adapters/vllm/manifests/definitions.json"]
 
 
+SPLIT = {
+    "tests/tree.toml: verity/protocols/accounting":
+        "the layer's own row; registration, which leaves it, has a row of its own",
+    "benchmarks/demo_minutes/tests/test_no_pin_literal.py: verity/protocols/accounting":
+        "the scan follows `resource_accounting/`; `verity/protocols/registration` joins its list by hand",
+    "verity/protocols/accounting/certifier/verifier/README.md: verity/protocols/proofs/spot":
+        "the link names SPOT whole, which stays; only its `device/` moves, inside it",
+}
+
+
 def rows(way: str) -> dict[str, str]:
     net = NETWORK[way]
     return {
@@ -90,10 +100,15 @@ def toml(way: str) -> str:
             "# moves), files whose bytes a digest pins, every Lean file and every kernel source.",
             "exclude = [" + ",\n           ".join(q(e) for e in EXCLUDE) + "]",
             "include = [" + ",\n           ".join(q(e) for e in INCLUDE) + "]",
+            "# the auditor devices' install directories, each a checkout of the tree (`pods/nebius/challenger/`,",
+            "# `pods/nebius/verifier/`): their units name the challenger's service by its path there",
+            f"root_prefixes = {q(['/opt/vy-challenger/current/', '/opt/vy-verifier/current/'])}",
             "", "[split]",
-            "# `accounting/` splits: registration leaves it for `verity/protocols/registration/`. A reference to the whole",
-            "# directory follows the larger part, `resource_accounting/`.",
-            "", "[modules]", "# what `layout.py --modules` derives from [paths] and [roots]"]
+            "# `accounting/` splits: registration leaves it for `verity/protocols/registration/`, and a reference to the",
+            "# whole directory follows the larger part, `resource_accounting/`. SPOT's directory has no row of its own, so",
+            "# a reference to it reads as split though only its `device/` moves, into its own `verifier/`."]
+    out += [f"{q(k)} = {q(v)}" for k, v in SPLIT.items()]
+    out += ["", "[modules]", "# what `layout.py --modules` derives from [paths] and [roots]"]
     out += [f"{q(k)} = {q(v)}" for k, v in derived(paths).items()]
     return "\n".join(out) + "\n"
 

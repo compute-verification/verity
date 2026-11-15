@@ -1,0 +1,26 @@
+# The memory attester in the code's names: what `tools/move/rename.py --map tools/move/memory_attester_names_map.toml`
+# renames, after `memory_attester_words_map.toml`, and dropped with it whole. `memory_challenger` becomes `memory_attester`
+# as a name or one part of one: `memory_challenger.py`, `test_pous_memory_challenger.py` and
+# `benchmarks/pous/memory_challenger/`, their modules and the code that spells them. `MemoryChallenger` and the Lake package
+# `core_memory_challenger` are the Lean's and stay (`memory_attester_moves.json`).
+#
+# Kept bytes ([keep]): a result's or a placement record's key (`"memory_challenger"`, `"memory_challenger_args"`,
+# `"memory_challenger_rusage"`, `"memory_challenger_gaps"`, `"memory_challenger_lean_verdict"`) and the class a result
+# names (`"memory_challenger.MemoryChallenger"`), which kept runs hold; the Lake package's name; domain tags.
+
+[words]
+"memory_challenger" = "memory_attester"
+
+[keep]
+patterns = [
+    '[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',          # a domain tag or a format id
+    'note:[\w./-]+',
+    'art:[0-9a-f]+',
+    'cursor/[\w./-]+',
+    '''["']memory_challenger[\w.]*["']''',            # a record's key, or the class a result names
+    'core_memory_challenger',                         # the Lake package
+]
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "**/fixtures/**", "fixtures/**", "*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/*.lean", "tools/research/src/research/store/**"]

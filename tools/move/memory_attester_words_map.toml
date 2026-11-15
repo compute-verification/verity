@@ -1,0 +1,38 @@
+# The memory attester, in prose: what `tools/move/rename.py --map tools/move/memory_attester_words_map.toml` renames, a
+# reading put to Daniel and not yet his ruling, so this map and `memory_attester_names_map.toml` drop together and whole.
+# The auditor's device that runs PoUS's timed rounds is "the memory attester", no longer "the memory challenger": it
+# attests what it saw, as the network attester does, and the challenger is the verifier's online half. This move renames
+# prose only (`scope = "prose"`), as `ontology_words_map.toml` does, so it moves no path and leaves every lock and pin.
+#
+# Every form the tree spells, counted on the tip this map was written on, and what renames it:
+#
+#   form                    count  where                                              renamed by
+#   "memory challenger"       964  py-string 457, lean 320, md 120, toml 24, lock 18, this map: prose
+#                                  sh 13, py-comment 8, other 4
+#   "memory challengers"       51  lean 31, py-string 15, md 5                        this map
+#   "Memory challenger"         1  md 1                                               this map
+#   memory_challenger         375  py-string 147, py-code 139, lean 28, md 24,        `memory_attester_names_map.toml`:
+#                                  json 21, toml 12, other 4                           4 files' names and modules
+#   MemoryChallenger         1727  lock 1032, lean 452, py-string 86, py-code 71,     stays: the Lean package
+#                                  md 57, toml 16, other 13                            `MemoryChallenger` (lean's;
+#                                                                                       `memory_attester_moves.json`)
+#   MEMORY_CHALLENGER          61  py-code 36, lean 22, lock 2, sh 1                  stays: constants
+#   memoryChallenger           56  lean 54, lock 2 (`memoryChallengerMessage`)        stays: a Lean name
+#   memory-challenger         255  py-string 159, lean 43, toml 28, sh 9, md 9,       stays: the party's name in
+#                                  other 7                                             configurations and key
+#                                                                                       messages, domain tags, the
+#                                                                                       distribution
+#                                                                                       `memory-challenger-lean`
+scope = "prose"
+
+[words]
+"memory challengers'" = "memory attesters'"
+"memory challenger's" = "memory attester's"
+"memory challengers" = "memory attesters"
+"memory challenger" = "memory attester"
+"Memory challengers" = "Memory attesters"
+"Memory challenger" = "Memory attester"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "**/fixtures/**", "fixtures/**", "*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/*.lean", "tools/research/src/research/store/**"]
