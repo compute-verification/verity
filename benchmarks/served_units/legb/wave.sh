@@ -1,5 +1,7 @@
 # leg B, one wave on node A: stage WAVE's units in /dev/shm (RAM_WORK=1, at most 600 GB, stopped under 500 GB of the node's
-# MemAvailable), the form mirror over what staged, then prove it on CARDS; every file of the wave removed at any exit.
+# MemAvailable), the form mirror over what staged, then prove it on CARDS, each card's prover on its NUMA node's share of
+# PROVE_CORES; a statement its staged nets put past the GPU prover's bound is left in out/cpu.units for the CPU nodes
+# (CPU_PROVE=0), not proved here. Every file of the wave removed at any exit.
 # env: WAVE (N) STAGE_CORES PROVE_CORES CARDS STAGE_NOT_BEFORE STAGE_KILL_AT PROVE_NOT_BEFORE PROVE_KILL_AT (UTC epoch s)
 set -u
 IN=$RESEARCH_RUN_DIR/inputs; OUT=$RESEARCH_RUN_DIR/out; mkdir -p "$OUT"
@@ -27,4 +29,5 @@ if [ ! -s "$FW/.staged" ]; then
   U=$P
 fi
 awk -F'\t' 'NR > 1 && $6 != "accepted" { print "form mirror refuses " $2 }' "$OUT/ks_form.tsv" >> "$OUT/steps.txt"
-STEPS=prove UNITS=$U NOT_BEFORE=$PROVE_NOT_BEFORE KILL_AT=$PROVE_KILL_AT taskset -c "$PROVE_CORES" bash benchmarks/served_units/stage_prove.sh
+STEPS=prove CPU_PROVE=0 UNITS=$U NOT_BEFORE=$PROVE_NOT_BEFORE KILL_AT=$PROVE_KILL_AT taskset -c "$PROVE_CORES" \
+  bash benchmarks/served_units/stage_prove.sh

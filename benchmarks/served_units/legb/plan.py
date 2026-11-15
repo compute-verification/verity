@@ -1,6 +1,7 @@
-"""plan.py: leg B's waves from wave 2, the units files wave.sh stages and proves on node A, from the cheap read's 128 types.
+"""plan.py: leg B's waves from wave 2, the units files wave.sh stages and proves on node A's cards, and cpu.units, the types
+past the GPU prover's bound for CPU nodes, from the cheap read's 128 types.
 
-Run from this directory: `python3 plan.py` writes wave2.units ... waveN.units and prints a line a wave.
+Run from this directory: `python3 plan.py` writes wave2.units ... waveN.units and cpu.units and prints a line a file.
 
 - The types: form128.units, the cheap read's 128 block types (its form128.read.tsv: no type refused).
 - Their AND gates: the census in benchmarks/spot_figures/cards/workload.glm-5.3.json (MoeRouter's, absent there, as staged).
@@ -10,11 +11,18 @@ Run from this directory: `python3 plan.py` writes wave2.units ... waveN.units an
   the head and split blocks a line, 1,766 bytes an AND less 0.53 GB (wave 1's NVIS=58 head block: 61.3 GB at 34.3M);
   the singles at their own form-pass rates.
 - Route, predicted: the head and split blocks' A nonzeros at wave 1's NVIS=58 rate (6,091,870,711 at 34,336,169 ANDs);
-  past window.GPU_NNZ_MAX is the CPU prover's. Every other family is under a tenth of that rate. stage_prove.sh routes
-  each statement from its own staged nets; the prediction only labels the plan.
-- Waves: the T=9 split block first; then each wave takes the largest remaining type of every family and fills largest
-  first to CAP GB of circuits (node A's 600 GB of /dev/shm, less a margin). Lines are largest first, with window.py's
-  estimates: peak RSS x 1.15 + 2 GB, disk x 1.05 + 1 GB, staging seconds x 1.2, device GiB min(135, max(4, GB)).
+  past window.GPU_NNZ_MAX is the CPU prover's. Every other family is under a tenth of that rate. The predicted past-bound
+  types are cpu.units, for CPU nodes (stage_prove.sh DEV=cpu), and none is on node A's waves. stage_prove.sh still routes
+  each statement from its own staged nets: on node A (CPU_PROVE=0) one the prediction put under the bound and its nets put
+  past it is listed in the job's out/cpu.units for the CPU nodes, not proved there.
+- Waves, the GPU-predicted types only: each takes the largest remaining type of every family and fills largest first to
+  CAP GB of circuits (node A's 600 GB of /dev/shm, less a margin). Lines are largest first, with window.py's estimates:
+  peak RSS x 1.15 + 2 GB, disk x 1.05 + 1 GB, staging seconds x 1.2, device GiB min(135, max(4, GB)). cpu.units is
+  largest first, in the same columns.
+- A wave's printed hours, each a guess from wave 1: staging, the longest statement's or STAGE_SLOTS at a time, whichever
+  is longer; the cards, CARD_S_PER_MAND seconds a million ANDs a statement (WARM=1 RUNS=4, its build included) over three
+  cards; the Lean check, LEAN_S_PER_GB seconds a GB of circuit a session, serial, every KEPT session of a statement
+  whose one check takes under LEAN_ALL_S seconds and the last alone of the rest (stage_prove.sh's step 4).
 """
 
 from __future__ import annotations
@@ -30,11 +38,16 @@ sys.path.insert(0, str(HERE.parent))
 import window  # noqa: E402
 
 CAP = 540
-FIRST = "SparseMlaSplit_v1{T=9,"
+CARDS, STAGE_SLOTS, CARD_S_PER_MAND, LEAN_S_PER_GB, LEAN_ALL_S, KEPT = 3, 12, 7.0, 15.6, 120, 5
 HEAD_NNZ_A_PER_AND = 6_091_870_711 / 34_336_169
 SINGLES = {"AllReduceMnnvl_v1": (246, 43, 2.1), "SiluMul_v2": (248, 44, 1.2), "Fp8GroupQuantUe8m0_v1": (158, 25, 1.05),
            "MoeRouterSigmoidBiasSlots_v2": (528, 94, 2.0), "RMSNormCudaVector8_v1": (248, 44, 1.2)}
 MOE = 'MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}'
+
+
+def lean_s(r: dict) -> float:
+    one = LEAN_S_PER_GB * r["gb"]
+    return one * (KEPT if one < LEAN_ALL_S else 1)
 
 
 def types(lines):
@@ -65,9 +78,8 @@ def waves(rows: list[dict]) -> list[list[dict]]:
     out = []
     while any(by.values()):
         w, g = [], 0.0
-        first = [r for r in by["SparseMlaSplit_v1"] if r["t"].startswith(FIRST)]
-        for r in first + [by[f][0] for f in fams if by[f]]:
-            if r in by[r["f"]] and g + r["gb"] <= CAP and r["f"] not in {x["f"] for x in w}:
+        for r in [by[f][0] for f in fams if by[f]]:
+            if g + r["gb"] <= CAP:
                 w.append(r)
                 by[r["f"]].remove(r)
                 g += r["gb"]
@@ -91,20 +103,34 @@ def main() -> int:
     every = types((HERE / "form128.units").read_text().splitlines())
     left = [t for t in every if window.name(f"census:{t}", "1") not in done]
     assert len(left) == len(every) - len(done), (len(left), len(every), len(done))
-    plan = waves([size(t, ands[t]) for t in left])
+    rows = [size(t, ands[t]) for t in left]
+    gpu, cpu = [r for r in rows if not r["cpu"]], sorted((r for r in rows if r["cpu"]), key=lambda r: -r["gb"])
+    plan = waves(gpu)
+    for old in HERE.glob("wave*.units"):
+        if old.stem[4:].isdigit() and old.name != "wave1.units":
+            old.unlink()
     for i, w in enumerate(plan, 2):
         w.sort(key=lambda r: -r["gb"])
-        cpu = sum(r["cpu"] for r in w)
-        fam = collections.Counter(r["f"].split("_")[0] for r in w)
-        head = (f"# leg B, wave {i} of {len(plan) + 1}: {len(w)} types, about {sum(r['gb'] for r in w):.0f} GB of circuits, "
-                f"{cpu} predicted past the GPU prover's bound (the CPU prover's); largest first")
-        lines = [head] + [f"census:{r['t']}@1\t{r['peak'] * 1.15 + 2:.0f}\t{r['gb'] * 1.05 + 1:.0f}\t{r['s'] * 1.2:.0f}\t"
-                          f"{min(135, max(4, r['gb'])):.0f}" for r in w]
-        (HERE / f"wave{i}.units").write_text("\n".join(lines) + "\n")
-        print(f"wave {i}: {len(w)} types, {sum(r['gb'] for r in w):.0f} GB, {cpu} to the CPU prover "
-              f"({sum(r['gb'] for r in w if r['cpu']):.0f} GB), staging {sum(r['s'] for r in w) / 3600:.1f} statement-h, "
-              f"longest {max(r['s'] for r in w) / 60:.0f} min, {dict(fam)}")
+        gb, fam = sum(r["gb"] for r in w), collections.Counter(r["f"].split("_")[0] for r in w)
+        stage_h = max(max(r["s"] for r in w), sum(r["s"] for r in w) / STAGE_SLOTS) / 3600
+        card_h = max(sum(CARD_S_PER_MAND * r["ands"] / 1e6 for r in w) / CARDS,
+                     max(CARD_S_PER_MAND * r["ands"] / 1e6 for r in w)) / 3600
+        write(HERE / f"wave{i}.units", f"# leg B, wave {i} of {len(plan) + 1}, node A's cards: {len(w)} types, about {gb:.0f} GB "
+              "of circuits, every one predicted under the GPU prover's bound; largest first", w)
+        print(f"wave {i}: {len(w)} types, {gb:.0f} GB, {sum(r['ands'] for r in w) / 1e6:.0f}M ANDs; staging {stage_h:.1f} h "
+              f"(longest {max(r['s'] for r in w) / 60:.0f} min), cards {card_h:.1f} h, Lean {sum(map(lean_s, w)) / 3600:.1f} h "
+              f"({sum(LEAN_S_PER_GB * r['gb'] < LEAN_ALL_S for r in w)} with every session); {dict(fam)}")
+    write(HERE / "cpu.units", f"# leg B, the CPU nodes': {len(cpu)} types predicted past the GPU prover's bound, about "
+          f"{sum(r['gb'] for r in cpu):.0f} GB of circuits; largest first", cpu)
+    print(f"cpu.units: {len(cpu)} types, {sum(r['gb'] for r in cpu):.0f} GB, {sum(r['ands'] for r in cpu) / 1e6:.0f}M ANDs, "
+          f"largest {cpu[0]['gb']:.0f} GB ({cpu[0]['ands'] / 1e6:.1f}M ANDs), smallest {cpu[-1]['gb']:.0f} GB; staging "
+          f"{sum(r['s'] for r in cpu) / 3600:.1f} statement-h, peak RSS {max(r['peak'] for r in cpu):.0f} GB at most")
     return 0
+
+
+def write(path: Path, head: str, rows: list[dict]) -> None:
+    path.write_text("\n".join([head] + [f"census:{r['t']}@1\t{r['peak'] * 1.15 + 2:.0f}\t{r['gb'] * 1.05 + 1:.0f}\t"
+                                         f"{r['s'] * 1.2:.0f}\t{min(135, max(4, r['gb'])):.0f}" for r in rows]) + "\n")
 
 
 if __name__ == "__main__":
