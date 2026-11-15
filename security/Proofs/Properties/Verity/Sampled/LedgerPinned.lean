@@ -55,8 +55,8 @@ def LedgerLinesPinned (k : Verity.Registration.Composite) (log : Verity.Registra
 which the deployed device signs at least one ledger line, and `LedgerLinesPinned` holds of it at some registration log
 and auditor's inputs. Not proved. -/
 def LedgerLinesPinnedHonest (k : Verity.Registration.Composite) : Prop :=
-  ∃ (I : Instance d α) (log : Verity.Registration) (A : Verity.Registration.Auditor) θ F c o,
-    Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧
+  ∃ (I : Instance d α) (log : Verity.Registration) (A : Verity.Registration.Auditor),
+    ∃ θ F c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧
       (I.deployment.setupOf I.base.families o).ledger ≠ [] ∧ I.LedgerLinesPinned k log A
 
 /-- **`LedgerLinesPinned` is not vacuous**: at every instance, composite `k`, registration log and auditor's inputs,
