@@ -2431,7 +2431,7 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
 
 def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, capsys):
     """GitHub's rulesets let only drive's App move `main` and `next`, yet don't stop verity-agents[bot] force-pushing `next` from a
-    VM's `research queue eject` that syncs. Off drive an eject only withdraws the mark; sync refuses."""
+    VM's `research queue eject`. Off drive an eject only withdraws the mark."""
     import research.landing as L
     import research.queue as Qm
 
@@ -2441,9 +2441,6 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
             "--store", str(world.tmp / "queue-store")]
-    for verb in ("sync",):
-        assert research_main(["queue", verb, *base]) == 1
-        assert f"/data/infra/drive.sh queue {verb}" in capsys.readouterr().err
     def refs() -> str:
         return _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
 
@@ -5081,9 +5078,8 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
         assert e.value.code == 2 and "ready takes one of --on MACHINE" in capsys.readouterr().err
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
-                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync only: `eject` would act"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync only: `ready` would act"),
-                      (["queue", "status", "--priority-file", "p"], "--priority-file is for sync only")):
+                      (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for open and edit only: `eject` would act"),
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for open and edit only: `ready` would act")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
@@ -5531,18 +5527,7 @@ def test_first_is_refused_naming_the_priority_file_which_holds_the_landing_order
     the fix."""
     monkeypatch.chdir(world.dev)
     with pytest.raises(SystemExit) as e:
-        Q.main(["sync", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
+        Q.main(["status", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
                 "--store", str(world.tmp / "store"), "--first", "7,8"])
     assert e.value.code == 2 and not (world.tmp / "q").exists()
     assert Q.FIRST_RETIRED in capsys.readouterr().err
-
-
-def test_sync_takes_the_priority_file_it_is_given(world, monkeypatch):
-    seen = []
-    monkeypatch.setattr(Q.Queue, "sync", lambda self, dry_run=False: seen.append((self.priority_file, dry_run)))
-    monkeypatch.chdir(world.dev)
-    path = world.tmp / "priority"
-    assert Q.main(["sync", "--dry-run", "--priority-file", str(path), "--workdir", str(world.tmp / "q" / "verity"), "--remote",
-                   str(world.origin), "--repo", "o/r", "--store", str(world.tmp / "store")]) == 0
-    assert [(str(p), d) for p, d in seen] == [(str(path), True)]
-
