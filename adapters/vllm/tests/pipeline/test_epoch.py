@@ -64,3 +64,18 @@ def test_a_tp_rows_digests_are_its_build_summarys_ranks(tmp_path: Path) -> None:
     meta = epoch.store_meta(d, kind="build", role="R", rownum=1, run_id="r", epoch_sha="x", gpu="", pod="", epoch="e")
     assert meta["program_digests"] == {"rank0/step": "s0", "rank0/build_request_LP8_T4": "q0", "rank1/step": "s1", "rank1/build_request_LP8_T4": "q1"}
     assert meta["workload_digests"] == {"rank0": "w0", "rank1": "w1"}
+
+
+def test_resolve_finds_a_pin_of_a_sibling_manifest(tmp_path: Path, monkeypatch) -> None:
+    """The INT8 pins are in `checkpoints-int8.json`, beside `checkpoints.json`: an INT8 row resolves to its pin there,
+    and a BF16 row's still to `checkpoints.json`'s."""
+    def row_at(case: str) -> Path:
+        p = tmp_path / f"{case}.json"
+        p.write_text(json.dumps({"case": case}))
+        return p
+
+    monkeypatch.setattr(epoch, "row_file", lambda row: row_at(row.split("|")[0]))
+    assert epoch.resolve("LLAMA32_1B_INT8|llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager") == (
+        "LLAMA32_1B_INT8", "verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800", 1)
+    assert epoch.resolve("LLAMA32_1B|llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager") == (
+        "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", 1)

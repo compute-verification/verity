@@ -109,7 +109,10 @@ cases = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B", "B7": "Q
 ent = next((c for c in entries if c.get("role") == case or (case in cases and c["repo"] == cases[case] and c.get("local_path"))), None)
 if ent is None:
     sys.exit(f"no checkpoints.json entry for case {case}")
-local = Path(ent["local_path"]); shas = ent.get("safetensors_sha256", {})
+# a pin's snapshot under this run's HF_HOME, where the download and the recipe put it (a manifest's local_path is the machine's
+# that made it, and the same path only where HF_HOME is /workspace/hf)
+at = lambda e: Path(os.environ["HF_HOME"]) / "hub" / f"models--{e['repo'].replace('/', '--')}" / "snapshots" / e["revision"]
+local = at(ent); shas = ent.get("safetensors_sha256", {})
 fetched = not all((local / f).exists() for f in shas) or not (local / "config.json").exists()
 if fetched:
     from huggingface_hub import snapshot_download
@@ -119,9 +122,9 @@ if fetched:
         from verity_vllm.engine import fp8_checkpoint as F, int8_checkpoint as I8
         recipe = {r.id: r for r in (F.FP8, *I8.RECIPES.values())}[ent["recipe"]["id"]]
         base = F.base_entry(ent, entries, recipe)
-        if not all((Path(base["local_path"]) / f).exists() for f in base["safetensors_sha256"]):
+        if not all((at(base) / f).exists() for f in base["safetensors_sha256"]):
             print("downloaded", fetch(base), flush=True)
-        made, bad = F.remake(ent, entries, recipe=recipe)
+        made, bad = F.remake(ent, entries, hf_home=os.environ["HF_HOME"], recipe=recipe)
         print("made", made["local_path"], "mismatch", bad, flush=True)
     else:
         print("downloaded", fetch(ent), flush=True)

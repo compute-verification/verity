@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, option, row_file
+from verity_vllm.config import ROOT, checkpoint_entries, option, row_file
 from verity_vllm.pipeline.cli import write
 from verity_vllm.records.schema_ids import REBASELINE_DIGESTS_SCHEMA
 
@@ -94,10 +94,11 @@ def has_role(checkpoint: dict[str, Any], role: str) -> bool:
 
 
 def resolve(row: str) -> tuple[str, str, str, int]:
-    """The row's checkpoint role, repo, revision and TP world (its workload and `manifests/checkpoints.json`)."""
+    """The row's checkpoint role, repo, revision and TP world (its workload, and `manifests/checkpoints.json` with its sibling
+    manifests)."""
     wl = _doc(row_file(row))
     role = wl["case"]
-    cps = _doc(ROOT / "manifests" / "checkpoints.json")["checkpoints"]
+    cps = checkpoint_entries(ROOT / "manifests" / "checkpoints.json")   # with its siblings: the INT8 pins are in checkpoints-int8.json
     cp = next((c for c in cps if c.get("role") == role), None) or next(c for c in cps if has_role(c, role) and c.get("local_path"))
     # a row outside a sweep states `tp` itself, or in its id
     tp = int(_of(wl.get("sweep"), "tp") or wl.get("tp") or (2 if "__tp2__" in row else 1))
