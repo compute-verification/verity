@@ -431,13 +431,21 @@ private theorem split_half : "1/2".splitOn "/" = ["1", "2"] := by
   show String.splitOnAux "1/2" "/" 0 0 0 [] = ["1", "2"]
   repeat (rw [String.splitOnAux.eq_1]; simp (config := {decide := true}) only [ite_true, ite_false])
 
+/-- `Core.Ratio.natOf` on the one-character numerals the parameters' `delta` holds. Proved on each literal on its own so
+the `decide` stays a one-character guard (`isEmpty`/`all isDigit`/`length`/`toNat!`), never the whole ratio parse's
+monad bind and `gcd` at once (that `decide` does not terminate in practice). -/
+private theorem natOf_one : Core.Ratio.natOf "1" "delta" = .ok 1 := by decide
+
+private theorem natOf_two : Core.Ratio.natOf "2" "delta" = .ok 2 := by decide
+
 /-- `Core.Ratio.ofString "1/2" "delta" = .ok ⟨1, 2⟩`: the parameters' `delta`. Fed to the walk whole (the ratio parse's
 `natOf` reads `String.all`/`length`/`front`, which the walk's weak-head step cannot drive), so `ruleAt` rewrites the
-`Core.Ratio.ofString` call before it is unfolded. `split_half` clears the one `splitOn`; the kernel then runs `natOf` and
-`gcd` under `decide`. -/
+`Core.Ratio.ofString` call before it is unfolded. `split_half` clears the one `splitOn`; `natOf_one`/`natOf_two` clear the
+two `natOf` reads, so the remaining `decide` sees only the two concrete naturals, the `≤` and the `gcd`. -/
 private theorem ratio_half : Core.Ratio.ofString "1/2" "delta" = .ok ⟨1, 2⟩ := by
   unfold Core.Ratio.ofString
   rw [split_half]
+  simp only [natOf_one, natOf_two]
   decide
 
 /-! ## v2's parameters, with every field named -/
