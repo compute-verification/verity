@@ -1,3 +1,0 @@
-[2026-11-15T09:16Z] c60b675350a4
-Lead: top read the locks (1:15 AM PST): TWO of the twelve are DEPLOYED: Flock.SecurityProofs.SampledKSLiveV3 and SampledKSLiveV5 (in deployed of security/lean-audit.json on main and at the tip, each unwitnessed: missing nontrivial). The other ten are not. So do SampledKSLiveV5 FIRST (not EndToEnd): name the constant under it whose body changed. Top also cannot tell whether four other deployed statements unfold through the same constant: DeltaPubDeployed, RecursiveKSDeployed, RecursiveZKLoopAnySumDeployed, SessionLoopZKDeployed: once you have the constant, say for each of the four whether its read-closure contains it. Deadline for the name: 10:15Z (top s 2:15 AM PST); report by 09:40Z with what you have. Re-run your command.
-
