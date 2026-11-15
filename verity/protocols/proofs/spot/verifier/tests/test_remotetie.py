@@ -104,7 +104,7 @@ PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 FLIP = ("row-table/1/k2048", M * 1)
 RECORDS = pytest.mark.skipif(not settings.REMOTETIE, reason="VERITY_PROVE_PATH_REMOTETIE=1 records, commits and writes the "
                              "toy's 11,252 proof blocks and builds the Lean verifiers that check them, a few minutes")
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[6]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"
 #: why `served_cases` writes no SPOT case from the toy's audit (`served_cases.v2_case`)
 NO_V2_CASE = "no v2 case: the audit's a5 writes no case-v2.json (a5.case_v2)"

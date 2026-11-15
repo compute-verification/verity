@@ -7,5 +7,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # the runner writes its result with the platform's own helper
 inputs = [
+    "tools/research/src/research/__init__.py",
     "tools/research/src/research/result.py",
 ]

@@ -21,7 +21,7 @@ namespace InferenceOnlyCheck.Properties.SecurityProofs
 theorem num_div_den_nonneg (i : Instance) : (0 : ℝ) ≤ (i.num : ℝ) / i.den :=
   div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
 
-/-- **A verdict of compliance throttles every threaded reference circuit the declaration contains, if its weights are
+/-- **A verdict of compliance throttles every threaded reference training algorithm the declaration contains, if its weights are
 incompressible and none of its fresh input registered** (`WeightsIncompressible`, `ThetaRegistered`). -/
 theorem Throttles : Properties.Throttles :=
   fun j out hev i P d hpar hdec hL hθ hc b_w b_a r T dd e M hbw hba hdd hB hT hW =>
@@ -29,21 +29,21 @@ theorem Throttles : Properties.Throttles :=
       (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hT hW
 
 /-- **A verdict of compliance puts counted multiplications off the books in dark gates**, for every threaded reference
-circuit the declaration contains partly, if its weights are incompressible and none of its fresh input registered
+training algorithm the declaration contains partly, if its weights are incompressible and none of its fresh input registered
 (`WeightsIncompressible`, `ThetaRegistered`). -/
 theorem ThrottlesDark : Properties.ThrottlesDark :=
   fun j out hev i P d hpar hdec hL hθ hc b_w b_a r T dd e M hbw hba hdd hB hT hW =>
     Slowdown.SecurityProofs.ThreadedThrottledDark_rate i.gamma ((i.num : ℝ) / i.den) b_w b_a r d T dd e M
       (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hT hW
 
-/-- **`Throttles` per parameter slot**, for threaded reference circuits under `WeightsIncompressibleSlots` and
+/-- **`Throttles` per parameter slot**, for threaded reference training algorithms under `WeightsIncompressibleSlots` and
 `ThetaRegistered`. -/
 theorem ThrottlesSlots : Properties.ThrottlesSlots :=
   fun j out hev i P d hpar hdec hL hθ hc b_w b_a r T σ dd e M hbw hba hdd hB hT hW =>
     Slowdown.SecurityProofs.ThreadedThrottledSlots_rate i.gamma ((i.num : ℝ) / i.den) b_w b_a r d T σ dd e M
       (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hT hW
 
-/-- **`ThrottlesDark` per parameter slot**, for threaded reference circuits under `WeightsIncompressibleSlots` and
+/-- **`ThrottlesDark` per parameter slot**, for threaded reference training algorithms under `WeightsIncompressibleSlots` and
 `ThetaRegistered`. -/
 theorem ThrottlesDarkSlots : Properties.ThrottlesDarkSlots :=
   fun j out hev i P d hpar hdec hL hθ hc b_w b_a r T σ dd e M hbw hba hdd hB hT hW =>
