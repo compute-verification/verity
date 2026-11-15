@@ -33,7 +33,8 @@ def sessions(row: str, s: dict) -> list[dict]:
 
 
 def total(rows: list[dict], key: str) -> float | None:
-    got = [r[key] for r in rows]
+    """`key` summed over the sessions; a session's `proof_bytes` is a list, one a proof of its session."""
+    got = [sum(r[key]) if isinstance(r[key], list) else r[key] for r in rows]
     return None if not got or any(x is None for x in got) else round(sum(got), 3)
 
 
