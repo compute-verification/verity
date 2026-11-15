@@ -13,7 +13,8 @@ DSA attention:
   then the head's end (or, past one split, its column ends and combines). A template's units are place-major, then member,
   then head.
 * The indexer, past `index_topk` keys: its fused key and head-weight GEMM (`CublasSplitKGemm_v1`) is its ``SLICES`` along N,
-  and `DsaIndexerKRow_v1` and `DsaIndexerQ_v1` each the row itself (`indexer_row`).
+  and `DsaIndexerKRow_v1` and `DsaIndexerQ_v1` each the row itself (`indexer_row`); its scores (`DsaMqaLogits_v3`) are its
+  ``SLICES`` along the keys, a unit a member's score of one key (`logits`).
 * The MoE layer: the router gate's GEMM (`CublasSplitKGemmF32Out_v1`, `LlBf16DotprodGemm_v1`) is its ``SLICES`` along N;
   `MoeRouterSigmoidBias_v1` its ``SLOTS``, an output row a slot's weight or expert id; `Fp8GroupQuantUe8m0_v1` the row
   itself; and `MoeExpertFp8Gemm(W)_v1` cut per expert, its blocks apart (`expert_gemm`): block GEMMs reading their block's
@@ -95,6 +96,30 @@ def indexer_row(w: NodeWindow, j: int, node: Any) -> None:
         outs.append(Piece(at, at + n, Row(t, a, o, n)))
         at += n
     w.out(j, node, outs)
+
+
+def logits(w: NodeWindow, j: int, node: Any) -> None:
+    """`DsaMqaLogits_v3{N, H, D}`, the indexer's scores, as its ``SLICES`` along N: unit (n, t), ``a + n M + t``, reads
+    member t's query q and head weights w whole and key n's row k[n] and scale ks[n], and returns member t's score of key
+    n. Every member reads the keys alike, each key's two rows those its `DsaIndexerKRow_v1` unit returns."""
+    spec, M = descriptor_id(node.fn), w.members(node)
+    N = int(node.fn.bindings["N"])
+    fn = _part(spec, spec_base(spec), N=1)
+    t, a = w.unit(_family(node), fn, N * M)
+    for k, port in enumerate(("q", "w")):
+        x = w.take(node, k, whole=True)
+        w.feed(t, port, a, x if isinstance(x, _Free) else [x[m] for _n in range(N) for m in range(M)], (N, M))
+    for k, port in enumerate(("k", "ks"), 2):
+        try:
+            keys = w.rows(w.arg(node, k, 0))
+        except _Free as e:
+            w.feed(t, port, a, e, (N, M))
+            continue
+        if len(keys) != N:
+            raise Unexpressible(f"{w.name}: {spec}'s {port} is {len(keys)} rows, not one a key of {N}")
+        w.feed(t, port, a, [(r,) for r in keys for _m in range(M)], (N, M))
+    (_o, W), = IF.layout(fn).outs
+    w.out(j, node, [Piece(0, N * W, Row(t, a, "o0", W), M, 1)])
 
 
 def batched_gemm(w: NodeWindow, j: int, node: Any) -> None:
@@ -354,6 +379,7 @@ FAMILIES: dict[str, Lowering] = {
     "CublasSplitKGemm": row_gemm,
     "DsaIndexerKRow": indexer_row,
     "DsaIndexerQ": indexer_row,
+    "DsaMqaLogits": logits,
     "CublasSplitKGemmF32Out": row_gemm,
     "LlBf16DotprodGemm": row_gemm,
     "MoeRouterSigmoidBias": router_slots,
@@ -362,5 +388,5 @@ FAMILIES: dict[str, Lowering] = {
     "MoeExpertFp8GemmW": expert_gemm,
 }
 
-__all__ = ["BLOCK_WORDS", "FAMILIES", "batched_gemm", "expert_gemm", "group_quant", "indexer_row", "latent_row", "router_slots",
+__all__ = ["BLOCK_WORDS", "FAMILIES", "batched_gemm", "expert_gemm", "group_quant", "indexer_row", "latent_row", "logits", "router_slots",
            "row_gemm", "sparse_mla_split"]
