@@ -989,7 +989,7 @@ def test_a_run_is_one_committed_run_and_a_single_gpu_runs_one_window_is_rank_0()
         PP.ranks_of(argparse.Namespace(bundle="b", ranks="0,1"))
 
 
-def test_per_unit_timing_is_over_the_members_sampled_units_not_c_flocks_virtual_units():
+def test_per_unit_timing_is_over_the_members_sampled_proof_blocks_not_c_flocks_virtual_units():
     s = {"draw_counts": {"T": 2}, "timing": {"T": {"session_s": 501.2, "verify_s": 6.2, "lean_verify_s": 47.0,
                                                    "timing": {"prove_total_s": 428.9, "units": 16384, "k_log": 26,
                                                               "proof_bytes": [830330, 830330]}}}}
