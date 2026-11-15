@@ -743,6 +743,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Properties.Poub.Subprotocol.HonestLogAccepted": {
+   "owner": "@memory-accounting",
+   "issue": "MEM-353",
+   "due": "2026-11-30"
+  },
   "Properties.Poub.Subprotocol.HonestSchedule": {
    "owner": "@memory-accounting",
    "digest": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
@@ -950,13 +955,6 @@
    "digest": "59c32110ad37a324988ebec3721ddbed31555090ee2b008b734c1651b3387da1",
    "issue": "LEAN-186",
    "due": "2026-11-30"
-  }
- },
- "open_seed": {
-  "Properties.Poub.Remote.HonestLog": {
-   "issue": "MEM-353",
-   "due": "2026-11-30",
-   "owner": "@memory-accounting"
   }
  },
  "trust": {
