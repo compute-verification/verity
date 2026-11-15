@@ -26,7 +26,7 @@ from verity.protocols.proofs.spot.device import remote as R
 from test_serve import Auditor, finish, session, start, trusted
 
 HERE = Path(__file__).resolve().parent
-LINK = HERE.parent / "coin_link.py"
+LINK = HERE.parents[5] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "coin_link.py"
 sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 import coin_link as L  # noqa: E402
