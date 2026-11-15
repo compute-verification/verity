@@ -280,9 +280,10 @@ launched, and the new run labels and supersedes nothing, so the passing run stay
 on purpose. `--cores CPUS` (a booked slot's, `34-43`) runs the slot taker under `taskset -c CPUS`, so it takes that
 slot or waits for it, and `--card INDEX` (a booked card's, with `--cores`) asks the lease for that card alone, which
 the node side refuses before the statement unless it is on the NUMA node of the run's CPUs. The run waits for its slot,
-`jobs.DIRECT_WAIT_S` at most or until the spec's `max_minutes` before `--end UTC` (a booked period's end), and then
-has `max_minutes`; its timeout is the two, which `slot.py` never moves later, so a point that could not finish before
-it is not started and says so, and `run` refuses one whose `max_minutes` don't fit before `--end` at launch. On a node whose launcher
+`jobs.DIRECT_WAIT_S` at most or until the spec's `max_minutes` and `jobs.SLOT_GRACE_S` (for `slot.py`'s 20 s poll)
+before `--end UTC` (a booked period's end), and then has `max_minutes`; its timeout is the two, so it ends before the
+end whichever `slot.py` the node runs, and `run` refuses a point whose `max_minutes` don't fit before `--end` at
+launch. On a node whose launcher
 takes a run only through `slot.py` (`/etc/vy/runs-via-slot`), the launcher refuses a `--cores` launch. The job is
 `benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
 `python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports

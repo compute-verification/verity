@@ -310,6 +310,10 @@ GPU_SLOTS = "/workspace/research/locks/gpu/slots"
 #: how long a direct point waits for one of those slots where its launch states no end: as long as a pool's run waits for
 #: a slot (`research run --pool`'s --pool-wait, `slot_only.POOL_WAIT_S`)
 DIRECT_WAIT_S = 14400
+#: how far short of a stated end a direct point's wait stops: slot.py tries for a slot every 20 s (its POLL_S), and one
+#: that counts --run-max from taking the slot may take it a try past --wait-max, so the run ends before the end
+#: whichever slot.py the node runs
+SLOT_GRACE_S = 60
 
 
 def _env_flags(spec: ResolvedSpec) -> list[str]:
@@ -380,15 +384,15 @@ def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign
     only slot runs: the one form of a direct point's launch, whatever the point's spec. The run waits for its slot at
     most until `end` (seconds since the epoch, a booked period's end) less the spec's admission `max_minutes`, or
     `DIRECT_WAIT_S` where the launch states no end, and then has `max_minutes` from taking it (slot.py's `--wait-max`
-    and `--run-max`); its timeout is the two together, its stated end, which slot.py never moves later: a point that
-    could not have its `max_minutes` before it is not started, and says so. One whose `max_minutes` don't fit before
-    `end` at its launch is refused here. `tool` records the run; `env` is its `--env` flags; `store_read` gives the job
+    and `--run-max`); its timeout is the two together. With an `end`, the wait stops `SLOT_GRACE_S` short of it, so
+    the run ends before `end` whichever slot.py the node runs. One whose `max_minutes` don't fit before `end` at its
+    launch is refused here. `tool` records the run; `env` is its `--env` flags; `store_read` gives the job
     a read-only key to the store for the run's length (`research run --store-read`), for a job that fetches from it.
     `cores` (`34-43`), a booked slot's: the slot taker runs under `taskset -c CORES`, and takes only a slot within its
     own CPUs, so it takes that slot or waits for it; without it, the first free slot."""
 
     run_s = direct_minutes(spec, node) * 60
-    wait_s = DIRECT_WAIT_S if end is None else math.floor(end - now()) - run_s
+    wait_s = DIRECT_WAIT_S if end is None else math.floor(end - now()) - run_s - SLOT_GRACE_S
     if wait_s <= 0:
         raise ValueError(f"a point of spec {spec.id!r} runs for up to {run_s / 60:g} min (its admission max_minutes), "
                          f"which don't fit before its end, {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(end))}: it "

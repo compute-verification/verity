@@ -997,8 +997,9 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
 
 
 def test_a_run_given_the_booked_periods_end_never_ends_after_it_and_one_that_could_not_finish_is_not_launched(tmp_path):
-    """`run --end`: the run's timeout is the time left to the end, slot.py waits only as long as the spec's max_minutes
-    still fit before it, and a point whose max_minutes don't fit at its launch is refused, saying so."""
+    """`run --end`: slot.py waits only as long as the spec's max_minutes and slot.py's last try (`SLOT_GRACE_S`) still
+    fit before the end, the run's timeout is that wait and max_minutes, and a point whose max_minutes don't fit at its
+    launch is refused, saying so."""
 
     root, path = tree(tmp_path)
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, "why"))
@@ -1008,8 +1009,8 @@ def test_a_run_given_the_booked_periods_end_never_ends_after_it_and_one_that_cou
     assert len(commands) == 3
     for command in commands:
         flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-        assert flags[flags.index("--timeout") + 1] == "7199"
-        assert workload[workload.index("--wait-max") + 1] == "1799"
+        assert flags[flags.index("--timeout") + 1] == "7139"
+        assert workload[workload.index("--wait-max") + 1] == "1739"
         assert workload[workload.index("--run-max") + 1] == "5400"
     launched = []
     with pytest.raises(ValueError, match=r"up to 90 min .* don't fit before its end, 1970-01-12T15:16:40Z: it would "
