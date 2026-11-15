@@ -161,7 +161,9 @@ CAPITALS = LIVE_CAPS + REQUEST_CAPS + SOFTCAP_CAPS
 #: ``PEARL_CAP`` too outside ``CAPITALS``
 OWN_CAPS = {
     "verity/protocols/accounting/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
+    "tests/verity/protocols/accounting/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
     "verity/protocols/accounting/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    "tests/verity/protocols/accounting/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
     **dict.fromkeys(tuple(f"security/{tree}/{area}"
                           for tree in ("Definitions", "Properties", "Proofs", "Proofs/Properties")
                           for area in ("Pous", "Poub")),
@@ -177,6 +179,7 @@ OWN_CAPS = {
     "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
     "verity/protocols/accounting/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
     "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
+    "tests/verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
     "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
     "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
     "benchmarks/recursion_e2e/": "Flock's Merkle caps, the V* statements the recursion's benchmark proves and times",
@@ -801,13 +804,13 @@ def test_a_session_s_cap_is_its_own_and_pearl_s_other_spellings_there_are_not() 
     pearls = "# Pearl's: capOK, Device.cap, an over-cap tile, the cap check\n"
     pearl = [(4, "capOK"), (4, "Device.cap"), (4, "over-cap"), (4, "cap check")]
     window = "verity/protocols/accounting/pouw/verifier/"
-    for path in ("tests/test_pouw_window.py", "tests/window_vectors.py"):
-        assert Path(ROOT, window, path).is_file(), f"{window}{path} is gone: move its line of LIVE_CAPS with it"
-        assert said(session + pearls, window + path) == pearl
-    for path in ("window.py", "lean/window/PouwWindow/Inputs.lean", "lean/window/PouwWindow/Difftest.lean",
-                 "lean/window/README.md", "lean/window/tests/test_difftest.py"):
-        assert Path(ROOT, window, path).is_file(), f"{window}{path} is gone: move its line of OWN_CAPS with it"
-        assert said(session + pearls, window + path) == [(2, "CAP"), (3, "CAP"), *pearl]
+    for path in (f"tests/{window}test_pouw_window.py", f"tests/{window}window_vectors.py"):
+        assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of LIVE_CAPS with it"
+        assert said(session + pearls, path) == pearl
+    for path in (*(window + p for p in ("window.py", "lean/window/PouwWindow/Inputs.lean", "lean/window/PouwWindow/Difftest.lean",
+                                        "lean/window/README.md")), f"tests/{window}lean/window/test_difftest.py"):
+        assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of OWN_CAPS with it"
+        assert said(session + pearls, path) == [(2, "CAP"), (3, "CAP"), *pearl]
     assert said(session + pearls, window + "credit.py") == [(1, "cap"), (1, "cap"), (1, "cap"), (1, "Cap"), (2, "CAP"),
                                                             (3, "CAP"), *pearl]
 

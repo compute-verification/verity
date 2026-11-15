@@ -484,8 +484,8 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     (("circuit-check",), 340),
     # ci.toml's groups of lean-suites where no row above holds them: twice (`groups` gives lean-suites half the slot) what the
     # group's parts held running alone, + 15%, which their workers fit at their worker_gb
-    (("lean-suites:verity-flock:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
-    (("lean-suites:verity-flock:3/6",), 270),                    # beside lean-build, Flock's other four sixths: 115
+    (("lean-suites:verity-flock-tests:1/6",), 290),                    # beside pytest, Flock's first two sixths, vLLM's first third: 124
+    (("lean-suites:verity-flock-tests:3/6",), 270),                    # beside lean-build, Flock's other four sixths: 115
     (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 250),   # beside the Rust build, vLLM's other two thirds: 105
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
@@ -1874,18 +1874,18 @@ OPT_IN = {
         "tests/test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
     "benchmarks/spot_figures": {"VERITY_SPOT_FIGURES_SLOW": (
         "tests/test_figures.py::test_figures_writes_every_figure",)},
-    "verity/protocols/compose/verifier/lean": {"VERITY_SLOW": (
-        "tests/test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
-        "tests/test_composition_difftest.py::test_remote_agrees",
-        "tests/test_composition_difftest.py::test_onsite_agrees",
-        "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
+    "tests/verity/protocols/compose/verifier/lean": {"VERITY_SLOW": (
+        "test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
+        "test_composition_difftest.py::test_remote_agrees",
+        "test_composition_difftest.py::test_onsite_agrees",
+        "test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
     # the whole recursive session: the kept run's data, fetched from the evidence store with the run's custody key
-    "verity/protocols/proofs/recursion/verifier/vstar_cli": {"VERITY_VSTAR_RECURSIVE_DATA": (
-        "tests/test_vstar_recursive.py::test_the_honest_recursive_session_is_accepted_part_for_part",
-        "tests/test_vstar_recursive.py::test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size",
-        "tests/test_vstar_recursive.py::test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it",
-        "tests/test_vstar_recursive.py::test_a_rep_file_one_bit_off_is_refused_at_its_part",
-        "tests/test_vstar_recursive.py::test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both")},
+    "tests/verity/protocols/proofs/recursion/verifier/vstar_cli": {"VERITY_VSTAR_RECURSIVE_DATA": (
+        "test_vstar_recursive.py::test_the_honest_recursive_session_is_accepted_part_for_part",
+        "test_vstar_recursive.py::test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size",
+        "test_vstar_recursive.py::test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it",
+        "test_vstar_recursive.py::test_a_rep_file_one_bit_off_is_refused_at_its_part",
+        "test_vstar_recursive.py::test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both")},
     "adapters/vllm": {
         "VERITY_VLLM_INTERIOR_TABLE": (
             "tests/pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
@@ -1899,9 +1899,9 @@ OPT_IN = {
             "tests/pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
         "VERITY_VLLM_HISTORY_E2E": (
             "tests/pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
-    "verity/protocols/proofs/spot/prover": {"VERITY_SLOW": (
-        "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
-        "tests/test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
+    "tests/verity/protocols/proofs/spot/prover": {"VERITY_SLOW": (
+        "test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
+        "test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},
 }
 #: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
 OPT_IN_DIR = "opt-in"

@@ -184,7 +184,7 @@ def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
     offenders = [f"{path}:{line}" for path in _test_sources() if not path.startswith(tuple(after))
                  for line in lean_gates((ROOT / path).read_text(encoding="utf-8"))]
     assert not offenders, "tests that skip on what check's Lean steps build, outside the suites it runs after them:\n" + "\n".join(offenders)
-    flock = names["verity-flock"][1]["tool"]["verity"]["tests"]
+    flock = names["verity-flock-tests"][1]["tool"]["verity"]["tests"]
     assert "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof" in flock.get("artifacts", []), "verity-flock runs the verifier"
 
 

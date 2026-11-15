@@ -98,7 +98,8 @@ def roots() -> dict[str, Path]:
             out[Path(p).name] = ROOT / d / p
     for d in pkgs.values():
         top = d.split("/")[0]
-        out.setdefault(top, ROOT / top)
+        if top != "tests":
+            out.setdefault(top, ROOT / top)
     return out
 
 
