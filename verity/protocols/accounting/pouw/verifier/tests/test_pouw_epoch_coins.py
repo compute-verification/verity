@@ -179,6 +179,30 @@ OS_RANDOMNESS = {
                                                              "and no coin",
     "protocols/proofs/spot/verifier/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
                                                            "(`_dumps`), no coin",
+    "protocols/accounting/pouw/prover/kernels/served_zk/rows_bench.py": "the bench's hiding salts, no coin",
+    "protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py": "the commit's hiding salts, and its own pick "
+                                                                           "of the calls it measures (recorded as "
+                                                                           "``call_draw``), which credits nothing",
+    "protocols/accounting/pouw/prover/kernels/served_zk/stage_tile.py": "the staged tile's hiding key, no coin",
+    "protocols/accounting/pouw/prover/serving/h1/__init__.py": "the prover's hm96 salt keys (`WEIGHT_KEY`, a run's "
+                                                               "table key), no coin",
+    "protocols/accounting/pouw/prover/serving/h1/sampled.py": "the stager's hiding keys (`_random`), no coin",
+    "protocols/accounting/pouw/prover/serving/lead/feed.py": "`InProcessCertifier`'s bytes, a measurement whose coins "
+                                                             "credit nothing",
+    "protocols/accounting/pouw/prover/serving/lead/rows.py": "the keyed rows' key and salt, the prover's secrets and no "
+                                                             "coin",
+    "protocols/accounting/pouw/prover/serving/pearl_c/__init__.py": "`new_salt_key`, the prover's hm96 salt key, no coin",
+    "protocols/proofs/spot/prover/audit/local_challenger.py": "the development challenger's session token and gate "
+                                                              "secret, compose's service and no SPOT coin",
+    "protocols/proofs/spot/prover/audit/prove_path.py": "the committer's salt key (`committer_key`), no coin",
+    "protocols/proofs/spot/prover/audit/records_audit.py": "`free_ports`' order of loopback base ports, no coin",
+    "protocols/proofs/spot/prover/audit/stop_audit.py": "the staged member's hiding key, no coin",
+    "protocols/proofs/spot/prover/audit/template_audit.py": "a development challenger's entropy (`challenger_sample`), "
+                                                             "whose samples show the path; an auditor's coins are "
+                                                             "`a5_coins`'",
+    "protocols/proofs/spot/prover/cost/window_cost.py": "filler bytes the cost model times, no coin",
+    "protocols/proofs/spot/verifier/one_stage/member_trees.py": "the tree relay's shared secret with its verifier "
+                                                                "(`--tree-secret-file`), no coin",
 }
 
 
