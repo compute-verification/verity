@@ -98,7 +98,7 @@
 #     record ($OUT/record/block-record.json), `reject` where a piece about this node rejects or errs, and otherwise the
 #     verdict of the product's compiled Lean check (onsite's, or remote's) on the run's cases: the answer `composite.py`
 #     wrote to the composite's public output, which the record reads (--composite) where the composite ran before it,
-#     and takes only where it is of record, composed on an auditor host off the served node (`compose`; the deferral's
+#     and takes only where it is of record, composed on an auditor device off the served node (`compose`; the deferral's
 #     follow-on composes on a prover node, so its composite is a development check), and names the window's
 #     registration record R that the record's SPOT audit sampled against: one of another window, or bound to
 #     no record, is refused, exit 1; any other server's answer is carried as elsewhere. The certifier's chain files
@@ -309,7 +309,7 @@
 # `--composite`, so its composed_on names the host it composed on, served_node false, and that it read a prover-side
 # copy). That node is a prover node, which the prover controls, so its composite is a development check
 # (COMPOSE_DEVELOPMENT), never the record's verdict: the record stays pending and the exit is 2 at best (step 5); only
-# the compose follow-on's composite, on an auditor host, is of record. Its $OUT is published as every run's is.
+# the compose follow-on's composite, on an auditor device, is of record. Its $OUT is published as every run's is.
 # POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
 # it), and POUW_CMD to 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which
 # once the window is audited serves Pearl+ (pouw:pearl-c-h100-v1-h3, Llama 3.2 1B's BF16 checkpoint) on this card under
@@ -432,7 +432,7 @@ FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS
 COMPOSE_DIR=$D/private/compose
 COMPOSES="K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
 FOLLOW= COMPOSE= CLASH= ENV_REFUSED=
-# A compose hand-off's settings are the prover's bytes on an auditor host, so they are read as data and never run: each
+# A compose hand-off's settings are the prover's bytes on an auditor device, so they are read as data and never run: each
 # line NAME=VALUE, NAME one of the hand-off's and set once, VALUE as handoff's printf %q writes these characters (each as
 # itself but a comma, which it writes \, and an empty value, which it writes '').
 ENV_VALUE='^([A-Za-z0-9._/:+@=,-]|\\,)*$'
@@ -1487,7 +1487,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   if [ -n "${COMPOSITE-1}" ]; then
     local why="composed by a deferral's follow-on on $(hostname -s), a prover node, which the prover controls: a"
     why+=" development check, no claim of record (only the compose follow-on's composite, off the served node on an"
-    why+=" auditor host, is the record's)"
+    why+=" auditor device, is the record's)"
     TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_DEVELOPMENT=$why bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" \
       || comp=1
     lean=(--composite "$OUT/composite")

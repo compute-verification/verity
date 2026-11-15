@@ -400,7 +400,7 @@ POUS = Session(("verity.protocols.accounting.pous.device.challenger_party:PROTOC
                MEMORY_CHALLENGER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
 #: the verifier's monotonic clock; the verifier reads the memory challenger's PoUS key from that party's run beside it
-#: on the auditor's host (``challenger``), checked against the configuration's pin by PoUS's device (`onsite.pin`,
+#: on the auditor's device (``challenger``), checked against the configuration's pin by PoUS's device (`onsite.pin`,
 #: `onsite.signer`), which the table hands its start
 POUB = Session(("verity.protocols.accounting.poub.verifier.p2_parties:PROTOCOLS",
                 "verity.protocols.accounting.poub.prover.p2_party_prover:PROTOCOL"),
