@@ -274,7 +274,7 @@ theorem proofKey_ne_streams (spec : SessionSpec) : s!"proof_{spec.dk}" ≠ "stre
 theorem proofKey_ne_link (spec : SessionSpec) : s!"proof_{spec.dk}" ≠ "link" := by
   rcases dk_cases spec with e | e <;> simp [e, toString]
 
-theorem draw_ne_proofKey (spec : SessionSpec) : "unit_draw" ≠ s!"proof_{spec.dk}" := by
+theorem sample_ne_proofKey (spec : SessionSpec) : "unit_draw" ≠ s!"proof_{spec.dk}" := by
   rcases dk_cases spec with e | e <;> simp [e, toString]
 
 /-- The decoder's reads of the link points and the proof digests. -/
@@ -416,10 +416,10 @@ theorem verifyJOC_eval (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (tab
   rw [← (Flock.With.verifyJWithM_sim (Claims.ocLog H) (Claims.ocLog_hashes H) spec tabs j proofs #[]).1]
   exact Flock.With.verifyJWithM_sim (Flock.With.Sim.forget _) (Flock.With.Sim.forget_logged _) spec tabs j proofs #[]
 
-theorem drawOfJ_shaSubJ (spec : SessionSpec) (ds : Array ByteArray) (j : Json) :
-    drawOfJ (shaSubJ spec ds j) = drawOfJ j := by
-  unfold drawOfJ shaSubJ
-  rw [getObjVal?_mapKey_ne _ _ (draw_ne_proofKey spec)]
+theorem sampleOfJ_shaSubJ (spec : SessionSpec) (ds : Array ByteArray) (j : Json) :
+    sampleOfJ (shaSubJ spec ds j) = sampleOfJ j := by
+  unfold sampleOfJ shaSubJ
+  rw [getObjVal?_mapKey_ne _ _ (sample_ne_proofKey spec)]
 
 /-- The checks after the verdict read the statement and the sample, which `shaSubJ` keeps, and no proof file. -/
 theorem checksAtJ_shaSubJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
@@ -428,9 +428,9 @@ theorem checksAtJ_shaSubJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link 
     checksAtJ s spec x link c₁ mids ⟨stmt, shaSubJ spec ds j, bs⟩ j' =
       checksAtJ s spec x link c₁ mids ⟨stmt, j, #[]⟩ j' := by
   first
-  | (simp only [checksAtJ, drawOfJ_shaSubJ]; done)
-  | (unfold checksAtJ; rw [drawOfJ_shaSubJ])
-  | (unfold checksAtJ; dsimp only; rw [drawOfJ_shaSubJ])
+  | (simp only [checksAtJ, sampleOfJ_shaSubJ]; done)
+  | (unfold checksAtJ; rw [sampleOfJ_shaSubJ])
+  | (unfold checksAtJ; dsimp only; rw [sampleOfJ_shaSubJ])
 
 /-- **`decisionAtS` run against `H`**: the plain verdict at `hOf H` on the proofs' files at the substituted value,
 then the checks after it. -/

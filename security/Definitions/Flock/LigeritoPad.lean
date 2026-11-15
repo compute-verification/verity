@@ -51,11 +51,11 @@ def foldRoundsNL (A : Arith F K) : ℕ → K → Quad K → Game (List K × K)
       pure (r :: rs, s'')
 
 /-- `e` coins over `K`, one after the other. -/
-def drawKs (A : Arith F K) : (e : ℕ) → Game (Fin e → K)
+def sampleKs (A : Arith F K) : (e : ℕ) → Game (Fin e → K)
   | 0 => pure Fin.elim0
   | e + 1 => do
       let r ← drawK A
-      let rs ← drawKs A e
+      let rs ← sampleKs A e
       pure (Fin.cons r rs)
 
 /-- The padding correction at position `p`: `Σ_j ybar_j·(c₀·X̂_j + X̂_{2^cols + j})(ω_p)`. -/
@@ -109,7 +109,7 @@ def ligeritoPad (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F) (e r : ℕ
       let (initial, s) ← foldRoundsNL A sch.k0 s (fromMsg msg s)
       -- the extra lanes: `e^r` before its coins, then `ybar^r`
       let ev ← recv (Fin e → K)
-      let ρ ← drawKs A e
+      let ρ ← sampleKs A e
       let ybar ← recv (Fin t → K)
       -- the restarted claim and the code-switch message
       let s := s + ∑ i, ρ i * ev i

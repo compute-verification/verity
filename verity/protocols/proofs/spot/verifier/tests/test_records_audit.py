@@ -390,8 +390,8 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
             "registered": OP.block("test/model", {"b": b})}
     assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
-    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
-    assert RA.registration_roots({"window": w}) == RA.window_roots(w)
+    assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.docket_roots({"window": 63})
+    assert RA.docket_roots({"window": w}) == RA.window_roots(w)
     for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),
                      ({"activations": group(x="zz")}, "hex digits"), ({"registered": group(w=None)}, "hex digits"),
                      ({**w, "registered": group(x="cd" * 64)}, r"two roots for \['x'\]"),
@@ -562,7 +562,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     rec = json.loads((got.dir / "registration.json").read_text())
-    roots, pin = RA.registration_roots(rec), {v: e["root"] for v, e in pins.items()}
+    roots, pin = RA.docket_roots(rec), {v: e["root"] for v, e in pins.items()}
     assert roots == rec["window"]["registered_roots"] == pin == {"w": got.value.root.hex()}
     count = RA.declared_count(doc, 0, pins=pin, roots=roots)
     assert (count["inputs"], count["registered"], count["free"]) == (8 * per_unit, 8 * 8 * K, 8 * per_unit - 8 * 8 * K)
@@ -624,7 +624,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     files = IF.registered_reads(ldoc, ml, pins, registered=REG)
     assert files == IF.registered_reads(sdoc, ms, pins, registered=REG) and len(files) == 2
     pin = RA.pin_roots(pins)
-    roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
+    roots = RA.docket_roots(json.loads((listed.dir / "registration.json").read_text()))
     count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
     assert roots == pin and count == {**RA.declared_count(sdoc, 0, pins=pin, roots=roots), IF.WINDOW_INGRESS: 0}
     assert count["registered"] == 8 * 8 * K and "unpinned" not in count
@@ -1347,7 +1347,7 @@ def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
     assert e.value.code == 2 and "--run" in capsys.readouterr().err
 
 
-def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(written):
+def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it(written):
     from verity.protocols.proofs.spot.prover.audit import window_audit as A5
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
@@ -1403,7 +1403,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
                     "key_record": None, "deployed": True}
 
 
-def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
+def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_path, monkeypatch):
     """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""

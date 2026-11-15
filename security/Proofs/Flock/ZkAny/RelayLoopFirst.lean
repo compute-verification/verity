@@ -21,7 +21,7 @@ public import Proofs.Flock.ZkAny.RelaySwitch
   and the model's state the rep's start (`ofLoop_answered_switch`), its placeholder, configuration and schedule the
   model's (`freshOf_ok`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`), the round's count the plan's, and the table's
   level 0 the one the loop drew (`BuiltAt`), so giving a table whose commitment's cap is its root
-  (`tab_of_placeholder`, `cap_of_drawn`).
+  (`tab_of_placeholder`, `cap_of_sampled`).
 * `tab_of_same`, `tab_of_placeholder`: a level 0 at another's `m` and `t_pad` gives a table where it does, so one
   sampled at the table's `m` gives one where the rep's placeholder is there.
 -/
@@ -177,12 +177,12 @@ theorem tab_of_same {st : _root_.Flock.Setup} {l l' : _root_.Flock.ZkServer.Leve
     exact ⟨_, rfl⟩
 
 /-- **A level 0 sampled at the table's `m` and statement version gives a table**, where rep stream `k`'s placeholder is
-there: the placeholder's level 0 gives one, at the same `m` and version (`Level0.ofDraws_wideLeaf`) and the `t_pad` of
-its schedule (`Level0.ofDraws_ok`). -/
+there: the placeholder's level 0 gives one, at the same `m` and version (`Level0.ofSamples_wideLeaf`) and the `t_pad` of
+its schedule (`Level0.ofSamples_ok`). -/
 theorem tab_of_placeholder {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {link : Array F128} {c' : Cfg}
     {t' : _root_.Flock.ZkServer.Finish.Tab} {dom' : ByteArray} {xs' : Array (Array F128)} {hi' : Array ByteArray}
     (hph : Loop.placeholder spec sts k link = .ok (c', t', dom', xs', hi')) {g : Array F128} {d : ByteArray}
-    {l : _root_.Flock.ZkServer.Level0.Level0} (hl : _root_.Flock.ZkServer.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d = .ok l) :
+    {l : _root_.Flock.ZkServer.Level0.Level0} (hl : _root_.Flock.ZkServer.Level0.ofSamples sts[k / 2]!.wideLeaf sts[k / 2]!.m g d = .ok l) :
     ∃ t, _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l = .ok t := by
   have bok : ∀ {α β : Type} {x : V α} {f : α → V β} {b : β}, x >>= f = .ok b → ∃ a, x = .ok a ∧ f a = .ok b := by
     intro α β x f b hb
@@ -194,10 +194,10 @@ theorem tab_of_placeholder {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {li
   obtain ⟨⟨sch, tPad⟩, -, hph⟩ := bok hph
   obtain ⟨l₀, hl₀, hph⟩ := bok hph
   obtain ⟨t₀, ht₀, -⟩ := bok hph
-  obtain ⟨hm, -, ⟨s, hz, -⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl
-  obtain ⟨hm₀, -, ⟨s₀, hz₀, -⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl₀
+  obtain ⟨hm, -, ⟨s, hz, -⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofSamples_ok hl
+  obtain ⟨hm₀, -, ⟨s₀, hz₀, -⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofSamples_ok hl₀
   exact tab_of_same ht₀ (hm.trans hm₀.symm)
-    ((_root_.Flock.ZkServer.Level0.ofDraws_wideLeaf hl).trans (_root_.Flock.ZkServer.Level0.ofDraws_wideLeaf hl₀).symm)
+    ((_root_.Flock.ZkServer.Level0.ofSamples_wideLeaf hl).trans (_root_.Flock.ZkServer.Level0.ofSamples_wideLeaf hl₀).symm)
     (Prod.mk.inj (Except.ok.inj (hz.symm.trans hz₀))).2
 
 open Loop LeanRelease in
@@ -212,7 +212,7 @@ first of table `i`'s rep `r`'s stream (`hk`), the rep's frame fresh (`FreshAt`) 
 `roundPlace_prior` at rep 1), the model's state the rep's start (`ofLoop_answered_switch`), its placeholder,
 configuration and schedule the model's (`freshOf_ok`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`), the table's level 0
 the one sampled at its statement's `m` (`tables_inj`), so giving a table as the placeholder's does (`tab_of_placeholder`)
-whose commitment's cap is its root (`cap_of_drawn`), and the round's count the plan's (`Loop.loopNr_succ`,
+whose commitment's cap is its root (`cap_of_sampled`), and the round's count the plan's (`Loop.loopNr_succ`,
 `Count.plan_sched`), with its opening unbegun (`roundRun_alg_first`); the rep's salts are not read, the algebraic phase
 having a round past the first's coins. -/
 theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
@@ -344,7 +344,7 @@ theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
   obtain ⟨t, htab⟩ : ∃ t, _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t := by
     have h := tab_of_placeholder (g := gb) (d := db) (l := l0) hph' (by rw [hdiv, hstmb]; exact hdb)
     rwa [hdiv, hstmb] at h
-  have hcap : _root_.Flock.ZkServer.Finish.flat t.cm0.cap = l0.root := cap_of_drawn hdb htab
+  have hcap : _root_.Flock.ZkServer.Finish.flat t.cm0.cap = l0.root := cap_of_sampled hdb htab
   have hdom : (rel.spec.domain name r).toUTF8 = dom' := by rw [hdm, hdiv, hmod, hname, hsp]
   have hkl : 2 * i + r < spec.repStreams.size := rep_lt_size hmem
   have hls := wordsAt_zero_size M.x (cs := h1.map fun y => ZKMal.CoinLayer.rd y.2)

@@ -191,12 +191,12 @@ theorem piop_pos (L₁ : LeanRelease Flock.Wit Loop.Tp)
     try rfl
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hjjT : a + 1 ≤ piopNR tb.st.m tb.st.fold.kLog := by rw [htm, htk']; exact hjj
   have hjjT' : a < piopNR tb.st.m tb.st.fold.kLog := by omega
   have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.ZkServer.Finish.flat tb.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (fun _ => 0) (a + 1)).length ≤ c'.order.size := by
-    rw [hc', Loop.ofDraws_order, absorbed_size, piopV_length_eq _ _ _ _ _ _ _ _ hjjT]
+    rw [hc', Loop.ofSamples_order, absorbed_size, piopV_length_eq _ _ _ _ _ _ _ _ hjjT]
     have e := piopLen_le tb.st.m tb.st.fold.kLog hjjT
     simp only [_root_.Flock.Zk.PadLayout.fa]
     omega

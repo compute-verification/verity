@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOkJson
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 public import Proofs.Flock.Soundness.Discharge.ZkLink.One
@@ -23,7 +23,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.AccZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk
 
 /-!
 # verity-verify-proof `--zk`'s headline at the compiled `--zk` table

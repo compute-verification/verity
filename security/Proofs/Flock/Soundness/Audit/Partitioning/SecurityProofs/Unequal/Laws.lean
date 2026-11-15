@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Game
   `∏_{u ∈ B} (1 − num u / den)` (`bern_escape_toReal`), and unit `u` is sampled with `num u / den` (`bern_incl_toReal`).
   `Law.bernoulli` is its case of one `num` for every unit.
 * `restrict L S` is `L` seen on the units of `S` alone, numbered in increasing order. Its escape of `B` is `L`'s escape
-  of `B`'s image (`restrict_escape`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanDraws_restrict`).
+  of `B`'s image (`restrict_escape`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanSamples_restrict`).
 -/
 
 @[expose] public section
@@ -32,7 +32,7 @@ theorem incl_le_one (L : Law n) (u : Fin n) : L.incl u ≤ 1 := by
 theorem incl_toReal_le_one (L : Law n) (u : Fin n) : (L.incl u).toReal ≤ 1 := by
   simpa using ENNReal.toReal_mono ENNReal.one_ne_top (incl_le_one L u)
 
-theorem meanDraws_nonneg (L : Law n) : 0 ≤ meanDraws L := sum_nonneg fun _ _ => ENNReal.toReal_nonneg
+theorem meanSamples_nonneg (L : Law n) : 0 ≤ meanSamples L := sum_nonneg fun _ _ => ENNReal.toReal_nonneg
 
 theorem cost_nonneg (L : Law n) {c : Fin n → ℝ} (hc : ∀ u, 0 ≤ c u) : 0 ≤ cost L c :=
   sum_nonneg fun u _ => mul_nonneg ENNReal.toReal_nonneg (hc u)
@@ -99,9 +99,9 @@ theorem restrict_incl (L : Law n) (S : Finset (Fin n)) (i : Fin S.card) :
   refine congrArg prCoin (funext fun ω => propext ?_)
   simp [restrict]
 
-theorem meanDraws_restrict (L : Law n) (S : Finset (Fin n)) :
-    meanDraws (restrict L S) = ∑ u ∈ S, (L.incl u).toReal := by
-  unfold meanDraws
+theorem meanSamples_restrict (L : Law n) (S : Finset (Fin n)) :
+    meanSamples (restrict L S) = ∑ u ∈ S, (L.incl u).toReal := by
+  unfold meanSamples
   simp only [restrict_incl]
   conv_rhs => rw [← Finset.map_orderEmbOfFin_univ S rfl]
   rw [Finset.sum_map]

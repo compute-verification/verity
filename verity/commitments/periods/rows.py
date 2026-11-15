@@ -7,7 +7,7 @@ counts (``verity.commitments.periods.population``, over the builders core's ``on
 query the template query over them, so the partition (``verity/partition/v1``, ``partition_object``) and its digest are core's
 over that program, and the registration is core's ``verity/registration/v1`` record with ``window = {"kind": "served" |
 "stand-in", "run": <the record's run root>, ...provenance}`` (``registration``), made by the ``registrar`` the caller passes
-(core's ``one_stage.registration``): this module imports no core.  Any other program an integration ran is provenance in the
+(core's ``one_stage.docket``): this module imports no core.  Any other program an integration ran is provenance in the
 window: no query of core's selects template instances inside another Program (the template queries need every root node to be
 an instance).
 
@@ -868,7 +868,7 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served",
                  registrar: Any, entries: Sequence[Mapping[str, Any]] = (),
                  outputs: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.registration``: its
+    """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.docket``: its
     ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and window domain, the leaf layer,
     and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
     the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters

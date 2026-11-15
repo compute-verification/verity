@@ -92,7 +92,7 @@ theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 
   rcases Flock.Bridge.designAt_cases desc qr lj tb n with hlaw | h0
   · exact Flock.Bridge.le_add_ecrBoundL (FlockSoundness.Game.prob_le_one _ _ τ) fun hroots =>
       Flock.Bridge.sampledKSLiveV5R n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb law
-        kd hlaw (Flock.Bridge.notBernoulli_drawsUnder hlaw) hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk
+        kd hlaw (Flock.Bridge.notBernoulli_samplesUnder hlaw) hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk
         hRw hM ρ hρ hr t' ht' B τ qF qS q hTab hLink
   · have hδ : δ = 1 := by
       change (Flock.Bridge.designOf (Properties.Spot.oneStageOf (Flock.Bridge.designAt desc qr lj tb n))).Pa

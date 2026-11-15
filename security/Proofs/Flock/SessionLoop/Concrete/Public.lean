@@ -524,7 +524,7 @@ def checkPublicP (kh : String) (tl : ByteArray → ByteArray) (zr : Port → Byt
   let np := c.ports.size
   let (n, bcs, outputs) := pub.population.getD (pub.n, pub.digests, pub.outputs)
   if let .ok d := pub.header.getObjVal? "unit_draw" then
-    let u ← Draw.UnitDraw.ofJson d
+    let u ← Draw.UnitSample.ofJson d
     if (← J.nat pub.header "instances" "public file") != u.proved.size || pub.n != u.proved.size then
       throw "U3: the statement's instances are not the drawn units and their closure"
   let H := Sha512.hash

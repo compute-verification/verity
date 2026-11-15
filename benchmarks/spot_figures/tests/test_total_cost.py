@@ -376,7 +376,7 @@ def test_a_design_names_the_first_limit_of_the_second_stages_code_it_meets(monke
              Cell(4.0, 4096.0, prove=1e-2, fixed=5.0, cap=8, commit_bytes=512.0, table=4)]
     row = {"merged": "template", "form": "statements", "registration_sample": 3, "k": {0: 10, 1: 2}, "tables": 2.0}
     got = t.limits(cells, row)
-    assert t.draw_width(100) == (7 + 64 + 7) // 8 == 9 and t.draw_width(4) == (3 + 64 + 7) // 8
+    assert t.sample_width(100) == (7 + 64 + 7) // 8 == 9 and t.sample_width(4) == (3 + 64 + 7) // 8
     assert got["draw_bytes"] == 3 * ((2 * 10 * 9 + 64) + (2 * 2 * 9 + 64))
     # each type's sampled blocks of the phase are one session: 30 blocks within a table of 64, 6 blocks 1.5 tables of 4
     assert got["lines"] == pytest.approx(2 * 2 + t.TABLE_LINES * (1 + 1.5))
@@ -503,8 +503,14 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert out["configurations"]["per_expert"]["cut"]["label"] in caps["exfiltration"]
     assert "card_influenceTwo_le_served_min" in caps["exfiltration"] and "card_influenceTwo_le_min" in caps["exfiltration"]
     assert "the patterns' form (card_influenceTwo_le_patterns):" in caps["exfiltration"]
-    assert ("each request serves at most S = 144,000 bits, and no proof block is shared across requests"
-            in caps["exfiltration"])
+    s_bits, cap = out["served_bits_request"], out["inputs"]["max_tokens_cap"]["value"]
+    assert out["served"] == "cap" and s_bits == cap * 32
+    assert (f"Each request serves at most S = {s_bits:,.0f} bits, {cap:,} tokens, the network certifier's registered "
+            f"response cap ({f1.CAP_RULE}; the tie of the statement's served outputs to the tokens it releases is "
+            "pending), but the form reads each as serving exactly S (RequestsCover)") in caps["exfiltration"]
+    every = out | {"inputs": {k: v for k, v in out["inputs"].items() if k != "max_tokens_cap"}}
+    assert (f"each request serves exactly S = {s_bits:,.0f} bits (RequestsCover), and no proof block is shared across "
+            "requests") in t.captions(every, scope)["exfiltration"]
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
     at = out["betas"].index(f1.RATIO_BUDGET)
     lines = {s["config"]: s for s in out["panels"]["exfiltration"]["series"]}

@@ -13,7 +13,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
 * **Each opening a proof block.** Sample (pass i, position p, chunk j) is one `BlockOpeningCheck_v1` (`block_check`) at P,
   DR (the pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended chunk), its witness `opening.witness`:
   the chunk, its payload, the receipt leaf, the pass's plan row, both salts and paths. The window's proof blocks are one
-  statement of the one-stage audit (`one_stage.registration`, the template-instance partition, the stratified sampling
+  statement of the one-stage audit (`one_stage.docket`, the template-instance partition, the stratified sampling
   design, every proof block sampled by the verifier's Lean), proved by `flock-circuit prove --zk` and held by Lean
   `verify --zk --partition --program`.
 * **What the verifier opens.** Of each proof block its public rows (``pub`` and ``signs``, which it derives itself:

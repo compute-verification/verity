@@ -1134,11 +1134,11 @@ theorem ascending_iff (xs : Array Int) :
     rw [getElem!_pos xs i (by omega), getElem!_pos xs (i + 1) (by omega)]
     exact h i (by omega)
 
-theorem checkDrawFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop law : Json) :
-    (Draw.checkDrawFull (.obj kvs) pop law).codes = #[] ↔ Drawn (.obj kvs) pop law := by
-  unfold Draw.checkDrawFull Drawn
+theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop law : Json) :
+    (Draw.checkSampleFull (.obj kvs) pop law).codes = #[] ↔ Drawn (.obj kvs) pop law := by
+  unfold Draw.checkSampleFull Drawn
   extract_lets kind closure want have_ c0 n us j2 raw cs bad problem ok j1 j0 c1 dk dcl
-  have hw : want = drawKeys kind closure := rfl
+  have hw : want = sampleKeys kind closure := rfl
   have hkd : dk = kind := rfl
   have hcl : dcl = closure := rfl
   have hkeys : ∀ x, keys? (Json.obj kvs) = some x → have_ = x := by intro x h; simp [have_, h]
@@ -1196,7 +1196,7 @@ theorem checkDrawFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop l
         · rfl
     have hmem : kind ∈ ["subset", "bernoulli", "stratified", "work"] := by
       simpa only [List.contains_iff_mem] using hc
-    have hkeys' : keys? (Json.obj kvs) = some (drawKeys kind closure) := by
+    have hkeys' : keys? (Json.obj kvs) = some (sampleKeys kind closure) := by
       have : have_ = want := by simpa only [Bool.not_eq_true, bne_eq_false_iff_eq] using hk
       rw [← hw, ← this]; simp [have_, keys?]
     have hex : ∀ P : Array Int → Prop, (∃ us' units', getD (Json.obj kvs) "units" = .arr us' ∧
@@ -1296,14 +1296,14 @@ theorem checkDrawFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop l
     · intro h; exact absurd h (fail_ne_nil _ _ _)
     · rintro ⟨_, _, _, _, _, us', units', h1, h2, _⟩
       exact (hnone units' (by simp only [us, h1]; exact h2)).elim
-theorem checkDraw_nil (draw pop law : Json) : Draw.checkDraw draw pop law = #[] ↔ Drawn draw pop law := by
+theorem checkSample_nil (draw pop law : Json) : Draw.checkDraw draw pop law = #[] ↔ Drawn draw pop law := by
   unfold Draw.checkDraw
   cases draw
-  case obj kvs => exact checkDrawFull_obj_nil kvs pop law
+  case obj kvs => exact checkSampleFull_obj_nil kvs pop law
   all_goals
     constructor
     · intro h
-      unfold Draw.checkDrawFull at h
+      unfold Draw.checkSampleFull at h
       simp only [Bool.not_false, Bool.true_or, ↓reduceIte, Id.run_pure] at h
       exact absurd h (fail_ne_nil _ _ _)
     · rintro ⟨h, _⟩; cases h
@@ -1317,7 +1317,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
     OneStage.check p c e = .accept pub prof ↔
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
         UnitsRead p c e ∧ VerdictsAccept e.verdicts ∧
-        Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
+        Record.profileSample law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n := by
   unfold OneStage.check
   simp only []
@@ -1335,11 +1335,11 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
           (p.verifier.certified.map (·.1.value)) = #[]
       · simp only [h3, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
         have hu := (recordChecks_nil p c e).1 h3
-        have hdr := (checkDraw_nil _ _ _).1 h2
+        have hdr := (checkSample_nil _ _ _).1 h2
         rcases hv : OneStage.verdictOf e.verdicts with ⟨⟨⟩, ⟨⟩⟩ | r | r
         · have hva := (verdictOf_accept _).1 hv
           simp only []
-          rcases hpd : Record.profileDraw law with _ | d <;>
+          rcases hpd : Record.profileSample law with _ | d <;>
             rcases hn : nat? (getD c.record "population") with _ | n
           · simp only [reduceCtorEq, false_iff]
             rintro ⟨law', d', n', hreg', -, -, -, hd', -⟩
@@ -1378,7 +1378,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
       simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
       rintro ⟨law', d', n', hreg', hdr, -⟩
       obtain rfl := uniq law' hreg'
-      exact h2 ((checkDraw_nil _ _ _).2 hdr)
+      exact h2 ((checkSample_nil _ _ _).2 hdr)
   · have : (Registration.check c.record p.verifier).isEmpty = false := by
       simpa [Array.isEmpty_iff] using h1
     simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
@@ -1395,7 +1395,7 @@ the agreed sampling design over the registered population, its units proved and 
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
     (hr : Registered p.verifier c.record law)
     (hd : Drawn e.draw (getD c.record "population") law)
-    (hu : UnitsRead p c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
+    (hu : UnitsRead p c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileSample law = some d)
     (hn : nat? (getD c.record "population") = some n) :
     OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
   (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩

@@ -9,7 +9,7 @@ public import Flock.JsonParse
 
 A sampled leaf's 33 statements are each proved and checked in full: the verifier's sample policy for a leaf statement's
 session is `subset` of every unit of its partition, a non-empty population. verity-verify-proof takes the record's sample as
-it is (any sampling design it decodes, `Flock.Draw.UnitDraw.ofJson`), so the leaf verifier holds each session record to the
+it is (any sampling design it decodes, `Flock.Draw.UnitSample.ofJson`), so the leaf verifier holds each session record to the
 policy itself (`checkFull`, which `pouw-leaf-own` runs on every session of a statement):
 
 * `recordDraw`: the record's `unit_draw`, rebuilt (`Flock.norm`), as verity-verify-proof reads it (`Main.recordDraw`, through
@@ -33,12 +33,12 @@ def recordDraw (record : String) : Option Json :=
     | .error _ => none
   | .error _ => none
 
-/-- **The session's record samples every unit**: its sample decodes (`UnitDraw.ofJson`), is `subset k` of a population of
+/-- **The session's record samples every unit**: its sample decodes (`UnitSample.ofJson`), is `subset k` of a population of
 `k` units, `0 < k`, and its units are `[0, k)`; else the reason, named. -/
 def checkFull (record : String) : Except String Unit :=
   match recordDraw record with
   | none => .error "the session's record has no draw"
-  | some d => match Flock.Draw.UnitDraw.ofJson d with
+  | some d => match Flock.Draw.UnitSample.ofJson d with
     | .error e => .error s!"the session's draw: {e}"
     | .ok D => match D.law with
       | .subset k =>
@@ -47,7 +47,7 @@ def checkFull (record : String) : Except String Unit :=
       | _ => .error "the session's draw's law is not subset"
 
 theorem checkFull_ok {record : String} (h : checkFull record = .ok ()) :
-    ∃ d D k, recordDraw record = some d ∧ Flock.Draw.UnitDraw.ofJson d = .ok D ∧ D.law = .subset k ∧
+    ∃ d D k, recordDraw record = some d ∧ Flock.Draw.UnitSample.ofJson d = .ok D ∧ D.law = .subset k ∧
       k = D.population ∧ 0 < k ∧ D.units = Array.range k := by
   unfold checkFull at h
   split at h

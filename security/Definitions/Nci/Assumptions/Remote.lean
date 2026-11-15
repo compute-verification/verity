@@ -78,7 +78,7 @@ def PouwPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t
 /-- **Sampled proofs' per-window bounds** (in place of `SampledDetection`): a window's faulty blocks `bad` (block `b` in
 window `win b`) are fixed before its coins, and the units it samples (`drawn`) and the faulty blocks it detects
 (`detected`) read only its coins and the earlier windows'; its sample misses its `m` faulty blocks with probability at most
-`(1 − q)^m` (`Flock.Guarantees.SamplingBlock.drawMiss_le`, under A3), and it detects none of them while sampling one
+`(1 − q)^m` (`Flock.Guarantees.SamplingBlock.sampleMiss_le`, under A3), and it detects none of them while sampling one
 with probability at most `ks t` (`SamplingBlock.accepted_drawnWrong_le`). That the deployment's windows are such
 windows is not stated. The share `q` is a hypothesis: a window that samples a uniform `kd`-subset of its `n` units has
 the miss bound at `q ≤ kd/n`, which the count a `rate:NUM/DEN` rule names meets at `q = NUM/DEN` over whatever `n` the

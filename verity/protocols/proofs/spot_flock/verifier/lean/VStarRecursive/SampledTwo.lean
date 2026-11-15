@@ -46,7 +46,7 @@ package's audit builds and reads it.
 * **check** (`checkBlobsAt`), in order:
   0. each second-stage session's statement is under `2^64` bytes (`stmtsBytesFit`, `STMT_BYTES`): the sum of the
      lengths a session's statement holds, which v2 holds each under `2^64` (`OneStageZk.fitsWhy`,
-     `OneStageZk.drawFitsWhy`), so a list of the sessions' statements holds each after its length in an 8-byte word;
+     `OneStageZk.sampleFitsWhy`), so a list of the sessions' statements holds each after its length in an 8-byte word;
      and each statement is the one the session at its position makes, the sessions as many as the statements
      (`stmtsSessions`, `STMT_COUNT`, `STMT_SESSION`): at each position the verifier rebuilds the statement the
      session there makes (`stmtOwnAt`), refuses where the counts differ or a position's rebuilt statement is none or
@@ -410,12 +410,12 @@ def headerLine (file : ByteArray) : Option Json := do
   (Flock.JsonParse.parse (← String.fromUTF8? (file.extract 0 nl))).toOption
 
 /-- **A session's statement as round 2 reads one**, of the template `name`, at the public file `pub`, the sample's
-text `drawB` and the registered reads' text `registeredB`: the template's name, the public file's header, the sample
+text `sampleB` and the registered reads' text `registeredB`: the template's name, the public file's header, the sample
 and the registered reads (null where there are none), each read as `verity-verify-proof verify` reads JSON. None where a
 field doesn't read or there is no sample. -/
-def stmtOf (name : String) (pub : ByteArray) (drawB registeredB : Option ByteArray) : Option Json := do
+def stmtOf (name : String) (pub : ByteArray) (sampleB registeredB : Option ByteArray) : Option Json := do
   let header ← headerLine pub
-  let draw ← jsonOfBytes (← drawB)
+  let draw ← jsonOfBytes (← sampleB)
   let registered ← match registeredB with
     | some b => jsonOfBytes b
     | none => some .null
@@ -737,7 +737,7 @@ def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage
   | .reject r => .reject r
   | .undecided r => .undecided r
   | .accept () () =>
-  match Record.profileDraw design with
+  match Record.profileSample design with
   | some prof =>
     let units := match getD e.draw "units" with | .arr us => us.filterMap nat? | _ => #[]
     let str := fun (k : String) => match getD rec_ k with | .str s => s | _ => ""
@@ -780,7 +780,7 @@ def tablesSize (tables : List (String × ByteArray)) : Nat :=
 /-- **A bound on the bytes of a member's session statement** at its record's sample `draw` and lookup tables of
 `tables` bytes (`tablesSize`): `STMT_HEAD`, the circuit and public files, the tables, the program, and the
 partition object, the registered reads and the sample as `Flock.RecordText.printT` prints them
-(`OneStageZk.printedSize`). These are the fields `OneStageZk.fitsWhy` and `OneStageZk.drawFitsWhy` hold each under
+(`OneStageZk.printedSize`). These are the fields `OneStageZk.fitsWhy` and `OneStageZk.sampleFitsWhy` hold each under
 `2^64`; this is their sum. -/
 def stmtSize (o : OneStageZk.Own) (circuit pub : ByteArray) (tables : Nat) (draw : Option Json) : Nat :=
   STMT_HEAD + circuit.size + pub.size + tables + o.program.size + OneStageZk.printedSize o.partition +
