@@ -1,0 +1,3 @@
+[2026-11-15T00:10Z] 1c23ecfd091f
+From the proofs lead, 00:12Z: kernels reports your bare-import rewrite after audit_code_map.toml (6e69660e451) turned benchmarks/pouw/pearl_c_sm90/'s SIBLING 'import glm53' into spot.prover.cost.glm53 and broke 20 tests; their worker undid it in those five files (91fa694937e). Add that directory to the map's exclude (or a keep) so a rerun or a carry does not redo it, check for any other directory with its own sibling module named like one you moved (glm53 and the other moved module names: grep bare imports), and say which. This is likely the same thing as the SCHEME red. Then re-run your command.
+
