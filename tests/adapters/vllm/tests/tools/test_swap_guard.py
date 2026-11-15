@@ -32,7 +32,7 @@ def test_the_guard_fails_a_test_that_leaves_a_module_swapped_and_no_test_whose_m
     elif plugin:
         pytest.skip("`suites.py` loads its plugin into the suites it runs, and it didn't start this run")
     r = subprocess.run([sys.executable, "-m", "pytest", CASES, "-rA", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'b'}",
-                        *(["-p", "verity_suite_guard"] if plugin else [])], cwd=(Path(__file__).resolve().parents[5] / "adapters" / "vllm"),
+                        *(["-p", "verity_suite_guard"] if plugin else [])], cwd=Path(__file__).resolve().parents[2],
                        capture_output=True, text=True)
     lines = r.stdout.splitlines()
     left = [f"{CASES}::test_a_loaded_module_left_swapped_is_failed_by_name",
