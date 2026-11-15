@@ -310,7 +310,7 @@ def topcoded(dials: dict) -> dict:
     head; its blocks' matrices under the published Muon at `lr` with the decay decoupled, its gains at `norm_lr` under
     torch's AdamW, undecayed, the embedding frozen; the gradient clipped at 1; the rate a linear ramp over `warmup`
     steps, falling linearly to 0 over the last `decay` share of them. One forward and backward over the whole batch:
-    the route's micro-batches draw the backward's rounding in the same order, one row after another."""
+    the route's micro-batches sample the backward's rounding in the same order, one row after another."""
     depth = SHAPE["n_layer"] + dials["grow"]
     start = stacked(dials)[1]
     torch.manual_seed(0)

@@ -255,7 +255,7 @@ def test_a_stopped_job_of_a_grown_model_starts_from_its_map_again_and_continues_
     assert_continues(whole, both, at=2)
 
 
-def test_a_stopped_job_of_topcode_draws_its_codes_rounding_again_and_continues_as_the_unbroken_job(tmp_path):
+def test_a_stopped_job_of_topcode_samples_its_codes_rounding_again_and_continues_as_the_unbroken_job(tmp_path):
     """The harness alone, in one process. A job of route `topcode` rounds its gradient's code stochastically from
     torch's global generator and holds R, built once, outside the state dict; the segment that continues builds R
     again, puts the kept state and generators back, and ends at the unbroken job's outputs bit for bit."""

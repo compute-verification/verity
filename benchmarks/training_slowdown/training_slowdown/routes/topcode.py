@@ -8,9 +8,9 @@ levels over their largest magnitude; the codes cross as a uint8 plane, `forward_
 (`codecs.wire.pack_codes`), beside the token's step in bf16, and are rotated back. The gradient crosses back rotated by
 R, rounded stochastically onto 2^backward_bits − 1 steps whose ends are its largest magnitude a token (rounded up a bf16
 unit), as floats, and rotated back. A trace reads the forward's plane at its width; the backward's rounding is on its
-own grid and never crosses as bytes. R is a DCT-II's rows with each coordinate's sign drawn from a generator seeded 1000
+own grid and never crosses as bytes. R is a DCT-II's rows with each coordinate's sign sampled from a generator seeded 1000
 plus the grown depth, from the dials and the shape alone; `build` makes it once, a buffer outside the state dict, so a
-resumed job keeps the one it began with. The stochastic rounding draws from torch's global generator, which a job keeps
+resumed job keeps the one it began with. The stochastic rounding samples from torch's global generator, which a job keeps
 across a resume.
 
 - `grow`: the new top blocks, at least 1;
@@ -86,7 +86,7 @@ def origin(shape: dict, dials: dict) -> dict[str, str | None]:
 
 
 def rotation(d: int, seed: int) -> torch.Tensor:
-    """R, d × d and orthogonal: row k the DCT-II's k-th basis vector, column i's sign drawn from `seed`."""
+    """R, d × d and orthogonal: row k the DCT-II's k-th basis vector, column i's sign sampled from `seed`."""
     i = torch.arange(d, dtype=torch.float32)
     r = torch.stack([torch.cos(math.pi * (i + 0.5) * float(k) / d) for k in range(d)]) * math.sqrt(2.0 / d)
     r[0] = r[0] / math.sqrt(2.0)
@@ -113,7 +113,7 @@ def nearest(z: torch.Tensor, bits: int) -> torch.Tensor:
 
 def stochastic(g: torch.Tensor, bits: int) -> torch.Tensor:
     """Each token's coordinates rounded stochastically onto 2^bits − 1 steps from −top to top, top their largest
-    magnitude rounded up a bf16 unit, the draw torch's global generator's. Each token is one group
+    magnitude rounded up a bf16 unit, the sample torch's global generator's. Each token is one group
     (`grouped`)."""
     y = grouped(g)
     top = (y.abs().amax(-1, keepdim=True) * (1 + 2 ** -7)).to(torch.bfloat16).float().clamp_min(1e-30)

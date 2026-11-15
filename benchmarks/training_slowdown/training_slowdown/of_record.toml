@@ -1052,7 +1052,7 @@ op = "mul"
 shapes = [[768]]
 count = 1
 macs = 768
-why = "R, the code's rotation, which the program makes again in every step (its cache lives one step, so its counter sees R made in the step that uses it) where the route makes it once, in `build`: the drawn signs' bits times 2"
+why = "R, the code's rotation, which the program makes again in every step (its cache lives one step, so its counter sees R made in the step that uses it) where the route makes it once, in `build`: the sampled signs' bits times 2"
 
 [[held."m-t20-2x-wildcard-topcode-coded".record_only]]
 phase = "other"
