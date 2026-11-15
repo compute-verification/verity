@@ -114,7 +114,7 @@ REFERENCES = HERE / "references.json"
 #: a block of PoUB's store, in bytes
 BLOCK_BYTES = 4096
 #: the files of a run this command reads
-RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json"]
+RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.json", "out/memory.json", "node.json"]
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 LOCAL = "local: the verifier and its coins ran on the machine being measured"
@@ -357,15 +357,29 @@ def left(tree: Path) -> dict:
     return doc
 
 
-def looped(tree: Path, run: str) -> bool:
-    """Whether `run`, whose records are under `tree`, is this command's own loopback, as the document it left says. A
-    document about another run says nothing of this run's session, and a session that may be a loopback's isn't
-    printed as a node's."""
+def kind(doc: dict) -> str | None:
+    """What document `doc` is of: "loopback", "local" (`--local`'s), or None, a node session's."""
+    return "loopback" if doc.get("loopback") is True else "local" if doc.get("local") else None
+
+
+def kind_of(tree: Path, run: str) -> str | None:
+    """What `run`, whose records are under `tree`, was (`kind`), as the document this command left in it says. A
+    document about another run, or one that doesn't say, says nothing of this run's session, and a `--local` run
+    (its node.json) that left no document isn't printed as a node's either."""
     doc = left(tree)
-    if doc and doc.get("run") != run:
-        raise Unreadable(f"{run}'s out/memory.json is the document of {doc.get('run')}, so whether {run}'s own session "
-                         "was a loopback isn't recorded")
-    return doc.get("loopback") is True
+    if not doc:
+        if (tree / "node.json").is_file():
+            raise Unreadable(f"{run} holds --local's node.json but no out/memory.json saying what it was, so it isn't "
+                             "printed as a node session")
+        return None
+    if doc.get("run") != run:
+        raise Unreadable(f"{run}'s out/memory.json is the document of {doc.get('run')}, so what {run}'s own session "
+                         "was isn't recorded")
+    looped, local = doc.get("loopback"), doc.get("local")
+    if not isinstance(looped, bool) or not (local is None or (isinstance(local, str) and local)) or (looped and local):
+        raise Unreadable(f"{run}'s out/memory.json doesn't say what its session was (loopback {looped!r}, local "
+                         f"{local!r}), so it isn't printed as a node session")
+    return kind(doc)
 
 
 def from_run(store, run: str, k: int | None) -> dict:
@@ -380,8 +394,9 @@ def from_run(store, run: str, k: int | None) -> dict:
         verifier = tree / "out" / "host" / host / "out" / "verifier.json"
     if verifier is None or not verifier.is_file():
         raise NoNumber(f"{run} left no verifier's record (it ended rc {(attempt.get('status') or {}).get('rc')})")
-    return document(session(verifier, k), commit_of(attempt), run, loopback=looped(tree, run), host_run=host,
-                    local=bool(left(tree).get("local")), machine=left(tree).get("machine"))
+    was = kind_of(tree, run)
+    return document(session(verifier, k), commit_of(attempt), run, loopback=was == "loopback", host_run=host,
+                    local=was == "local", machine=left(tree).get("machine"))
 
 
 def from_dir(tree: Path, k: int | None) -> dict:
@@ -403,8 +418,9 @@ def from_dir(tree: Path, k: int | None) -> dict:
         raise NoNumber(f"{tree} holds no verifier's record (out/verifier.json)")
     if mine and run and mine.get("run") not in (None, run):
         raise Unreadable(f"{tree}'s out/memory.json is the document of {mine.get('run')}, not of {run}")
-    return document(session(verifier, k), commit, run, loopback=mine.get("loopback") is True, host_run=host,
-                    local=bool(mine.get("local")), machine=mine.get("machine"))
+    was = kind_of(tree, mine.get("run") if mine else run or str(tree))
+    return document(session(verifier, k), commit, run, loopback=was == "loopback", host_run=host,
+                    local=was == "local", machine=mine.get("machine"))
 
 
 def cores() -> tuple[str, str]:
@@ -873,8 +889,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
             if isinstance(doc, int):
                 return doc
         held = SETTINGS.RESEARCH_RUN_DIR
-        # a run that ran the loopback keeps a loopback's document, the mark `--from` that run reads
-        kept = bool(held) and not doc["loopback"] and left(Path(held)).get("loopback") is True
+        # a run that ran the loopback or --local keeps that document, the mark `--from` that run reads
+        kept = bool(held) and (was := kind(left(Path(held)))) is not None and was != kind(doc)
         ledger = doc.pop("ledger")
     except NoNumber as e:
         if a.local or a.loopback:
@@ -894,7 +910,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     except ValueError as e:
         print(f"memory: the result ({', '.join(m['name'] for m in measured)}) is not written: {e}", file=sys.stderr)
     if kept:
-        print("memory: this run ran the loopback, and its out/memory.json stays the loopback's document", file=sys.stderr)
+        which = "the loopback" if was == "loopback" else "--local"
+        print(f"memory: this run ran {which}, and its out/memory.json stays {which}'s document", file=sys.stderr)
     return 0
 
 

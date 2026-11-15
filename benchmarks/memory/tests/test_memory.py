@@ -353,6 +353,47 @@ def test_a_recorded_loopback_is_printed_as_one(store, capsys):
     assert text[3] == "  store: 262,144 bytes, a test store, bound to no checkpoint"
 
 
+def test_a_recorded_local_session_is_printed_as_one_and_writes_no_node_result(store, capsys, monkeypatch, tmp_path):
+    """A run `--local` left holds its document, which says so: read back with `--from`, inside another research run,
+    it is still a `--local` measurement, in the text and in the JSON, and writes its one-machine row, never the
+    node's."""
+    held = a_run(monkeypatch, tmp_path)
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session())), "node.json": {},
+                    "out/memory.json": {"value": 0.25, "run": RUN, "loopback": False, "local": M.LOCAL}})
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    assert text[1] == f"  {M.LOCAL}" and (doc["local"], doc["loopback"]) == (M.LOCAL, False)
+    got = written(held)
+    assert M.METRIC not in got and got[M.LOCAL_METRIC]["value"] == doc["value"]
+
+
+def test_a_local_run_that_left_no_document_is_not_printed_as_a_node_session(store, capsys):
+    store.add(RUN, {"out/verifier.json": a_record(a_session()), "node.json": {}})
+    assert bench(store, "--from", RUN) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and f"{RUN} holds --local's node.json but no out/memory.json saying what it was" in err
+
+
+@pytest.mark.parametrize("marks", [{}, {"loopback": "no"}, {"loopback": False, "local": 1},
+                                   {"loopback": False, "local": ""}, {"loopback": True, "local": "local: x"}])
+def test_a_run_whose_document_does_not_say_what_it_was_is_not_printed(store, capsys, marks):
+    store.add(RUN, {"out/verifier.json": a_record(a_session()), "out/memory.json": {"value": 0.25, "run": RUN, **marks}})
+    assert bench(store, "--from", RUN) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and f"{RUN}'s out/memory.json doesn't say what its session was" in err
+
+
+def test_a_run_that_ran_local_keeps_its_document_when_it_prints_another_session(store, capsys, monkeypatch, tmp_path):
+    held = a_run(monkeypatch, tmp_path)
+    (held / "out").mkdir(parents=True)
+    mine = {"value": 0.25, "run": BENCH, "loopback": False, "local": M.LOCAL}
+    (held / "out" / "memory.json").write_text(json.dumps(mine))
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session()))})
+    assert bench(store, "--from", RUN) == 0
+    assert json.loads((held / "out" / "memory.json").read_text()) == mine
+    assert "this run ran --local, and its out/memory.json stays --local's document" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("body", ["{", "[1]", "7"])
 def test_a_run_whose_own_document_cannot_be_read_is_not_printed(store, capsys, body):
     """Whether the run was a loopback is then unknown, so nothing is printed as a node's number."""
