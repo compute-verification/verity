@@ -7,7 +7,7 @@ Writes `DIR/difftest/instances.jsonl` (N random instances, then `pinned()`'s), o
 reads it (`InferenceOnlyCheck.Check`'s docstring: `program`, `theta`, `owner`, `gamma`, `alpha`), and `DIR/difftest/python.jsonl`,
 the same line's results from
 `scripts/inference_only_reference.py`. The Lean audit runs `InferenceOnlyCheck/DifftestMain.lean` on both files (`runs` in `lean-audit.json`,
-which pins their SHA-256), and `verity/protocols/resource_accounting/network/verifier/network/tests/test_inference_only_lean_difftest.py` checks that this script
+which pins their SHA-256), and `tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_lean_difftest.py` checks that this script
 still writes them.
 
 A declaration is a descriptor v1 Program built with `verity.circuits` in one of five shapes: a random DAG, a chain, a

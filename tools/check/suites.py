@@ -212,7 +212,7 @@ _spec = importlib.util.spec_from_file_location("suites_settings", HERE / "settin
 #: every environment variable the runner reads, declared once (`settings.py`)
 SETTINGS = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(SETTINGS)
-CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.home() / ".cache") / "verity" / "tests")
+CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.home() / ".cache") / "tests" / "verity")
 #: Files every key includes: the code that decides a suite's verdict, the runner, its settings, its guard and tracer. Not
 #: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
 #: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
@@ -239,7 +239,7 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
-              "verity/tests", "verity-core-evaluate", "verity-core-zk-server",
+              "tests/verity", "verity-core-evaluate", "verity-core-zk-server",
               "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/verifier/sigma", "verity-core-sampled-proofs",
               "verity/protocols/registration/verifier/lean",
               "verity/protocols/resource_accounting/memory/poub/verifier/lean", "verity/protocols/resource_accounting/memory/poub/verifier",

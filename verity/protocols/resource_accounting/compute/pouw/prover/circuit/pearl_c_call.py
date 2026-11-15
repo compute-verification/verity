@@ -50,7 +50,7 @@ F32, BF16, E4M3, U32 = Value(32), Value(16), Value(8), Value(32)
 #: the ANDs circuit-check lowers a Boolean Definition whole up to (`circuit_check.checks.Options.lower_max_ands`): a unit's size
 LOWERED_WHOLE = 1 << 16
 
-_TESTS = "adapters/vllm/verity_vllm/definitions/tests/test_pearl_c_call.py"
+_TESTS = "tests/adapters/vllm/verity_vllm/definitions/test_pearl_c_call.py"
 _HELD = f"protocol-defined; equal to `verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c.PearlC.encode` on its vectors ({_TESTS})"
 
 

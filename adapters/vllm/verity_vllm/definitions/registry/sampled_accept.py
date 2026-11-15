@@ -129,7 +129,7 @@ RESAMPLE_N = ROW
 NEG_INF = SA.NEG_INF_BITS
 _CONF = ("exact-model-tested: vLLM d9105ea80's `rejection_sample` kernels launched on a cc 9.0 GPU at 154,880 logits and five "
          f"draft tokens, one request of 1 + 5 rows a launch ({EVIDENCE['sampled_accept_capture']['run_record']}, "
-         "adapters/vllm/tests/properties/sampled_accept_capture_gpu.py): every word they stored for a request inside the "
+         "tests/adapters/vllm/tests/properties/sampled_accept_capture_gpu.py): every word they stored for a request inside the "
          "domain is the reference's, and on the requests its replay evaluates "
          f"({EVIDENCE['sampled_accept_capture']['replay_run_record']}) `SampledAccept_v1` gives the stored count and tokens; "
          "the launched PTX and SASS are the ones the Definitions were read from "

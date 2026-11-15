@@ -35,7 +35,7 @@ CHUNK = 1 << 24
 
 def _signer_module():
     spec = importlib.util.spec_from_file_location(
-        "pous_test_signer", ROOT / "verity/protocols/resource_accounting/memory/pous/verifier/tests/pous_test_signer.py")
+        "pous_test_signer", ROOT / "tests/verity/protocols/resource_accounting/memory/pous/verifier/pous_test_signer.py")
     m = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     return m

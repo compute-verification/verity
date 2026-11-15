@@ -34,7 +34,7 @@ ahead of the tree (the Lean bar warns of one, naming the count to lower it to); 
 touches.
 
 `lint/allowlists/superseded_versions.json` is circuit-check's suite's
-(`tools/verity/circuit_check/tests/test_superseded_versions.py`): every Definition version the registries register below
+(`tests/tools/verity/circuit_check/test_superseded_versions.py`): every Definition version the registries register below
 a higher one of its name and kind (a Boolean version, registered with the word Definition it computes, supersedes no word),
 one entry each, or one line of its `held` table naming the workload of record that still names it. That list is exact: a
 superseded version with neither fails, and so does a line for a version that is gone. The same gate reports a change that

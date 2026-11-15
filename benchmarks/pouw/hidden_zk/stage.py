@@ -109,7 +109,7 @@ def main() -> None:
         for p in ports:
             rows[p] = np.array([r[p] for r in regs], dtype=np.uint16)
     elif ROLE.startswith(("tile", "hidden")):
-        V = _load("pouw_rows_vectors", ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "tests" / "pouw_rows_vectors.py")
+        V = _load("pouw_rows_vectors", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "pouw_rows_vectors.py")
         hidden = ROLE.startswith("hidden")
         if hidden:
             sys.path.insert(0, str(HERE))

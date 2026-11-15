@@ -70,7 +70,7 @@ ALLOWED = {
                     "Marlin MoE path, served at TP8"),
     **dict.fromkeys(("benchmarks/vllm_encoded/kernels.py",
                      "benchmarks/vllm_encoded/serve.py", "benchmarks/vllm_encoded/stack.py",
-                     "benchmarks/vllm_encoded/tests/properties/encoded_kv_append_capture_gpu.py"),
+                     "tests/benchmarks/vllm_encoded/properties/encoded_kv_append_capture_gpu.py"),
                     "memory-accounting: the encoded-weights stack inside vLLM, its linears, attention and KV append in "
                     "place of vLLM's"),
     # vLLM general plugins and the engine-core internals they patch
@@ -96,7 +96,7 @@ ALLOWED = {
     "benchmarks/spot_proved/discover.py": "proofs: a rehearsal of the capture on a GLM-5.3 vllm.LLM with dummy weights",
     "benchmarks/route_capture/route_capture_plugin.py": "proofs: a general plugin recording each served step's launch-shape "
                                                         "class and kernels",
-    "benchmarks/route_capture/tests/test_plugin.py": "proofs: the route capture's plugin on stand-ins for vLLM's model "
+    "tests/benchmarks/route_capture/test_plugin.py": "proofs: the route capture's plugin on stand-ins for vLLM's model "
                                                      "runners, imported under vLLM's module names",
 }
 

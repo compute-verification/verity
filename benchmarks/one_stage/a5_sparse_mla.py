@@ -1,4 +1,4 @@
-"""One-stage audit, run A5, on a sparse-MLA split stand-in: `adapters/vllm/tests/pipeline/test_serving_rows_splits.py`'s
+"""One-stage audit, run A5, on a sparse-MLA split stand-in: `tests/adapters/vllm/tests/pipeline/test_serving_rows_splits.py`'s
 window (one ``SparseMlaSplit_v1{T=40,NS=2,NH=2,DR=16,DV=32,BN=16}`` row in its heads' split chains: per head, split 0's 16-key
 first block and the full block after it, split 1's 8-key first block, each split's end in one column block and the two-split
 combine, each read row wired to the output row of the unit that wrote it; each key block its Boolean body,
@@ -52,7 +52,7 @@ from verity_vllm.commit import index as IX  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 
 RULE = "stratified-rate:1/64"
-FIXTURE = "adapters/vllm/tests/pipeline/test_serving_rows_splits.py"
+FIXTURE = "tests/adapters/vllm/tests/pipeline/test_serving_rows_splits.py"
 #: what a run's summary keeps of the rank's own (`a5.audit`'s), and what its printed line shows of it
 RANK = ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives", "coins", "circuits", "timing")
 SHOWN = ("draw", "negatives")

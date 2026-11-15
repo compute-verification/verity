@@ -9,7 +9,7 @@
 inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "hardware/cards", "security", "verity/protocols/resource_accounting/compute/pouw/verifier/README.md",
           "verity/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json",
           "verity/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
-          "verity/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json", "verity/circuits",
+          "tests/verity/circuits/ops/fixtures/golden/ada_e4m3_m16n8k32.json", "verity/circuits",
           "verity/circuits/kernels",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear"]
 parallel = true

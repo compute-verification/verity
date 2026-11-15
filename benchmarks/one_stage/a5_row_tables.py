@@ -1,4 +1,4 @@
-"""One-stage audit, run A5, on a row-table stand-in: `adapters/vllm/tests/pipeline/test_row_tables.py`'s window (40
+"""One-stage audit, run A5, on a row-table stand-in: `tests/adapters/vllm/tests/pipeline/test_row_tables.py`'s window (40
 `ScaledMmS8Coordinate_v1{K=64}` units in eight chunks, each of whose ``x`` rows link one of four row tables, one per engine step and linear
 over two engine steps, under the stratified sampling design), its run ``<ROOT>/rank0``, committed as serving commits it
 (`pipeline.serving_rows._read_s8` on the fixture's served values, `ml.windows.rows.commit` under the step roots
@@ -43,7 +43,7 @@ from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 ROOT = hashlib.sha512(b"verity/a5/row-table-stand-in/v1").hexdigest()
 #: Two of the fixture's 40 proof blocks, and a twentieth of however many it registers.
 RULE = "stratified-rate:1/20"
-OF = {"fixture": "adapters/vllm/tests/pipeline/test_row_tables.py", "context": TR.CTX.hex()}
+OF = {"fixture": "tests/adapters/vllm/tests/pipeline/test_row_tables.py", "context": TR.CTX.hex()}
 
 
 def commit(out: Path) -> tuple[CS.Binding, dict[int, bytes]]:

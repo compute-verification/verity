@@ -14,8 +14,8 @@ untraced = ["tests/test_unit_lowering.py"]
 # names the statement as `pouw_h1_circuits` does (adapters/vllm, its tests package's two __init__.py on the way); run.py
 # reads the run's commit through verity_config.settings; h1form.py reads its tile and form from PoUW's settings.py.
 inputs = ["verity", "benchmarks/pouw/h1_prove", "benchmarks/pouw/hidden_zk", "benchmarks/pouw/settings.py",
-          "adapters/vllm/tests/__init__.py",
-          "adapters/vllm/tests/protocols/__init__.py", "adapters/vllm/tests/protocols/pouw_h1_circuits.py",
+          "tests/adapters/vllm/tests/__init__.py",
+          "tests/adapters/vllm/tests/protocols/__init__.py", "tests/adapters/vllm/tests/protocols/pouw_h1_circuits.py",
           "tools/config/verity_config"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -23,4 +23,4 @@ inputs = ["verity", "benchmarks/pouw/h1_prove", "benchmarks/pouw/hidden_zk", "be
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_unit_lowering.py"]
-paths = ["benchmarks/pouw/hidden_zk", "adapters/vllm/tests"]
+paths = ["benchmarks/pouw/hidden_zk", "tests/adapters/vllm/tests"]

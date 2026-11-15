@@ -547,7 +547,7 @@ configuration it reads `rehearsal, no bound: the configuration is not a committe
 the run pinned for itself included, `rehearsal: key not the auditor's pinned key, no bound`; either way
 the key's custody is among what the bound doesn't cover. The hosts' names give `kind` (`own-host`, `simulated`,
 `prover-node`), a label and never the reason. Which keys the verifier accepts is the run's pin, and a separate matter.
-`verity/protocols/resource_accounting/memory/pous/attester/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on generated sessions at every batch size, one adversarial edit of them (a wrong
+`tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on generated sessions at every batch size, one adversarial edit of them (a wrong
 label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a start mark changed, a
 field past its width), JSON the Lean must refuse, and named negative controls.
 

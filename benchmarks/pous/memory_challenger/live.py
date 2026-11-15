@@ -40,7 +40,7 @@ against C's leaf).
   (`lean_verdict`, built with `lake` on first use) and with the Python, which stays the reference, and keeps both in the
   witness (`verdicts`).  `RECORD_VERDICT` names the one that is the record's (the Lean's); where the two disagree, on the
   accept bit or the reasons, the session is rejected for it (`DISAGREE`, listing both).
-  `verity/protocols/resource_accounting/memory/pous/attester/lean/tests/test_verdict.py` holds the Lean to the Python on generated records.
+  `tests/verity/protocols/resource_accounting/memory/pous/attester/lean/test_verdict.py` holds the Lean to the Python on generated records.
   `accepted_under_signer` is the same verdict under the signer's own mapping (`memory_challenger.SCHEMES` for `lms`, the
   test signer's for `test`): for `test`, every check but the scheme's acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
@@ -87,7 +87,7 @@ from verity.protocols.resource_accounting.memory.pous.attester.timed_audit impor
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-TEST_SIGNER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "tests" / "pous_test_signer.py"
+TEST_SIGNER = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
 LEAN_VERDICT = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean" / "verdict.py"
 RECORD_VERDICT = "lean"
 """Which verdict is the record's: `"lean"` (`lean_verdict`) or `"python"` (`memory_challenger.verdict`, the reference).

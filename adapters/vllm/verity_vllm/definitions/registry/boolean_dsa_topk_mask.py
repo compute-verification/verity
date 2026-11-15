@@ -1,5 +1,5 @@
 """`dsa_topk_mask`'s Definitions on bits.  These are the definitions; `dsa_topk_mask`'s word versions are accelerators that
-circuit-check and adapters/vllm/tests/program/test_dsa_topk_mask.py hold equal to them.
+circuit-check and tests/adapters/vllm/tests/program/test_dsa_topk_mask.py hold equal to them.
 
     DsaTopKKey_v2                  (s: 32 bits) -> 32 bits; word view DsaTopKKey_v1
     DsaRadixPass_v1{N,TOPK}        (eq, gt: N bits, r: RB bits, e: N bits) -> (N bits, N bits, RB bits); traced, no word
@@ -257,7 +257,7 @@ DsaRadixTiesV2 = CompositeDefinition(
     "DsaRadixTies", 2, ("N", "TOPK"),
     lambda S: ((("eq", Array(S.N, BIT)), ("gt", Array(S.N, BIT)), ("r", Array(_rb(S), BIT))), Array(S.N, BIT)), _ties_calls,
     doc=_ties_calls.__doc__,
-    conformance="exact-model-tested: held to DsaRadixTies_v1 and to the mask's rule by adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+    conformance="exact-model-tested: held to DsaRadixTies_v1 and to the mask's rule by tests/adapters/vllm/tests/program/test_dsa_long_row_calls.py")
 
 #: how many keys one `DsaRadixPassCount_v1` counts: `DsaRadixPass_v2` counts a row in chunks of this many
 PASS_CHUNK = 256
@@ -328,7 +328,7 @@ DsaRadixPassV2 = CompositeDefinition(
     "DsaRadixPass", 2, ("N", "TOPK"),
     lambda S: ((("eq", Array(S.N, BIT)), ("gt", Array(S.N, BIT)), ("r", Array(_rb(S), BIT)), ("e", Array(S.N, BIT))),
                Tuple(Array(S.N, BIT), Array(S.N, BIT), Array(_rb(S), BIT))), _pass_calls, doc=_pass_calls.__doc__,
-    conformance="exact-model-tested: held to DsaRadixPass_v1 and to the pass's rule by adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+    conformance="exact-model-tested: held to DsaRadixPass_v1 and to the pass's rule by tests/adapters/vllm/tests/program/test_dsa_long_row_calls.py")
 
 
 def _row_valid(S):
@@ -402,7 +402,7 @@ def _valid_calls(B, S, n):
 
 DsaRowValidV2 = CompositeDefinition(
     "DsaRowValid", 2, ("N",), lambda S: ((("n", I32),), Array(S.N, BIT)), _valid_calls, doc=_valid_calls.__doc__,
-    conformance="exact-model-tested: held to DsaRowValid_v1 and to n > j by adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+    conformance="exact-model-tested: held to DsaRowValid_v1 and to n > j by tests/adapters/vllm/tests/program/test_dsa_long_row_calls.py")
 
 
 def _select(B, S, scores, n=None, ties=DsaRadixTies, step=DsaRadixPass, valid=DsaRowValid):
@@ -497,7 +497,7 @@ DsaButterflyTagsCount = CompositeDefinition(
     "DsaButterflyTagsCount", 1, ("N", "K"),
     lambda S: ((("mask", Array(S.N, BIT)),), Tuple(Array(S.N, _tag(S.K)), I32)), _tags_count, doc=_tags_count.__doc__,
     conformance="exact-model-tested: held to DsaButterflyTagBits_v1 and to the bits' count by "
-                "adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+                "tests/adapters/vllm/tests/program/test_dsa_long_row_calls.py")
 
 
 def _ctl(S):

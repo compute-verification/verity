@@ -15,7 +15,7 @@ Kernel-pinned, as Lean data (their checks, one theorem per part, in `Proofs/Pouw
   same adder with two groups of 16), for `adaStep`.
 
 The bulk, as gzipped text with the SHA-256 of each uncompressed file in `conformance/SHA256SUMS` (`runs` in
-`lean-audit.json` pins them; `verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_lean_package.py` checks that this script still writes them):
+`lean-audit.json` pins them; `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_lean_package.py` checks that this script still writes them):
 * `conformance/steps.txt.gz`: the 10,549 steps, then R1's 166,000 differential steps (`R1_FAMILIES`);
 * `conformance/adds.txt.gz`: the 5,000 FP32 adds.
 
@@ -556,7 +556,7 @@ def main() -> None:
         f"seed {SEED}). -/\ndef vectors : List Vec :=\n  " + " ++\n  ".join(f"Vectors.{n}" for n in names)
         + "\n\nend Pouw.Fp8Atom\n")
 
-    golden = json.loads((args.verity / "verity/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json").read_text())
+    golden = json.loads((args.verity / "tests/verity/circuits/ops/fixtures/golden/ada_e4m3_m16n8k32.json").read_text())
     ada = []
     for rec in golden["records"]:
         a = [int(rec["a"][i : i + 2], 16) for i in range(0, 64, 2)]

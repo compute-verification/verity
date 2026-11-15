@@ -246,7 +246,7 @@ def _core_body(B, S, a, b, y, cert, salt, root, unit, rows, col, eb, fa, fb, g):
 PearlPlusTileCore = CompositeDefinition(
     "PearlPlusTileCore", 1, ("K", "TM", "TN", "N", "RHO", "RHOR", "DEV"), lambda S: (_core_params(S), Tuple(BYTES64, BIT)),
     _core_body, refuse=_refuse_k, conformance="protocol-defined; equal to `pearl_plus_tile.reference` on its fixture tiles "
-                                              "(verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_pearl_plus_tile.py)",
+                                              "(tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_pearl_plus_tile.py)",
     doc="A drawn -h3 tile on words: its rows formed against the salt's noise (`PearlCRowA`, `PearlCRowB`), and (the "
         "sha512/row-seg/v1 digest of its C̃ and U, ok: every row admitted, the tile's and each row's cap, and each row's "
         "served y its committed y at column tile col).")
@@ -311,7 +311,7 @@ def _refuse_tile(b: dict) -> str | None:
 PearlPlusTile = CompositeDefinition(
     "PearlPlusTile", 1, ("K", "TM", "TN", "N", "D", "RHO", "RHOR", "DEV"), _tile_sig, _tile_body, refuse=_refuse_tile,
     conformance="protocol-defined; `pearl_plus_tile.reference` and `leaf_reference` on its fixture tiles "
-                "(verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_circuit_pearl_plus_tile.py)",
+                "(tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_pearl_plus_tile.py)",
     doc="Pearl+'s -h3 tile unit: `PearlPlusTileCore_v2`'s ok, and its digest's hm96 leaf under hsalt opening at tpos to the "
         "transcript root troot (`PearlPlusTileLeaf_v1`); the verifier holds ok to 1.")
 

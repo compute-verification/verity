@@ -97,7 +97,7 @@ build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1 P
   rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
-    && cp "$SRC/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean" "$P/" \
+    && cp "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean" "$P/" \
     && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$P/lakefile.toml" \
     && (cd "$P" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
 }

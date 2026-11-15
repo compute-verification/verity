@@ -82,7 +82,7 @@ change that adds or modifies a circuit passes `uv run circuit-check <definition|
   records step (`--cc-records`: `circuit-check --all --records-only`), and give each shard those records
   (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/check/policy.toml`): a candidate's
   check runs it, and its red holds nothing. The session of circuit-check's own test suite takes the bindings' records from
-  that same cache and has the ones it lacks built and stored there once (`tools/verity/circuit_check/tests/conftest.py`);
+  that same cache and has the ones it lacks built and stored there once (`tests/tools/verity/circuit_check/conftest.py`);
   either can list the records its catalog rests on (`--records-manifest FILE`, `CIRCUIT_CHECK_RECORDS_MANIFEST`), by which
   a store carries them to another run.
 - The fine-grained check ([`verity graph`](../../tools/verity/graph/README.md)) has circuit-check as one
@@ -213,5 +213,5 @@ Pure functions of a Program, read by the resource audits:
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits`), and `./ops/tests/` is a suite
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits`), and `../../tests/verity/circuits/ops/` is a suite
 of its own.

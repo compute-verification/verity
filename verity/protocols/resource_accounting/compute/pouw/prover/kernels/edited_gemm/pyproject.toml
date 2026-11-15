@@ -19,4 +19,4 @@ inputs = ["verity/protocols/resource_accounting/compute/pouw/prover/kernels/floo
           "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/receipts/receipt_conform.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/receipts/receipt_folds.py", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts/vectors.json",
-          "verity/protocols/resource_accounting/compute/pouw/verifier/receipts/tests/fixtures/receipt_folds_r9.py"]
+          "tests/verity/protocols/resource_accounting/compute/pouw/verifier/receipts/fixtures/receipt_folds_r9.py"]

@@ -11,7 +11,7 @@ Every implementation passes the same gates and reports the same metrics, written
 (`verity-pous/bench-result/v1`) and, when `RESEARCH_RUN_DIR` is set, to `$RESEARCH_RUN_DIR/result.json`:
 
 * **Gates.**
-  - The scheme's pinned conformance vectors (`verity/protocols/resource_accounting/memory/pous/verifier/tests/fixtures/schemes/<name>.json`), through
+  - The scheme's pinned conformance vectors (`tests/verity/protocols/resource_accounting/memory/pous/verifier/fixtures/schemes/<name>.json`), through
     `verity.protocols.resource_accounting.memory.pous.verifier.protocol`.
   - The implementation's own gates: known answers, and decoded blocks equal to the reference's.
   - The timed audit, and a negative control where one block in ten is wrong.
@@ -106,7 +106,7 @@ def weight_set(ws_id: str) -> dict[str, Any]:
 
 def conformance_gate(name: str) -> dict[str, Any]:
     """The scheme's pinned vectors, recomputed through `verity.protocols.resource_accounting.memory.pous.verifier.protocol` (the conformance suite's own check)."""
-    sys.path.insert(0, str(ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "tests"))
+    sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier"))
     import pous_scheme_vectors as sv
 
     pinned = json.loads(sv.path(name).read_text())

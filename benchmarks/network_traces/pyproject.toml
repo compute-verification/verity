@@ -70,15 +70,15 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "verity/protocols/proofs/flock/prover/python/verity_flock",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
-          "benchmarks/network_e2e/encodings/tests/fixtures",
-          "verity/protocols/resource_accounting/network/verifier/network/tests/fixtures/slot_entry.json",
-          "verity/protocols/resource_accounting/network/verifier/network/tests/fixtures/select_entry.json",
+          "tests/benchmarks/network_e2e/encodings/fixtures",
+          "tests/verity/protocols/resource_accounting/network/verifier/network/fixtures/slot_entry.json",
+          "tests/verity/protocols/resource_accounting/network/verifier/network/fixtures/select_entry.json",
           "verity/protocols/proofs/flock/prover/agreement/redigest.py", "verity/protocols/proofs/flock/prover/agreement/transcript_check.py",
           "verity/protocols/proofs/flock/prover/agreement/record_text.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py", "benchmarks/census/deployments.json",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
-          "verity/protocols/resource_accounting/network/verifier/network/tests/period_case.py", "tools/difftest/python/verity_difftest",
+          "tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py", "tools/difftest/python/verity_difftest",
           "verity/__init__.py", "verity/protocols/compose/__init__.py", "verity/protocols/compose/verifier/__init__.py",
           # test_kept_scan's window classes are the vLLM integration's (`program.predict.window_circuit`), which import
           # across its package and the PyTorch adapter's; demo_stub's `verity-vllm advice`, the encodings' replay and
@@ -88,7 +88,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           # the block record's period-0 fixture, and test_certifier_piece holds the CLI's served_table to scan_zk's scan class.
           "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
           "benchmarks/certifier_term/run.py",
-          "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json",
+          "tests/benchmarks/one_stage/interfaces/fixtures/block-record-r2-period0.json",
           "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
           "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py"]
 # network-rows, the compiled audit of the network certifier's records, which test_certifier_piece builds in its package

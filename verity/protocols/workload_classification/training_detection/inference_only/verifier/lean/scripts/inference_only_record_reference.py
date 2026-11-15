@@ -124,7 +124,7 @@ def closure_digest(desc: dict, key: str) -> str:
     (`DefinitionDigest.closureDigest`), by its one Python mirror, the network suite's
     `period_case.slot_entry_digest`, read from the checkout `verity.circuits` comes from."""
     if "period_case" not in sys.modules:
-        _load("period_case", Path(codec.__file__).resolve().parents[1] / "protocols" / "resource_accounting" / "network" / "verifier" / "network" / "tests")
+        _load("period_case", Path(codec.__file__).resolve().parents[2] / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network")
     return sys.modules["period_case"].slot_entry_digest(desc, key)
 
 

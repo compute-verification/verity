@@ -14,7 +14,7 @@ checks `replay_step.reference` on every step that fits the size class (the rest 
 `--circuit` the Definition on them too; with `--EW` each step's `looked` against the lookups the scheduler made (the
 candidates whose `BlockPool.hit` it called), each of whose hits past the pool bound is the pool's; `--fixture N` writes each trace's N consecutive fitting steps with the most
 preemptions, cache hits, admissions and stops (`window`) as the vectors the certifier's test reads
-(`verity/protocols/resource_accounting/network/verifier/tests/fixtures/replay_step_vectors.json`).
+(`tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json`).
 
 **A served window as the compile slice's input.** `served_window` cuts one window out of a served run's step trace (the
 server's `window` open and close records, `verity_vllm.engine.step_trace`), renumbered from its first step, and

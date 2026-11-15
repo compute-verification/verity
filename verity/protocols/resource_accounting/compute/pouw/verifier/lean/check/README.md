@@ -170,7 +170,7 @@ its release log, and the auditor's signed ledger opening and ending it for the e
 in-process challenger's coins, an unsigned or tampered log, a ledger signed under another key or cut before the session's
 end, a second session for the execution phase, roots the challenger's log doesn't show,
 a coin opened twice, one opened before its round's root, a foreign execution phase's, a seeded execution phase's commitment or another
-layout's). `verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
+layout's). `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at. Its `window` and `period` go against `credit._window_outcomes` and `credit._period_outcomes` (`credit.window`
 and `credit.period_credit` on proof outcomes, which they derive from an execution phase's proof files by running the
 verifier; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
@@ -182,7 +182,7 @@ descriptor whose record names another layout than its nodes, a round log the cha
 sampled proof block's proof of another registration than the execution phase's, an entry whose root is not its sessions', an execution phase of a
 credit period whose B rows, one row's s_w or every code, are not the ones the credit period's open signed, a credit period whose open signs
 no weights' root, an execution phase whose request runs past its public max_tokens or stops before it, a credit period whose open
-commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `verity/protocols/resource_accounting/compute/pouw/verifier/tests/test_pouw_credit.py`
+commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit.py`
 holds each mutation to its refusal.
 
 `tests/test_verified_difftest.py` puts `credit-verified` against `credit._asks` and `credit._verified` with the Lean

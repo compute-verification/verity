@@ -151,7 +151,7 @@ execution phase:
 How it is run: the difftests run the Lean against the Python on generated cases
 (`uv run tools/check/suites.py verity/protocols/resource_accounting/compute/pouw/verifier/lean/check`, and likewise `lean/window` and
 `lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside SPOT's
-(`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py` runs
+(`tests/verity/protocols/compose/verifier/lean/test_composition_difftest.py`); `verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
 
 ## Schemes
@@ -209,7 +209,7 @@ reads. Proved:
   at those prices, at zero SHA-512 and fetch prices, matches every adversary within its cost and query bound with
   good-tile credit at least as likely to exceed any threshold; the device reading's FP32 price is refuted on the H200,
   so this premise is falsified there) and `tt-out-tile-pearl-c-h100-rev1` (TT_OUT rev1 per
-  audit tile over that W1 setting, falsification test `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py`). They do
+  audit tile over that W1 setting, falsification test `tests/benchmarks/pouw/test_tt_out_tile_h100_rev1.py`). They do
   not cover what is served: `pearl-c-h100-v1-h3` pays by the per-clock record `devH100`, about 1.5% more, and at the
   two-clock reading no statement of this form covers that credit, since the honest program with its first promotion
   skipped falls about 1% under TT_OUT's threshold for it. TT_OUT rev1 is refuted by proofs' red-team rating, so both

@@ -57,7 +57,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # the deployment layer and its wire, which the period hook's memory challenger is started through
           # (`verity.runtime.stream.Side`) and runs on
           "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py",
-          "verity/tests/tests/test_channel.py", "verity/protocols/proofs/flock/verifier/lean-toolchain",
+          "tests/verity/tests/test_channel.py", "verity/protocols/proofs/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/vectors.json", "benchmarks/pous/p2_v1/__init__.py",
           "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/reference.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/wire.py",

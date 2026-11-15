@@ -221,7 +221,7 @@ from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = HERE.parents[1] / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
+LLAMA32_1B_CONFIG = HERE.parents[1] / "tests/adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")

@@ -61,4 +61,4 @@ the same names and compare with `python compare.py DEVICE_DIR TWIN_DIR` (exit 9 
 - **EGEMM's digest byte order (63f78c35a):** the device dumped its digests' native uint64 words, so no reference matched.
   `gk::Dump::digests` writes SHA-512's big-endian bytes, and `compare.py` names a word-reversed difference as byte order.
 
-`../../../../../../../../benchmarks/pouw/opcode_probe/` is the kit's first user. The tests are `../../../../../../../../benchmarks/pouw/tests/test_gpu_kit.py`.
+`../../../../../../../../benchmarks/pouw/opcode_probe/` is the kit's first user. The tests are `../../../../../../../../tests/benchmarks/pouw/test_gpu_kit.py`.

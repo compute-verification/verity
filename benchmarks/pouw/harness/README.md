@@ -21,7 +21,7 @@ versions, the consistency gate. It uses the CUDA primary context through ctypes,
 | `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier, a replay, on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments. An accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck) |
 | `ledger.py` | the attempt ledger: `verify.py` writes one `kernel-attempt/v1` record per arm and shape under the run's `ledger/` (the variant, parent, tier, gate version, metrics, step times, γ, the verifier's lines, the hypothesis) and publishes it with `--publish`; `ledger.py publish RUN_DIR` later, `ledger.py outcome ART OUTCOME --reason ...`, and `ledger.py rows`, what `panel.py` reads beside `attempts.jsonl` |
 | `price_twins.py`, `price_twins.json` | the gap's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`, or `--repository-only` when only `security/lean-audit.json` changed): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, at its cube or its linear (n, k) (`lookup(..., layout=)` for a served layout's), and never takes one typed in |
-| `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
+| `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../../../tests/benchmarks/pouw/test_harness.py`) |
 | `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) and `../nvfp4_sm120/nvf4_plain.cu`'s in the same registry (`cutlass_api.h`; `PH_NO_CUTLASS=1` builds only these); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
 
 The runner is `run.sh JOB [ARGS]`, which `verity bench pouw harness JOB [ARGS]` runs: it starts one job as it is, with
@@ -92,7 +92,7 @@ $R --no-sampler -- bash -c "gpu-lease 8 --wait --timed -- timeout 1140 bash -c '
 
 `H` and `V` go to `bash -c`, so each must be one line (`H` is wrapped above for reading).
 
-An arm on another branch runs from a tree that holds both: its branch with this directory and `../tests/test_harness.py`
+An arm on another branch runs from a tree that holds both: its branch with this directory and `../../../tests/benchmarks/pouw/test_harness.py`
 checked out from the harness's commit, `--arm-path` its own directory. `jobs/harness.yaml` and `jobs/harness-timed.yaml` are
 the RTX PRO 6000 node's queue jobs, for when its Kueue is up.
 

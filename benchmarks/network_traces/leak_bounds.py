@@ -767,7 +767,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
                               f"no certified {MODEL} class: the most ids a response holds (--response-ids)"),
         "id_bits": Input(id_bits, "bit", "assumed",
                          f"no certified {MODEL} class: an id of the vocabulary "
-                         "(adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json's vocab_size)"),
+                         "(tests/adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json's vocab_size)"),
         "phase_buckets": Input(buckets, "bucket", "assumed",
                                f"no certified {MODEL} class: an execution phase's buckets (--phase-buckets)"),
         "bucket_s": Input(bucket_s, "s", "assumed",

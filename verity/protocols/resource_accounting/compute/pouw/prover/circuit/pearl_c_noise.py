@@ -91,7 +91,7 @@ NORM_E, NORM_F = 0x4600, 0x4400
 _NAN_BF16 = 0x7FFF
 _M64 = (1 << 64) - 1
 #: where the tests hold each Definition to its reference
-_TESTS = "adapters/vllm/verity_vllm/definitions/tests/test_pearl_c_noise.py"
+_TESTS = "tests/adapters/vllm/verity_vllm/definitions/test_pearl_c_noise.py"
 
 
 # ---- the hashes ------------------------------------------------------------------------------------------------------------

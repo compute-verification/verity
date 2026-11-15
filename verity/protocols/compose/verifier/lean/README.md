@@ -164,7 +164,7 @@ Lean to:
 - PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period_prover.audit`
   signed at its deployed parameters, honest and cheating, and an honest run on another store; PoUB-P2's sessions over
   that `C*`, honest, cheating and unverified, as `p2_case` answers them), whose Lean their packages' difftests hold to
-  those verifiers (`../../../resource_accounting/memory/pous/verifier/check/tests/test_run_protocol.py`, `../../../resource_accounting/memory/poub/verifier/lean/tests/test_p2_case.py`).
+  those verifiers (`../../../../../tests/verity/protocols/resource_accounting/memory/pous/verifier/check/test_run_protocol.py`, `../../../../../tests/verity/protocols/resource_accounting/memory/poub/verifier/lean/test_p2_case.py`).
 
 Hypothesis samples 1000 cases a product (seed 0), and fewer in the short form each thousand-case test has (`FEWER`),
 which a check that leaves the test out still runs: each subprotocol's case accepts, rejects, is undecided or fails to decode
@@ -190,5 +190,5 @@ rejection need not reject the whole: such a reference disagrees with the Lean on
 subprotocols its `serve` gives onsite's verdicts (`test_product_over_onsites_subprotocols_is_onsite`); remote v1's has
 no difftest until Pearl+'s run has reference cases.
 
-A bare `uv run` inside this directory stops its workspace search at `verity/protocols/tests/pyproject.toml`; run the suite
+A bare `uv run` inside this directory stops its workspace search at `tests/verity/protocols/pyproject.toml`; run the suite
 through `suites.py`, or `pytest` with the workspace's `.venv`.

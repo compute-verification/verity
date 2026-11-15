@@ -33,4 +33,4 @@ CPU. `run.sh` is `kv.cu`'s GPU benchmark.
 **Reads and writes:** the GPU scripts read the built kernels and write their gates, timings and profiles as JSON in their
 output directory; the suite reads only the vectors. **Backs:** the codec whose word the named assumptions
 `Accounting.Assumptions.SquaringFloor` and `ChainSum` price is `kv/v0`, and the bandwidth audit's vectors test
-(`verity/protocols/resource_accounting/memory/poub/verifier/tests/test_poub_vectors.py`) holds the audit's codec to it.
+(`tests/verity/protocols/resource_accounting/memory/poub/verifier/test_poub_vectors.py`) holds the audit's codec to it.

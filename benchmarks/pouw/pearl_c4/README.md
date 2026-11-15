@@ -50,8 +50,8 @@ F1′ item that `real.py --f1 fast` uses.
 
 ## Who reads it
 
-The tests in `../tests/` import `replay.py`, `real.py` and `real_table.py` by name; the protocol's own tests
-(`verity/protocols/experimental/pearl_c4/tests/`) import `twin.py` and `f1_fast.py` and start `sass.py` and `fixture.py`
+The tests in `../../../tests/benchmarks/pouw/` import `replay.py`, `real.py` and `real_table.py` by name; the protocol's own tests
+(`tests/verity/protocols/experimental/pearl_c4/`) import `twin.py` and `f1_fast.py` and start `sass.py` and `fixture.py`
 by their command lines. `../settings.py` declares the variables `dev.py` reads. `dev.py` runs beside the cubin on the
 card with the standard library and numpy alone, so it imports nothing of the tree. Nothing here is a verifier: no script
 writes a verdict a guarantee reads, and only `run.sh` and the `dev.py` it starts touch a GPU.

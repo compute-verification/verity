@@ -61,7 +61,7 @@ EVALUATES = re.compile(r"(?m)(?:^[ \t]*|\bin[ \t]+)(?:#eval!?|#guard|run_cmd|run
 PRIVATE = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*private[ \t]+(?:(?:noncomputable|partial|unsafe|nonrec)[ \t]+)*"
                      r"(?:def|abbrev|instance|structure|inductive|opaque|class)\b")
 FIX = "python3 tools/verity/lean/modules.py"
-FIXTURES = "tools/verity/lean/tests/fixtures/"
+FIXTURES = "tests/tools/verity/lean/fixtures/"
 
 
 def _sibling(name: str):

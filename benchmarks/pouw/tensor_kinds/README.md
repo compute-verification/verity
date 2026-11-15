@@ -56,4 +56,4 @@ python3 sm80.py census OUT... --extension OUT... [--to DIR]   # sm_80's rows.csv
 margin; `sm80.py` reports no number for a kernel the gate refused or whose poisoned sink failed. Their module
 docstrings give each quantity. One caller reads this directory: `../opcode_probe/sm89/census.py` loads `tensor_kinds.py`
 by its path for the sm_89 census, and its `__all__` lists what that reads. The tests are
-`../tests/test_tensor_kinds.py` and `../tests/test_tensor_kinds_sm80.py`.
+`../../../tests/benchmarks/pouw/test_tensor_kinds.py` and `../../../tests/benchmarks/pouw/test_tensor_kinds_sm80.py`.
