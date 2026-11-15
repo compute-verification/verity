@@ -4551,6 +4551,11 @@
       "paths": {
         "benchmarks/torch_gpu/p2_stage/build.sh": "verity/protocols/accounting/pous/prover/p2/p2_store/build.sh"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/lean/tests/fixtures/inner-trees-served/": "verity/protocols/proofs/flock/prover/tests/fixtures/inner-trees-served/"
+      }
     }
   ]
 }
