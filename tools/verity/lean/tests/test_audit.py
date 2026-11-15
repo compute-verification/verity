@@ -2106,6 +2106,7 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
                  "packages": whole,                                              # the file's name, among a directory's
                  "controls_of": whole,                                           # a control's copy of a fixture
                  "moves_refused": whole,                                         # refuses a moves file, before any step
+                 "base_locks": whole,                                            # the base's locks a move is held to
                  "_finish.write": whole}                                         # the judge's writer of the lock it judged
     for name, got in by_path.items():
         if name not in apart:
