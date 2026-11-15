@@ -22,3 +22,31 @@ Counts, with ci's Python path (no repository root on any subprocess's path) and 
 - py_compile ok; ruff on the 3 files: 65 findings against the base's 68, none new.
 - The child run from a directory that is not the repository root: from /home/ubuntu/gx with relative paths, SS.release(Path('out'), Path('hold'), Path('q'), None) gave rc 0, "clean ... 1 of 1 held released". The old form, `-m` without cwd, fails there with "No module named 'benchmarks'".
 
+[2026-11-15T11:46Z] 8097709071e8
+ONSITEMAIN2 to network-accounting lead, Sun 15 Nov 3:46 AM PST. The MonitoringPeriodLeakAccepted pin is mended: branch cursor/na-onsite-rests-on-b51f, commit 0bd0d494aeeaeef8ba2df87c2af5aa5a648657f9, cut from origin/architecture 54e1b5c0f933. Pushed only there; nothing to architecture or collect.
+
+1. Only moved names; nothing in substance changed. [read]
+- The pin is the lock's digest of the guarantee's statement Prop. onsite_record.statement takes the signature's type, NetTiming.Guarantees.MonitoringPeriodLeakAccepted, and reads its digest among the lock's reads.
+- That digest: 41de25b3444487593edcbd858f2daee2767204c6475b0aa1ae05516f315d1772 at 009698aa9c0a (read module Definitions.NetworkCertifier.Guarantees.MonitoringPeriod); e7686773821a0c9646d03a906d16c534d2253ed2a566aedf686d01fccf4a1e36 at the tip (read module Definitions.Certifier.Guarantees.MonitoringPeriod).
+- The guarantee's record, 009698aa9c0a against the tip:
+  - signature, type_hash, assumptions ([]), owner, domain ([Claims.Sampling.CommitmentScheme.Binds]) and reads ([]): identical.
+  - open: the same four but Verity.Assumptions.TrustedHost → Verity.Assumptions.TrustedDevice.
+  - unfolded_hash: 16b44efd… → 893f1985….
+- The Lean file security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean is byte-identical at 009698aa9c0a and the tip. Its last changes are the moves b1a80682b1d (certifier_area_map) and aba8e048ae7 (wrong_units_words_map), both below 009698aa9c0a.
+- The 009698aa9c0a lock was a record kept from before those moves: its reads still say TrustedHost while the Lean there already says TrustedDevice. ci's close (958aec66a02) regenerated the digest over the definition as it now reads, with the new names.
+- Against main's Lean (security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean), def MonitoringPeriodLeakAccepted's text is identical but for:
+  - faultySets → incorrectSets (lines 8 and 29 of the def: hβ, and the count's #incorrectSets);
+  - Verity.Assumptions.TrustedHost → Verity.Assumptions.TrustedDevice (line 12: htrust).
+  No other token differs.
+
+2. The takes still match. [read] RESTS_ON's takes for it are Claims.SamplingGeneric.Compiled.KS, Claims.Sampling.CommitmentScheme.Binds, Verity.Assumptions.TrustedDevice, hPw, hβ, hcap, hfit, hs, hdz, NetTiming.ScopeAcc and NetTiming.CertifierRegisters.
+- They already say TrustedDevice, and they cover each of the tip record's open premises (KS, CertifierRegisters, ScopeAcc, TrustedDevice) and its domain (Binds).
+- The test (line 941) compares only the lock's assumptions, [], against takes ∪ STANDING, so no takes key moves.
+
+3. The changed line, the only change, in benchmarks/one_stage/onsite_record.py:576:
+-        "statement": "41de25b3444487593edcbd858f2daee2767204c6475b0aa1ae05516f315d1772",
++        "statement": "e7686773821a0c9646d03a906d16c534d2253ed2a566aedf686d01fccf4a1e36",
+I took the hash from the tip's lock, not from ci's line.
+
+4. Counts: [ran] benchmarks/one_stage/tests/test_onsite_record.py whole gives 225 passed, 0 failed. py_compile passes on both files. The tests/lint/ and tests/test_repository.py results follow in my next line. TIMER: none.
+
