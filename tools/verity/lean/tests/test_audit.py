@@ -7796,7 +7796,9 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
     (a / "Control" / "A.lean").write_text("namespace Control.A\ntheorem t : 1 + 1 = 2 := rfl\nend Control.A\n")
     pol = unclaimed(A.load(a))
     A.dump(a, pol | {"layers": pol["layers"] | {"Control.A": {"imports": []}},
-                     "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.A.t")}})
+                     "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.A.t")},
+                     "shape": pol["shape"] | {"properties": pol["shape"]["properties"] | {
+                         "Control.A.t": {"function": "Control.double", "outcome": "none"}}}})
     for p in pkgs.values():
         A.dump(p, unclaimed(A.load(p)))
         subprocess.run(["lake", "build"], cwd=p, check=True, capture_output=True, env=A.lake_env())
@@ -7833,6 +7835,9 @@ def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_onc
     assert code == 0 and f"audit: {pkgs['b'] / A.POLICY}: written" in said, said
     assert (pkgs["b"] / A.POLICY).read_bytes() == recorded["b"]
     (a / "Control" / "A.lean").write_text("namespace Control.Z\ntheorem t : 1 + 1 = 2 := rfl\nend Control.Z\n")
+    pol = A.load(a)
+    A.dump(a, pol | {"shape": pol["shape"] | {"properties": {
+        "Control.Z.t" if n == "Control.A.t" else n: e for n, e in pol["shape"]["properties"].items()}}})
     code, reps, said = run(["a", "b"], "--update", "--moved", str(moves), sandbox=False)
     assert code == 0, said
     assert said.count(": written") == 2 and set(A.load(a)["guarantees"]) == {"Control.main_thm", "Control.Z.t"}
