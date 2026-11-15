@@ -341,7 +341,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable, Collection, Iterable
 
-from . import linear, quick_tier, waitcap
+from . import linear, quick_tier, suite_layout, waitcap
 from .gates import WORKTREES_LOCK, git_env, worktrees_shared
 from .store import ids, vocab
 
@@ -1377,8 +1377,9 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
     that ends in `/` (a directory from the repository's root: the verifiers and the soundness-path Python), is an entry with
     a `/` before its end (one file's path from the root: a package's `__init__.py`, which Python runs on every import below
     it, without the rest of its directory), or has a name an entry with no `/` matches as a glob (`*.lean`, every
-    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  ``files`` are the PR's own change, against its merge base with
-    `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
+    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  A directory holds its tests under the root's `tests/` too, and
+    `tests/` holds only the root suite's own (`suite_layout.held`).  ``files`` are the PR's own change, against its merge
+    base with `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
     dirs, paths, names = [], set(), []
     for x in excludes:
         if x.endswith("/"):
@@ -1387,9 +1388,9 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
             paths.add(x)
         else:
             names.append(x)
-    files = list(files)
+    files, dirs = list(files), tuple(dirs)
     return bool(files and (dirs or paths or names)) and not any(
-        f.startswith(tuple(dirs)) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
+        suite_layout.held(f, dirs) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
         for f in files)
 
 
