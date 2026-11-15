@@ -7,7 +7,7 @@ public import Proofs.Properties.Challenger.Limits
 # The two-stage form's challenger key is at the deployed parameters
 
 The two-stage form's parameters hand the interior's parameters to one-stage v2's per-member parse
-(`Spot.OneStageZk.membersParamsOfJson`), which parses them as v2's (`Spot.OneStageZk.paramsOfJson`) and refuses a
+(`Spot.OneStageZk.membersParamsOfJson`), which parses them as v2's (`Spot.OneStageZk.paramsParsed`) and refuses a
 challenger key at other parameters than `Lms.deployed` (`KEY_PARAMS`). So every parameters the form accepts name a
 challenger key at the deployed parameters (`paramsOfJson_deployed`), the key both stages' coins are read under.
 -/
@@ -40,7 +40,7 @@ theorem membersParamsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : One
        obtain ⟨_, -, h⟩ := bind_ok h
        simp only [pure, Except.pure, Except.ok.injEq] at h
        subst h
-       have hd := Properties.Challenger.Limits.paramsOfJson_deployed hq
+       have hd := Properties.Challenger.Limits.paramsParsed_deployed hq
        exact hd)
 
 /-- **What the form's parameters hold of its interior audit**: the audit's parameters are what one-stage v2's
