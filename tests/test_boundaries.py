@@ -724,7 +724,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
     quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
+    ours = {rel: text for rel, text in texts.items() if not rel.removeprefix("tests/").startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
     #: Each upper-case module constant bound to a path into benchmarks/, with the modules (by last name) that bind it.
     owners: dict[str, set[str]] = {}
