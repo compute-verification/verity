@@ -18,3 +18,34 @@ reason = "The commit also puts registration back for docket in the prose beside 
 ["96942e204b5c2efc583edc7b4fa09f51e9cd830a"]
 hand = ["tests/workload_messages.toml"]
 reason = "The commit also renames weights_docket_of_serve back in the message table's search pattern, a data file the word map excludes."
+
+["0b4c48a00c2c75d38c5be41f1184a13cb932d11c"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+hand = ["tools/research/src/research/store/moves.json"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and kept one entry for the map in research's moves.json where layout.py appends a second."
+
+["b2112f543e4609e75b93ff528ec5545ecadb900f"]
+line = "Layout-move: tools/move/vllm_profile_test_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["8f35530ca87cc286a1d75ce6eed64636a1a34ca4"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["3b94ba2b786dad839e371a8f3b42286d32c833c8"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["cc6b56dfe2adeffddf5bc62c2d00d5b5aaeb4631"]
+line = "Layout-move: tools/move/torch_adapter_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["e6c3e6eabd8fda375981e20c83c5af0dcd78f325"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+hand = ["verity/protocols/proofs/spot/prover/tests/test_audit_one_member.py"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and rewrote by hand the bare import of member_trees its subject names, which layout.py derives no module for."
+
+["9853a730c24e593ca621b602905eef8bef7d907f"]
+line = "Layout-move: tools/move/mla_inputs_map.toml --no-lock"
+hand = ["tools/move/mla_inputs_map.toml"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and kept its map as it was where layout.py rewrites the map's own paths."

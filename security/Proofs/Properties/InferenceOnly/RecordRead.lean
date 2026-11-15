@@ -25,7 +25,7 @@ widths summed (`Spot.Bits.bitsOf`), on every type.
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 open Lean (Json)
 open Flock.Program (Ty)
 
