@@ -25,7 +25,7 @@ resource:
 The hardware is a tree of *locations* `𝒳` (a set of `Finset L`) and *links* `e : E` (a finite type), each joining two
 leaves `ends e` with capacity `β_e` bits a tick each way. A link is *certified* when a certifier sits on it, at one of its ends
 (`cert`). `β_X` (`linkCapacity`) is the total capacity of the links across `X`'s boundary (`boundary`), `β°_X`
-(`uncertifiedCapacity`) that of the uncertified ones, and a *spatial unit* is a location with `β°_X = 0`
+(`uncertifiedLinkCapacity`) that of the uncertified ones, and a *spatial unit* is a location with `β°_X = 0`
 (`Hardware.SpatialUnit`). `in_X(I), out_X(I) ≤ β_X |I|` is then a lemma (`Accounting.SecurityProofs.Actual.ingress_le`,
 `egress_le`). Compute `Φ_X` (`compute`) and memory `M_X` are numbers per location, in work and bits.
 
@@ -184,14 +184,14 @@ noncomputable def linkCapacity (ends : E → L × L) (β : E → ℕ) (X : Finse
 open Classical in
 /-- `β°_X`: the total capacity of the uncertified links across `X`'s boundary, those with no end at a certifier's leaf
 (`cert`). -/
-noncomputable def uncertifiedCapacity (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : ℕ :=
+noncomputable def uncertifiedLinkCapacity (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : ℕ :=
   ∑ e ∈ (boundary ends X).filter (fun e => (ends e).1 ∉ cert ∧ (ends e).2 ∉ cert), β e
 
 /-- **Coverage** (the listed claim `certifier-coverage`): every boundary link of `X` is certified, `β°_X = 0`
-(`uncertifiedCapacity`), so nothing leaves `X` but through a certifier. One physical premise, the auditor's placement
+(`uncertifiedLinkCapacity`), so nothing leaves `X` but through a certifier. One physical premise, the auditor's placement
 in the onsite protocol; `Hardware.SpatialUnit` is it at a `Hardware`'s parameters. -/
 def Covered (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) : Prop :=
-  uncertifiedCapacity ends β cert X = 0
+  uncertifiedLinkCapacity ends β cert X = 0
 
 end Links
 
@@ -219,7 +219,7 @@ structure Hardware (L : Type*) (E : Type*) where
 
 /-- **A spatial unit**: a location all of whose boundary links are certified, `β°_X = 0`. -/
 def Hardware.SpatialUnit {L E : Type*} [Fintype E] (H : Hardware L E) (X : Finset L) : Prop :=
-  X ∈ H.units ∧ uncertifiedCapacity H.ends H.β H.cert X = 0
+  X ∈ H.units ∧ uncertifiedLinkCapacity H.ends H.β H.cert X = 0
 
 /-- **A run's usage**: what the physical assumptions on one run read about `A` that its gates don't carry, what each
 gate uses of its location's compute (`π`, its work) and the link each wire uses (`link`). -/
