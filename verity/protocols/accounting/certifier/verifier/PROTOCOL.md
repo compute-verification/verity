@@ -495,13 +495,13 @@ bucket's steps, sorted and padded to S. The proof block reads the map as 8 bytes
 for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's `PAD`, B zero bytes).
 - **The advice is private**: it is never published; it enters the registered compiler and is proved in zero
   knowledge. v4 computes the map in the clear from the opened advice v0, and takes the map and the steps as public
-  inputs. That is the **named gap**, the one the compile unit carries (the advice's hiding root in the registration,
-  "the advice is opened to the verifier until the compile unit exists"). Nothing may call the tie zero-knowledge until
+  inputs. That is the **named gap**, the one the compile slice's proof block carries (the advice's hiding root in the registration,
+  "the advice is opened to the verifier until the compile slice's proof block exists"). Nothing may call the tie zero-knowledge until
   it is closed.
 - **The target** reads a committed map inside the proof, bound to the advice's hiding root. The map is registered with
   the advice before the sample, as rows of `verity.commitments.advice` (fixed-width bit rows under
   `hm96-sha512/row/v2` leaves in one `frame-v3-sha512` tree, `advice.Committed`), here 4 KiB rows: a window's 8N
-  bytes of records and 4S a bucket of steps, at a window-aligned place in a link-day's map. The compile unit holds the
+  bytes of records and 4S a bucket of steps, at a window-aligned place in a link-day's map. The compile slice's proof block holds the
   map's rows to the advice's outputs and release buckets, as `window_map` does in the clear. The window reads its rows
   by a range read (each row's digest, hm96 leaf and `FrameV3Leaf`, the subtree's nodes once and the path above it): 12
   rows at depth 15, 3.07 × 10^7, at the rehearsal, and 1,980 rows at depth 22, 4.77 × 10^9, served. That is about half
