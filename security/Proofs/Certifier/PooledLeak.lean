@@ -227,36 +227,32 @@ theorem encard_leakAt_le {L K S : ℕ} (lay : AuditStatement → BoundaryGates L
     rw [this, Set.encard_empty]
     exact zero_le
 
-/-- **The count at any relation on the whole period**: the secrets whose windows' observations together meet `Good` at
-incorrect sets holding fewer than `Fmax` proof blocks in total number at most
-`#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^(cw i) · D i`, when the period's observations meeting
-`Good` at incorrect sets `F i` of each window's proof blocks number at most `∏_i 2^(cw i) · 2^(bits i (F i)) · D i` and
-`bits i F ≤ |F| · b`. -/
-theorem encard_pooledJoint_le {L K S m : ℕ} (Good : (Fin m → Finset ℕ) → (Fin m → List (Obs L K S)) → Prop)
+/-- **The count at any relation on the whole period, read under a parameter**: the secrets whose windows'
+observations together meet `Good` at incorrect sets holding fewer than `Fmax` proof blocks, and whose view is the
+reading `rd θ` of those observations under some `θ ∈ Θ`, number at most
+`#Θ · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^(cw i) · D i`, when the period's observations meeting `Good` at incorrect
+sets `F i` of each window's proof blocks number at most `∏_i 2^(cw i) · 2^(bits i (F i)) · D i` and
+`bits i F ≤ |F| · b`. The decoder `dec` recovers each secret from its view. -/
+theorem encard_pooledJoint_view_le {L K S m : ℕ} (Good : (Fin m → Finset ℕ) → (Fin m → List (Obs L K S)) → Prop)
     (n : Fin m → ℕ) (b : ℕ) (cw D : Fin m → ℕ) (bits : Fin m → Finset ℕ → ℕ)
     (hbits : ∀ i F, F ⊆ range (n i) → bits i F ≤ F.card * b)
     (hcnt : ∀ F : Fin m → Finset ℕ, (∀ i, F i ⊆ range (n i)) →
       {o | Good F o}.encard ≤ ((∏ i, (2 ^ cw i * (2 ^ bits i (F i) * D i)) : ℕ) : ℕ∞))
-    {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
-    (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
-    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
-    (Zs : Set Z) (sched : Z → CertifierSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
-    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
-    (W : Z → Fin m → Finset ℕ) (hWn : ∀ z i, W z i ⊆ range (n i)) (Fmax : ℕ) :
-    {z | z ∈ Zs ∧ (∑ i, (W z i).card < Fmax ∧ Good (W z) ((run tap (sched z, srv z)).2))}.encard ≤
-      Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) * ∏ i, (2 ^ cw i * D i) : ℕ) : ℕ∞) := by
+    {V Par Z : Type} (rd : Par → (Fin m → List (Obs L K S)) → V) (Θ : Set Par) (Zs : Set Z) (view : Z → V)
+    (obs : Z → Fin m → List (Obs L K S)) (dec : V → Z) (hdz : ∀ z ∈ Zs, dec (view z) = z)
+    (W : Z → Fin m → Finset ℕ) (hWn : ∀ z i, W z i ⊆ range (n i)) (Fmax : ℕ)
+    (hview : ∀ z ∈ Zs, ∑ i, (W z i).card < Fmax → Good (W z) (obs z) → ∃ θ ∈ Θ, view z = rd θ (obs z)) :
+    {z | z ∈ Zs ∧ (∑ i, (W z i).card < Fmax ∧ Good (W z) (obs z))}.encard ≤
+      Θ.encard * ((((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) * ∏ i, (2 ^ cw i * D i) : ℕ) : ℕ∞) := by
   classical
-  set G := {z | z ∈ Zs ∧ (∑ i, (W z i).card < Fmax ∧ Good (W z) ((run tap (sched z, srv z)).2))} with hG
+  set G := {z | z ∈ Zs ∧ (∑ i, (W z i).card < Fmax ∧ Good (W z) (obs z))} with hG
   set B : ℕ := 2 ^ (b * Fmax) * ∏ i, (2 ^ cw i * D i) with hB
   let s : Finset (Fin Fmax → Option (Σ i : Fin m, Fin (n i))) := univ.filter fun g => ∑ i, (famOf g i).card < Fmax
   let X : (Fin Fmax → Option (Σ i : Fin m, Fin (n i))) → Set (Fin m → List (Obs L K S)) := fun g =>
     {o | Good (famOf g) o}
   let Y : Set (Fin m → List (Obs L K S)) := ⋃ g ∈ s, X g
-  let V : Set (Conn → List (ℕ × CellView Cell)) :=
-    (fun p : CertifierSchedule Conn × (Fin m → List (Obs L K S)) => f.read p.1 p.2) '' (Ss ×ˢ Y)
-  have hgood : ∀ z ∈ G, (run tap (sched z, srv z)).2 ∈ Y := by
+  let Vs : Set V := (fun p : Par × (Fin m → List (Obs L K S)) => rd p.1 p.2) '' (Θ ×ˢ Y)
+  have hgood : ∀ z ∈ G, obs z ∈ Y := by
     rintro z ⟨-, hlt, hleak⟩
     obtain ⟨g, hg⟩ := exists_famOf_eq n Fmax (W z) (hWn z) hlt.le
     refine Set.mem_biUnion (x := g) ?_ ?_
@@ -265,9 +261,9 @@ theorem encard_pooledJoint_le {L K S m : ℕ} (Good : (Fin m → Finset ℕ) →
     · show Good (famOf g) _
       rw [hg]
       exact hleak
-  have hsub : G ⊆ dec '' V := fun z hz =>
-    ⟨(run tap (sched z, srv z)).1, ⟨(sched z, (run tap (sched z, srv z)).2), ⟨hs z hz.1, hgood z hz⟩,
-      (certifier_cells_read f arr tap run htrust _ (hfit _ (hs z hz.1)) _).symm⟩, hdz z hz.1⟩
+  have hsub : G ⊆ dec '' Vs := fun z hz => by
+    obtain ⟨θ, hθ, hv⟩ := hview z hz.1 hz.2.1 hz.2.2
+    exact ⟨view z, ⟨(θ, obs z), ⟨hθ, hgood z hz⟩, hv.symm⟩, hdz z hz.1⟩
   have hX : ∀ g ∈ s, (X g).encard ≤ ((B : ℕ) : ℕ∞) := by
     intro g hg
     have hlt : ∑ i, (famOf g i).card < Fmax := (Finset.mem_filter.1 hg).2
@@ -298,19 +294,49 @@ theorem encard_pooledJoint_le {L K S m : ℕ} (Good : (Fin m → Finset ℕ) →
             rw [Fintype.card_fun, Fintype.card_option, Fintype.card_sigma, Fintype.card_fin]
             simp only [Fintype.card_fin]
           exact_mod_cast Nat.mul_le_mul_right B this
-  have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
-  have hroom : ((∑ i, n i) + 1) ^ Fmax * B ≤ (∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
-      ∏ i, (2 ^ cw i * D i) := by
-    calc ((∑ i, n i) + 1) ^ Fmax * B ≤ (∏ c, (cap c + 1)) * (((∑ i, n i) + 1) ^ Fmax * B) :=
-          Nat.le_mul_of_pos_left _ hcap1
-      _ = _ := by rw [hB]; ring
-  calc G.encard ≤ (dec '' V).encard := Set.encard_le_encard hsub
-    _ ≤ V.encard := Set.encard_image_le _ _
-    _ ≤ (Ss ×ˢ Y).encard := Set.encard_image_le _ _
-    _ = Ss.encard * Y.encard := Set.encard_prod
+  have hYB : ((∑ i, n i) + 1) ^ Fmax * B = ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) * ∏ i, (2 ^ cw i * D i) := by
+    rw [hB]
+    ring
+  calc G.encard ≤ (dec '' Vs).encard := Set.encard_le_encard hsub
+    _ ≤ Vs.encard := Set.encard_image_le _ _
+    _ ≤ (Θ ×ˢ Y).encard := Set.encard_image_le _ _
+    _ = Θ.encard * Y.encard := Set.encard_prod
     _ ≤ _ := by
         gcongr
-        exact hY.trans (by exact_mod_cast hroom)
+        exact hY.trans_eq (by rw [hYB])
+
+/-- **The count at any relation on the whole period**: the secrets whose windows' observations together meet `Good` at
+incorrect sets holding fewer than `Fmax` proof blocks in total number at most
+`#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^(cw i) · D i`, when the period's observations meeting
+`Good` at incorrect sets `F i` of each window's proof blocks number at most `∏_i 2^(cw i) · 2^(bits i (F i)) · D i` and
+`bits i F ≤ |F| · b`: `encard_pooledJoint_view_le` with the record format's own reading (`certifier_cells_read`) under
+the schedules `Ss`. -/
+theorem encard_pooledJoint_le {L K S m : ℕ} (Good : (Fin m → Finset ℕ) → (Fin m → List (Obs L K S)) → Prop)
+    (n : Fin m → ℕ) (b : ℕ) (cw D : Fin m → ℕ) (bits : Fin m → Finset ℕ → ℕ)
+    (hbits : ∀ i F, F ⊆ range (n i) → bits i F ≤ F.card * b)
+    (hcnt : ∀ F : Fin m → Finset ℕ, (∀ i, F i ⊆ range (n i)) →
+      {o | Good F o}.encard ≤ ((∏ i, (2 ^ cw i * (2 ^ bits i (F i) * D i)) : ℕ) : ℕ∞))
+    {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
+    (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
+    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
+    (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
+    (Zs : Set Z) (sched : Z → CertifierSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
+    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
+    (W : Z → Fin m → Finset ℕ) (hWn : ∀ z i, W z i ⊆ range (n i)) (Fmax : ℕ) :
+    {z | z ∈ Zs ∧ (∑ i, (W z i).card < Fmax ∧ Good (W z) ((run tap (sched z, srv z)).2))}.encard ≤
+      Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) * ∏ i, (2 ^ cw i * D i) : ℕ) : ℕ∞) := by
+  have h := encard_pooledJoint_view_le Good n b cw D bits hbits hcnt (fun s o => f.read s o) Ss Zs
+    (fun z => (run tap (sched z, srv z)).1) (fun z => (run tap (sched z, srv z)).2) dec hdz W hWn Fmax
+    (fun z hz _ _ => ⟨sched z, hs z hz, certifier_cells_read f arr tap run htrust _ (hfit _ (hs z hz)) _⟩)
+  have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
+  have hroom : ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) * ∏ i, (2 ^ cw i * D i) ≤
+      (∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) * ∏ i, (2 ^ cw i * D i) := by
+    calc ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) * ∏ i, (2 ^ cw i * D i) ≤
+          (∏ c, (cap c + 1)) * (((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) * ∏ i, (2 ^ cw i * D i)) :=
+          Nat.le_mul_of_pos_left _ hcap1
+      _ = _ := by ring
+  exact h.trans (mul_le_mul' le_rfl (by exact_mod_cast hroom))
 
 /-- **The count at any per-window relation**: the secrets whose windows' observations each meet `Good i` at incorrect
 sets holding fewer than `Fmax` proof blocks in total number at most
