@@ -383,7 +383,7 @@ def test_specified_list_is_closed():
     resolved would be checked with the ones this module materialises."""
     import subprocess
     code = "from tests.program.test_lifted_tiny import _check_specified_list; _check_specified_list()"
-    p = subprocess.run([sys.executable, "-c", code], cwd=(Path(__file__).resolve().parents[5] / "adapters" / "vllm"), capture_output=True, text=True)
+    p = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-4000:]
 
 

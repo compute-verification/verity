@@ -66,7 +66,7 @@ def retirements() -> list[dict[str, Any]]:
 
 
 def render_retired(rows: list[dict[str, Any]]) -> str:
-    lines = [f"retired checks in {resolver.FIXTURES.relative_to(resolver.VLLM_ROOT)}: {len(rows)}", ""]
+    lines = [f"retired checks in {resolver.FIXTURES.relative_to(resolver.TESTS_ROOT)}: {len(rows)}", ""]
     for r in rows:
         lines.append(f"{'MALFORMED ' if r['problem'] else ''}#{r['row']} {r['check']}  since {r['since']}")
         if r["problem"]:
@@ -81,7 +81,7 @@ def render_retired(rows: list[dict[str, Any]]) -> str:
 def render(rows: list[dict[str, Any]]) -> str:
     findings = {(d["finding"], d["row"]) for d in rows}                      # one decision = one finding on one row; a block per check it touches
     n_pending = sum(1 for d in rows if d["status"] == "pending_review")
-    lines = [(f"labelled decisions in {resolver.FIXTURES.relative_to(resolver.VLLM_ROOT)}: {len(findings)} (by finding x row), "
+    lines = [(f"labelled decisions in {resolver.FIXTURES.relative_to(resolver.TESTS_ROOT)}: {len(findings)} (by finding x row), "
               f"{len(rows)} check consequence(s), {n_pending} pending_review"), ""]
     for d in rows:
         flag = "PENDING " if d["status"] == "pending_review" else ("MALFORMED " if d["problem"] else "")
