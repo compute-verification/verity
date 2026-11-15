@@ -1,7 +1,8 @@
 """`suites`: every test suite in the repository, each run in its own process from its own directory, with passes cached.
 
     uv run tools/check/suites.py                     every suite whose inputs changed since it last passed here
-    uv run tools/check/suites.py verity flock        only these suites (a package name, a directory, or a unique part of one)
+    uv run tools/check/suites.py verity flock        only these suites (a package name, a directory, or a unique part of one;
+                                                            `tests` is the repository's own)
     uv run tools/check/suites.py --quick             without the tests marked `slow`
     uv run tools/check/suites.py --changed REV       only the suites the change from REV touches (`touched`); under
                                                             --quick, the test modules it reaches keep their slow tests (`taken_whole`)
@@ -17,14 +18,15 @@ the directories of the workspace packages it depends on (its dependencies, extra
 transitively without their dependency groups, which are their own tests' tooling; a package that lists `exports` under
 `[tool.verity.tests]` is those paths of it, what its dependents read, in place of its directory), the paths it lists under
 `[tool.verity.tests] inputs` (with `inputs_only = true`, those alone in place of its dependencies' directories, for a suite whose
-tests read a little of a large dependency), the build outputs it lists under `artifacts` (git ignores them: one a Lake package
+tests read a little of a large dependency), each of those with its tests under the root's `tests/` (`tests/X` for `X`: the
+layout rule, `LAYOUT`), the build outputs it lists under `artifacts` (git ignores them: one a Lake package
 builds by what it is built from, `built_from`, any other by its digest), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
 groups, which bring pytest) and the installed version of each, and the environment (`environment`): Python, the platform, the
 base image (the os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake` and `cargo` are on the PATH and
 whether the tests may use a GPU, and the `VERITY_*` and `FLOCK_*` variables tests switch on (all but the `where` ones
-`settings.py` declares), and the code that runs the suites (`RUNNER`: this runner, its settings and its guard, not the rest of
-check, so an edit to `check.py` reruns its own suite alone). Nothing in it names the machine, the checkout's path or the run, so
+`settings.py` declares), and the code that runs the suites (`RUNNER`: this runner, its settings, its guard and the layout rule,
+not the rest of check, so an edit to `check.py` reruns its own suite alone). Nothing in it names the machine, the checkout's path or the run, so
 the same inputs key alike on every node. The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
@@ -44,7 +46,7 @@ directory's own name), the declared inputs, build outputs, fixtures and runner f
 `uv.lock` the workspace paths that name it (its `source`, a `requires-dist` on it). An input outside it (a dependency's
 directory, a declared path) is keyed by its path from the root, as before. A suite is the same suite after a move by its name:
 its distribution's name (`[project] name`, in the pyproject the tree id hashes), `repository` for the root's, and its path for a
-suite without one, which is a new suite where it lands. The key also holds the suite's depth (`depth`): its tests find the
+suite without one, which is a new suite where it lands; a suite at `tests/X` is named as `X` names it (`LAYOUT.suite_name`). The key also holds the suite's depth (`depth`): its tests find the
 root by counting parents of `__file__`, so a suite moved to another depth would read elsewhere. So a suite renamed beside itself,
 or moved to the same depth, with every file as it was and every input outside it where it was, hits its pass and its tests'
 passes; any changed byte under it, or an outside input moved or changed, misses. What this can't see is a test that names its
@@ -195,6 +197,8 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from research import suite_layout as LAYOUT
+
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 GUARD = HERE / "guard"
@@ -205,11 +209,13 @@ _spec = importlib.util.spec_from_file_location("suites_settings", HERE / "settin
 SETTINGS = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(SETTINGS)
 CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.home() / ".cache") / "verity" / "tests")
-#: Files every key includes: the code that decides a suite's verdict, the runner, its settings, its guard and tracer. Not
+#: Files every key includes: the code that decides a suite's verdict, the runner, its settings, its guard and tracer, and the
+#: layout rule it names and keys suites by (`LAYOUT`). Not
 #: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
 #: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
 RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard/verity_suite_guard.py",
-          "tools/check/guard/child/sitecustomize.py", "tools/check/guard/child/verity_suite_reads.py")
+          "tools/check/guard/child/sitecustomize.py", "tools/check/guard/child/verity_suite_reads.py",
+          "tools/research/src/research/suite_layout.py")
 #: the check's own code, which decides the suites a check runs and what it hands the runner: `--lend-from` lends nothing
 #: across a change to it (`lent_by`)
 OWN_CODE = "tools/check"
@@ -269,8 +275,7 @@ REGISTRY = "artifacts.json"
 STORE_READS = (REGISTRY, "tools/research/store.pod.toml")
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
+_norm = LAYOUT.norm
 
 
 def _requirement_name(req: str) -> str:
@@ -488,14 +493,14 @@ def metadata() -> list[str]:
 
 
 def discover() -> list[Suite]:
-    suites = []
+    suites, dirs = [], LAYOUT.member_dirs(_pyproject)
     for f in metadata()[:-1]:
         path = str(Path(f).parent)
         data = _pyproject(path)
         if "pytest" not in data.get("tool", {}):
             continue
         project = data.get("project", {})
-        name = "repository" if path == "." else _norm(project["name"]) if project else path
+        name = LAYOUT.suite_name(path, project, dirs)
         tests = data["tool"].get("verity", {}).get("tests", {})
         parts = tests.get("parts", 0)
         if "parts" in tests and (type(parts) is not int or parts < 2):
@@ -835,7 +840,8 @@ def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     alone: the guard allows what this returns, so a test that reads that package's own dependencies fails until they are
     declared too. A suite that declares `inputs_only = true` leaves its dependencies' directories out: its `inputs` name what
     its tests read of them, which the guard holds it to."""
-    return sorted({suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs})
+    ins = {suite.path, *([] if suite.inputs_only else closure(suite, pkgs)), *suite.inputs}
+    return sorted(ins | LAYOUT.mirrors(ins, lambda p: (ROOT / p).exists()))
 
 
 def _under(path: str, prefixes: list[str]) -> bool:
@@ -2476,7 +2482,7 @@ def select(suites: list[Suite], names: list[str]) -> list[Suite]:
         return suites
     chosen = []
     for n in names:
-        exact = [s for s in suites if n in (s.name, s.path, s.path.rstrip("/"))]
+        exact = [s for s in suites if n in LAYOUT.names(s.path, s.name)]
         hits = exact or [s for s in suites if n in s.name or n in s.path]
         if len(hits) != 1:
             sys.exit(f"suites: {n!r} matches {len(hits)} suites: {', '.join(s.name for s in hits) or 'none'} (see --list)")

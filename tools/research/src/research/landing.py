@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy, settings
+from . import carry, policy, settings, suite_layout
 from .notes import ART_RE
 from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, merge_main, unreviewed
 from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
@@ -690,13 +690,18 @@ def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
         return {}
 
 
+@functools.lru_cache(maxsize=16)
+def member_dirs(repo: Path, commit: str) -> dict[str, str]:
+    """{directory: distribution} of the workspace's members at ``commit`` but the root (`suite_layout.member_dirs`)."""
+    return suite_layout.member_dirs(lambda d: suite_pyproject(repo, commit, d))
+
+
 def suite_name(repo: Path, commit: str, suite: str) -> str:
-    """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`): `repository` for the root,
-    else its pyproject.toml's project name, normalized, else its path."""
-    if suite.strip("/") in ("", "."):
-        return "repository"
-    name = suite_pyproject(repo, commit, suite).get("project", {}).get("name")
-    return re.sub(r"[-_.]+", "-", name).lower() if isinstance(name, str) else suite
+    """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`: `suite_layout.suite_name`)."""
+    path = suite.strip("/") or "."
+    if path == ".":
+        return suite_layout.ROOT_SUITE
+    return suite_layout.suite_name(path, suite_pyproject(repo, commit, path).get("project", {}), member_dirs(repo, commit))
 
 
 def lean_errors(log: str) -> set[str]:

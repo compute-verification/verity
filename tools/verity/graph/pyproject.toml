@@ -3,7 +3,11 @@ name = "verity-graph"
 version = "0.0.0"
 description = "`verity graph`: the check as a task graph that depends only on the commit (graph/v2), its runners (result/v1) and the serial reference executor."
 requires-python = ">=3.12"
-dependencies = []
+# research: the suite layout rule `suites.py` names suites by (`research.suite_layout`), stdlib only
+dependencies = ["research"]
+
+[tool.uv.sources]
+research = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
