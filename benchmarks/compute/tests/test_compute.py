@@ -119,6 +119,7 @@ class FakeStore:
 def store(tmp_path: Path, monkeypatch) -> FakeStore:
     """A store with no `research run` around the command."""
     monkeypatch.delenv("OUT", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     return FakeStore(tmp_path / "store")
 
 

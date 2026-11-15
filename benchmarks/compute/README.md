@@ -241,12 +241,14 @@ client's work; the command itself writes only the two files named below.
   never refuses on them. With `--per-call`, also where the MACs the credit leaves out went, by cause and by matmul call (the top N
   calls, 10 by default), from the Pearl+ verifier's split of its credit (the record's `verify.json`, or the file
   `--uncredited` names).
-- **What it writes:** two files where `OUT` names a directory, as it does under `research run`, and otherwise
-  nothing. With no number printed it writes neither.
-  - `$OUT/compute.json`: the printed document.
-  - `result.json`: the same result in the fields every resource's benchmark reports, through the harness kit's writer
-    (`verity_bench.kit`). Under `research run` it is the run directory's (`$RESEARCH_RUN_DIR/result.json`), where
-    `research` reads a run's result; outside one it is `$OUT/result.json`. Its measurements are
+- **What it writes:** two files, through the harness kit's report (`kit.report`, `benchmarks/harness/README.md`), as
+  `verity bench memory` does: under `research run` in its run directory, outside one where `OUT` names a directory,
+  and otherwise nothing. With no number printed it writes neither.
+  - `compute.json`: the printed document, `$RESEARCH_RUN_DIR/out/compute.json` under `research run`, else
+    `$OUT/compute.json`.
+  - `result.json`: the same result in the fields every resource's benchmark reports, through the kit's writer. Under
+    `research run` it is the run directory's (`$RESEARCH_RUN_DIR/result.json`), where `research` reads a run's
+    result; outside one it is `$OUT/result.json`. Its measurements are
     `compute-accounting/verified-compute-share` (the printed number, its unit and its target, under its id in
     `metrics.toml`, where the console's Metrics tab reads it), `verified` (the credited MACs), `capacity`, `free`
     (capacity less verified) and `error` (the answer's δ_s, sampling's alone). A recorded run's record holds no
