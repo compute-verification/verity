@@ -307,6 +307,10 @@ meta partial def rewriteIn (e : Expr) : M (Option (Expr × Expr)) := do
   while progress && n < 64 do
     progress := false
     n := n + 1
+    -- `kabstract` only abstracts a subterm whose syntactic head index equals the rule's left side's; so a rule whose left
+    -- head constant does not occur in `e` abstracts nothing. Collect `e`'s constants once and skip those rules without
+    -- the full `kabstract` traversal, which is otherwise the walk's cost over a large value (a parser's key array, say).
+    let eConsts : NameSet := e.getUsedConstants.foldl (·.insert ·) {}
     for ar in (← read).rules do
       let s : Meta.SavedState ← Meta.saveState
       try
@@ -314,6 +318,8 @@ meta partial def rewriteIn (e : Expr) : M (Option (Expr × Expr)) := do
         let (mvs, _, ty) ← forallMetaTelescopeReducing (← inferType p)
         let ty ← instantiateMVars ty
         let some (_, l, r) := ty.eq? | do s.restore; continue
+        if let .const lc _ := l.getAppFn then
+          unless eConsts.contains lc do s.restore; continue
         let ea ← withReducible (kabstract e l)
         if !ea.hasLooseBVars then
           s.restore; continue
