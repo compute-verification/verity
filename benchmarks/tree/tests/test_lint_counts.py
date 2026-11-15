@@ -34,3 +34,12 @@ def test_each_line_is_five_sorted_tab_separated_columns() -> None:
                              "repo_python_verdicts\t-\tn/a\tn/a\tn/a\n"
                              "repo_ruff\t-\t-\t-\t-\n")
     assert len(C.NOT_COUNTED) == len(C.NO_RATCHET) == 4 and C.NOT_COUNTED != C.NO_RATCHET
+
+
+def test_only_a_named_list_is_no_ratchets_and_any_other_without_allowed_is_not_counted() -> None:
+    why = "tests/lint/test_x.py has no allowed(), so its list is no ratchet's"
+    assert C.unread("repo_python_verdicts", None, why) == (C.NO_RATCHET, why)
+    columns, said = C.unread("repo_env_reads", None, why)
+    assert columns == C.NOT_COUNTED and "NO_RATCHETS does not name it" in said
+    assert C.unread("repo_ruff", "no ruff", None) == (C.NOT_COUNTED, "no ruff")
+    assert C.unread("repo_env_reads", None, None) == (None, "")

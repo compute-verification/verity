@@ -18,16 +18,17 @@ for each file that a lint finds a site in or that a list has an entry for, sorte
 the file, ``allowed`` the sites the list's entries allow it and ``past`` the sites found past their entries, counted by
 key and never netted (``by_file``).  The first four columns are what they were before ``past`` was added.  A list that
 could not be counted has one line, ``NAME  -  -  -  -`` (``NOT_COUNTED``), its reason goes to stderr, and the exit is 1.
-A list whose module has no ``allowed()`` is not a ratchet's and has one line, ``NAME  -  n/a  n/a  n/a``
-(``NO_RATCHET``), and a line on stderr saying so; it changes no exit.  Each counted list has a line of totals on stderr.
+A list named in ``NO_RATCHETS`` is not a ratchet's and has one line, ``NAME  -  n/a  n/a  n/a`` (``NO_RATCHET``), and
+a line on stderr saying so; it changes no exit.  Any other list whose module has no ``allowed()`` is not counted: a
+ratchet that lost the function must not leave the sums unseen.  Each counted list has a line of totals on stderr.
 Exit 0: every ratchet's list asked for was counted.  Exit 2: no such commit, list or lint.
 
 How a list is read:
 
 * A repository lint (``tests/lint/test_NAME.py``): its ``found()`` and ``allowed()``.  The environment-reads lint's
   ``allowed()`` returns the list's registry marks too, which its ``found`` takes.  The ruff lint has no ``found()``:
-  its findings are its ``scan()``'s, as its own ``--prune`` reads them.  A list whose module has no ``allowed()`` is
-  not a ratchet's (``NO_RATCHET``): the Python verdicts' list is a reading's, and its lint finds nothing outside it.
+  its findings are its ``scan()``'s, as its own ``--prune`` reads them.  The Python verdicts' list is no ratchet's
+  (``NO_RATCHETS``): it is a reading's, its lint finds nothing outside it and its module has no ``allowed()``.
 * ``lean_retired_terms``, which ``tests/test_retired_terms.py`` holds: the Lean files' sites of its ``offenders`` and
   its ``lean_allowed()``, as its own ``--prune`` reads them.
 * ``superseded_versions``, which circuit-check's suite holds (``tools/verity/circuit_check/tests/``): the files of
@@ -87,6 +88,8 @@ DROPPED = ("PYTHONPATH", "MYPYPATH")
 #: a line's columns after ``lint`` for a list that could not be counted, and for one that is no ratchet's
 NOT_COUNTED = ("-", "-", "-", "-")
 NO_RATCHET = ("-", "n/a", "n/a", "n/a")
+#: the lists that are no ratchet's, by name: a module without ``allowed()`` that isn't one of these is not counted
+NO_RATCHETS = frozenset({"repo_python_verdicts"})
 
 #: Run as ``python -I -c CHILD TREE OUT JOBS`` (JOBS a JSON list of [list, how it is read, its lint module]): writes to OUT
 #: a JSON list with, for each job, ``{"list", "found", "allowed"}`` (each a list of [key, count], the key as the lint
@@ -267,6 +270,16 @@ def by_file(found: Counter, allowed: Counter, path: Callable[[str], str] = lambd
     return {f: (n[0], n[1], n[2]) for f, n in files.items()}
 
 
+def unread(name: str, refused: str | None, no_ratchet: str | None) -> tuple[tuple[str, ...] | None, str]:
+    """(``NO_RATCHET`` or ``NOT_COUNTED``, why) for a list that gives no counts, and (None, "") for one that does.  A
+    module without ``allowed()`` is no ratchet's only for a list ``NO_RATCHETS`` names; for any other it is a refusal."""
+    if no_ratchet and name in NO_RATCHETS:
+        return NO_RATCHET, no_ratchet
+    if why := refused or (no_ratchet and f"{no_ratchet}, and NO_RATCHETS does not name it: a ratchet has allowed()"):
+        return NOT_COUNTED, why
+    return None, ""
+
+
 def lines(rows: list[tuple[str, ...]]) -> str:
     """stdout: each row a sorted, tab-separated line."""
     return "".join("\t".join(row) + "\n" for row in sorted(rows))
@@ -313,12 +326,13 @@ def main(argv: list[str]) -> int:
         total: Counter[str] = Counter()
         for name in asked:
             r = results.get(name, {})
-            if why := r.get("no_ratchet"):
+            columns, why = unread(name, refused.get(name) or r.get("refused"), r.get("no_ratchet"))
+            if columns == NO_RATCHET:
                 rows.append((name, *NO_RATCHET))
                 total.update(none=1)
                 print(f"{name}: not a ratchet's: {why.strip()}", file=sys.stderr)
                 continue
-            if why := refused.get(name) or r.get("refused"):
+            if columns == NOT_COUNTED:
                 rows.append((name, *NOT_COUNTED))
                 print(f"{name}: not counted: {why.strip()}", file=sys.stderr)
                 continue
