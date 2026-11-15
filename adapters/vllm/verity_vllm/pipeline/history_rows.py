@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import bisect
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -152,6 +152,9 @@ class Plan:
     def keys(self) -> list[tuple[str, int]]:
         """Every table the window appends to or reads: its writers' first, then the reads' others."""
         return list(dict.fromkeys([*self.written, *self.read_keys()]))
+
+    def __iter__(self) -> Iterator[tuple[str, int]]:
+        return iter(self.keys())
 
 
 def cut(ms: Sequence[CS.Member], plan: Plan) -> list[CS.Member]:
