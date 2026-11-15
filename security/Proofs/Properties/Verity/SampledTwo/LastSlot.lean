@@ -76,7 +76,7 @@ theorem verify_reps {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} {text : 
     rw [getElem!_pos sts 0 hi]; exact hN _ (Array.getElem_mem hi)
   have hrep' : Flock.Zk.verifyRep spec (Flock.Setup.ofCircuit sts[0]!) sch tPad sess 0 r proofs[r]! = .ok c := hrep
   rw [← Flock.With.zk_verifyRepWith_std spec _ hN'] at hrep'
-  have hsch' : Flock.Zk.schedule sts[0]!.m = .ok (sch, tPad) := hsch
+  have hsch' : Flock.Zk.schedule sts[0]!.wideLeaf sts[0]!.m = .ok (sch, tPad) := hsch
   obtain ⟨stream, extras, hfind, hex, hsize⟩ := FlockDeploy.zkVerifyRepWith_rounds Flock.With.std hsch hrep'
   have hx : extras.size = sts[0]!.regions.size * sess.points.size := FlockDeploy.extraClaims_size hex
   have hpn : sess.points.size = spec.points := by

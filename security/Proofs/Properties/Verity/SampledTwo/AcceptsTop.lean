@@ -16,6 +16,7 @@ public import Proofs.Properties.Verity.SampledTwo.InputMap
 public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
 public import Proofs.Properties.Verity.SampledTwo.AtStmt
 public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.SpotFlock.DoWalk
 
 /-!
 # The form's accept and the run's accept: the pieces
@@ -272,7 +273,7 @@ theorem firstK_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o
     have hpd : Spot.Select.parseDesign s =
         .ok (Lean.Json.mkObj [("law", Lean.Json.str "subset"), ("k", Lean.toJson K)]) := by
       rw [hs, subset_text K]
-      exact Verity.Sampled.Record.parseDesign_count "subset" (Or.inl rfl) K hK1
+      exact Properties.Spot.SecurityProofs.parseDesign_count "subset" (Or.inl rfl) K hK1
     refine ⟨K, ?_⟩
     unfold SpotFlock.firstK SpotFlock.firstKOf
     simp only [hcl, SamplingDeploy.Reg.program, SamplingDeploy.Reg.query, hn', Spot.Select.Rule.samplingDesignOver, hpd,
@@ -327,38 +328,27 @@ private theorem eq_of_not_bne_true {α : Type} [BEq α] [LawfulBEq α] {a b : α
 
 set_option linter.auxLemma false in
 /-- **`Run.templateCircuits` names the check's templates, in its order, or returns none**: the parser throws unless
-`named.map (·.1)` is `Select.templateIds`' and returns none only for no `proofs`. Its match on `#["templates"]` has
-no equations `split` can use, so that matcher is unfolded by name and its test of the key against `"templates"` is
-cased on. The proof names the matcher by its number (`Spot.Run.templateCircuits.match_9`), so it breaks when an edit
-of `Spot/Run.lean` renumbers the parser's matchers: the number to name then is the matcher's that tests the key. -/
+`named.map (·.1)` is `Select.templateIds`' and returns none only for no `proofs`; the proof walks its `do` block line by
+line (`SpotFlock.DoWalk`), each join point inlined into its arms. -/
 theorem templateCircuits_names {proofs query : Lean.Json} {cs : Array (String × String × Lean.Json × Lean.Json)}
     (h : Spot.Run.templateCircuits proofs query = .ok cs) :
     cs = #[] ∨ Spot.Select.templateIds query = .ok (cs.map (·.1)) := by
   unfold Spot.Run.templateCircuits at h
-  generalize Spot.keys? proofs = kk at h
-  generalize Spot.getD proofs "templates" = gg at h
   split at h
   · exact Or.inl (Except.ok.inj h).symm
   · obtain ⟨ids, hids, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
-    rcases kk with _ | ⟨⟨_ | ⟨s, _ | ⟨s2, l2⟩⟩⟩⟩
-    · cases h
-    · cases h
-    · delta Spot.Run.templateCircuits.match_9 at h
-      conv at h => lhs; whnf
-      generalize instDecidableEqString _ "templates" = d at h
-      cases d with
-      | isFalse hn => cases h
-      | isTrue ht =>
-        have hs : s = "templates" := ht
-        subst hs
-        cases gg <;> first | cases h | skip
-        obtain ⟨named, hnamed, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
-        split at h
-        · cases h
-        · rename_i hne
-          cases h
-          exact Or.inr (hids.trans (congrArg Except.ok (eq_of_not_bne_true hne).symm))
-    · cases h
+    refine Or.inr ?_
+    rw [hids]
+    repeat' first
+      | (cases h; done)
+      | (have h' := Properties.Spot.SecurityProofs.bind_eq_ok.1 h; clear h; obtain ⟨_, _, h⟩ := h')
+      | head_zeta at h
+      | (jp_intro k hk at h; subst hk; dsimp -zeta only at h)
+      | split at h
+    all_goals
+      rename_i hne
+      cases h
+      exact congrArg Except.ok (eq_of_not_bne_true hne).symm
 
 /-- **The form's parameters' circuits are `Run.templateCircuits`'** at the interior's query. -/
 theorem paramsOfJson_circuits {j : Lean.Json} {p : VStar.Recursive.SampledTwo.Params}
