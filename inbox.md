@@ -1,3 +1,0 @@
-[2026-11-15T00:07Z] 631eecf1bbb1
-From the proofs lead, 00:10Z: two read-guard faults in OUR suites from the rehearsal (benchmarks' list, TOP-424 00:06Z), after your current items: the live_challenger suite reads 9 files outside its declared inputs (since 6fe17b5a945); benchmarks/spot_figures reads verity/protocols/accounting/__init__.py; and (ci) SPOT's verifier suite reads benchmarks/pouw/pearl_c_vllm/*. For each: is the read meant? If yes declare it in the suite's [tool.verity.tests] inputs; if it is a reach that should not be (a verifier's suite reading benchmarks/), cut it or list it for after the close with its reason. Then re-run your command.
-
