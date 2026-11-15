@@ -95,6 +95,9 @@ NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
 NUMPY_USERS += ("verity/circuits/cross_call.py", "verity/circuits/kernels", "verity/circuits/ops",
                 "verity/circuits/word.py")
+#: and the network certifier's load relay, whose `generate` lays a weight's generation rows with numpy
+#: (Mon 16 Nov 6 PM PST, network-accounting, whether `load_relay` keeps numpy)
+NUMPY_USERS += ("verity/protocols/accounting/certifier/device/load_relay.py",)
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
 NO_DATE_OR_REASON = ("verity/protocols/compose/device/live_challenger", "verity/protocols/accounting/poub/device/live_verifier",

@@ -82,7 +82,7 @@ CLEAR = {
     "endpoint": "at the auditor, on the endpoint's records and the run's certified I/O: each Commit window's advice "
                 "opened to its registered root and rebuilt from the certified I/O, and the I/O tie (IoTieRequest's "
                 "reference, network-e2e's stand-ins for the network certifier's rows and the Commit's port) on the honest run",
-    "n2": "at the verifier: the registration records, the draw, the certificates' public fields, the clock syncs, the "
+    "n2": "at the verifier: the registration records, the sample, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
           "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
     "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
@@ -391,11 +391,11 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
                          "leaked": (m.get("received") or {}).get("leaked"),
                          "ok": m.get("ok")}
     honest = members.get("honest") or {}
-    draw = s.get("draw") if isinstance(s.get("draw"), dict) else {}
-    n = (draw.get("population") or honest.get("windows")
+    sample = s.get("draw") if isinstance(s.get("draw"), dict) else {}
+    n = (sample.get("population") or honest.get("windows")
          or (s.get("link") or {}).get("planned_windows", {}).get("honest") or 0)
-    drawn = draw.get("k", s.get("drawn", n))
-    law = draw.get("law") or s.get("law", "all")
+    sampled = sample.get("k", s.get("drawn", n))
+    law = sample.get("law") or s.get("law", "all")
     proved = (bool(members) and all(v["windows"] and not v["unexpected"] for v in members.values())
               and (s.get("ok") is True and rc in (None, "0") or any(v["escaped_the_draw"] for v in members.values())))
     if not proved and honest.get("windows"):
@@ -403,17 +403,17 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
     elif proved:
         gone = [k for k, v in members.items() if v["escaped_the_draw"]]
         why = (f"the driver's ok is false only for {', '.join(gone)}: accepted with none of its incorrect windows "
-               "drawn, within the draw's bound" if gone else None)
+               "sampled, within the sample's bound" if gone else None)
     return {"verdict": ("accepted" if honest.get("network_accepted") else "refused") if proved else
             ("dry" if "members" in s and not honest.get("windows") else "failed"), "why": why, "stand_in": stand_in,
             "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,
-            "negatives": {k: "escaped the draw" if v["escaped_the_draw"] else v["network_accepted"] is False
+            "negatives": {k: "escaped the sample" if v["escaped_the_draw"] else v["network_accepted"] is False
                           for k, v in members.items() if k != "honest"},
             "challenger": s.get("challenger"),
             "clocks": s.get("clocks") or {"source": "declared", "by": "plan.json's syncs (n2_zk); the certificates step "
                                                                       "found them equal to the signed ones: "
                                                                       f"{certs_doc.get('signed_are_declared')}"},
-            "eps_at_delta": eps_at_delta(n, drawn, law), "stager": s.get("stager"), "in_the_clear": CLEAR["n2"]}
+            "eps_at_delta": eps_at_delta(n, sampled, law), "stager": s.get("stager"), "in_the_clear": CLEAR["n2"]}
 
 
 def scan_step(s: dict | None, network_certifier_run: str | None, job: dict | None = None) -> dict:
@@ -585,16 +585,16 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
                          "the registered rows counted there are none the registration registers")
     law, n = reg["law"], reg["population"]
     if law.get("law") == "subset":
-        drawn, q = law["k"], Fraction(law["k"], n)
+        sampled, q = law["k"], Fraction(law["k"], n)
     elif law.get("law") == "stratified" and law.get("strata"):
         sizes = [sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]]
-        drawn, q = sum(s["k"] for s in law["strata"]), min(Fraction(s["k"], m) for s, m in zip(law["strata"], sizes))
+        sampled, q = sum(s["k"] for s in law["strata"]), min(Fraction(s["k"], m) for s, m in zip(law["strata"], sizes))
         if q == 0 or sum(sizes) != n:
-            raise SystemExit(f"--audit {d}: a stratified sampling design whose strata cover its {n} units, each drawn, not {law}")
+            raise SystemExit(f"--audit {d}: a stratified sampling design whose strata cover its {n} units, each sampled, not {law}")
     else:
         raise SystemExit(f"--audit {d}: K's q is a subset or stratified sampling design's, not {law}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
-            "units": n, "drawn": drawn, "q": str(q), "free": terms["free"], "inputs": terms,
+            "units": n, "drawn": sampled, "q": str(q), "free": terms["free"], "inputs": terms,
             "held": sorted(IF.held_params(pins, roots))}
 
 
@@ -660,7 +660,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
         k = {"open": f"the network's terms aren't all computed: {network}"}
     elif not audits:
         k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
-                     "inputs and draw the K counts", "network": network}
+                     "inputs and sample the K counts", "network": network}
     elif not steps:
         k = {"open": "the certificates step records no execution phase's egress buckets (window_buckets), the steps over "
                      "which K's jitter term charges each audit", "network": network}
@@ -671,7 +671,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "K": k,
             "sum": "NetTiming.monitoringPeriodLeak_le_sum: Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
             "windows": windows, "acc": acc, "all_accepted": bool(acc) and all(acc),
-            "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the draw's term at δ (eps_at_delta)",
+            "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the sample's term at δ (eps_at_delta)",
             "sum_eps": f"{windows}·(δ + ε_ks + ε_bind)",
             "a": "log2 #Ss + Σ_c log2(cap_c + 1), charged once a period",
             "b_w": "#(freeInputs_w \\ reg_w) + log2 #incorrectSets_w(δ) + β_w + k_w·log2 Dj",
@@ -729,10 +729,10 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     params, cls = W.NetworkCertifierParams(**dep["params"]), SZ.CLASS
     cls.serves(params)
     T, units = params.window, 2 * params.window + 1
-    drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
-    if drawn != units:
-        raise SystemExit(f"leak: the scan drew {drawn} of {units} proof blocks; K's terms for incorrect proof blocks "
-                         f"are 0 only with every proof block drawn (scan_zk --draw {units})")
+    sampled = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
+    if sampled != units:
+        raise SystemExit(f"leak: the scan sampled {sampled} of {units} proof blocks; K's terms for incorrect proof blocks "
+                         f"are 0 only with every proof block sampled (scan_zk --draw {units})")
     rate = asked / v["windows"]
     window_s = T * params.bucket_ms / 1000
     at = {"T": T, "tau": Fraction(params.bucket_ms, 1000), "egress_cells": params.egress_cells}
@@ -764,7 +764,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"],
             "class": {k: getattr(cls, k) for k in IS.STATICS},
             "widths": link.widths | {"entries": link.entries, "egress_row": 8 * cls.egress.R * cls.B},
-            "draw": {"units": units, "drawn": drawn},
+            "draw": {"units": units, "drawn": sampled},
             "run": {"link_windows": v["windows"], "requests": asked, "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
@@ -825,9 +825,9 @@ def merged_n2(paths: list[str] | None) -> dict | None:
     docs = [d for d in map(_json, [paths] if isinstance(paths, str) else paths or []) if d]
     if len(docs) < 2:
         return docs[0] if docs else None
-    draws = {json.dumps({k: (d.get("draw") or {}).get(k) for k in ("law", "k", "population")}) for d in docs}
-    if len(draws) > 1:
-        raise SystemExit(f"--n2: the runs' draws differ: {sorted(draws)}")
+    samples = {json.dumps({k: (d.get("draw") or {}).get(k) for k in ("law", "k", "population")}) for d in docs}
+    if len(samples) > 1:
+        raise SystemExit(f"--n2: the runs' samples differ: {sorted(samples)}")
     return {**docs[0], "members": {k: v for d in docs for k, v in (d.get("members") or {}).items()},
             "sampled": {k: v for d in docs for k, v in (d.get("sampled") or {}).items()},
             "challenger": [d.get("challenger") for d in docs], "ok": all(d.get("ok") is True for d in docs),

@@ -5,17 +5,30 @@ Two ways the list goes wrong without failing anything: a `device/` or `verifier/
 new file there would land unread, even while the files there now are caught by a name glob or a subdirectory's entry), and
 an entry a move left behind, which matches nothing and so excludes nothing. Both are read through the queue's own parse
 (`DriveFlags.parse`) and matcher (`research.queue.lowrisk`), against `git ls-files`.
+
+The land verdicts gate reads `lowrisk_excludes` but the entries `verdict_plain` lists: those may free for it no file the
+whole check must see before it lands (`NEVER_PLAIN`).
 """
 from __future__ import annotations
 
 import functools
+import re
 import subprocess
+import tomllib
 from collections.abc import Iterable
 from pathlib import Path
 
 from research.queue import DRIVE_FLAGS, DriveFlags, lowrisk
 
 ROOT = Path(__file__).resolve().parents[1]
+#: what `verdict_plain` may never make plain, beside every file under a `TRUSTED_DIRS` directory and every file of a trusted
+#: place of tests/import_order.toml or of a place one reaches (the soundness path): Lean, its locks and Lake files, the
+#: research tool and the move tool it certifies moves against, the check, the Lean check, and the code an auditor's host runs
+#: outside a `device/` directory
+NEVER_PLAIN = re.compile(r"(.*/)?(.*\.lean|lean-audit\.json|unread-caps\.json|lakefile\..*|lean-toolchain|lake-manifest\.json"
+                         r"|TRUSTED\.sha256)|tools/research/.*|tools/move/.*|tools/verity/check/.*|tools/check/.*"
+                         r"|tools/verity/lean/.*"
+                         r"|benchmarks/one_stage/.*|benchmarks/network_traces/.*|benchmarks/remote_session/auditor_line\.py")
 #: the directories whose every file, present or added later, is the auditor's devices' or a verifier's code
 TRUSTED_DIRS = ("device", "verifier")
 #: a file name no name glob of the list matches, standing for a file added later to a directory
@@ -63,9 +76,55 @@ def test_no_excludes_entry_is_dead():
         + ", ".join(bad) + ". Fix: point each at the path it was meant to cover (where a move put it), or delete it.")
 
 
+def soundness_paths() -> dict[str, bool]:
+    """{each path of a place of tests/import_order.toml: whether its place is trusted (marked `trusted`, or named under a
+    `TRUSTED_DIRS` directory) or one a trusted place `reaches`: the soundness path}."""
+    places = tomllib.loads((ROOT / "tests/import_order.toml").read_text())["place"]
+    trusted = [p for p in places if p.get("trusted") or set(TRUSTED_DIRS) & set(p["paths"][0].split("/"))]
+    names = {p["paths"][0] for p in trusted} | {r for p in trusted for r in p.get("reaches", ())}
+    return {path: p["paths"][0] in names for p in places for path in p["paths"]}
+
+
+def never_plain(files: Iterable[str], paths: dict[str, bool]) -> list[str]:
+    """The ``files`` `verdict_plain` may never make plain: under a `TRUSTED_DIRS` directory, matching `NEVER_PLAIN`, or of
+    the place whose path is the longest above it, when ``paths`` (`soundness_paths`) marks it."""
+    def sound(f: str) -> bool:
+        above = [p for p in paths if f == p or f.startswith(p + "/")]
+        return bool(above) and paths[max(above, key=len)]
+    return [f for f in files if set(TRUSTED_DIRS) & set(f.split("/")[:-1]) or NEVER_PLAIN.fullmatch(f) or sound(f)]
+
+
+def test_every_verdict_plain_entry_frees_no_file_the_whole_check_must_see_and_matches_a_tracked_path():
+    """An entry of `verdict_plain` names a tracked path, and together they make plain no file under a `verifier/` or
+    `device/` directory, of the soundness path, of Lean, a lock or a Lake file, of the research tool, the move tool, the
+    check or the Lean check, or of the code an auditor's host runs: such a file keeps the whole check before it lands,
+    whatever its land verdicts."""
+    flags = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS)
+    assert flags.verdict_plain and not (bad := dead_entries(tracked(), flags.verdict_plain)), (
+        f"these `verdict_plain` entries of {DRIVE_FLAGS} match no tracked path: {', '.join(bad)}. Fix: delete each, here and "
+        f"from `lowrisk_excludes`, or point both at the path it was meant to cover")
+    gate = [x for x in flags.lowrisk_excludes if x not in flags.verdict_plain]
+    freed = [f for f in tracked() if not lowrisk([f], flags.lowrisk_excludes) and lowrisk([f], gate)]
+    paths = soundness_paths()
+    assert freed and any(paths.values()) and not (bad := never_plain(freed, paths)), (
+        f"{DRIVE_FLAGS}'s `verdict_plain` lets these land on land verdicts and the quick tier, before the whole check: "
+        + ", ".join(bad[:20]) + ". Fix: take out of `verdict_plain` each entry that frees them.")
+
+
 def test_each_check_catches_its_failure():
     files = ["a/device/run.py", "a/device/sub/x.py", "b/verifier/registration.py", "b/verifier/lean/X.lean", "c/devices/y.py"]
     assert trusted_dirs(files) == ["a/device/", "b/verifier/"]
     assert open_dirs(files, ("a/device/", "registration.py", "*.lean")) == ["b/verifier/"]
     assert open_dirs(files, ("a/", "b/verifier/")) == []
     assert dead_entries(files, ("a/device/", "gone/", "a/device/run.py", "*.lean", "*.rs")) == ["gone/", "*.rs"]
+    paths = {"v/circuits": True, "v/circuits/ops": False, "v/channel.py": True, "v/defs": False}
+    assert never_plain(["a/device/x.py", "b/verifier/__init__.py", "x/Y.lean", "p/lean-audit.json", "p/lakefile.toml",
+                        "tools/research/x.py", "tools/verity/check/drive.toml", "tools/verity/lean/check.py",
+                        "v/circuits/program.py", "v/channel.py", "tools/move/restack.py", "benchmarks/one_stage/a5.py",
+                        "benchmarks/network_traces/x.py", "benchmarks/remote_session/auditor_line.py",
+                        "v/circuits/ops/add.py", "v/defs/__init__.py", "benchmarks/remote_session/x.py", "pyproject.toml"],
+                       paths) == [
+        "a/device/x.py", "b/verifier/__init__.py", "x/Y.lean", "p/lean-audit.json", "p/lakefile.toml", "tools/research/x.py",
+        "tools/verity/check/drive.toml", "tools/verity/lean/check.py", "v/circuits/program.py", "v/channel.py",
+        "tools/move/restack.py", "benchmarks/one_stage/a5.py", "benchmarks/network_traces/x.py",
+        "benchmarks/remote_session/auditor_line.py"]

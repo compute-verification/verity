@@ -60,6 +60,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import settings
 from . import budgets as B
 
 DEAD = ("EXITED", "TERMINATED")
@@ -100,7 +101,7 @@ class Config:
 
 
 def guard_dir() -> Path:
-    return Path(os.environ.get("RESEARCH_GUARD_DIR", Path.home() / ".research" / "pods"))
+    return Path(settings.get("RESEARCH_GUARD_DIR", Path.home() / ".research" / "pods"))
 
 
 def paths(dry_run: bool = False, log: str | None = None) -> dict[str, Path]:
@@ -126,8 +127,8 @@ iso = B.iso
 
 
 def self_pod_id() -> str | None:
-    if os.environ.get("RUNPOD_POD_ID"):
-        return os.environ["RUNPOD_POD_ID"]
+    if settings.get("RUNPOD_POD_ID"):
+        return settings.need("RUNPOD_POD_ID")
     try:
         for item in Path("/proc/1/environ").read_bytes().split(b"\0"):
             if item.startswith(b"RUNPOD_POD_ID="):
@@ -640,7 +641,7 @@ def main(argv: list[str]) -> int:
                  self_pod=ns.self_pod or self_pod_id())
     if ns.supervise:
         return supervise([sys.executable, "-m", "research", "pods", "guard", *[a for a in argv if a != "--supervise"]], ns.poll)
-    if not os.environ.get(SUPERVISED_ENV):
+    if not settings.get(SUPERVISED_ENV):
         try:
             state_path = paths(ns.dry_run)["state"]
             prior = budgets_from_state(json.loads(state_path.read_text())) if state_path.exists() else None

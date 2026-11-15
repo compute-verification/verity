@@ -3,7 +3,7 @@
  "statement": "FlockSoundness.Audit.Partition.audit_exfiltration",
  "inputs": {
   "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean": "3ebd22ab25f62944f90f33a9ccc38df3683c4904b89252c238dd8dfbf3ef7d38",
-  "security/Proofs/Flock/Soundness/Audit/Influence.lean": "e14bc3271da4693f4b30ebc41419958bceeca8744bbb875e85e1e781e9edf24c",
+  "security/Proofs/Flock/Soundness/Audit/Influence.lean": "45493607fa4e6e01c017bed0fea7894555d6e86a091629cbe66d72de5802b19f",
   "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean": "e111cd96ad9588e38af3624fd5947a95ceb4ea4f749d862350e7cc96544c3695",
   "security/Proofs/Flock/Soundness/Audit/Stratified.lean": "b4fe1ef871903be23db629f3abd91fd3c61ee1dd4eab162d2f198bf681101d92",
   "security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean": "c75d7649bb6a772ccd76e958437dbf8f68182684171dbb0aae9d2ab902bbc6b7",

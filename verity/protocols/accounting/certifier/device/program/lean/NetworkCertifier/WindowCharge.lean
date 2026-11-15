@@ -5,7 +5,7 @@ public import NetworkCertifier.AdviceV1
 /-!
 # The certifier program: advice v1's whole execution phase charged (`ChargeCount_v2`)
 
-The executable forms of `Security/Definitions/Certifier/WindowCharge.lean` that the execution phase charge's difftest
+The executable forms of `security/Definitions/Certifier/WindowCharge.lean` that the execution phase charge's difftest
 runs, under the same names in `NetworkCertifier.WindowCharge`, on `NetworkCertifier.AdviceV1`'s counting encoder. Lean
 core only: a bin is `AdviceV1.bitlen` where the reference reads Mathlib's `Nat.size`, and `charges` takes the windows as
 a list where the reference takes them as a function on `Fin W`. `Proofs.Certifier.Code` (`CodeChargesWhole`)

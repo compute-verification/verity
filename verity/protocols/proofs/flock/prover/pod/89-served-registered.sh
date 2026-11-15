@@ -23,6 +23,8 @@
 #      prover build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+for o in DRAW_COINS:SAMPLE_COINS; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "served-registered: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 if [ -z "${SR_PINNED:-}" ]; then
   if mkdir -p "${SLICE_LOCKS:-/workspace/jobs/slices}" 2>/dev/null; then
     . verity/protocols/proofs/flock/prover/pod/cpu-slices.sh
@@ -82,7 +84,7 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 RESEARCH=$(command -v research || true)
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 
 D=$S/stage; N=32; K=${K:-16}
 if [ "${ZK:-1}" = 0 ]; then ZF=(); else ZF=(--zk); fi

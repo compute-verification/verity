@@ -2018,7 +2018,7 @@ def test_a_facts_or_replay_cache_that_a_build_could_write_is_refused(tmp_path, c
 
     ctl = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", ctl, ignore=shutil.ignore_patterns(".lake"))
-    for flag in ("--facts-cache", "--replay-cache"):
+    for flag in ("--facts-cache", "--replay-cache", "--program-cache"):
         with pytest.raises(SystemExit):
             A.main([str(ctl), flag, str(ctl / ".lake" / "cache"), "--out", str(tmp_path / "out")])
         assert f"{flag} {ctl / '.lake' / 'cache'} overlaps {(ctl / '.lake').resolve()}" in capsys.readouterr().err

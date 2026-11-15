@@ -38,7 +38,7 @@ Each θ entry lies in a root input node `k` whose gates are `w` bits each, part 
 `n_p` gates. The run's own record registers `p` (R7) under a hiding root, and the entry is bound when that root is the
 cited `R`: the frame-v3-sha512 root over hm96-sha512 rows determines the rows, short of a SHA-512 collision among the
 inputs hashed along the two trees (`InferenceOnly.Assumptions.RootsBind`, the binding premise the reduction names). That is
-R7's `held` rule: a value keeps its root across records (`one_stage/registration.py`).
+R7's `held` rule: a value keeps its root across records.
 
 ## Refusals
 

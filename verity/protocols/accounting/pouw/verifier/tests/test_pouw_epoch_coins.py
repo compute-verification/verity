@@ -195,13 +195,6 @@ OS_RANDOMNESS = {
     "protocols/accounting/pouw/prover/serving/pearl_c/__init__.py": "`new_salt_key`, the prover's hm96 salt key, no coin",
     "protocols/proofs/spot/prover/audit/local_challenger.py": "the development challenger's session token and gate "
                                                               "secret, compose's service and no SPOT coin",
-    "protocols/proofs/spot/prover/audit/prove_path.py": "the committer's salt key (`committer_key`), no coin",
-    "protocols/proofs/spot/prover/audit/records_audit.py": "`free_ports`' order of loopback base ports, no coin",
-    "protocols/proofs/spot/prover/audit/stop_audit.py": "the staged member's hiding key, no coin",
-    "protocols/proofs/spot/prover/audit/template_audit.py": "a development challenger's entropy (`challenger_sample`), "
-                                                             "whose samples show the path; an auditor's coins are "
-                                                             "`a5_coins`'",
-    "protocols/proofs/spot/prover/cost/window_cost.py": "filler bytes the cost model times, no coin",
     "protocols/proofs/spot/verifier/one_stage/member_trees.py": "the tree relay's shared secret with its verifier "
                                                                 "(`--tree-secret-file`), no coin",
 }

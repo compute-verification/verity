@@ -3,7 +3,7 @@ the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family
 is a template, its units staged from the step's own values, sampled by the stratified sampling design in one audit, proved by M0 under
 ``--zk`` and held by the Lean verifier.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
       --lean verity-verify-proof --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 
@@ -68,10 +68,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "served_units"))
 sys.setrecursionlimit(100000)
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+import a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
-from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402

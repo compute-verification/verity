@@ -48,13 +48,15 @@
                      beside it (`q_call`: proof blocks, committed bits, values computed in two proof blocks; or why it refuses,
                      a warning).
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned,
-                     nor is one over ``partition_max_gates`` gates not cut member by member, or cut so down to a member
-                     over the budget that isn't (`uncut`); such a Call is
+                     nor is one over ``partition_max_gates`` gates (the cost target) not cut member by member, or cut so down
+                     to a member over it that isn't (`uncut`); such a Call is
                      partitioned by its callees where each is a Call (`by_callees`: each callee's partition checked as a
-                     Call's, failing by its name), and otherwise fails by its own name, ``partition/unpartitioned``, with why
-                     its callees can't partition it (`callee_gap`: one is no Call, or is a primitive over the budget): every
-                     gate of a served Call sits in a Call whose partition is checked.  A Definition that is no Call is
-                     partitioned inside the Call that contains it, so over the budget it is a warning, ``partition/unchecked``
+                     Call's, failing by its name).  Otherwise a Call over the leaf budget fails by its own name,
+                     ``partition/unpartitioned``, with why its callees can't partition it (`callee_gap`: one is no Call, or
+                     is a primitive over a budget).  Over the cost target, a Call or not, the partition is unchecked and a
+                     warning, ``partition/over-cost-target``, prints its gates: the cost target bounds no proof, whose
+                     proof block is held to Flock's range by ``block``.  A Definition that is no Call over the leaf budget
+                     is a warning, ``partition/unchecked``
     lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
@@ -111,7 +113,8 @@ class Options:
     """``vectors`` input vectors per correspondence check (the all-edge ones first), fewer when the reference would spend more
     than ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word
     query; the word view samples 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
-    ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
+    ``partition_max_gates`` gates (the cost target, a warning: ``partition/over-cost-target``) or ``partition_max_leaves``
+    parameter leaves are not partitioned, over
     ``lower_max_gates`` gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole; ``input_budget``
     bounds vectors x input leaves, ``lane_budget`` vectors x proof blocks when a template's proof blocks are evaluated;
     a composite of at most ``struct_max_gates`` gates is realized by its structural lowering too (`struct_lowering`; 0, the
@@ -138,6 +141,10 @@ class Options:
     struct_max_gates: int = 0
 
 DEFAULTS = Options()
+
+#: the tail of ``partition/over-cost-target``: the cost target (``partition_max_gates``) bounds no proof, whose limit is the
+#: block Flock proves in, which ``block`` (`block_range`, `cut_of`) checks whatever the partition reads
+OVER_COST_TARGET = "partition unchecked; its proof blocks are held to Flock's range (`block`)"
 
 
 @dataclass
@@ -1104,12 +1111,12 @@ def dead_gates(fn: Any, opts: Options, F: Findings) -> dict:
 
 def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = True, q_word: int = 1) -> tuple[dict, dict]:
     """`Q_word_v1` on one Call of ``fn`` (its record and `word.unit_rule`).  Where the invariant applies (``fn`` is a Call of a
-    served Program) every violation fails by name, a member over the budget that `word.unit_rule` leaves whole too
-    (``partition/unpartitioned``); elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
-    are partitioned inside the Call that contains it.  With ``q_word=2`` (a Boolean Call: `Q_word` v2) a value computed in two
-    proof blocks is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else
-    `word.unit_rule`'s count;
-    None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
+    served Program) every violation fails by name; elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
+    are partitioned inside the Call that contains it.  A member over the cost target that `word.unit_rule` leaves whole is
+    unchecked either way, a warning in ``F`` (``partition/over-cost-target``, `OVER_COST_TARGET`).  With ``q_word=2`` (a
+    Boolean Call: `Q_word` v2) a value computed in two proof blocks is no failure: ``recomputed_across`` records how many gates
+    are (the whole cut's v2 view, else `word.unit_rule`'s count;
+    None when ``fn`` is over the cost target and unchecked), and every other code fails as under v1."""
     from verity.circuits import word as W
 
     P = F if applies else Findings()
@@ -1132,11 +1139,8 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
                        gates=det.get("gates") if isinstance(det, dict) else det)
         elif v["class"] == "too-large":
             rec["checked"] = False
-            rec["reason"] = f"{v['gates']} gates: over the partition budget {v['limit']}"
-            if applies:
-                P.fail("partition", "unpartitioned", d, f"{rec['reason']}, and not cut member by member")
-            else:
-                P.warn("partition", "unchecked", d, 1, rec["reason"])
+            rec["reason"] = f"{v['gates']:,} gates: over the cost target {v['limit']:,}"
+            F.warn("partition", "over-cost-target", d, 1, f"{rec['reason']}; {OVER_COST_TARGET}")
         else:
             P.fail("partition", "width", d, f"{v['class']}: |out(S)| = {v['out_bits']} b over {v['out_gates']} gate(s), limit "
                    f"{v['limit'][0]} b or one gate of {v['limit'][1]} b", unit_class=v["class"], units=v.get("units"))
@@ -1200,9 +1204,9 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
 
 def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
     """Why `partition` can't check a Call of ``fn`` itself, or None: its parameters' leaves are over ``partition_max_leaves`` (the
-    word query and `Q_call` resolve every leaf), or it is a composite over its gate budget (``partition_max_gates``,
+    word query and `Q_call` resolve every leaf), or it is a composite over its cost target (``partition_max_gates``,
     `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`), or cuts so down to a member
-    over its own budget that it doesn't (``too-large``)."""
+    over its own cost target that it doesn't (``too-large``)."""
     from verity.circuits.cut import separable
     from verity.circuits import word as W
 
@@ -1219,8 +1223,8 @@ def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
             continue
         seen.add(u.id)
         if (sep := separable(u)) is None:
-            return (f"{fn.gates} gates: over the partition budget {limit}" if u is fn else
-                    f"its member {u.id}'s {u.gates} gates are over the partition budget {limit}, and not cut member by member")
+            return (f"{fn.gates:,} gates: over the cost target {limit:,}" if u is fn else
+                    f"its member {u.id}'s {u.gates:,} gates: over the cost target {limit:,}, and not cut member by member")
         todo += [c for c, _m in sep]
     return None
 
@@ -1397,7 +1401,10 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
                 part = by_callees(t, opts, F, memo, why)
         if part is None:
             gap = callee_gap(t, opts, memo.setdefault("callee_gap", {}))
-            F.fail("partition", "unpartitioned", t.id, f"{why}; {gap}")
+            if sum(pt.leaves for pt in params) > opts.partition_max_leaves:
+                F.fail("partition", "unpartitioned", t.id, f"{why}; {gap}")
+            else:
+                F.warn("partition", "over-cost-target", t.id, 1, f"{why}; {gap}; {OVER_COST_TARGET}")
             part = {"applies": True, "checked": False, "q_word": 2 if is_boolean(t) else 1, "reason": why, "callee_gap": gap}
     if part is not None:
         entry["partition"] = part

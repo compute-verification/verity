@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from verity_proof_throughput import cli, zk
 from verity_proof_throughput.workloads import workload
 
@@ -45,3 +47,15 @@ def test_the_zk_point_fails_unless_its_sessions_were_masked_and_zk_served(tmp_pa
     zk_records(tmp_path, zk_server=False)
     assert "no ZK server times" in zk.point(tmp_path, W, 16, True, None)["validation"]["detail"]
     assert zk.point(tmp_path, W, 16, False, None)["validation"]["status"] == "passed"
+
+
+def test_a_job_that_sets_the_old_switch_and_not_the_new_one_is_refused_by_the_new_name():
+    with pytest.raises(SystemExit, match="FC_FIREWALL is set and FC_ZK_SERVER is not.*set FC_ZK_SERVER instead"):
+        zk.zk_server_on({"FC_FIREWALL": "1"})
+    assert zk.zk_server_on({"FC_FIREWALL": "1", "FC_ZK_SERVER": "1"}) and not zk.zk_server_on({"FC_ZK_SERVER": "0"})
+
+
+def test_a_session_recorded_before_the_rename_reports_the_same_zk_server_times():
+    new = {"buckets": [{"t.zk_server_recheck": 4.0, "cpu.zk_server_recheck": 40.0, "t.total": 1.0}]}
+    old = {"buckets": [{"t.firewall_recheck": 4.0, "cpu.firewall_recheck": 40.0, "t.total": 1.0}]}
+    assert zk._zk_server(old) == zk._zk_server(new) == {"t.zk_server_recheck": 4.0, "cpu.zk_server_recheck": 40.0}
