@@ -91,6 +91,15 @@ def toml(way: str) -> str:
            "# Lean module names follow their package's root, so no Lean module, declaration or lock record changes; a Lake",
            "# path between packages does. Lean sources are not rewritten (a comment's path rebuilds the module). The format",
            "# is `layout_map.toml`'s.",
+           "#",
+           "# Names that follow a path, which the mover rewrites: workspace members and suite inputs, `uv.lock` (by",
+           "# `uv lock`), Lake requirement paths (`lakefile.toml`, `lake-manifest.json`) and the check's pins of those",
+           "# manifests, the listing's paths and distributions (`tests/import_order.toml`). No distribution or Lake package",
+           "# name follows a path (`pous-check`, `memory-challenger-lean`, `certifier_program`, `core_memory_challenger`), so",
+           "# none needs a line. The hand lines the move's change adds, which name a directory by its last part:",
+           "# `tests/test_boundaries.py`'s `_trusted` and `tests/test_lowrisk_excludes.py`'s `TRUSTED_DIRS` gain `attester`;",
+           "# `tests/tree.toml`'s `NAME/device/` becomes `NAME/attester/`, with a row for each resource group;",
+           "# `benchmarks/demo_minutes/tests/test_no_pin_literal.py`'s `SCANNED` gains `verity/protocols/registration`.",
            "", "[roots]", f"old = {inline}", f"new = {inline}", "", "[paths]"]
     out += [f"{q(k)} = {q(v)}" for k, v in paths.items()]
     retired = [f"{P}/accounting/", f"{P}/policy/"]
