@@ -70,7 +70,7 @@ def runner(tree: Path, lake: str) -> Path | None:
 def together(exe: Path, argv: list[str]) -> int:
     """``exe`` on each run ``argv`` names (``DIR MODE [M2]``, runs separated by ``+``) at once, each's output in
     ``$OUT/guard-<i>.log``; prints each one's exit and result line. -> 0 when every run printed its result."""
-    out = Path(of(Path(__file__).resolve().parents[2] / "benchmarks" / "two_stage" / "settings.py").OUT or ".")
+    out = Path(of(__file__).OUT or ".")
     jobs, cur = [], []
     for a in [*argv, "+"]:
         if a != "+":

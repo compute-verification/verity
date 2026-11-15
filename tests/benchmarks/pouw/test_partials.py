@@ -21,7 +21,7 @@ from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
 from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
 from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
-SETTINGS = of(PT.__file__)
+SETTINGS = of(__file__)
 RC = PT.RC
 COM = types.SimpleNamespace(root=bytes(range(7, 71)), epoch=3)
 COIN, ROOT = bytes(range(100, 164)), bytes(range(30, 94))

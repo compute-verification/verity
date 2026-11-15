@@ -25,7 +25,7 @@ STANDIN = {f"{G.PACKAGE}/__init__.py": 'VERSION = "stand-in"\n',
            f"{G.PACKAGE}/work.py": "HE_BITS = {}\n",
            f"{G.PACKAGE}/capture/__init__.py": "",
            f"{G.PACKAGE}/capture/products.py": f"CAPTURE = {G.CAPTURE!r}\n"}
-SLOWDOWN_CODE = of(G.__file__).VERITY_GRADER_SLOWDOWN_CODE
+SLOWDOWN_CODE = of(__file__).VERITY_GRADER_SLOWDOWN_CODE
 
 
 def _git(d: Path, *args: str) -> str:

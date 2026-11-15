@@ -1,2 +1,0 @@
-# The settings registry's anchor: `verity_config.settings.of` reads the `settings.py` beside the nearest
-# `pyproject.toml` above a file. This directory's suite is `tests/benchmarks/two_stage/pyproject.toml`.
