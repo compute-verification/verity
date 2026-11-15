@@ -21,7 +21,7 @@ file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
   a word) and alone on the uniform datapath (4 a word); A6's floors `q = q_T = ½`, `b_T = 0`; 128 committed words a unit
   of honest work (an IMMA.16832 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
-  ε_skip's skippable work at NOROW's price, 0.420701% of ♭'s bound (`eps_budget.design_skip` on DS-120).
+  ε_skip's free compute at NOROW's price, 0.420701% of ♭'s bound (`eps_budget.design_skip` on DS-120).
 * `piStar`: π*, the facet (DS_issue) the machine model's LP certificate sits on at q* = ½, with 197/3761 moved onto
   DS_smem: the least weight there at which each bulk-reduction floor (the exporter's `BULK_FLOORS`, A5b) costs at least
   the menu's φ*.
@@ -140,7 +140,7 @@ def flatWords : Sparse := [(27, 1, 1), (61, 25641, 1000000)]
 /-- ♭'s fold a unit: the lane fold for 128 words. -/
 def flatFold : Sparse := [(0, 8, 1), (24, 8, 1)]
 
-/-- ♭'s skippable work a unit, at NOROW's price. -/
+/-- ♭'s free compute a unit, at NOROW's price. -/
 def flatSkip : Sparse := [(65, 14325412520309335111003, 199158597757329117000000)]
 
 /-- The floor program ♭, labelled. -/
