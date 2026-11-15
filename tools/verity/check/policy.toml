@@ -14,9 +14,10 @@ schema = "policy/v0"
 # circuit-check returns to the gate
 # once `circuit-check --all` fits inside the rest of the check (under 30 minutes); ratchet-gate judges the merges above the
 # run's base, and no plan holds it. A job here has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
-# lean-audit is here only while the kernel replay of security/Proofs doesn't end (two declarations of its third batch, with
-# security/Properties' closure): owner lean, out with their cure and by 2026-11-17T07:59:00Z at the latest. It still runs in
-# every check, and what a candidate fails of it is rung; it is the one job here no smaller allowance can name.
+# lean-audit is off the gate for the landing of the tree that moves this file to tools/check/policy.toml alone: the loop's
+# code in that tree reads only that file, where lean-audit gates. Owner lean; expires 2026-11-17T07:59:00Z. The kernel
+# replay of security/Proofs doesn't end there (four declarations of Proofs.Pous.PeriodWitnesses); it runs on the landed
+# commit until it passes, and their cure follows. No allowance can name a step, so the whole job is off the gate.
 off_gate = ["circuit-check", "ratchet-gate", "lean-audit"]
 
 # Allowances: a failure the verified queue doesn't take as one while its allowance at a candidate's base is unexpired: the
