@@ -31,7 +31,7 @@ uniform K-subset's exact bound, one-stage's `wrong_units` over windows), so ε =
 is Python's
 (`service.select_draw`), which records the coin bytes it read (`read`); the sample of record is the Lean
 verifier's on those bytes (`lean_draw`: Flock's `verity-verify-proof draw --population n --k K --stream-file`, the Lean
-`draw` the one-stage drivers run, `Flock.Draw.sampleOn`), which the network verdict runs itself, as a registration's own
+`sample` the one-stage drivers run, `Flock.Draw.sampleOn`), which the network verdict runs itself, as a registration's own
 sample is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
 proved are exactly that sample's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever proof blocks the sample
 object it is handed lists. Selection `All` (K None) samples every window and reads no coin, and K = n leaves nothing to
@@ -603,9 +603,9 @@ class TransferBlocks:
         return R.record(self._program, self.query, {"law": "subset", "k": 1}, S.SCHEME, roots, self.provenance(w),
                         previous=previous)
 
-    def session(self, opening: Hidden, draw: S.Draw) -> str:
+    def session(self, opening: Hidden, sample: S.Draw) -> str:
         """The delivered session's SHA-512: the registration, the sample and the salted leaves the opening reproduces."""
-        return _sha512({"format": SESSION, "registration": draw.docket.digest, "draw": _sha512(dict(draw.draw)),
+        return _sha512({"format": SESSION, "registration": sample.docket.digest, "draw": _sha512(dict(sample.draw)),
                         "leaves": [x.hex() for x in self.leaves(opening)]})
 
     # the challenger
@@ -726,8 +726,8 @@ class TransferBlocks:
         verdict = all(i is not None and HC.reference(i) for i in self.head_checks(opening, root))
         return int(verdict) | int(all(r.head.deadline for r in opening.records)) << 1
 
-    def _registered(self, opening: Hidden, draw: S.Draw) -> str:
-        reg = draw.docket.record
+    def _registered(self, opening: Hidden, sample: S.Draw) -> str:
+        reg = sample.docket.record
         if opening.window != reg["window"]["window"] or len(opening.records) != 2:
             raise ValueError("the opening is not the registered execution phase's")
         return reg["roots"][0]["root"]
@@ -761,29 +761,29 @@ class TransferBlocks:
             and c.verify(self.key, self.certifier_session) for d, c in enumerate(certificates))
 
     @staticmethod
-    def _decided(draw: S.Draw, sessions: Sequence[str], accepted: bool, public: dict[str, Any]) -> dict[str, Any]:
+    def _decided(sample: S.Draw, sessions: Sequence[str], accepted: bool, public: dict[str, Any]) -> dict[str, Any]:
         """A verdict's accept bit and public outputs, with the digest binding them to the registration and sessions."""
-        digest = _sha512({"format": VERDICT, "registration": draw.docket.digest, "sessions": list(sessions),
+        digest = _sha512({"format": VERDICT, "registration": sample.docket.digest, "sessions": list(sessions),
                           "accepted": accepted, "public": public})
         return {"accepted": accepted, "digest": digest, "public": public}
 
-    def python_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+    def python_verdict(self, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                        delivered: Delivered, findings: Sequence[Finding] | None,
                        sessions: Sequence[str]) -> dict[str, Any]:
         """This module's verdict on the execution phase (`verify`'s conditions), on the findings of the verifier's own run
         of Flock's Lean verifier (None where `proofs.verify` refused): its accept bit, digest and public outputs."""
-        reg = draw.docket.record
+        reg = sample.docket.record
         w, root = reg["window"]["window"], bytes.fromhex(reg["roots"][0]["root"])
         proved = findings is not None and self.proved(findings) \
-            and all(list(f.units) == list(draw.units) for f in findings)
+            and all(list(f.units) == list(sample.units) for f in findings)
         args = self.public_arguments(w, root, certificates, syncs)
-        opened = _opened(delivered, draw.units[0], self.row(args, "pub") if args is not None else None,
+        opened = _opened(delivered, sample.units[0], self.row(args, "pub") if args is not None else None,
                          self.bits("pub")) if proved else None
         word = opened if opened is not None else 0
         accepted = proved and opened is not None and word == 0b11 and self.certified(w, certificates)
-        return self._decided(draw, sessions, accepted, {"verdict": int(accepted), "deadline": word >> 1 & 1})
+        return self._decided(sample, sessions, accepted, {"verdict": int(accepted), "deadline": word >> 1 & 1})
 
-    def lean_case(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+    def lean_case(self, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                   delivered: Delivered, findings: Sequence[Finding] | None,
                   sessions: Sequence[str]) -> dict[str, Any] | None:
         """`verify`'s inputs as `NetworkCheck.TransferBlocks.caseOf` reads them: the verifier's own structure (the Program's
@@ -794,7 +794,7 @@ class TransferBlocks:
         profile, and the network certifier's parameters digest. None for a key the Lean doesn't read (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
             return None
-        reg, p = draw.docket.record, self.key.params
+        reg, p = sample.docket.record, self.key.params
         w = reg["window"]["window"]
 
         def cert(c: Any) -> dict[str, Any] | None:
@@ -819,7 +819,7 @@ class TransferBlocks:
         word = delivered.output
         case: dict[str, Any] = {
             "kind": "warden", "link": self.link, "run": self.run, "window": w, "root": reg["roots"][0]["root"],
-            "registration": draw.docket.digest, "units": list(draw.units), "program": self._partition["program"],
+            "registration": sample.docket.digest, "units": list(sample.units), "program": self._partition["program"],
             "partition": P.digest(self._partition), "gates": [g.id for g in self.gates()],
             "findings": None if findings is None else [
                 {"accepted": f.accepted, "program": f.program, "units": list(f.units)} for f in findings],
@@ -836,13 +836,13 @@ class TransferBlocks:
             "warden": self.network_certifier.digest.hex()}
         return case
 
-    def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+    def lean_verdict(self, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                      delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
                      server: LA.Server | None = None) -> dict[str, Any] | None:
         """The Lean's verdict on the execution phase (`NetworkCheck.TransferBlocks.verdict`, `network-records verdicts`'
         ``link-window``): its accept bit, digest and public outputs; None where `lean_case` has no case or the Lean
         refuses it. The Lean not built or not running raises."""
-        case = self.lean_case(draw, certificates, syncs, delivered, findings, sessions)
+        case = self.lean_case(sample, certificates, syncs, delivered, findings, sessions)
         if case is None:
             return None
         try:
@@ -851,7 +851,7 @@ class TransferBlocks:
             return None
         return {"accepted": out["accepted"], "digest": out["digest"], "public": out["public"]}
 
-    def verify(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+    def verify(self, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                delivered: Delivered, *, circuit_sha512: str, opening: Hidden | None = None) -> dict[str, Any]:
         """The verdict of record on the execution phase's delivered proof, from public inputs and the proof alone: accepted
         when
@@ -875,24 +875,24 @@ class TransferBlocks:
                                       partition=self._partition)
         findings = None if refused is not None else findings
         sessions = delivered.sessions()
-        python = self.python_verdict(draw, certificates, syncs, delivered, findings, sessions)
-        lean = self.lean_verdict(draw, certificates, syncs, delivered, findings, sessions)
+        python = self.python_verdict(sample, certificates, syncs, delivered, findings, sessions)
+        lean = self.lean_verdict(sample, certificates, syncs, delivered, findings, sessions)
         by = OF_RECORD
         mine, other = (lean, python) if by == "lean" else (python, lean)
         if lean is None or any(lean[k] != python[k] for k in python):
-            mine = self._decided(draw, sessions, False, {"verdict": 0, "deadline": 0})
+            mine = self._decided(sample, sessions, False, {"verdict": 0, "deadline": 0})
         verdict = {"of_record": True, "decided_by": "proof", "by": by, **mine, "sessions": sessions,
                    "reference": {"accepted": None if other is None else other["accepted"]}}
         if opening is not None:
-            verdict["clear"] = {"accepted": self.clear(opening, draw, syncs)["accepted"]}
+            verdict["clear"] = {"accepted": self.clear(opening, sample, syncs)["accepted"]}
         return verdict
 
-    def clear(self, opening: Hidden, draw: S.Draw, syncs: Sequence[ClockSync] = ()) -> dict[str, Any]:
+    def clear(self, opening: Hidden, sample: S.Draw, syncs: Sequence[ClockSync] = ()) -> dict[str, Any]:
         """The in-the-clear check on the opening, the witness: the debug comparison `verify` makes on request and the
         tests' reference, never a verdict of record. Accepted when the opening reproduces the registered root under the
         execution phase's domain, both head checks accept (the module docstring), the opening's two certificates hold
         (`certified`) and both heads met their deadline. `syncs` is unread: the link declares none."""
-        root = self._registered(opening, draw)
+        root = self._registered(opening, sample)
         egress, ingress = opening.records
         holds = self.root(opening) == root and all(
             i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root))) \
@@ -900,31 +900,31 @@ class TransferBlocks:
         public = {"verdict": int(holds), "deadline": int(egress.head.deadline and ingress.head.deadline)}
         return {"of_record": False, "accepted": holds and public["deadline"] == 1, "public": public}
 
-    def statement(self, draw: S.Draw) -> dict[str, Any]:
-        reg = draw.docket.record
+    def statement(self, sample: S.Draw) -> dict[str, Any]:
+        reg = sample.docket.record
         return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link,
                 "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
 
-    def outcome(self, stream: S.Stream, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+    def outcome(self, stream: S.Stream, sample: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                 delivered: Delivered, *, circuit_sha512: str, opening: Hidden | None = None) -> S.Outcome:
         """`stream.outcome` on the verifier's verdict (`verify`), with the registered root as the session's:
         the root the proof's public row names, which it opens only to the verifier's own copy."""
-        verdict = self.verify(draw, certificates, syncs, delivered, circuit_sha512=circuit_sha512, opening=opening)
-        return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
-                              session_roots={VALUE: draw.docket.record["roots"][0]["root"]})
+        verdict = self.verify(sample, certificates, syncs, delivered, circuit_sha512=circuit_sha512, opening=opening)
+        return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
+                              session_roots={VALUE: sample.docket.record["roots"][0]["root"]})
 
-    def unproved_outcome(self, stream: S.Stream, draw: S.Draw, opening: Hidden,
+    def unproved_outcome(self, stream: S.Stream, sample: S.Draw, opening: Hidden,
                          syncs: Sequence[ClockSync]) -> S.Outcome:
         """`stream.outcome` for a run that proves nothing (a rehearsal, the simulator): on the in-the-clear check
         (`clear`), which reads the opening, so it is never zero-knowledge, and its
         verdict says ``"decided_by": "clear"``. The delivered session is the opening's (`session`), and its root the
         one the opening reproduces, which one-stage's audit holds to the registered root."""
-        v = self.clear(opening, draw, syncs)
-        sessions = [self.session(opening, draw)]
-        digest = _sha512({"format": VERDICT, "registration": draw.docket.digest, "sessions": sessions,
+        v = self.clear(opening, sample, syncs)
+        sessions = [self.session(opening, sample)]
+        digest = _sha512({"format": VERDICT, "registration": sample.docket.digest, "sessions": sessions,
                           "accepted": v["accepted"], "public": v["public"], "decided_by": "clear"})
         verdict = {**v, "of_record": True, "decided_by": "clear", "digest": digest, "sessions": sessions}
-        return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
+        return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
                               session_roots={VALUE: self.root(opening)})
 
     def _period(self, stream: S.Stream, windows: int | None) -> int:
@@ -957,7 +957,7 @@ class TransferBlocks:
         if not all(isinstance(r, str) and len(r) == 128 and all(c in "0123456789abcdef" for c in r) for r in roots):
             raise ValueError("a period commits each window's salted root, a SHA-512 in lowercase hex")
         if k is not None and not (type(k) is int and 1 <= k <= n):
-            raise ValueError(f"a period draw takes 1 <= K <= {n} of the execution phases, not {k!r}")
+            raise ValueError(f"a period sample takes 1 <= K <= {n} of the execution phases, not {k!r}")
         commitment = self._committed(stream, roots)
         rule = S.All() if k is None else S.SamplingDesign(f"rate:{k}/{n}")
         if k is not None and callable(getattr(coins, "commit", None)):
@@ -968,9 +968,9 @@ class TransferBlocks:
             b = coins(m)
             read.extend(b)
             return b
-        draw = S.select_draw(rule, S.selection_sampling_design(rule, n), n, reading)
-        return {"format": PERIOD_DRAW, "stream": stream.digest, "law": "subset", "k": draw["k"], "population": n,
-                "units": list(draw["units"]), "roots": roots, "commitment": commitment, "read": read.hex()}
+        sample = S.select_draw(rule, S.selection_sampling_design(rule, n), n, reading)
+        return {"format": PERIOD_DRAW, "stream": stream.digest, "law": "subset", "k": sample["k"], "population": n,
+                "units": list(sample["units"]), "roots": roots, "commitment": commitment, "read": read.hex()}
 
     def _drawn(self, stream: S.Stream, n: int, drawn: Mapping[str, Any]) -> list[int]:
         """The sampled windows, once `drawn` is a period sample over this stream's n windows; else `ValueError`."""
@@ -981,9 +981,9 @@ class TransferBlocks:
                 and all(type(u) is int and 0 <= u < n for u in units) and units == sorted(set(units))
                 and len(units) == k and isinstance(roots, list) and len(roots) == n and isinstance(read, str)
                 and len(read) % 2 == 0 and all(c in "0123456789abcdef" for c in read)):
-            raise ValueError(f"not a period draw of subset:K over this link's {n} windows")
+            raise ValueError(f"not a period sample of subset:K over this link's {n} windows")
         if get("stream") != stream.digest or get("commitment") != self._committed(stream, roots):
-            raise ValueError("the period draw is not this stream's, or not over the period it committed")
+            raise ValueError("the period sample is not this stream's, or not over the period it committed")
         return list(units)
 
     @staticmethod
@@ -1000,7 +1000,7 @@ class TransferBlocks:
         if not (got.get("law") == "subset" and got.get("k") == k and got.get("population") == n
                 and isinstance(units, list) and all(type(u) is int and 0 <= u < n for u in units)
                 and len(set(units)) == len(units) == k):
-            return None, f"the Lean's draw is not subset:{k} over the {n} windows: {json.dumps(got)[:300]}"
+            return None, f"the Lean's sample is not subset:{k} over the {n} windows: {json.dumps(got)[:300]}"
         return sorted(units), None
 
     def network_verdict(self, stream: S.Stream, windows: int | None = None,
@@ -1044,7 +1044,7 @@ class TransferBlocks:
                 why[PERIOD_DRAWN] = {"lean": lean if lean is not None else {"refused": no}, "drawn": claimed,
                                      "registered": registered,
                                      "why": no or "the windows registered and proved are not the Lean verifier of "
-                                                  "record's draw on the period's coins"}
+                                                  "record's sample on the period's coins"}
         outcomes = {r["registration"]: r for r in stream.records}
         records: list[str | None] = [None] * n
         refused: list[int] = []

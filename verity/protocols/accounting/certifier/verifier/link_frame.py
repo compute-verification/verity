@@ -10,7 +10,7 @@ import struct
 #: `tests/test_network_certifier_id_request_writers.py`
 HEADER = struct.Struct(">BII")
 PAD, DATA, SALT = 0, 1, 3
-#: a request's length (u32be), which opens it in the link's DATA payloads (`active.request_frames`)
+#: a request's length (u32be), which opens it in the link's DATA payloads
 LENGTH = struct.Struct(">I")
 
 

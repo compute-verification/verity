@@ -6,15 +6,15 @@ public import Identity.Tagged
 /-!
 # The network certificate's encodings (record v2)
 
-Executable forms of `verity/core/protocols/certifier/certificate.py`, whose module docstring is the spec: the
-frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `verifyFrame`) over a window's real frames
+Executable forms of `verity/protocols/accounting/certifier/verifier/certificate.py`, whose module docstring is the
+spec: the frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `verifyFrame`) over a window's real frames
 (`realFrames`), the parameters digest (`parametersDigest`, the manifest's identity bytes through `Flock.canonUtf8`), the record head's
 encoding and digest (`RecordHead.encode`, `RecordHead.digest`, `recordHead`), the digest a certificate signs, the record
 digest under the certifier's salt (`certificateDigest`), and the message it signs over it (`certificateMessage`,
-`verity.ml.crypto.lms.certificate_message`). A Python `ValueError` is an `Except.error` here.
+`verity.commitments.crypto.lms.certificate_message`). A Python `ValueError` is an `Except.error` here.
 `tagged_sha512` is core's `Identity.taggedSha512`, which refuses what Python refuses. Every other SHA-512 is
 `Flock.Sha512.hash`, and what each such call hashes has a name of its own (`leafInput`, `nodeInput`, `emptyInput`,
-`certificateInput`, `messageInput`), as the properties (`Security/Properties/Certifier/Check.lean`) name the strings a run hashes. The tree climbs by structural recursion (`pairs`, `climb`, `top`). `NetworkCheck.Difftest` holds these to the
+`certificateInput`, `messageInput`), as the properties (`security/Properties/Certifier/Check.lean`) name the strings a run hashes. The tree climbs by structural recursion (`pairs`, `climb`, `top`). `NetworkCheck.Difftest` holds these to the
 Python on generated inputs.
 -/
 
@@ -288,7 +288,7 @@ def messageInput (keyId session : ByteArray) (link : String) (direction : Direct
   let context := field session ++ field link.toUTF8 ++ field direction.value.toUTF8 ++ w
   pure (field messageTag.toUTF8 ++ keyId ++ field context ++ field digest)
 
-/-- `certificate_message` (`certificate.py` and `verity.ml.crypto.lms`): SHA-512 of `messageInput`,
+/-- `certificate_message` (`certificate.py` and `verity.commitments.crypto.lms`): SHA-512 of `messageInput`,
 `[tag] ‖ I ‖ [[session] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [signed digest]` with the tag
 `verity/network-certificate-message/v2`; refused unless the digest is 64 bytes, the window a u64, the session 32 bytes
 and I 16. -/
