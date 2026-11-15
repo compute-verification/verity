@@ -577,7 +577,7 @@ def test_local_runs_a_config_end_to_end_grades_it_and_a_second_run_runs_nothing(
         assert all(cp["e_bytes"] and cp["score"]["split"] == job.split for cp in rec["checkpoints"])
     s = json.loads(graded.wrote[0])
     assert s["schema"] == grade.SCHEMA and s["config"] == "a" and s["honest"]["config"] == "ref"
-    assert s["S"]["why"] is None and s["rho"]["rho"] is not None and s["basis"]["split"] == "final"
+    assert s["S"]["why"] is None and s["record_slowdown"]["slowdown"] is not None and s["basis"]["split"] == "final"
     assert all(s["H"][k]["C"] and isinstance(s["S"][k], float) and s["S"][k] > 0 for k in ("any", "honest"))
     shown = block(first.stdout, 4)
     assert shown.startswith("SLOWDOWN a   start tiny, gain 1.1x, policy console ")

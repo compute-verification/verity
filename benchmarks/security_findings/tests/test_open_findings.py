@@ -186,6 +186,24 @@ def test_only_a_command_that_runs_the_guard_from_opt_alone_is_outside(O: ModuleT
     assert O.outside_checkout(command, {"tools", ".cursor", ".venv", "tests"}) is outside
 
 
+def test_the_one_wrapper_is_outside_only_word_for_word_with_a_hook_file(O: ModuleType) -> None:
+    """The wrapper (`GUARD_WRAPPER`) counts as outside only as `/bin/sh -c WRAPPER guard NAME` with its exact text and a hook
+    file NAME: a changed character, a shell found on PATH, a wrapper that keeps the caller's PATH, another argument or a name of
+    the checkout reopens the finding until the check vouches for it."""
+    names = {"tools", ".cursor", ".venv", "tests", "x.py"}
+    w = O.GUARD_WRAPPER
+    assert O.outside_checkout(f"/bin/sh -c '{w}' guard shell_hook.py", names) is True
+    assert O.outside_checkout(f"/bin/sh -c '{w}' guard task_hook.py", names) is True
+    for command in (f"/bin/sh -c '{w.replace('/opt/agent-guard', '/opt/agent-guard/../x')}' guard shell_hook.py",
+                    f"/bin/sh -c '{w} ' guard shell_hook.py", f"/bin/sh -c '{w}' guard shell_hook.py extra",
+                    f"/bin/sh -c '{w}' other shell_hook.py", f"/bin/sh -c '{w}' guard tools",
+                    f"/bin/sh -c '{w}' guard x.py",
+                    f"/bin/sh -c '{w}' guard ../tools/agent-guard/shell_hook.py", f"bash -c '{w}' guard shell_hook.py",
+                    f"/bin/sh -c '{w}'", f"sh -c '{w}' guard shell_hook.py",
+                    f"/bin/sh -c '{w.replace('PATH=/usr/local/bin:/usr/bin:/bin; export PATH; ', '')}' guard shell_hook.py"):
+        assert O.outside_checkout(command, names) is False, command
+
+
 def _hooks(*commands: str) -> str:
     return json.dumps({"version": 1, "hooks": {"stop": [{"command": c} for c in commands]}})
 

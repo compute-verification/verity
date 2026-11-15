@@ -11,8 +11,12 @@ file).
     verity bench prove --system flock --workload glm53 --json        the table as JSON
     verity bench prove lean-verify --lean VERIFIER --proof TREE      the Lean verifier timed on one kept proof, as the
                                                                      record the table's Lean verifier figures read
+    verity bench prove layers --flock DIR|RUN --zk DIR|RUN --sampling DIR|RUN --recursion DIR|RUN
+                                                                     the proof system by layer, a row each from its
+                                                                     run's output (`verity-bench prove-layers`)
 
-Under a research run, `--system spot` also writes `METRICS` into the run's result (`prove_records.record`).
+Under a research run, `--system spot` also writes `METRICS` into the run's result (`prove_records.record`), and `layers`
+writes `LAYER_METRICS`.
 """
 
 from __future__ import annotations
@@ -29,7 +33,16 @@ METRICS = {"benchmarks/prover-gpus-per-serving-gpu": "gpus_per_serving_gpu",
            "benchmarks/lean-verifier-seconds-per-token": "lean_verifier_seconds_per_token",
            "benchmarks/proof-bytes-per-token": "proof_bytes_per_token",
            "benchmarks/prover-gpus-per-serving-gpu-at-record": "gpus_per_serving_gpu_at_record"}
+#: the metrics `layers` writes, by id: each the figure a proof block it holds (`proof_layers.FIGURES`), the Flock and
+#: zero-knowledge layers as members and the sampling layer as its own reading (`proof_layers.MEMBERS`)
+LAYER_METRICS = {"benchmarks/proof-layer-prover-seconds": "prover_s",
+                 "benchmarks/proof-layer-lean-seconds": "lean_s",
+                 "benchmarks/proof-layer-proof-bytes": "proof_bytes"}
 
 if __name__ == "__main__":
     argv = sys.argv[1:]
-    sys.exit(main(argv) if argv[:1] == ["lean-verify"] else main(["prove", *argv], metrics=METRICS))
+    if argv[:1] == ["lean-verify"]:
+        sys.exit(main(argv))
+    if argv[:1] == ["layers"]:
+        sys.exit(main(["prove-layers", *argv[1:]], metrics=LAYER_METRICS))
+    sys.exit(main(["prove", *argv], metrics=METRICS))
