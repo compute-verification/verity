@@ -3307,6 +3307,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Vocab.InferenceOnlySound": {
+   "owner": "@lean",
+   "digest": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Verity.Vocab.NetworkCertifierSound": {
    "owner": "@network-accounting",
    "digest": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
