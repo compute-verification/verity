@@ -1611,14 +1611,14 @@ def render(doc: Mapping[str, Any]) -> str:
         + ". A sum takes the output count at 0 only on an execution phase the reader's answer holds, never because "
           "its row's schedules read 0:",
         *(f"  - {line}" for line in charged["why"]),
-        f"- the compute audit's part fails with at most δ = {_n(head['delta'])} over the monitoring period. The network "
+        (f"- the compute audit's part fails with at most δ = {_n(head['delta'])} over the monitoring period. The network "
         f"certifier's ε over the world's year is each execution phase's scan's δ ({delta['mark']}), "
         f"{_p(delta['value'])}, summed over every link's execution phases, {_n(year['phases'])} of them: {_p(eps)}. "
         f"The two together fail with at most the sum of both, {_n(error)}. A figure whose error, summed over "
-        f"everything it covers, is 1 or more is printed as \"{NO_BOUND}\", with that error and no amount.",
-        f"- with the network check's own proving at {_pct(net['share'])} of total compute, which the planner's rows "
+        f"everything it covers, is 1 or more is printed as \"{NO_BOUND}\", with that error and no amount."),
+        (f"- with the network check's own proving at {_pct(net['share'])} of total compute, which the planner's rows "
         f"don't count (assumed, no run), the audit budget is β = {_part(net['beta'])} and the compute audit's part "
-        f"{_n(net['GB'])} GB.",
+        f"{_n(net['GB'])} GB."),
         *_security(head["binding"]),
         f"- of {len(doc['inputs'])} inputs, {marks['measured']} {'is' if marks['measured'] == 1 else 'are'} measured, "
         + _listed([f"{marks['modeled']} modeled", f"{marks['simulated']} simulated", f"{marks['assumed']} assumed",
@@ -1680,10 +1680,10 @@ def render(doc: Mapping[str, Any]) -> str:
         f"({count['mark']}): "
         + (f"the sum under {_names([name for name in at_zero if name in record])} takes it at 0{held}."
            if any(name in record for name in at_zero) else "no sum of this table takes it at 0."), "",
-        "Each part's amounts are followed by its error over the line's scope and monitoring period: the compute "
+        ("Each part's amounts are followed by its error over the line's scope and monitoring period: the compute "
         "audit's δ; the network certifier's ε, its scans' δ summed over every link of the scope and every execution "
         "phase of the period; and `together`'s, the sum of the two. A figure whose error is 1 or more is printed as "
-        f"\"{NO_BOUND}\".", "",
+        f"\"{NO_BOUND}\"."), "",
         *_table(("compute", "period", "GPU-seconds", "requests", "compute audit", "bits a request", "compute audit's δ",
                  *(f"certifier, {name}" for name in record), "scan's δ", "certifier's ε",
                  *(f"together, {name}" for name in record), "together's error", f"output count ({count['mark']})"),
