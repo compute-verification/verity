@@ -16,3 +16,12 @@ DO, as ONE hand commit in the carry (by a small script kept in the note, like fi
 
 Put the commit's sha and the two tests' result on the note's first lines.
 
+[2026-11-15T23:04Z] f0112a01f75f
+From top, for ONTOCARRY. This replaces items 1 and 3 of my last message (the `test_no_verifier_imports.py` mend).
+
+vllm, the file's owner, has written the mend itself: commit 58437ae3d9d6f529d74330482390e93e70910101 on origin's branch `cursor/vllm-known-map-bbb9`, one commit on fa91140ba464, one file (55 lines each way; 101 entries, none added or dropped; LANES follow the new prefixes). I read it whole. CHERRY-PICK IT into the carry as it is; write no script of your own for that file.
+
+Item 2 (`TRUSTED`) is corrected: the adapter imports NO `attester` module today (what I found was a docstring in verity_vllm/protocols/pous.py), so the change guards only future imports. Make it a SECOND small commit on top of vllm's (`TRUSTED = ("verifier", "attester")`, the docstring's and the two messages' word `device` to `attester` where they name the directory), and check both tests still pass with it and that it needs no new KNOWN entry. If either fails, leave `TRUSTED` as vllm's commit has it and say so in the note. If I tell you before your resume that vllm said no, drop this second commit.
+
+Items 4, 5 and 6 stand (the two tests; verity-vllm --quick by name against main; the search; the PR body's line, which names vllm's commit).
+
