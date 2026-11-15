@@ -119,6 +119,7 @@ stuck=$(SANDBOX_KEPT=$(printf '%s\n' "${rw[@]}" "${ours[@]}") awk '
     }
   }' /proc/self/mountinfo)
 echo 0 > /proc/sys/user/max_user_namespaces
+as_cmd=(setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all --)
 # A stuck mount is out of CMD's reach only where, run as CMD runs, this shows it: a directory above it that CMD can't
 # search and doesn't own (so can't chmod), or nothing in it that CMD may write or owns, and no directory CMD can search
 # but not list. Anything else leaves it writable, a find error other than EACCES included. A kernel filesystem under a
@@ -138,7 +139,7 @@ out=$(LC_ALL=C find "$m" -xdev ! -type l \( -writable -o -user "$me" -o -type d 
 [ -z "$out" ] || ! printf "%s\n" "$out" | grep -qv "^find: .*: Permission denied$"'
 writable=()
 for m in $stuck; do
-  setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all -- bash -c "$unreachable" _ "$m" || writable+=("$m")
+  "${as_cmd[@]}" bash -c "$unreachable" _ "$m" || writable+=("$m")
 done
 if [ ${#writable[@]} -gt 0 ]; then
   echo "sandbox.sh: these mounts stay writable here, which the build could write through:" "${writable[@]}" "(their" \
@@ -146,4 +147,4 @@ if [ ${#writable[@]} -gt 0 ]; then
   exit 3
 fi
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
-exec setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all -- "$@"
+exec "${as_cmd[@]}" "$@"
