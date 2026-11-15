@@ -42,7 +42,7 @@ from verity_difftest import Reject
 from verity_difftest import protocol as P
 
 PROTOCOLS = Path(__file__).resolve().parents[5]
-LEAN = PROTOCOLS / "policy" / "inference_only" / "verifier" / "lean"
+LEAN = PROTOCOLS / "workload_classification" / "training_detection" / "inference_only" / "verifier" / "lean"
 FIXTURES = PROTOCOLS / "proofs" / "flock" / "prover" / "tests" / "fixtures"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

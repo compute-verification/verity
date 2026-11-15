@@ -36,7 +36,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "adapters/vllm/verity_vllm/definitions/numerics", "adapters/vllm/verity_vllm/definitions/evidence.py",
           "adapters/vllm/verity_vllm/definitions/evidence.json", "verity/circuits/ops/boolean/versions.py",
           "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py",
-          "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py",
+          "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
           "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py",
           "verity/protocols/proofs/spot/__init__.py",
           "verity/protocols/proofs/spot/verifier/challenger/__init__.py"]

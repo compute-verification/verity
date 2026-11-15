@@ -69,4 +69,4 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/resource_accounting/memory/pous/attester/lean", "verity/commitments/attest/lean", "verity/commitments/lms/lean",
           # the deployment layer and its wire, which the period hook's memory challenger is started through
           # (`verity.runtime.stream.Side`) and runs on
-          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py"]
