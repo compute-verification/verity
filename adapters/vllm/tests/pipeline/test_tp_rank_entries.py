@@ -24,7 +24,7 @@ pytest.importorskip("torch")
 import torch
 
 from verity_vllm.engine import vllm_adapter as va
-from verity_vllm.observe import capture, events
+from verity_vllm.observe import capture, capture_types, events
 from verity_vllm.pipeline import match_capture
 from verity_vllm.pipeline.tp import rank_worker as RW
 
@@ -184,7 +184,7 @@ def _close(monkeypatch, out: Path, *, log: bytes | None = b"eleven byte", errors
     order: list[str] = []
     stats = _stats(out, errors)
     header = events.RunHeader("log/v1", "2026-01-01T00:00:00Z", "profile-of-this-rank", {}, {}, {})
-    monkeypatch.setattr(capture, "make_header", lambda engine, workload, **kw: header)
+    monkeypatch.setattr(capture_types, "make_header", lambda engine, workload, **kw: header)
     monkeypatch.setattr(capture, "Capture", lambda engine, *, log_path, **kw: _Recorder(order, stats, log_path, log))
     monkeypatch.setattr(match_capture, "dump_cos_sin", lambda engine, rank_dir: None)
     monkeypatch.setattr(va, "versions_doc", lambda engine: {})

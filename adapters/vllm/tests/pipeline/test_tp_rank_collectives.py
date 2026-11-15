@@ -25,7 +25,7 @@ import torch
 from tests import fake_vllm
 from verity_vllm.acquire.sources import moe_align_source
 from verity_vllm.engine import vllm_adapter as va
-from verity_vllm.observe import capture
+from verity_vllm.observe import capture, capture_types
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.pipeline import match_capture
 from verity_vllm.pipeline.tp import rank_worker as RW
@@ -336,7 +336,7 @@ def _observed(monkeypatch, w: _Rank, out: Path) -> _Recorder:
     """The recorder of the observer that `tp2_install` puts on rank ``w`` before the collectives' recorder, as `tp-capture` does."""
     rec = _Recorder()
     header = RunHeader("log/v1", "2026-01-01T00:00:00Z", "id", {}, {}, {})
-    monkeypatch.setattr(capture, "make_header", lambda engine, workload, **kw: header)
+    monkeypatch.setattr(capture_types, "make_header", lambda engine, workload, **kw: header)
     monkeypatch.setattr(capture, "Capture", lambda engine, **kw: SimpleNamespace(rec=rec, roots=[], install=lambda: None))
     monkeypatch.setattr(match_capture, "dump_cos_sin", lambda engine, rank_dir: None)
     monkeypatch.setattr(va, "versions_doc", lambda engine: {})

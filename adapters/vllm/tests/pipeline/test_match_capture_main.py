@@ -29,6 +29,7 @@ import torch
 import verity_vllm.pipeline.match_capture as M1
 from verity_vllm.acquire import install, stage
 from verity_vllm.observe import capture as OC
+from verity_vllm.observe import capture_types
 
 Record = dict[str, Any]
 Lines = Callable[[], list[str]]
@@ -231,7 +232,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     for name in ("load_workload", "target_of_workload", "build_engine", "versions_doc", "throwaway_requests", "run_requests",
                  "resolved_async_scheduling"):
         monkeypatch.setattr(M1.va, name, getattr(w, name))
-    monkeypatch.setattr(OC, "make_header", w.make_header)
+    monkeypatch.setattr(capture_types, "make_header", w.make_header)
     monkeypatch.setattr(OC, "Capture", lambda eng, **kw: Observer(w, eng, **kw))
     monkeypatch.setattr(stage, "plan_at_stage", w.plan_at_stage)
     monkeypatch.setattr(install, "install_from_plan", w.install_from_plan)

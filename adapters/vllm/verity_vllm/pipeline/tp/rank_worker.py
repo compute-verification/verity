@@ -293,7 +293,8 @@ class TP2CaptureWorkerExtension:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
-        from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
+        from verity_vllm.observe.capture import Capture, ObserverConfig
+        from verity_vllm.observe.capture_types import make_header
         from verity_vllm.observe.events import RunHeader
         from verity_vllm.pipeline.match_capture import dump_cos_sin
 
