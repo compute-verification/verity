@@ -17,7 +17,8 @@ untraced = ["tests/test_periods_difftest.py"]
 # requires (under `verity/circuits` and `verity/commitments`), and these files of Flock's verifier (`Flock.Canon` and
 # what it imports, and the package's configuration).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/device.py",
-          "verity/channel.py", "verity/protocol.py", "verity/runtime/handshake.py",
+          "verity/channel.py", "verity/protocol.py", "verity/runtime/handshake.py", "verity/runtime/framing.py",
+          "verity/party.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/runtime/__init__.py", "hardware/cards", "hardware/nodes",
           "security/Definitions/Accounting/Sheets/B200.lean", "security/Proofs/Core/Accel/Sheet.lean",

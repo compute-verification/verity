@@ -34,8 +34,8 @@ import fake_challenger as FC  # noqa: E402
 
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
 G8ID = descriptor_id(G8)
-LAW = "stratified:2"
-#: the stream's rate, whose sampling design over the window's four units is `LAW` (`service.params_law`)
+SAMPLING_DESIGN = "stratified:2"
+#: the stream's rate, whose sampling design over the window's four units is `SAMPLING_DESIGN` (`service.params_sampling_design`)
 RULE = "stratified-rate:1/2"
 RUN = "ab" * 64
 SESSION = "5e" * 64
@@ -59,7 +59,7 @@ def _window(d: Path, n: int = 4):
     runs = ({"start": 0, "count": n, "writer": G8ID, "out": "o0", "radix": [n], "base": 0, "step": [1]},)
     circuit = I.Circuit("history", ((G8, n),),
                         registered=I.Registered({}, histories=(I.History("latent", "program", G8ID, "o0", 8, runs, 16),)))
-    win = I.Window(circuit, RUN, D.parse_design(LAW), 2, registered={"latent": table})
+    win = I.Window(circuit, RUN, D.parse_design(SAMPLING_DESIGN), 2, registered={"latent": table})
     win.record(G8, [x, w], [y])
     c = win.close(salt_key=bytes(32))
     win.write(c, d, {"label": "test"}, registrar=R)

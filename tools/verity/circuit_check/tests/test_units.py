@@ -924,6 +924,7 @@ ON_DEMAND = """
 from circuit_check import targets as TG
 from verity.circuits.defs import REGISTRY
 import verity_vllm.definitions.boolean
+import verity_vllm.definitions
 
 before = set(dict.keys(REGISTRY.defs))
 TG.on_demand_boolean_families({"Const8[0x0]_v1", "Const16[0x1]_v1", "Const32[0x2]_v1", "Const4[0x3]_v1", "GatherBf16x4_v1",

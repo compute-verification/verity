@@ -23,7 +23,7 @@ constructor — `src/veritor/constructors/moe.py` — commits the `top_k` route 
 a value there; Bet A has no counterpart kind yet.)
 
 Run (pod venv, CPU): `CUDA_VISIBLE_DEVICES="" PYTHONPATH=. nice -n 10 python -m pytest -q -p no:cacheprovider
-../torch/tests/frontend/test_harden_moe.py`; `HARDEN_OUT=<dir>` writes `moe_results.json`.
+tests/frontend/test_harden_moe.py`; `HARDEN_OUT=<dir>` writes `moe_results.json`.
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 
-from verity_vllm.program.frontend import derive_examples as ex
+from verity_torch.frontend import derive_examples as ex
 from verity_torch.frontend.derive import derive_report
 
 REF = dict(mode="reference")

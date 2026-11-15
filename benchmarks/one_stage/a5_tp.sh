@@ -11,7 +11,7 @@
 #     rank's stand-in window is made here first from its bundle (`verity-vllm tp-serving-rows`, up to A5_JOBS ranks at once);
 #     A5_CHECKPOINT=DIR opens the registered tensors the bundles don't carry (a MoE partition's expert stacks) from the checkpoint
 #     of record, without its shard sha256 (each tensor read is held to the committed weights root).
-#   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
+#   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:SAMPLING_DESIGN (its SiluMul_v2{I}
 #     rows, its partition's sampling design); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
 #     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is; the entry
@@ -302,9 +302,9 @@ else
       keep $N
       continue
     fi
-    I=${e%%:*}; LAW=${e#*:}; S=$W/served-i$I
+    I=${e%%:*}; SAMPLING_DESIGN=${e#*:}; S=$W/served-i$I
     DEFERRED=$([ "${A5_WINDOWS:-served}" = bundles ] && echo --deferred)
-    (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $LAW $DEFERRED "${TPL[@]}") \
+    (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I $I --law $SAMPLING_DESIGN $DEFERRED "${TPL[@]}") \
       > $O/standin-i$I.json 2> $O/standin-i$I.err || { tail -20 $O/standin-i$I.err; exit 8; }
     WL=$S/workload.json; ADV=()
     if [ -n "${A5_ADVICE:-}" ]; then
