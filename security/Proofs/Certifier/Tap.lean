@@ -4,7 +4,7 @@ public import Aesop.BuiltinRules
 public import Definitions.Core.Assumptions
 public import Definitions.Certifier.Tap
 public import Mathlib.Tactic.ToDual
-public import Proofs.Certifier.Warden
+public import Proofs.Certifier.Cells
 import Mathlib.Data.Finset.Attr
 import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.SetLike

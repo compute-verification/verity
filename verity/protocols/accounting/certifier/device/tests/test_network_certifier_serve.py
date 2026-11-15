@@ -24,9 +24,9 @@ import pytest
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-from verity.protocols.accounting.certifier.verifier.warden import (END, audit, cells, reason_frame)
+from verity.protocols.accounting.certifier.verifier.network_certifier import (END, audit, cells, reason_frame)
 from verity.protocols.accounting.certifier.verifier import load_check as LK, relay_check as RC, record_files as RF
-from verity.protocols.accounting.certifier.device import runner_parts as rp, warden_serve as ws
+from verity.protocols.accounting.certifier.device import runner_parts as rp, network_certifier_serve as ws
 from verity.protocols.accounting.certifier.device.tests.relay_runs import (PARAMS, SESSION, SLOW_COMMIT_S, _response, _run, _session_argv, _Writer, refusing_commit, slow_commit)
 from verity.protocols.accounting.certifier.verifier import link_frame
 
@@ -49,8 +49,8 @@ def test_varied_traffic_is_fixed_by_its_seed_and_varies():
     assert min(words) < 30 and max(words) > 500
 
 
-def test_the_warden_always_paces_and_serve_and_rehearse_refuse_a_release_within_the_slack(tmp_path):
-    """`serve` and `rehearse`, the deployed warden and the gate's rehearsal of it, always pace: `--paced-ms 0` (once the
+def test_the_network_certifier_always_paces_and_serve_and_rehearse_refuse_a_release_within_the_slack(tmp_path):
+    """`serve` and `rehearse`, the deployed network_certifier and the gate's rehearsal of it, always pace: `--paced-ms 0` (once the
     loop's write) and a release within the slack or past the next boundary are refused before anything runs."""
     serve = ["serve", "--upstream", "127.0.0.1:9", "--listen", "127.0.0.1:0", "--key", str(tmp_path / "key"),
              "--session", "00" * 32, "--windows", "1", "--out", str(tmp_path / "run")]
@@ -76,10 +76,10 @@ def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_grou
         out = tmp_path / f"t{tokens}"
         out.mkdir()
         responses = [ws.id_response(list(range(tokens)), p.payload)] * p.lanes
-        warden = _run(out, tmp_path / f"key{tokens}", requests, responses, windows=G, params=p, id_payload=p.payload)
-        assert len(warden.log) == p.lanes and all(c["failed"] is None and not c["cut"] for c in warden.log)
-        assert {c["ended"] - c["admitted"] for c in warden.log} == {p.delay + tokens // p.slots}
-        assert all(c["admitted"] + 2 + p.delay + tokens // p.slots < G * p.window for c in warden.log)
+        network_certifier = _run(out, tmp_path / f"key{tokens}", requests, responses, windows=G, params=p, id_payload=p.payload)
+        assert len(network_certifier.log) == p.lanes and all(c["failed"] is None and not c["cut"] for c in network_certifier.log)
+        assert {c["ended"] - c["admitted"] for c in network_certifier.log} == {p.delay + tokens // p.slots}
+        assert all(c["admitted"] + 2 + p.delay + tokens // p.slots < G * p.window for c in network_certifier.log)
         result = RC.check(out)
         assert result["accepted"], result["problems"]
         assert (result["summary"]["ended"], result["summary"]["windows"]) == (p.lanes, G)
@@ -169,8 +169,8 @@ def test_serve_releases_the_id_form_unless_told_and_rehearse_names_its_traffics_
     out.mkdir()
     gated = dataclasses.replace(PARAMS, egress="id")
     requests = [ws.http_request({"prompt": "x"}, "h:1")]
-    warden = _run(out, tmp_path / "key", requests, [_response([" a"])], params=gated)
-    assert [(c["failed"], c["failed_at"]) for c in warden.log] == [("format", 0)]
+    network_certifier = _run(out, tmp_path / "key", requests, [_response([" a"])], params=gated)
+    assert [(c["failed"], c["failed_at"]) for c in network_certifier.log] == [("format", 0)]
     deployment = json.loads((out / "deployment.json").read_text())
     assert deployment["params"]["egress"] == "id" and deployment["digest"] == gated.digest.hex() != PARAMS.digest.hex()
     problems = RC.check(out)["problems"]
@@ -232,12 +232,12 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
     servers: list[_Writer] = []
-    warden = _run(out, key, requests, responses, servers=servers)
-    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in warden.log}
+    network_certifier = _run(out, key, requests, responses, servers=servers)
+    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in network_certifier.log}
     assert sorted(n for n, _ in release.values()) == [0, 1, 2]
     assert [b"".join(d for _, d in s.writes) for s in servers] == \
-        [with_release(r, release[k + 1][0], warden.run_id, release[k + 1][1]) for k, r in enumerate(requests)]
-    assert json.loads((out / "deployment.json").read_text())["run_id"] == warden.run_id.hex()
+        [with_release(r, release[k + 1][0], network_certifier.run_id, release[k + 1][1]) for k, r in enumerate(requests)]
+    assert json.loads((out / "deployment.json").read_text())["run_id"] == network_certifier.run_id.hex()
     result = RC.check(out)
     assert result["accepted"], result["problems"]
     s = result["summary"]
@@ -378,8 +378,8 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
     out.mkdir()
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 20, 30, 40, 50)]
     responses = [_response([" a"]) for _ in range(4)]
-    warden = _run(out, tmp_path / "key", requests, responses, windows=2, process=process)
-    assert (warden.refused, warden.refused_windows, len(warden.log)) == (1, {0}, 4)
+    network_certifier = _run(out, tmp_path / "key", requests, responses, windows=2, process=process)
+    assert (network_certifier.refused, network_certifier.refused_windows, len(network_certifier.log)) == (1, {0}, 4)
     certified = [json.loads(x) for x in (out / "certified.jsonl").read_text().splitlines()]
     cells_ = [json.loads(x) for x in (out / "cells.jsonl").read_text().splitlines()]
     assert [(x["refused"][2], x["withheld"]) for x in certified if "refused" in x] == [(0, True)] * 3
@@ -648,7 +648,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
             await self.answered.wait()
 
     monkeypatch.setattr(ws, "PublisherProcess", Publisher)
-    monkeypatch.setattr(ws, "Warden", Relay)
+    monkeypatch.setattr(ws, "NetworkCertifier", Relay)
     monkeypatch.setattr(ws, "prepare_process", lambda params: {})
     monkeypatch.setattr(ws, "stall_probe", types.SimpleNamespace(start=lambda *a: None, stop=lambda *a: None))
     monkeypatch.setattr(ws, "_quiet_runtime", lambda: None)

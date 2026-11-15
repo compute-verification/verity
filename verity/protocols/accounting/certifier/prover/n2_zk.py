@@ -11,9 +11,9 @@ the device, timings and memory, the references' failed parts and the scan's find
     python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
 
-* **The run** (``--warden-run``): an active network certifier's run (`warden_serve.py`'s, or the gate's
-  ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
-  certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
+* **The run** (``--warden-run``): an active network certifier's run (`network_certifier_serve.py`'s, or the gate's
+  ``warden-rehearse``'s), read by `network_certifier_chain`: its own certified records under its key and session, on the network
+  certifier link (`service.NetworkCertifierProfile`: both heads at the network certifier's grid and parameters digest, no sync
   declared or charged), a certifier rehearsal's run refused by name. Which execution phases its signer refused follows
   what the node sent, so the public summary of a run whose signer refused any holds each member's
   ``certifier_refused`` and ``ok`` alone, nothing per window, and the members whole go to ``--witness``.
@@ -134,11 +134,11 @@ def _record_lean_runs(PF) -> None:
 
 # --- the run's execution phases ---------------------------------------------------------------------------------------
 
-def warden_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
-    """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
+def network_certifier_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
+    """A network certifier run's link (`network_certifier_chain.link`: the active network certifier's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
-    the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
-    WC = proof_drivers.drivers().warden_chain
+    the signer's refusals. A certifier rehearsal's run is refused by name (`network_certifier_chain.PROXY`)."""
+    WC = proof_drivers.drivers().network_certifier_chain
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)
     certified = {(d, w): r for w, pair in enumerate(got) for d, r in zip((Direction.EGRESS, Direction.INGRESS), pair)}
@@ -146,14 +146,14 @@ def warden_link(run: Path) -> tuple[TransferBlocks, dict, dict, list]:
 
 
 def phases(run: Path, edit=None) -> SimpleNamespace:
-    """Every execution phase of the active network certifier's run (`warden_link`) with both certified records, as the
+    """Every execution phase of the active network certifier's run (`network_certifier_link`) with both certified records, as the
     prover holds it before it registers: its opening (fresh salts), the root it commits (`TransferBlocks.root`), the proof
     block's arguments under that root (None where the proof block takes no instance), each end's head check's failed
     parts (`head_check.reference_parts`) and the proof block's output word by the gates' references
     (`TransferBlocks.outputs`); and the network certifier's certificates, which the verifier receives from it, no sync
     declared. ``edit(lw, w, pair)``: the records the prover commits in place of the certified ones. ``expect``: the
     verdict the verifier should reach on an honest proof of the opening."""
-    lw, plan, certified, refused = warden_link(run)
+    lw, plan, certified, refused = network_certifier_link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     out = []
     for w in range(plan["windows"]):
@@ -168,7 +168,7 @@ def phases(run: Path, edit=None) -> SimpleNamespace:
         insts = lw.head_checks(opening, root)
         args = lw.arguments(opening, root, syncs)
         word = lw.outputs(opening, root, syncs) if args is not None else None
-        others = lw.certified(w, certificates) and (lw.warden is not None
+        others = lw.certified(w, certificates) and (lw.network_certifier is not None
                                                     or (w < len(syncs) and syncs[w] in lw.sync_set))
         out.append(SimpleNamespace(
             window=w, opening=opening, root=root, insts=insts, args=args, word=word, certificates=certificates,
@@ -556,7 +556,7 @@ def prove(a) -> int:
     summary["warden_run"] = members["honest"].plan["warden_run"]
     summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the link's "
                                   "charge is 0",
-                         "counts": "the warden's schedule's (service.WardenProfile), not a profile's"}
+                         "counts": "the warden's schedule's (service.NetworkCertifierProfile), not a profile's"}
     members = {k: v for k, v in members.items() if k in a.rounds or k == OTHER}
     lw0 = next(iter(members.values())).lw
     summary["link"] = {"name": lw0.link, "unit": lw0.unit.id, "keys": {e: lw0.head_key(d) for d, e in enumerate(ENDS)},
@@ -647,8 +647,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("prove", help="each execution phase's proof block proved --zk and decided by N2's verifier of "
                                      "record")
     p.add_argument("--warden-run", dest="network_certifier_run", type=Path, required=True,
-                   help="an active network certifier's run (warden_serve.py's, or the gate's warden-rehearse's): "
-                        "its own certified records, no certifier rehearsal (warden_chain)")
+                   help="an active network certifier's run (network_certifier_serve.py's, or the gate's warden-rehearse's): "
+                        "its own certified records, no certifier rehearsal (network_certifier_chain)")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
     p.add_argument("--bin")
     p.add_argument("--lean")
