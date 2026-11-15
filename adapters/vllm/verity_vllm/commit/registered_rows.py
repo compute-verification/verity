@@ -29,12 +29,12 @@ BLOCK_ROWS = 4096
 _INST = hm96.SHA512
 
 
-def row_width(n: int, cap: int = MAX_WORDS) -> int:
-    """The widest row of at most `cap` leaves that divides `n` leaves into whole rows (`registered.shape` takes no ragged
+def row_width(n: int, limit: int = MAX_WORDS) -> int:
+    """The widest row of at most `limit` leaves that divides `n` leaves into whole rows (`registered.shape` takes no ragged
     row)."""
     if n < 1:
         raise ValueError(f"a registered value is at least one leaf, not {n}")
-    return next(d for d in range(min(n, cap), 0, -1) if n % d == 0)
+    return next(d for d in range(min(n, limit), 0, -1) if n % d == 0)
 
 
 @dataclass(frozen=True)

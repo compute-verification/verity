@@ -14,10 +14,14 @@ from types import ModuleType
 
 import pytest
 
-from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_party
+from verity.commitments.identity import canonical_json_bytes
+from verity.protocols.accounting.poub.prover import p2_prover
+from verity.protocols.accounting.poub.prover import period_prover as PP
+from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_parties
 from verity.protocols.accounting.poub.verifier import period as P
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period as pous
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -68,7 +72,7 @@ def _entropy(label: bytes):
     return take
 
 
-def _committed() -> p2.Store:
+def _committed() -> p2_prover.Store:
     """The committed 9-block `C*` (`fixtures/p2-store.json`), registered for P2 on its PoUS setup."""
     doc = json.loads((FIXTURES / "p2-store.json").read_text())
     data = (FIXTURES / "p2-c-star.bin").read_bytes()
@@ -78,7 +82,7 @@ def _committed() -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(SOURCE, b"n0", commitment, vk), blocks)
+    return p2_prover.Store(p2.register(SOURCE, b"n0", commitment, vk), blocks)
 
 
 def _root(pous_case: dict) -> bytes:
@@ -100,16 +104,20 @@ def cases(tmp_path_factory) -> dict[str, dict]:
     store = _committed()
     reg, q = store.registration, store.registration.params
     n = q.blocks_per_segment
-    held = pous.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
+    held = period_prover.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
                              store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
                              pous.setup_case(q, reg.commitment, reg.salt,
                                              [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
-    space = pous.audit("n0", held, COINS, **kw)
-    other = pous.run("n0", OTHER_POUS_STORE, COINS, point=pous.point_for(len(OTHER_POUS_STORE), pous.W, pous.C0, k=8),
+    space = period_prover.audit("n0", held, COINS, **kw)
+    other = period_prover.run("n0", OTHER_POUS_STORE, COINS, point=pous.point_for(len(OTHER_POUS_STORE), pous.W, pous.C0, k=8),
                      **kw)
-    reads = p2_case.case_of(p2_party.registration_json(reg, None), REQUEST | {"node": reg.node.hex()}, 10 ** 9, [])
+    sid = hashlib.sha512(b"a P2 session").digest()[:32]
+    held = p2_parties.registration_json(reg, None)
+    head = p2_case.head(canonical_json_bytes(held), 10 ** 9)
+    reads = p2_case.case_of(held, REQUEST | {"node": reg.node.hex()}, 10 ** 9, [], session=sid,
+                            trusted=[kw["signer"].public_key], close=p2_case.close_of(kw["signer"], sid, head, []))
     c = Clock()
-    generic = P.session("n0", P.Local("n0", hashlib.shake_256(b"a tiny MLP's weights").digest(2 * 4032 - 17),
+    generic = P.session("n0", PP.Local("n0", hashlib.shake_256(b"a tiny MLP's weights").digest(2 * 4032 - 17),
                                       entropy=_entropy(b"salts")), COINS, windows=1, clock=c, sleep_until=c.sleep_until)
     assert generic.answer["verdict"] == "accept"
     return {"space": space.case, "other-space": other.case, "reads": reads, "generic": generic.case}

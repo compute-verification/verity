@@ -1,13 +1,13 @@
 """a5's checks by the verifier, each asked once per input (`memo`, which `a5.main` runs under, each audit's summary.json
 counting the checks asked and reused as ``verifier_checks``): a check the verifier answered is reused while every argument
-it reads is the same, so the negatives' fresh streams, which register the honest registration and sample the honest sample
-on its bytes, don't send the window's whole registration to the Lean verifier again.
+it reads is the same, so the negatives' fresh streams, which register the honest docket and sample the honest sample
+on its bytes, don't send the window's whole docket to the Lean verifier again.
 
 Each of `PURE`'s checks is a function of its arguments on both sides (the Lean's piece and the Python beside it), so the
 same arguments are the same verdict. A check is keyed by the SHA-512 of its name, `verifier.RECORD_VERDICT` and every
-argument bound to its signature with the defaults applied, pickled: the registration record and each copy the verifier
+argument bound to its signature with the defaults applied, pickled: the docket and each copy the verifier
 holds it to, a `Program` by its digest and annotations (computed once per object: a Program is never changed once
-built). A registration with anything changed, or any copy changed (R2's program, R3's ports, R4's leaf layer), is
+built). A docket with anything changed, or any copy changed (R2's program, R3's ports, R4's leaf layer), is
 another key and is checked again; a check whose arguments pickle can't write is never kept (`Memo.unkeyed` says
 why). Not kept: `coins` (the operating system's randomness), `run` (each stream's whole run, on its own coins and
 evidence), and any verdict whose Lean side refused, which may be the Lean failing to run rather than its answer. A
@@ -28,6 +28,8 @@ from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
+import a0
+
 PURE = ("check", "check_public", "select", "audit_record")
 
 
@@ -43,8 +45,7 @@ class _Sha512:
 def _answered(got: Any) -> bool:
     """Whether the Lean answered `got`, a check's verdict, a select's `(draw, verdict)` or an audit record."""
     v = got[1] if isinstance(got, tuple) else got
-    side = (v.verifiers if isinstance(v, Verdict) else v.get("verifiers")) or {}
-    return "refused" not in (side.get("lean") or {})
+    return a0.lean_answered(v.verifiers if isinstance(v, Verdict) else v.get("verifiers"))
 
 
 class Memo:

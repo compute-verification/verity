@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs, served_table
-from verity_bench.served_table import ms_cell
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import expand_sweep, resolve_spec
 from verity_bench.vllm.runner import summarize
@@ -52,6 +51,11 @@ DECODE_ROWS = {
     "attention": "paged attention with the KV words decoded inside it",
 }
 NOT_PARTS = ("step", "append")
+
+
+def ms_cell(summary: Mapping[str, Any]) -> str:
+    ci = summary.get("ci95")
+    return f"{summary['mean']:.3f}" if ci is None else f"{summary['mean']:.3f} ± {(ci[1] - ci[0]) / 2:.3f}"
 
 
 def _reps(row: Mapping[str, Any], arm: str) -> list[Mapping[str, Any]]:
@@ -118,7 +122,7 @@ def attribution(row: Mapping[str, Any]) -> dict[str, Any]:
         spanned = sum(values[name][-1] for name in names[:-1])
         values["outside every span"].append(tpot[AUDIT_OFF] - tpot[PLAIN_OFF] - spanned)
     total = summarize(values["total"])
-    rows = []
+    rows: list[dict[str, Any]] = []
     for name in ["top-up contention", *names]:
         summary = summarize(values[name])
         rows.append({"row": name, "ms_per_token": summary,
@@ -138,7 +142,8 @@ def arm_spans(row: Mapping[str, Any], arm: str) -> dict[str, Any]:
 
     def extra(key: str) -> float | None:
         got = [(rep.get("extras") or {}).get(key) for rep in reps]
-        return None if any(value is None for value in got) else mean([float(value) for value in got])
+        known = [float(value) for value in got if value is not None]
+        return mean(known) if len(known) == len(got) else None
 
     out: dict[str, Any] = {"tpot_ms": mean([_tpot_ms(rep) for rep in reps]), "reps": len(reps),
                            "topup_busy_share": extra("span.topup_busy_share"), "filler_share": extra("filler_share"),

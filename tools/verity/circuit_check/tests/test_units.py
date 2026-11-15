@@ -75,14 +75,12 @@ def _fresh(root: Path, harness: str = HARNESS) -> dict:
     return out
 
 
-def _records(root: Path, units: tuple[str, ...] | None = None) -> list[Path]:
+def _records(root: Path, units: tuple[str, ...] | None = None, skip: frozenset[Path] = frozenset()) -> list[Path]:
+    """The cache's binding records, of ``units`` if given; ``skip``: files a test made unreadable, read as no record."""
     def target(p: Path) -> list:
-        try:
-            return json.loads(p.read_text())["key"]["request"]["target"]
-        except ValueError:
-            return []
+        return json.loads(p.read_text())["key"]["request"]["target"]
     return [p for p in (root / "cache").glob("*/*/*.json")
-            if (t := target(p))[:1] == ["catalog-unit"] and (units is None or tuple(t[1]) == units)]
+            if p not in skip and (t := target(p))[:1] == ["catalog-unit"] and (units is None or tuple(t[1]) == units)]
 
 
 def test_a_definition_module_edit_rebuilds_exactly_the_bindings_that_read_it(tmp_path):
@@ -112,14 +110,14 @@ def test_a_missing_or_unreadable_record_rebuilds_its_binding(tmp_path):
     _bindings(root, *BINDINGS)
     _run(root, HARNESS)
     (bad,) = _records(root, ("_xor_roots",))
-    bad.write_text("{")
     (gone,) = _records(root, ("_sized_roots",))
+    bad.write_text("{")
     gone.unlink()
     _edit(root, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")    # no binding reads it: the task list misses
     out = _run(root, HARNESS)
     assert sorted(out["stats"]["units"]["rebuilt"]) == ["_sized_roots", "_xor_roots"]
     assert out["stats"]["units"]["stored"] == 2 and out["hits"] == sorted(out["values"])
-    assert len(_records(root, ("_sized_roots",))) == 1
+    assert len(_records(root, ("_sized_roots",), skip=frozenset({bad}))) == 1
 
 
 #: `units.store` with the `cache.seen` calls it makes counted (in ``<root>-seen.json``, beside the tree), and with PER_RECORD
@@ -897,7 +895,7 @@ def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(t
 
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
     """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has
-    its Boolean version among them though no record holds one, `targets.CALLEE_CALLS`' families are among them, and a vocabulary
+    its Boolean version among them though no record holds one, `targets.callee_calls`' families are among them, and a vocabulary
     kind that doesn't bind refuses them by name, as `targets.word_call_families` does (left out, its family's partition would be
     judged as no Call's)."""
     from circuit_check import targets as TG, units as UN
@@ -907,7 +905,7 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
         m.setattr(TG, "word_call_families", lambda: {"Const32[0x00000001]_v1", "GatherI32x16_v1"})
         m.setattr(TG, "boolean_call_candidates", lambda words: set())
         assert UN.call_families([], nothing, {}) == {"Const32[0x00000001]_v1", "GatherI32x16_v1",
-                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2", *TG.CALLEE_CALLS}
+                                                    "Const32[0x00000001]_v2", "GatherI32x16_v2", *TG.callee_calls()}
     from circuit_check import sidecars as SC
 
     syn = types.ModuleType("syn.circuit-check")
@@ -926,7 +924,8 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
 ON_DEMAND = """
 from circuit_check import targets as TG
 from verity.circuits.defs import REGISTRY
-import verity.definitions.boolean
+import verity.circuits.ops.boolean.versions
+import verity_vllm.definitions
 
 before = set(dict.keys(REGISTRY.defs))
 TG.on_demand_boolean_families({"Const8[0x0]_v1", "Const16[0x1]_v1", "Const32[0x2]_v1", "Const4[0x3]_v1", "GatherBf16x4_v1",

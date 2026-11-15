@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["PouwCommit"],
  "exempt": {
   "PouwCommit.DifftestMain": "the difftest against the Python, under `runs`: compiled evaluation of PouwCommit.Difftest.main, audited under PouwCommit, a test and not a proof"

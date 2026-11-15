@@ -3,9 +3,10 @@
 
 [[metric]]
 id = "vllm/serving-cost-glm53"
-title = "GLM-5.3's serving cost over stock vLLM"
+title = "Serving cost over stock vLLM"
 owner = "vllm"
-unit = "percent of stock's serving compute"
+unit = "percent"
+axis = "Extra compute to serve GLM-5.3, as a percent of stock vLLM's."
 better = "lower"
 command = "research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53"
 every = "7d"

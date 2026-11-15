@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Circuit
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Definitions.Core.Game
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Fintype.Prod
@@ -15,7 +15,7 @@ A server's life is cut into server-time blocks, each opened by a certified memor
 (`Accounting.Device`) extended by one thing, wipes. This module states what a block is, what crosses the boundary into it,
 and what the wipe there bounds. It states no guarantee; a joint guarantee over a schedule of blocks reads these.
 
-* **A block** (`Block`) of the declared circuit `C` on the device: the window of ticks it runs, and the gates of `C` it
+* **A block** (`Block`) of the registered circuit `C` on the device: the window of ticks it runs, and the gates of `C` it
   computes there. **A schedule of `B` blocks** (`Blocks`): the blocks in order, no gate computed in two of them. There
   is one wipe per block, the one that opens it: boundary `b` is block `b`'s, so block 0 has one too, which bounds what
   survives from before the schedule.

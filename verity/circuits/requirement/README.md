@@ -36,7 +36,7 @@ What code outside this directory may use. Everything else here is internal.
 ~~~sh
 cd verity/circuits/requirement && lake build                 # .lake/build/bin/requirement-difftest
 python tools/verity/lean/check.py verity/circuits/requirement   # the Lean check, from the repository root
-uv run tools/verity/check/suites.py verity/circuits/requirement # the difftest against the Python
+uv run tools/check/suites.py verity/circuits/requirement # the difftest against the Python
 ~~~
 
 `tests/test_requirement_difftest.py` holds it to `verity.circuits.requirement` through `verity_difftest`, output for

@@ -43,7 +43,7 @@ import Proofs.Flock.Claims.KS.Range
 the deployed runs. At a plain statement in scope with a sample, `wrP`'s decoders are right there, at public outputs
 (`plain_hdec`) and at hidden ones (`plain_hdecH`), so what is left is the mixture at them:
 
-* `checks_draw`, `acc_draw`: a statement some run accepts carries a sample, the checks after the verdict refusing a
+* `checks_sample`, `acc_sample`: a statement some run accepts carries a sample, the checks after the verdict refusing a
   session without one.
 * `plainVerdict`, `plainOpn`, `plainOpnH`, `plainDec`: `wrP`'s verdict, openings at public and at hidden outputs, and
   decoder, at the sample and no sampled proof block.
@@ -65,8 +65,8 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The checks after the verdict refuse a session without a sample** (`drawLaw zk tags false none`). -/
-theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+/-- **The checks after the verdict refuse a session without a sample** (`sampleDesign zk tags false none`). -/
+theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d := by
   unfold checks at h
@@ -77,7 +77,7 @@ theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
   obtain ⟨_, -, h⟩ := Refine.ebind_ok h
   obtain ⟨_, h, -⟩ := Refine.ebind_ok h
   cases hd : s.read.draw with
-  | none => simp [hd, ProvedScope.drawLaw] at h
+  | none => simp [hd, ProvedScope.sampleDesign] at h
   | some d => exact ⟨d, rfl⟩
 
 
@@ -85,11 +85,11 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The checks after the verdict refuse a session without a sample** (`drawLaw zk tags false none`). -/
-theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+/-- **The checks after the verdict refuse a session without a sample** (`sampleDesign zk tags false none`). -/
+theorem checks_sample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d :=
-  _root_.FlockDeploy.KS.checks_draw (checks_base h)
+  _root_.FlockDeploy.KS.checks_sample (checks_base h)
 
 end Gen
 
@@ -97,7 +97,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem next_acc_sample {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((next zk x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   cases ha : act zk x as cs with
@@ -105,38 +105,38 @@ theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : 
   | coin c => simp [next_coin sha512 ha] at h
   | decide s spec sts link c₁ mids f =>
     obtain ⟨-, hc⟩ := (next_decide_sha512 ha).1 h
-    obtain ⟨d, hd⟩ := checks_draw hc
+    obtain ⟨d, hd⟩ := checks_sample hc
     exact ⟨s, spec, sts, d, act_decide ha, hd⟩
 
 end Gen
 
-theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem next_acc_sample {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((next zk x as cs).eval sha512).1 = .acc) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
-  Gen.next_acc_draw (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (h := h)
+  Gen.next_acc_sample (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (h := h)
 
 namespace Gen
 
 variable [S : ZkSetup]
 
 /-- **A statement some run accepts at SHA-512 sets up at a sample.** -/
-theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+theorem acc_sample {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
   unfold Claims.Flock.NoAcc at hacc
   push Not at hacc
   obtain ⟨Ω, P, ω, r, hr⟩ := hacc
   obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
-  exact next_acc_draw has
+  exact next_acc_sample has
 
 end Gen
 
 /-- **A statement some run accepts at SHA-512 sets up at a sample.** -/
-theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+theorem acc_sample {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
-  Gen.acc_draw (S := S₀) (zk := zk) (x := x) (hacc := hacc)
+  Gen.acc_sample (S := S₀) (zk := zk) (x := x) (hacc := hacc)
 
 open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
-/-- **`wrP`'s verdict at the sample `d`**: flock-verify accepts what `wrP` writes for the outcome at `d` and no sampled
+/-- **`wrP`'s verdict at the sample `d`**: verity-verify-proof accepts what `wrP` writes for the outcome at `d` and no sampled
 proof block, the outcome's root is `rootB₀`'s, and the deployed reader looks up no column off `C` in it. -/
 def plainVerdict (I : Exec.Inputs) (d : Json) {N mPts : ℕ} (C : Fin N → List 𝔽) (rootB₀ : Array ByteArray)
     (o : Tables.LiveOutJ 1 mPts) : Prop :=
@@ -267,12 +267,12 @@ def PlainLiveW (x : Claims.Msg) : Prop :=
       PlainLiveAccAt (wide false) h L m k0 l₀ l₁ rest ext hsch hk0 hm PT_LOCAL hlay)
 
 /-- **`PlainLiveW` gives `PlainLiveAcc`** where some run accepts: the statement parses in scope (`acc_inScope`) and sets
-up at a sample (`acc_draw`). -/
+up at a sample (`acc_sample`). -/
 theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) (hl : PlainLiveW x) :
     PlainLiveAcc x := by
   intro spec st h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-  obtain ⟨ins, spec', sts, d, hset, hd⟩ := acc_draw hno
+  obtain ⟨ins, spec', sts, d, hset, hd⟩ := acc_sample hno
   obtain rfl : spec' = spec := by
     have hmem : (spec, st) ∈ (tables false x) := by rw [h]; exact List.mem_singleton_self _
     unfold tables at hmem

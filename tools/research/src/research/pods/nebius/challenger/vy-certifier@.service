@@ -12,6 +12,10 @@ ExecStart=/usr/bin/python3 -I /opt/vy-challenger/current/verity/protocols/compos
 # past the gate's longest --minutes (170, the network-records build within them) and 10 minutes for the tunnels and the
 # outcome (test_auditor_load), so only a run the runner lost track of meets it
 RuntimeMaxSec=3h
+# a stop's SIGTERM goes to auditor.py alone, which passes it to the rehearsal, then closes the tunnels and a session's
+# listener and writes the end; past the rehearsal's exit on that signal, so only one that ignores it meets the timeout
+KillMode=mixed
+TimeoutStopSec=1min
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes

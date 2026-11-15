@@ -104,7 +104,8 @@ class Silent(threading.Thread):
         super().__init__(daemon=True)
         self.sock = socket.create_server(("127.0.0.1", 0))
         self.address = self.sock.getsockname()[:2]
-        self.answer, self.sent, self.requests = answer, threading.Event(), []
+        self.answer, self.sent = answer, threading.Event()
+        self.requests: list[bytes] = []
         self.start()
 
     def run(self) -> None:

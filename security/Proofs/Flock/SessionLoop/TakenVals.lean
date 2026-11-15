@@ -172,18 +172,18 @@ def TakesVals (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
-    (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (v : Msg) (m : _root_.Flock.Firewall.Frame.Masker)
-    (out : ByteArray) (s : _root_.Flock.Firewall.Frame.Masker) (fr : Array ℕ) (j : Fin (jOf x)) (r : Fin 2),
+    (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (v : Msg) (m : _root_.Flock.ZkServer.Frame.Masker)
+    (out : ByteArray) (s : _root_.Flock.ZkServer.Frame.Masker) (fr : Array ℕ) (j : Fin (jOf x)) (r : Fin 2),
     0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
     ((allOk ((CoinLayer.session Loop.loopNr Masked.dataE).refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval
       CoinOpen.shaH).1 = true →
     wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
     L.answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m →
-    _root_.Flock.Firewall.Frame.roundFree (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)) { m with stopped := false } ⟨v.toArray⟩
+    _root_.Flock.ZkServer.Frame.roundFree (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)) { m with stopped := false } ⟨v.toArray⟩
       (L.coins x (ops.length + 1)) = .ok (out, s, fr) →
     L.rep x (ops.length + 1) = 2 * j.val + r.val →
     ∀ k < fr.size,
-      (_root_.Flock.Firewall.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]! =
+      (_root_.Flock.ZkServer.Frame.words ⟨v.toArray⟩ fr[k]! 1)[0]! =
         vsWord vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
           (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
           (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[m.pos + k]!
@@ -203,7 +203,7 @@ def TakesFinalC (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
       CoinOpen.shaH).1 = true →
     wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
     w'.size = 16 →
-    v = (_root_.Flock.Firewall.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ _root_.Flock.Transcript.header 3 1 1 ++
+    v = (_root_.Flock.ZkServer.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ _root_.Flock.Transcript.header 3 1 1 ++
       w' ++ _root_.Flock.Transcript.header 4 1 1).data.toList →
     L.rep x (ops.length + 1) = 2 * j.val + r.val →
     finalCOf ⟨v.toArray⟩ + (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)).h.getD (L.cfg x (ν, t) ((m₀, ρ₀) :: ops)).lay.fc 0 =
@@ -255,7 +255,7 @@ end Vals
 section Inner
 
 open _root_.Flock (V F128 Stmt SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`
@@ -278,8 +278,8 @@ def InnerAt (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List Flo
     FlockDeploy.setupOf true x = some (s0, spec, sts) ∧ cs.length = q + 1 ∧
     CoinLayer.locate (roundsOf spec sts) 0 q = (k, i) ∧ real k = .ok (t, hi) ∧
     schedSoFar t (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras sts[k / 2]!
-        (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
+      (_root_.Flock.ZkServer.Drive.extras sts[k / 2]!
+        (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
       hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) = .ok sched ∧
     sched.size ≤ i
 
@@ -293,8 +293,8 @@ theorem schedOf_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : L
       match real k with
       | .ok (t, hi) =>
         match schedSoFar t (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-            (_root_.Flock.Firewall.Drive.extras sts[k / 2]!
-              (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
+            (_root_.Flock.ZkServer.Drive.extras sts[k / 2]!
+              (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
             hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) with
         | .ok sched => sched[i]?.map (·.1)
         | .error _ => some .empty
@@ -328,8 +328,8 @@ theorem schedOf_eq_none_iff {real : ℕ → V (Tab × Array ByteArray)} {x : Msg
   · rw [hr] at hn
     dsimp only at hn
     rcases hss : schedSoFar t (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-        (_root_.Flock.Firewall.Drive.extras sts[k / 2]!
-          (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
+        (_root_.Flock.ZkServer.Drive.extras sts[k / 2]!
+          (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
         hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) with e | sched
     · rw [hss] at hn
       simp at hn
@@ -480,7 +480,7 @@ section Worker
 
 open _root_.Flock (V F128)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker labelFrame roundFree INNER_ROUNDS)
+open _root_.Flock.ZkServer.Frame (Cfg Masker labelFrame roundFree INNER_ROUNDS)
 open FlockSoundness.Refine (Frame encs toBytes_length)
 open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 
@@ -550,7 +550,7 @@ theorem check_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (v : Msg) (hl : L.toSrv.live wk x w ρ κ h = true)
     (hk : L.kindAt x h.length = .masked) (hv : wk x w ρ h 0 = some (v, false)) :
     ∃ m out s', L.answered x ρ h = .ok m ∧
-      _root_.Flock.Firewall.Frame.check (L.cfg x ρ h) { m with stopped := false } ⟨v.toArray⟩
+      _root_.Flock.ZkServer.Frame.check (L.cfg x ρ h) { m with stopped := false } ⟨v.toArray⟩
         ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩ (L.coins x h.length) =
         .ok (out, s', none) := by
   have hp := L.toSrv.pass_of_live wk x w ρ κ h hl (le_refl h.length)
@@ -571,7 +571,7 @@ theorem check_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (
   | ok m =>
     rw [ha] at hpass
     simp only at hpass
-    cases hc' : _root_.Flock.Firewall.Frame.check (L.cfg x ρ h) { m with stopped := false } ⟨v.toArray⟩
+    cases hc' : _root_.Flock.ZkServer.Frame.check (L.cfg x ρ h) { m with stopped := false } ⟨v.toArray⟩
         ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩ (L.coins x h.length) with
     | error e => rw [hc'] at hpass; cases hpass
     | ok q =>
@@ -1033,7 +1033,7 @@ noncomputable def valsDev (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwV
 /-- **The worker that sends the scheduled rounds with `vs`'s values**: `L`'s honest worker at the device `valsDev vs
 L`. Its run is live wherever its rounds pass the frame's checks (`live_valsWk`), and it meets `TakesVals` and
 `TakesFinalC` at `vs` (`takesVals_valsWk`, `takesFinalC_valsWk`). That the deployed device's rounds are `valsWk
-honestVals`'s at the honest values is the device's completeness, checked empirically under `FC_FIREWALL=1`. -/
+honestVals`'s at the honest values is the device's completeness, checked empirically under `FC_ZK_SERVER=1`. -/
 noncomputable def valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)) :

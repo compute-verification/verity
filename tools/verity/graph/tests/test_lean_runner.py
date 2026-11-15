@@ -315,7 +315,8 @@ def updated(tree: Path, built: Path, tmp_path: Path, *nested: str) -> dict:
     ones its `proved_in` names, whose audit its own runs), which go back into ``tree``'s copy."""
     for at in (*(built / n for n in nested), built):
         p = subprocess.run([sys.executable, str(tree / "tools/verity/lean/check.py"), "--update", "--no-replay",
-                            "--no-runs", "--out", str(tmp_path / "update" / at.name), str(at)], capture_output=True, text=True)
+                            "--no-runs", "--program-cache", str(lock_runner.programs()),
+                            "--out", str(tmp_path / "update" / at.name), str(at)], capture_output=True, text=True)
         assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
     for n in nested:
         (tree / built.name / n / "lean-audit.json").write_text((built / n / "lean-audit.json").read_text())

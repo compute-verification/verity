@@ -1,4 +1,8 @@
-/-
+module
+
+public import CoreProtocol.Protocol
+
+/-!
 A protocol whose sample reads live coins (`Live`): its check is a check at the coins (`checkAt`), run on the coins it reads
 from its evidence (`coins`), the challenger's signed record of them under the key its parameters pin.
 
@@ -9,12 +13,9 @@ from its evidence (`coins`), the challenger's signed record of them under the ke
 
 A soundness argument reasons about `answerAt` at the coins the challenger flipped. That `answer` accepts only what
 `answerAt` accepts at the coins its evidence's record shows follows from `factors`; that those are the coins the device
-flipped, or the run carries a break, is each reader's property (`Security/Properties`). A protocol without live coins
+flipped, or the run carries a break, is each reader's property (`security/Properties`). A protocol without live coins
 needs none of this: `Protocol` and `Protocol.answer` are unchanged.
 -/
-module
-
-public import CoreProtocol.Protocol
 
 @[expose] public section
 

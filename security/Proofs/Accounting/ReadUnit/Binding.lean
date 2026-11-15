@@ -7,10 +7,10 @@ public import Proofs.Core.Game.Expect
 /-!
 # A table read the read's template check accepts binds
 
-`Accounting.SecurityProofs.TableReadBinding` proves `Accounting.Guarantees.TableReadBinding` from `readUnitDrawn_check`:
-the check's run puts the read's input `x` on column `x` and output `j` on `Layout.outCol`'s column, so a read at the
-template's columns (`portsAt`) is a read at the run's ports (`portsAt_eq`, `readPorts`). SHA-512's collision resistance
-at the reads' finder is the named assumption at its one coin (`expectedCR_of_draw`).
+`Accounting.SecurityProofs.TableReadBinding` proves `Accounting.Guarantees.TableReadBinding` from
+`readUnitSampled_check`: the check's run puts the read's input `x` on column `x` and output `j` on `Layout.outCol`'s
+column, so a read at the template's columns (`portsAt`) is a read at the run's ports (`portsAt_eq`, `readPorts`).
+SHA-512's collision resistance at the reads' finder is the named assumption at its one coin (`expectedCR_of_sample`).
 
 `gatesRefine_check` is the gate fact under it on its own: at every copy of a unit of a parsed templated statement whose
 template the check accepts and whose unit returns the circuit's outputs, with the unit's constant registered as `true`,
@@ -76,8 +76,8 @@ gate is committed. The root's and the domain id's gates are the copy's inputs, o
 nothing of them here.
 
 It names no probability, no acceptance and no hash's collision resistance. It is the gate premise
-`Accounting.SecurityProofs.readUnitDrawnCR` takes of each read, which `readUnitDrawn_check` discharges inside its own
-proof, here on its own and from the same parts (`unrolled_leaves_of_parse`, `read_of_check`, `gatesRefine_layout`),
+`Accounting.SecurityProofs.readUnitSampledCR` takes of each read, which `readUnitSampled_check` discharges inside its
+own proof, here on its own and from the same parts (`unrolled_leaves_of_parse`, `read_of_check`, `gatesRefine_layout`),
 stated at the template's columns through `portsAt_eq`. -/
 theorem gatesRefine_check {V H : ℕ} {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     {ct : Flock.Circuit} {tu : Flock.TmplUnit}
@@ -112,7 +112,7 @@ namespace Claims
 
 /-- **The named assumption at a finder's one coin is `ExpectedCR` there**: a finder is the game of one uniform coin over
 its coins, played by its one strategy. -/
-theorem expectedCR_of_draw {H : Msg → Msg} (F : Finder)
+theorem expectedCR_of_sample {H : Msg → Msg} (F : Finder)
     (h : FlockSoundness.Assumptions.SHA512CRExpected H (Verity.Game.draw F.S) (fun _ => PUnit.unit) F.out
       fun s => (F.cost s : ℝ)) : ExpectedCR H F := by
   classical
@@ -136,10 +136,10 @@ open Accounting.ReadUnit
 theorem TableReadBinding : Accounting.Guarantees.TableReadBinding := by
   intro V H t hcheck tags bytes tables ct hparse tu ht htu ho
   subst htu
-  intro n consts hone ι R hR Ω _ _ acc drawn tr cost ε hcom below hcr
+  intro n consts hone ι R hR Ω _ _ acc sampled tr cost ε hcom below hcr
   obtain ⟨run, hr, hφ, hout, hbind⟩ :=
-    Gates.readUnitDrawn_check (Ω := Ω) hparse ht hcheck ho (FlockSoundness.unrolled_built hparse) n
-  refine hbind consts hone R ?_ acc drawn tr cost ε hcom below (Claims.expectedCR_of_draw _ hcr)
+    Gates.readUnitSampled_check (Ω := Ω) hparse ht hcheck ho (FlockSoundness.unrolled_built hparse) n
+  refine hbind consts hone R ?_ acc sampled tr cost ε hcom below (Claims.expectedCR_of_sample _ hcr)
   intro i hi
   obtain ⟨j, hj, hp⟩ := hR i hi
   exact ⟨j, hj, hp.trans

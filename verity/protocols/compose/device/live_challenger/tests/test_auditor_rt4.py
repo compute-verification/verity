@@ -1,5 +1,5 @@
 """The witnesses against the auditor ledger v1, ported to v2 as the refusals they now meet, where they hit the auditor
-host's code: the gate, the ledger and its publisher.
+device's code: the gate, the ledger and its publisher.
 
 * A root gets one session, whatever period a v1 open named for it, and an open's `by` is its gate key's lane; `serve.py` is
   told the window's root (its refusal of a salt after any other root is `test_serve.py`'s).
@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -35,8 +35,8 @@ sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
 P = lms.Params(64, 4, 4)
-T0 = datetime(2026, 10, 20, 9, 30, 0, tzinfo=timezone.utc)
-T1 = datetime(2026, 10, 20, 9, 40, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 20, 9, 30, 0, tzinfo=UTC)
+T1 = datetime(2026, 10, 20, 9, 40, 0, tzinfo=UTC)
 COMMIT = "ab" * 64
 PIN = "c" * 40
 SALT, ROUND = "pouw/salt", "pouw/round"
@@ -185,7 +185,7 @@ def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answ
 
 def test_a_withheld_sessions_gate_gives_no_coin_commitment_root_and_fetches_no_record_before_its_end(host, signer, tmp_path,
                                                                                                     monkeypatch):
-    """A sampled-proofs window's session (`reserve --withhold`): its reserve and open say `withheld: true` (so
+    """A SPOT window's session (`reserve --withhold`): its reserve and open say `withheld: true` (so
     `challenger.withheld_on` takes its window), serve.py runs it `--withhold`, and its hello answers the layout alone.
     Until its end entry the gate hands out no root: the open's answer, though `ready` has one, and `status` carry
     `commitment` null, and `fetch` refuses, though serve.py has written out/record.json. Once its end is in, `status`
@@ -232,7 +232,8 @@ def test_a_withheld_sessions_gate_gives_no_coin_commitment_root_and_fetches_no_r
 
 def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_an_uppercase_root_is_refused(host, signer, capsys):
     rest = f"--scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}'"
-    for words, why in ((f"reserve --peer 'vy-nebius-1\n' {rest}", "--peer"),
+    for words, why in ((f"reserve --peer elsewhere {rest}", "--peer 'elsewhere': not one of this device's peers"),
+                       (f"reserve --peer 'vy-nebius-1\n' {rest}", "--peer"),
                        (f"reserve --period 'p0\n' --peer vy-nebius-1 {rest}", "no --commit, --period"),
                        (f"reserve --period p0 --peer vy-nebius-1 {rest}", "no --commit, --period"),
                        (f"reserve --commit {COMMIT} --peer vy-nebius-1 {rest}", "no --commit, --period")):
@@ -346,6 +347,23 @@ def publish(tmp_path: Path, lines: list[bytes], log: Path) -> subprocess.Complet
            "PUBLISHED": str(log), "VY_CHALLENGER_STATE": str(tmp_path / "state")}
     return subprocess.run(["bash", str(HERE.parent / "publish.sh"), "research@10.0.0.1"], env=env, capture_output=True,
                           text=True)
+
+
+def test_publish_reads_the_hosts_address_from_the_environment_and_ends_at_once_without_it(tmp_path):
+    """With no DEST the gate is research@ the address the environment holds; with neither, a pass and a loop end at
+    once naming the variable, before anything is asked of the host or kept."""
+    script, bin_dir, asked = str(HERE.parent / "publish.sh"), tmp_path / "bin", tmp_path / "asked"
+    bin_dir.mkdir()
+    (bin_dir / "ssh").write_text(f'#!/bin/sh\necho "$*" >> {asked}\nexit 9\n')
+    (bin_dir / "ssh").chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if k != "VY_CHALLENGER_1_HOST"}
+    env |= {"PATH": f"{bin_dir}:{env['PATH']}", "VY_CHALLENGER_STATE": str(tmp_path / "state")}
+    for words in ([], ["--every", "300"]):
+        r = subprocess.run(["bash", script, *words], env=env, capture_output=True, text=True)
+        assert r.returncode != 0 and "VY_CHALLENGER_1_HOST: the auditor device's address, or DEST as an argument" in r.stderr
+    assert not asked.exists() and not (tmp_path / "state").exists()
+    r = subprocess.run(["bash", script], env=env | {"VY_CHALLENGER_1_HOST": "192.0.2.21"}, capture_output=True, text=True)
+    assert r.returncode == 9 and [line.split()[-2] for line in asked.read_text().splitlines()] == ["research@192.0.2.21"] * 3
 
 
 def test_publish_puts_every_session_that_ended_since_its_last_pass(tmp_path):

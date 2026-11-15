@@ -6,7 +6,7 @@
 #   research run --on MACHINE --project verity --source . --cwd clone --timeout 240m \
 #     --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200.sh
 #
-# Outside any lease: the ship (ship.sh's tree) unpacked into this directory and held to its MANIFEST.sha256, nvcc and the
+# Outside any lease: the ship (ship.sh's tree) unpacked into the kernel's directory (K) and held to its MANIFEST.sha256, nvcc and the
 # card recorded.  MODEL (default glm53, GLM-5.3's one TP8 rank; llama32_1b, Llama-3.2-1B's on one card) names whose
 # in-domain linears every step below runs at (this directory's <MODEL>.py; glm53_passes.py and glm53_timing.py --model).
 # Under one lease of at most LEASE_MIN minutes (default 60): run.py's check at the fixture's shape with its
@@ -37,7 +37,7 @@
 # /usr/local/cuda-13.0).  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
-D=benchmarks/pouw/pearl_c_sm90
+D=benchmarks/pouw/pearl_c_sm90 K=verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
@@ -51,7 +51,7 @@ SHAPES=""
 for nk in $NKS; do
   SHAPES="$SHAPES 64x$nk 8192x$nk"
 done
-export O D PY SHAPES MODEL LAYERS LOCK_MHZ=${LOCK_MHZ:-} TIMING=${TIMING:-1}
+export O D K PY SHAPES MODEL LAYERS LOCK_MHZ=${LOCK_MHZ:-} TIMING=${TIMING:-1}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 : > "$O/rc.txt"
 NEEDED=$("$PY" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer-needed --verdict pass 2> "$O/volunteer-needed.log")
@@ -69,7 +69,7 @@ fi
 tar -C "$S" -xf "$IN/ship.tar" && (cd "$S" && sha256sum -c --quiet MANIFEST.sha256)
 echo "ship rc $?" >> "$O/rc.txt"
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
-cp "$S/pearl_c_sm90.cubin" "$D/" && rm -rf "$D/check" && cp -r "$S/check" "$D/check"
+cp "$S/pearl_c_sm90.cubin" "$K/" && rm -rf "$K/check" && cp -r "$S/check" "$K/check"
 export DEBIT=$S/debit/debit_sm90.cubin
 cp "$S/source.txt" "$S/toolchain.txt" "$S/sass.json" "$S/MANIFEST.sha256" "$O/"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
@@ -79,7 +79,7 @@ nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit 
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit --format=csv -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
-  PEARLC_EXPECT_UUID=$GPU_LEASE_UUID SHAPES="$SHAPES" REPS=5 "$PY" "$D/run.py" "$D/check/check.json" > "$O/run.jsonl" 2> "$O/run.err"
+  PEARLC_EXPECT_UUID=$GPU_LEASE_UUID SHAPES="$SHAPES" REPS=5 "$PY" "$K/run.py" "$K/check/check.json" > "$O/run.jsonl" 2> "$O/run.err"
   rc=$?; echo "run.py rc $rc" >> "$O/rc.txt"
   [ "$rc" = 0 ] || exit "$rc"
   "$PY" "$D/glm53_passes.py" capture --model "$MODEL" --out "$O/passes" > "$O/capture.log" 2>&1

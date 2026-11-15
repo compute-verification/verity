@@ -23,15 +23,19 @@ msg owners PATH...` names each path's owner (longest prefix).
 
 ## Handles, inboxes and channels
 
-- **A handle is a role**, held by one coordinator; `@top` is the admin. `@console` is Daniel's desktop agent: nothing
-  wakes it, so its inbox holds your ask until he opens it. Put the whole brief in the ask, and card `#ask-daniel` when it
-  can't wait.
+- **A handle is a role**, held by one coordinator; `@top` is the admin. `@console`, `@dashboard-goals` and
+  `@dashboard-metrics` are Daniel's desktop agents: nothing wakes them, so an inbox holds your ask until he opens that
+  agent. Put the whole brief in the ask, and card `#ask-daniel` when it can't wait. A desktop holder picks up by hand
+  when opened: `research msg names read --as HANDLE`, and answers in the source thread. Where its session can't reach
+  the broker, it answers on its Linear team (the registry's `linear`), and the asker copies the answer into the thread.
 - **Each handle has an inbox thread** (its route, `routes.d` in the notes), where a post rings each name it addresses
   with a doorbell (`from AUTHOR, thread T: ...`; a person's leads with them and how long they've waited, `from douglas
   (a person, waiting 18 min), #chat-douglas thread T: ...`); the holder's own posts never ring it. The route names the holder:
   `names open --as HANDLE --succeeds` takes a handle over and opens the registry's holder change for you to mark, `names open --as HANDLE` on a new branch adds its suffix, and
   `--poster BC_ID` lets another agent post as it, subscribed to the inbox itself: its post naming the handle rings the
   holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too.
+  `research msg read --as NAME` lists the unread doorbells and marks them read; `--peek` marks none and ends with the newest
+  ts it listed, and `--mark-through TS` later marks only those at or before it.
   `names revoke --as HANDLE --poster BC_ID` takes one off again and leaves the inbox open; `names close` closes the whole
   name, and refuses an option it doesn't read, `--poster` among them. `--as
   NAME` takes only a name your agent id holds or posts for (`$RESEARCH_AGENT_URL`, else your Cursor identity).
@@ -121,6 +125,11 @@ id is missing).
    spend, access, keys, destructive or node changes: before any of those, `verify-author --authorizes` exits 1 unless the
    author is in `humans`.
 4. **Act**, and relay to your workers what they need.
+
+A doorbell that arrives while you are mid-turn is delivered but starts nothing until the turn ends, so a long turn is
+unreachable for as long as it lasts. At each working checkpoint of a long turn, run `research msg names read --as <you>
+--peek` and answer what is addressed to you. On a handoff, the incoming holder confirms its inbox subscription with
+`list_subscriptions` before anything else.
 
 ## Chat channels
 

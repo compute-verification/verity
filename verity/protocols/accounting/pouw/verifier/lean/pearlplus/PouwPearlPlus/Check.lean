@@ -15,11 +15,13 @@ public import PouwPearlPlus.Credit
   retained passes' manifests (their records, the voluntary rows among them, and what each published), the number of
   samples, the verifier's coin: a source, or its record of the coin it drew on this run's commitment (`CoinRecord`), which
   pins the source, the window record W the passes are tied to where there is one, with the passes' rounds and the
-  dropped rounds (the coin record's), and whether the verdict is to be of record (`ofRecord`).
+  dropped rounds (the coin record's) and the window's class where the passes are to be its fixed load (`load`), and
+  whether the verdict is to be of record (`ofRecord`).
 * **The prover's openings** (`opener pass tile`): each opened tile's rows, leaf and y rows with their paths. The verifier
   asks only for the tiles its sample names.
 * **The verdict**: every pass loads (`load`), all of one salt and, unless the input is a test instance's
-  (`testInstance`), each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; the passes are W's (`tieOf`, refused as its `ValueError`), the run's
+  (`testInstance`), each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; the passes are W's and, given
+  the window's class, its fixed load (`tieAt`: `tieOf` and `heldToLoad`, refused as Python's `ValueError`), the run's
   commitment is the coin record's where there is one (`after-coin`), the record's challenger sample is coin ``pouw/draw`` 0
   opened after it (`drawReason`, refused as `draw`), a verdict of record takes only a challenger sample on live coins
   (`ofRecordReason`, refused as `of-record`), the sample over every pass's tickets names the sampled tiles, each pass adds one
@@ -27,9 +29,9 @@ public import PouwPearlPlus.Credit
   with every other check passed under `over_cap` `uncredited` (the default, and the run of record's, whose passes hold
   no voluntary row; `reject` rejects such a run). A rejected
   tile's reason is `pass i tile t: why`, joined by `; `.
-* **The work** an accepted run publishes: its credit at Pearl's assumption at δ = 1/100 (`creditAtAssumption`), at X_O,
+* **The work** an accepted run publishes: its credit at its scheme's named assumption at δ = 1/100 (`creditAtAssumption`), at X_O,
   the number of samples on tiles over their bound, which are credited nothing. A test instance's credits nothing
-  (`credited` 0), as `--recorded`'s salt claims nothing.
+  (`credited` 0).
 
 Out of scope, refused by name in `load`: sm_120's schemes.
 -/
@@ -42,16 +44,16 @@ open Lean PouwCommit Words
 
 /-- The rule on an opened tile over its inert-work bound (`verify_run`'s ``over_cap``, `served_passes.py verify
 --over-cap`): `uncredited` credits it nothing and goes on (CMP-311 option A, the default); `reject` rejects the run. -/
-inductive OverCap where
+inductive OverInertBound where
   | uncredited
   | reject
   deriving BEq, DecidableEq, Repr, Inhabited
 
-def OverCap.name : OverCap → String
+def OverInertBound.name : OverInertBound → String
   | .uncredited => "uncredited"
   | .reject => "reject"
 
-def OverCap.ofName? : String → Option OverCap
+def OverInertBound.ofName? : String → Option OverInertBound
   | "uncredited" => some .uncredited
   | "reject" => some .reject
   | _ => none
@@ -68,11 +70,14 @@ structure Input where
   draws : Nat
   source : Option ByteArray := none
   held : Option CoinRecord := none
-  overCap : OverCap := .uncredited
+  overInertBound : OverInertBound := .uncredited
   /-- The passes are a test instance's (`verify_passes`' ``test_instance``): their `k_min` and tile may be other than
   `K_MIN` and `TILE × TILE`, and the verdict credits nothing. -/
   testInstance : Bool := false
   tie : Option Json := none
+  /-- The window's class (`verify_passes`' ``window_class``), read only with `tie`: passes that are not its fixed load are
+  refused (`Tie.tieAt`). -/
+  load : Option LoadClass := none
   rounds : Option (List Nat) := none
   dropped : List Nat := []
   ofRecord : Bool := false
@@ -96,20 +101,20 @@ structure TileVerdict where
 def TileVerdict.reason (v : TileVerdict) : Option String :=
   match v.outcome with
   | .pass => none
-  | .overCap why | .fail why => some why
+  | .overInertBound why | .fail why => some why
 
 /-- Whether the tile is accepted under `m`: it passes, or it is over its bound and `m` credits it nothing. -/
-def TileVerdict.ok (m : OverCap) (v : TileVerdict) : Bool :=
+def TileVerdict.ok (m : OverInertBound) (v : TileVerdict) : Bool :=
   match v.outcome with
   | .pass => true
-  | .overCap _ => m == .uncredited
+  | .overInertBound _ => m == .uncredited
   | .fail _ => false
 
 /-- X_O: how many of the plan's samples landed on a tile over its inert-work bound. -/
-def overCapDraws (pl : Plan) (vs : List TileVerdict) : Nat :=
+def overInertBoundDraws (pl : Plan) (vs : List TileVerdict) : Nat :=
   pl.picks.countP fun (i, tid) => (vs.find? fun v => v.pass == i && v.tile == tid).any fun v =>
     match v.outcome with
-    | .overCap _ => true
+    | .overInertBound _ => true
     | _ => false
 
 structure RunAnswer where
@@ -119,7 +124,7 @@ structure RunAnswer where
   plan : Option Plan := none
   verdicts : List TileVerdict := []
   work : Option Credit := none
-  overCap : OverCap := .uncredited
+  overInertBound : OverInertBound := .uncredited
   tie : Option Tied := none
 
 /-- `verify_passes` after the tie: the record, the source, the sample's holds and the tiles to open. -/
@@ -165,13 +170,13 @@ def plan (i : Input) : Except Refusal Plan := do
     | none => pure ()
   let tie ← match i.tie with
     | none => pure none
-    | some w => match tieOf w (i.manifests.zip passes) i.rounds i.dropped with
+    | some w => match tieAt i.load w (i.manifests.zip passes) i.rounds i.dropped with
       | .ok t => pure (some t)
       | .error e => throw { reason := s!"ValueError: {e}" }
   tryCatch (afterTie i passes tie) fun r => throw { r with tie := r.tie <|> tie }
 
 /-- The verdict of every tile of `pl.todo`, in order, replayed in parallel: the fixed operand's noise once per pass and
-weight, then each tile on it. -/
+fixed operand, then each tile on it. -/
 def replay (pl : Plan) (opener : Nat → Nat → Except String TileOpening) : List TileVerdict := Id.run do
   let mut noise : List ((Nat × Nat) × Task (Except String FixedNoise)) := []
   let mut tasks : Array (Task TileVerdict) := #[]
@@ -200,15 +205,15 @@ def testCredit (testInstance : Bool) (c : Credit) : Credit :=
 /-- `verify_passes`: the run's verdict. -/
 def check (i : Input) (opener : Nat → Nat → Except String TileOpening) : RunAnswer :=
   match plan i with
-  | .error r => { accept := false, reason := some r.reason, refused := r.refused, overCap := i.overCap, tie := r.tie }
+  | .error r => { accept := false, reason := some r.reason, refused := r.refused, overInertBound := i.overInertBound, tie := r.tie }
   | .ok pl =>
     let vs := replay pl opener
     let bad := vs.filterMap fun v =>
-      if v.ok i.overCap then none else v.reason.map fun r => s!"pass {v.pass} tile {v.tile}: {r}"
+      if v.ok i.overInertBound then none else v.reason.map fun r => s!"pass {v.pass} tile {v.tile}: {r}"
     if bad.isEmpty then
-      { accept := true, plan := some pl, verdicts := vs, overCap := i.overCap, tie := pl.tie,
-        work := some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overCapDraws pl vs) DELTA)) }
-    else { accept := false, reason := some ("; ".intercalate bad), plan := some pl, verdicts := vs, overCap := i.overCap,
+      { accept := true, plan := some pl, verdicts := vs, overInertBound := i.overInertBound, tie := pl.tie,
+        work := some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overInertBoundDraws pl vs) DELTA)) }
+    else { accept := false, reason := some ("; ".intercalate bad), plan := some pl, verdicts := vs, overInertBound := i.overInertBound,
            tie := pl.tie }
 
 end PouwCheck.PearlPlus

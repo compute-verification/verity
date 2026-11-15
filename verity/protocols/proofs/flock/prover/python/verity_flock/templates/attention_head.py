@@ -5,8 +5,8 @@ the zero word the IR pads with, the query is a public port, and the softmax (run
 MUFU.RCP of the sum, the output cast) is the native tail the verifier evaluates on the public words.
 
 T is per instance: a statement covers the instances of one T (:func:`lowering` takes it; :func:`lowering_for_set` reads it
-off a set whose instances share it). The one unit netlist is the same for every T; the leaf maps and the tail (the CUT line)
-are T's, so the pin is per T."""
+off a set whose instances share it). The unit's one circuit description is the same for every T; the leaf maps and the tail (the
+CUT line) are T's, so the pin is per T."""
 TEMPLATE = "attention-head"
 UNIT = "attention-head/fa2-bf16/tc-step"
 FRAME_SCHEMES = ("frame-v3/blake3-keyed",)
@@ -42,10 +42,10 @@ def frame_lowering(subcircuit, T: int):
 
 def supports(subcircuit, scheme):
     if int(subcircuit.params["D"]) % 16:
-        return f"C-Flock lowers AttentionHead_v3 with D a multiple of 16, not D = {subcircuit.params['D']}"
+        return f"Flock lowers AttentionHead_v3 with D a multiple of 16, not D = {subcircuit.params['D']}"
     if scheme in FRAME_SCHEMES:
         return None
-    return (f"C-Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3: tensor-core steps as units, "
+    return (f"Flock proves {subcircuit.id} under {', '.join(FRAME_SCHEMES)} (verity/flock-ir-frame/v3: tensor-core steps as units, "
             f"the softmax native); binding its rows under {scheme} is not wired yet")
 
 
@@ -73,8 +73,8 @@ def cached_lowering(subcircuit, T: int):
 
 
 def unit_rows_sha256(text: str) -> str:
-    """sha256 of a unit netlist without its name and its per-T lines: the header line minus the name token, then the matrix rows
-    up to ``LEAVES``. Every T's netlist has the same one, so one block circuit serves a class."""
+    """sha256 of a unit's circuit description without its name and its per-T lines: the header line minus the name token, then the
+    matrix rows up to ``LEAVES``. Every T's circuit description has the same one, so one block circuit serves a class."""
     import hashlib
 
     head, rest = text.split("\n", 1)
@@ -83,8 +83,8 @@ def unit_rows_sha256(text: str) -> str:
 
 
 def class_manifest(subcircuit, lo: int, hi: int) -> bytes:
-    """The class's manifest, canonical JSON: every T in [lo, hi] with the sha256 of its v3 netlist (``lowering(subcircuit, T)``),
-    and the unit rows they share. Its sha256 is the class pin."""
+    """The class's manifest, canonical JSON: every T in [lo, hi] with the sha256 of its v3 circuit description
+    (``lowering(subcircuit, T)``), and the unit rows they share. Its sha256 is the class pin."""
     import json
 
     nets, rows = {}, set()
@@ -93,7 +93,7 @@ def class_manifest(subcircuit, lo: int, hi: int) -> bytes:
         nets[str(T)] = low.sha256
         rows.add(unit_rows_sha256(low.text))
     if len(rows) != 1:
-        raise ValueError(f"{subcircuit.id}: the netlists of T in [{lo}, {hi}] do not share their unit rows")
+        raise ValueError(f"{subcircuit.id}: the circuit descriptions of T in [{lo}, {hi}] do not share their unit rows")
     D = int(subcircuit.params["D"])
     m = {"format": CLASS_FORMAT, "template": subcircuit.id, "T": [lo, hi], "key_port": "k", "words_per_key": D, "unit_rows": rows.pop(),
          "nets": nets}

@@ -9,14 +9,18 @@ import pytest
 
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.protocols.accounting.pous.device.memory_challenger import block_digest
+from verity.protocols.accounting.pous.prover.responder import HonestResponder
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.audit import (
-    HonestResponder,
     UnsignedRounds,
     challenge_key,
     run_timed,
 )
-from verity.protocols.accounting.pous.verifier.codec import Codec, encode_segments, split
+from verity.protocols.accounting.pous.verifier.codec import (
+    Codec,
+    encode_segments,
+    split,
+)
 from verity.protocols.accounting.pous.verifier.layout import TensorLayout, decode_tensor
 from verity.protocols.accounting.pous.verifier.params import Params
 from verity.protocols.accounting.pous.verifier.primitives import reference

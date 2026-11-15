@@ -1,6 +1,6 @@
-"""`requirement.from_census` and memory-map/v1's builder (`verity_vllm.protocols.remote_bandwidth.memory_map.Lines`) held to
-`core_requirement`'s Lean through the difftest's instance format (`test_requirement_difftest.encode`, the port's test in
-`verity/circuits/requirement/tests/`, loaded by file), Python's reference agreeing with Lean on each.
+"""`requirement.from_census` and memory-map/v1's builder (`verity.protocols.accounting.poub.prover.node_store.memory_map.Lines`) held to
+`core_requirement`'s Lean through the difftest's instance format (`test_requirement_difftest.encode`), Python's reference
+agreeing with Lean on each.
 
 The census path: a census and a schedule as an instance (`census_execution`): the census's values, then a value of 0 bits
 for each root Call a step runs, whose operands are the values the Call reads or selects. Lean's live values and bits are
@@ -46,29 +46,32 @@ from pathlib import Path
 
 import pytest
 import verity_difftest as D
-from verity_vllm.commit import memory_map as MM
-from verity_vllm.program.predict.build import build_program
-from verity_vllm.program.predict.phi import Phi
-from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
-from verity_vllm.protocols.remote_bandwidth.memory_map import Lines
-from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
-from verity_vllm.query.required import SAMPLING_EVENTS
-
-from verity.circuits.program import REGISTRATION, Program, is_input
 from verity.circuits import requirement as R
 from verity.circuits.census import census, step_ends, step_of
+from verity.circuits.program import REGISTRATION, Program, is_input
+from verity.protocols.accounting.poub.prover.node_store.interface import PageLayout
+from verity.protocols.accounting.poub.prover.node_store.memory_map import Lines
+from verity.protocols.accounting.poub.prover.node_store.registry import _page_blocks
 from verity.protocols.accounting.poub.verifier import codec
 from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
 
-PORT_TEST = Path(__file__).resolve().parents[4] / "verity/circuits/requirement/tests/test_requirement_difftest.py"
-_spec = importlib.util.spec_from_file_location("test_requirement_difftest", PORT_TEST)
+from verity_vllm.commit import memory_map as MM
+from verity_vllm.program.predict.build import build_program
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.query.required import SAMPLING_EVENTS
+
+#: The requirement suite's difftest, whose Port, instance format and Programs this test shares; a file of another suite,
+#: so loaded by its path.
+REQUIREMENT_DIFFTEST = Path(__file__).resolve().parents[4] / "verity/circuits/requirement/tests/test_requirement_difftest.py"
+_spec = importlib.util.spec_from_file_location("test_requirement_difftest", REQUIREMENT_DIFFTEST)
 assert _spec is not None and _spec.loader is not None
-RD = importlib.util.module_from_spec(_spec)
-sys.modules.setdefault("test_requirement_difftest", RD)
-_spec.loader.exec_module(RD)
-PORT, _lean, encode, rmsnorm, serve, toy_decoder = RD.PORT, RD._lean, RD.encode, RD.rmsnorm, RD.serve, RD.toy_decoder
+_RD = importlib.util.module_from_spec(_spec)
+sys.modules.setdefault("test_requirement_difftest", _RD)
+_spec.loader.exec_module(_RD)
+PORT, _lean, encode, rmsnorm, serve, toy_decoder = _RD.PORT, _RD._lean, _RD.encode, _RD.rmsnorm, _RD.serve, _RD.toy_decoder
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+
 server = D.server_fixture(PORT)
 
 

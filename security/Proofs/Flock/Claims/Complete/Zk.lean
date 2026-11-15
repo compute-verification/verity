@@ -75,7 +75,7 @@ from the scope and the session's shape (`tablesZk_goal`, `schedulesZk_goal`, `pr
 send (`linkFirstZk_goal`). `Json.Record` is the masked record's JSON (`recordJson_eqZk`) and the masked decoder's hello
 and coin-tree checks passing on it (`checkHello_ok`, `checkRecord_ok`, with `Json.QSort`'s `qsort_coinTree`), after
 which it decodes as the plain record of `specZ` (`decodeWith_specZ`); `Json.Decode` reads it back: decoded, live, and
-its sample (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `Json.Session` is what the one-table
+its sample (`decode_recordObjZk`, `live_recordObjZk`, `recordSample_recordObjZk`); `Json.Session` is what the one-table
 masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
 the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`), and
 `Json.Stmt` `StmtOkZk` from the case's setup (`stmtOkZk`, with `Same.good` and `good_subset`);
@@ -128,8 +128,8 @@ model, given its openings and final identity at the model's values (`ligeritoWit
 masked prover's Ligerito against that model (`mid_lv0Z`), and `Level0HonestRun` its whole walk: it ends at the model's
 transcript and meets the model's final identity (`honestZ`); `Level0Opens` its openings passing the masked Merkle
 checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`). Level 0's last premise,
-the verifier returning the prover's record at its transcript (`ZkTables.Level0.Verifier`), is not proved: with the
-other three (`Level0Premises`) and `MaskRank.maskRankBound`, `ZkTables.complete_jsonT_of_level0` leaves it and the
-JSON specification. -/
+the verifier returning the prover's record at its transcript at either statement version (`ZkTables.Level0.Verifier`),
+is not proved: with the other three (`Level0Premises`) and `MaskRank.maskRankBound`,
+`ZkTables.complete_jsonT_of_level0` leaves it and the JSON specification. -/
 
 @[expose] public section

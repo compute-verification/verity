@@ -33,7 +33,7 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json",
            "**/*.lean", "tests/tree.toml", "**/*.cu",
            "**/*.cuh", "**/*.cpp", "**/*.h",
            "**/*.c", "verity/protocols/accounting/pouw/verifier/lean/commit/tests/difftest_vectors.py"]
-include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md",
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md",
            "**/lake-manifest.json", "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
            "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean", "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean", "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",

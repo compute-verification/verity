@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameSched
 public import Proofs.Flock.Claims.ZK.L0PinFrame
-public import Flock.Firewall.Frames
+public import Flock.ZkServer.Frames
 
 /-!
 # The loop places a rep's rounds as `Drive.reqs` does
@@ -24,13 +24,13 @@ round's coins keeps the invariant:
 namespace Claims.ZKServer
 
 open _root_.Flock (V F128 Stmt)
-open _root_.Flock.Firewall.Finish (Tab flat Memo)
+open _root_.Flock.ZkServer.Finish (Tab flat Memo)
 
 namespace Loop
 
 /-- What the schedule `sched` places at round `k`: its round there and the coins it squeezes, else the inner proof's
 own round (and no coins), as `Drive.reqs` places them. -/
-def placeAt (sched : Array (ByteArray × ℕ)) (k : ℕ) : _root_.Flock.Firewall.Frame.Place × ℕ :=
+def placeAt (sched : Array (ByteArray × ℕ)) (k : ℕ) : _root_.Flock.ZkServer.Frame.Place × ℕ :=
   match sched[k]? with
   | some (c, n) => (.sched c, n)
   | none => (.own, 0)
@@ -38,17 +38,17 @@ def placeAt (sched : Array (ByteArray × ℕ)) (k : ℕ) : _root_.Flock.Firewall
 /-- **The rep `p`'s opening fed its coins past the algebraic phase**, at the table `t`, its stream's domain `dom`, the
 extra claims `xs` and the salts for levels ≥ 1 `hi`: what it goes on as, and the rounds it sent. -/
 def openFed (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p : _root_.Flock.Firewall.Frames.Rep) :
-    _root_.Flock.Firewall.Drive.Step Memo × Array (ByteArray × ℕ) :=
-  (_root_.Flock.Firewall.Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size)).feed
+    (p : _root_.Flock.ZkServer.Frames.Rep) :
+    _root_.Flock.ZkServer.Drive.Step Memo × Array (ByteArray × ℕ) :=
+  (_root_.Flock.ZkServer.Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size)).feed
     (p.coins.extract p.alg.size p.coins.size).toList #[]
 
 /-- **The loop keeps the rep `p`'s schedule so far**, at its next round: its algebraic phase's rounds are
 `Skeleton.rounds`', and its opening is not begun while their coins are not all in, then is `openFed`, until it ended
 (`opened`). -/
 structure RepInv (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p : _root_.Flock.Firewall.Frames.Rep) : Prop where
-  alg : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg
+    (p : _root_.Flock.ZkServer.Frames.Rep) : Prop where
+  alg : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg
   toOpening : p.toOpening = false
   opening : (p.opening = none ∧ p.opened = false ∧ p.coins.size ≤ p.alg.size) ∨
     (p.alg.size ≤ p.coins.size ∧ p.opened = false ∧ p.opening = some (openFed t dom xs hi p).1) ∨
@@ -56,23 +56,23 @@ structure RepInv (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Arr
       ∃ x, (openFed t dom xs hi p).1 = .done x)
 
 /-- **The rep `p` after the coins `cs`**, its frame's state then `st'`: as `Frames.coinsStep` puts it back. -/
-def coinsOf (p : _root_.Flock.Firewall.Frames.Rep) (st' : _root_.Flock.Firewall.Frame.State) (cs : Array F128) :
-    _root_.Flock.Firewall.Frames.Rep :=
+def coinsOf (p : _root_.Flock.ZkServer.Frames.Rep) (st' : _root_.Flock.ZkServer.Frame.State) (cs : Array F128) :
+    _root_.Flock.ZkServer.Frames.Rep :=
   let opening := match p.toOpening, p.opening with
     | true, some (.ask _ _ k) => some (k cs)
     | _, o => o
   { p with st := st', coins := p.coins.push cs, toOpening := false, opening }
 
-theorem coinsStep_ok (R : _root_.Flock.Firewall.Frames.Sessions) (sid i r : ℕ) (cs : Array F128) {j : ℕ}
-    {p : _root_.Flock.Firewall.Frames.Rep} {st' : _root_.Flock.Firewall.Frame.State} (hf : R.find sid i r = some (j, p))
-    (hs : _root_.Flock.Firewall.Frame.step p.cfg p.st (.coins (.ok cs)) = (.ok, st')) :
-    _root_.Flock.Firewall.Frames.coinsStep R sid i r cs = .ok (coinsOf p st' cs) := by
-  unfold _root_.Flock.Firewall.Frames.coinsStep
+theorem coinsStep_ok (R : _root_.Flock.ZkServer.Frames.Sessions) (sid i r : ℕ) (cs : Array F128) {j : ℕ}
+    {p : _root_.Flock.ZkServer.Frames.Rep} {st' : _root_.Flock.ZkServer.Frame.State} (hf : R.find sid i r = some (j, p))
+    (hs : _root_.Flock.ZkServer.Frame.step p.cfg p.st (.coins (.ok cs)) = (.ok, st')) :
+    _root_.Flock.ZkServer.Frames.coinsStep R sid i r cs = .ok (coinsOf p st' cs) := by
+  unfold _root_.Flock.ZkServer.Frames.coinsStep
   simp only [hf, hs, pure, Except.pure]
   rfl
 
 /-- A step fed coins sent at most a round for each. -/
-theorem feed_size_le {α : Type} : ∀ (s : _root_.Flock.Firewall.Drive.Step α) (l : List (Array F128))
+theorem feed_size_le {α : Type} : ∀ (s : _root_.Flock.ZkServer.Drive.Step α) (l : List (Array F128))
     (rs : Array (ByteArray × ℕ)), (s.feed l rs).2.size ≤ rs.size + l.length
   | .ask c n k, a :: l, rs => by
     have := feed_size_le (k a) l (rs.push (c, n))
@@ -84,62 +84,62 @@ theorem feed_size_le {α : Type} : ∀ (s : _root_.Flock.Firewall.Drive.Step α)
   | .done _, _, rs => Nat.le_add_right _ _
   | .fail _, _, rs => Nat.le_add_right _ _
 
-theorem placeOf_alg (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
+theorem placeOf_alg (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.ZkServer.Level0.Level0)
+    (s : _root_.Flock.ZkServer.Frames.Release) (p : _root_.Flock.ZkServer.Frames.Rep) (dom : ByteArray)
     (h : p.coins.size < p.alg.size) :
-    _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom =
+    _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom =
       .ok (.sched (p.alg[p.coins.size]'h).1, (p.alg[p.coins.size]'h).2, p) := by
-  unfold _root_.Flock.Firewall.Frames.placeOf
+  unfold _root_.Flock.ZkServer.Frames.placeOf
   simp only [dif_pos h]
   rfl
 
-theorem placeOf_opened (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
+theorem placeOf_opened (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.ZkServer.Level0.Level0)
+    (s : _root_.Flock.ZkServer.Frames.Release) (p : _root_.Flock.ZkServer.Frames.Rep) (dom : ByteArray)
     (h : ¬ p.coins.size < p.alg.size) (ho : p.opened = true) :
-    _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom = .ok (.own, 0, p) := by
-  unfold _root_.Flock.Firewall.Frames.placeOf
+    _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom = .ok (.own, 0, p) := by
+  unfold _root_.Flock.ZkServer.Frames.placeOf
   simp only [dif_neg h, ho]
   rfl
 
 /-- What the opening at `S` places, and the rep `q` after: its round, asked for; the inner proof's, once it ended. -/
-def stepPlace (S : _root_.Flock.Firewall.Drive.Step Memo) (q : _root_.Flock.Firewall.Frames.Rep) :
-    Except String (_root_.Flock.Firewall.Frame.Place × ℕ × _root_.Flock.Firewall.Frames.Rep) :=
+def stepPlace (S : _root_.Flock.ZkServer.Drive.Step Memo) (q : _root_.Flock.ZkServer.Frames.Rep) :
+    Except String (_root_.Flock.ZkServer.Frame.Place × ℕ × _root_.Flock.ZkServer.Frames.Rep) :=
   match S with
   | .ask c n _ => .ok (.sched c, n, { q with toOpening := true })
   | .done _ => .ok (.own, 0, { q with opened := true, opening := none })
   | .fail e => .error e
 
-theorem placeOf_some (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
-    (h : ¬ p.coins.size < p.alg.size) (ho : p.opened = false) {S : _root_.Flock.Firewall.Drive.Step Memo}
+theorem placeOf_some (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.ZkServer.Level0.Level0)
+    (s : _root_.Flock.ZkServer.Frames.Release) (p : _root_.Flock.ZkServer.Frames.Rep) (dom : ByteArray)
+    (h : ¬ p.coins.size < p.alg.size) (ho : p.opened = false) {S : _root_.Flock.ZkServer.Drive.Step Memo}
     (hS : p.opening = some S) :
-    _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom = stepPlace S { p with opening := some S } := by
-  unfold _root_.Flock.Firewall.Frames.placeOf
+    _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom = stepPlace S { p with opening := some S } := by
+  unfold _root_.Flock.ZkServer.Frames.placeOf
   simp only [dif_neg h, ho, hS, Option.isNone_some, Bool.false_eq_true, ↓reduceIte]
   cases S <;> rfl
 
-theorem placeOf_none (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray)
+theorem placeOf_none (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.ZkServer.Level0.Level0)
+    (s : _root_.Flock.ZkServer.Frames.Release) (p : _root_.Flock.ZkServer.Frames.Rep) (dom : ByteArray)
     (h : ¬ p.coins.size < p.alg.size) (ho : p.opened = false) (hS : p.opening = none) {st : Stmt}
     {c : Array F128} {r0 : ByteArray} {q0 : ℕ} {hi : Array ByteArray} {t : Tab}
     (hst : s.sts[p.table]? = some st) (hlink : s.link = some c)
     (hsalt : salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
-    (htab : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit st) l0 = .ok t) :
-    _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom =
-      let S := _root_.Flock.Firewall.Drive.openStepM t p.rep dom
-        (_root_.Flock.Firewall.Drive.extras st (_root_.Flock.Firewall.Drive.linkPoints st c)) hi
+    (htab : _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit st) l0 = .ok t) :
+    _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom =
+      let S := _root_.Flock.ZkServer.Drive.openStepM t p.rep dom
+        (_root_.Flock.ZkServer.Drive.extras st (_root_.Flock.ZkServer.Drive.linkPoints st c)) hi
         (p.coins.extract 0 p.alg.size)
       stepPlace S { p with opening := some S } := by
-  unfold _root_.Flock.Firewall.Frames.placeOf
+  unfold _root_.Flock.ZkServer.Frames.placeOf
   simp only [dif_neg h, ho, hS, Option.isNone_none, hst, hlink, hsalt, htab, Bool.false_eq_true, ↓reduceIte, bind,
     Except.bind]
-  generalize _root_.Flock.Firewall.Drive.openStepM t p.rep dom
-    (_root_.Flock.Firewall.Drive.extras st (_root_.Flock.Firewall.Drive.linkPoints st c)) hi
+  generalize _root_.Flock.ZkServer.Drive.openStepM t p.rep dom
+    (_root_.Flock.ZkServer.Drive.extras st (_root_.Flock.ZkServer.Drive.linkPoints st c)) hi
     (p.coins.extract 0 p.alg.size) = S
   cases S <;> rfl
 
 /-- A step whose end is mapped, fed: the step fed, its end mapped. -/
-theorem feed_map {α β : Type} (f : α → β) : ∀ (s : _root_.Flock.Firewall.Drive.Step α) (l : List (Array F128))
+theorem feed_map {α β : Type} (f : α → β) : ∀ (s : _root_.Flock.ZkServer.Drive.Step α) (l : List (Array F128))
     (rs : Array (ByteArray × ℕ)), (f <$> s).feed l rs = (f <$> (s.feed l rs).1, (s.feed l rs).2)
   | .ask c n k, a :: l, rs => feed_map f (k a) l (rs.push (c, n))
   | .ask _ _ _, [], _ => rfl
@@ -149,13 +149,13 @@ theorem feed_map {α β : Type} (f : α → β) : ∀ (s : _root_.Flock.Firewall
 /-- **`Drive.openStepM` is `Drive.openStep` but for what it ends with**: the same rounds, the same coins. -/
 theorem openStepM_unit (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (coins : Array (Array F128)) :
-    (fun _ => ()) <$> _root_.Flock.Firewall.Drive.openStepM t rep dom xs hi coins =
-      _root_.Flock.Firewall.Drive.openStep t rep dom xs hi coins := by
-  have key : ∀ (P : _root_.Flock.TMW _root_.Flock.Firewall.Drive.OpenM Memo) s0 s1,
+    (fun _ => ()) <$> _root_.Flock.ZkServer.Drive.openStepM t rep dom xs hi coins =
+      _root_.Flock.ZkServer.Drive.openStep t rep dom xs hi coins := by
+  have key : ∀ (P : _root_.Flock.TMW _root_.Flock.ZkServer.Drive.OpenM Memo) s0 s1,
       (fun _ => ()) <$> (P.run' s0).run' s1 = (((fun _ => ()) <$> P).run' s0).run' s1 := by
     intro P s0 s1
     simp only [StateT.run'_eq, StateT.run_map, Functor.map_map]
-  unfold _root_.Flock.Firewall.Drive.openStepM _root_.Flock.Firewall.Drive.openStep
+  unfold _root_.Flock.ZkServer.Drive.openStepM _root_.Flock.ZkServer.Drive.openStep
   dsimp only
   rw [key]
   congr 2
@@ -167,20 +167,20 @@ theorem openStepM_unit (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Arra
   by_cases hk : (s.size != coins.size) = true
   · simp only [hk, ↓reduceIte]
     rfl
-  · simp only [hk, Bool.false_eq_true, ↓reduceIte, map_bind, ← _root_.Flock.Firewall.Finish.repOpeningMemo_fst none,
+  · simp only [hk, Bool.false_eq_true, ↓reduceIte, map_bind, ← _root_.Flock.ZkServer.Finish.repOpeningMemo_fst none,
       bind_map_left, map_pure]
 
 theorem schedSoFar_alg (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p : _root_.Flock.Firewall.Frames.Rep)
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
+    (p : _root_.Flock.ZkServer.Frames.Rep)
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
     (h : p.coins.size < p.alg.size) : schedSoFar t p.rep dom xs hi p.coins = .ok p.alg := by
   unfold schedSoFar
   rw [hal]
   simp only [bind, Except.bind, h, ↓reduceIte, pure, Except.pure]
 
 theorem schedSoFar_open (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p : _root_.Flock.Firewall.Frames.Rep)
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
+    (p : _root_.Flock.ZkServer.Frames.Rep)
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
     (h : ¬ p.coins.size < p.alg.size) :
     schedSoFar t p.rep dom xs hi p.coins = match openFed t dom xs hi p with
       | (.ask c n _, rs) => .ok (p.alg ++ rs.push (c, n))
@@ -190,14 +190,14 @@ theorem schedSoFar_open (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (h
   rw [hal]
   simp only [bind, Except.bind, h, ↓reduceIte]
   rw [← openStepM_unit, feed_map]
-  generalize (_root_.Flock.Firewall.Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size)).feed
+  generalize (_root_.Flock.ZkServer.Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size)).feed
     (p.coins.extract p.alg.size p.coins.size).toList #[] = F
   obtain ⟨S, rs⟩ := F
   cases S <;> rfl
 
 /-- **The opening on one more round's coins** is the opening so far fed them. -/
 theorem openFed_push (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p q : _root_.Flock.Firewall.Frames.Rep) (cs : Array F128) (hle : p.alg.size ≤ p.coins.size)
+    (p q : _root_.Flock.ZkServer.Frames.Rep) (cs : Array F128) (hle : p.alg.size ≤ p.coins.size)
     (hq : q.rep = p.rep) (ha : q.alg = p.alg) (hc : q.coins = p.coins.push cs) :
     openFed t dom xs hi q = (openFed t dom xs hi p).1.feed [cs] (openFed t dom xs hi p).2 := by
   unfold openFed
@@ -210,15 +210,15 @@ theorem openFed_push (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi :
   rw [e1, e2, feed_append]
 
 theorem openFed_size (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p : _root_.Flock.Firewall.Frames.Rep) : (openFed t dom xs hi p).2.size ≤ p.coins.size - p.alg.size := by
-  have := feed_size_le (_root_.Flock.Firewall.Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size))
+    (p : _root_.Flock.ZkServer.Frames.Rep) : (openFed t dom xs hi p).2.size ≤ p.coins.size - p.alg.size := by
+  have := feed_size_le (_root_.Flock.ZkServer.Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size))
     (p.coins.extract p.alg.size p.coins.size).toList #[]
   rw [Array.length_toList, Array.size_extract, Array.size_empty] at this
   unfold openFed
   omega
 
 theorem openFed_ask_size (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p : _root_.Flock.Firewall.Frames.Rep) {c : ByteArray} {n : ℕ} {k} {rs : Array (ByteArray × ℕ)}
+    (p : _root_.Flock.ZkServer.Frames.Rep) {c : ByteArray} {n : ℕ} {k} {rs : Array (ByteArray × ℕ)}
     (h : openFed t dom xs hi p = (.ask c n k, rs)) : rs.size = p.coins.size - p.alg.size := by
   unfold openFed at h
   rw [feed_ask_size _ _ _ h, Array.length_toList, Array.size_extract, Array.size_empty]
@@ -234,26 +234,26 @@ theorem placeAt_ask (alg rs : Array (ByteArray × ℕ)) (c : ByteArray) (n k : �
   rw [Array.getElem?_append_right (by omega), show k - alg.size = rs.size by omega, Array.getElem?_push_size]
 
 theorem repInv_coinsOf_alg (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p : _root_.Flock.Firewall.Frames.Rep) (st' : _root_.Flock.Firewall.Frame.State) (cs : Array F128)
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
+    (p : _root_.Flock.ZkServer.Frames.Rep) (st' : _root_.Flock.ZkServer.Frame.State) (cs : Array F128)
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
     (hlt : p.coins.size < p.alg.size) (hto : p.toOpening = false) (hn : p.opening = none) (ho : p.opened = false) :
     RepInv t dom xs hi (coinsOf p st' cs) :=
   ⟨hal, rfl, Or.inl ⟨by simp only [coinsOf, hto, hn], ho, by simp only [coinsOf, Array.size_push]; omega⟩⟩
 
 theorem repInv_coinsOf_ask (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p : _root_.Flock.Firewall.Frames.Rep) (st' : _root_.Flock.Firewall.Frame.State) (cs : Array F128)
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
+    (p : _root_.Flock.ZkServer.Frames.Rep) (st' : _root_.Flock.ZkServer.Frame.State) (cs : Array F128)
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
     (hle : p.alg.size ≤ p.coins.size) (hto : p.toOpening = true) (ho : p.opened = false) {c : ByteArray} {n : ℕ} {k}
     {rs : Array (ByteArray × ℕ)} (hF : openFed t dom xs hi p = (.ask c n k, rs)) (hS : p.opening = some (.ask c n k)) :
     RepInv t dom xs hi (coinsOf p st' cs) := by
   refine ⟨hal, rfl, Or.inr (Or.inl ⟨by simp only [coinsOf, Array.size_push]; omega, ho, ?_⟩)⟩
   rw [openFed_push t dom xs hi p (coinsOf p st' cs) cs hle rfl rfl rfl, hF,
-    show (_root_.Flock.Firewall.Drive.Step.ask c n k).feed [cs] rs = (k cs).feed [] (rs.push (c, n)) from rfl, feed_nil]
+    show (_root_.Flock.ZkServer.Drive.Step.ask c n k).feed [cs] rs = (k cs).feed [] (rs.push (c, n)) from rfl, feed_nil]
   simp only [coinsOf, hto, hS]
 
 theorem repInv_coinsOf_done (t : Tab) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
-    (p : _root_.Flock.Firewall.Frames.Rep) (st' : _root_.Flock.Firewall.Frame.State) (cs : Array F128)
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
+    (p : _root_.Flock.ZkServer.Frames.Rep) (st' : _root_.Flock.ZkServer.Frame.State) (cs : Array F128)
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom = .ok p.alg)
     (hle : p.alg.size ≤ p.coins.size) (hto : p.toOpening = false) (hn : p.opening = none) (ho : p.opened = true)
     {x : Memo} {rs : Array (ByteArray × ℕ)} (hF : openFed t dom xs hi p = (.done x, rs)) :
     RepInv t dom xs hi (coinsOf p st' cs) := by
@@ -267,17 +267,17 @@ the table `t` and extras its session gives it, and the salts the loop's salts gi
 where `placeOf` reads them, `placeOf` places its next round (round `p.coins.size`) at the schedule so far on its coins
 (`placeAt`), and the rep it puts back, after that round's coins at any frame state and values (`coinsOf`), keeps
 `RepInv`. -/
-theorem placeOf_sched (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
-    (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray) {t : Tab}
+theorem placeOf_sched (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.ZkServer.Level0.Level0)
+    (s : _root_.Flock.ZkServer.Frames.Release) (p : _root_.Flock.ZkServer.Frames.Rep) (dom : ByteArray) {t : Tab}
     {xs : Array (Array F128)} {hi : Array ByteArray} {st : Stmt} {c : Array F128} {r0 : ByteArray} {q0 : ℕ}
     (hst : s.sts[p.table]? = some st) (hlink : s.link = some c)
     (hsalt : p.alg.size ≤ p.coins.size → p.opened = false → p.opening = none →
       salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
-    (htab : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit st) l0 = .ok t)
-    (hxs : xs = _root_.Flock.Firewall.Drive.extras st (_root_.Flock.Firewall.Drive.linkPoints st c))
+    (htab : _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit st) l0 = .ok t)
+    (hxs : xs = _root_.Flock.ZkServer.Drive.extras st (_root_.Flock.ZkServer.Drive.linkPoints st c))
     (hI : RepInv t dom xs hi p) {sched : Array (ByteArray × ℕ)}
     (hs : schedSoFar t p.rep dom xs hi p.coins = .ok sched) :
-    ∃ q, _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom =
+    ∃ q, _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom =
         .ok ((placeAt sched p.coins.size).1, (placeAt sched p.coins.size).2, q) ∧
       ∀ st' v cs st'', RepInv t dom xs hi (coinsOf { q with st := st', vals := v } st'' cs) := by
   obtain ⟨hal, hto, hop⟩ := hI
@@ -295,7 +295,7 @@ theorem placeOf_sched (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 
     rw [schedSoFar_open t dom xs hi p hal hlt] at hs'
     rcases hop with ⟨hn, ho, hle⟩ | ⟨hle, ho, hS⟩ | ⟨hle, ho, hn, x, hx⟩
     · have hk : p.coins.size = p.alg.size := by omega
-      have hF : openFed t dom xs hi p = (_root_.Flock.Firewall.Drive.openStepM t p.rep dom xs hi
+      have hF : openFed t dom xs hi p = (_root_.Flock.ZkServer.Drive.openStepM t p.rep dom xs hi
           (p.coins.extract 0 p.alg.size), #[]) := by
         unfold openFed
         rw [Array.extract_empty_of_size_le_start hle]
@@ -303,7 +303,7 @@ theorem placeOf_sched (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 
       rw [hF] at hs'
       rw [placeOf_none salts l0 s p dom hlt ho hn hst hlink (hsalt (by omega) ho hn) htab, ← hxs]
       revert hs' hF
-      generalize _root_.Flock.Firewall.Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size) = S
+      generalize _root_.Flock.ZkServer.Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size) = S
       intro hs' hF
       cases S with
       | ask c' n k' =>

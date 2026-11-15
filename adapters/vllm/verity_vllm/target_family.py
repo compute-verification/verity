@@ -34,6 +34,7 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option, workload_arg
+from verity_vllm.log import write
 from verity_vllm.records.schema_ids import TARGET_FAMILY_SCHEMA
 
 #: The names the library's other modules read here; ``Options`` and ``main`` are the ``target-family`` command.
@@ -237,5 +238,5 @@ def main(a: Options) -> int:
     if rec["verdict"] == "FAIL":
         print(line, file=sys.stderr)
         return 3
-    print(line)
+    write(line)
     return 0

@@ -28,12 +28,13 @@ from pathlib import Path
 
 import pytest
 
-from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.device.tests.relay_runs import PARAMS, SESSION, _response, _Writer, ws
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.io_tie import TRAILER
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_head, with_release
-from verity.protocols.accounting.certifier.verifier.warden import Warden, WardenParams, audit, cells, read_cell
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifier, NetworkCertifierParams, audit, cells, read_cell
 
 HERE = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -680,8 +681,8 @@ class _Uncommitted(ws.Publisher):
 
 
 def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, held: tuple[int, ...] = (),
-            watermark: bool = True, params: WardenParams = PARAMS, order=None, phases: int = 1,
-            arrive: tuple[int, ...] = ()) -> tuple[Warden, list[_Writer], _Writer]:
+            watermark: bool = True, params: NetworkCertifierParams = PARAMS, order=None, phases: int = 1,
+            arrive: tuple[int, ...] = ()) -> tuple[NetworkCertifier, list[_Writer], _Writer]:
     """`phases` execution phases of the network certifier at `params` on a `VirtualClock`, one unless given, published
     as `serve` publishes a run: its records and certificates through `Publisher`, `deployment.json`, and
     `warden.json`'s connections and, with `watermark`, its watermark. Every request arrives before the first tick,
@@ -694,7 +695,7 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
     tau = params.bucket_ms / 1000
     starts = arrive or (0,) * len(requests)
     assert len(starts) == len(requests) and list(starts) == sorted(starts)
-    signer = ws.cs.signer(key, 4)
+    signer = ws.ck.signer(key, 4)
     publisher = (ws.Publisher if order is None else _Uncommitted)(out, ws.Issuer(signer, SESSION), params, WR.Cells.of)
     servers: list[_Writer] = []
     mark = _Writer()
@@ -710,13 +711,13 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
     async def open_watermark():
         return asyncio.StreamReader(), mark
 
-    def settled(w: Warden) -> bool:
+    def settled(w: NetworkCertifier) -> bool:
         return all(c.server is not None and c.ingress_ended
                    and (c.egress_ended or (c.ordinal - 1 in held and c.bytes_out)) for c in w.active)
 
-    async def main() -> Warden:
+    async def main() -> NetworkCertifier:
         clock = VirtualClock(-tau / 2)
-        relay = Warden(params, connect, origin=0.0, windows=phases, clock=clock, sleep=clock.sleep, publish=publisher,
+        relay = NetworkCertifier(params, connect, origin=0.0, windows=phases, clock=clock, sleep=clock.sleep, publish=publisher,
                        withhold=publisher.withhold, watermark=open_watermark if watermark else None)
         running = asyncio.create_task(relay.run())
         tasks = []
@@ -740,8 +741,8 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
     relay = asyncio.run(main())
     publisher.close()
     (out / "deployment.json").write_text(json.dumps(ws.deployment_record(
-        params, signer.public_key(), SESSION, origin_unix=0.0, windows=phases, listen=(CERTIFIER[0], 1),
-        upstream=SERVER, slack=relay.slack, run_id=relay.run_id)))
+        params, signer.public_key(), SESSION, origin_unix=0.0, windows=phases, slack=relay.slack,
+        run_id=relay.run_id)))
     log: dict = {"connections": relay.log}
     if watermark:
         log["watermark"] = {"last": relay.watermarked and list(relay.watermarked), "lost": relay.watermark_lost,
@@ -844,13 +845,13 @@ def test_a_run_of_two_execution_phases_is_counted_across_both_phases_records(tmp
                                            for k, r in enumerate(requests)]
     # the bytes each phase's record holds, in each direction: some in each, and the requests' and responses' in all
     ingress, egress = ([sum(len(read_cell(frame, PARAMS.cell_bytes)[2]) for row in r.grid for frame in row if frame)
-                        for r in sorted(ws.read_records(out, PARAMS)[name], key=lambda r: r.window)]
-                       for name in (ws.INGRESS, ws.EGRESS))
+                        for r in sorted(RC.read_records(out, PARAMS)[name], key=lambda r: r.window)]
+                       for name in (RC.INGRESS, RC.EGRESS))
     assert len(ingress) == len(egress) == 2 and all(ingress) and all(egress)
     assert (sum(ingress), sum(egress)) == (sum(map(len, requests)), sum(map(len, responses)))
     record = cf.record_counts(out)
     phases = json.loads((out / "deployment.json").read_text())["windows"]
-    assert phases == 2 and record["phase_records"] == {"certified": 6, "of": len(ws.CERTIFIED) * phases}
+    assert phases == 2 and record["phase_records"] == {"certified": 6, "of": len(RC.CERTIFIED) * phases}
     assert record["connections"] == [
         *({"connection": k + 1, "release": logged[k + 1][0], "exact": True, "why": None, "to_server": len(_sent(s)),
            "from_server": len(r)} for k, (s, r) in enumerate(zip(servers, responses))),
@@ -891,7 +892,7 @@ def _three_ids(tmp_path: Path):
 
 def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direction(tmp_path):
     """The id egress form at the id front's cell of 4,096 bytes (`ids.sh`'s): three id requests
-    (`active.id_request`), one whose prompt takes three cells, each answered in the id form, an event of exactly P
+    (`id_form.id_request`), one whose prompt takes three cells, each answered in the id form, an event of exactly P
     bytes a token and then the trailer, and the watermark stream. The device's own read accepts the run, so every
     egress cell is one the id form reads. The schedule the reader rebuilds from the deployment is the id form's,
     whose digest each record's head holds and the bytes form's is not, so all three records are counted as
@@ -904,8 +905,8 @@ def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direct
     deployment = json.loads((out / "deployment.json").read_text())
     assert deployment["params"]["egress"] == "id"
     assert deployment["digest"] == params.digest.hex() != dataclasses.replace(params, egress="bytes").digest.hex()
-    records = ws.read_records(out, params)
-    device = audit(params, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
+    records = RC.read_records(out, params)
+    device = audit(params, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])
     assert device["accepted"], device["windows"]
     assert [c["egress_cells"] for c in device["connections"]] == [n + 1 for n in tokens]
     release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in relay.log}

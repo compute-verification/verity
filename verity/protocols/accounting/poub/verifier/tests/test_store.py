@@ -1,10 +1,7 @@
-"""`store`: the registered store a pinned BF16 checkpoint alone fixes, and the verifier's binding of a registration to it.
-A salt is SHA-512 in counter mode over its versioned message. On a small checkpoint: the arena is vLLM's 2-D weights in its module order with q/k/v and gate/up fused, each from a block
-boundary; its payload root, recomputed from the weights' digests in worker processes, is `audit.payload_tree`'s; a hello
-whose store is that store under the verifier's key is held and bound, and any other (another key, another checkpoint,
-another layout, a store short of the arenas) is refused with why; a pin whose files aren't the checkpoint's is refused
-before anything reads them; and core's `models.json` is read as its roles' pins. The sessions that run the binding end to
-end are `benchmarks/remote_session/tests/test_store_layout.py`'s."""
+"""`store`: the store a pinned BF16 checkpoint lays out, and the payload salts. A salt is SHA-512 in counter mode over
+its versioned message. On a small checkpoint: the arena is vLLM's 2-D weights in its module order with q/k/v and gate/up
+fused, each from a block boundary, and the store its arenas then host filler; a checkpoint whose files aren't its pin's
+is refused with why (`check`); and core's `models.json` is read as its roles' pins."""
 from __future__ import annotations
 
 import hashlib
@@ -19,10 +16,9 @@ from pathlib import Path
 import pytest
 
 from verity.circuits import codec as circuits_codec
-from verity.protocols.accounting.poub.verifier import audit, store
+from verity.protocols.accounting.poub.verifier import store
 
 ROLE = "synthetic-bf16"
-NODE = b"test-node"
 KEY = bytes(range(32))
 B = store.BLOCK
 TINY = {"layers": 1, "hidden": 16, "heads": 2, "kv_heads": 1, "intermediate": 32, "vocab": 64}
@@ -83,19 +79,9 @@ def raw(directory: Path, name: str) -> bytes:
         return f.read(hi - lo)
 
 
-def binding(ckpt: Path, engines: int = 2, arena_blocks: int = 7, **kw) -> store.Binding:
-    return store.Binding(ROLE, ckpt, ckpt / "pin.json", engines, arena_blocks, log=lambda m: None, **kw)
-
-
-def root_of(s: store.Store, key: bytes = KEY) -> bytes:
-    """`audit.payload_tree`'s root over the store's payloads, salted under `key` as the prover salts them."""
-    salts = [store.store_salt(key, store.PAYLOAD_LABEL, j) for j in range(s.blocks)]
-    return audit.payload_tree(NODE, s.payloads(), salts).commitment.root
-
-
 def test_a_salt_is_sha512_in_counter_mode_over_its_versioned_message():
     """`store_salt` is the first 192 bytes of SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖ SHA512(m ‖ u32be 2), m =
-    "verity/store/salt/v1\\0" ‖ key ‖ label ‖ u64be c: the format `Binding.record` names (`SALT_VERSION`)."""
+    "verity/store/salt/v1\\0" ‖ key ‖ label ‖ u64be c (`SALT_VERSION`)."""
     for label, c in ((store.PAYLOAD_LABEL, 5), (b"", 2 ** 64 - 1)):
         m = b"verity/store/salt/v1\0" + KEY + label + struct.pack(">Q", c)
         want = b"".join(hashlib.sha512(m + struct.pack(">I", k)).digest() for k in range(3))
@@ -120,11 +106,11 @@ def test_the_local_canonical_json_is_ml_circuits_codecs_on_the_shapes_pins_use()
 
 
 @pytest.mark.parametrize("tied", [False, True])
-def test_the_arena_is_vllms_weights_in_module_order_and_its_root_the_payload_trees(tmp_path, tied):
+def test_the_arena_is_vllms_weights_in_module_order_and_the_store_its_arenas(tmp_path, tied):
     """vLLM's module order at one GPU an engine: the embedding, each layer's fused qkv (q's, k's, then v's rows), o,
     fused gate_up and down, then the LM head unless it is tied; each from the block boundary after the one before,
-    norms and biases left out, zeros between. The root `expected_root` builds from the weights' digests, in subtrees
-    of any size and in worker processes, is `audit.payload_tree`'s over the store's payloads under the key."""
+    norms and biases left out, zeros between. The store is its arenas, weights then zero filler each, then host
+    filler, in its payloads and its regions."""
     pin = checkpoint(tmp_path / "m", tied=tied)
     d = tmp_path / "m"
     a = store.arena(d, pin["checkpoint"])
@@ -142,12 +128,9 @@ def test_the_arena_is_vllms_weights_in_module_order_and_its_root_the_payload_tre
     assert a.read(a.entries[3].offset, a.entries[3].nbytes) == b"".join(
         raw(d, f"model.layers.0.mlp.{x}_proj.weight") for x in ("gate", "up"))
     s = store.Store(a, 2, a.weights_blocks + 3, 5)
-    want = root_of(s)
-    store.weight_digests(a, tmp_path / "digests", 2)
-    for workers, log2 in ((1, 16), (1, 2), (1, 0), (2, 2)):
-        assert store.expected_root(s, NODE, KEY, tmp_path / "digests", workers, log2) == want
-    assert store.expected_root(s, NODE, bytes(32), tmp_path / "digests") != want
     W, A = a.weights_blocks, s.arena_blocks
+    weights = a.read(0, W * B)
+    assert b"".join(s.payloads()) == (weights + bytes(3 * B)) * 2 + bytes(5 * B)
     assert s.regions() == [{"kind": "weights", "tier": "hbm", "first": 0, "blocks": W},
                            {"kind": "filler", "tier": "hbm", "first": W, "blocks": 3},
                            {"kind": "weights", "tier": "hbm", "first": A, "blocks": W},
@@ -169,47 +152,10 @@ def test_a_checkpoint_the_layout_doesnt_cover_is_refused(ckpt, tmp_path):
         store.Store(a, 1, a.weights_blocks - 1)
 
 
-def test_a_hello_whose_store_is_the_pinned_models_is_bound_and_any_other_refused_with_why(ckpt, tmp_path):
-    """`hold` against a hello's store, payload root and layout: the root of the right store salted under another key,
-    another checkpoint's arenas of the same shape, a layout of other arenas, and a store short of the arenas are each
-    refused with why and leave the binding unbound; the pinned model's store under the verifier's key is bound, with
-    and without a layout, and its regions are the layout's."""
-    b = binding(ckpt, workers=2)
-    s = store.Store(b.arena, 2, 7, 2)
-    assert b.arena.weights_blocks == 6 and s.blocks == 16
-    layout = [(r["kind"], r["tier"], r["first"], r["blocks"]) for r in s.regions()]
-    checkpoint(tmp_path / "other", seed=1, **TINY)
-    other = store.Store(store.arena_of(tmp_path / "other"), 2, 7, 2)
-    wider = [(r["kind"], r["tier"], r["first"], r["blocks"]) for r in store.Store(b.arena, 2, 8).regions()]
-    cases = [
-        (16, root_of(s, bytes(32)), layout,
-         re.escape("is not the pinned model synthetic-bf16's store (2 arenas of 7 blocks, 6 of weights each, then 2 "
-                   "host filler blocks) under this verifier's payload key")),
-        (16, root_of(other), layout, "is not the pinned model synthetic-bf16's store"),
-        (16, root_of(s), wider, "the hello's layout .* is not the pinned model synthetic-bf16's"),
-        (12, root_of(s), None, "the hello's store is 12 blocks, fewer than the pinned model's 2 arenas of 7"),
-    ]
-    for blocks, root, lay, why in cases:
-        with pytest.raises(store.Refused, match=why) as e:
-            b.hold(NODE, blocks, root, KEY, lay)
-        assert b.record()["bound"] is False, why
-    with pytest.raises(store.Refused) as e:
-        b.hold(NODE, 16, root_of(s, bytes(32)), KEY, layout)
-    assert str(e.value).endswith("register the store `remote_bandwidth.store` lays out, salted with the key the "
-                                 "verifier sent")
-    assert b.hold(NODE, 16, root_of(s), KEY, layout) == tuple(layout)
-    rec = b.record()
-    assert rec["bound"] is True and rec["name"] == ROLE and rec["checkpoint_sha512"] == b.pin["checkpoint_sha512"]
-    assert rec["salt"] == store.SALT_VERSION
-    assert rec["expected_root"] == rec["payload_root"] == root_of(s).hex() and rec["payload_key"] == KEY.hex()
-    assert (rec["host_blocks"], rec["blocks"], rec["weights_blocks"]) == (2, 16, 6)
-    assert b.hold(NODE, 16, root_of(s), KEY, None) == tuple(layout)
-
-
-def test_a_pin_whose_files_arent_the_checkpoints_is_refused_before_anything_reads_them(ckpt, tmp_path):
-    """The binding holds every pinned file to its SHA-512 first: a pin naming another hash for a file, a file changed
-    since its pin, a checkpoint_sha512 that isn't its files', another role's pin and a symlinked file are each refused
-    with why; a registry's lines of the role (`models.jsonl`) are read as its pin."""
+def test_a_checkpoint_whose_files_arent_its_pins_is_refused_with_why(ckpt, tmp_path):
+    """`check` holds every pinned file to its SHA-512: a pin naming another hash for a file, a file changed since its
+    pin, a checkpoint_sha512 that isn't its files' and a symlinked file are each refused with why; a registry's lines of
+    the role (`models.jsonl`) are read as its pin."""
     pin = json.loads((ckpt / "pin.json").read_text())
     shard = sorted(f for f in pin["checkpoint"] if f.endswith(".safetensors"))[0]
 
@@ -221,7 +167,7 @@ def test_a_pin_whose_files_arent_the_checkpoints_is_refused_before_anything_read
 
     def refused(pin_path: Path, role: str = ROLE) -> str:
         with pytest.raises(store.Refused) as e:
-            store.Binding(role, ckpt, pin_path, 2, 7, log=lambda m: None)
+            store.check(ckpt, store.read_pin(pin_path, role))
         return str(e.value)
 
     other = {**pin["checkpoint"], shard: "ab" * 64}
@@ -229,12 +175,12 @@ def test_a_pin_whose_files_arent_the_checkpoints_is_refused_before_anything_read
                                       f"{'ab' * 8}... of {ROLE}")
     assert "is not the SHA-512 of its checkpoint's canonical JSON" in refused(
         pinned(pin["checkpoint"], checkpoint_sha512="cd" * 64))
-    assert refused(ckpt / "pin.json", "llama31-8b") == f"the pin {ckpt / 'pin.json'} is {ROLE}'s, not --model llama31-8b's"
     registry = tmp_path / "models.jsonl"
     registry.write_text("".join(json.dumps(x) + "\n" for x in (
         {"model": "other", "checkpoint": other, "checkpoint_sha512": store.checkpoint_sha512(other)},
         {"model": ROLE, "checkpoint": pin["checkpoint"], "checkpoint_sha512": pin["checkpoint_sha512"]})))
-    assert store.Binding(ROLE, ckpt, registry, 2, 7, log=lambda m: None).pin == pin
+    assert store.read_pin(registry, ROLE) == pin
+    store.check(ckpt, pin, workers=2)
     with (ckpt / shard).open("r+b") as f:
         f.seek(-1, 2)
         last = f.read(1)
@@ -262,18 +208,18 @@ def models_json(ckpt, tmp_path) -> Path:
 
 def test_cores_models_json_is_read_as_its_roles_pin_held_to_the_same_checks(ckpt, models_json, tmp_path):
     """`read_pin` reads core's `models.json` as its entry of the role, named the role, its `files` the checkpoint, so
-    the verifier binds to core's pin itself (the auditor host's `--model`); a role the file lacks is refused with the
-    roles it has, and an entry is held to what a pin is."""
+    `checkpoint.sh` holds a node's checkpoint to core's pin itself; a role the file lacks is refused with the roles it
+    has, and an entry is held to what a pin is."""
     pin = json.loads((ckpt / "pin.json").read_text())
     want = {"name": "SYNTHETIC_BF16", "checkpoint": pin["checkpoint"], "checkpoint_sha512": pin["checkpoint_sha512"]}
     assert store.read_pin(models_json, "SYNTHETIC_BF16") == want
-    assert store.Binding("SYNTHETIC_BF16", ckpt, models_json, 2, 7, log=lambda m: None).pin == want
+    store.check(ckpt, want)
     for role, named in (("LLAMA31_8B_INT8", '"LLAMA31_8B_INT8"'), (None, "null")):
         with pytest.raises(store.Refused) as e:
             store.read_pin(models_json, role)
         assert str(e.value) == f'the pin {models_json} pins no role {named}: its roles are ["OTHER_BF16","SYNTHETIC_BF16"]'
     with pytest.raises(store.Refused, match=re.escape(f"{ckpt / 'config.json'}: SHA-512 ")):
-        store.Binding("OTHER_BF16", ckpt, models_json, 2, 7, log=lambda m: None)
+        store.check(ckpt, store.read_pin(models_json, "OTHER_BF16"))
 
     doc = json.loads(models_json.read_text())
 
