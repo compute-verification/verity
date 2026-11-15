@@ -28,7 +28,8 @@ prompt can be older than `main`: `git show origin/main:AGENTS.md` wins.
   (`config/`), the Python held to each Lean (`difftest/`) and the layout's move maps (`move/`).
 - `tests/`: invariants of the whole tree. `artifacts.json` registers every replicated fixture by `art:` id.
 - The team's own machinery, which nothing in `verity/` reads: `infra/`, `tools/research/`, `tools/agent-guard/` (the
-  team skill). Retired code is deleted, never archived: history keeps every file.
+  team skill). They stay here until the move `tests/tree.toml` plans, and new infra goes here too; this repository is
+  public whole. Retired code is deleted, never archived: history keeps every file.
 
 Dependencies point inward: `tests/import_order.toml` lists which folder may import which, `tests/test_boundaries.py`
 holds the tree to it, and `uv run tools/check/import_order.py` writes its tables. To allow an import, write it, run the
@@ -39,7 +40,7 @@ and `verity/commitments/randomness`; none reaches the catalog (`verity/circuits/
 Nothing under `verity/` imports an adapter (`tests/test_integration_boundaries.py`). Nothing outside `benchmarks/`
 imports its code; a number a protocol uses reaches it through a card file citing an `art:` id.
 
-`verity` is the one command (`tools/verity/cli/README.md`): `verity check [tests|lean|circuits]`, `verity bench NAME`,
+`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench NAME`,
 `verity demo [NAME]`, `verity run CONFIG`, `verity verify proof ARGS`.
 
 ~~~text
@@ -282,5 +283,4 @@ Read the file before the work it names. Skills are in `.agents/skills/`.
 | prove or state anything in Lean (the edit loop, why two agents never share a writable `.lake`) | the lean-proofs skill |
 | write or tune a PoUW GPU kernel | the kernel-engineering skill |
 | call something served, end to end, proved or credited | the smell-check skill |
-| add or edit a skill | the authoring-skills skill |
 | are one of the team's own agents | the team skill first, then the skills it names |
