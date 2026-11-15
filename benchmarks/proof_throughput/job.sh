@@ -20,6 +20,8 @@
 #      check unless FC_ZK_SERVER=0; the result is zk-point's, no contract result and no bundle
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+for o in FLOCK_DRAW_LAW:FLOCK_SAMPLE_DESIGN; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "proof-throughput: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 : "${WORKLOAD:?WORKLOAD= is required}" "${B:?B= is required}"
 # a job written when the ZK server's controls were FC_FIREWALL* sets keys nothing reads: refused, naming the key read now
 for k in ${!FC_FIREWALL*}; do n=FC_ZK_SERVER${k#FC_FIREWALL}; [ -n "${!n+x}" ] \
