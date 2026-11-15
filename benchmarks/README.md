@@ -131,6 +131,7 @@ headings and its call of `kit.report` with `ran_with` and `accepted`:
 
 | command | directory | owner |
 |---|---|---|
+| `verity bench inference_only` | `benchmarks/inference_only` | training |
 
 ## Metrics
 
