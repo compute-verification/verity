@@ -226,8 +226,8 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert doc["rows"][3]["ran_with"] == "ran with: not stated" and doc["rows"][3]["prover_s"] == 1202.0
     head = text.splitlines()
     assert head[1:6] == [PL.NOT_AN_AUDIT, "- Flock: ran with: not stated",
-                         "- Flock with zero knowledge: ran with: coins local challenger; parameters not stated "
-                         "(PROVE-PATH coins challenger; summary.json coins.challenger local)",
+                         ("- Flock with zero knowledge: ran with: coins local challenger; parameters not stated "
+                          "(PROVE-PATH coins challenger; summary.json coins.challenger local)"),
                          "- with sampling: ran with: not stated", "- with recursion: ran with: not stated"]
     assert doc["audit"] is False and "audit" not in text.replace(PL.NOT_AN_AUDIT, "")
     line = table_lines(text)
