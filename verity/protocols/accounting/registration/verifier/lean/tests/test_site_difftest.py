@@ -23,7 +23,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.device import (COMPOSITES, KINDS, OPERAND_CLASSES, OUTSIDE, OWNERS, SCHEMES, TIERS, Auditor,
+from verity.device import (COMPOSITES, KINDS, NO_LINE_RATE, OPERAND_CLASSES, OUTSIDE, OWNERS, SCHEMES, TIERS, Auditor,
                                   DeviceFigures, Entry, HostFigures, Link, Loc, Malformed, MemoryFigures, Refused,
                                   Registration, Sheet, Site, check, genesis, refusal)
 
@@ -153,6 +153,7 @@ ENTRIES = {
                                          links=UPLINK9)),
     "auditor-owned-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
     "keyed-host": ("owner", Entry("", locs=(replace(host("node9"), scheme=SCHEME),))),
+    "unrated-at-certifier": (None, Entry("", links=(Link("u9", ("node0", OUTSIDE), None, 1, NO_LINE_RATE),))),
     "bare-uplink": ("uncertified", Entry("", links=(Link("u9", ("node0", OUTSIDE), 1, 1),))),
     "unreached-host": ("challenger-reach", Entry("", locs=(host("node1"), leaf("dram1", "dram")),
                                                  links=(Link("n01", ("node0", "node1"), 1, 1),))),

@@ -105,6 +105,7 @@ ENTRIES = {
                                          links=UPLINK9)),
     "auditor-owned-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
     "keyed-host": ("owner", Entry("", locs=(replace(host("node9"), scheme=SCHEME),))),
+    "unrated-at-certifier": (None, Entry("", links=(Link("u9", ("node0", OUTSIDE), None, 1, NO_LINE_RATE),))),
     "bare-uplink": ("uncertified", Entry("", links=(Link("u9", ("node0", OUTSIDE), 1, 1),))),
     "unreached-host": ("challenger-reach", Entry("", locs=(host("node1"), leaf("dram1", "dram")),
                                                  links=(Link("n01", ("node0", "node1"), 1, 1),))),
@@ -113,7 +114,8 @@ ENTRIES = {
 example's 14, its `not-the-sheet` now a sheet of an SKU the auditor has no data sheet for; `doubled-clock`, a sheet's
 figures; `unrated-leaf`, `second-clock` and `chipless-host`, a host's leaf with no rate, a second site at another unit
 of time and a host with no on-chip state, each refused by `figures`; `keyed-host`, a prover's location stating a
-scheme; and `unrated-link`, a link that states no capacity and no reason."""
+scheme; `unrated-link`, a link that states no capacity and no reason; and `unrated-at-certifier`, a link to the
+outside of the host a certifier splits that states no capacity but says why, which the check takes."""
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
 """The entries a remote site accepts: it has no certifier and no memory challenger to hold its links to."""
 
@@ -131,7 +133,7 @@ def grown(composite: str = "onsite") -> Registration:
 def test_every_check_has_a_case() -> None:
     """Every refusal but `inventory`, which no entry gets on its own, has an entry here, and every check of the
     spec's but `Figures`, `Fresh` and `Refs`, which the lifecycle's cases cover, more than one."""
-    assert len(ENTRIES) == 20 and {name for name, _ in ENTRIES.values()} - {None} == set(REFUSALS) - {"inventory"}
+    assert len(ENTRIES) == 21 and {name for name, _ in ENTRIES.values()} - {None} == set(REFUSALS) - {"inventory"}
     assert list(CHECKS) == ["Fresh", "Refs", "Kinds", "Sheets", "Figures", "Rates", "Timed", "Chips", "Capacity",
                             "Owners", "Covered", "Reached"]
     assert [name for name, _ in CHECKS.values()] == [
