@@ -222,6 +222,8 @@ class Sketch:
         self.seen = torch.zeros(units, dtype=torch.int32, device=device)
         self.blocks = 0
         self.checked, self.int_mm = False, True
+        #: why torch._int_mm stopped being used, once it raised
+        self.int_mm_refused: str | None = None
 
     def _mm(self, x: Any) -> Any:
         """x · signs, exactly: by torch._int_mm where it runs (held to the float product once), else in float32, exact
@@ -230,8 +232,8 @@ class Sketch:
         if self.int_mm and self.device.type == "cuda" and x.shape[0] > 16:
             try:
                 out = t._int_mm(x, self.signs)
-            except RuntimeError:
-                self.int_mm = False
+            except RuntimeError as e:
+                self.int_mm, self.int_mm_refused = False, f"torch._int_mm raised {e}; the float32 product instead"
             else:
                 if not self.checked:
                     ref = (x[:64].to(t.float32) @ self.signs_f).to(t.int32)
@@ -526,6 +528,8 @@ class Engine:
         times["covered_units"] = sk.covered(self.plan.runs)
         times["sketched_blocks"] = sk.blocks
         times["int_mm"] = sk.int_mm and sk.checked
+        if sk.int_mm_refused is not None:
+            times["int_mm_refused"] = sk.int_mm_refused
         if self.skip_layer is None and times["covered_units"] != self.plan.length:
             raise RuntimeError(f"the step sketched {times['covered_units']} of the plan's {self.plan.length} units whole")
         return sk.sigma, times
