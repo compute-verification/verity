@@ -33,10 +33,10 @@ class Case:
     """One execution phase's sample, certificates, syncs and delivered proof, with the findings of the stand-in Lean run
     on the honest proof."""
 
-    def __init__(self, lw, opening, draw, syncs, tmp):
-        self.lw, self.draw, self.syncs, self.tmp = lw, draw, syncs, tmp
+    def __init__(self, lw, opening, sample, syncs, tmp):
+        self.lw, self.sample, self.syncs, self.tmp = lw, sample, syncs, tmp
         self.certificates = [r.certificate for r in opening.records]
-        self.delivered = standin.prove(lw, opening, draw, syncs, tmp / "honest")
+        self.delivered = standin.prove(lw, opening, sample, syncs, tmp / "honest")
         self.findings, refused = standin.lean(self.delivered.proof, circuit_sha512=standin.circuit_sha512(self.delivered),
                                               program=lw.program, partition=lw.partition)
         assert refused is None
@@ -44,7 +44,7 @@ class Case:
 
     def both(self, *, certificates=None, syncs=None, delivered=None, findings=()):
         """The Lean's and the Python's verdicts on the case with the given inputs replaced."""
-        args = (self.draw, self.certificates if certificates is None else certificates,
+        args = (self.sample, self.certificates if certificates is None else certificates,
                 self.syncs if syncs is None else syncs, delivered or self.delivered,
                 self.findings if findings == () else findings)
         sessions = args[3].sessions()
@@ -132,7 +132,7 @@ def _certificates(c):
 
 
 def _syncs(c):
-    w = c.draw.docket.record["window"]["window"]
+    w = c.sample.docket.record["window"]["window"]
     s = c.syncs[w]
     moved = lambda new: c.syncs[:w] + [new] + c.syncs[w + 1:]
     return [[], c.syncs[:w], moved(ClockSync(s.delta + 7, s.rho)), moved(ClockSync(s.delta, s.rho * 3)),
@@ -179,7 +179,7 @@ def test_a_network_certifier_phase_reads_the_network_certifiers_digest_and_no_sy
     lean, python = c.both()
     assert lean == python and not python["accepted"]
     c.lw = lw
-    case = lw.lean_case(c.draw, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
+    case = lw.lean_case(c.sample, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
     assert case["kind"] == "warden" and case["warden"] == plain.NETWORK_CERTIFIER_DIGEST.hex()
     assert SVC.LA.SERVER.call("link-window", case)["accepted"]
     grid = case["ingress"]["grid"]
@@ -198,7 +198,7 @@ def test_an_advised_phase_is_refused_by_name(tmp_path):
     """No advised link has a verdict of record: the Lean refuses a case of kind ``advised`` by name, its view and advice
     included or not, as it does a kind it doesn't know."""
     c = _network_certifier(tmp_path)
-    case = c.lw.lean_case(c.draw, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
+    case = c.lw.lean_case(c.sample, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
     assert case["kind"] == "warden" and SVC.LA.SERVER.call("link-window", case)["accepted"]
     view = {"view": {"released": [0], "floor": [0], "received": 0}, "advice": "00" * 64}
     for advised in ({**case, "kind": "advised"}, {**case, "kind": "advised", **view}):
@@ -212,7 +212,7 @@ def test_a_disagreement_or_a_case_the_lean_cant_state_rejects(tmp_path, monkeypa
     """The switch names whose verdict is the record's (`by`), the other's accept bit is `reference`'s; where the two
     differ, or the Lean has no case (a key other than an `LmsKey`), the execution phase is rejected with deadline 0."""
     c = _network_certifier(tmp_path)
-    run = lambda lw=c.lw: lw.verify(c.draw, c.certificates, c.syncs, c.delivered,
+    run = lambda lw=c.lw: lw.verify(c.sample, c.certificates, c.syncs, c.delivered,
                                     circuit_sha512=standin.circuit_sha512(c.delivered))
     lean = run()
     assert lean["by"] == "lean" and lean["accepted"] and lean["reference"] == {"accepted": True}
@@ -242,6 +242,6 @@ def test_a_disagreement_or_a_case_the_lean_cant_state_rejects(tmp_path, monkeypa
             return self.key.verify(message, signature)
 
     other = replace(c.lw, key=Wrapped(c.lw.key))
-    assert other.lean_case(c.draw, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions()) is None
+    assert other.lean_case(c.sample, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions()) is None
     v = run(other)
     assert not v["accepted"] and v["public"] == {"verdict": 0, "deadline": 0} and v["reference"] == {"accepted": True}

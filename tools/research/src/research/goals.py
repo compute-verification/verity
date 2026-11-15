@@ -84,6 +84,9 @@ class Route:
             raise SlackError(f"{what}: the route is unreachable: {getattr(e, 'reason', e)}") from None
         if not isinstance(out, dict) or not isinstance(out.get("goals"), list):
             raise SlackError(f"{what}: the answer has no goals list")
+        if body is not None and isinstance(out.get("message"), str):
+            # A saved write the norms check warns about, or couldn't read: the findings and their fixes, for this agent.
+            print(f"research goals: {out['message']}", file=sys.stderr)
         return out["goals"]
 
 

@@ -657,6 +657,10 @@ def _address(text: str) -> tuple[str, int]:
     return host, int(port)
 
 
+def _premise(where: Mapping[str, Any]) -> str | None:
+    return mc.premise(where) if mc.PREMISE in where or mc.PREMISE_BEFORE in where else None
+
+
 def line(answer: Mapping[str, Any]) -> str:
     # said of the certified bits until an answer names its tier and leaf
     pub = f"{answer.get('public') or {}} through the device model, not the answer"
@@ -665,7 +669,7 @@ def line(answer: Mapping[str, Any]) -> str:
         return (f"POUS: accept: {w.get('model')}@{str(w.get('revision'))[:10]}'s {w.get('linears')} linears, "
                 f"{w.get('bytes')} B of the checkpoint's {w.get('checkpoint_bytes')} in {w.get('used_blocks')} of "
                 f"{w.get('blocks')} blocks; certifies {pub}; "
-                f"{CS.PREMISE} {(answer['profile'].get('placement') or {}).get(CS.PREMISE)}; {CS.SETUP}")
+                f"{CS.PREMISE} {_premise(answer['profile'].get('placement') or {})}; {CS.SETUP}")
     return f"POUS: {answer['verdict']}: {answer['reason']}"
 
 

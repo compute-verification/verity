@@ -12,7 +12,7 @@ schedule has only where it sets them, and what the check says of a schedule with
 
 namespace NetworkCheck.Period
 
-/-- The byte of an id request past its first prompt id (`io_request.layout`'s `start` and `active.ID_FIELD_BYTES`):
+/-- The byte of an id request past its first prompt id (`io_request.layout`'s `start` and `id_form.ID_FIELD_BYTES`):
 with lengths rows a cell's payload holds at least this much, so a request's head and first prompt id are in its first
 cell, each field at its place (`io_request.layout` raises for a smaller cell). -/
 def firstPromptEnd : Nat := 378

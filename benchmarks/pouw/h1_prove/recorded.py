@@ -908,7 +908,7 @@ def cmd_summarize(a: argparse.Namespace) -> int:
         pe = out / s["tag"] / "prove.err"
         fw = text + (pe.read_text(errors="replace") if pe.exists() else "")
         proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": text[-1500:] or None,
-                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.zk_server" in fw}
+                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.zk_server" in fw or "t.firewall" in fw}
     zk_server = a.zk_server == "1"
     checks, ok = [], bool(record["z_only_registration"]["refused"])
     if zk_server and not proofs.get("honest", {}).get("firewall_timed"):

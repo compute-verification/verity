@@ -285,7 +285,7 @@ def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_network
     shutil.copyfile(reply, published / "start.json")
     got = subprocess.run([sys.executable, "-m", SS.LEAK_GUARD, str(published), str(q), "--gates",
                           str(kept / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, env=SS.guard_env())
     assert got.returncode == 3, got.stdout + got.stderr
     assert [d["path"] for d in json.loads((tmp_path / "report.json").read_text())["found"]] == ["start.json"]
     doc = json.loads((q / "leak-guard.json").read_text())
@@ -554,7 +554,7 @@ def _gate_chain(tmp_path, monkeypatch, peer):
             "--main", str(tmp_path / "main.txt")]
 
 
-def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
+def test_a_gate_coin_sample_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
     argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
     assert SS.main(argv) == 0
     scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")

@@ -140,7 +140,7 @@ period that closed with its reserves held. ``pearlplus-period rule``, once the c
 (`pearlplus_period_rule`; exit 1 when BROKEN). ``coin``: the verifier's coin record published the moment it is
 sampled (`coin`), ``--run-dir`` naming the run's Attempt as its custody where no put preserves it.
 
-``record``: SPOT's answer from the records audit kept under ``--sampled-proofs`` (`verity/protocols/proofs/spot/prover/audit/prove_path.sh`'s with
+``record``: SPOT's answer from the records audit kept under ``--sampled-proofs`` (`benchmarks/prove_path/run.sh`'s with
 ``PP_RECORDS=1``, or V3c's: ``summary.json``, ``window/audit.json``, and ``window/registration.json``, the docket it
 sampled against), read as `served_integrity.answer` reads it (Pearl+'s window tie from the same files under
 ``--window-tie DIR`` where it is given, the window tied to W); each other subprotocol's from
@@ -159,7 +159,7 @@ $OUT/composite, `composite_answer`); a Lean rejection there rejects whatever the
 product's check, one whose Lean answered, or with a development one (composed on the served node or on a prover node),
 no Lean answer is the record's, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line
 name ``pending``; each says, as ``lean``, where its answer was read or why there is none. A composite not of the
-record's window is refused (`composite_tie`): its SPOT case must name the digest of the registration record R that
+record's window is refused (`composite_tie`): its SPOT case must name the digest of the docket R that
 the SPOT audit the record reads sampled against (`window_digest`), and its commitment must bind its cases' digests.
 Python accepts nothing here: the exit is 0 only for the Lean's accept, 1 for a reject, a refused composite or a block
 record `block_record.check` refuses, 2 for pending.
@@ -819,7 +819,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                 "replay": None if rp is None else rp.get("error") or {
                     k: rp.get(k) for k in ("s", "cpus", "cores_to_keep_pace", "device_s", "node", "finished", "of")},
                 "execution_phase": None if phase is None else {
-                    "clock": "the auditor host's", **{k: phase.get(k) for k in ("start_utc", "end_utc", "seconds", "why")},
+                    "clock": "the auditor device's", **{k: phase.get(k) for k in ("start_utc", "end_utc", "seconds", "why")},
                     "prover": phase.get("prover")},
                 "checks": doc.get("checks"), "class": doc.get("class")}
     check, credit = doc.get("check") or {}, doc.get("credit") or {}
@@ -1484,16 +1484,16 @@ def pearlplus_why_tied(reserved: Mapping[str, Any] | None) -> str:
 
 
 #: whose clock `execution_phase` reads, and where
-PHASE_CLOCK = ("the auditor host's, to the second, in its signed ledger's entries as the gate answered them "
+PHASE_CLOCK = ("the auditor device's, to the second, in its signed ledger's entries as the gate answered them "
                "(ledger.jsonl beside this document); none of these times is the served node's")
 #: whose clock the serve's own wall is on, which a piece holds beside `execution_phase`'s times
 PROVER_CLOCK = ("the served node's, the prover's: the serve's own wall for its timed call (generate_s), which no auditor "
-                "host measured")
+                "device measured")
 #: `served_passes.py lean`'s check document beside the piece's Lean verdict
 PEARLPLUS_LEAN_CHECK = "pearlplus-lean-check.json"
 #: where Pearl+'s two checks ran, which a piece says beside what each cost
 CHECKS_WHERE = ("on the served node, at the serve, over the passes it retained: the node each cost names is the served "
-                "node, not the node the audit runs on, and no auditor host runs either check again, since their case is "
+                "node, not the node the audit runs on, and no auditor device runs either check again, since their case is "
                 "witness")
 #: what a tied piece's ``class`` says its two derived counts are
 CLASS_LOAD = ("the class's fixed load, which Pearl+'s check holds the passes to (verify --class): a request a slot "
@@ -2222,7 +2222,7 @@ class CompositeRefused(ValueError):
 
 
 def window_digest(audit: Path) -> tuple[str | None, str]:
-    """The digest of the window's registration record R, the record SPOT's audit ``audit`` sampled against
+    """The digest of the window's docket R, the record SPOT's audit ``audit`` sampled against
     and every case of the window commits to (`served_cases.window_case`, `served_cases.record_of`), and where it was
     read; or None and why there is none."""
     import served_cases as SC
@@ -2234,7 +2234,7 @@ def window_digest(audit: Path) -> tuple[str | None, str]:
 
 
 def composite_tie(doc: Mapping[str, Any], window: str | None, read: str) -> str | None:
-    """Why the public composite ``doc`` is not of the window whose registration record has digest ``window`` (read
+    """Why the public composite ``doc`` is not of the window whose docket has digest ``window`` (read
     from ``read``), or None when it is: its SPOT case (`served_cases.SAMPLED`) names that digest, and its commitment is
     `composite.bind` of its cases' digests, so the commitment its Lean judged binds that window. The Lean ties the other
     cases to the same record (`Core.Composition.same`, `Core.Remote.windows`), and accepts only where every case names
@@ -2269,7 +2269,7 @@ def composite_answer(public: Path, product: str, window: str | None = None,
     read; or None and why there is no answer to take: a composite.json that doesn't parse, no composite of one of the
     product's checks (`block_record.CHECKS`) or more than one, one whose Lean gave no answer, or one composed as a
     development check, which claims no record. `CompositeRefused` where the composite is not of the window whose
-    registration record has digest ``window`` (`composite_tie`)."""
+    docket has digest ``window`` (`composite_tie`)."""
     from verity_e2e_demo import block_record as BR
 
     found = []

@@ -18,7 +18,7 @@ An instance is one JSON object:
 * `program`: the declaration's circuit `D`, a `verity-ir/descriptor/v1` Program as text (`verity/circuits/PROTOCOL.md`),
   read with Flock's decoder (`Flock.Program.decode`). Its canonical layout (§6) is `D`: gate `g` of the layout is
   `Fin D.N` gate `g`, one primitive call returning one `Value<w>`, and `w g` is that `w`, in bits (`Circuit.w`, which
-  the definition calls `verity.ir`'s `Value<w>`). The input gates are the input nodes, `Input<w>_v1` and
+  the format calls `Value<w>`). The input gates are the input nodes, `Input<w>_v1` and
   `RegisteredInput<w>_v1` (§5). `reads g` is the set of gates `g`'s operands name (`Flock.Program.Prog.gate`: the
   layout's operands; a repeat names the same gate). The definition's gates read only earlier gates (`reads_lt`), so a
   Program with a gate reading itself or a later one is refused (`not-topological`), and its input gates read nothing

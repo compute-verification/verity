@@ -93,8 +93,10 @@ theorem declaredIn_take_mono (V : Vocab d α) (θ : ByteArray) (F : Array ByteAr
     (h : n ≤ m) (hd : DeclaredIn V θ F mp cut w (view D c (log.take n))) :
     DeclaredIn V θ F mp cut w (view D c (log.take m)) := by
   obtain ⟨-, hdecl, -⟩ := view_take_prefix D c log h
-  obtain ⟨j, hw, p, hp, hn⟩ := hd
-  refine ⟨j, hw, p, hp, hn.mono fun e he => ?_⟩
+  obtain ⟨j, hw, hd⟩ := hd
+  refine ⟨j, hw, fun r hr => ?_⟩
+  obtain ⟨p, hp, hn⟩ := hd r hr
+  refine ⟨p, hp, hn.mono fun e he => ?_⟩
   simp only [Set.mem_ofPred_eq] at he ⊢
   exact ⟨hdecl.subset he.1, he.2⟩
 

@@ -75,7 +75,7 @@ def signer(state: Path | None, key_sha512: str) -> mc.LmsSigner:
         public = bytes.fromhex(json.loads((state / KEY_STATE).read_text())["public"])
     except (OSError, ValueError, KeyError, TypeError) as e:
         raise Refused("key", f"{state} holds no memory challenger key ({type(e).__name__}): it is made once on the "
-                             "auditor's host (`device_key`) and its SHA-512 pinned ([[pin]])") from None
+                             "auditor's device (`device_key`) and its SHA-512 pinned ([[pin]])") from None
     if not (state / "seed").is_file():
         raise Refused("key", f"{state} holds a leaf state but no key seed")
     _pinned(state, public, key_sha512)

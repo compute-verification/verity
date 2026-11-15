@@ -5,13 +5,12 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import subprocess
 from contextlib import redirect_stderr, redirect_stdout
 
 import pytest
 
-from research import remote
+from research import remote, settings
 from research.pods import budgets
 from research.pods.nebius import wake as W
 
@@ -118,7 +117,7 @@ def test_the_pod_refuses_without_a_key_that_may_start_vms_and_reads_one_from_its
         monkeypatch.delenv(k)
     key.write_text("# start-capable\nNEBIUS_SA_ID=serviceaccount-dummy\nNEBIUS_BIN='/data/nebius/bin/nebius'\n")
     W.load_key(key)
-    assert os.environ["NEBIUS_SA_ID"] == "serviceaccount-dummy" and os.environ["NEBIUS_BIN"] == "/data/nebius/bin/nebius"
+    assert settings.need("NEBIUS_SA_ID") == "serviceaccount-dummy" and settings.need("NEBIUS_BIN") == "/data/nebius/bin/nebius"
 
 
 def test_a_dry_run_checks_and_starts_nothing(pod):

@@ -22,6 +22,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
 from verity.protocols.accounting.certifier.verifier import arith_encode, charge_chain
 from verity.protocols.accounting.certifier.prover import window_charge as WC
 
@@ -146,8 +148,9 @@ def test_a_slices_lengths_fit_a_length_slot_up_to_the_leans_mt_cap():
                      re.M)
     assert lean and WC.MT_CAP == (1 << int(lean[1])) - 1 == (1 << charge_chain.LENGTH_BITS) - 1
     for L in sorted({0, 1} | {v for k in range(41) for v in (2 ** k - 1, 2 ** k, 2 ** k + 1)}):
-        try:
-            taken = charge_chain.check_length_slots({"L": L}) == {"L": L}
-        except ValueError:
-            taken = False
-        assert taken == (L <= WC.MT_CAP), L
+        if L <= WC.MT_CAP:
+            assert charge_chain.check_length_slots({"L": L}) == {"L": L}, L
+        else:
+            with pytest.raises(ValueError, match=f"an output length of {L.bit_length()} bits, wider than a length "
+                                                 f"slot's {charge_chain.LENGTH_BITS}"):
+                charge_chain.check_length_slots({"L": L})

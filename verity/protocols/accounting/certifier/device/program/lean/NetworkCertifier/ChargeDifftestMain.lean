@@ -8,7 +8,7 @@ under `NetworkCertifier`.
 
 It is the one test that holds `arith_encode.reference_charge`, which circuit-check holds `ChargeCount_v1{N}`'s circuit to,
 to the certifier program's `AdviceV1.charges`, which `Proofs.Certifier.Code` (`CodeChargesV1`) proves equal to the
-reference definition (`Security/Definitions/Certifier/AdviceV1.lean`). -/
+reference definition (`security/Definitions/Certifier/AdviceV1.lean`). -/
 
 @[expose] public section
 

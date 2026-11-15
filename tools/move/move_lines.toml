@@ -166,3 +166,7 @@ reason = "The rename ran by a copy of inference_only_map.toml narrowed by hand t
 ["6b2dae730f06053c576435fe828128e24166656d"]
 move = false
 reason = "The rename ran by a copy of theta_map.toml narrowed by hand to the three Lean files its message names, which no commit holds; the map at its parent names paths its parent lacks, and rename.py refuses it there."
+
+["e961879c09863af3ee7abcd89de06861d6dd4125"]
+line = "Layout-move: tools/move/docket_paths_map.toml --no-lock"
+reason = "The commit ran layout.py with --no-lock, as its message's command says; its trailer leaves the flag out, so the rerun writes another uv.lock."

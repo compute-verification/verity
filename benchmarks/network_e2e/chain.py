@@ -719,22 +719,22 @@ def _registered(g: dict | None) -> str:
     margin, bound = (nxt, "the next window closed") if nxt is not None else \
         (end, "its session ended, with no window after it") if end is not None else (None, None)
     if g.get("at_serve_time"):
-        return (f"by {by} at serve time{ref}, {lag}, before its draw and {'at least ' if a else ''}{margin} s before "
+        return (f"by {by} at serve time{ref}, {lag}, before its sample and {'at least ' if a else ''}{margin} s before "
                 f"{bound}{stamped}")
     if g.get("at_serve_time") is None:
         unknown = ([] if margin is not None else ["the next window's close isn't in the endpoint's records"]) \
-            + ([] if g.get("before_draw") is not None else ["no draw receipt orders it against its draw"]) \
+            + ([] if g.get("before_draw") is not None else ["no sample receipt orders it against its sample"]) \
             + ([f"its run record's stamp, {a['stamp']} to the second, puts it up to {abs(margin)} s after {bound}, "
                 f"though its file's time, {g['file_at']}, is before"] if a and a.get("within") is False else [])
         when = f", no later than {g['at']} ({_lag(g.get('after_close_s'))})" if a else f" at {g['at']}, {lag}"
         return f"by {by}{ref}{when}; whether at serve time is unknown: {' and '.join(unknown)}"
     lead = None if not g.get("first_draw") else round(
         (datetime.fromisoformat(g["first_draw"]) - datetime.fromisoformat(g["at"])).total_seconds(), 1)
-    late = ([] if g.get("before_draw") is not False else ["after its draw"]) \
+    late = ([] if g.get("before_draw") is not False else ["after its sample"]) \
         + ([f"{abs(margin)} s after {bound}"]
            if margin is not None and (margin < 0 or g.get("before_draw") is not False) else [])
     return (f"after serving, by {by}{ref}, {lag}, {' and '.join(late)}{stamped}"
-            + (f", {lead} s before the first draw" if lead is not None and lead >= 0 else ""))
+            + (f", {lead} s before the first sample" if lead is not None and lead >= 0 else ""))
 
 
 def markdown(c: dict) -> list[str]:
@@ -797,7 +797,7 @@ def markdown(c: dict) -> list[str]:
             lines += ["", "## Prove path", "",
                       f"`prove_path.py audit --serve-run`'s output adopted from {p['dir']}: each arm a Commit window of "
                       f"the endpoint's served run ({b['served']}), its step units compiled from that window's advice by "
-                      "the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean ZK server "
+                      "the registered compiler, sampled on the auditor's challenger's coins, proved --zk behind the Lean ZK server "
                       f"and verified by Lean. Bound to these runs: {_cell(p['bound'])}"
                       + (" (every arm's Commit the endpoint's, its run root the one sealed while serving, its advice "
                          "root registered under that Commit and opened to the report's advice of its window, and an "
@@ -817,14 +817,14 @@ def markdown(c: dict) -> list[str]:
         else:
             lines += ["", "## Prove path" + (" (from the fixed workload, not this run)" if served else ""), "",
                       f"`prove_path.py audit`'s output adopted from {p['dir']}: each rank's step units compiled from the "
-                      "advice by the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean "
+                      "advice by the registered compiler, sampled on the auditor's challenger's coins, proved --zk behind the Lean "
                       "ZK server and verified by Lean. The advice each arm committed is the --advice file: "
                       f"{_cell(p['committed_is_the_advice_file'])}. Bound to these runs: {_cell(p['bound'])}"
                       + ("" if p["bound"] else f" ({p['bound_why']}), so its ok is not the report's")
                       + "".join(f"; {n} held by {a['advice_held_by']}" for n, a in p["arms"].items()
                                 if a.get("advice_held_by")) + "." + gaps]
-        lines += ["", "| arm | ok | rank | audit accepted | units | drawn | incorrect proof blocks at most | negatives refused | "
-                  "forged unit refused | s | prove s a drawn unit | Lean verify s a drawn unit | proof bytes | source |",
+        lines += ["", "| arm | ok | rank | audit accepted | units | sampled | incorrect proof blocks at most | negatives refused | "
+                  "forged unit refused | s | prove s a sampled proof block | Lean verify s a sampled proof block | proof bytes | source |",
                   "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
 
         def each(x, k):

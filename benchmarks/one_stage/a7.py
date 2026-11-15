@@ -6,7 +6,7 @@ reader, each registered block freed at its values' last structural reader, and e
 the cap the committed pass row and the public lifetime cap give), one instance of each per step
 (`verity.circuits.requirement_units`), the layout row at two epochs a value.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/tools/verity/circuit_check/src \\
       python benchmarks/one_stage/a7.py --bin flock-circuit --lean verity-verify-proof --out DIR [--k K] [--steps 32] [--delta 2^-20]
 
 * **Stand-in.** A decoder's requirement built directly (`requirement.Requirement`): 8 weight blocks, every step reading
@@ -78,8 +78,8 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
-from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
+import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.accounting.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402

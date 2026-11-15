@@ -456,7 +456,8 @@ def test_the_counts_schedule_is_the_cost_runners_by_default_and_each_part_is_an_
     cost = CR.parser().parse_args(["cost", "--out", "x"])
     assert (len(CR.CLASSES), cost.delay, cost.lanes, cost.window) == (6, 30, 16, 600)
     assert (LB.CLASSES, LB.DELAY, LB.COST_LANES, LB.COST_BUCKETS) == (6, 30, 16, 600)
-    assert CR.__file__ == str(ROOT / LB.COST_RUNNER) and "ingress_buckets=args.delay" in Path(CR.__file__).read_text()
+    runner = Path(CR.__file__).resolve()
+    assert runner == ROOT / LB.COST_RUNNER and "ingress_buckets=args.delay" in runner.read_text()
     inp = LB.inputs()
     assert [inp[k].value for k in ("lanes", "classes", "delay", "ingress_buckets")] == [None, 6, 30, 30]
     assert list(inp)[list(inp).index("lanes"):][:4] == ["lanes", "classes", "delay", "ingress_buckets"]

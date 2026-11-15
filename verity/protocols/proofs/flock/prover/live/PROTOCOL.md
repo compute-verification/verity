@@ -1160,7 +1160,7 @@ the same way at the second table:
 | `cut-tree` | samples its first tree at or after that round one leaf larger than the statement's (the CPU device: its trees sample through the salt context) | the frame's stop at the opening round that differs; cut at round 0, the ZK server's `ZK-SERVER-REFUSED: the proof's exposed value 0 is not the one the ZK server passed` may come with it |
 
 `FC_ZK_SERVER_CUT_AT` counts the table's device rounds over both reps (default 0; a rep's bucket has the count so far as
-`zk_server_device_rounds`, which leaves out the rounds the host's inner proof sends), and a `cut-` control fires once a table.
+`firewall_device_rounds`, which leaves out the rounds the host's inner proof sends), and a `cut-` control fires once a table.
 The selftest's `zk_worker_cut_MODE` holds each `cut-` control to the rule on the CPU path, beside an honest
 session: cut at the table's third, half-way and last device round (`cut-tree` at its first and half-way round), the verifier
 gets the honest session's every request up to its `Finish`, in the same order and at the same sizes, with no proof. It
@@ -1253,12 +1253,12 @@ connection). The auditor sees every stop:
   stays with the developer, beside the ZK server: it holds more than the auditor's records do (each stop's `why`, every
   `refused` attempt with its part, every `wait` for the slot, each interior registration's own key, §10.2). The auditor
   sees serve's and `rec_live`'s records only.
-  `zk_server.json`, which `rec_live` writes beside each inner session's record, names the recursive session and nothing
+  `firewall.json`, which `rec_live` writes beside each inner session's record, names the recursive session and nothing
   else.
 
 **A stop ends the recursive session** (`verity_flock.zk_server`). `rec_live --zk-server DIR --parts L0,…,alg --budget b` opens a
 recursive session for each inner session it serves, with its V* statements in their order, public and fixed from K (L0–L6
-and the algebra at K = 4096), recorded in the `open` event (`zk_server.json`, beside the session's record, names it), and
+and the algebra at K = 4096), recorded in the `open` event (`firewall.json`, beside the session's record, names it), and
 records its finish or its stop. Every outer session reaches the challenger through the ZK server's relay (`python -m
 verity_flock.zk_server relay --state DIR --session ID --part NAME --to SERVE`, between `flock-circuit prove --zk` and
 `serve`), which serves it only while its recursive session is open, its inner session finished, and nothing of it stopped,
@@ -1294,7 +1294,7 @@ proofs, and at `Finish` decides (`Decision.after`, at the wall clock's time): th
 stop, as is a `Finish` with fewer than the session's proofs (two a table, the loop's finish's: where a check refused, the
 finish computed none) and a missed release time. A session that goes waits for its release time; its proofs, then `Finish`,
 leave, and serve's verdict is its release or its stop. At each decision the loop writes one line to its stderr,
-`ZK-SERVER-TIMES {"session", "part", "ready_ms", "release_ms", "outcome"}`: when it decided, the release time it holds
+`FIREWALL-TIMES {"session", "part", "ready_ms", "release_ms", "outcome"}`: when it decided, the release time it holds
 the proofs to (null on a stop) and `go` or `stop`, by which a run times its windows (pod 85's `RELEASE=1`,
 `rec_inner.py release-report`). `verity/protocols/proofs/recursion/verifier/zk_server/tests` holds these stages to
 Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
