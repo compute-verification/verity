@@ -62,3 +62,62 @@ Tests [ran], on 6ace99d0d01's tree:
 - `test_chain_record` plus `test_released_keys`: 43/43.
 - Ruff: the same findings as at 14ff649845cd.
 
+[2026-11-15T00:30Z] 5620338a5dbc
+MODEL: Claude Opus 5.5
+
+NETSEATS2: both tasks are done and pushed at 4:29 PM PST. The collect head is `2afe42ed443`, a fast-forward from `2ffef78f32f`:
+- `654e72987c8`: n2's log split.
+- `2afe42ed443`: the report's n2 step holds no timings and no `structured`.
+
+**Task 1: n2.log, line by line** [read: the diff; ran: the tests below]
+
+Public lines print only keys that have a kind in "N2's summary". Every other line goes to `n2.log` beside `--witness` (`$Q/witness/n2/n2.log`) through a new `wlog`. A line that `plog` prints is public, but it goes to the witness when the signer refused any phase. That is ruling 4: a refused run's public summary has nothing per window.
+- In `member`, "drew windows U (k of N) on B coin bytes after commitment C" uses `plog`. Its keys are `selection/units` and `draw/units` (challenge), `k` and `population` (structure), `coin_bytes` (structure) and `commitment` (commitment).
+- "the prover proves windows U instead" uses `plog`. Its key is `units` (challenge).
+- The per-window line splits in two:
+  - Accept or reject, public, LATE, Lean proved, output word and as expected use `plog`. They are all `windows/*` outputs.
+  - Prove `session_s`, `prove_total_s`, `proof_bytes` and verify seconds go to the witness. These are timings and sizes, none of the four kinds.
+- "the draw of record (by) is U; proved [w]; REFUSED by name / matches" uses `plog`. Its keys are `selection/by`, `units`, `windows/*/window` and `why/*`.
+- In `prove`, the reference line splits in two:
+  - "N execution phases, words, expected verdicts" uses `plog`. Its keys are `reference/*/word` and `expect` (output). The count goes with per-window facts.
+  - "failed parts" goes to the witness. It is not in the list.
+- The stager line splits in two:
+  - "unit, k_log, ANDs, pin" is printed through the ordinary log, always public. Its keys are under `stager/*` (structure), and none of them is per phase.
+  - "lowered in s" goes to the witness. It is a timing.
+- The staged line splits in two:
+  - "N statements" is public. Its key is `staging/statements` (structure).
+  - The full staging dict goes to the witness. It holds timings.
+- "member M: the draw of record … at most b wrong, epsilon at delta, refused by name" uses `plog`. Its keys are `network/selection/*` and `wrong_units/*`.
+- "member M: network accept/refuse (refused windows), windows [..]" uses `plog`. Its keys are `network/accepted`, `network/refused/*` and `windows/*/accepted`.
+- The scan line splits in two:
+  - "the verifier received F files, scanned for B pieces: leaked L, control holds all H; as expected" uses `plog`. Its keys are `received/files` and `received/blobs` (structure), and `received/leaked` and `received/control/holds_all` (output).
+  - `verifier_bytes`, `verifier_found`, the count of `public_pieces`, `structured` and `control/blobs_found` go to the witness. These are the witness pieces and sizes.
+- "dry: done" and "done: ok/FAILED" stay public, as protocol outputs.
+
+The order is right: `refused_any` is set at line 568, before `member` runs at line 602 [read]. The tests run `--dry`, so the lines in `member` under a refusal are [argued], not [ran].
+
+**Task 2: the report.** I took option 1: the report's n2 step holds no timings and no `structured`.
+- Before this change, the witness-derived keys were `steps.n2.members.*.prove_s`, `steps.n2.members.*.verify_s` and `steps.n2.members.*.structured`. They now stay only in `$Q/witness/n2/summary.json`, which already exists, so no new witness file was needed. The public report gives each member's verdict alone.
+- What option 1 broke:
+  - `test_chain_record`'s assert on `structured`. It now asserts that none of the three keys is present.
+  - `chain_record.sh`'s `--n2-witness` argument and `chain_record.py`'s `--n2-witness`. Both are removed.
+  - [read] Nothing else reads them. `rg` finds no other reader of the report's n2 `prove_s`, `verify_s` or `--n2-witness`; the other `prove_s` and `verify_s` hits are in other records.
+- What option 2 would break: nothing in tests. But timings are measurements and `structured` names witness pieces, so I found no reason that makes them protocol structure.
+- The released-keys list: I added no list for the report's n2 keys. A list rules a whole file, so listing those keys alone would need a list for every key of the report. The report's n2 step now holds no witness-derived key, so nothing is waiting on that list. `report/**` stays in `not_yet`.
+
+**Tests** [ran] on the changed tree:
+- `test_n2_zk.py`, `test_chain_record.py` and `test_released_keys.py`: 49 passed.
+- Two new asserts in `test_n2_zk`:
+  - Stdout has the phases line and no "failed parts", and the witness `n2.log` has them.
+  - Under a refused phase, the public stdout is identical wherever the refusal fell and prints no "phases"; the witness log has the line.
+- Ruff on the four changed Python files finds the same six findings as at `2ffef78f32f`.
+- `bash -n chain_record.sh` passes.
+
+**Still public that should not be** [argued]:
+- `n2.log` gets the process's stderr whole. That includes `SystemExit` messages, tracebacks, and anything a7 or prove_subprotocol print themselves. Any of these can name paths, timings or witness values.
+- A run with no `--witness` prints the witness lines to stdout. One example is a `CR_N2_CMD` override that drops it.
+- `report/**` is still in `not_yet`, and has no list.
+- The `warden` JSON keys wait on the rename's keep list.
+
+TIMER: none
+
