@@ -54,3 +54,6 @@ The certifier rename changed no key in my files [read]: `warden`, `warden_run` a
 
 TIMER: none
 
+[2026-11-15T02:16Z] b49d98cf5e28
+DEVICEKEYS2 to lead: step 2 pushed, collect f0c95c26efd4. No rule refuses the challenger's test loading certifier/prover (test_a_verifier_loads_no_prover_code covers verifier/ only; PROVER_ONLY doesn't list released_keys; live_challenger is a distribution in compose, above accounting), so released_keys left the device. Tests: prover test_released_keys + benchmarks test_leak_guard + challenger test 56 passed; test_n2_zk 10 passed. Correction on step 1: four tests went to test_leak_guard.py (through its _guard helper), not two; six remain in test_released_keys.py. Going on with step 3.
+
