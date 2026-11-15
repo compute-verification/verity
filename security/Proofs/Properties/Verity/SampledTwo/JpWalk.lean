@@ -400,8 +400,9 @@ theorem isEmpty_checkRegistered (c : Array String) (got : Json) (mine : Flock.V 
 theorem isEmpty_checkOutputs (c : Array String) (got : Json) (mine : Flock.V (Array Spot.Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Spot.Supplied.Rows))
     (rootOf : String → Spot.Supplied.Rows → Spot.Registered.Entry → Flock.V String)
-    (outputs : Array (String × String × Earlier)) (log : Array Json) (hc : c.isEmpty = false) :
-    (checkOutputs c got mine held supplied rootOf outputs log).isEmpty = false := by
+    (outputs : Array (String × String × Earlier)) (log : Array Json)
+    (certified : Array Spot.Registered.Entry) (hc : c.isEmpty = false) :
+    (checkOutputs c got mine held supplied rootOf outputs log certified).isEmpty = false := by
   unfold checkOutputs
   split
   · exact isEmpty_addCode _ _
