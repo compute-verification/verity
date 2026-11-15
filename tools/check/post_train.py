@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """`tools/check/post_train.py [COMMIT] [--attempt RID] [--on MACHINE] [--cores LIST] [--workers N] [--force]`: the vLLM
-reference regression's manifest rebuilds and the fast rows of record's neutrality on a landing of main.
+reference regression's manifest rebuilds and the fast workloads of record's neutrality on a landing of main.
 
 `check` blocks on the regression's cheap T0 tier; the checks that recompute from a row's Programs (marked `rebuild`: the manifest
 rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and `step_segmentation`'s decode of every component;
 about an hour of CPU in one process) run here instead, once per landing.  `research merge --push` starts
 this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
 
-After the rebuilds the same run rebuilds the fast rows of record's Programs and compares them with their pins (`verity-vllm
+After the rebuilds the same run rebuilds the fast workloads of record's Programs and compares them with their pins (`verity-vllm
 neutrality --tier fast`, by `neutrality_tier.sh` beside this, minutes a row), so a landing that moves a
 fast row's Program without re-pinning it is a red: each row that moved or didn't build is named in the label beside the
-rebuilds' rows (`regression fail:<row>`), and the owner of the rows of record (`OWNER`) is rung at once in the merge thread,
+rebuilds' rows (`regression fail:<row>`), and the owner of the workloads of record (`OWNER`) is rung at once in the merge thread,
 as ci, with the run to read.  A carried verdict rings no one: the run it carries from rang.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
@@ -244,7 +244,7 @@ def _order(row: str) -> tuple[int, int, str]:
 
 
 def moved(report: Path) -> list[str] | None:
-    """The rows of record the neutrality tier's ``report`` names not neutral (a pinned Program digest not reproduced, or a Build
+    """The workloads of record the neutrality tier's ``report`` names not neutral (a pinned Program digest not reproduced, or a Build
     that didn't finish); None when there is no report."""
     if not report.is_file():
         return None
@@ -278,7 +278,7 @@ def verdict(junit: Path, rc: int | None = None, cut: str | None = None, report: 
 
 def ring(sha: str, attempt: str | None, rid: str, rows: list[str] | None, dry_run: bool = False) -> None:
     """Ring OWNER at once in the merge thread, as SENDER, when the run's neutrality tier moved ``rows`` or left no report (None):
-    the rows of record are OWNER's, and a landing that moved one is re-pinned or fixed forward long before the daily sweep."""
+    the workloads of record are OWNER's, and a landing that moved one is re-pinned or fixed forward long before the daily sweep."""
     what = f"moved {', '.join(rows)}" if rows else "ran and left no report, so it compared nothing (out/neutrality/setup.fail)"
     text = (f"{OWNER} post-train: the fast neutrality tier at landing {sha[:12]} (check {attempt}) {what}. Run {rid}: "
             f"`research fetch {rid} --all`; out/neutrality/neutrality.json names each Program's pinned and built digests. A row "
