@@ -1011,13 +1011,13 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
-#: the toy registration record R of the window the record tests' SPOT audit sampled against
+#: the toy docket R of the window the record tests' SPOT audit sampled against
 WINDOW_RECORD = {"format": "toy-registration", "window": 1}
 WINDOW_DIGEST = REG.digest(WINDOW_RECORD)
 
 
 def _window_case(audit: Path, rec: Mapping[str, Any] = WINDOW_RECORD) -> Path:
-    """SPOT's audit ``audit``'s v1 case, committing to the registration record ``rec``."""
+    """SPOT's audit ``audit``'s v1 case, committing to the docket ``rec``."""
     from verity.circuits import codec
 
     (audit / "window").mkdir(parents=True, exist_ok=True)
@@ -1059,7 +1059,7 @@ def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_o
 
 
 def test_the_window_record_is_the_one_spots_audit_sampled_against(tmp_path):
-    """`window_digest` is the digest of the registration record R the audit's v1 case commits to, and None, saying
+    """`window_digest` is the digest of the docket R the audit's v1 case commits to, and None, saying
     why, for an audit with no case."""
     assert S.window_digest(_window_case(tmp_path / "audit"))[0] == WINDOW_DIGEST
     digest, why = S.window_digest(tmp_path / "none")
@@ -1519,7 +1519,7 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
 
 
 def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_and_what_each_check_cost(tmp_path, live):
-    """The piece's document holds the execution phase on the auditor host's clock (`execution_phase`): its salt session's
+    """The piece's document holds the execution phase on the auditor device's clock (`execution_phase`): its salt session's
     reserve, open and end and its Pearl-C period's open and close, read from the ledger the coins' check fetched, with the
     seconds from the reserve to the end; another session's and another period's entries are not its. The serve's own wall
     is beside it, named the prover's (`PROVER_CLOCK`), never among the challenger's times. And it holds what
@@ -1558,7 +1558,7 @@ def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_an
     assert doc["verdict"] == "accept" and doc["execution_phase"] == phase and doc["checks"] == checks
     assert json.loads((piece / "development.json").read_text())["execution_phase"] == phase
     line = S.development_line(doc)
-    assert line["execution_phase"] == {"clock": "the auditor host's", "start_utc": phase["start_utc"],
+    assert line["execution_phase"] == {"clock": "the auditor device's", "start_utc": phase["start_utc"],
                                        "end_utc": phase["end_utc"], "seconds": 460, "why": None, "prover": phase["prover"]}
     assert line["checks"] == doc["checks"]
     public = S.public_json(doc)
@@ -5400,7 +5400,7 @@ def _read_env(f: Path, names: str) -> dict[str, str]:
     ("touch {ran}", "is not NAME=VALUE"),
 ])
 def test_a_compose_follow_on_reads_the_hand_offs_settings_as_data_and_runs_no_line_of_them(tmp_path, bad, why):
-    """compose.env is the prover's bytes on an auditor host, so the compose follow-on reads it as data and never runs it:
+    """compose.env is the prover's bytes on an auditor device, so the compose follow-on reads it as data and never runs it:
     a value a shell would expand (`$(...)`, a backtick, a `;` and a command), a name outside the hand-off's settings
     (ONSITE_PIECES, a file the script would source in turn) and a line that isn't NAME=VALUE (a bare command) each refuse
     the hand-off before anything is composed, naming the line, and none of it runs: the marker it would make is absent."""

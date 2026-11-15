@@ -1960,7 +1960,7 @@ impl ZkServer {
         let fin_root = finish.lock().unwrap_or_else(PoisonError::into_inner).level0(table, &root)?;
         let (t_recheck, cpu_recheck) = (t0.elapsed().as_secs_f64(), flock_live::zk_server::cpu_seconds() - c0);
         let short = |r: &[u8]| hex(&r[..r.len().min(8)]);
-        eprintln!("ZK_SERVER\t{}", json!({"recheck_root": hex(&root), "m": st.m, "t.zk_server_recheck": t_recheck, "cpu.zk_server_recheck": cpu_recheck}));
+        eprintln!("FIREWALL\t{}", json!({"recheck_root": hex(&root), "m": st.m, "t.zk_server_recheck": t_recheck, "cpu.zk_server_recheck": cpu_recheck}));
         if fin_root != root {
             return Err(refused(format!("level-0 recheck: the Lean finish's root {} is not the loop's {}", short(&fin_root), short(&root))));
         }
@@ -2254,9 +2254,9 @@ impl ZkServer {
             table: self.table, rep: r.rep, vals: vals.clone(), extras: r.extras.clone().unwrap_or_default(),
             rounds: std::mem::take(&mut r.rounds), dump: self.dump.clone(),
         };
-        // zk_server_device_rounds: the table's device rounds the ZK server was handed so far (FC_ZK_SERVER_CUT_AT counts them)
-        let mut v = json!({"zk_server_failed": r.failed,
-                           "zk_server_device_rounds": self.seen.load(std::sync::atomic::Ordering::SeqCst)});
+        // firewall_device_rounds: the table's device rounds the ZK server was handed so far (FC_ZK_SERVER_CUT_AT counts them)
+        let mut v = json!({"firewall_failed": r.failed,
+                           "firewall_device_rounds": self.seen.load(std::sync::atomic::Ordering::SeqCst)});
         if r.rep == 0 {
             v["t.zk_server_recheck"] = json!(self.t_recheck);
             v["cpu.zk_server_recheck"] = json!(self.cpu_recheck);
@@ -2319,7 +2319,7 @@ fn zk_served_end<C: flock_transcript::challenger::Challenger>(g: &Arc<Mutex<ZkSe
         Ok((proof, cm, bk)) => (Some((proof, cm)), bk),
         Err(why) => {
             lock().fail(flock_live::zk_server::refused(format!("the device failed: {why}")));
-            (None, json!({"zk_server_device_failed": why}))
+            (None, json!({"firewall_device_failed": why}))
         }
     };
     if !lock().committed() {
@@ -6108,7 +6108,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let t = if wire.is_empty() { shared(tcp) } else { shared(Wire { inner: tcp, mode: wire, refused: refused.clone() }) };
     let (v, _) = session(st, inst, t, &plan, ProverSeed::from_os());
     let seen = std::mem::take(&mut *log.lock().unwrap_or_else(PoisonError::into_inner));
-    let device_rounds = v["buckets"].as_array().and_then(|b| b.iter().filter_map(|x| x["zk_server_device_rounds"].as_u64()).max());
+    let device_rounds = v["buckets"].as_array().and_then(|b| b.iter().filter_map(|x| x["firewall_device_rounds"].as_u64()).max());
     let refused = refused.lock().unwrap_or_else(PoisonError::into_inner).clone();
     let load = |b: &std::sync::atomic::AtomicBool| b.load(std::sync::atomic::Ordering::SeqCst);
     json!({"accepted": v["accepted"], "why": v["why"], "prover_stopped": v["prover_stopped"], "device_rounds": device_rounds, "seen": seen,
@@ -6635,7 +6635,7 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
 
 /// `zk_worker_cut_MODE` (PROTOCOL.md §10.1): a worker that fails in one way (`FC_ZK_SERVER_TAMPER=cut-MODE`) at its table's device
 /// round `k` never chooses where the session ends. Beside an honest ZK server session, one session per `k` (early, half way and
-/// the last of the honest session's `zk_server_device_rounds`; `cut-tree` samples its trees in the opening phases, so it takes the
+/// the last of the honest session's `firewall_device_rounds`; `cut-tree` samples its trees in the opening phases, so it takes the
 /// first and the half-way round), each a CPU
 /// session in a process of its own: the verifier gets the honest session's every request up to its `Finish`, in its order and
 /// at its sizes (the rounds, the Commit, the Link: the same bytes and public bytes), no proof, then `Finish`, which reports the
@@ -7844,6 +7844,15 @@ fn prove_stream(path: &str) {
 }
 
 fn main() {
+    let names: Vec<String> = std::env::vars_os().map(|(k, _)| k.to_string_lossy().into_owned()).collect();
+    if let Some(why) = flock_live::zk_server::retired_env(names.iter().map(String::as_str)) {
+        refuse(why);
+    }
+    for (old, new) in [("--firewall-state", "--zk-server-state"), ("--draw-law", "--sample-design")] {
+        if flag(old) {
+            refuse(format!("{old} is not read: its name is {new}; pass {new} instead"));
+        }
+    }
     let cmd = std::env::args().nth(1).unwrap_or_default();
     // unit-walk times the device witness's host units, so it runs on the device prover's pages unless --huge-pages asks
     flock_live::huge_pages::set(!(flag("--gpu") || (cmd == "unit-walk" && !flag("--huge-pages"))));

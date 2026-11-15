@@ -1461,7 +1461,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     are live: the challenger commits to none. ``ready`` is called with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
     ``out/schedule.json`` before the first is served. With ``zk_server`` (a `verity_flock.zk_server.ZkServer`), each session
     opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
-    algebra at K = 4096), its id in the session directory's ``zk_server.json``: a stop is that recursive session's stop, so
+    algebra at K = 4096), its id in the session directory's ``firewall.json``: a stop is that recursive session's stop, so
     the ZK server serves none of its outer sessions, and a finished session lets them be served, in that order, each once.
     ``budget`` is the stream's failure budget (the challenger's stream's ``budget``, a public parameter of the deployment,
     at least `verity_flock.zk_server.BUDGET_MIN`), which a ZK server needs: without one, or with a lesser one, ``serve``
@@ -1557,7 +1557,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 if zk_server is not None:
                     zk_server.finish(sid)
             if zk_server is not None:
-                (d / "zk_server.json").write_text(json.dumps({"kind": "firewall/v0/session", "session": sid}))
+                (d / "firewall.json").write_text(json.dumps({"kind": "firewall/v0/session", "session": sid}))
                 res[-1]["firewall"] = sid
             if done:
                 done(res[-1])

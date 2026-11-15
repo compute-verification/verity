@@ -4592,6 +4592,19 @@
         "verity/protocols/compose/device/live_challenger/tests/test_auditor_warden.py": "verity/protocols/compose/device/live_challenger/tests/test_auditor_network_certifier.py",
         "verity/protocols/compose/device/live_challenger/tests/test_auditor_warden_serve.py": "verity/protocols/compose/device/live_challenger/tests/test_auditor_network_certifier_serve.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/device/tests/test_two_stage_verdicts.py": "benchmarks/one_stage/tests/test_two_stage_verdicts.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/device/leak_guard.py": "benchmarks/network_traces/leak_guard.py",
+        "verity/protocols/accounting/certifier/device/leak_guard.json": "benchmarks/network_traces/leak_guard.json",
+        "verity/protocols/accounting/certifier/device/tests/test_leak_guard.py": "benchmarks/network_traces/tests/test_leak_guard.py",
+        "verity/protocols/accounting/certifier/device/tests/gate_runs.py": "benchmarks/network_traces/tests/gate_runs.py"
+      }
     }
   ]
 }

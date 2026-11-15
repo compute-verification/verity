@@ -8,7 +8,7 @@
 # rounds as the honest session's, and the prover's record carries the control's own refusal (`EXPECT` below:
 # `prover_stopped`'s, the ZK server's, and the verdict's `why`, the Lean frame's stop where it stopped a rep; `ALSO`, a
 # second refusal a control may carry beside it). A `cut-MODE` control (a worker that fails) runs at its table's device rounds 2, half way and the last of
-# the honest session's (`zk_server_device_rounds`), and `inner` (FC_INNER_TAMPER, §10.4: table 0 rep 0's inner round J
+# the honest session's (`firewall_device_rounds`), and `inner` (FC_INNER_TAMPER, §10.4: table 0 rep 0's inner round J
 # relayed with a value byte flipped) at each of the inner proof's rounds 0 to 3. Run from the source tree's root:
 #   bash verity/protocols/proofs/flock/prover/agreement/zk_server_controls.sh
 #   (a job run from the source tree, 16 CPUs, 48 GB, keeping out/*)
@@ -64,7 +64,7 @@ if v is None:
     rec = {"control": name, "rc": rc, "auditor": auditor, "error": [l.rstrip("\n")[:300] for l in open(err, errors="replace")][-3:]}
 else:
     why = (v.get("verdict") or {}).get("why") or v.get("why") or ""
-    dev = max([b.get("zk_server_device_rounds") or 0 for b in v.get("buckets") or []] or [0])
+    dev = max([b.get("firewall_device_rounds") or 0 for b in v.get("buckets") or []] or [0])
     rec = {"control": name, "rc": rc, "accepted": v.get("accepted"), "why": str(why)[:300],
            "prover_stopped": str(v.get("prover_stopped") or "")[:300], "device_rounds": dev, "auditor": auditor,
            "frame_stops": stops[:3] + ([f"... {len(stops) - 3} more"] if len(stops) > 3 else [])}

@@ -73,7 +73,7 @@ NAMED_TERM = ("claim", "term", "value", "in_total", "status")
 CHECKS = {"onsite": ("verity/onsite/v0",), "remote": ("verity/remote/v0", "verity/remote/v1")}
 VERDICTS = ("accept", "reject", "undecided")
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointPooledLive", "proved": True,
-                 "file": "Security/Definitions/Compose/Guarantees/JointLive.lean",
+                 "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
 
 

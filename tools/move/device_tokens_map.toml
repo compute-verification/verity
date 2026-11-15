@@ -32,8 +32,9 @@ files = ["**/test_provider_names.py", "**/certifier/verifier/protocol/coin-link.
 
 [keep]
 # The placement key of a record made before this move, where `benchmarks/one_stage/served_verdicts.py` reads it beside
-# the new key and its test writes both: a rerun leaves the old key standing there.
-strings = ['or place.get("trusted-host")', '["trusted-device", "trusted-host"]']
+# the new key and its test writes both, and where `memory_challenger.premise` reads it after the new key
+# (`PREMISE_BEFORE`, which PoUS's readers and their tests take): a rerun leaves the old key standing there.
+strings = ['or place.get("trusted-host")', '["trusted-device", "trusted-host"]', 'PREMISE_BEFORE = "trusted-host"']
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a

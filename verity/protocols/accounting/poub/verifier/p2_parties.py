@@ -1072,7 +1072,7 @@ def starts(pin: Pin, signer: Load) -> dict[str, Starter]:
 
 def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None, *, pin: Pin,
           signer: Load) -> Start:
-    """The verifier's start on the auditor's host (`ProtocolDef.starts`, through `starts`), from the configuration, its
+    """The verifier's start on the auditor's device (`ProtocolDef.starts`, through `starts`), from the configuration, its
     deploy bindings (`bound`, its `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory challenger's
     PoUS device directory on this host) and its own `state` directory: the closer's key, pinned by the check handed in
     (`pinned_signer`); its case digests under `state`'s `private/` (`CASE_DIGESTS`, `_keep`, the `keep` capability); the

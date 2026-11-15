@@ -76,7 +76,6 @@
 
 # --- refusal and line words, then environment names and constants
 "FIREWALL-REFUSED" = "ZK-SERVER-REFUSED"
-"FIREWALL-TIMES" = "ZK-SERVER-TIMES"
 "H1S_UNFIREWALLED" = "H1S_NO_ZK_SERVER"
 "UNFIREWALLED" = "UNSERVED"
 "FIREWALLED" = "ZK_SERVED"
@@ -139,6 +138,8 @@ patterns = ['(?<![\w-])verity/firewall-[\w-]*(?:/v\d+)?', '(?<![\w/.-])firewall/
             '\x22Firewall\x22|\bFirewall(?= \{sha512)',
             '\bthe firewall(?: serves nothing more of it|\x27s fault)',
             '\b(?:goal:)?proofs/firewall-[\w-]+', '\bfirewall\.slice\b', '\.firewall\.lock\b',
-            'recursion/verifier/firewall/tests/fixtures']
+            'recursion/verifier/firewall/tests/fixtures',
+            '\bFIREWALL-TIMES\b', '(?<=\x22)FIREWALL(?=\\t)', '\bfirewall_(?:failed|device_rounds|device_failed)\b',
+            '\bfirewall\.json\b']
 strings = ["dials firewall, workers", "refused listen: firewall, workers", "outer prove (firewall) e2e_s",
            'r"firewall-.*"']
