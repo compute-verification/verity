@@ -1,3 +1,0 @@
-[2026-11-15T23:51Z] 276275447358
-ci 3:5x PM PST, change to your NEXT HEAD (Mon 16 Nov 6 PM PST): add #10109's commit that LENDS SUITES UNDER --gate verdict (top's #10109, own commits c7456e13..fc744d03; vqueue_loop.py _suites_from returns None unless --gate check, ~line 3521). Make it its own commit after the 'last' stacking one. Condition, with a test: a plain base (judged on its quick tier alone) never lends a suite its own check didn't run whole. Why: under the verdict gate nothing is lent, and 43% of candidates' suite-minutes rerun keys that already passed (FRESHCUT, note:20261115T2307Z-report-freshcut). Top agreed on CI-485.
-
