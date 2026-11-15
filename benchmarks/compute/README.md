@@ -103,8 +103,10 @@ client's work; the command itself writes only the two files named below.
   run used: the answer's sample source (`profile.source_from`: `challenger` or `node`), the passes' salt coins
   (`development.json`'s `coin_source`: `challenger` or `in-process`), whether the Lean verifier ran as of record
   (`--of-record` in `pearlplus-lean-check.json`'s `argv`), and the answer's draws and δ. What the record doesn't state
-  it prints as not stated, and it ends the line with `development` unless all three state live coins. It never refuses
-  on them. With `--per-call`, also where the MACs the credit leaves out went, by cause and by matmul call (the top N
+  it prints as not stated. It ends the line with `development` where the record holds PoUW's development piece
+  (`development.json`) or any of the three is not live, which today is every record, since only that piece states the
+  salt coins. `challenger` names a challenger session, the auditor's or a local one: the record doesn't say whose. It
+  never refuses on them. With `--per-call`, also where the MACs the credit leaves out went, by cause and by matmul call (the top N
   calls, 10 by default), from the Pearl+ verifier's split of its credit (the record's `verify.json`, or the file
   `--uncredited` names).
 - **What it writes:** two files where `OUT` names a directory, as it does under `research run`, and otherwise

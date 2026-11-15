@@ -64,8 +64,10 @@ Either way it reads the verifier's side of the record, and nothing the developer
 The line under the number says which coins and parameters the record states the run used (`coins`): the answer's
 sample source (`profile.source_from`), the piece's salt coins (``coin_source``), whether the Lean verifier ran as of
 record (``--of-record`` in `pearlplus-lean-check.json`'s ``argv``), and the answer's draws and δ. Each that the record
-doesn't state is printed as not stated; ``development`` ends the line unless all three state live coins. None of them
-refuses a number.
+doesn't state is printed as not stated. ``development`` ends the line where the record holds PoUW's development piece
+(`development.json`, whose credit is the piece's own and no row of record) or any of the three is not live; since the
+salt coins are stated only in that piece, every record of today's format reads ``development``. ``challenger`` names a
+challenger session, the auditor's or a local one: the record doesn't say whose. None of them refuses a number.
 
 The record holds neither the tokens the run served nor the seconds it served them in (both stay on the developer's
 node). So the tokens are the class's, and the capacity share (the credited MACs over the card's rate times the seconds
@@ -329,7 +331,9 @@ def coins(tree: Path) -> dict:
     answer's sample (`profile.source_from`, ``challenger`` or ``node``), of the passes' salt coins (the piece's
     ``coin_source``, ``challenger`` or ``in-process``), whether the Lean verifier ran as of record (``--of-record`` in
     the comparison's ``argv``, which `served_passes.py lean` passes only on live coins), the answer's draws and δ, each
-    None where the record doesn't state it, and ``development`` unless all three state live coins."""
+    None where the record doesn't state it, and ``development`` where the record holds PoUW's development piece (whose
+    credit is the piece's, not a row of record) or any of the three is not live. ``challenger`` names a challenger
+    session, the auditor's or a local one: the record doesn't say whose."""
     def read(path: str, *keys: str) -> Any:
         try:
             got = _held(tree, path)
@@ -343,7 +347,7 @@ def coins(tree: Path) -> dict:
     sample, salt = read(ANSWER, "profile", "source_from"), read(DEVELOPMENT, "coin_source")
     return {"sample": sample, "salt": salt, "lean": lean, "draws": read(ANSWER, "profile", "draws"),
             "delta": read(ANSWER, "profile", "delta"),
-            "development": not (sample == salt == "challenger" and lean in ("of record", None))}
+            "development": (tree / DEVELOPMENT).is_file() or not (sample == salt == "challenger" and lean == "of record")}
 
 
 def fixed_load() -> dict:

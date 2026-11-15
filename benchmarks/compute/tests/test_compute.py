@@ -956,8 +956,11 @@ def of_record(argv: list[str]) -> list[str]:
     ({}, f"node sample, salt coins from in-process; Lean verifier run as development; {PARAMETERS}", True),
     ({"ANSWER": to("profile", "source_from", value="challenger"), "DEVELOPMENT": to("coin_source", value="challenger"),
       "LEAN_CHECK": lambda d: d.update(argv=of_record(d["argv"]))},
-     "challenger sample, salt coins from challenger; Lean verifier run as of record; parameters: draws 459, delta 1/100",
-     False),
+     f"challenger sample, salt coins from challenger; Lean verifier run as of record; {PARAMETERS}", True),
+    ({"ANSWER": to("profile", "source_from", value="challenger"), "DEVELOPMENT": None,
+      "LEAN_CHECK": lambda d: d.update(argv=of_record(d["argv"]))},
+     ("challenger sample, salt coins: not stated in the record; Lean verifier run as of record; parameters: draws 459, "
+      "delta 1/100, development"), True),
     ({"ANSWER": to("profile", "source_from", value="challenger"), "DEVELOPMENT": to("coin_source", value="challenger")},
      f"challenger sample, salt coins from challenger; Lean verifier run as development; {PARAMETERS}", True),
     ({"DEVELOPMENT": None},
@@ -973,7 +976,8 @@ def test_the_coins_line_says_which_coins_and_parameters_the_record_states_and_ne
                                                                                          edits, said, development):
     """Under the number, one line names the answer's sample source, the piece's salt coins, whether the Lean verifier
     ran as of record and the answer's draws and δ; the record's own words, each `not stated` where it holds none, and
-    `development` unless all three state live coins. Both ways of reading the record print it."""
+    `development` where the record holds PoUW's development piece or any of the three is not live: live coins and a
+    Lean verdict of record in a development piece are still development. Both ways of reading the record print it."""
     record = a_record(tmp_path, **edits)
     store.add(RUN, record)
     for argv in (["--from", RUN], ["--record", str(record)]):
