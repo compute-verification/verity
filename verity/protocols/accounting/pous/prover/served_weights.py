@@ -71,6 +71,14 @@ from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
+__all__ = [
+    "ALIASES", "CHUNK_BYTES", "DEMO_SEED", "FORMAT", "H200", "MANIFEST", "PHASE1", "REGISTRATION", "Reader", "SCHEMA",
+    "SHAPES", "Shape", "TEST_PROGRAM", "TEST_SALT_KEY", "TEST_SEED", "TINY", "Tensor", "chunk_bits", "chunk_levels",
+    "commit", "domain", "dumps", "entries", "entry", "first_rows", "fixture", "generate", "main", "manifest",
+    "model_id", "reader", "registered_words", "registration_digest", "root", "row_bytes", "salts", "scale_exponent",
+    "stream", "stream_bytes", "subtree", "tensor", "tensor_bytes", "tensor_key", "tensor_sha256", "tensors", "write",
+]
+
 FORMAT = "verity/seeded-weights/v1"
 MANIFEST = "verity/seeded-weights/manifest/v1"
 REGISTRATION = "verity/seeded-weights/registration/v1"

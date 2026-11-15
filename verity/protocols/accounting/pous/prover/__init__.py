@@ -7,3 +7,9 @@ with the verifier's answer on it (`wipe_run`); the honest responder (`responder`
 (`period_prover`); and the store of a served model's weights that a serving system's adapter holds (`weight_store`).
 PoUS's verifier reads none of them.
 """
+
+__all__ = [
+    "answer_circuit", "challenger_prover", "circuit", "decode_circuit", "p2", "period_prover", "responder",
+    "served_weights", "session", "session_circuit", "setup_circuit", "setup_proof", "verdict_circuit", "weight_store",
+    "window", "wipe_prover", "wipe_run", "wipe_store", "workload",
+]
