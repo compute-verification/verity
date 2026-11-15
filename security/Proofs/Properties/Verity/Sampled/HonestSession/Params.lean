@@ -400,8 +400,11 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
     generalize hgh : hexOf programSha = gh
     generalize hgc : hexOf circuitSha = gc
     generalize hgp : hexOf (Sha512.hash publicFile) = gp
+    generalize hgk : hexOf keyPub = gk
+    generalize hgw : hexOf (ByteArray.mk (Array.replicate 64 0)) = gw
     rw [hgc] at hdc
     rw [hgp] at hdp
+    rw [hgk] at hU
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
     case walk => fwd_walk [hDp, hE, hU, hdc, hdp, keys?_mkObj, sortStrings_of_sorted]
       block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
