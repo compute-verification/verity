@@ -214,7 +214,7 @@ trap '[ -n "$SV" ] && kill -- "-$SV" 2> /dev/null; rm -rf "$B"' EXIT
 export B RS GIB=${GIB:-16}
 if [ -n "${SERVE:-}" ]; then
   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=${HF_HOME:-$WS/hf} PATH=$(dirname "$VPY"):$PATH
-  export PYTHONPATH=$PWD/adapters/vllm:$PWD/tools/config:$PWD/verity/protocols/proofs/flock/prover/python:$PWD${PYTHONPATH:+:$PYTHONPATH}
+  export PYTHONPATH=$PWD/adapters/vllm:$PWD/adapters/torch:$PWD/tools/config:$PWD/verity/protocols/proofs/flock/prover/python:$PWD${PYTHONPATH:+:$PYTHONPATH}
 fi
 if [ -n "$SERVED" ]; then
   PLAN=${PLAN:-serve}

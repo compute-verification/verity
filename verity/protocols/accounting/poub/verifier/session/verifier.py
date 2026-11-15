@@ -1491,7 +1491,9 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  Each reading's γ terms are the Lean verifier's, held to the ledger's (`gamma_answer`).  A
         reading the ledger refuses, or whose terms the Lean's don't hold, carries why, and the session then declares
-        nothing.  With the session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
+        nothing.  Of what `declared` carries beside them, a paced session's fixed windows (`ledger.Gamma.windows`) and
+        the sketch's and the sample's terms in its errors (`sketch`, `draw`) are the Python ledger's.  With the
+        session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s
         forms carry.
         No δ or error here holds the windows' PRF advantages: each reads `ledger.DELTA_FORM`, and `named`
@@ -1538,22 +1540,23 @@ class Verifier:
         readings: dict[str, ledger.Gamma] = {}
         for name, r in (("spec", spec), ("measured", measured)):
             try:
-                g = readings[name] = ledger.gamma(record, stated, r, wrong=lambda p: by[id(p)])
+                g = ledger.gamma(record, stated, r, wrong=lambda p: by[id(p)])
             except ValueError as e:
-                out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
-                continue
-            try:
-                gamma_answer(self.lean, record, stated, r, g.ledger.to_json())
-            except ValueError as e:
-                del readings[name]
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
             whole = r * record.span_ns / 1e9
-            out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
-                         "certified_bytes": (1 - g.gamma) * whole,
-                         "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
+            reading = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
+                       "certified_bytes": (1 - g.gamma) * whole,
+                       "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
-                out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
+                reading["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
+            try:
+                gamma_answer(self.lean, record, stated, r, g.ledger.to_json())
+            except ValueError as e:
+                out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
+                continue
+            readings[name] = g
+            out[name] = reading
         out["delta"] = {k: line.text(v) for k, v in ledger.delta_parts(record).items()}
         out["named"] = ledger.NAMED_TERMS
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
