@@ -8,9 +8,11 @@ PoUW's verifier for Pearl, a proof-of-work scheme whose products are FP8 (E4M3) 
 H200. The number is the MACs Pearl+ credits over all the MACs the model computes on a fixed load, and its target is
 97%.
 
-It is a measurement, not an audit: on your own machine you choose the coins as well as the work, so nothing stops you
-re-rolling them until a run passes. The output says so on its third line. An audit draws the coins on the auditor's
-own device, which this command does not do.
+It is a measurement, never an audit: your own run writes every file of the record it reads, coins included, so nothing
+in a record can show that the auditor drew the coins rather than you, re-rolling them until a run passed. The output
+says so on its third line, always, and refuses a record that claims a deployed challenger or deployed parameters
+(exit 2). Reading a deployed run needs a check of the challenger's signature against a pinned key, which this command
+doesn't have yet.
 
 ## What you may change
 
@@ -165,8 +167,8 @@ ran with: coins in-process; parameters development (draws 459, delta 1/100, sche
 a measurement, not an audit
 ~~~
 
-The second line says who drew the coins (`deployed challenger`, the auditor's; `local challenger`, one you run; or
-`in-process`, the run's own process) and whether the sample size and δ are the deployed ones or development defaults.
+The second line says who drew the coins (`local challenger`, a challenger you run as its own process; or `in-process`,
+the run's own process), and that the sample size and δ are development ones.
 The fixture's are the node's own: it is a development run. ε_s and δ_s in the output are sampling's: the credit misses
 more than the share ε_s of the work with probability at most δ_s.
 
@@ -209,8 +211,9 @@ The paths below are relative to the record directory.
   passes hold the LM head's calls, and `--per-call` prints it.
 - `out/pieces/pouw/development.json` (optional): the Pearl+ verifier's development document. Only its `coin_source`,
   where the passes' salt coins came from, is read.
-- `out/compute-run.json` (optional): what the serving command ran with. Only its `challenger` (`local` or
-  `in-process`) and `development` are read, for the second line.
+- `out/compute-run.json` (optional): what the serving command ran with. Only its `challenger` and `development` are
+  read, for the second line: `challenger` is `local` or `in-process`, and `development` true. A file saying the
+  challenger is `deployed`, or `development` false, is refused (exit 2).
 - `job.json` (optional): the run's own record of itself. The command prints its `run.id` as the run, and the commit
   its `store.conditions` name (`source.commit`, with `-dirty` when `source.dirty`). Without it the run is the
   directory's name and the commit is unknown. A `made_up` statement in it is printed under the number.
@@ -223,7 +226,8 @@ It prints `compute: no number: WHY` and exits 1 unless the Pearl+ answer is an a
 instance's (the answer's `profile.test_instance`, whose passes are not the served instance's). It prints no number
 either when the record holds no Lean verdict, or when the Lean verdict differs from the answer in verdict, run
 commitment or credit. It exits 2 when a file can't be read, when the policy's model or load is not the benchmark's or
-can't give the model's MACs, or when the answer's passes or credit hold more MACs than one load of the class can. It
+can't give the model's MACs, when the answer's passes or credit hold more MACs than one load of the class can, or when
+`out/compute-run.json` claims a deployed challenger or deployed parameters. It
 reads only the verifier's side of the record, so the tokens and seconds the serving machine reports are never part of
 the number.
 
@@ -238,11 +242,9 @@ the number.
 **What it prints:** the number as text and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its target.
 The first line says the number is what the Pearl+ verifier's own answer credits, not PoUW's row in the composed record.
 The second and third are the harness kit's (`benchmarks/harness/README.md`): the coins and parameters the record states
-(`ran_with` in the JSON), and `a measurement, not an audit` unless both are deployed (`audit`). Where the record doesn't
-say whose challenger drew a challenger's coins, the second line is `ran with: not stated` and a line under it says what
-the record does state. It prints `deployed` for the coins or the parameters only where the record's pieces bear it out,
-never on the launcher's `out/compute-run.json` alone: where the two disagree it exits 2. The pieces state the salt
-coins only in PoUW's development piece, which itself means development parameters, so no record reads as an audit.
+(`ran_with` in the JSON), and `a measurement, not an audit`, always (`audit` is false, in `compute.json` and in each
+entry of `result.json`). Where the record doesn't say whose challenger drew a challenger's coins, the second line is
+`ran with: not stated` and a line under it says what the record does state.
 
 **What it writes:** two files, through the harness kit's report (`kit.report`): under `research run` in its run
 directory, outside one where `OUT` names a directory, and otherwise nothing.

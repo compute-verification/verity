@@ -135,13 +135,15 @@ def bench(store: FakeStore, *argv: str) -> int:
 
 
 def no_number(capsys, why: str) -> dict:
-    """What the command printed with no number: the kit's ``compute: no number: WHY`` (`why` its start) and its
-    document, with nothing on stderr."""
+    """What the command printed with no number: the kit's ``compute: no number: WHY`` (`why` its start), that the
+    record states no coins and that this is no audit, and its document, with nothing on stderr."""
     out, err = capsys.readouterr()
     lines = out.splitlines()
-    assert err == "" and len(lines) == 2 and lines[0].startswith(f"compute: no number: {why}"), (out, err)
-    doc = json.loads(lines[1])
+    assert err == "" and len(lines) == 4 and lines[0].startswith(f"compute: no number: {why}"), (out, err)
+    assert lines[1:3] == ["ran with: not stated", "a measurement, not an audit"]
+    doc = json.loads(lines[3])
     assert doc["value"] is None and doc["no_number"] == lines[0].removeprefix("compute: no number: ")
+    assert doc["audit"] is False
     return doc
 
 
@@ -504,7 +506,7 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
     doc = no_number(capsys, "Pearl+'s answer is reject")
     assert json.loads((none / "compute.json").read_text()) == doc
     got = json.loads((none / "result.json").read_text())["measurements"]
-    assert [(m["name"], m["value"], m["why"]) for m in got] == [(C.METRIC, None, doc["no_number"])]
+    assert [(m["name"], m["value"], m["why"], m["audit"]) for m in got] == [(C.METRIC, None, doc["no_number"], False)]
 
 
 def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capacity_and_free_absent(
@@ -535,6 +537,7 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
     for m in got.values():
         assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
         assert m["mark"] == "measured" and m["inputs"] == ["measured", RUN, *["delta_s"] * (m["name"] == "error")]
+        assert m["audit"] is False
     assert C.NO_SPAN == ("a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
                          "developer's node")
 
@@ -1011,39 +1014,33 @@ def ran(**said) -> str:
     return json.dumps({"class": "4,32,4", "scheme": "pearl-c-h100-v1-h3", "draws": 459, "delta": "1/100", **said})
 
 
-@pytest.mark.parametrize("edits, said, audit", [
-    ({}, RAN_WITH, False),
+@pytest.mark.parametrize("edits, said", [
+    ({}, RAN_WITH),
     ({"DEVELOPMENT": None}, (f"ran with: coins in-process; parameters development ({DETAIL}, sample from node, salt coins "
-                             "not stated, Lean verdict development)"), False),
+                             "not stated, Lean verdict development)")),
     ({"ANSWER": to("profile", "source_from", value="challenger")},
      (f"ran with: coins in-process; parameters development ({DETAIL}, sample from challenger, salt coins from "
-      "in-process, Lean verdict development)"), False),
+      "in-process, Lean verdict development)")),
     ({"ANSWER": lambda d: (d["profile"].pop("draws"), d["profile"].pop("delta"))},
      ("ran with: coins in-process; parameters development (draws not stated, delta not stated, scheme "
-      "pearl-c-h100-v1-h3, sample from node, salt coins from in-process, Lean verdict development)"), False),
-    ({"RAN": ran(challenger="local", development=True)},
-     RAN_WITH.replace("coins in-process", "coins local challenger"), False),
-    ({"RAN": ran(challenger="in-process", development=True)}, RAN_WITH, False),
+      "pearl-c-h100-v1-h3, sample from node, salt coins from in-process, Lean verdict development)")),
+    ({"RAN": ran(challenger="local", development=True)}, RAN_WITH.replace("coins in-process", "coins local challenger")),
+    ({"RAN": ran(challenger="in-process", development=True)}, RAN_WITH),
     ({**LIVE, "RAN": ran(challenger="local", development=True)},
      (f"ran with: coins local challenger; parameters development ({DETAIL}, sample from challenger, salt coins from "
-      "challenger, Lean verdict of record)"), False),
-    ({**LIVE, "RAN": ran(challenger="deployed", development=True)},
-     (f"ran with: coins deployed challenger; parameters development ({DETAIL}, sample from challenger, salt coins from "
-      "challenger, Lean verdict of record)"), False),
+      "challenger, Lean verdict of record)")),
 ])
-def test_the_ran_with_line_says_who_drew_the_coins_as_the_record_states_it(store, tmp_path, capsys, edits, said, audit):
+def test_the_ran_with_line_says_who_drew_the_coins_as_the_record_states_it(store, tmp_path, capsys, edits, said):
     """Under the number, the kit's line: who drew the coins is the launcher's ``challenger`` where the record holds
     `out/compute-run.json`, else ``in-process`` where the sample is the node's or the salt coins in-process; the
-    parameters are deployed only where the launcher says so and the pieces agree; the detail is the record's own words, each `not stated`
-    where it holds none. ``a measurement, not an audit`` follows unless both are deployed. Both ways of reading the
-    record print it."""
+    parameters are development; the detail is the record's own words, each `not stated` where it holds none.
+    ``a measurement, not an audit`` follows, always. Both ways of reading the record print it."""
     record = a_record(tmp_path, **edits)
     store.add(RUN, record)
     for argv in (["--from", RUN], ["--from", str(record)]):
         assert bench(store, *argv) == 0
         text, doc, _ = printed(capsys)
-        assert text[1] == said and doc["value"] == SHARE and doc["audit"] is audit
-        assert (text[2] == "a measurement, not an audit") is not audit
+        assert text[1:3] == [said, "a measurement, not an audit"] and doc["value"] == SHARE and doc["audit"] is False
 
 
 @pytest.mark.parametrize("edits", [{**LIVE}, {**LIVE, "DEVELOPMENT": None}])
@@ -1063,32 +1060,29 @@ def test_a_challengers_coins_whose_challenger_the_record_does_not_name_are_not_s
         assert doc["ran_with"] is None and doc["audit"] is False and "deployed" not in "\n".join(text)
 
 
+#: the refusal of a launcher's deployed word, and the word
+DEPLOYED = (f"{C.NO_DEPLOYED} (the record's {C.RAN} says the deployed challenger)",
+            f"{C.NO_DEPLOYED} (the record's {C.RAN} says development false)")
+
+
 @pytest.mark.parametrize("edits, why", [
     ({"RAN": "not json"}, f"the record's {C.RAN} doesn't read as JSON"),
     ({"RAN": ran(challenger="the auditor's")}, f"the record's {C.RAN} names the challenger \"the auditor's\", not one of"),
-    ({"RAN": ran(challenger="deployed", development=False)},
-     f"the record's {C.RAN} says a deployed challenger and its coins don't: {DETAIL}, sample from node"),
-    ({**{k: v for k, v in LIVE.items() if k != "LEAN_CHECK"}, "RAN": ran(challenger="deployed")},
-     f"the record's {C.RAN} says a deployed challenger and its coins don't"),
-    ({**LIVE, "DEVELOPMENT": None, "RAN": ran(challenger="deployed")},
-     f"the record's {C.RAN} says a deployed challenger and its coins don't: {DETAIL}, sample from challenger, salt "
-     "coins not stated, Lean verdict of record"),
-    ({**LIVE, "RAN": ran(challenger="deployed", development=False)},
-     f"the record's {C.RAN} says development false and its pieces say development true (development is the pieces' "
-     f"word where they hold {C.DEVELOPMENT} or their coins or Lean run aren't live): {DETAIL}, sample from challenger, "
-     "salt coins from challenger, Lean verdict of record"),
-    ({**LIVE, "RAN": ran(challenger="local", development=False)},
-     f"the record's {C.RAN} says development false and its pieces say development true"),
-    ({**LIVE, "DEVELOPMENT": None, "RAN": ran(challenger="local", development=False)},
-     f"the record's {C.RAN} says development false and its pieces say development true"),
-    ({"DEVELOPMENT": None, "RAN": ran(challenger="in-process", development=False)},
-     f"the record's {C.RAN} says development false and its pieces say development true"),
-    ({"RAN": ran(development=False)}, f"the record's {C.RAN} says development false and its pieces say development true"),
+    ({"RAN": ran(challenger="deployed", development=False)}, DEPLOYED[0]),
+    ({**{k: v for k, v in LIVE.items() if k != "LEAN_CHECK"}, "RAN": ran(challenger="deployed")}, DEPLOYED[0]),
+    ({**LIVE, "DEVELOPMENT": None, "RAN": ran(challenger="deployed")}, DEPLOYED[0]),
+    # ci's reader's probe: live coins beside PoUW's development piece, and a launcher saying deployed both
+    ({**LIVE, "RAN": ran(challenger="deployed", development=False)}, DEPLOYED[0]),
+    # comms' edited record: every file agreeing that the auditor's challenger drew live coins
+    ({**LIVE, "RAN": ran(challenger="deployed", development=True)}, DEPLOYED[0]),
+    ({**LIVE, "RAN": ran(challenger="local", development=False)}, DEPLOYED[1]),
+    ({"DEVELOPMENT": None, "RAN": ran(challenger="in-process", development=False)}, DEPLOYED[1]),
+    ({"RAN": ran(development=False)}, DEPLOYED[1]),
 ])
-def test_a_launchers_word_the_record_does_not_bear_out_exits_2(store, tmp_path, capsys, edits, why):
-    """The launcher's `out/compute-run.json` is a claim and the record's pieces the evidence: a deployed challenger or
-    deployed parameters the pieces don't bear out, a missing piece included, exits 2 naming both, never a deployed
-    word. The reader's probe is the live coins with PoUW's development piece and a launcher saying deployed both."""
+def test_a_launchers_word_the_command_cannot_check_exits_2(store, tmp_path, capsys, edits, why):
+    """A person's own run writes every file of the record, so files that agree with each other prove nothing: a
+    launcher's deployed challenger or ``development`` false exits 2, whatever the rest of the record says, as does a
+    launcher's word that doesn't read."""
     record = a_record(tmp_path, **edits)
     store.add(RUN, record)
     for argv in (["--from", RUN], ["--from", str(record)]):
@@ -1102,21 +1096,22 @@ PIECES = {"fixture": {}, "live": LIVE, "live, no development piece": {**LIVE, "D
           "no development piece": {"DEVELOPMENT": None}}
 LAUNCHERS = {"none": None, **{f"{who} {said}": ran(**({} if who == "unnamed" else {"challenger": who}),
                                                  **({} if said == "unsaid" else {"development": said == "development"}))
-                              for who in ["unnamed", *C.CHALLENGER] for said in ("development", "deployed", "unsaid")}}
+                              for who in ("unnamed", "local", "in-process", "deployed")
+                              for said in ("development", "deployed", "unsaid")}}
 
 
 @pytest.mark.parametrize("launcher", LAUNCHERS)
 @pytest.mark.parametrize("pieces", PIECES)
-def test_no_launchers_word_makes_an_audit_of_pieces_that_say_development(tmp_path, capsys, pieces, launcher):
-    """Every shape of the record's pieces against every word the launcher may say: `audit` true and ``parameters
-    deployed`` rest on the pieces, which today always say development (the salt coins are stated only in PoUW's
-    development piece), so no launcher's word prints them: the line reads development, or the run exits 2."""
+def test_no_record_prints_an_audit(tmp_path, capsys, pieces, launcher):
+    """Every shape of the record's pieces against every word the launcher may say: a deployed word exits 2, and
+    every other prints ``a measurement, not an audit`` with ``audit`` false and development parameters."""
     edits = PIECES[pieces] | ({} if LAUNCHERS[launcher] is None else {"RAN": LAUNCHERS[launcher]})
     rc = C.main(["--from", str(a_record(tmp_path, **edits))])
     text, doc, _ = printed(capsys)
-    assert rc in (0, 2)
+    assert rc == (2 if "deployed" in launcher else 0)
     if rc == 0:
-        assert doc["audit"] is False and "a measurement, not an audit" in text and "parameters deployed" not in text[1]
+        assert text[1].endswith(("not stated", "Lean verdict development)", "Lean verdict of record)"))
+        assert text[2] == "a measurement, not an audit" and doc["audit"] is False and "deployed" not in "\n".join(text)
 
 
 def test_the_benchmarks_load_is_the_fixtures_and_the_harness_class_of_record():

@@ -63,14 +63,14 @@ Either way it reads the verifier's side of the record, and nothing the developer
   holds it: its ``coin_source`` alone, where the passes' salt coins came from (`coins`).
 
 The line under the number is the kit's ``ran with: coins COINS; parameters PARAMETERS (DETAIL)`` (`ran_with`), and
-below it the kit's ``a measurement, not an audit`` unless both are deployed. COINS is who drew the coins: the launcher's
-``challenger`` in `out/compute-run.json` (`RAN`, written by `serve.sh`: ``local`` or ``in-process``), else
-``in-process`` where the answer's sample is the node's or the salt coins an in-process challenger's; a record that
-says neither prints ``ran with: not stated`` and, below it, the coins it does state. ``deployed challenger`` is printed
-only where the launcher says so and the sample and salt coins are a challenger's and the Lean verifier ran as of
-record. PARAMETERS is ``deployed`` only where the launcher says ``development`` false and the record's pieces don't say
-development (`coins`): the pieces are the evidence and the launcher's word a claim, so a launcher's word the pieces
-don't bear out exits 2, and no piece's absence makes either word deployed. DETAIL is what the record states
+below it the kit's ``a measurement, not an audit``, always: this command never prints an audit, and ``audit`` is false
+in `compute.json` and in each of `result.json`'s entries. COINS is who drew the coins: the launcher's ``challenger``
+in `out/compute-run.json` (`RAN`, written by `serve.sh`: ``local`` or ``in-process``), else ``in-process`` where the
+answer's sample is the node's or the salt coins an in-process challenger's; a record that says neither prints
+``ran with: not stated`` and, below it, the coins it does state. PARAMETERS is ``development``. A launcher that says
+``deployed`` or ``development`` false exits 2 (`NO_DEPLOYED`): the person's own run writes every file of the record,
+so no file of it can show the auditor's challenger drew the coins, and reading a deployed run waits on a check of the
+challenger's signature against a pinned key. DETAIL is what the record states
 of the rest (`coins`): the answer's draws and δ and scheme, its sample source (`profile.source_from`), the piece's salt
 coins (``coin_source``), and whether the Lean verifier ran as of record (``--of-record`` in
 `pearlplus-lean-check.json`'s ``argv``), each ``not stated`` where the record holds none. None of them refuses a
@@ -177,8 +177,11 @@ JOB = "job.json"
 RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS, DEVELOPMENT, RAN, JOB]
 #: the files of `RECORDS` a withdrawal of which leaves the record readable: the file is then neither fetched nor read
 OPTIONAL = frozenset({DEVELOPMENT, RAN, JOB})
-#: the launcher's ``challenger``, in the kit's words for who drew the coins (`kit.COINS`)
-CHALLENGER = {"local": "local challenger", "in-process": "in-process", "deployed": "deployed challenger"}
+#: the launcher's ``challenger``, in the kit's words for who drew the coins (`kit.COINS`): never the deployed one's
+CHALLENGER = {"local": "local challenger", "in-process": "in-process"}
+#: why a record whose launcher says a deployed challenger or deployed parameters is refused: the person's own run
+#: writes every file of the record, so no file of it can show that the auditor's challenger drew the coins
+NO_DEPLOYED = "this command does not yet read a deployed run: it has no check of the challenger's key"
 #: the verifier's document, read by `--per-call` alone
 VERIFY = "out/pieces/pouw/verify.json"
 #: the files a record directory must hold, and what each is
@@ -387,29 +390,27 @@ def ran_with(doc: dict) -> tuple[str, dict] | None:
     """The kit's `ran with` line of a document (`kit.ran_with`), from what its record states (`coins`): who drew the
     coins is the launcher's ``challenger`` (`CHALLENGER`, `RAN`), else ``in-process`` where the sample is the node's or
     the salt coins an in-process challenger's, and otherwise not stated (None): a challenger sample says no more than
-    that some challenger drew it, so ``deployed challenger`` is printed only where the launcher says so and the coins
-    and the Lean verifier's run are live. The parameters are ``deployed`` only where the launcher says
-    ``development`` false and the record's pieces don't say development. `Unreadable` where the launcher's word is
-    none of `CHALLENGER`'s, or says a deployed challenger or parameters the record's pieces don't bear out."""
+    that some challenger drew it. The parameters are always ``development``, so the line is never an audit's.
+    `Unreadable` where the launcher's word is none of `CHALLENGER`'s, and `NO_DEPLOYED` where it says the deployed
+    challenger or ``development`` false: the person's own run writes every file of the record, so files that agree
+    with each other prove nothing, and reading a deployed run waits on a check of the challenger's signature against a
+    pinned key."""
     c = doc["coins"]
     detail = ", ".join(f"{said} {v}" if v is not None else f"{unsaid} not stated" for said, unsaid, v in (
         ("draws", "draws", c["draws"]), ("delta", "delta", c["delta"]), ("scheme", "scheme", doc["scheme"]),
         ("sample from", "sample source", c["sample"]), ("salt coins from", "salt coins", c["salt"]),
         ("Lean verdict", "Lean verdict", c["lean"])))
+    if c["challenger"] == "deployed" or c["parameters"] is False:
+        raise Unreadable(f"{NO_DEPLOYED} (the record's {RAN} says "
+                         + ("the deployed challenger" if c["challenger"] == "deployed" else "development false") + ")")
     if c["challenger"] is not None and c["challenger"] not in CHALLENGER:
         raise Unreadable(f"the record's {RAN} names the challenger {c['challenger']!r}, not one of "
                          f"{', '.join(CHALLENGER)}")
     coins = CHALLENGER.get(c["challenger"]) or ("in-process" if c["sample"] == "node" or c["salt"] == "in-process"
                                                 else None)
-    if coins == "deployed challenger" and not (c["sample"] == c["salt"] == "challenger" and c["lean"] == "of record"):
-        raise Unreadable(f"the record's {RAN} says a deployed challenger and its coins don't: {detail}")
-    if isinstance(c["parameters"], bool) and c["parameters"] != c["development"]:
-        raise Unreadable(f"the record's {RAN} says development {str(c['parameters']).lower()} and its pieces say "
-                         f"development {str(c['development']).lower()} (development is the pieces' word where they hold "
-                         f"{DEVELOPMENT} or their coins or Lean run aren't live): {detail}")
     if coins is None:
         return None
-    return kit.ran_with(coins, "deployed" if c["parameters"] is False else "development", detail)
+    return kit.ran_with(coins, "development", detail)
 
 
 def fixed_load() -> dict:
@@ -814,12 +815,17 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         return 2
     except NoNumber as e:
         none = {"value": None, "unit": UNIT, "commit": None, "run": a.source, "target": float(TARGET)}
-        return kit.report("compute", "", none, [{"name": METRIC, "unit": UNIT, "target": float(TARGET)}],
-                          accepted=False, why=str(e))
+        return kit.report("compute", "", none, not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]),
+                          ran_with=None, accepted=False, why=str(e))
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
-    return kit.report("compute", text(doc), doc, measured, ran_with=said, accepted=True)
+    return kit.report("compute", text(doc), doc, not_an_audit(measured), ran_with=said, accepted=True)
+
+
+def not_an_audit(measured: list[dict]) -> list[dict]:
+    """`measured`, each saying in `result.json` that it is no audit's (``audit`` false), as `compute.json` does."""
+    return [m | {"extra": {**m.get("extra", {}), "audit": False}} for m in measured]
 
 
 if __name__ == "__main__":
