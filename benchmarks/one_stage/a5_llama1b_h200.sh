@@ -13,7 +13,7 @@
 #    the auditor device's service run on this machine, a development stand-in for the auditor's, its key made for the run at
 #    the deployed LMS parameters), at the rate rate:K/N (the partition's subset:K over the window's N units), every
 #    session's coin tree from that session's release log (a5.window_trees), Flock --zk behind the Lean ZK server; then SPOT's
-#    one-stage check on its case (v2_case.py --exe spot-one-stage-zk, `Spot.OneStageZk` v2), whose V2 line is the verdict.
+#    one-stage check (spot-one-stage-zk, `Spot.OneStageZk` v2) on the case the audit wrote, whose V2 line is the verdict.
 #
 #   research run --on MACHINE --project verity --source TREE --cwd clone --mem-gb 448 --timeout 3h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/one_stage/a5_llama1b_h200.sh
@@ -182,8 +182,30 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
   (cd "$A" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*private*' ! -path './*/archive/*' \
      ! -path '*/challenger-work/*' \( ! -path './challenger/*' -o -name windows.jsonl -o -name pins.jsonl \) -print0 \
     | xargs -0 -r -I{} cp --parents {} "$OUT/a5/")
-  "$TPY" benchmarks/one_stage/v2_case.py --window "$A/window" --out "$BASE/v2" --scratch "$BASE/v2-scratch" \
-    --exe "$TREE/verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-one-stage-zk" > "$OUT/a5/v2.log" 2>&1
+  # the case the audit wrote (a5.write_case: it names the challenger, its window root and coins), as SPOT's check reads it;
+  # v2_case.py's rebuild from the kept files carries no coins, which v2 refuses (NO_CHALLENGER)
+  "$TPY" - "$A/window/case-v2.json" "$BASE/v2" "$TREE/verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-one-stage-zk" \
+    > "$OUT/a5/v2.log" 2>&1 <<'PY'
+import json, subprocess, sys
+from pathlib import Path
+
+sys.path.insert(0, "benchmarks/one_stage")
+from composite import canonical, write_private
+
+case, out, exe = json.loads(Path(sys.argv[1]).read_text()), Path(sys.argv[2]), sys.argv[3]
+files = {"params.json": canonical(case["params"]), "commitment.bin": bytes.fromhex(case["commitment"]),
+         "evidence.json": bytes.fromhex(case["evidence"])}
+write_private(out, files)
+p = subprocess.run([exe, "check", *(str(out / f) for f in files), *case["blobs"]], capture_output=True, text=True, check=False)
+line = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else ""
+if not line:
+    print(f"V2 no answer (exit {p.returncode}): {p.stderr.strip()[-400:]}")
+    sys.exit(p.returncode or 2)
+write_private(out, {"answer.json": (line + "\n").encode()})
+answer = json.loads(line)
+print(f"V2 verity/sampled-proofs/one-stage/v2 {answer['verdict']}" + (f": {answer['reason']}" if answer.get("reason") else ""))
+sys.exit(p.returncode)
+PY
   echo "V2RC $?" >> "$OUT/a5/v2.log"
   return $rc
 }
