@@ -39,7 +39,10 @@ each entry with its `reason`; a malformed entry stops everything. A move with `h
 passes the check only where it differs from the script's tree in exactly those paths, and after step 2 its hand changes are
 merged into the branch's moved tree with the script's tree on B as the merge base (step `hand`; a hand change to a line the
 branch changed is `conflicted` there). Without that merge, step 3, with M as its base, would undo them. Nothing is skipped:
-the script still runs on the branch's own lines and `stale-words` reads them, as for any move.
+the script still runs on the branch's own lines and `stale-words` reads them, as for any move. An entry `move = false`
+(alone, with its `reason`) says no script writes the commit, though its message has a move line (a rename run by a copy
+of its map narrowed by hand, which no commit holds): no reader takes it as a move, `check_generated` vouches for nothing
+in it, and a crossing merges it as it merges any commit without a move line.
 
 A move commit that adds the map its move line names, which B lacks, runs by its own copy (`git show M:MAP`, in the scratch
 checkout the script runs in, where a rows file the branch commits beside it is read, and gone from the tree the script
@@ -163,8 +166,8 @@ LAYOUT_MAP = "tools/move/layout_map.toml"
 #: corrections to move commits' own records, each under the commit's full id, which `move_line`, `moves_on` and
 #: `check_generated` read before the commit (`corrections`)
 MOVE_LINES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "move_lines.toml")
-#: an entry's keys: at least one of `line` and `hand`, and always `reason`
-ENTRY_KEYS = {"line", "hand", "reason"}
+#: an entry's keys: at least one of `line` and `hand`, or `move = false` alone, and always `reason`
+ENTRY_KEYS = {"line", "hand", "move", "reason"}
 #: a hunk's header in `git diff -U0`: the old side's line count, the new side's first line and its count
 HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 #: the most `stale_words` lines `line` prints; the JSON holds every one
@@ -511,7 +514,7 @@ def keep_generated(key: dict, tree: str) -> None:
 def corrections() -> dict[str, dict]:
     """`MOVE_LINES`'s entries by commit id (none without the file). Refused, with the fix, unless every key is a full 40-hex
     id and every entry holds a `reason` and a `line` that is a move line (`MOVE_LINE`), a `hand` that lists paths, or both,
-    and nothing else. A clone without an entry's commit never looks it up (every lookup is by a commit the clone has), and a
+    or `move = false` alone, and nothing else. A clone without an entry's commit never looks it up (every lookup is by a commit the clone has), and a
     toy clone runs this file too, so only the suite holds each id to a commit of the repository's."""
     if not os.path.isfile(MOVE_LINES):
         return {}
@@ -524,9 +527,11 @@ def corrections() -> dict[str, dict]:
     for sha, e in data.items():
         if not re.fullmatch(r"[0-9a-f]{40}", sha):
             bad.append(f'["{sha}"] is no full commit id: key the entry by the commit\'s 40-hex id (git rev-parse SHA)')
-        elif not isinstance(e, dict) or set(e) - ENTRY_KEYS or not set(e) & {"line", "hand"}:
+        elif not isinstance(e, dict) or set(e) - ENTRY_KEYS or not set(e) & {"line", "hand", "move"} \
+                or "move" in e and (e["move"] is not False or set(e) & {"line", "hand"}):
             bad.append(f'["{sha}"] holds {sorted(e) if isinstance(e, dict) else e!r}: give it a `line`, a `hand` or both, '
-                       "and a `reason`, and nothing else")
+                       "or `move = false` alone (no script writes it: it crosses as a plain commit), and a `reason`, "
+                       "and nothing else")
         elif not isinstance(e.get("reason"), str) or not e["reason"].strip():
             bad.append(f'["{sha}"] has no `reason`: say in one sentence why the commit\'s own record is not what it did')
         elif "line" in e and not (isinstance(e["line"], str) and MOVE_LINE.fullmatch(e["line"])):
@@ -713,19 +718,23 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
 
 def move_line(commit: str, cwd: str | None) -> tuple[str, tuple[str, ...]] | None:
     """The script and arguments ``commit``'s move line names, its `MOVE_LINES` entry's where it has one, or None when it has
-    none."""
-    m = MOVE_LINE.search(corrections().get(rev(commit, cwd), {}).get("line")
-                         or out("log", "-1", "--format=%B", commit, cwd=cwd))
+    none or its entry says `move = false`."""
+    entry = corrections().get(rev(commit, cwd), {})
+    if entry.get("move") is False:
+        return None
+    m = MOVE_LINE.search(entry.get("line") or out("log", "-1", "--format=%B", commit, cwd=cwd))
     return (LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) if m else None
 
 
 def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple[str, ...]]]:
     """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line,
-    its `MOVE_LINES` entry's where it has one."""
+    its `MOVE_LINES` entry's where it has one; none whose entry says `move = false`."""
     log = out("log", "--topo-order", "--reverse", "--no-merges", "--format=%H%x00%B%x1e", ref, f"^{head}", cwd=cwd)
     found, lines = [], corrections()
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
         commit, body = rec.split("\x00", 1)
+        if lines.get(commit, {}).get("move") is False:
+            continue
         if m := MOVE_LINE.search(lines.get(commit, {}).get("line") or body):
             found.append((commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())))
     return found
