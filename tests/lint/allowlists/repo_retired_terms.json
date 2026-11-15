@@ -3954,7 +3954,7 @@
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Produced.lean", "count": 7},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Rate.lean", "count": 4},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Record.lean", "count": 98},
-    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean", "count": 24},
+    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Docket.lean", "count": 24},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Run.lean", "count": 51},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Select.lean", "count": 153},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Service.lean", "count": 3},

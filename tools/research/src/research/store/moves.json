@@ -3121,6 +3121,11 @@
         "demos/lifecycle/remote.py": "tools/verity/cli/tests/lifecycle/remote.py",
         "demos/lifecycle/tests/test_lifecycle.py": "tools/verity/cli/tests/lifecycle/test_lifecycle.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/Docket.lean"
+      }
     }
   ]
 }
