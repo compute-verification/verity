@@ -52,10 +52,13 @@ FP8_KINDS = ("_fused_norm_rope_kernel", "concat_mla_q", "ConvertReqIndexToGlobal
 
 @functools.cache
 def _fold():
-    return fold(read_log(str(FIXTURE)), load_profile("derived_GLM53_tp8")[0], strict=False)
+    return fold(read_log(str(FIXTURE)), load_profile("derived_GLM53_tp8")[0], strict=False, with_program=False)
 
 
+@pytest.mark.slow
 def test_both_steps_fold_every_fp8_cache_launch_and_nothing_is_refused_or_unread():
+    """Minutes (the fold of all 78 layers of a 256-row prefill and a decode row): the only test that holds the FP8-cache patterns to
+    launches vLLM served, whose arguments, cache views and FlashMLA split plan no synthetic launch reproduces."""
     r = _fold()
     assert r.report.unsupported_ops == {}, r.report.unsupported_examples[:4]
     assert r.errors == [], r.errors[:4]
