@@ -698,7 +698,7 @@ which was not measured. The node's load average was about 930 during the run, wh
   witness gives `(g/N)` a batch, `k/B` factors in place of `k`. Covering it needs a direct-product (multi-instance)
   compression bound. Until then the verdict accepts only the sequential wipe: 74,000 rounds took 2.6 s over loopback,
   against a fill of about a minute.
-- **The physical premises** are the game's shape, not yet tied to `Definitions.Accounting.Physical`, whose `Memory` and
+- **The physical premises** are the game's shape, not yet tied to `Definitions.Registration.Physical`, whose `Memory` and
   `Links` constraints are their form there.
 - **The inter-node stream** is not measured: between the nodes only TCP 22 passes. The fill time is the NIC's line rate
   (52 s) and its RDMA loopback (59 s), and the deadline needs the challenger's round trip to a server and the fastest

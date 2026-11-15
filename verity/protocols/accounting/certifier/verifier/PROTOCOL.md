@@ -1804,7 +1804,7 @@ them.
     open cells (`Accounting.Attribution.openCells`, the record minus those slots) are the grids, and what
     the certifier sends into the block, the salt frame's release included, is a function of its record, the sealed
     slots included, and its jitter, as
-    `Accounting.TrustedUnits` (W2) asks of a certifier's sends, in `security/Definitions/Accounting/Physical.lean`.
+    `Accounting.TrustedUnits` (W2) asks of a certifier's sends, in `security/Definitions/Registration/Physical.lean`.
   - **The weights before the salt.** PoUW's noise seed reads the weights' root, so a credited window needs the
     weights fixed before its salt. A second sealed record cell per PoUW window, `_weights[p]`, holds that order: the
     prover's registration path hands `Proxy.commit_weights(p, root, signature)` the 64-byte frame-v3-sha512 root

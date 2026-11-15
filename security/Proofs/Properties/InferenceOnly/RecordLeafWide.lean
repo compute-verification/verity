@@ -44,7 +44,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty fieldsOf)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.RecordText (Row)
+open Spot.RecordText (Row)
 open InferenceOnlyCheck.Record.SecurityProofs (ranges_spec)
 open InferenceOnlyCheck.Properties.SecurityProofs
 

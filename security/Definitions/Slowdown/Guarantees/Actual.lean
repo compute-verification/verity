@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 public import Definitions.Core.Partition
 public import Definitions.InferenceOnly.Reads
 public import Definitions.InferenceOnly.Assumptions

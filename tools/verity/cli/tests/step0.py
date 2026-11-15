@@ -109,7 +109,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("verifier", "workers", ("draw",), after=("coins",)),
                         Channel("workers", "firewall", ("witness",), after=("draw",)),
                         Channel("firewall", "verifier", ("proof",), after=("draw",))),
-              needs=frozenset({"windows"}), law=_design, default_law="subset:8"),
+              needs=frozenset({"windows"}), law=_design, default_sampling_design="subset:8"),
     Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=_VERIFIER, needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
@@ -118,7 +118,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("certifier", SP.IDS["certifier"], parties=_CERTIFIER, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_certifier_params,
-              default_params=CERTIFIER_DEFAULTS, law=_work_design, default_law="work:64"),
+              default_params=CERTIFIER_DEFAULTS, law=_work_design, default_sampling_design="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),

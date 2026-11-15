@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.PerRun
-public import Proofs.Accounting.Device
+public import Proofs.Registration.Device
 public import Proofs.Pouw.PerRunTruncation
 public import Proofs.Pouw.Game
 
