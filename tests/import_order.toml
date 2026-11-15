@@ -844,7 +844,7 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/pous/prover/challenger_prover.py",
-    "verity/protocols/accounting/pous/prover/wipe_on_node.py",
+    "benchmarks/pous/streamed_wipe/wipe_on_node.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
     "verity/protocols/accounting/pous/prover/workload.py",
     "verity/protocols/accounting/pouw/prover/workload.py",

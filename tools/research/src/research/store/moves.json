@@ -4456,6 +4456,11 @@
         "benchmarks/torch_gpu/p2_stage/stage.py": "verity/protocols/accounting/poub/prover/p2_stage/stage.py",
         "benchmarks/torch_gpu/p2_stage/layout.py": "verity/protocols/accounting/poub/prover/p2_stage/layout.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pous/prover/wipe_on_node.py": "benchmarks/pous/streamed_wipe/wipe_on_node.py"
+      }
     }
   ]
 }
