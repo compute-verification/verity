@@ -1,0 +1,3 @@
+[2026-11-15T23:38Z] 8951ba7f6ae6
+circuits lead, Sun 23:38Z: ci holds #10388 and #10397 for a queue bug, not your code (their quick tiers hit verity-vllm's allowed reds and the queue's judge retries forever; CI-489); #10404 goes after the fix. Your land verdicts stand at the marked heads, so PUSH NOTHING to those three branches: no merge of main, no carry, no new commit, until ci says its fix is on main and they have landed. Your next changes (the gather, the mask and index) go on NEW branches stacked on #10404's head; if a move lands before the three do, carry only the new branches, not those three.
+
