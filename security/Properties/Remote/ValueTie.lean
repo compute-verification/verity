@@ -46,7 +46,7 @@ Pearl+ are `Properties.Pouw.PearlPlus`'s, read by name and restated nowhere here
 (`Verity.PolicyCase`) of the phase's counted exchange, `(P.out x k).sent`. Nothing here makes that exchange an
 outcome of `Vocab.game` under the commit's strategy, so nothing ties these cases to the outcome that
 `Vocab.Holds … .inferenceOnly` judges. The conjunct's antecedent, that the case's declaration complies at the case's
-own `Γ` and `α` (`Nci.CompliesRate … d`), is its own hypothesis and is not discharged by the clause. The conjunct says
+own `Γ` and `α` (`InferenceOnly.CompliesRate … d`), is its own hypothesis and is not discharged by the clause. The conjunct says
 nothing where no inference-only case's declaration is the committed circuit (`LaysOutAs`), the one case of the two that
 can arise at remote, whose composite has an inference-only component. Nothing proves `LaysOutAs` of any case today: it
 is the gap the clause's docstring names (`Vocab.Holds`: its two missing checks, the case's wires the committed
@@ -242,17 +242,17 @@ rows, in which
 
 At remote `s` is the phase's counted exchange's, `(P.out x k).sent` (`Phases.TiedAt`). Nothing here makes that
 exchange an outcome of `Vocab.game` under the commit's strategy, so nothing ties these cases to the outcome that
-`Vocab.Holds … .inferenceOnly` judges. The conjunct's antecedent (`Nci.CompliesRate … d`) is its own hypothesis and is
+`Vocab.Holds … .inferenceOnly` judges. The conjunct's antecedent (`InferenceOnly.CompliesRate … d`) is its own hypothesis and is
 not discharged by the clause. The conjunct says nothing where no inference-only case's declaration is the committed
 circuit (`LaysOutAs`), the one such case that can arise at remote, whose composite has an inference-only component;
 nothing proves `LaysOutAs` of any case today: it is the gap the clause's docstring names, stated once. -/
 def TiedBy (K : Verity.Registration.Composite) (s : Sent) (R : Properties.Pouw.PearlPlus.Run) : Prop :=
   ∃ X' : c.tying.tied.D.Trace, c.tying.Extends c.served X' ∧ c.tying.Evaluated X' ∧
     (∀ e ∈ c.tying.cells, c.Reads R e → ∀ g ∈ c.cut.yAt e, c.tying.IsGates X' g) ∧
-    ∀ p r ev, PolicyCase K s p r ev → ∀ (j' : Lean.Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
-      NciCheck.Properties.Expands (NciCheck.Protocol.instanceOf p ev) j' → NciCheck.Properties.Parses j' i →
+    ∀ p r ev, PolicyCase K s p r ev → ∀ (j' : Lean.Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
+      InferenceOnlyCheck.Properties.Expands (InferenceOnlyCheck.Protocol.instanceOf p ev) j' → InferenceOnlyCheck.Properties.Parses j' i →
       Properties.Remote.VerifierOwn p i → LaysOutAs V c.params c.files c.theta d →
-      Nci.CompliesRate i.gamma ((i.num : ℝ) / i.den) d →
+      InferenceOnly.CompliesRate i.gamma ((i.num : ℝ) / i.den) d →
       c.tying.CompliesBut i.gamma ((i.num : ℝ) / i.den) (c.tying.untiedCells X')
 
 /-- **A y the claim reads is not shown at W's entries** by the rows `S`, at the run `R` (`Tying.ShownAt` in the served

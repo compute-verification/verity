@@ -1,7 +1,7 @@
 module
 
 public import Properties.Verity.Tied
-public import Proofs.Nci.Untied
+public import Proofs.Slowdown.Untied
 
 /-!
 # The tied circuit's blocks: the placement from below, lean's form of the policy on it, and the period's pooling
@@ -13,7 +13,7 @@ public import Proofs.Nci.Untied
   prover passes.
 * `fromBelow`: the placement is from below (`Verity.ValueTie.Tying.FromBelow`) at every blocks, homes and untied
   cells.
-* `novelReads_asInputs_eq`: a block of the tied circuit with the untied gates `T` as inputs
+* `freshInput_asInputs_eq`: a block of the tied circuit with the untied gates `T` as inputs
   (`Verity.RegisteredCircuit.asInputs`, `Verity.Partition.asInputs`) reads, outside `θ`, what the block but `T` reads
   in the tied circuit, so `Tying.CompliesBut` is the per-block budget `counts_asInputs` gives a block: its own `k`, and
   the gates of `T` it holds.
@@ -131,7 +131,7 @@ theorem into_blocks_sub {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fi
       (C.into (Q.gates u) \ θ).map ⟨T.emb, T.emb_inj⟩ := by
   intro a ha
   obtain ⟨haI, haθ⟩ := mem_sdiff.1 ha
-  obtain ⟨haB, h, hhB, hah⟩ := Nci.Cut.SecurityProofs.mem_into.1 haI
+  obtain ⟨haB, h, hhB, hah⟩ := Slowdown.Cut.SecurityProofs.mem_into.1 haI
   have hhu : (T.blocks Q home).unit h = some u := ((T.blocks Q home).mem_gates).1 hhB
   have haB' : (T.blocks Q home).unit a ≠ some u := fun e => haB (((T.blocks Q home).mem_gates).2 e)
   have hθa : ∀ g', T.emb g' = a → g' ∉ θ := fun g' hg' hθ => haθ (hg' ▸ (T.theta_emb g').2 hθ)
@@ -173,7 +173,7 @@ theorem into_blocks_sub {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fi
       obtain ⟨g', hg', hga⟩ := mem_map.1 hah
       have hga' : T.emb g' = a := hga
       subst hga'
-      refine mem_map.2 ⟨g', mem_sdiff.2 ⟨Nci.Cut.SecurityProofs.mem_into.2 ⟨fun hg'Q => ?_, g,
+      refine mem_map.2 ⟨g', mem_sdiff.2 ⟨Slowdown.Cut.SecurityProofs.mem_into.2 ⟨fun hg'Q => ?_, g,
         (Q.mem_gates).2 hhu, hg'⟩, hθa g' rfl⟩, rfl⟩
       have hq := (Q.mem_gates).1 hg'Q
       have hgy : g' ∉ L.yOf T.cells := fun hy => by
@@ -181,7 +181,7 @@ theorem into_blocks_sub {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fi
         cases hq
       exact haB' (by rw [T.blocks_unit_served Q home hgy, hq])
   · have hna : ∀ g, T.emb g ≠ h := fun g e => hs ⟨g, e⟩
-    have hhi : T.tied.D.isInput h = false := Nci.Cut.SecurityProofs.reader_computed hah
+    have hhi : T.tied.D.isInput h = false := Slowdown.Cut.SecurityProofs.reader_computed hah
     rw [T.blocks_unit_added Q home hna hhi] at hhu
     have hcu : home (T.owner h) = u := Option.some.inj hhu
     rcases T.reads_tie h hna hhi a hah with hr | ⟨hna', hown⟩
@@ -200,15 +200,15 @@ theorem compliesBut_of_file {Γ : ℕ} {α : ℝ} {m : ℕ} (Q : Verity.Partitio
       (T.tied.D.into ((T.blocks Q home).gates u) \ T.tied.θ) ∪ (T.untiedGates U ∩ (T.blocks Q home).gates u) := by
     intro a ha
     obtain ⟨haI, haθ⟩ := mem_sdiff.1 ha
-    obtain ⟨haB, h, hhB, hah⟩ := Nci.Cut.SecurityProofs.mem_into.1 haI
+    obtain ⟨haB, h, hhB, hah⟩ := Slowdown.Cut.SecurityProofs.mem_into.1 haI
     by_cases hB : a ∈ (T.blocks Q home).gates u
     · have hT : a ∈ T.untiedGates U := by
         by_contra hT
         exact haB (mem_sdiff.2 ⟨hB, hT⟩)
       exact mem_union_right _ (mem_inter.2 ⟨hT, hB⟩)
-    · exact mem_union_left _ (mem_sdiff.2 ⟨Nci.Cut.SecurityProofs.mem_into.2
+    · exact mem_union_left _ (mem_sdiff.2 ⟨Slowdown.Cut.SecurityProofs.mem_into.2
         ⟨hB, h, (mem_sdiff.1 hhB).1, hah⟩, haθ⟩)
-  have hle : Nci.novelReads T.tied ((T.blocks Q home).gates u \ T.untiedGates U) ≤
+  have hle : InferenceOnly.freshInput T.tied ((T.blocks Q home).gates u \ T.untiedGates U) ≤
       C.width (C.into (Q.gates u) \ θ) + T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u) := by
     show T.tied.D.width _ ≤ _
     calc T.tied.D.width (T.tied.D.into ((T.blocks Q home).gates u \ T.untiedGates U) \ T.tied.θ)
@@ -227,7 +227,7 @@ theorem compliesBut_of_file {Γ : ℕ} {α : ℝ} {m : ℕ} (Q : Verity.Partitio
             exact sum_le_sum_of_subset (T.into_blocks_sub Q home hH u)) _
       _ = C.width (C.into (Q.gates u) \ θ) + T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u) := by
           rw [T.width_map]
-  have hle' : (Nci.novelReads T.tied ((T.blocks Q home).gates u \ T.untiedGates U) : ℝ) ≤
+  have hle' : (InferenceOnly.freshInput T.tied ((T.blocks Q home).gates u \ T.untiedGates U) : ℝ) ≤
       C.width (C.into (Q.gates u) \ θ) + T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u) := by
     exact_mod_cast hle
   linarith [(hQ u).2]
@@ -238,9 +238,9 @@ end Tying
 circuit `d`, any partition `P` and computed gates `T`, block `u` of `P` with `T` as inputs reads in
 `d.asInputs T` the fresh input that `P`'s block `u` but `T` reads in `d`. So `Tying.CompliesBut`'s bound on a block
 but its untied gates is the budget `counts_asInputs` takes for the block on the circuit with them as inputs. -/
-theorem novelReads_asInputs_eq {m : ℕ} (d : Verity.RegisteredCircuit) (P : Verity.Partition d.D m)
+theorem freshInput_asInputs_eq {m : ℕ} (d : Verity.RegisteredCircuit) (P : Verity.Partition d.D m)
     (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false) (u : Fin m) :
-    Nci.novelReads (d.asInputs T) ((P.asInputs T).gates u) = Nci.novelReads d (P.gates u \ T) := by
+    InferenceOnly.freshInput (d.asInputs T) ((P.asInputs T).gates u) = InferenceOnly.freshInput d (P.gates u \ T) := by
   have hg : (P.asInputs T).gates u = P.gates u \ T := P.asInputs_gates T u
   have hθ : ∀ a, a ∉ d.θ \ T ↔ a ∉ d.θ := fun a => by
     constructor
@@ -257,14 +257,14 @@ theorem novelReads_asInputs_eq {m : ℕ} (d : Verity.RegisteredCircuit) (P : Ver
     constructor
     · intro h
       obtain ⟨hin, hθa⟩ := mem_sdiff.1 h
-      obtain ⟨ha, g, hgu, hag⟩ := Nci.Cut.SecurityProofs.mem_into.1 hin
+      obtain ⟨ha, g, hgu, hag⟩ := Slowdown.Cut.SecurityProofs.mem_into.1 hin
       have h' : a ∈ (if g ∈ T then ∅ else d.D.reads g) := hag
       rw [ite_eq_right (mem_sdiff.1 hgu).2] at h'
-      exact mem_sdiff.2 ⟨Nci.Cut.SecurityProofs.mem_into.2 ⟨ha, g, hgu, h'⟩, (hθ a).1 hθa⟩
+      exact mem_sdiff.2 ⟨Slowdown.Cut.SecurityProofs.mem_into.2 ⟨ha, g, hgu, h'⟩, (hθ a).1 hθa⟩
     · intro h
       obtain ⟨hin, hθa⟩ := mem_sdiff.1 h
-      obtain ⟨ha, g, hgu, hag⟩ := Nci.Cut.SecurityProofs.mem_into.1 hin
-      refine mem_sdiff.2 ⟨Nci.Cut.SecurityProofs.mem_into.2 ⟨ha, g, hgu, ?_⟩, (hθ a).2 hθa⟩
+      obtain ⟨ha, g, hgu, hag⟩ := Slowdown.Cut.SecurityProofs.mem_into.1 hin
+      refine mem_sdiff.2 ⟨Slowdown.Cut.SecurityProofs.mem_into.2 ⟨ha, g, hgu, ?_⟩, (hθ a).2 hθa⟩
       show a ∈ (if g ∈ T then ∅ else d.D.reads g)
       rw [ite_eq_right (mem_sdiff.1 hgu).2]
       exact hag

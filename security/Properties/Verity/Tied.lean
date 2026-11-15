@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Nci
+public import Definitions.InferenceOnly
 
 /-!
 # The tied circuit with its blocks
@@ -210,7 +210,7 @@ gates' reads of the cell's A row and the weights count in none. -/
 def CompliesBut (Γ : ℕ) (α : ℝ) (U : Finset Cell) : Prop :=
   ∃ (m : ℕ) (Q : Verity.Partition C m) (home : Cell → Fin m), T.Homes Q home ∧ ∀ u,
     C.size (Q.gates u) ≤ Γ ∧
-      (Nci.novelReads T.tied ((T.blocks Q home).gates u \ T.untiedGates U) : ℝ) ≤
+      (InferenceOnly.freshInput T.tied ((T.blocks Q home).gates u \ T.untiedGates U) : ℝ) ≤
         α * C.size (Q.gates u) + T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u)
 
 end Tying
