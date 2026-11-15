@@ -184,6 +184,7 @@ OS_RANDOMNESS = {
                                                                            "of the calls it measures (recorded as "
                                                                            "``call_draw``), which credits nothing",
     "protocols/accounting/pouw/prover/kernels/served_zk/stage_tile.py": "the staged tile's hiding key, no coin",
+    "protocols/accounting/pouw/prover/lowering/live.py": "the staged unit's hiding key, no coin",
     "protocols/accounting/pouw/prover/serving/h1/__init__.py": "the prover's hm96 salt keys (`WEIGHT_KEY`, a run's "
                                                                "table key), no coin",
     "protocols/accounting/pouw/prover/serving/h1/sampled.py": "the stager's hiding keys (`_random`), no coin",
