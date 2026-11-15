@@ -631,8 +631,9 @@ def _mapped(p: str, rows: list[tuple[str, str]]) -> str:
 
 
 def _meant(target: str, old: str, rows: list[tuple[str, str]], held: set[str]) -> str:
-    """Where what file `old` named, `target`, went: a directory holding kept files stays, but for a file that was in it."""
-    return target if target in held and not under(old, target) else _mapped(target, rows)
+    """Where what file `old` named, `target`, went: a directory holding kept files stays, but for a file that was in it
+    and moved (a kept file's own directory is where it stays)."""
+    return target if target in held and (not under(old, target) or _mapped(old, rows) == old) else _mapped(target, rows)
 
 
 def _add_pythonpath(text: str, entry: str) -> str:
@@ -653,13 +654,13 @@ def _kept_paths(t: Tree, rows: list[tuple[str, str]], held: set[str]) -> dict[st
         mirror = _mapped(d, rows)
         importers = [f for f in t.files if f.endswith(".py") and under(f, mirror)
                      and any((m.group(1) or m.group(2)) in names for m in BARE_IMPORT.finditer(t.read(f)))]
-        if not importers or (suite := t.owner(mirror)) is None:
-            continue
-        p = posixpath.join(suite, "pyproject.toml")
-        entry = posixpath.relpath(d, suite)
-        text, said = out.get(p, (t.read(p), []))
-        if (added := _add_pythonpath(text, entry)) != text:
-            out[p] = (added, said + [f"{p}: pythonpath + {entry} ({importers[0]} imports a module kept in {d})"])
+        for suite in sorted({s for f in importers if (s := t.owner(f)) is not None}):
+            p = posixpath.join(suite, "pyproject.toml")
+            entry = posixpath.relpath(d, suite)
+            first = next(f for f in importers if t.owner(f) == suite)
+            text, said = out.get(p, (t.read(p), []))
+            if (added := _add_pythonpath(text, entry)) != text:
+                out[p] = (added, said + [f"{p}: pythonpath + {entry} ({first} imports a module kept in {d})"])
     return out
 
 
@@ -729,6 +730,9 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
                 expr = _expression(n1, up + (0 if n1 else 1), [] if rel == "." else rel.split("/"), style)
                 if " / " in expr and after[e1:e1 + 1] in (".", "["):
                     expr = f"({expr})"
+                elif (" / " not in expr and after[s1 - 1:s1] == "(" and after[e1:e1 + 1] == ")"
+                      and not re.search(r"[\w)\]]$", after[:s1 - 1])):
+                    s1, e1 = s1 - 1, e1 + 1             # the parentheses the mover put around a join it no longer is
                 edits.append((s1, e1, expr, f"{new}:{line + 1}: {after[s1:e1].strip()} -> {expr} ({want})"))
         if edits:
             out[new] = [e[3] for e in edits]

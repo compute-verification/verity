@@ -58,7 +58,8 @@ TREE = {
     "tools/check/tests/test_c.py": "def test_c():\n    pass\n",
     "verity/a/runner.py": "import sys\nfrom pathlib import Path\n\nKEPT = Path(__file__).resolve().parent / \"tests\"\n"
                           "sys.path.insert(0, str(KEPT))\nimport kept  # noqa: E402\n",
-    "verity/a/tests/kept.py": "from kept_helper import K\n",
+    "verity/a/tests/kept.py": "from pathlib import Path\n\nfrom kept_helper import K\n\nHERE = Path(__file__).resolve().parent\n"
+                              "PACKAGE = HERE.parent\n",
     "verity/a/tests/kept_helper.py": "K = 1\n",
     "verity/a/tests/data.json": "{}\n",
     "verity/a/tests/test_kept.py": "from pathlib import Path\n\nimport kept\n\nHERE = Path(__file__).resolve().parent\n"
@@ -155,7 +156,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     whose own directory held more than its tests reads it still, and a reference through `Path(__file__)` or a name bound
     to it still reaches what it did: a test's to its code, a test's to another's tests, and code's to its tests, in
     parentheses where a call or a subscript follows it. A kept file stays (`[keep_files]`, a row to itself): code that
-    imports it is as it was, a reference to its directory from outside it means it, and its suite's tests, which imported
+    imports it is as it was, a reference to its directory from outside it or from itself means it, and its suite's tests, which imported
     it from beside them, find it on the suite's `pythonpath`."""
     monkeypatch.setattr(TR, "KEEP_FILES", KEEP)
     r = repo(tmp_path)
@@ -215,6 +216,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert 'HERE = Path(__file__).resolve().parent\nDATA = HERE / "data.json"' in (r / "tests/verity/a/test_kept.py").read_text()
     assert (r / "tests/verity/a/data.json").is_file()
     assert (r / "verity/a/runner.py").read_text() == TREE["verity/a/runner.py"]
+    assert (r / "verity/a/tests/kept.py").read_text() == TREE["verity/a/tests/kept.py"]
     a = tomllib.loads((r / "tests/verity/a/pyproject.toml").read_text())
     assert a["tool"]["pytest"]["ini_options"]["pythonpath"] == ["../../../verity/a", "../../../verity/a/tests"]
     assert TR.anchors(TR.Tree(r), base, write=False) == {}
