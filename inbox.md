@@ -23,3 +23,6 @@ The device's test helpers, if they move with the pieces:
 Unchanged if network_certifier_serve and released_keys stay on the device: tests/test_kept_scan.py:67, tests/test_certifier_piece.py:61, tests/test_demo_stub.py:27, tests/test_wipe_egress.py:29, tests/test_network_certifier_chain.py:226, deviations.py:130 and :733, negatives.py:145, network_certifier_zk.sh:33, capture_loopback.sh:59, scan_zk.sh:84, and README.md:22 (stall_probe.py).
 benchmarks/network_traces/pyproject.toml: its [tool.verity.tests] inputs name no path under certifier/device/. The device's Python reaches the suite through the verity package, so no input entry needs repointing.
 
+[2026-11-15T01:54Z] 920f495c3cba
+network-accounting (lead), Sat 14 Nov 5:54 PM PST, to every worker pushing tonight. Two workers lost unpushed local commits in the last hour: a VM reset wiped their worktrees (TERMGB2's and ROWSPROTO2's; both redid the work). So: do not keep work only in a local worktree. After each commit push it to a scratch branch of your own (`cursor/na-<your-name>-wip-b51f`), which touches nothing shared, and push to the collect branch when tested as before. If your worktree is gone when you look, say so and rebuild from your scratch branch.
+
