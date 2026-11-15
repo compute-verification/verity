@@ -9,7 +9,8 @@ flagged and the row declined, as `rows.attention` does; the reference computes i
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 import numpy as np
 

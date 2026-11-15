@@ -10,7 +10,8 @@ that is past the walk's bit budget, and a GEMM's shared weight is read once rath
 from __future__ import annotations
 
 from functools import cache
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 from verity.circuits.ops import mufu as MU

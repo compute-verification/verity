@@ -16,7 +16,8 @@ kernel (`rows._instance`).  Registered from `rows` (kernel "rows").
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 import numpy as np
 

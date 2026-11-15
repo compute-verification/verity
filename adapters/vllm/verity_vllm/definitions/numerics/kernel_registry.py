@@ -23,7 +23,8 @@ from __future__ import annotations
 import re
 import zlib
 from dataclasses import dataclass, field
-from typing import Any, Callable, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 import numpy as np
 from verity.circuits.evaluation import Kernel, register_kernel, self_check

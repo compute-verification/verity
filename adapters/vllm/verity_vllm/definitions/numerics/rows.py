@@ -19,7 +19,8 @@ import hashlib
 import json
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, Callable, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 import numpy as np
 from verity.circuits.evaluation.batch import type_dtype, type_shape

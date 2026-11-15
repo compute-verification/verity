@@ -7,7 +7,7 @@ against them."""
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 from verity.circuits.kernels.tc import group_sum_total_batch

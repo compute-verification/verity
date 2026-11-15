@@ -5,7 +5,8 @@ as the Definitions' `I32Add` and `I32Div` do.  The row kernels register from `ro
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 import numpy as np
 

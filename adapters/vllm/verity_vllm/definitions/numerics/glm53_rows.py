@@ -9,7 +9,8 @@ capture that holds a twin to the served kernel where the twin's Definition is no
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 import numpy as np
 

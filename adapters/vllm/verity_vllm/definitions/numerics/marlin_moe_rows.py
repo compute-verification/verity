@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import itertools
 from functools import partial
-from typing import Any, Callable, Sequence
+from typing import Any
+from collections.abc import Callable, Sequence
 
 import numpy as np
 from verity.circuits.evaluation.batch import type_dtype

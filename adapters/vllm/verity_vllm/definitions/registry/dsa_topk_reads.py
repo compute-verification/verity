@@ -50,7 +50,8 @@ from __future__ import annotations
 
 from collections import Counter
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ZERO, add, const_bits, mux, sub
