@@ -6764,7 +6764,7 @@
   "RecDeploy",
   "Verity",
   "WeightSecurity",
-  "Accounting",
+  "ResourceAccounting",
   "Bandwidth",
   "Claims",
   "Flock",
