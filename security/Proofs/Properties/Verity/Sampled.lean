@@ -539,11 +539,11 @@ noncomputable def κ : Fin A.Cc.N → Option Bool := fun g => Flock.Bridge.const
 
 /-- **The claim's transcript at a strategy of the live audit**: V5's trace fixed at registration (`Xr`) as the
 deployed commitment's sampling witness (`Flock.Bridge.witDep`), opened at each gate's claims position under the
-commitment's roots and read at the circuit's gates with its constants (`Flock.Bridge.transcriptOf`), on the committed
+commitment's roots and read at the circuit's gates with its constants (`Flock.Bridge.traceOf`), on the committed
 files' circuit (`circuit_eq`). -/
 noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRead.circuit.Trace :=
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
-    (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ
+    (Flock.Bridge.traceOf A.D A.hU A.n A.κ
       ((Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val Claims.Sampling.sha512Msg A.Cd
         (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩
           A.roots)))
@@ -551,7 +551,7 @@ noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRea
 /-- **The openings `op` of the committed files `r` hold wherever the session's deployed commitment opens**: at each
 gate `r` doesn't fix to a constant, a bit the deployed commitment opens at the gate's claims position under the
 session's roots (`Flock.Bridge.posOf`, `Cd`, `roots`) opens the gate to every value whose first bit it is. -/
-def OpensUnder (r : Verity.WindowFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
+def OpensUnder (r : Verity.ExecutionPhaseFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
   ∀ (h : r.circuit.N = A.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Claims.Msg), r.consts g = none →
     A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨Flock.Bridge.posOf A.Cc (Fin.cast h g), b, d⟩ = true →
       ∀ v : BitVec (r.circuit.w g), v.getLsbD 0 = b → op g v
@@ -700,7 +700,7 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   own : A.own = none
   circuit : A.I.circuitFile = V.circuitFile θ F
   publicFile : A.I.publicFile = V.publicFile θ F
-  read : V.read θ F = Verity.WindowFiles.one A.fileRead
+  read : V.read θ F = Verity.ExecutionPhaseFiles.one A.fileRead
   share : (V.certOf θ).ε = A.ε
   single : OneStatement θ
 
@@ -816,7 +816,7 @@ ones v2's parameters name (`programDigestOf`, `publicDigestOf`) and whose readin
 (`readOf`) reads the files at those digests and the lookup tables the circuit file registers. -/
 theorem digestsAt_of (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
-    (hr : ∀ θ F, V.read θ F = Verity.WindowFiles.one (readOf T θ F)) (θ : ByteArray) :
+    (hr : ∀ θ F, V.read θ F = Verity.ExecutionPhaseFiles.one (readOf T θ F)) (θ : ByteArray) :
     DigestsAt V T θ where
   circuit p hθ dg hdg := by
     rw [hc, programDigestOf, paramsOf_eq hθ]

@@ -30,7 +30,7 @@ the cost.
   copy of the Programs' statics and its verdict ``o0``; Lean holds each ``srb`` row's b‖c to the leaf its own reads file
   names (`served_rows.reads_port`), and the host predicts the same read (`served_rows.leaf_ok`). A block passes when it is
   proved and its verdict is ``ACCEPT``. The received-pieces scan is `leak_scan.scan`
-  (``benchmarks/network_traces/leak_scan.py``), every zero-knowledge driver's, and a row shorter than its piece (``srb``
+  (``verity/protocols/accounting/certifier/prover/leak_scan.py``), every zero-knowledge driver's, and a row shorter than its piece (``srb``
   at G = 1 in the slice's class, 8 bytes) is found whole (`leak_scan.find_whole`).
 """
 from __future__ import annotations

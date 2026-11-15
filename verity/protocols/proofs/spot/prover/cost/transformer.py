@@ -400,7 +400,7 @@ def chosen(cands: list[Candidate], cm: CostModel, objective: Objective, front: l
     return for_target(cands, cm, objective, target, plans=front, exact=False)
 
 
-def law(plan: Plan, cands: list[Candidate]) -> Stratified:
+def sampling_design(plan: Plan, cands: list[Candidate]) -> Stratified:
     """The plan's stratified sampling design: one stratum a subcircuit, k_s of n_s sampled."""
     return Stratified(tuple(Stratum(c.template, c.units, plan.sizes[c.template]) for c in cands
                             if c.template in plan.sizes))
@@ -411,7 +411,7 @@ def recertify(plan: Plan, cands: list[Candidate], delta: float, *, exact_count: 
     `Stratified.harm_bound` (and units by `count_bound`, exact, when `exact_count`), and the optimizer's own `certify`
     and `density_bound` of the ANDs."""
     chosen_ = [c for c in cands if c.template in plan.sizes]
-    st = law(plan, cands)
+    st = sampling_design(plan, cands)
     out = {"delta": delta, "ands": st.harm_bound({c.template: float(c.work) for c in chosen_}, delta),
            "units": st.harm_bound({c.template: 1.0 for c in chosen_}, delta),
            "certify": certify(plan.sizes, cands, Objective(delta), exact=True).harm,
@@ -454,11 +454,11 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
 
 
 def handoff(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
-    """The plan as a GPU loop registers it (a `circuit_record(..., law, cap)`), each subcircuit
+    """The plan as a GPU loop registers it (a `circuit_record(..., sampling_design, cap)`), each subcircuit
     a Definition's descriptor id (a stub's id until its Definition lands) with its units:
 
     * `windows`, the form `IntegrityPeriod` reads: one window a subcircuit, its units under `subset:k_s` in
-      members of its statement size (the loop's `--law` and `--cap`), and at each delta its `K0`, `IntegrityPeriodLog`'s
+      members of its statement size (the loop's `--sampling-design` and `--cap`), and at each delta its `K0`, `IntegrityPeriodLog`'s
       ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no sample misses), so
       outside delta every window has fewer than its K0 units incorrect;
     * `record`, the block as one window: every subcircuit under the `work:1` sampling design whose work table's floors are the plan's

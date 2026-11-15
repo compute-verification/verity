@@ -65,7 +65,7 @@ def audit_argv(win: Path, out: Path, main: Path, flock: Path, lean: Path) -> lis
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/proofs/flock/prover/python",
                                                   "adapters/vllm"))
     return [sys.executable, str(ROOT / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py"), "audit", "--window", str(win),
-            "--law", RULE, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
+            "--sampling-design", RULE, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, "--bin", str(flock),
             "--lean", str(lean / "verity-verify-proof"), "--firewall", str(lean / "flock-firewall"),
             "--out", str(out), "--deployed-key"]

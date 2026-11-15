@@ -112,7 +112,6 @@ from verity.commitments import Opening as MerkleOpening
 from verity.commitments.randomness import derive, frame
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.protocols.proofs.spot.verifier.profile import (
-    WINDOW_DELTA,
     IntegrityProfile,
     Subset,
 )
@@ -135,15 +134,20 @@ TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
 NONCE_BYTES = 32
 NODE_BYTES = _DIGEST_BYTES["sha512"]
-QUERIES_LOG2 = 64
-SLACK_LOG2 = 67
-"""AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-67 a
-pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 passes they add at most 2^-50, 2^-10 of
-`DELTA`: an hour, six times the stated 10-minute horizon, of the node's 41.2 ms passes over 130,023,424 blocks
-(532.6 GB, eight GPUs' 62 GiB shards) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
+QUERIES_LOG2 = 80
+"""Q = 2^80, the prover's budget: the SHA-512 compressions it makes over a session, on any hardware it reaches, at
+most.  Every bound that counts the prover's hashing reads this one constant: AuditRO's q (`named_bits`), sketch-sha512's
+guesses and keys (`timing.sketch_failure`, `ledger.sketch`) and the receipts' fork finder (`ledger.binding`)."""
+SLACK_LOG2 = 140
+"""AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-140 a
+pass, which γ's error and the memory line's δ add once a pass.  Up to 2^30 passes they add at most 2^-110, 2^-9 of
+`DELTA`: 2^30 of the node's 41.2 ms passes are about 1.4 years of passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
-DELTA = float(WINDOW_DELTA)
+DELTA = 2.0 ** -101
+"""PoUB's δ, its own: each window's profile δ and the pooled bound's (`Poub.Protocol.DELTA`), 2^-101, half
+of the audit's error of 2^-100.  SPOT's `WINDOW_DELTA` is another constant, and PoUB-P2's δ is its own
+(`p2_parties.DELTA`)."""
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
@@ -207,7 +211,7 @@ class Pace:
 @dataclass(frozen=True, slots=True)
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
-    deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at 2^-40 by default, 555 a second of the
+    deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at `DELTA` by default, 555 a second of the
     stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
     boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
     receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
@@ -1249,7 +1253,7 @@ class AuditRun:
         return tuple((first, commitment.count) for first, _, commitment, _ in self._appends)
 
     def scheduled(self, schedule: _schedule.Schedule) -> Scheduled:
-        """The schedule check (`schedule.check`, of record in `lean/RemoteAudit/Schedule.lean`) on this session's own
+        """The schedule check (`schedule.check`, of record in `lean/Poub/Schedule.lean`) on this session's own
         passes, each plan as received and the step it named, and its appends, at the cap its parameters committed
         before its first coin (`Params.schedule_cap`): its verdict, which `ledger` requires before it credits an
         appended block, or `schedule.Refused` and why not.  A session whose parameters commit no cap has none
@@ -1365,7 +1369,7 @@ class Registry:
                  receipt: str = receipts.DEFAULT, **kw) -> Registration:
         """`register`'s registration for a node with none live, which it makes live; refused, and counted, for one
         with.  One that would bind PoUW's tile outputs (`bind`) samples nothing either (ValueError): the verifier's
-        definition, `RemoteAudit.Registry.register`, covers receipts of a block alone and refuses it."""
+        definition, `Poub.Registry.register`, covers receipts of a block alone and refuses it."""
         node = _node(node)
         if node in self._live:
             self.refused[node] = self.refused.get(node, 0) + 1
@@ -1373,7 +1377,7 @@ class Registry:
                                 "second draws no codec seed until the verifier closes the first and counts its sessions")
         if _bind(kw.get("bind", False)):
             raise ValueError("a registration that binds PoUW's tile outputs is not covered: the verifier's definition "
-                             "(RemoteAudit, in Lean) covers receipts of a block alone")
+                             "(Poub, in Lean) covers receipts of a block alone")
         registration = register(source, node, blocks, payload_root, codec, receipt, **kw)
         self._live[node] = _Live(registration.digest, registration, [])
         return registration
@@ -1637,7 +1641,7 @@ def pooled_windows(record: Record) -> tuple[list[tuple[int, int]], Fraction]:
 
 
 def pooled_bound(record: Record) -> _pooled.Bound:
-    """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `RemoteAudit.Pooled`)."""
+    """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `Poub.Pooled`)."""
     return _pooled.bound(*pooled_windows(record))
 
 
@@ -1671,7 +1675,7 @@ def pooled(record: Record) -> tuple[float, float]:
     + the receipts' binding term (`Accounting.Guarantees.Remote.PooledSample`, `ledger.draw`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
-    `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least
+    `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.Poub.PooledCovers` proves at least
     the bound `PooledSample` reads."""
     b = pooled_bound(record)
     return _up(b.wrong), _up(b.floor)

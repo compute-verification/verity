@@ -6,10 +6,10 @@
         [--log LOG --snapshots DIR] [--control-tokens PATH] [--other-log LOG] [--cards-dir out/gen/cards] [--k 3] [--seed S]
 
 GPU phase (the pod's torch venv, Python 3.11):
-    capture         bench.m1_capture --snapshot-steps 0,1,2,3 (contiguous from 0: replay of step N finds every earlier
+    capture         bench.match_capture --snapshot-steps 0,1,2,3 (contiguous from 0: replay of step N finds every earlier
                     KV producer) -> RUN_DIR/capture/{log.jsonl.gz, tokens.json, snapshots.json, values/, stats.json,
                     versions.json, cos_sin_cache.npy}
-    control         bench.m1_capture --no-observer -> RUN_DIR/control/tokens.json  — THE token reference of every gate
+    control         bench.match_capture --no-observer -> RUN_DIR/control/tokens.json  — THE token reference of every gate
     census, nonint  no command (see root_policy below)
     -> RUN_DIR/gpu_done.json with timings
 CPU phase (Python 3.12, torch-free; pod or laptop):
@@ -50,6 +50,7 @@ from verity_vllm.config import RowEngine, UsageError, option, workload_arg
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.match_fold import (
     _jsonable,
     fold_summary_result,
@@ -76,7 +77,7 @@ DEFAULT_K = 10                         # tier a: instances per (specialization, 
 DEFAULT_CHAINS = 3                     # tier chain: connected slices replayed with computed intermediate values
 DEFAULT_PARALLEL_REPLAY = 4            # run.json's `parallel_replay` (1 with --laptop)
 DEFAULT_CHECKPOINTS = "manifests/checkpoints.json"
-SNAPSHOT_CAP_FLOOR = 32 << 20          # m1_capture's fixed per-tensor snapshot cap, the floor of the derived one
+SNAPSHOT_CAP_FLOOR = 32 << 20          # match_capture's fixed per-tensor snapshot cap, the floor of the derived one
 SNAPSHOT_ROW_BYTES_FALLBACK = 64 << 10  # per-token activation row bound when no HF config is readable: 2 x I x bf16 for I <= 16384
 LAPTOP_MAX_RSS_GB = 1.5
 LAPTOP_STAGE_TIMEOUT_S = 180.0
@@ -450,8 +451,8 @@ def gates_stage(plan: Plan, a: Options) -> dict:
     (run / "CARD.md").write_text(CARD.summarize_md(card))
     dest = Path(a.cards_dir) / f"{a.config_id}.json"
     CARD.write_card(card, dest)
-    print(CARD.top_section(card))
-    print(G.gates_markdown(results))
+    write(CARD.top_section(card))
+    write(G.gates_markdown(results))
     return {"stage": "gates", "status": "ok", "returncode": 0, "seconds": round(time.time() - t0, 3), "log": None, "cmd": "in-process",
             "reason": None, "verdict": card.verdict, "card": str(dest)}
 
@@ -477,7 +478,7 @@ class Options:
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
     max_tokens: int | None = option("--max-tokens", type=int, default=None, help="override the workload's max_tokens (passed to the GPU stages)")
-    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; a prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
+    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (match_capture default 32 MiB; a prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
     #: how `main` derived the cap (run.json's snapshot_cap_derivation); None under a --snapshot-max-bytes given; no flag sets it
     snapshot_cap_derivation: dict | None = field(default=None, init=False)
     snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a 2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
@@ -524,7 +525,7 @@ def main(a: Options) -> int:
     for req in ("config_id", "profile", "workload", "case", "out"):
         required(a, req)
     # no explicit --snapshot-max-bytes: derive the cap from the workload's largest forward and the checkpoint's widths
-    # (snapshot_cap_bytes) instead of m1_capture's fixed 32 MiB, which leaves the prefill MLP rows of every 1024-class workload without
+    # (snapshot_cap_bytes) instead of match_capture's fixed 32 MiB, which leaves the prefill MLP rows of every 1024-class workload without
     # snapshot evidence.  An explicit value still wins; the run.json records the derivation either way.
     if a.snapshot_max_bytes is None:
         C0 = profile_config(required(a, "profile"))
@@ -540,21 +541,21 @@ def main(a: Options) -> int:
     timeout = a.stage_timeout if a.stage_timeout is not None else (LAPTOP_STAGE_TIMEOUT_S if plan.laptop else None)
 
     if a.dry_run:
-        print(f"# run_config --dry-run  RUN_DIR={plan.run}  phase={a.phase}  snapshot_steps={plan.steps}  laptop={plan.laptop}")
+        write(f"# run_config --dry-run  RUN_DIR={plan.run}  phase={a.phase}  snapshot_steps={plan.steps}  laptop={plan.laptop}")
         for st in stages:
             if plan.skipped(st):
-                print(f"[{st}] SKIP (--skip)")
+                write(f"[{st}] SKIP (--skip)")
                 continue
             if st == "gates":
-                print(f"[gates] in-process: gates.evaluate_gates({plan.run}) -> {plan.p('gates')}; card -> {plan.p('card')}, {plan.run / 'CARD.md'}, "
+                write(f"[gates] in-process: gates.evaluate_gates({plan.run}) -> {plan.p('gates')}; card -> {plan.p('card')}, {plan.run / 'CARD.md'}, "
                       f"{Path(a.cards_dir) / (required(a, 'config_id') + '.json')}")
                 continue
             cmd = plan.cmd(st)
             if cmd is None:
                 continue
-            print(f"[{st}] {shlex.join(cmd)}")
+            write(f"[{st}] {shlex.join(cmd)}")
         if a.phase in ("gpu", "all"):
-            print(f"[gpu_done] write {plan.p('gpu_done')} with per-stage timings")
+            write(f"[gpu_done] write {plan.p('gpu_done')} with per-stage timings")
         return 0
 
     man = write_manifest(plan, a)

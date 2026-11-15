@@ -83,7 +83,7 @@ part, and the command sums them per scope and monitoring period under each of th
 `TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice.
 
 * **How the stop class is charged** is the answer of the stop verdicts' reader
-  (`benchmarks/network_traces/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
+  (`verity/protocols/accounting/certifier/prover/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
   ``stop``). The rows the calculator reads from verdict records (its document's `stop`'s `rows`: those that hold
   the lengths by a stop block) are charged below their schedules only on the execution phases the answer holds, and
   their whole schedules on every other. The runs handed to the reader are every run that carries the record
@@ -189,7 +189,7 @@ NOT_RECORDED = "not recorded"
 SHARE = 0.10
 #: the network check's own proving as a share of total compute, which the planner's rows don't count: no run measures it
 NETWORK_CHECK_SHARE = 0.003
-#: the case of the plan the figure is: the planner's world (rho's world fleet), the plan of record's row, with every
+#: the case of the plan the figure is: the planner's world (the slowdown calculator's world fleet), the plan of record's row, with every
 #: modeled lever at its measured value, and the step of that row that prices the verifier as measured (a prefix of the
 #: step's name)
 WORLD, ROW, STEP = "ours", "(ii) honest", "+ the verifier as measured"

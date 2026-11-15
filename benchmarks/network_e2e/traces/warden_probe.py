@@ -1,4 +1,4 @@
-"""`python warden_probe.py ARGS...`: `benchmarks/network_traces/warden_serve.py ARGS...`, with probes the warden doesn't
+"""`python warden_probe.py ARGS...`: `verity/protocols/accounting/certifier/device/warden_serve.py ARGS...`, with probes the warden doesn't
 keep, for telling a late tick's cause: every tick's lateness (`Warden.lateness`, which warden.json keeps only as
 quantiles), how long each tick's own work took (`Warden._tick`), when the publisher packed, signed and committed each
 record (`Publisher.keep`) and every garbage collection of the warden's process (serve turns the collector off, so any is
@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-SERVE = ROOT / "benchmarks" / "network_traces" / "warden_serve.py"
+SERVE = ROOT / "verity" / "protocols" / "accounting" / "certifier" / "device" / "warden_serve.py"
 #: a collection kept in `gc` by its own: any of generation 1 or 2, else one that took at least this long
 GC_MS = 1.0
 #: in `--out`: the spawned publisher's keeps, one JSON line each: [start on the network certifier's clock, seconds,
@@ -169,7 +169,7 @@ def _path() -> None:
 def main(argv: list[str]) -> int:
     out = Path(argv[argv.index("--out") + 1]) if "--out" in argv else None
     _path()
-    from benchmarks.network_traces import warden_serve
+    from verity.protocols.accounting.certifier.device import warden_serve
 
     from verity.protocols.accounting.certifier.verifier import warden
 
@@ -187,6 +187,6 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 elif __name__ == "__mp_main__":
     _path()
-    from benchmarks.network_traces import warden_serve
+    from verity.protocols.accounting.certifier.device import warden_serve
 
     time_keeps(warden_serve.Publisher)

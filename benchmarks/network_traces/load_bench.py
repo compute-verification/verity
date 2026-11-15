@@ -23,7 +23,7 @@ from verity.protocols.accounting.certifier.verifier.load_check import SHAPES, Sh
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from benchmarks.network_traces.load_relay import SALT_BYTES, first_values, relay, store_params, verifier_domain
+from verity.protocols.accounting.certifier.device.load_relay import SALT_BYTES, first_values, relay, store_params, verifier_domain
 
 
 class RandomSource(io.RawIOBase):

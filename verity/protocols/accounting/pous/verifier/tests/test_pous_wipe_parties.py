@@ -1,5 +1,5 @@
 """The wipe's memory challenger and prover as parties of the deployment layer (`wipe_challenger`, `wipe_prover`, over
-`wipe_parties`'s messages). On the coins, clock readings and key `wipe_party.serve` is given, the ported challenger
+`wipe_parties`'s messages). On the coins, clock readings and key `wipe_challenger.serve` is given, the ported challenger
 signs the same bytes, whatever its fill frames' size;
 an honest prover keeping the fill in host memory (`wipe_store.StoreProver`) is accepted by `verity/wipe/v0`'s verdict, one
 keeping foreign content is rejected and one that leaves is undecided; the challenger's transcript keeps each large fill
@@ -24,11 +24,12 @@ from verity.runtime.runner import run
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.prover import wipe_prover as WR
+from verity.protocols.accounting.pous.prover import wipe_run
+from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WPS
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
-from verity.protocols.accounting.pous.verifier import wipe_store as WS
 from verity.channel import canonical
 from verity.commitments.crypto import lms
 
@@ -57,24 +58,24 @@ def verify(public: bytes, message: bytes, signature: bytes) -> bool:
     return lms.verify(KEY, public, message, lms.Signature.decode(KEY, signature))
 
 
-def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.WipeMemoryChallenger:
-    """`wipe_party.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins."""
+def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> WC.WipeMemoryChallenger:
+    """`wipe_challenger.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins."""
     coins = S.SeededCoins(SEED)
-    monkeypatch.setattr(WP, "secrets", types.SimpleNamespace(token_bytes=coins.draw))
-    monkeypatch.setattr(sw, "os", types.SimpleNamespace(urandom=coins.draw))
+    monkeypatch.setattr(WC, "secrets", types.SimpleNamespace(token_bytes=coins.draw))
+    monkeypatch.setattr(WC, "os", types.SimpleNamespace(urandom=coins.draw))
     signer, log = ts.TestSigner(secret, 2), ts.session_log()
     a, b = socket.socketpair()
     got: dict = {}
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=log, reads=params.k,
+            got["c"] = WC.serve(f, WP.request_of("n0", params), signer=signer, log=log, reads=params.k,
                                 clock=itertools.count(T0, STEP).__next__)
 
     t = threading.Thread(target=side)
     t.start()
     with b, b.makefile("rwb") as f:
-        WP.answer(f, sw.Prover(params))
+        wipe_run.answer(f, WS.Prover(params))
     t.join()
     return got["c"]
 
@@ -83,7 +84,7 @@ def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
     return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "reads": params.k}
 
 
-def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,
+def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=WS.Prover,
          prover=WR.Prover, state=None, request=None, sources=None):
     """One wipe on the runtime: in a live run on `sources` (the challenger's virtual clock and `SEED`'s coins unless
     given; `{}` for the runtime's own)."""
@@ -155,7 +156,7 @@ def test_an_honest_prover_on_host_memory_is_accepted():
 
 
 def test_a_prover_keeping_foreign_content_is_rejected():
-    r = wipe(PARAMS, b"foreign", store=W.keeping(PARAMS.labels // 2))
+    r = wipe(PARAMS, b"foreign", store=WS.keeping(PARAMS.labels // 2))
     out = r.outcomes[C]["outcome"]
     assert out["ended"] == sw.WRONG and verdict(out, b"foreign")["verdict"] == "reject"
 

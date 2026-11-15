@@ -142,9 +142,9 @@ for r in "$O"/ncu/*.ncu-rep "$O"/ncu_vp/*.ncu-rep; do
   ncu -i "$r" --page source --csv --print-source sass > "$b.sass.csv" 2> "$b.sass.err"
 done
 cat "$O/rc.txt"
-$PY $D/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
+$PY benchmarks/pouw/edited_gemm_profile/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
   --toml-arms "apv,fu,plain" > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" | tee -a "$O/rc.txt"
-$PY $D/vprod_profile.py "$O" --json "$O/vprod.json" --toml "$O/vprod.toml" > "$O/vprod.md" 2> "$O/vprod.err"
+$PY benchmarks/pouw/edited_gemm_profile/vprod_profile.py "$O" --json "$O/vprod.json" --toml "$O/vprod.toml" > "$O/vprod.md" 2> "$O/vprod.err"
 echo "vprod rc $?" | tee -a "$O/rc.txt"
 cat "$O/vprod.md"

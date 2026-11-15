@@ -23,7 +23,7 @@ derives them:
 
 * **The parameters** (`program_of_paramsAt`): the verifier's program is the one a descriptor parses to, as v2's
   parameters decode it (`Spot.OneStage.paramsParsed`).
-* **The sampling design** (`lawAt_designAt`): where v2 samples, the design `samplingDesignAt` reads off its parameters is
+* **The sampling design** (`samplingDesignAt_designAt`): where v2 samples, the design `samplingDesignAt` reads off its parameters is
   `designAt`'s at the verifier's descriptor, query, sampling design object and work table.
 * **The lookup tables** (`pinnedTables_eq`): on blobs that hold the registered circuit's lookup tables and no other
   pinned table (`HoldsRegisteredTables`), each at its registered file (`TablesSent`), where the deployment registers a
@@ -96,7 +96,7 @@ theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp
 to, under the sampling design object `Draw.derive` writes, a sample `sampledFrom` makes is under `sampledDesign`'s design
 (`samplesUnder_of_sampledFrom`), which is `designAt`'s there and the one `samplingDesignAt` reads: the design `deriveSamplingDesign` expands,
 else the one `flockSamplingDesign` parses from the object. -/
-theorem lawAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Docket.Verifier} {lo : Json}
+theorem samplingDesignAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Docket.Verifier} {lo : Json}
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
     (hlo : _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : _root_.Spot.OneStage.sampledFrom v lo n src = .ok r) :
@@ -490,7 +490,7 @@ open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 files `F` at the parameters `θ`, v2's parameters `p` in `θ` set its session up at the statement's tags on `F`'s
 circuit and public files (`checkBlobsAt_event`, `get_named`), whose lookup tables are the ones the circuit file
 registers where the blobs hold each at its registered file (`pinnedTables_eq`), and a descriptor of the verifier's
-program reads the session's sampling design off `designAt` (`lawAt_designAt`). -/
+program reads the session's sampling design off `designAt` (`samplingDesignAt_designAt`). -/
 theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD : DigestsAt V T θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
@@ -564,7 +564,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
   have hdrew : Drew k o.sent dr (derived.getD fl) n ξ (sampledBlocks ev.base.draw) :=
     ⟨a, b, e, p₀, cm, ev, hcase, hacc0, ⟨lo, derived, fl, hlo, hnn ▸ hn', hder, hfl, rfl⟩, rfl, read, hdu⟩
   have hrd := sampleHeld k o.sent dr _ n ξ _ recS hv.2.1 hdrew hrecS
-  have hlawD := lawAt_designAt hdesc hlo hdf
+  have hlawD := samplingDesignAt_designAt hdesc hlo hdf
   have hlawL : samplingDesignAt p₀.base.verifier n = .ok (derived.getD fl) := by
     simp only [samplingDesignAt, hlo, hder, hfl, ok_bind]
     rfl
@@ -687,7 +687,7 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
     (hD : DigestsAt V T θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
-    (hread : V.read θ F = Verity.WindowFiles.one (readOf T θ F)) (hone : OneStatement θ)
+    (hread : V.read θ F = Verity.ExecutionPhaseFiles.one (readOf T θ F)) (hone : OneStatement θ)
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
     (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) : ∃ A, LiveSpec V b θ F A := by
   obtain ⟨p, n, I, D, pubO, desc, hpa, htags, hcount, hwork, hstrat, hclos, hcirc, hpubf, htab, hpart, hprog, htyp,
@@ -715,7 +715,7 @@ theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBou
       hM := hb.M, ρ := b.ρ, hρ := hb.ρ, hr := fun S R j => hr_planZHJP _ _ hb.kρ S R j, ε := (V.certOf θ).ε,
       v := b.v, w := b.w, h := b.h }
   refine ⟨A, ⟨⟨p, hpa, hpart, hprog, hlaw, hdesc, rfl⟩, rfl, htags, hcount, hwork, hstrat, hclos, rfl, hcirc, hpubf,
-    hread.trans (congrArg Verity.WindowFiles.one (readOf_eq V T hc hp (A := A) htags hcount hcirc hpubf htab)), rfl, rfl,
+    hread.trans (congrArg Verity.ExecutionPhaseFiles.one (readOf_eq V T hc hp (A := A) htags hcount hcirc hpubf htab)), rfl, rfl,
     rfl, rfl, rfl, rfl, rfl, rfl, hreg, hone⟩⟩
 
 /-- **The session at the files of an accepted play is set up** (`liveSpec_of_accepted`): `liveOf` is not `none`
@@ -726,7 +726,7 @@ theorem liveOf_ne_none {V : Vocab d α} {T : PinnedTables} {b : SessionBound} (h
     (hD : DigestsAt V T θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
-    (hread : V.read θ F = Verity.WindowFiles.one (readOf T θ F)) (hone : OneStatement θ)
+    (hread : V.read θ F = Verity.ExecutionPhaseFiles.one (readOf T θ F)) (hone : OneStatement θ)
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
     (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) : liveOf V b θ F ≠ none := by
   unfold liveOf

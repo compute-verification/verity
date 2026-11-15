@@ -18,6 +18,7 @@ import pytest
 import pous_test_signer as ts
 from verity import protocol
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_monitoring as WM
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
@@ -31,7 +32,7 @@ LINK = WP.link("control", "n0", "outside", "eth0")
 
 def _answer(egress_mib: int | None) -> dict:
     """An accepted HBM-only wipe of `HBM`, its evidence's egress `egress_mib`, with the placement a GPU leg records."""
-    w = W.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
+    w = wipe_run.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
               coin_secret=b"coins", egress_mib=egress_mib)
     assert w.verdict == "accept"
@@ -165,7 +166,7 @@ RECORD = {"format": WM.EGRESS, "covered": True, "egress_mib": 5, "egress_bits": 
 """A covered `wipe-egress/v1` record: its writer's verdict, its count and its link."""
 WINDOW = {"t0_unix_ns": 1_793_088_000_123_456_789, "t1_unix_ns": 1_793_088_183_000_001_000, "pad_ns": 10 ** 9}
 """The wipe's own session in real time, as its challenger's side reports it beside the signed session
-(`wipe_party.report`), in the fields a record's writer gives its window."""
+(`wipe_challenger.report`), in the fields a record's writer gives its window."""
 
 
 def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(counted, uncounted):

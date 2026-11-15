@@ -26,7 +26,7 @@ to the second, at the window's member that is the parameters' member on the regi
 * **The member's files pass** (`filesPass_of_held`): on blobs where v2 reads the member's files among the files
   the window's member is on (`ReadsFiles`) and each pinned table the blobs hold is its registered file
   (`TablesSent`), a member whose files the run held has `FilesPass` at the window's member; so has every member of
-  a window (`WindowOn.passes`).
+  a window (`ExecutionPhaseOn.passes`).
 * **Files that pass fix their roots' domains** (`FilesPass.rootsFix`, `FilesPass.checked_all`,
   `MembersSetUp.rootsFix`): the ports check refuses two ports of one root and different published domains, so a
   member whose files pass has `Member.RootsFix`, and is `Checked` as Flock's member at every cost.
@@ -221,8 +221,8 @@ theorem filesPass_of_held {R : Array ByteArray} {s : Verity.Sent} (ht : TablesSe
 parameters' members on the registered files, on blobs sent where v2 reads each member's files among the registered
 files, each pinned table the blobs hold is its registered file and the run held each member's files at its slice
 of the registration. -/
-theorem WindowOn.passes {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
-    (h : WindowOn V θ F W) {s : Verity.Sent} (ht : TablesSent s)
+theorem ExecutionPhaseOn.passes {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+    (h : ExecutionPhaseOn V θ F W) {s : Verity.Sent} (ht : TablesSent s)
     {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member} (hp : ParamsAt θ p)
     (hms : p.members = some ms)
     (hF : ∀ vm ∈ ms, ReadsFiles (V.registered θ) vm (_root_.Core.Blobs.ofArray s.blobs)) {rec : Json}

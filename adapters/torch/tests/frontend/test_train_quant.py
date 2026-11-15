@@ -26,7 +26,7 @@ from verity.circuits.ops import scalar as SC
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import int8_exact as IE
 
-from tests.program.test_train_step import _program
+from tests.frontend.test_train_step import _program
 from verity_torch.frontend.derive_graph import derive_graph
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.rules import training_views as TV

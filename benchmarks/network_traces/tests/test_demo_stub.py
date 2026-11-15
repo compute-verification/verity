@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/c
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
-from benchmarks.network_traces import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.device import warden_serve as ws  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name

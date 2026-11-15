@@ -16,7 +16,7 @@ attaches the decode to its layers (vLLM's: `verity_vllm.protocols.pous`).
 * **Decode** (`decoder`): a tensor's bytes from ``C*`` into a fresh buffer, by the store's load
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the
   CPU (`Store.decode_cpu`).
-* **The period** (`answer`, `audit`, `leg`): `period.audit` of what setup published, the prover answering each index
+* **The period** (`answer`, `audit`, `leg`): `period_prover.audit` of what setup published, the prover answering each index
   from ``C*`` where it is held, the memory challenger at ``period.json``'s ``challenger_host``, and the Lean answering
   where the period's tools name it.
 
@@ -170,10 +170,11 @@ class Store:
         return [[host[s * n + v].tobytes() for v in range(n)] for s in range(self.params.segments)]
 
     def held(self) -> Any:
-        """`period.EncodedStore` of what this setup left: the setup case is built from ``C*`` as held now."""
+        """`period_prover.EncodedStore` of what this setup left: the setup case is built from ``C*`` as held now."""
         from verity.protocols.accounting.pous.verifier import period
-        return period.EncodedStore(self.point, self.published(), Blocks(self), self.digests,
-                                   period.setup_case(self.params, self.commitment, self.salt, self.segments()))
+        from verity.protocols.accounting.pous.prover import period_prover
+        return period_prover.EncodedStore(self.point, self.published(), Blocks(self), self.digests,
+                                          period.setup_case(self.params, self.commitment, self.salt, self.segments()))
 
     def decode_cpu(self, offset: int, size: int) -> bytes:
         """``W`` bytes ``[offset, offset + size)`` by the scheme's codec, from the segments they fall in; refused when a
@@ -196,7 +197,7 @@ class Store:
 
 
 class Blocks:
-    """``C*``'s blocks as `period.EncodedStore` reads them, from where they are held."""
+    """``C*``'s blocks as `period_prover.EncodedStore` reads them, from where they are held."""
 
     def __init__(self, store: Store) -> None:
         self.store = store
@@ -286,22 +287,24 @@ def answer(store: Store | None, index: int) -> bytes:
 
 
 def audit(store: Store, node: str, coins: bytes, **kw: Any) -> Any:
-    """`period.audit` of what ``store``'s setup published, on ``node`` under the auditor's ``coins``; ``kw`` as
-    `period.audit`'s."""
-    from verity.protocols.accounting.pous.verifier import period
-    return period.audit(node, store.held(), coins, **kw)
+    """`period_prover.audit` of what ``store``'s setup published, on ``node`` under the auditor's ``coins``; ``kw`` as
+    `period_prover.audit`'s."""
+    from verity.protocols.accounting.pous.prover import period_prover
+    return period_prover.audit(node, store.held(), coins, **kw)
 
 
 def leg(store: Store | None, period_dir: str | Path, node: str, out: str | Path, *, audit: Callable[..., Any],
         side_of: Callable[..., Any], fresh: bool, answered: Callable[[], int],
         schemes: Mapping[str, Any] | None = None, protocol: str | None = None) -> dict[str, Any]:
-    """One period's PoUS of ``store``, as `period.leg` runs it for a node's records: the memory challenger at
+    """One period's PoUS of ``store``, as `period_prover.leg` runs it for a node's records: the memory challenger at
     ``period.json``'s ``challenger_host`` (``side_of``, the runtime's ``Side.of``, its side's key and session log in
     ``pous-challenger`` beside the periods when it is this node), fresh coins handed to ``audit`` (the holder's
     `audit`), and the Lean's answer where the period's tools name ``pous-run-protocol`` (and, at the first period,
-    ``fresh``, ``pous-setup``), which must agree with the Python's.  Writes ``out/pous.case.json``, ``out/pous.json``
-    and, at the first period, ``out/pous-setup.case.json``; returns the answer, its profile carrying where each party
-    ran (`challenger_session.placement`).  ``answered()`` counts the rounds the prover has answered so far.
+    ``fresh``, ``pous-setup``), which must agree with the Python's; where they name none, the Python's accept is
+    undecided (`period.unjudged`).  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period,
+    ``out/pous-setup.case.json``; returns the answer, its profile carrying where each party ran, whether
+    `trusted-device` holds, which only the key the session was signed under and the period's `deployment` decide, and
+    that setup was checked by the developer, not the auditor (`challenger_session.placement`).  ``answered()`` counts the rounds the prover has answered so far.
     ``schemes`` and ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's
     in tests)."""
     from verity.protocols.accounting.pous.device import challenger_session as CS
@@ -312,19 +315,21 @@ def leg(store: Store | None, period_dir: str | Path, node: str, out: str | Path,
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools = doc.get("tools", {})
     party = side_of(doc, node, "pous", CS.command(Path(period_dir).parent / "pous-challenger"))
-    where = CS.placement(node, party.host)
     before = answered()
     t = time.monotonic()
     got = audit(node, secrets.token_bytes(64), party=party, session=CR.session,
                 schemes=mc.SCHEMES if schemes is None else schemes,
                 protocol=period.PROTOCOL if protocol is None else protocol)
     seconds = round(time.monotonic() - t, 2)
+    where = CS.placement(node, party.host, got.key_sha512, **period.deployment(doc))
     answer, lean = got.answer, {}
     if "pous-run-protocol" in tools:
         lean["run"] = period.serve(tools["pous-run-protocol"], [got.case])[0]
         if {k: v for k, v in lean["run"].items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
             raise RuntimeError(f"pous-run-protocol answered {lean['run']}, the Python {answer}")
         answer = lean["run"]
+    else:
+        answer = period.unjudged(answer)
     if fresh and "pous-setup" in tools:
         lean["setup"] = period.serve(tools["pous-setup"], [got.setup_case])[0]
         if lean["setup"]["verdict"] != "accept":

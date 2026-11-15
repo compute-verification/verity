@@ -27,8 +27,6 @@ public import Proofs.Certifier.Schedule
 public import Proofs.Certifier.PerWindow
 public import Proofs.Certifier.Sanity
 public import Proofs.Certifier.Code
-public import Proofs.Certifier.Accepted
-public import Proofs.Certifier.Causal
 public import Proofs.Certifier.Tap
 public import Proofs.Certifier.RecordRows
 public import Proofs.Certifier.Witnesses
@@ -92,6 +90,7 @@ nontrivial lemmas; `CountWitnesses` gives the counts', and `PeriodWitnesses` two
 monitoring period's guarantee, at the instances of `Definitions.Certifier.Witness`, from what `WitnessToys`
 proves there. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
+
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
 any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.

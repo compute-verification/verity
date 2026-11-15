@@ -19,9 +19,10 @@ What code outside this directory may use. Everything else here is internal.
 |---|---|
 | `python -m verity.protocols.accounting.pous.device.challenger_party --device DIR [--listen HOST:PORT]` | The timed rounds' memory challenger as a process of its own, for the challenger host. It reads one JSON line on stdin. A salt request `{"salt": {"audit", "commitment"}}` it answers with `{"source": HEX}`, logged in its salt log. A run's request `{"binding", "block_bytes", "blocks", "k", "limit_ns", "node"}` it answers by printing `{"listening": PORT}`, serving one prover and printing its report `{"host", "public_key", "session", "session_id", "warmups"}`. A refusal prints `{"refused": REASON}` and exits 1. Its key, session log and salt log are in `DIR`, and it keeps each run it completes in `DIR/setups/`. `challenger_party.PROTOCOL` is the same two parties as a `ProtocolDef` (`verity.protocol`), which the deployment layer (`verity.runtime`) runs. |
 | `python verity/protocols/accounting/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (PoUS's `protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. Every P2 v4 document is judged by the Lean, `pous-timed-audit` (at `--lean-exe PATH`, else `pous_check`'s), whose verdict is the record's: where it can't run, every audit is undecided and no profile is issued. A scheme no Lean judges (the band's) is measured, its verdict `unjudged`, with no profile. It exits 0 when the Lean accepted every audit and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
+| `python -m verity.protocols.accounting.pous.device.wipe_challenger --device DIR [--listen HOST:PORT] [--reads K] [--streamer build\|PATH [--threads T]]` | The streamed wipe's memory challenger as a process of its own, for the challenger host. It reads the request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover and prints its report. `wipe_challenger.PROTOCOL` is the same two parties for the deployment layer. |
 | The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
 
-From Python there are five modules, each imported by its path.
+From Python there are eight modules, each imported by its path.
 `memory_challenger` is the timed rounds' device and its records: the device and its coin tree (`MemoryChallenger`,
 `CoinTree`, `CoinOpening`, `verify_coin`), what it publishes and signs (`SessionCommitment`, `SignedSession`, `Round`,
 `records_digest`, `message`), the check of a signed run (`verdict`, `Verdict`), its two logs (`SessionLog`, `SaltLog`), its
@@ -35,6 +36,10 @@ and the setups the host keeps (`setup_of`, `SETUPS`); the prover's side is `pous
 record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `accepted`,
 `verdict`, `lean_verdict`, `run_lean` and `lean_judges`, and the clocks, counters and parameters a harness reads beside them.
 `continuous` is the continuous audit's memory challenger: `ContinuousMemoryChallenger`, `Reply` and `run_continuous`.
+`onsite` is the challenger's key as a deployment starts it: `device_key`, `signer` and `pin`. `wipe_challenger` is the
+streamed wipe's memory challenger: `WipeMemoryChallenger`, one session over a socket (`serve`), its report (`report`),
+its party (`MemoryChallengerParty`, `start`, `PROTOCOL`) and the command (`main`). `wipe_stream` is the wipe's native
+fill on the challenger's CPUs (`Streamer`, over `wipe_stream.c`).
 
 What leaves the challenger's host goes into the node that started its party. `challenger_party` answers on two
 channels only: its stdout, which goes to the node that started it (the salt's source, `{"listening": PORT}`, the report
@@ -56,8 +61,8 @@ Python is `verity/protocols/accounting/pous/verifier/check/interop.py --all`, wh
 reference on every vector, and `verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py`, which writes the
 difftest's instances with the Python's answers on them and which the Lean check runs.
 
-The streamed-label wipe's Python (`streamed_wipe.py`, and the wipe's process `wipe_party.py`) is PoUS's verifier's, an
-entry point of `verity/protocols/accounting/pous/verifier/README.md`.
+The streamed-label wipe's records and verdict (`streamed_wipe.py`) and the messages both its sides speak
+(`wipe_party.py`) are PoUS's verifier's, an entry point of `verity/protocols/accounting/pous/verifier/README.md`.
 
 ## Top statements
 
@@ -90,6 +95,8 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 - `wipe_challenger.py`: the streamed wipe's memory challenger as a party of the party runtime (`verity/runtime`), over
   `verity/protocols/accounting/pous/verifier/wipe_parties.py`'s messages; the prover's party is
   `verity/protocols/accounting/pous/prover/wipe_prover.py`.
+- `onsite.py`: the memory challenger's key as a deployment starts it (`ProtocolDef.starts`, `challenger_party.start`,
+  `wipe_challenger.start`), refused unless the configuration pins it for the protocol it signs for.
 - `verity/protocols/accounting/pous/verifier/streamed_wipe.py`: the streamed-label wipe's device (`Challenger`) and `verdict`;
   `wipe_party.py` beside it, the wipe as a party of its own on the challenger's host.
 - `lean/tests/`: the difftests of both verdicts and of the record formats against the Python.

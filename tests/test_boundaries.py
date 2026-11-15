@@ -89,7 +89,7 @@ DEPENDENCIES = {"numpy"}
 #: the hardware's cards, the Site's types, SPOT's planning beside its verifier, and a protocol's manifest with the
 #: monitoring periods.  Within them, what may use numpy.
 STDLIB_ONLY = ("verity/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
-               "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/proofs/spot",
+               "verity/claims", "verity/device.py", "verity/protocols/proofs/spot",
                "verity/protocol.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
@@ -128,7 +128,7 @@ SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which co
 FLOCK_VERIFIER = "flock_verifier"
 REQUIRES_FLOCK_VERIFIER = {
     "core_zk_server", "core_memory_challenger", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
-    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "remote_audit", "security_proofs",
+    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "poub", "security_proofs",
     "security_properties",
 }
 #: The base packages below Flock's verifier, each with every package it may require: nothing above it.
@@ -156,6 +156,8 @@ BENCHMARKS_IMPORTERS = {
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py": "memory-accounting: the harness's control "
                                                                       "responder (`benchmarks/pous/band_gpu/harness.py`)",
+    "verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py": "memory-accounting: P2's reference and wire "
+                                                                        "(`benchmarks/pous/p2_v1`)",
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
@@ -163,7 +165,7 @@ BENCHMARKS_IMPORTERS = {
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
-        "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
+        "proofs: the relay's load (`verity/protocols/accounting/certifier/device/load_relay.py`), "
         "imported since before the move; goes when the session's code moves under `verity/`",
     "verity/protocols/accounting/poub/device/live_verifier/tests/stub_verifier.py":
         "memory-accounting: the remote session's in-process harness "
@@ -811,7 +813,7 @@ def test_a_benchmarks_import_is_found() -> None:
         "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
-                         "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/rho']\n"),
+                         "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/census']\n"),
         "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
         "x/loader.py": ("import importlib.util\nfrom x import config\ndef load(name, directory=config.SESSION):\n"
                         "    def named(n):\n        return n\n"
@@ -824,7 +826,7 @@ def test_a_benchmarks_import_is_found() -> None:
     found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
     assert found == {
         "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
-        "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/rho']"],
+        "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/census']"],
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],
     }, found

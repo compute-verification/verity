@@ -1,17 +1,17 @@
 """Compute efficiency eta of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
-needs, divided by the FLOP the developer spends, monitored plus unmonitored. The developer must still compute the counted
+needs, divided by the FLOP the developer spends, registered plus unregistered. The developer must still compute the counted
 multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow the proposal
 "Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and ARCHITECTURE.md's Glossary.
 
 eta <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which steps are
 proved.
 
-* s, the unmonitored compute share, trains at full efficiency.
-* r, the monitored compute residual: r-hat, the share of monitored capacity outside the compute certificate
+* s, the unregistered compute share, trains at full efficiency.
+* r, the registered compute residual: r-hat, the share of registered capacity outside the compute certificate
   (1 - W_cert/C), plus PoUW's deficit on the certified work, eps_W W_cert/C, plus the aggregation slack eps'. r-hat is
   idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
   peak. It trains at full efficiency unless the memory cap binds: at peak in eta, at MFU_0 in D (``evaluate``'s
-  ``residual_mfu``, the reference-efficiency assumption: free compute runs no better than the reference). A
+  ``free_mfu``, the reference-efficiency assumption: free compute runs no better than the reference). A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
   information, which a wipe would bound, is open: its two support forms were falsified), declared or not.
@@ -26,7 +26,7 @@ proved.
   counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)).
 * The verdict lag: from its first incorrect proof block until the halt (a window plus the verdict delay), a developer can skip
   the whole registered circuit, once per identity, in every tier; that capacity joins the residual. Detection must end the
-  identity and take its hardware out of use, or the capacity after the halt is unmonitored.
+  identity and take its hardware out of use, or the capacity after the halt is unregistered.
 * chi, the cheating share: with SPOT at a budget, the incorrect proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
   (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns incorrect outputs into skipped work. A block that
@@ -39,10 +39,10 @@ proved.
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
 multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
-only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The slowdown D, the
+only the constrained terms (nu, mu and chi), not the residual or unregistered compute. The slowdown D, the
 hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
-mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` in Lean's form
-(``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``) with the residual at MFU_0.
+mfu, isn't computed here: it is the slowdown calculator's ``slowdown.theorem.multiple_bound`` in Lean's form
+(``InferenceOnly.Slowdown.remoteSlowdown``) on these terms (``remote_terms``) with the residual at MFU_0.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -101,7 +101,7 @@ NODE_FLOPS = 8 * GPU_FLOPS
 #: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.323, "host_share": 0.0,
+    "unregistered": 0.0, "free": 0.323, "host_share": 0.0,
     "clock_share": 1 - CREDITED_CLOCK_HZ / CARD["clock_hz"], "eps_w": 0.00744,
     "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
@@ -118,9 +118,9 @@ DEFAULTS = {
 #: one entry per parameter: label, unit, slider range, log scale, whether the leftmost position means zero, and whether
 #: it is one of the few shown up front
 SPEC = [
-    {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
+    {"key": "unregistered", "main": True, "label": "Unregistered compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
-    {"key": "residual", "main": True, "label": "Monitored compute residual r-hat on the GPUs, their share outside the certificate (floor credit at the locked clock 0.323, with an attested clock 0.213; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "free", "main": True, "label": "Registered compute residual r-hat on the GPUs, their share outside the certificate (floor credit at the locked clock 0.323, with an attested clock 0.213; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
     {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (CircuitCredit 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
     {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (the theorem's delta is p/eps' at PoUW's per-window failure p, which has no value yet: 2.7e-8 at 1e-4 if p were 3 x 2^-40; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
@@ -155,10 +155,10 @@ SPEC = [
     {"key": "floor_steps", "label": "SPOT: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
     {"key": "Gamma", "label": "NCI: gates per inference block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
-    {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e). 1 is what Lean certifies for a training run from structure alone: its embedding table is updated weights, which Layered's lookups (columns of novel inputs) can't read. ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 (a Dot16 step's 17 legs less E = 7 bf16 embedding columns) under the open conjecture ReferenceLayered, which holds for a training run only once lookups may read weight columns", "unit": "", "min": 1, "max": 65536, "log": True},
+    {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e). 1 is what Lean certifies for a training run from structure alone: its embedding table is updated weights, which Layered's lookups (columns of novel inputs) can't read. ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 (a Dot16 step's 17 terms less E = 7 bf16 embedding columns) under the open conjecture ReferenceLayered, which holds for a training run only once lookups may read weight columns", "unit": "", "min": 1, "max": 65536, "log": True},
     {"key": "e", "label": "Model: fan-out e, multiplications per activation value (37,248 for Kimi K2: ReferenceThreaded's 2,328 Dot16 steps of 16 products, an MoE input value's, under the open conjecture ReferenceLayered)", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
-    {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies a Dot16 reference circuit 17 - E legs below E + 1 lookup columns, none at 17: 17 x 163,840 x 16 bits = 4.46e7 at the bf16 embeddings ReferenceLayered states; at C1's 2.5-bit floor 7.0e6, below K, so a reference circuit C1 allows may get no (d, e) at K; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified legs fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e6, "max": 1e11, "log": True},
+    {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies a Dot16 reference circuit 17 - E terms below E + 1 lookup columns, none at 17: 17 x 163,840 x 16 bits = 4.46e7 at the bf16 embeddings ReferenceLayered states; at C1's 2.5-bit floor 7.0e6, below K, so a reference circuit C1 allows may get no (d, e) at K; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified terms fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e6, "max": 1e11, "log": True},
     {"key": "block_mults", "label": "Model: counted multiplications one inference block can hold, as a share of its gates (1 with no premise; kappa/2 if each block's counted share were the recipe's)", "unit": "", "min": 0.05, "max": 1, "log": False},
     {"key": "nodes", "label": "Fleet: servers", "unit": "", "min": 1e2, "max": 1e7, "log": True},
     {"key": "node_flops", "label": "Fleet: server compute (8 RTX PRO 6000s, FP8 dense at the card table's 2,430 MHz)", "unit": "FLOP/s", "min": 1e15, "max": 1e17, "log": True},
@@ -179,11 +179,11 @@ STATUS = [
     ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean when the declaration "
      "contains the reference circuit gate for gate, and with dark gates (T1', ThreadedThrottledOn) on a branch. It rests "
      "on WeightsIncompressible and Threaded (d, e). (10, 37248) is ReferenceThreaded's for a reference circuit written "
-     "in Dot16 steps, as the declarations are (17 legs less 7 bf16 embedding columns; 2,328 steps of 16 products), under "
+     "in Dot16 steps, as the declarations are (17 terms less 7 bf16 embedding columns; 2,328 steps of 16 products), under "
      "the open conjecture ReferenceLayered, whose lookups need the embedding columns to be inputs: a run that trains its "
      "embedding reads them as updated weights, so the default is the structural d = 1 until Layered's lookups may read "
      "weight columns."),
-    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
+    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as InferenceOnly.Guarantees.SlowdownRemote states it "
      "in Lean. PoUW's deficit epsilon_W = 0.744% (CircuitCredit) is a share of credited work, evaluated "
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "
      "times the floor, unpublished), the clock 0 (PoUW credits the card "
@@ -208,7 +208,7 @@ STATUS = [
      "Each injected bit is worth at most the chord of one inference block's thread bound, 5.76e7 counted "
      "multiplications, with (1, 0)-threading above thread_bits. chi grows with the identities a detection doesn't end and "
      "shrinks with the fleet, so detection must be terminal (J = 1)."),
-    ("Unmonitored compute", "No bound: it trains at full efficiency."),
+    ("Unregistered compute", "No bound: it trains at full efficiency."),
 ]
 
 
@@ -239,7 +239,7 @@ def block_cap(p: dict, S: float, threaded: bool) -> float:
 
 
 def chord(p: dict, bits: float = math.inf) -> float:
-    """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` novel bits
+    """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` fresh input bits
     each: the steepest secant from ``K`` of ``block_cap``, out to ``K + bits``, with (d, e)-threading only up to
     ``thread_bits``. The cap is convex between its kinks, so the secants peak at their ends, and concentrating the bits
     on few blocks is the adversary's best. At the defaults the steepest secant is to ``S_1 = sqrt(2 b_w b_a block_mults
@@ -277,34 +277,34 @@ def ingress(p: dict, mech: dict) -> float:
     return p["sigma"] + p["tau"] + p["intake_x"] * p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
 
 
-def audited_residual(p: dict) -> float:
+def audited_free(p: dict) -> float:
     """r-hat: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs (0: hosts carry no
     compute)."""
-    return min(1.0, p["residual"] + p["host_share"] + p["clock_share"])
+    return min(1.0, p["free"] + p["host_share"] + p["clock_share"])
 
 
-def residual_share(p: dict) -> float:
-    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``Nci.Guarantees.DampenerRemote``'s bounds,
+def free_share(p: dict) -> float:
+    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``InferenceOnly.Guarantees.SlowdownRemote``'s bounds,
     ``residualShare W C + εW * W / C + ε``: the audited residual r-hat = 1 - W_cert/C, PoUW's deficit on the certified
     work (a certificate that isn't wrong may credit up to eps_W of its work without its running, so what was certified
     and run is (1 - eps_W) W_cert), and the share whose certificates may be wrong."""
-    r_hat = audited_residual(p)
+    r_hat = audited_free(p)
     certified = 1 - r_hat
     return min(1.0, r_hat + p["eps_w"] * certified + p["eps_agg"])
 
 
 def state_threshold(p: dict, mech: dict) -> float:
     """The server state, in bits, below which memory caps the residual (the window bound's quadratic regime)."""
-    return residual_share(p) * p["node_flops"] * p["kappa"] * p["d"] * p["b_w"] * p["b_a"] / (4 * ingress(p, mech))
+    return free_share(p) * p["node_flops"] * p["kappa"] * p["d"] * p["b_w"] * p["b_a"] / (4 * ingress(p, mech))
 
 
-def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
+def evaluate(p: dict, mech: dict, free_mfu: float = 1.0) -> dict:
     """The terms of eta at ``mech``, each in counted multiplications over the FLOP spent, the residual's capacity
-    training at ``residual_mfu`` of peak: 1 for eta, MFU_0 for D under the reference-efficiency assumption."""
+    training at ``free_mfu`` of peak: 1 for eta, MFU_0 for D under the reference-efficiency assumption."""
     gpm = 2 / p["kappa"]
     H = p["years"] * YEAR
     C = p["nodes"] * p["node_flops"] * H
-    s = min(p["unmonitored"], 0.999)
+    s = min(p["unregistered"], 0.999)
     U = C * s / (1 - s)
     alpha = p["K"] / p["Gamma"]
     rho_T = p["b_a"] / (alpha * lam(p, p["K"]))
@@ -320,7 +320,7 @@ def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
         bits = p["identities"] * L * (1 / q + p["floor_steps"]) * p["step_bits"]
         cheat = min(p["m"] * chord(p, bits) * bits, C / gpm)
 
-    res_ops = residual_share(p) * C + skipped
+    free_ops = free_share(p) * C + skipped
     sigma_eff = p["sigma"] if mech["net"] else p["nic"]
 
     filled = (p["hbm_gb"] + p["host_gb"]) * GB
@@ -341,31 +341,31 @@ def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
     region = p["nodes"] * per_server
 
     declared = cap_T
-    res_mults = residual_mfu * res_ops / gpm
-    unmon = U / gpm
-    monitored = min(p["m"] * declared + res_mults, p["m"] * region)
-    declared_part = min(p["m"] * declared, monitored)
-    res_part = monitored - declared_part
+    free_mults = free_mfu * free_ops / gpm
+    unreg = U / gpm
+    registered = min(p["m"] * declared + free_mults, p["m"] * region)
+    declared_part = min(p["m"] * declared, registered)
+    free_part = registered - declared_part
     spent = C + U
     amp = p["g"] * gpm / spent
-    terms = {"unmonitored": amp * unmon, "residual": amp * res_part, "declared": amp * declared_part, "cheat": amp * cheat}
-    capped = p["m"] * region < p["m"] * declared + res_mults
+    terms = {"unregistered": amp * unreg, "free": amp * free_part, "declared": amp * declared_part, "cheat": amp * cheat}
+    capped = p["m"] * region < p["m"] * declared + free_mults
     largest = max(terms, key=lambda t: terms[t])
     if largest == "declared":
         largest = "declared (thread bound)"
     return {
-        "efficiency": sum(terms.values()), **terms, "largest": largest, "memory_caps_residual": capped,
+        "efficiency": sum(terms.values()), **terms, "largest": largest, "memory_caps_free": capped,
         "rho_T": rho_T, "wipe_state_bits": wipe_state, "envelope_bits": envelope,
         "state_threshold_bits": state_threshold(p, mech), "cheat_steps": k, "cheat_bits": bits,
     }
 
 
 def remote_terms(p: dict, r: dict) -> tuple[float, float]:
-    """``evaluate``'s terms as the ``s`` and ``x`` of ``Nci.Dampener.remoteDampener mfu s x``: the unmonitored share,
+    """``evaluate``'s terms as the ``s`` and ``x`` of ``InferenceOnly.Slowdown.remoteSlowdown mfu s x``: the unregistered share,
     which trains like the unconstrained developer, and the rest in counted multiplications (so at a = 1/MFU_0,
     ``multiple_bound``'s ``reference_efficiency=False``; the assumption is in ``r``'s residual, ``evaluate`` at
-    ``residual_mfu`` = MFU_0), each per the compute amplifier g (which cancels against the unconstrained developer's)."""
-    return r["unmonitored"] / p["g"], (r["residual"] + r["declared"] + r["cheat"]) / p["g"]
+    ``free_mfu`` = MFU_0), each per the compute amplifier g (which cancels against the unconstrained developer's)."""
+    return r["unregistered"] / p["g"], (r["free"] + r["declared"] + r["cheat"]) / p["g"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -377,10 +377,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"spec": SPEC, "defaults": DEFAULTS, "tiers": TIERS,
                           "status": [{"piece": a, "status": b} for a, b in STATUS], "results": results}, indent=1))
         return 0
-    print(f"{'tier':5} {'efficiency':>10} {'unmonitored':>11} {'residual':>9} {'declared':>9} {'cheat':>9}  largest")
+    print(f"{'tier':5} {'efficiency':>10} {'unregistered':>12} {'free':>9} {'declared':>9} {'cheat':>9}  largest")
     for name, r in results.items():
-        print(f"{name:5} {r['efficiency']:10.3g} {r['unmonitored']:11.3g} {r['residual']:9.3g} {r['declared']:9.3g} "
-              f"{r['cheat']:9.2g}  {r['largest']}{' (memory caps it)' if r['memory_caps_residual'] else ''}")
+        print(f"{name:5} {r['efficiency']:10.3g} {r['unregistered']:12.3g} {r['free']:9.3g} {r['declared']:9.3g} "
+              f"{r['cheat']:9.2g}  {r['largest']}{' (memory caps it)' if r['memory_caps_free'] else ''}")
     return 0
 
 

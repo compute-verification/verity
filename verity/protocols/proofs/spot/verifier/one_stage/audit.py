@@ -31,7 +31,7 @@ from verity.circuits.partition import Level
 from verity.protocols.proofs.spot.verifier.profile import (Bernoulli, IntegrityProfile, SamplingDesign, Stratified, Stratum, Subset, Work,
                                           WorkStratum)
 
-from .draw import check_draw, check_proved, law_of
+from .draw import check_draw, check_proved, sampling_design_of
 from verity.protocols.proofs.spot.verifier.one_stage.docket import PROTOCOL, digest as registration_digest
 
 FORMAT = "verity/one-stage/audit/v0"
@@ -45,44 +45,44 @@ def _sha512(obj: Any) -> str:
 
 def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> IntegrityProfile:
     """The audit's integrity profile under any of the four sampling designs. The work sampling design is the stratified sampling design at its sizes (Lean
-    `Law.work`), so its profile is the same `Stratified` one, counting the sampled proof blocks (a closure proves more, and only
+    `SamplingDesign.work`), so its profile is the same `Stratified` one, counting the sampled proof blocks (a closure proves more, and only
     helps)."""
     if draw["law"] == "subset":
-        law = Subset(draw["k"])
+        sampling_design = Subset(draw["k"])
     elif draw["law"] == "bernoulli":
-        law = Bernoulli(Fraction(draw["p"]))
+        sampling_design = Bernoulli(Fraction(draw["p"]))
     elif draw["law"] in ("stratified", "work"):
-        law = core_law(law_of(draw), registration["population"])
+        sampling_design = core_sampling_design(sampling_design_of(draw), registration["population"])
     else:
         raise ValueError(f"no profile for a {draw['law']!r} sample")
     return IntegrityProfile(levels=(Level(LEVEL, registration["partition"]),), sizes=(registration["population"],),
-                            draws={LEVEL: law}, delta=delta, programs=(registration["program"],),
+                            draws={LEVEL: sampling_design}, delta=delta, programs=(registration["program"],),
                             drawn={LEVEL: len(draw["units"])})
 
 
-def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
+def core_sampling_design(sampling_design: Mapping[str, Any], population: int) -> Stratified | None:
     """The sampling design as core's `Stratified`: the uniform k-subset is one stratum, and a stratified or work sampling design has one per
     template (named by its descriptor id). None for `bernoulli`."""
-    if law.get("law") == "subset":
-        return Stratified.uniform(population, law["k"])
-    if law.get("law") in ("stratified", "work"):
-        return Stratified(tuple(Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in law["strata"]))
+    if sampling_design.get("law") == "subset":
+        return Stratified.uniform(population, sampling_design["k"])
+    if sampling_design.get("law") in ("stratified", "work"):
+        return Stratified(tuple(Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in sampling_design["strata"]))
     return None
 
 
-def design(law: Mapping[str, Any]) -> SamplingDesign:
+def design(sampling_design: Mapping[str, Any]) -> SamplingDesign:
     """The sampling design of a well-formed sampling design or sample (`check_draw`'s), as the profile writes it (Lean
-    `Spot.Pieces.designOfLaw`): each stratum named by its template, its size its ranges' total, and a work sampling design's
+    `Spot.Pieces.designOfSamplingDesign`): each stratum named by its template, its size its ranges' total, and a work sampling design's
     `Work` with its works and floors."""
-    if law["law"] == "subset":
-        return Subset(law["k"])
-    if law["law"] == "bernoulli":
-        return Bernoulli(Fraction(law["p"]))
-    sizes = [sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]]
-    if law["law"] == "work":
-        return Work(law["k"], tuple(WorkStratum(s["template"], n, s["k"], s["work"], s["floor"])
-                                    for s, n in zip(law["strata"], sizes)))
-    return Stratified(tuple(Stratum(s["template"], n, s["k"]) for s, n in zip(law["strata"], sizes)))
+    if sampling_design["law"] == "subset":
+        return Subset(sampling_design["k"])
+    if sampling_design["law"] == "bernoulli":
+        return Bernoulli(Fraction(sampling_design["p"]))
+    sizes = [sum(hi - lo for lo, hi in s["units"]) for s in sampling_design["strata"]]
+    if sampling_design["law"] == "work":
+        return Work(sampling_design["k"], tuple(WorkStratum(s["template"], n, s["k"], s["work"], s["floor"])
+                                    for s, n in zip(sampling_design["strata"], sizes)))
+    return Stratified(tuple(Stratum(s["template"], n, s["k"]) for s, n in zip(sampling_design["strata"], sizes)))
 
 
 def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> dict[str, Any]:
@@ -182,7 +182,7 @@ def answer_complete(answer: Any) -> bool:
 
 
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
-                 law: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
+                 sampling_design: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None,
                  session_registered: Mapping[str, str] | None = None, certified: Sequence[str] = ()) -> dict[str, Any]:
@@ -194,7 +194,7 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     that value's registered root, and a registered value needs no reported read. `certified`: the names of the values
     the verifier holds certified entries for; each of them does need a reported read (the check `certified` names the
     ones that have none), so a read reported under another value's name does not stand in for it."""
-    checks = {"draw": check_draw(draw, registration, law).to_json(),
+    checks = {"draw": check_draw(draw, registration, sampling_design).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):
         checks["receipt"] = {"ok": False, "codes": ["receipt"], "detail": {"receipt": receipt.get("registration")}}
@@ -221,7 +221,7 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                 and all(v["accepted"] is True for v in ran.values()) and all(c["ok"] for c in checks.values()))
     rec: dict[str, Any] = {
         "format": FORMAT, "registration": dict(registration), "registration_digest": registration_digest(registration),
-        "receipt": dict(receipt), "draw": dict(draw), "law": law_of(draw), "proved_units": list(proved_units),
+        "receipt": dict(receipt), "draw": dict(draw), "law": sampling_design_of(draw), "proved_units": list(proved_units),
         "statement": dict(statement), "checks": checks, "verdicts": {k: dict(v) for k, v in verdicts.items()},
         "accepted": accepted, "complete": len(ran) == len(verdicts), "profile": None, "integrity_profile": None,
         "wrong_units": None}
@@ -240,5 +240,5 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "design", "integrity_profile", "profile",
+__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_sampling_design", "design", "integrity_profile", "profile",
            "session_registered", "wrong_units"]

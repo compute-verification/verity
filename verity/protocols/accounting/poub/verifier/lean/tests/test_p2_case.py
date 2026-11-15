@@ -1,4 +1,4 @@
-"""PoUB-P2's core case (`p2_case.py`) replayed by `remote-audit-p2-protocol serve` (`RemoteAudit.P2Protocol`): the case
+"""PoUB-P2's core case (`p2_case.py`) replayed by `poub-p2-protocol serve` (`Poub.P2Protocol`): the case
 `p2_parties.session` sends the prover for each session of `test_p2_party.py`'s held to the auditor's session (`SESSION`),
 its answer the core form of the session's own (`p2_case.answer`), and every field equal: an honest session accepted
 with its credited reads, one whose receipts skip a unit's reads and one whose openings are out of form rejected, and
@@ -31,6 +31,7 @@ from verity.commitments.crypto import lms
 from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period as pous
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.poub.verifier import p2_case, p2_lean, p2_parties, receipts
@@ -48,7 +49,7 @@ UNSIGNED = "the close's signature does not verify on the params' session"
 
 @pytest.fixture(scope="module")
 def lean() -> Path:
-    """`remote-audit-p2-protocol`, built in the package under the difftest's build lock (`p2_lean.BUILD_LOCK`)."""
+    """`poub-p2-protocol`, built in the package under the difftest's build lock (`p2_lean.BUILD_LOCK`)."""
     p2_lean.BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(p2_lean.BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -264,7 +265,7 @@ def _wipe_record() -> bytes:
 def test_another_subprotocols_record_signed_for_the_session_is_refused_as_a_close(lean, honest, record) -> None:
     """The memory challenger's key signs a PoUS session record, or a wipe record, for the case's session id; put in
     the case as its close, it is refused by name: those records are 64-byte digests, and P2's is raw bytes of another
-    length (`RemoteAudit.P2Close.closeRecord_ne_pous`, `closeRecord_ne_wipe`)."""
+    length (`Poub.P2Close.closeRecord_ne_pous`, `closeRecord_ne_wipe`)."""
     r = record()
     assert len(r) == 64 != len(p2_case.close_record(0, bytes(64)))
     close = _evidence(honest)["close"] | {"signature": signer().sign(SESSION_ID, r).hex()}
@@ -277,7 +278,7 @@ def test_the_close_bytes() -> None:
     length plus 72; the message, the role's (`lms.memory_challenger_message`)."""
     tag = b"verity/remote-bandwidth/p2/close/v0\0"
     assert p2_case.CLOSE_TAG == tag and len(tag) == 36
-    others = [v.encode() for k, v in domains.TABLE.items() if k != "REMOTE_BANDWIDTH_P2_CLOSE"]
+    others = [v.encode() for k, v in domains.TABLE.items() if k != "POUB_P2_CLOSE"]
     others += [mc.SESSION_TAG, sw.SESSION_TAG]
     assert not [o for o in others if tag.startswith(o) or o.startswith(tag[:-1])]
     chain = bytes([0xAB]) * 64
@@ -342,10 +343,10 @@ def test_a_session_on_pous_setups_store_names_pous_store_and_is_accepted(exe, le
     reg = store.registration
     q, n = reg.params, reg.params.blocks_per_segment
     encoded = [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]
-    held = pous.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
+    held = period_prover.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
                              store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
                              pous.setup_case(q, reg.commitment, reg.salt, encoded))
-    space = pous.audit("n0", held, COINS, signer=S.TestSigner(b"the memory challenger", directory=tmp_path),
+    space = period_prover.audit("n0", held, COINS, signer=S.TestSigner(b"the memory challenger", directory=tmp_path),
                        log=S.session_log(tmp_path), schemes=S.SCHEMES, protocol=mc.TEST_PREFIX + pous.PROTOCOL,
                        clock=lambda: 10 ** 9)
     assert R.Setup.from_json(json.loads(bytes.fromhex(space.case["commitment"]))).root == reg.root

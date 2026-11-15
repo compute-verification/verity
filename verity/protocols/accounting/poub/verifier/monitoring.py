@@ -1,7 +1,7 @@
 """PoUB over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
-answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes`, the receipts not shown wrong in bytes, at `eps` =
-δ₀ + ⌈W/g⌉·s/2^64 (δ₀ the openings' pooled bound's δ, 2^-40, and ⌈W/g⌉·s/2^64 at least the sample term, the session's
+answer as `Poub.Protocol.certify` publishes it: `q_bytes`, the receipts not shown wrong in bytes, at `eps` =
+δ₀ + ⌈W/g⌉·s/2^64 (δ₀ the openings' pooled bound's δ, 2^-101, and ⌈W/g⌉·s/2^64 at least the sample term, the session's
 openings coins at its `samples` s each, `LineHeldAtSubprotocol`'s ⌈W/g⌉·s/2^256).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocol import DELTAS, MONITORING_PERIODS
-# The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
+# The count bound is the wipe's too, held in pous: poub may import pous, and pous not it.
 from verity.protocols.accounting.pous.verifier.wipe_monitoring import block_count, short_sessions
 
 from . import codec, pooled
@@ -81,7 +81,7 @@ def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction, draw
 
 
 def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment: str | None = None) -> dict[str, Any]:
-    """The monitoring-period result of one session's core answer (`RemoteAudit.Protocol`'s) when every one of `machines`
+    """The monitoring-period result of one session's core answer (`Poub.Protocol`'s) when every one of `machines`
     runs such a session every `window_s` seconds."""
     head = {"format": FORMAT, "deployment": {"id": deployment, "machines": machines, "window_s": window_s},
             "deltas": [str(d) for d in DELTAS], "statement": STATEMENT, "except_also": EXCEPT,

@@ -19,7 +19,7 @@ from verity_vllm.records.global_match import GlobalMatch
 
 def load_match_account(match_dir: str | None) -> dict[str, Any]:
     """The Match attempt's serving transcript + account beside the Commit: `<match_dir>/capture/tokens.json` (the driver's served tokens,
-    per-request two lengths, the document-level lag attestation -- bench.m1_capture) and `<match_dir>/../global_match.json` (GM-01's
+    per-request two lengths, the document-level lag attestation -- bench.match_capture) and `<match_dir>/../global_match.json` (GM-01's
     verdict, G6's lag block and lengths_by_request, as `records.global_match.GlobalMatch`).  Missing or unreadable files are reported,
     never invented."""
     out: dict[str, Any] = {"match_dir": match_dir, "tokens": None, "tokens_path": None, "global_match": None, "global_match_path": None, "notes": []}

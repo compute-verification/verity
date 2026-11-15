@@ -33,7 +33,7 @@ kernels (`pouw_h1_tables_device.flush`, `pouw_h1_registered.commit`, `public_sal
 kernels that don't build and a library off `ZyArgs` (`pouw_h1_registered_device.available`, `zy_host_lib`). Beside
 it, a pull that holds two engine steps and a rank call with no rows or off the Program's order
 (`pouw_h1_ranks.Holder.pull`, `ingest`, `pouw_h1_served.Served.commit`), a leaf's committed files, its staged table
-and its record's root (`drawn.leaf_stagers`, `FileStager.stage`, `stage_leaves`), and a saved window's Program
+and its record's root (`drawn.leaf_stagers`, `h1_prove/stagers.py`'s `FileStager.stage`, `stage_leaves`), and a saved window's Program
 (`pouw_h1_handoff.resume`).
 
 And what a call's receipts are with no card: each lane's words, J10-R's from the call's one stream, a dead tile's
@@ -117,6 +117,7 @@ import verity.protocols.accounting.pouw.prover.serving.h1.tables_device as TBD
 import verity.protocols.accounting.pouw.prover.serving.h1.window as PHW
 import verity.protocols.accounting.pouw.prover.serving.h1.words as W
 from tests.protocols import challenger_host as CH
+from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols import test_pouw_h1_commit as TC
 from tests.protocols import test_pouw_h1_handoff as TH
 from tests.protocols import test_pouw_h1_ranks as TR
@@ -2086,7 +2087,7 @@ def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_
 
     def refusal(manifest):
         with pytest.raises(Refused) as refused:
-            DN.leaf_stagers(k, PH.TILE, tmp_path, manifest)
+            DN.leaf_stagers(k, PH.TILE, tmp_path, manifest, PC.stagers().FileStager)
         return str(refused.value)
     absent = f"--circuits has no {name} file, leaf Program and template id: build them (pouw_h1_circuits --lanes {k})"
     assert refusal({}) == refusal(manifest) == absent
@@ -2100,7 +2101,7 @@ def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_
     program.write_bytes(b"a leaf Program")
     assert refusal(manifest) == (f"{name}'s circuit (SHA-512 {hashlib.sha512(text).hexdigest()[:16]}...) is not "
                                  f"--circuits' {name} file ({'00' * 8}...), the one the period-open committed")
-    stager = DN.FileStager(circuit, "a template", [("p", 0, 0, ())], DR.LEAF_OUT_ROWS)
+    stager = PC.stagers().FileStager(circuit, "a template", [("p", 0, 0, ())], DR.LEAF_OUT_ROWS)
     with pytest.raises(ValueError, match="^port p's table rows at the instances' refs are not their rows$"):
         stager.stage({"p": [[1, 2]]}, tmp_path / "staged", KEY, {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted([circuit.name, program.name])

@@ -171,7 +171,7 @@ structure LiveSpec (V : Vocab d α) (b : SessionBound) (θ : ByteArray) (R : Arr
   own : A.own = none
   circuit : A.I.circuitFile = V.circuitFile θ R
   publicFile : A.I.publicFile = V.publicFile θ R
-  read : V.read θ R = Verity.WindowFiles.one A.fileRead
+  read : V.read θ R = Verity.ExecutionPhaseFiles.one A.fileRead
   share : (V.certOf θ).ε = A.ε
   k : A.k = b.k
   Rw : A.Rw = b.Rw
@@ -257,7 +257,7 @@ structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   signatures : ∀ θ, deployment.signatures θ ≤ base.signatures θ
   /-- Every pinned table file the deployment can register at one of its sessions. -/
   tables : Array ByteArray
-  read : ∀ θ F, base.read θ F = Verity.WindowFiles.one (readOf (PinnedTables.ofFiles tables) θ F)
+  read : ∀ θ F, base.read θ F = Verity.ExecutionPhaseFiles.one (readOf (PinnedTables.ofFiles tables) θ F)
   programDigest : ∀ θ, base.programDigest θ = programDigestOf θ
   publicDigest : ∀ θ, base.publicDigest θ = publicDigestOf θ
   place : ∀ θ F c g, base.place θ F c g = placeOfFiles (base.read θ F) g
@@ -548,7 +548,7 @@ noncomputable def extractAt (θ : ByteArray) (F : Array ByteArray) (c : ByteArra
     (σ : Verity.Game.Strategy ((I.stage K).game θ F c)) :
     (o : Option Live) → I.sessions θ F = o → (I.base.read θ F).circuit.Trace
   | some A, h =>
-      cast (congrArg (fun r : Verity.WindowFiles => r.circuit.Trace) (I.sessions_some h).2.1.read.symm)
+      cast (congrArg (fun r : Verity.ExecutionPhaseFiles => r.circuit.Trace) (I.sessions_some h).2.1.read.symm)
         ((K.live A θ F c σ).extract (K.project A θ F c σ))
   | none, _ => I.base.extract θ F c σ
 

@@ -142,7 +142,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_onXP
       (batchStratL H512 enc512 Lp (fun S R => [T S R])
         (cont (simAuditOnP H512 enc512 Lp T I own wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAcceptsP I own o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp (fun S R => [T S R]) tab (rs.binding hHm)
               (reg (simAuditOnP H512 enc512 Lp T I own wr opn dg dec one fin capOf N hdec τ))

@@ -84,12 +84,12 @@ pooled (``pooled``, `POOLED`): at most ⌊ln(1/δ)/q⌋ incorrect proof blocks o
 its n proof blocks (q = k/n), by `Flock.Guarantees.IntegrityHorizon`, and for each monitoring period of
 `leak_bounds.PERIODS` that count for the serving node, a datacenter's and the world's links (each link's at δ / links,
 summed), each with its share of the period's proof blocks at a window an execution phase (`WINDOW_S`), scaled from the
-run's window by its rule (`POOLED_RULES`); a law other than a k-subset has no pooled figure (`NOT_POOLED`). ``refused``
+run's window by its rule (`POOLED_RULES`); a sampling_design other than a k-subset has no pooled figure (`NOT_POOLED`). ``refused``
 names the draws a run of record doesn't make (`MULTI`), and it is conditional on the coins while they are open.
 
 **Coins** (``coins``, `COINS`): SPOT's coins as the run's COINS lines in verdicts.txt name them (the served
 run's, or the follow-on's where it audits), and the network certifier's chain draws as its published report states
-each one's law (``draws``, `CHAIN_DRAWS`); ``open`` unless each COINS line names the live challenger (`LIVE_COINS`) and,
+each one's sampling_design (``draws``, `CHAIN_DRAWS`); ``open`` unless each COINS line names the live challenger (`LIVE_COINS`) and,
 where the network certifier accepted, each chain draw takes everything, naming each draw that doesn't
 (``open_draws``), and ``missing`` where the run published no COINS line. While they are open, live-coins is named
 wherever a figure rests on that draw: the sampled-proofs verdict's, ``of_record``'s and the composite's error's
@@ -385,7 +385,7 @@ NO_COMPLETION = ("the audit's record states no registered-file completion (check
 UNCOMPLETED = "the audit couldn't complete its --registered file, and refused it"
 UNREPORTED = "its Lean verdict of record didn't accept its completed file reporting exactly that file's reads"
 UNLISTED = "the audit's record lists its Lean verdict but no completion of its --registered file"
-#: where the window report keeps the records audit's answer, whose profile and public, the draw's n, law and δ and the
+#: where the window report keeps the records audit's answer, whose profile and public, the draw's n, sampling_design and δ and the
 #: bound there, SPOT's guarantee reads once its verdict, the composite's leg (`sampled_verdict`), accepted
 SAMPLED_FROM = f"record/verdicts.json protocols.{ROWS['sampled proofs']}.answer"
 SAMPLED = ("sampled proofs' guarantee, what its draw establishes, ε at δ, per window and pooled over each monitoring "
@@ -414,7 +414,7 @@ WINDOW_S = ("a stated parameter: a window an execution phase, T buckets of τ (t
             "windows lower each share and leave the count, which no window count enters")
 NO_GATES = ("in AND gates: missing. A proof block's AND gates are its partition's, which is private, so each share is "
             "of the monitoring period's proof blocks")
-NOT_POOLED = ("its draw isn't a uniform k-subset of the window's proof blocks, the law IntegrityHorizon pools, so no "
+NOT_POOLED = ("its draw isn't a uniform k-subset of the window's proof blocks, the sampling_design IntegrityHorizon pools, so no "
               "pooled figure is stated for it")
 MULTI = ("a window of more than one member, whatever its draw: its case of verity/sampled-proofs/v1 names each "
          "member's circuit and registered file (`a5.v2_proof`'s per-member form, proofs.members), and Lean refuses "
@@ -425,12 +425,12 @@ MULTI = ("a window of more than one member, whatever its draw: its case of verit
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
 CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `LinkWindows.period_draw`) "
-               "takes every window (law all: k None, no coins) or K of them on the verifier's own coins (n2_zk.py's); "
+               "takes every window (sampling_design all: k None, no coins) or K of them on the verifier's own coins (n2_zk.py's); "
                "its scan's draw takes every proof block or K of them on the verifier's or the gate's coins, which the "
-               "published report doesn't say. So each draw whose law isn't all is open under "
+               "published report doesn't say. So each draw whose sampling_design isn't all is open under "
                f"{COINS_OPEN}, by its name (``open``), and the network certifier's bound and figures are conditional on "
                "the coins")
-NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose steps state each draw's law"
+NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose steps state each draw's sampling_design"
 CHARGED = ("MonitoringPeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
@@ -688,7 +688,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "rules are strata draws. Open, by this name, until a theorem stating it at the deployed draw is "
                            "in the lock. Three of its parts are in no lock: RegMatches, that the registration matches the "
                            "design the bound reads, assumed and the sampled leg's bridge's to give (`sampled-leg-bridge`); "
-                           "the law identity, that OneStage.check's derived v.law is g.rule.lawOver n, which today meet "
+                           "the sampling_design identity, that OneStage.check's derived v.law is g.rule.samplingDesignOver n, which today meet "
                            "only through R1's Draw.sameLaw, an equality of canonical texts (jeq); and the population "
                            "lemma, jeq a (toJson n) → nat? a = some n, so R2's population check gives the n the audit's "
                            "bound reads",
@@ -1168,7 +1168,7 @@ def sampled(row: Any, verdict: Mapping[str, Any], phase_s: Fraction | None, why:
     """SPOT's guarantee (`SAMPLED`) from its accepted row's answer: its window's, and pooled over each
     monitoring period (`POOLED`) for the serving node and, by the links of each (`census`), a datacenter and the world,
     at a window an execution phase of ``phase_s`` seconds (`WINDOW_S`; where it is None the periods are missing,
-    ``why``); a draw of another law has no pooled figure (`NOT_POOLED`). ``refused`` names the draws a run of record
+    ``why``); a draw of another sampling_design has no pooled figure (`NOT_POOLED`). ``refused`` names the draws a run of record
     doesn't make (`MULTI`), and ``conditional_on`` the coins' condition while it is open (`COINS`)."""
     g = {"is": SAMPLED, "refused": MULTI, "from": SAMPLED_FROM} | (
         {"conditional_on": list(conditional)} if conditional else {})
@@ -1178,14 +1178,14 @@ def sampled(row: Any, verdict: Mapping[str, Any], phase_s: Fraction | None, why:
     try:
         a = row["answer"]
         levels, b = a["profile"]["levels"], int(a["public"]["bound"])
-        n, law, delta = int(levels[-1]["size"]), levels[-1]["draw"], exact_delta(a["profile"]["delta"])
+        n, sampling_design, delta = int(levels[-1]["size"]), levels[-1]["draw"], exact_delta(a["profile"]["delta"])
     except (IndexError, KeyError, TypeError, ValueError) as e:
         return g | {"error": f"its answer's profile or public lacks a field: {type(e).__name__}: {e}"}
     if not (0 < n and 0 <= b <= n and 0 < delta < 1):
         return g | {"error": f"its answer's bound {b} over {n} proof blocks at δ {delta} states no ε"}
-    g["per_window"] = {"units": n, "law": law, "delta": str(delta), "bound": b, "epsilon": str(Fraction(b, n)),
+    g["per_window"] = {"units": n, "law": sampling_design, "delta": str(delta), "bound": b, "epsilon": str(Fraction(b, n)),
                      "statement": "Flock.Guarantees.EndToEndHidden"}
-    k = law.get("subset") if isinstance(law, Mapping) and len(levels) == 1 else None
+    k = sampling_design.get("subset") if isinstance(sampling_design, Mapping) and len(levels) == 1 else None
     if not (isinstance(k, int) and 0 < k <= n):
         return g | {"pooled": {"missing": NOT_POOLED}}
     q = Fraction(k, n)
@@ -1365,14 +1365,14 @@ def credited(c: Mapping[str, Any]) -> bool:
 
 
 def chain_draws(out: Path) -> dict[str, Any]:
-    """The network certifier's chain draws as its published report states each one's law (`CHAIN_DRAWS`), by name, and
-    ``open``, each whose law isn't all; ``missing`` where the run published no report, every draw then open."""
+    """The network certifier's chain draws as its published report states each one's sampling_design (`CHAIN_DRAWS`), by name, and
+    ``open``, each whose sampling_design isn't all; ``missing`` where the run published no report, every draw then open."""
     try:
         steps = json.loads((out / CHAIN_REPORT).read_text()).get("steps") or {}
     except FileNotFoundError:
         return {"missing": NO_CHAIN_REPORT, "open": list(DRAWS.values()), "is": CHAIN_DRAWS}
-    laws = {name: ((steps.get(s) or {}).get("eps_at_delta") or {}).get("law") for s, name in DRAWS.items()}
-    return {"laws": laws, "open": [n for n, law in laws.items() if law != "all"], "from": str(CHAIN_REPORT),
+    sampling_designs = {name: ((steps.get(s) or {}).get("eps_at_delta") or {}).get("law") for s, name in DRAWS.items()}
+    return {"laws": sampling_designs, "open": [n for n, sampling_design in sampling_designs.items() if sampling_design != "all"], "from": str(CHAIN_REPORT),
             "is": CHAIN_DRAWS}
 
 

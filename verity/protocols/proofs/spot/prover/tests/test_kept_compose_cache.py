@@ -207,7 +207,7 @@ def test_without_v3c_compose_cache_the_warm_and_the_audit_get_the_windows_own_di
         got[name] = (argv, *_but_the_chain(order, limits, [here(x) for x in lines]))
     argv, order, _limits, _lines, _chain = got["unset"]
     own = f"ROOT/serve/v3c-w7-{SV.VTAG}/compose-cache"
-    assert argv["warm"] == ["warm", "--window", f"ROOT/serve/v3c-w7-{SV.VTAG}/window", "--law", SV.RULE,
+    assert argv["warm"] == ["warm", "--window", f"ROOT/serve/v3c-w7-{SV.VTAG}/window", "--sampling-design", SV.RULE,
                             "--compose-cache", own, "--jobs", "3"]
     assert argv["audit"][argv["audit"].index("--compose-cache") + 1] == own and argv["audit"].count(own) == 1
     assert order.index("warm") < order.index("audit")

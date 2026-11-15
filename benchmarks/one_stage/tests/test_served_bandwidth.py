@@ -41,7 +41,7 @@ def _serve_dir(path: Path) -> Path:
     return path
 
 
-#: a stand-in for `remote-audit-p2-protocol serve`, so the toy builds no Lean: one undecided answer per case
+#: a stand-in for `poub-p2-protocol serve`, so the toy builds no Lean: one undecided answer per case
 CASE_EXE = f"""#!{sys.executable}
 import json, sys
 from verity.protocols.accounting.poub.verifier import p2_case
@@ -57,7 +57,7 @@ def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
     party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_parties "
              f"--device {tmp / 'party'} --listen 127.0.0.1:0 --registration {toy / 'registration.json'} "
              "--windows 1 --passes 2 --samples 64 --window-ns 1000000 --deadline-ns 1000000")
-    exe = tmp / "remote-audit-p2-protocol"
+    exe = tmp / "poub-p2-protocol"
     exe.write_text(CASE_EXE)
     exe.chmod(0o755)
     return dict(os.environ) | {"BANDWIDTH_CMD": CMD, "PY": sys.executable, "BW_STORE": str(toy / "store"),
@@ -111,7 +111,7 @@ HELD = {"commitment": "ab" * 64, "protocol": p2_parties.PROTOCOL, "reason": None
 
 
 def _held(tmp: Path, window: int, answer: dict = HELD) -> Path:
-    """What the PoUS piece's bandwidth session leaves in the bandwidth piece's directory (`held_bandwidth.session`)."""
+    """What the PoUS piece's bandwidth session leaves in the bandwidth piece's directory (`held_bandwidth.decide`)."""
     d = tmp / "held"
     d.mkdir(exist_ok=True)
     (d / "answer.json").write_text(json.dumps(answer))

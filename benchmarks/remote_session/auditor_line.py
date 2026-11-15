@@ -2,10 +2,10 @@
 (time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
 the auditor's device signed rather than from the verifier's stamps.
 
-**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
-`RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
+**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`poub-verifier`'s `line_record` request,
+`Poub.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `Poub.Pooled` over the
 record's samples) computes each session's line off its record from
-the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
+the inputs `verifier.recorded_inputs` reads, and `poub.line` computes it beside it from the same JSON
 (`line.line_of_record`):
 the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
 differ refuses the run's line, naming both values (`Disagree`). Floats appear only as the exact shares correctly
@@ -19,7 +19,7 @@ k-th root (its boundary leaves before it), so that request leaves as the root ar
 names the same root too. At one window in flight (`audit.Pace.in_flight` 1) chal_(g+1)'s request names it and openings
 coin g's leaves once chal_(g+1) is back, so this reading, which doesn't take f, ends L_g about a round trip to the
 challenger past s_(g+1). Sampled G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last
-root of draw c's last window, and another window's A_g is the first request that leaves after its last root,
+root of sample c's last window, and another window's A_g is the first request that leaves after its last root,
 chal_(g+2)'s at the earliest, which above k = 1 names a root of window g + 1 and so ends L_g later than the window did.
 Both times are the challenger's monotonic clock in its release log, whose lines its close signs
 (`challenger.session_of`), and whose close, record and refused hellos the auditor's ledger sealed at the session's end
@@ -27,7 +27,7 @@ Both times are the challenger's monotonic clock in its release log, whose lines 
 after its coin, whose seed they take, and before its last root, which chains them.
 
 Beside the times the line reads the Lean verifier's record of the session (`verifier.lean_record`, `verifier.json`'s
-`lean_record`): each group's passes, its windows' receipts and draws, whose pooled bound (`remote_bandwidth.pooled`)
+`lean_record`): each group's passes, its windows' receipts and samples, whose pooled bound (`poub.pooled`)
 is its wrong receipts, and its registered blocks, the registration's; and the verifier's verdict, and each group's
 held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
 regions). The verifier runs on the audit's machine, not
@@ -46,10 +46,11 @@ the auditor's.
 
 The ledger's head, a gate session's read of the ledger and the *credited* and *pinned* checks below are the Lean
 verifier's answers (`sampled-proofs-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
-`challenger_pinned`, through `coins.lean_answer`), each held to the Python's, which may only refuse; `verify_ledger`,
-`verify_periods`, the commit on main, *complete* and the store's binding are still the Python's alone. A served
-session's `session_of` has no Lean yet. The Lean's answers for those but the binding have their interfaces, not yet
-written (`periods_answer`, `on_main_answer`, `complete_answer`, `served_session_answer`).
+`challenger_pinned`, through `coins.lean_answer`), each held to the Python's, which may only refuse. So are the
+ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify_periods`), the commit on main
+(`on_main_answer`), *complete* (`complete_answer`) and a served session's read (`served_session_answer`, past
+`session_of`), whose Lean isn't written yet: where the Python doesn't refuse, each is undecided
+(`coins.undecided`), and the session earns no credit, with that reason. The store's binding is still the Python's.
 
 **Credit.** The line of record (`line`) counts a session only when all four hold, each reported per session
 (`credit`), and its store's binding isn't refused, and gives any other session zero credit with the reasons:
@@ -71,13 +72,14 @@ written (`periods_answer`, `on_main_answer`, `complete_answer`, `served_session_
   `pinned`, and that commit is on main's first-parent line, a tree main's check ran on. With no
   log or no copy of main, no session is pinned or credited.
 
-**The store** (`bound_check`, the run's, so every session's, reported as `bound`). The registered store is bound to
-the model when the verifier bound it (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose
-payload root isn't that of the store the pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited*
+**The store** (`bound_check`, the run's, so every session's, reported as `bound`). The verifier holds no checkpoint, so
+a run's registered store is the developer's choice. A record made while the verifier could bind it carries
+verifier.json's `binding`: the registered store is bound to the model when that binding held, refusing any hello whose
+payload root isn't that of the store the pinned checkpoint lays out (`poub.store`, in the tree *credited*
 names, so the period's circuit commits to the code that decided it), the Lean verifier deciding it (`hold`, the
 binding's `lean`), the binding's root is the registration's, and its model, name and checkpoint_sha512, is the one the
-audit's period signs (its open's `model`), or with no period's, `--model-pin`'s. A run whose verifier bound the store to
-no model, or with no model to bind it to, is unbound: its sessions are credited on the four checks, and the line is
+audit's period signs (its open's `model`), or with no period's, `--model-pin`'s. A run whose record carries no
+binding, or with no model to bind it to, is unbound: its sessions are credited on the four checks, and the line is
 conditional on `DeveloperStore` (`PREMISES`: the verifier held no checkpoint, so the store's bytes are the developer's
 choice). A binding the record carries is checked even with no model: one that doesn't hold, or holds the store to
 another model, is refused, and every session's credit is zero.
@@ -88,18 +90,18 @@ tier, `line`'s `filler`), which the line doesn't count as weights. Each form cha
 their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7), and deducts the chips' S_chip at no
 less than the auditor's (`verifier.recorded_chip_bytes`). What every accepted paced session
 measured, credited or not, is `measured`. `--table` writes each session's four checks and the line as Markdown.
-Each session's `sketch` is its δs at the outside-compute factor F its verifier charged, Q = F·C (`verifier.sketch_at`),
-and `sketch_outside` every F the run's sessions were charged at.
+Each session's `sketch` is its δs at the queries Q its verifier charged (`verifier.sketch_at`: the prover's budget, or
+F·C in a record written before it), and `sketch_queries` every Q the run's sessions were charged at.
 
 **Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
 `error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its six
-parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
-41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
-commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the sketch's, and the
-sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
-total of a record whose ledger didn't charge them). The total leaves out the windows' PRF advantages Σ_t adv_t, which
-nothing prices and the line doesn't assume: every error names them (`NAMED_TERMS`, claim prf/sha-512) with no number,
-in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, and the line of record over every T
+parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 140 bits, 67
+in a record written before it, and 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's
+2118 passes), the coin commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the
+sketch's, and the sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the
+rejection added to the total of a record whose ledger didn't charge them). The total leaves out the windows' PRF
+advantages Σ_t adv_t, which nothing prices and the line doesn't assume: every error names them (`NAMED_TERMS`, claim
+prf/sha-512) with no number, in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
 whichever session the run made least, so the union bound holds where a maximum wouldn't.
 
@@ -153,7 +155,7 @@ from verity.protocols.accounting.poub.verifier.session import lean_verifier as l
 from verity.protocols.accounting.poub.verifier.session import verifier as V  # noqa: E402
 from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
-from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
+from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
 from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
 from verity.protocols.proofs.spot.device import remote  # noqa: E402
@@ -296,7 +298,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     naming the same value (chal_(g+1)'s, or another window's) would.
 
     Sampled `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
-    request names the last root of draw c's last window and no request names another window's by place. A_g is then
+    request names the last root of sample c's last window and no request names another window's by place. A_g is then
     the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
     chal_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
     That time is at or after A_g, so L_g is at least window g's own and the line credits no more."""
@@ -471,22 +473,29 @@ def session_error(session: dict) -> dict:
     charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger
     that didn't charge the hiding, the binding or the rejection (no such part) has it added to its total: the hiding
     from its windows (`recorded_windows`, as `ledger.hiding` reads them), the binding at the session's bounds
-    (`recorded_binding`, as `ledger.binding` reads them), reading F·C off the record's sketch term (`sketch_failure`),
-    so a record with none has no binding term here, and the rejection at its windows' requested draws (the session's
+    (`recorded_binding`, as `ledger.binding` reads them), reading Q off the record's sketch term (`sketch_failure`),
+    so a record with none has no binding term here, and the rejection at its windows' requested samples (the session's
     `samples` in each, as `ledger.rejection` reads them off the record). Each in floats and exact beside them
     (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
-    total."""
+    total. `{"undecided": why}` where the ledger's declared outputs are undecided."""
     lg = session["ledger"]
+    if "undecided" in lg["declared"]:
+        return {"undecided": lg["declared"]["undecided"]}
     totals = {m["delta"] for m in lg["declared"]["memory"].values() if "delta" in m}
     if len(totals) != 1:
         raise Disagree(f"session {session['k']}'s memory line forms record δ {sorted(totals)}: the ledger computes one")
     total = Fraction(totals.pop())
     hiding = binding = rejection = None
     if (d := lg.get("delta")) is not None:
-        added = 0.0
-        for n in ledger.DELTA_PARTS:
-            added += d.get(n, 0.0)
-        if added != float(total):
+        parts = [d.get(n, 0.0) for n in ledger.DELTA_PARTS]
+        if all(type(x) is str for x in parts):
+            agree = sum(map(Fraction, parts), Fraction(0)) == total
+        else:
+            added = 0.0
+            for x in parts:
+                added += x
+            agree = added == float(total)
+        if not agree:
             raise Disagree(f"session {session['k']}'s δ parts {d} don't sum to its memory line's δ {float(total)!r}")
         profile, slack, sketch = (Fraction(d[n]) for n in ("profile", "slack", "sketch"))
         if "hiding" in d:
@@ -529,8 +538,8 @@ def recorded_binding(session: dict) -> Fraction:
     """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its samples
     (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a sample of it can have (g times
     `ledger.window_receipts`, at its pace's k, its registered blocks and, when its append coins aren't recorded
-    (`recorded_append_coins`), the codec's `max_blocks`) and its sample cap `samples`, F·C the queries its sketch term
-    (`sketch_failure`) charged; 0 for a record with no sketch term, which states no C."""
+    (`recorded_append_coins`), the codec's `max_blocks`) and its sample cap `samples`, Q the queries its sketch term
+    (`sketch_failure`, `V.recorded_queries`) charged; 0 for a record with no sketch term, which states no Q."""
     sf = (session.get("ledger") or {}).get("sketch_failure")
     if not sf:
         return Fraction(0)
@@ -540,7 +549,7 @@ def recorded_binding(session: dict) -> Fraction:
     L = ledger.window_receipts(None if pace is None else audit.Pace(pace["k"], pace["window_ns"]), public["blocks"],
                                1 if appends is None else appends, wire.codec_named(public["codec"]).max_blocks)
     return Fraction(ledger.binding_over(len(V.recorded_windows(session)[0]), public.get("groups_per_coin", 1) * L,
-                                        session["samples"], sf.get("outside", 1) * sf["compressions"]))
+                                        session["samples"], V.recorded_queries(sf)))
 
 
 def union_error(rows: list[dict]) -> dict:
@@ -555,8 +564,8 @@ def union_error(rows: list[dict]) -> dict:
 
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
-    binding (verifier.json's `binding`, `remote_bandwidth.store.Binding.record`) held the hello's payload root to the root of the
-    store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
+    binding (verifier.json's `binding`, in a record made while the verifier could bind it) held the hello's payload root
+    to the root of the store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
     `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`.
     `bound` says whether it is. A run with no binding, or with no model to hold one to, is unbound: its store is the
     developer's choice (`store`), which the line is then conditional on (`premise`, `STORE_PREMISE`), and `ok`.
@@ -568,8 +577,8 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     why = refused(b, root, model)
     if why is None and (b is None or model is None):
         why = ("no model to bind the store to: the audit's period signs none and no --model-pin names one"
-               if model is None else "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint "
-               "DIR --pin FILE), so its payload root is the prover's choice")
+               if model is None else "the verifier holds no checkpoint, so the store's payload root is the developer's "
+               "choice")
         return {**out, "bound": False, "store": DEVELOPERS, "premise": STORE_PREMISE, "refused": None, "ok": True,
                 "reason": why}
     return {**out, "bound": why is None, "store": MODELS if why is None else DEVELOPERS, "premise": None,
@@ -734,9 +743,14 @@ def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: st
     verify = lambda m, sig: VP.lms_verify(key, m, sig)  # noqa: E731
     windows = Ch.verify_ledger(raw, key.public[:16], verify)
     periods = Ch.verify_periods(raw, key.public[:16], verify)
-    p = periods.get(period)
     doc = {"entries": len(lines), "sha512": hashlib.sha512("".join(x + "\n" for x in lines).encode()).hexdigest(),
            "verify_ledger": "passed", "heads": len(heads)}
+    try:
+        got = periods_answer(lines, key, {"windows": windows, "periods": periods})
+        windows, periods = got["windows"], got["periods"]
+    except NotImplementedError:
+        doc["verify_ledger"], doc["undecided"] = "undecided", coins.undecided("ledger's windows and periods")
+    p = periods.get(period)
     doc["period"] = None if p is None else {
         "name": period, "lane": p["lane"], "cap": p["cap"], "circuit": p["circuit"], "windows": len(p["windows"]),
         "opened_by": p["open"]["body"].get("by") if p.get("open") else None,
@@ -756,32 +770,34 @@ def head_lines(heads: list[Path], key: Ch.ChallengerKey) -> list[str]:
                              {"ledger": Ch.ledger_head(hl, key, VP.lms_verify)})["ledger"]
 
 
-def periods_answer(lines: list[str], key: Ch.ChallengerKey) -> dict:
-    """The Lean verifier's read of the ledger's windows and periods (`challenger_periods`, on `{"key", "ledger"}`),
-    held to `verify_ledger`'s and `verify_periods`'s as `{"windows", "periods"}`, which `ledger_check` is to act on in
-    place of the Python's."""
-    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+def periods_answer(lines: list[str], key: Ch.ChallengerKey, python: dict) -> dict:
+    """The Lean verifier's read of the ledger's windows and periods (`challenger_periods`, on `{"key", "ledger"}`), the
+    one `ledger_check` acts on, held to `python`, `verify_ledger`'s and `verify_periods`'s as `{"windows", "periods"}`,
+    as `coins.lean_answer` holds an answer. Until it is written the read is undecided."""
+    raise NotImplementedError(coins.UNWRITTEN)
 
 
-def complete_answer(lines: list[str], R: str, period: str, session: str | None, key: Ch.ChallengerKey) -> dict:
+def complete_answer(lines: list[str], R: str, period: str, session: str | None, key: Ch.ChallengerKey,
+                    python: dict) -> dict:
     """The Lean verifier's *complete* (`challenger_complete`, on `{"key", "ledger", "window": {"root": R}, "period",
-    "session"}`): the window's end and the period's close complete, and the close listing the session's window complete,
-    held to `credit_check`'s *complete*, which is to act on it in place of the Python's."""
-    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+    "session"}`): the window's end and the period's close complete, and the close listing the session's window complete;
+    the one `credit_check` acts on where the Python's *complete* (`python`) holds, as `coins.lean_answer` holds an
+    answer. Until it is written *complete* is undecided."""
+    raise NotImplementedError(coins.UNWRITTEN)
 
 
-def on_main_answer(commit: str, main: list[str] | None) -> bool:
+def on_main_answer(commit: str, main: list[str] | None, python: bool) -> bool:
     """The Lean verifier's answer to whether the verifier's `commit` is on the auditor's first-parent list of main
-    (`challenger_on_main`, on `{"commit", "main"}`), held to `credit_check`'s, which is to act on it in place of the
-    Python's."""
-    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+    (`challenger_on_main`, on `{"commit", "main"}`), the one `credit_check` acts on where the Python's (`python`) holds.
+    Until it is written the commit's place on main is undecided."""
+    raise NotImplementedError(coins.UNWRITTEN)
 
 
-def served_session_answer(key: Ch.ChallengerKey, files: dict) -> dict:
+def served_session_answer(key: Ch.ChallengerKey, files: dict, python: dict) -> dict:
     """The Lean verifier's read of a served session under the key its run wrote (`challenger_served`, on `{"key",
-    "session"}`, `session` being `remote.session_files`'), held to `challenger.session_of`'s, which `signed_lines` is
-    to act on in place of the Python's."""
-    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+    "session"}`, `session` being `remote.session_files`'), the one `signed_lines` acts on where
+    `challenger.session_of` (`python`) reads it. Until it is written the read is undecided."""
+    raise NotImplementedError(coins.UNWRITTEN)
 
 
 def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict, *, key: Ch.ChallengerKey,
@@ -807,6 +823,13 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
                 f"its verifier ran commit {commit}, which is not on main's first-parent line in the auditor's copy "
                 "(`git rev-list --first-parent origin/main`), so no tree main's check ran on: repin the verifier "
                 "host to a commit on main's first-parent line (vy-verifier-pin) and rerun the window there"))
+        if credited["ok"]:
+            try:
+                if not on_main_answer(commit, main, True):
+                    credited.update(ok=False, reason=f"the Lean verifier finds commit {commit} off main's "
+                                                     "first-parent line")
+            except NotImplementedError:
+                credited.update(ok=False, reason=coins.undecided("verifier's commit on main"))
     except Ch.CoinError as e:
         credited.update(ok=False, reason=str(e))
     end = ((windows.get(R) or {}).get("end") or {}).get("body") or {}
@@ -830,12 +853,21 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
                    "incomplete)")
     elif outcome is None or outcome.get("complete") is not True:
         why.append(f"period {period}'s close doesn't list its window complete")
+    if not why:
+        try:
+            complete_answer(lines, R, period, sid, key, complete)
+        except NotImplementedError:
+            why.append(coins.undecided("completeness"))
+        except Ch.CoinError as e:
+            why.append(str(e))
     complete.update(ok=not why, reason="; ".join(why) or None)
     verdict = s.get("verdict")
     if verdict not in LEAN_VERDICTS:
         reason = f"its verdict is {verdict}'s, not the Lean's"
     elif s.get("disagreement") is not None:
         reason = "the two verifiers disagreed"
+    elif (s.get("failure") or {}).get("failure") == "undecided":
+        reason = s["failure"].get("reason") or "undecided"
     elif s.get("accepted") is not True:
         reason = f"the Lean refused it ({(s.get('failure') or {}).get('failure')})"
     else:
@@ -895,7 +927,12 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
         trust = {"read": "trusted_session", "period": got["period"], "cap": got["cap"], "circuit": got["circuit"]}
     else:
         key = Ch.ChallengerKey.from_json(json.loads((d / remote.KEY).read_text()))
-        Ch.session_of(key, files["record"], files["log"], files["close"], VP.lms_verify)
+        commitment, roots, sid = Ch.session_of(key, files["record"], files["log"], files["close"], VP.lms_verify)
+        try:
+            served_session_answer(key, files, {"commitment": commitment.to_json(), "session": sid,
+                                               "roots": {k: [r.hex() for r in rs] for k, rs in roots.items()}})
+        except NotImplementedError:
+            raise coins.Undecided(coins.undecided("served session's read")) from None
         trust = {"read": "session_of", "key_sha512": hashlib.sha512(key.public).hexdigest(),
                  "note": "a served challenger on the verifier's machine: no ledger, not the auditor's clock"}
     close = Ch.ChallengerClose.from_json(files["close"])
@@ -970,6 +1007,9 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
             row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc,
                                          commit=commit, pins=pins, main=main, bound=bound)
+            if "undecided" in doc["ledger"]:
+                row["credit"] = {**row["credit"], "ok": False,
+                                 "zero": [*row["credit"]["zero"], f"not credited: {doc['ledger']['undecided']}"]}
             row["no_relay"] = lockdown_check(lockdown, signed_span(windows.get(R)))
             d = ch_dir / c["session"] / "out"
         elif c.get("challenger") == "serve":
@@ -982,6 +1022,10 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             continue
         try:
             log, row["trust"] = signed_lines(d, c["challenger"], R, heads or [], key, period)
+        except coins.Undecided as e:
+            row["undecided"] = f"the challenger's session's read: {e}"
+            row["credit"] = {**row["credit"], "ok": False, "zero": [*row["credit"]["zero"], row["undecided"]]}
+            continue
         except (Ch.CoinError, OSError, ValueError, KeyError) as e:
             row["refused"] = f"the challenger's session is not readable as signed: {e}"
             row["credit"] = {**row["credit"], "ok": False, "zero": [*row["credit"]["zero"], row["refused"]]}
@@ -1009,6 +1053,9 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates, lean, clock="challenger", transcript=tr)
         row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates, lean, transcript=tr)
         row["error"] = session_error(s)
+        if "undecided" in row["error"]:
+            row["credit"] = {**row["credit"], "ok": False,
+                             "zero": [*row["credit"]["zero"], f"not credited: its ledger's {row['error']['undecided']}"]}
         row["cross_check"] = cross_check(s["windows_seen"], seen)
         for clock in ("auditor", "verifier"):
             for f, x in row[f"shares_{clock}_clock"].items():
@@ -1019,7 +1066,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     doc["sessions"], doc["measured"] = rows, measured
     doc["line"], doc["credit"] = credited_line(rows)
     doc["conditional_on"] = conditional_on(rows, bound)
-    doc["sketch_outside"] = sorted({r["sketch"]["outside"] for r in rows if r["sketch"]})
+    doc["sketch_queries"] = sorted({r["sketch"]["queries"] for r in rows if r["sketch"]})
     return doc
 
 
@@ -1116,7 +1163,7 @@ def main(argv: list[str] | None = None) -> int:
                     "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned")
     ap.add_argument("--model-pin", type=Path, metavar="FILE",
                     help="the model the store must be bound to when the audit's period signs none: a pin in the "
-                         "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either the store is "
+                         "auditor's model registry's shape (`poub.store.read_pin`); without either the store is "
                          "unbound and the line conditional on DeveloperStore")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
@@ -1133,7 +1180,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="compute each line in the Lean verifier, held exactly to line.py's (the line of record), or in "
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
-                    help="the remote-audit-verifier executable (default: `lake build` it in PoUB's package)")
+                    help="the poub-verifier executable (default: `lake build` it in PoUB's package)")
     ap.add_argument("--lockdown", type=Path, metavar="FILE",
                     help="infra's record of the provider's lockdown of the gate node (`read_lockdown`): a gate "
                          "session whose signed span lies inside an applied interval is conditional on "
