@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.TS.J10R
+public import Definitions.Pouw.TS.J10R
 public import Properties.Pouw.Period
 public import PouwCheck.Credit
 import Mathlib.Algebra.Order.Floor.Extended

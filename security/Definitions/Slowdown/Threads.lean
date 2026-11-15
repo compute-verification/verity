@@ -24,7 +24,9 @@ thread's work. It states them over `C` itself, not over the declared circuit, wh
 
 @[expose] public section
 
-namespace InferenceOnly
+open InferenceOnly
+
+namespace Slowdown
 
 open Verity Finset
 
@@ -90,4 +92,4 @@ noncomputable def bound (k : ℝ) (b_w : ℝ) (d e : ℕ) : ℝ :=
 
 end Threading
 
-end InferenceOnly
+end Slowdown

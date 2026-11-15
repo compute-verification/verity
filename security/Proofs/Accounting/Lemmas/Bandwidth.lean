@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.Bandwidth
+public import Definitions.Poub.Guarantees.Bandwidth
 
 /-!
 # The bandwidth audit's honest device: a lemma
 
-`HonestPasses`, the honest device of `Definitions.Accounting.Guarantees.Bandwidth`'s `AuditRO`: for every store and tag
+`HonestPasses`, the honest device of `Definitions.Poub.Guarantees.Bandwidth`'s `AuditRO`: for every store and tag
 size, a device accepted on every coin, which shows `AuditRO`'s event is not vacuous. It is no guarantee, nor a witness
 of one: a witness constructs its instance, and it quantifies over every `N`, `b` and `h`. It is a `def G : Prop` under
 the guarantees' namespace, proved by the `SecurityProofs` theorem of the same name, and audited with the proofs: no

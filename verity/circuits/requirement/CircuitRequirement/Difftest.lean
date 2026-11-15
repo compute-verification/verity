@@ -89,7 +89,7 @@ def placement (j : Json) (n : Nat) : Flock.V Placement := do
 
 /-- A executionPhase of PoUW's: the devices `X`, the marked values, the ticks `[lo, hi)` and the engine steps
 `[start, start + len)`. -/
-structure Window where
+structure ExecutionPhase where
   devices : List Nat
   marked : List Nat
   lo : Nat
@@ -97,7 +97,7 @@ structure Window where
   start : Nat
   len : Nat
 
-def executionPhase (j : Json) : Flock.V Window := do
+def executionPhase (j : Json) : Flock.V ExecutionPhase := do
   return {
     devices := ← nats (← Flock.J.get j "devices" "window") "window.devices"
     marked := ← nats (← Flock.J.get j "marked" "window") "window.marked"
@@ -108,7 +108,7 @@ def executionPhase (j : Json) : Flock.V Window := do
 
 def natsJson (l : List Nat) : Json := .arr (l.map toJson).toArray
 
-def executionPhaseJson (i : Instance) (p : Placement) (price : Array Nat) (w : Window) : Json :=
+def executionPhaseJson (i : Instance) (p : Placement) (price : Array Nat) (w : ExecutionPhase) : Json :=
   Json.mkObj [("region", natsJson (i.region p w.devices w.lo w.hi)),
     ("step_region", natsJson (i.stepRegion p w.devices w.start w.len)),
     ("ingress", toJson (i.ingress p w.devices w.lo w.hi)),

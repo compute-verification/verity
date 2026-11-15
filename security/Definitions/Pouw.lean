@@ -125,7 +125,7 @@ least the honest work of its correct units, over `1 + ε`.
 * `Properties.Pouw.Period.CheckedCreditPeriod` (the same module): the general form it instantiates, the credit in live
   words over the windows the deployed check accepts.
 * Resource accounting reads PoUW through two guarantees. `Accounting.Guarantees.ComputeOfPouw`
-  (`Definitions.Accounting.Guarantees.Pouw`) is PoUW's guarantee as the compute guarantee.
+  (`Definitions.Pouw.Guarantees.Pouw`) is PoUW's guarantee as the compute guarantee.
   `Accounting.Guarantees.Compose.CircuitCredit` (`Definitions.Accounting.Guarantees.Compose`) is PoUW's credit on a
   registered circuit it compiles.
 

@@ -6,14 +6,14 @@ public import Definitions.Slowdown.Threads
 /-!
 # The slowdown: the model's accounting, named
 
-The slowdown's statements (`InferenceOnly.Guarantees.SlowdownThreaded`, `SlowdownRemote`, `SlowdownRemoteMonitoringPeriod`) take the
+The slowdown's statements (`Slowdown.Guarantees.SlowdownThreaded`, `SlowdownRemote`, `SlowdownRemoteMonitoringPeriod`) take the
 model's accounting of where counted multiplications run, and the shape of the servers' windows, as premises over
 numbers. These name them. None is about the world: each is how the model counts.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Assumptions
+namespace Slowdown.Assumptions
 
 open Verity
 
@@ -53,4 +53,4 @@ def ResidualAtMost (Mr : ℕ) (κ C εW W wc skipped : ℝ) : Prop :=
 def CheatingAtMost (Mx : ℕ) (κ χ C U : ℝ) : Prop :=
   (Mx : ℝ) ≤ κ * χ * (C + U) / 2
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions

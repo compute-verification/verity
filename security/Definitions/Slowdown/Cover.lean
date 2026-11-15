@@ -10,7 +10,7 @@ at most `s` gates, each reading at most `k` bits besides the registered paramete
 The cover theorem bounds how many of training's counted products one block can finish, so that a cover of a
 training circuit needs many blocks. Nothing here reads what a gate computes, only the wiring.
 
-The covering bound (`InferenceOnly.Guarantees.CoveringBoundTwoCosts`) is stated in `InferenceOnly.Covering`'s vocabulary, over a
+The covering bound (`Slowdown.Guarantees.CoveringBoundTwoCosts`) is stated in `Slowdown.Covering`'s vocabulary, over a
 declaration's gates. This one is the bare wiring, so that it also reads a declaration bit by bit (`Circuit.ofDecl`), and
 its products carry a use and an updated parameter, so that one parameter's many uses are counted once.
 
@@ -28,7 +28,7 @@ its products carry a use and an updated parameter, so that one parameter's many 
 
 @[expose] public section
 
-namespace InferenceOnly.Cover
+namespace Slowdown.Cover
 
 /-- **A Boolean circuit with registered parameters.** Its gates are `Fin N`, numbered so that every predecessor of a
 gate has a smaller index, which makes the circuit acyclic. A gate with no predecessors is an input gate. The registered
@@ -70,7 +70,7 @@ def ReachesIn (C : Circuit) (A : Finset (Fin C.N)) (x y : Fin C.N) : Prop :=
   ∃ π, C.IsPath π x y ∧ ∀ v ∈ π, v ∈ A
 
 /-- **An inference block** of size `s` and read cap `k`: a set of at most `s` gates that is handed at most `k` bits
-besides the registered parameters, `#(inputs I \ θ) ≤ k`, as `InferenceOnly.Covering.InferenceBlock` is on a declaration's gates.
+besides the registered parameters, `#(inputs I \ θ) ≤ k`, as `Slowdown.Covering.InferenceBlock` is on a declaration's gates.
 Inference fits in such blocks, since its weights are registered, in `θ`, and a block is handed only tokens and
 activations. -/
 def InferenceBlock (C : Circuit) (s k : ℕ) (I : Finset (Fin C.N)) : Prop :=
@@ -145,4 +145,4 @@ structure Upstream [DecidableEq L] (M : MulBlocks C J L) (A : J → Finset (Fin 
 
 end MulBlocks
 
-end InferenceOnly.Cover
+end Slowdown.Cover

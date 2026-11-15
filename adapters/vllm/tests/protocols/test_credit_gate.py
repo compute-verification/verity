@@ -47,6 +47,7 @@ from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
 from verity_vllm.protocols import pouw
 from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
+from verity.protocols.accounting.pouw.prover.serving import credit_gate_device as CGD
 from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
@@ -414,7 +415,7 @@ def test_serve_h1s_wrapper_is_refused_too():
     quantizes the same activations again and takes z from `int_mm`; the trace refuses it the same way."""
     layer = Linear(32, 1, TodayArm())
     x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
-    with CG.Trace("q") as t:
+    with CGD.Trace("q") as t:
         y = layer.quant_method.apply(layer, x)
         xq, _sa = E.quantize_rows(x.reshape(-1, x.shape[-1]))
         z = E.int_mm(xq, layer.weight)
@@ -612,7 +613,7 @@ def test_a_z_written_outside_the_trace_is_refused_as_untraced():
     w = torch.randint(-127, 128, (32, K), dtype=torch.int8)
     xq = torch.randint(-127, 128, (3, K), dtype=torch.int8)
     z = zy_linear(xq, torch.ones(3), w, torch.ones(32, 1))[0]
-    with CG.Trace("q") as t:
+    with CGD.Trace("q") as t:
         y = zy_linear(xq, torch.ones(3), w, torch.ones(32, 1))[1]
     assert CG.verdict(t, y, z)["reason"] == f"credit: served-output-not-credited-kernel: q y from {ZY}, z from <untraced>"
 

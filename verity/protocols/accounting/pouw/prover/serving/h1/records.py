@@ -11,6 +11,7 @@ from typing import Any, overload
 import numpy as np
 
 from verity.protocols.accounting.pouw.prover.serving import int8_arm as ARM
+from verity.protocols.accounting.pouw.prover.serving.tensors import h1_device, tensors
 
 #: a unit's rows and columns (`pouw_h1.TILE`, `engine.int8_exact.UNIT`)
 UNIT = (32, 32)
@@ -54,10 +55,9 @@ def split(records: np.ndarray, rows: int, n: int) -> tuple[np.ndarray, np.ndarra
 
 def _dq(z: np.ndarray, sa: np.ndarray, s_w: Any) -> np.ndarray:
     """dq(z, s_a, s_w)'s bf16 bits as int16 (the arm's `dequantize`, `int8_arm.Int8Arm`, row by row)."""
-    import torch
-
-    return ARM.arm().dequantize(torch.from_numpy(z), torch.from_numpy(sa),
-                        torch.from_numpy(np.ascontiguousarray(s_w, np.float32).reshape(-1))).view(torch.int16).numpy()
+    ts = tensors()
+    dq = ARM.arm().dequantize(ts.put(z), ts.put(sa), ts.put(np.ascontiguousarray(s_w, np.float32).reshape(-1)))
+    return ts.host(ts.view(dq, "int16"))
 
 
 def _holds(records: np.ndarray, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -> bool:
@@ -130,33 +130,13 @@ def refusal(held: tuple[np.ndarray, np.ndarray, np.ndarray] | None, call: Any, y
 
 
 def holds_on(zy: Any, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -> bool:
-    """Whether `reason` finds nothing, read on the records' own device from the call's tensors (``scaled_mm_zy``'s zy, the
-    served y [m, n] bf16, s_a [m] and s_w [n]) with one sync for the answer. dq there is the arm's `dequantize` (`int8_arm.Int8Arm`): an
-    s32 to f32 conversion, two f32 products and a bf16 rounding, each to nearest, so its bits are the host's but for a NaN's.
-    False, for `refusal` to read the host's copy, when they aren't a call's tensors on one device, s_w isn't finite, a dq is
-    a NaN, or anything doesn't hold."""
-    import torch
-
-    ur, uc = UNIT
-    if not all(torch.is_tensor(t) for t in (zy, y, s_a, s_w)):
+    """Whether `reason` finds nothing, read on the records' own device from the call's buffers (``scaled_mm_zy``'s zy, the
+    served y [m, n] bf16, s_a [m] and s_w [n]) with one sync for the answer, by the workload's H1 device
+    (`tensors.H1Device.holds_on`). False, for `refusal` to read the host's copy, when any is on the host or anything doesn't
+    hold."""
+    if any(t is None or isinstance(t, np.ndarray) for t in (zy, y, s_a, s_w)):
         return False
-    m, dev = s_a.numel(), zy.device
-    if not (zy.dtype == torch.uint8 and y.dtype == torch.bfloat16 and rows > 0 and rows % ur == 0 and n > 0
-            and n % uc == 0 and tuple(zy.shape) == ((rows // ur) * (n // uc), ZY_BYTES) and m <= rows
-            and y.numel() == m * n and s_w.numel() == n and all(t.device == dev for t in (y, s_a, s_w))):
-        return False
-
-    def grid(v: Any) -> Any:
-        return v.reshape(rows // ur, n // uc, ur, uc).permute(0, 2, 1, 3).reshape(rows, n)
-    zy = zy.detach().contiguous()
-    z, yr = grid(zy.view(torch.int32)[:, :ur * uc]), grid(zy.view(torch.int16)[:, 2 * ur * uc:])
-    sw = s_w.detach().reshape(-1).to(torch.float32)
-    sa = torch.zeros(rows, dtype=torch.float32, device=dev)
-    sa[:m] = s_a.detach().reshape(-1).to(torch.float32)
-    dq = ARM.arm().dequantize(z, sa, sw).view(torch.int16)
-    bad = (~torch.isfinite(sw).all() | ((dq & 0x7FFF) > 0x7F80).any() | (dq != yr).any() | (z[m:] != 0).any()
-           | (yr[:m] != y.detach().contiguous().view(torch.int16).reshape(m, n)).any())
-    return not bool(bad)
+    return h1_device().holds_on(zy, rows, n, y, s_a, s_w)
 
 
 __all__ = ["UNIT", "ZY_BYTES", "holds_on", "numpy_of", "of", "reason", "refusal", "split"]

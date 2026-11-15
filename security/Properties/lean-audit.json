@@ -64,6 +64,7 @@
   "Properties.Pous.PeriodDeployed",
   "Properties.Pous.Pooled",
   "Properties.Pous.PeriodGame",
+  "Properties.Pous.Period.Witnesses",
   "Properties.Pous.Component",
   "Properties.Pous.MemoryChallenger.Session",
   "Properties.Pous.Obligation",
@@ -90,6 +91,7 @@
   "Properties.Verity.Sha512",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
+  "Properties.Verity.Committed",
   "Properties.Verity.Tied",
   "Properties.Flock.Nets",
   "Properties.Flock.ReadNet",
@@ -652,8 +654,8 @@
   "Pous.Period.ReadsNoPrimitive": {
    "owner": "@memory-accounting",
    "digest": "941286e788e84d808d5f58d95004d4e5cb4762a1eb9bf82b9f04d854577e552c",
-   "issue": "MEM-245",
-   "due": "2026-11-17"
+   "issue": "MEM-302",
+   "due": "2026-11-30"
   },
   "Pous.Period.RingDeviceAt": {
    "id": "pous-ring-device-at",
@@ -854,6 +856,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.GateARow": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24"
+  },
   "Verity.Site.Boundary": {
    "owner": "@lean",
    "digest": "50c25787a970be9a17ca64fb4e05503a0761b0713bc7559c426f3103eb93fa35",
@@ -908,6 +915,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Vocab.WiresSound": {
+   "owner": "@lean",
+   "issue": "LEAN-238",
+   "due": "2026-11-24"
+  },
   "Verity.Wipe.SurvivorBound": {
    "owner": "@soundness",
    "digest": "59c32110ad37a324988ebec3721ddbed31555090ee2b008b734c1651b3387da1",
@@ -933,8 +945,8 @@
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
    "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order",
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
-   "Verity.Assumptions.TrustedDevice": "the honest verifier server's auditor-trusted devices (trusted-device): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
+   "Verity.Assumptions.TrustedDevice": "the honest verifier server's auditor-trusted devices (trusted-device): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
   },
   "extra": {
    "Verity.remote_soundness_of_subprotocols": {
@@ -978,7 +990,7 @@
    "Properties.Pouw.Period.ServiceSound",
    "Properties.Pouw.Period.StagedPins"
   ],
-  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound"]
+  "Verity.remote_soundness_of_subprotocols": ["Verity.GateARow", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound", "Verity.Vocab.WiresSound"]
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
@@ -1490,6 +1502,24 @@
   "Properties.Poub.steered_of_checked": {
    "honest": ["Properties.Poub.steered_of_checked_honest"],
    "nontrivial": "Properties.Poub.steered_of_checked_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.periodHeld": {
+   "nontrivial": "Pous.Period.SecurityProofs.periodHeld_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.periodCapacity": {
+   "nontrivial": "Pous.Period.SecurityProofs.periodCapacity_nontrivialEmpty"
+  },
+  "Pous.Period.SecurityProofs.periodHeldDeployed": {
+   "nontrivial": "Pous.Period.SecurityProofs.periodHeld_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.obligationHeld": {
+   "nontrivial": "Pous.Period.SecurityProofs.obligationHeld_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.periodHeldAt": {
+   "nontrivial": "Pous.Period.SecurityProofs.periodHeld_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.periodHeldDemo": {
+   "nontrivial": "Pous.Period.SecurityProofs.periodHeldDemo_nontrivialDemo"
   }
  },
  "unwitnessed": {
@@ -1651,26 +1681,38 @@
   },
   "Pous.Period.SecurityProofs.obligationHeld": {
    "type_hash": "f31db42a28a358d01783989144fd06d900c17f0c2781ee656f73160f84108d35",
+   "missing": "honest",
+   "why": "its honest lemma, `obligationHeld_honestInstance`, shows the device model, the instantiation and the fit at `obligationAudit`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
    "unfolded_hash": "31d5f25d5b4a941187d3332230e482ec3f6753741e88053f0485d7f47d3dfc54"
   },
   "Pous.Period.SecurityProofs.periodCapacity": {
    "type_hash": "1bf5978e0d2b8c3a3c1e28748c6edab67a042d18704f5bb0764ff33ac555606c",
+   "missing": "honest",
+   "why": "its honest lemma, `periodCapacity_honestInstance`, shows the device model, the instantiation, the fit and that the capacity verdict implies `sidAudit.Accepts`, at `sidAudit`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
    "unfolded_hash": "d707b0fc20021c5a35bc2f764954c606827932ecfa5ad9c114f258750fbe1e63"
   },
   "Pous.Period.SecurityProofs.periodHeld": {
    "type_hash": "490f8e2f6da996708950158f449ec1c4cebced6b38811e0091f1262cc31d7309",
+   "missing": "honest",
+   "why": "its honest lemma, `periodHeld_honestInstance`, is at `sidAudit`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
    "unfolded_hash": "04811c762f5202050b9c03137e5efbca6c92436e2cf3e4dd371c22f0084820fb"
   },
   "Pous.Period.SecurityProofs.periodHeldAt": {
    "type_hash": "0654ba44ddb9ce5cd0016e31b85a2b00599c4b03a263febd27ff5faeb4681907",
+   "missing": "honest",
+   "why": "its honest lemma, `periodHeldAt_honestInstance`, shows `RingDeviceAt` and the fit at `sidAuditAt (2^19)`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
    "unfolded_hash": "45b5b884466a67826e9718d77fab1b3ae31d4558752482f6333f2b706da5d0e5"
   },
   "Pous.Period.SecurityProofs.periodHeldDemo": {
    "type_hash": "dd2437050789b0efa4862ef682df951711b976fa9fae90350e72b8884fe4273d",
+   "missing": "honest",
+   "why": "its honest lemma, `periodHeldDemo_honestInstance`, shows `RingDeviceAt` and the fit at `sidAuditAt (1038 * 2^16)`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
    "unfolded_hash": "2bdb97e1e46b354f0331dd7b5ed0c15ef0a57ef3a188d92c7f33dec812b062ea"
   },
   "Pous.Period.SecurityProofs.periodHeldDeployed": {
    "type_hash": "8f6e4c37ca2146a19ac93109a1c7eb55d0f39106332e5156b95ea6da8c7df7c2",
+   "missing": "honest",
+   "why": "its honest lemma, `periodHeldDeployed_honest` (that is `periodHeld_honestInstance`), is at `sidAudit`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
    "unfolded_hash": "a0ed5d5a2833f2490795c66cafdac2ca9745a83747ce711c1cf3a7c481f72d29"
   },
   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
@@ -2296,7 +2338,7 @@
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
    "except": [],
-   "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Accounting.ComposeMonitoringPeriod`, `Definitions.Accounting.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
+   "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Accounting.ComposeMonitoringPeriod`, `Definitions.Pouw.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
   },
   "Properties.Accounting.JointBridge": {
    "imports": [
@@ -2311,7 +2353,7 @@
   "Properties.Accounting.JointBridge.WorkOfCreditedWords": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions"],
    "except": [],
-   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its named premises (`Definitions.Accounting.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
+   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
   "Properties.NetworkPeriod": {
    "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
@@ -2349,9 +2391,9 @@
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
   },
   "Properties.Pous.Wipe": {
-   "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
+   "imports": ["Definitions.Pous.Wipe", "MemoryChallenger.WipeProtocol"],
    "except": [],
-   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Accounting.Wipe`), never a proof"
+   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Pous.Wipe`), never a proof"
   },
   "Properties.Attest": {
    "imports": [
@@ -2402,10 +2444,14 @@
     "Properties.Remote",
     "Properties.Verity.ExecutionPhaseFiles",
     "Definitions.Core.Compiler",
+    "Properties.Verity.Committed",
+    "Properties.Spot.Wires",
+    "Spot.FilePart",
+    "Spot.RecordText",
     "Properties.Verity.Tied"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.ExecutionPhaseFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), a window's files as its members' side by side (`Properties.Verity.ExecutionPhaseFiles`, whose circuit is the compiler's `Circuit.append`, `Definitions.Core.Compiler`), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy, and its claim on the Program its compiled check judges, `Properties.Remote.PolicyHeld`; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string); the two statements that tie the policy's clause to the committed files (`Properties.Verity.Committed`) read a wiring's rows (`Properties.Spot.Wires`), a file's rows a unit (`Spot.FilePart`) and the record's text as SPOT's reader reads it (`Spot.RecordText`), never over a proof"
   },
   "Properties.Core": {
    "imports": ["Definitions.Core", "CoreProtocol.Site", "RegistrationLog.SiteCheck"],
@@ -2586,7 +2632,7 @@
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "Properties.Pouw.Period"],
    "except": [],
-   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Accounting.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
+   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Pouw.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
   },
   "Properties.Certifier.Device": {
    "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
@@ -2690,11 +2736,11 @@
    "imports": [
     "Properties.InferenceOnly.Record",
     "Properties.Flock.Circuit.CircuitOf",
-    "Definitions.Accounting.ReadUnit",
+    "Definitions.Poub.ReadUnit",
     "Spot.Bits"
    ],
    "except": [],
-   "why": "a reader's ports as gates are stated over the record's roles (Properties.InferenceOnly.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Accounting.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
+   "why": "a reader's ports as gates are stated over the record's roles (Properties.InferenceOnly.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Poub.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
    "sealed": true
   }
  },
@@ -4210,6 +4256,21 @@
    "type_hash": "f31db42a28a358d01783989144fd06d900c17f0c2781ee656f73160f84108d35",
    "unfolded_hash": "31d5f25d5b4a941187d3332230e482ec3f6753741e88053f0485d7f47d3dfc54"
   },
+  "Pous.Period.SecurityProofs.obligationHeld_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.obligationHeld_nontrivial :",
+    "  Not (Real.instLE.le (Pouw.pr fun x => True) (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a0344d70b46e1803251dab17762befc1d28dd76d02a928db29593ede8e8b3357"
+  },
   "Pous.Period.SecurityProofs.periodCapacity": {
    "owner": "@memory-accounting",
    "signature": ["Pous.Period.SecurityProofs.periodCapacity : Pous.Period.PeriodCapacity"],
@@ -4222,6 +4283,26 @@
    },
    "type_hash": "1bf5978e0d2b8c3a3c1e28748c6edab67a042d18704f5bb0764ff33ac555606c",
    "unfolded_hash": "d707b0fc20021c5a35bc2f764954c606827932ecfa5ad9c114f258750fbe1e63"
+  },
+  "Pous.Period.SecurityProofs.periodCapacity_nontrivialEmpty": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodCapacity_nontrivialEmpty :",
+    "  Not",
+    "    (And",
+    "      (Pous.Period.emptyRun.CapacitySoundPerRun Pous.Period.HONEST_S.cast",
+    "        (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal))",
+    "      (Pous.Period.emptyRun.CapacitySound Pous.Period.HONEST_S.cast",
+    "        (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "86157b4976196c8eaff9e4dbacadb8f5373a840e909464ccd9738f08c2de7adc"
   },
   "Pous.Period.SecurityProofs.periodHeld": {
    "owner": "@memory-accounting",
@@ -4305,6 +4386,21 @@
    "type_hash": "dd2437050789b0efa4862ef682df951711b976fa9fae90350e72b8884fe4273d",
    "unfolded_hash": "2bdb97e1e46b354f0331dd7b5ed0c15ef0a57ef3a188d92c7f33dec812b062ea"
   },
+  "Pous.Period.SecurityProofs.periodHeldDemo_nontrivialDemo": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldDemo_nontrivialDemo :",
+    "  Not (Real.instLE.le (Pouw.pr fun x => True) (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "9354391c3f64cdce1e75e12d70d26b2898586785c103fbe9531beecaa81bea35"
+  },
   "Pous.Period.SecurityProofs.periodHeldDeployed": {
    "owner": "@memory-accounting",
    "signature": ["Pous.Period.SecurityProofs.periodHeldDeployed : Pous.Period.PeriodHeldDeployed"],
@@ -4384,6 +4480,21 @@
     "reads": []
    },
    "type_hash": "be577666ca2d997724e2f6c27e85a0f32ab25a6091fd7b50d55ae36d137f0698"
+  },
+  "Pous.Period.SecurityProofs.periodHeld_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeld_nontrivial :",
+    "  Not (Real.instLE.le (Pouw.pr fun x => True) (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ac7874e72d8635e02fc6e22c75de65e8b6dd680f107e04b035b93d77a8e08430"
   },
   "Pous.Period.SecurityProofs.pooledShort_log": {
    "owner": "@memory-accounting",

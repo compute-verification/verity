@@ -568,7 +568,7 @@ def test_a_re_key_s_old_index_is_below_the_stale_bound_of_the_pass_after_its_ste
         audit.ledger(rec, **common, requirement=dataclasses.replace(at_cap, rekeys=((2, N), (2, N + 1), (2, N + 2))))
 
 
-def test_a_link_credits_what_its_units_draw_proved_and_adds_its_delta_to_the_error(honest) -> None:
+def test_a_link_credits_what_its_units_sample_proved_and_adds_its_delta_to_the_error(honest) -> None:
     """The plan and memory-map units are sampled: a link whose sample leaves ε of its credit unproved, except with δ,
     credits 1 − ε of the session's linked credit, 37 blocks (each plan read whole, less its uncredited post-seed
     blocks), and each window its own (23 and 14) less ε of the session's,
@@ -688,7 +688,7 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
 
 
 @pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
-def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> None:
+def test_a_window_with_no_samples_is_malformed_whatever_its_openings(opened) -> None:
     """No session samples nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose samples are
     empty is `malformed` at `verify`, with or without openings, as the Lean `Session.verify` has it: a frame that
     doesn't decode, read as no openings, is refused on every window."""

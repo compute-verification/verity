@@ -31,14 +31,14 @@ guarantee and it holds under either; only whether `ParameterHard` holds with a u
 **One shared `c`.** With one rate, `c` is at most both a weight's entropy and an activation's width
 (`c_a ≤ 16` at bf16, 8 at FP8, 4 at FP4), so the weights' low entropy caps what an activation is charged. The proof goes through unchanged with `c_w` in
 `ParameterHard` and `c_a` in `ActivationChained`, giving `(k / c_w)(k / c_a) + k` a block; that two-rate form is
-`InferenceOnly.Guarantees.CoveringBoundTwoCosts`.
+`Slowdown.Guarantees.CoveringBoundTwoCosts`.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Assumptions
+namespace Slowdown.Assumptions
 
-open Verity InferenceOnly.Covering
+open Verity Slowdown.Covering
 
 /-- **Parameter-hardness** `(s, r, b)` ([PARAMETER-HARDNESS]): every subcircuit `S` of `d` with `|S| ≤ s` reads at
 least `c = r · b` bits outside the registered parameters for each weight whose multiplications it completes,
@@ -77,4 +77,4 @@ open Classical in
 noncomputable def chainedBlocks (d : RegisteredCircuit) (B : MulBlocks d) (D : ℕ) (r b : ℝ) : Finset (Fin B.nw × Fin B.nt) :=
   B.P.filter (ActivationChained d B D r b)
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions

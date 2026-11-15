@@ -16,7 +16,7 @@ own, which reads two.
 
 @[expose] public section
 
-namespace InferenceOnly.Cut.Toy
+namespace Slowdown.Cut.Toy
 
 open Verity Finset
 
@@ -86,4 +86,4 @@ def P2 : Partition C 2 where
   unit := fun g => if g.val < 3 then none else if g.val = 3 then some 0 else some 1
   input_iff := by decide
 
-end InferenceOnly.Cut.Toy
+end Slowdown.Cut.Toy

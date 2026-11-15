@@ -928,7 +928,7 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
     `PIECE_FILES`, which releases the hold to DIR once it passes (0 when nothing was found, 3 when a find, a file
     holding a piece of the witness or of another path, was moved to the quarantine)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)
-    got = captured([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine),
+    got = captured([sys.executable, "-m", "verity.protocols.accounting.certifier.device.leak_guard", str(d), str(quarantine),
                     *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
                     "--release-to", str(d), *(x for f in PIECE_FILES for x in ("--public", f)),
                     "--report", str(quarantine / "piece-guard.json")])

@@ -7,7 +7,7 @@ number of execution phases (``windows``) and the first one's opening on its cloc
 
 Its life is the methods its turns call:
 
-- `start` opens the session (`open_session`), hands out the run's deployment and load (`hand_out_run`) and sets a
+- `start` opens the session (`open_session`), hands out the run's deployment (`hand_out_run`) and sets a
   timer at each execution phase's close.
 - `on` takes each timer: the execution phase it closes is certified (`certify`), signed (`sign`) and handed out
   (`hand_out`). After the last, the session's end is collected (`collect`) and the party finishes (`close`), handing
@@ -34,16 +34,15 @@ from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 
 GOAL = "network/certifier-device-is-a-party"
 SENDS = {NC.WORKERS: (NC.OUT_OPENING, NC.RECORDS, NC.CELLS_SALTS),
-         NC.VERIFIER: (NC.OUT_RECORD, NC.CERTIFICATE, NC.REGISTRATION, NC.LOAD, NC.DEPLOYMENT, NC.GROUPS)}
+         NC.VERIFIER: (NC.OUT_RECORD, NC.CERTIFICATE, NC.REGISTRATION, NC.DEPLOYMENT, NC.GROUPS)}
 """What the device sends each peer: its channels' messages in the manifest."""
 
 
 @dataclass(frozen=True)
 class Opened:
-    """A session as the device opened it: the run's `deployment.json` and, when a load was signed, its `load.json`."""
+    """A session as the device opened it: the run's `deployment.json`."""
 
     deployment: bytes
-    load: bytes | None = None
 
 
 @dataclass(frozen=True)
@@ -116,7 +115,7 @@ class NetworkCertifier:
 
     def open_session(self, identity: Identity) -> Opened:
         """Start the relay on its listener and the publisher on the key (`identity.capabilities["signing-key"]`), sign
-        the run's start, and return the run's deployment and load. The start is the run's base and ordinal in the key's
+        the run's start, and return the run's deployment. The start is the run's base and ordinal in the key's
         life (`certificate.DeviceState.start`, over a span of windows · window · bucket_ms), certified by
         `certificate.Issuer.certify_start` under `certificate.start_link`. Seam: the relay listens on a socket the
         auditor device's relay session holds and binds its own connections, I/O done outside the runtime
@@ -140,11 +139,8 @@ class NetworkCertifier:
         raise NotImplementedError(f"{GOAL}: collect, the relay session's end")
 
     def hand_out_run(self, opened: Opened) -> list[Action]:
-        """The run's deployment, and its load when one was signed, to the verifier."""
-        out: list[Action] = [Send(NC.VERIFIER, Message(NC.DEPLOYMENT, body=opened.deployment))]
-        if opened.load is not None:
-            out.append(Send(NC.VERIFIER, Message(NC.LOAD, body=opened.load)))
-        return out
+        """The run's deployment, to the verifier."""
+        return [Send(NC.VERIFIER, Message(NC.DEPLOYMENT, body=opened.deployment))]
 
     def hand_out(self, phase: Phase) -> list[Action]:
         """A signed execution phase's messages: each record packed and its rows' salts to the workers, its certificate

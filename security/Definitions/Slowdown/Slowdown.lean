@@ -41,20 +41,20 @@ The training-efficiency bound of `benchmarks/nci/tiers.py`. A developer spends `
 unmonitored hardware, and must still compute the counted multiplications `M` of training (an updated weight times an
 activation or an activation gradient). Each stands for `2/κ` FLOP of an unconstrained run, `κ` being the share of
 training FLOP that are counted multiplications at 2 FLOP each, so the compute efficiency is `η = (2/κ) M / (C + U)`
-(`efficiency`). The slowdown bounds it by `s + min(r, μ) + ν + χ` (`InferenceOnly.Guarantees.Slowdown`), with:
+(`efficiency`). The slowdown bounds it by `s + min(r, μ) + ν + χ` (`Slowdown.Guarantees.Slowdown`), with:
 
 * `s = U/(C + U)`, the unmonitored compute share (`unregisteredShare`);
 * `r = 1 − W_cert/C`, the monitored compute residual (`residualShare`);
 * `ν = (1 − s) · 2/(κ ρ)`, the declared computation at `ρ` declared gates per counted multiplication (`declaredShare`);
   at the inference-only policy's thread bound `ρ = ρ_T = b_a/(α Λ(K))` (`rhoT`), `Λ(K) = max(e, reuse · K/(4 d b_w))` (`Lambda`, which is
-  `InferenceOnly.Threading.bound`);
+  `Slowdown.Threading.bound`);
 * `μ = 2 reuse · R α/(κ d b_w b_a)`, the memory cap at wipe state `R` (`memoryCap`);
 * `χ`, the cheating share.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Slowdown
+namespace Slowdown.Slowdown
 
 /-- **Compute efficiency** `η = (2/κ) M / (C + U)`: the FLOP of an unconstrained run that `M` counted multiplications
 stand for, `2/κ` each, over the FLOP the developer spends, `C` monitored and `U` unmonitored. -/
@@ -68,12 +68,12 @@ certificate `W_cert`. -/
 noncomputable def residualShare (W C : ℝ) : ℝ := 1 - W / C
 
 /-- **Counted multiplications per `b_a` bits read** at read cap `K` (Theorem 1 over threads,
-`InferenceOnly.Guarantees.ThreadedReads`): `Λ(K) = max(e, reuse · K/(4 d b_w))`, `max(e, K/(2 d b_w))` at `reuse = 2`. It is
-`InferenceOnly.Threading.bound` with real arguments: `T.bound K b_w d e = Lambda T.reuse e d b_w K`. -/
+`Slowdown.Guarantees.ThreadedReads`): `Λ(K) = max(e, reuse · K/(4 d b_w))`, `max(e, K/(2 d b_w))` at `reuse = 2`. It is
+`Slowdown.Threading.bound` with real arguments: `T.bound K b_w d e = Lambda T.reuse e d b_w K`. -/
 noncomputable def Lambda (reuse e d b_w K : ℝ) : ℝ := max e (reuse * K / (4 * d * b_w))
 
 /-- **Declared gates per counted multiplication** at the inference-only policy's thread bound, `ρ_T = b_a/(α Λ)`:
-`InferenceOnly.Guarantees.ThreadedThrottled` gives `b_a |M| ≤ α Λ size(d)`, that is `|M| ≤ size(d)/ρ_T`. -/
+`Slowdown.Guarantees.ThreadedThrottled` gives `b_a |M| ≤ α Λ size(d)`, that is `|M| ≤ size(d)/ρ_T`. -/
 noncomputable def rhoT (α b_a Λ : ℝ) : ℝ := b_a / (α * Λ)
 
 /-- **The declared computation's share** `ν = (1 − s) · 2/(κ ρ)`: the monitored compute, at `ρ` declared gates per counted
@@ -85,4 +85,4 @@ monitored servers when each window of `R/(αF)` ticks starts from at most `R` bi
 a tick, and holds at most `K Λ(K)/b_a` counted multiplications at `K = 2R`, in the quadratic regime of `Λ`. -/
 noncomputable def memoryCap (reuse κ R α d b_w b_a : ℝ) : ℝ := 2 * reuse * R * α / (κ * d * b_w * b_a)
 
-end InferenceOnly.Slowdown
+end Slowdown.Slowdown

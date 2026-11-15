@@ -1,5 +1,5 @@
 """`lean_headline_dc`: the H200's and B200's headline instances as Lean, exact
-(security/Definitions/Accounting/HeadlineDc/Sm*.lean). `machine-model lean-headline` writes them after sm_120's, and
+(security/Definitions/Pouw/HeadlineDc/Sm*.lean). `machine-model lean-headline` writes them after sm_120's, and
 with `--check` exits 1 when a committed file is not what it would write; `--numbers` prints each instance's bound, its
 branches and their terms and writes no Lean file, and `--json F` also writes the readings as JSON (`write`).
 
@@ -180,7 +180,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
     fold_lines = ",\n".join(f"    {_sparse(x, f)}" for f in x.folds)
     pipe_ctors = "\n".join(f"  | {p}" for p in lane)
     width_lines = "\n".join(f"  | .{p} => {S.literal(w)}" for p, w in fam.pipes.values())
-    return _header(fam, f"headline instance: {fam.sheet} and `{fam.design}`", "Definitions.Accounting.HeadlineDc.Encoding",
+    return _header(fam, f"headline instance: {fam.sheet} and `{fam.design}`", "Definitions.Pouw.HeadlineDc.Encoding",
                    f"{fam.ns}SheetHeadline") + f'''
 {_bullets(bullets)}
 -/
@@ -313,7 +313,7 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
     nt, nfo = len(x.writers), len(x.folds)
     body = (f"d2s.modelFill {nk} {nt} {nfo} machine {fam.ns}.flatFill" if x.nx else f"d2s.model {nk} {nt} {nfo} machine")
     return _header(fam, f"measured headline instance: {fam.measured} and `{fam.design}`",
-                   f"Definitions.Accounting.HeadlineDc.{fam.ns}", f"{fam.ns}MeasuredHeadline") + f'''
+                   f"Definitions.Pouw.HeadlineDc.{fam.ns}", f"{fam.ns}MeasuredHeadline") + f'''
 {_bullets(bullets)}
 -/
 
@@ -389,7 +389,7 @@ def render_twin(fam: Family, t: Reading, r: Reading) -> str:
          f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())})."),
     ]
     return _header(fam, f"(I3) twin: {fam.measured} at q = {qd} and `{fam.design}`",
-                   f"Definitions.Accounting.HeadlineDc.{fam.ns}Measured", f"{fam.ns}MeasuredI3Headline") + f'''
+                   f"Definitions.Pouw.HeadlineDc.{fam.ns}Measured", f"{fam.ns}MeasuredI3Headline") + f'''
 {_bullets(bullets)}
 -/
 

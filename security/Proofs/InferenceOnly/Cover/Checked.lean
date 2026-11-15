@@ -27,7 +27,7 @@ open Lean (Json)
 /-- **A verdict of compliance of the gate-level check carries the cover theorem's factor.** -/
 theorem coverTrained {j out : Json} (hev : evaluate j = .ok out) : Properties.CoverTrained j out :=
   fun i P d hpar hdec hL hθ hc b α₀ r M _ _ _ _ Mb A s D w₀ hb hB hH hU hk hw hs hα₀ => by
-    have h := InferenceOnly.Cover.SecurityProofs.CoverTraining_rate i.gamma _ b α₀ r d M Mb A s D w₀ hb
+    have h := Slowdown.Cover.SecurityProofs.CoverTraining_rate i.gamma _ b α₀ r d M Mb A s D w₀ hb
       (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
       (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hH hU hk hw hs hα₀
     calc _ = α₀ * b * r.D.size r.D.computed * i.gamma := by ring

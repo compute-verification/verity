@@ -1,13 +1,13 @@
 module
 
 public import Definitions.Accounting.Remote.Run
-public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Poub.RateAuditDeployed
 import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The deployed game's session as a run of PoUB (trusted)
 
-`Run.ofDeployed` reads a deployed session (`Accounting.Rate.DeployedRun`, `Definitions/Accounting/RateAuditDeployed.lean`)
+`Run.ofDeployed` reads a deployed session (`Accounting.Rate.DeployedRun`, `Definitions/Poub/RateAuditDeployed.lean`)
 as a run of PoUB (`Accounting.Remote.Run`) on a node `Nd` with parameters `a`, over the session's coins: the
 store and every window's coins, uniform. The audit's passes are the session's `n·P`; its declared capacity is meant to be
 the session's `n·P·N·b` bits, which the guarantees over it take as a hypothesis on `Nd` and `a`.

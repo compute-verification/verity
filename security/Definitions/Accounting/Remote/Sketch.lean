@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.RateAuditSketch
+public import Definitions.Poub.RateAuditSketch
 
 /-!
 # The receipts' sketch over a PoUB session: the seeds' keys and the passes' devices (trusted)

@@ -89,7 +89,7 @@ theorem FilesPass.ready {nJ : ℕ} {m : Member nJ} (h : FilesPass m) : Commit.Re
 
 /-- **Flock's window's members' reads are the vocabulary's read of the committed files, in order**, at a window on
 the files, at every cost. -/
-theorem ExecutionPhaseOn.reads_toV5 {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+theorem ExecutionPhaseOn.reads_toV5 {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : ExecutionPhaseOn V θ F W) (t : ℕ) :
     (W.ms.map fun m => m.toV5 t).map (·.fileRead) = (V.read θ F).first :: (V.read θ F).rest := by
   obtain ⟨m₀, rest, hW, hread⟩ := h.read
@@ -103,7 +103,7 @@ theorem ExecutionPhaseOn.reads_toV5 {V : Vocab d α} {θ : ByteArray} {F : Array
 /-- **At a window the verifier sets up, every member of Flock's window opens only at its own files' places**, at
 every cost: each member's files pass the files check, so it is `Checked` (`FilesPass.checked_all`) and its files
 are ready for its commitment's openings (`FilesPass.ready`). -/
-theorem MembersSetUp.opensOwn {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+theorem MembersSetUp.opensOwn {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : MembersSetUp V θ F W) (t : ℕ)
     {M : MemberV5 ByteArray W.nJ} (hM : M ∈ W.ms.map fun m => m.toV5 t) : OpensOwn M := by
   obtain ⟨m, hm, rfl⟩ := List.mem_map.1 hM
@@ -113,7 +113,7 @@ theorem MembersSetUp.opensOwn {V : Vocab d α} {θ : ByteArray} {F : Array ByteA
 opens**, at every cost: where the vocabulary places each gate at the committed files' place, at the members of
 Flock's window in order, each at its own gates of the members' circuits side by side (`opensWith_read`,
 `MembersSetUp.opensOwn`). -/
-theorem MembersSetUp.opensWith {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+theorem MembersSetUp.opensWith {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : MembersSetUp V θ F W) (c : ByteArray)
     (hplace : ∀ g, V.place θ F c g = placeOfFiles (V.read θ F) g) (t : ℕ) :
     OpensWith (V.read θ F).first (V.read θ F).rest (V.Opens θ F c) (W.ms.map fun m => m.toV5 t) :=

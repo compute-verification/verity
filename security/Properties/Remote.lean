@@ -18,7 +18,7 @@ one-stage v2's audit, the recursive audit's form refused (`VStar.Recursive.Sampl
 commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both
 forms) are the run's registration record, and the composite rejects unless both decode to one digest
 (`Core.Composition.strays` over `Core.Remote.tied`);
-the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
+the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.executionPhases`) rejects unless every Commit
 record its windows name (`Core.Remote.executionPhaseRecords`) has that digest too. The policy's check
 (`InferenceOnlyCheck.Protocol.check`) refuses a record whose `program` is not the
 registered circuit's SHA-512 (`names`), then runs
@@ -38,8 +38,8 @@ the check of record, `InferenceOnlyCheck.Theta.evaluate`: the policy check at th
   name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
   statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
   registered circuit the policy checked and the program SPOT verifies have one SHA-512.
-* `AcceptComplies`: its corollary in the form `InferenceOnly.Guarantees.SlowdownThreaded` reads, `InferenceOnly.CompliesRate Γ α d` from
-  acceptance, on a declaration acceptance exhibits and on every other. `InferenceOnly.Guarantees.SlowdownRemote` reads the count
+* `AcceptComplies`: its corollary in the form `Slowdown.Guarantees.SlowdownThreaded` reads, `InferenceOnly.CompliesRate Γ α d` from
+  acceptance, on a declaration acceptance exhibits and on every other. `Slowdown.Guarantees.SlowdownRemote` reads the count
   verdict instead, `InferenceOnly.CompliesAtMost c k n d`, which a published `complies` of the count gives
   (`InferenceOnlyCheck.Properties.DescCountsCK`).
 
@@ -130,24 +130,17 @@ def CallerCheckSound : Prop :=
     VStar.Recursive.Caller.check rec v = #[] → Properties.Spot.CallerHeld rec v
 
 /-- SPOT's case `k` decodes under SPOT's own decoders (`VStar.Recursive.Sampled`, whose params name
-the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
-(`Properties.Spot.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
-params, `Spot.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
-(`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes and whose
-soundness the recursive audit (`RecursiveAuditC3`) states. In either form the record keeps the caller's facts against
-that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
+the form) in the one-stage form, and the record it decodes to names, by its SHA-512, the program of one-stage v2's own
+verifier (the v1 part of its params, `Spot.OneStageZk.Params.base`), which it verifies the sessions against
+(`Properties.Spot.R2`). The record keeps the caller's facts against that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
 prover, the seed salt, the registered compiler and the pool's reset the verifier holds, it opens the pool the previous
 window of record left, and no output value reads a port of a record the verifier's verdict log names refused. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
 verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. -/
 def StageHeld (k : Case) : Prop :=
-  (∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
+  ∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
     Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record p.base.verifier ∧
-    Properties.Spot.CallerHeld c.record p.base.verifier) ∨
-  (∃ (q : VStar.Recursive.Params) (c : Spot.OneStage.Commitment),
-    (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr (.inl q)) ∧
-    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record q.base.verifier ∧
-    Properties.Spot.CallerHeld c.record q.base.verifier)
+    Properties.Spot.CallerHeld c.record p.base.verifier
 
 /-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
 policy's `kI`, PoUW's period's `kW` and SPOT's `kS`; the policy's and SPOT's commitments decode,
@@ -158,8 +151,8 @@ period's windows name, when they decode, has digest `r` (a period whose windows 
 refusal, `PouwCheck.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
 registered circuit by its SHA-512, θ holds what the log's first record registers, the instance checked has a parse, a
 declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
-and every declaration the registered circuit lays out, with the declared division, meets the policy; and SPOT's case is `StageHeld`: its record names, by its SHA-512, the program its named form verifies the sessions
-against, and keeps the caller's facts against that form's verifier. -/
+and every declaration the registered circuit lays out, with the declared division, meets the policy; and SPOT's case is `StageHeld`: it is in the one-stage form, its record names, by its SHA-512, the program of one-stage
+v2's verifier, and keeps the caller's facts against that verifier. -/
 def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
     Properties.Composition.digestOf InferenceOnlyCheck.Protocol.protocol kI.commitment = some r ∧
@@ -173,7 +166,7 @@ def AcceptInferenceOnly : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
     (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof → InferenceOnlyHeld ev
 
-/-- What remote's acceptance establishes in the form `InferenceOnly.Guarantees.SlowdownThreaded` reads, about its cases `ev`: they
+/-- What remote's acceptance establishes in the form `Slowdown.Guarantees.SlowdownThreaded` reads, about its cases `ev`: they
 are the three subprotocols' cases in order, the policy's case decodes to the parameters `p`, the run's record `cr` and
 the evidence `e`, the record names the registered circuit `P` by its SHA-512, the instance the policy checked, expanded
 gate by gate, has a parse carrying the policy's parameters and a declaration `P` lays out with its θ, which complies at
@@ -193,7 +186,7 @@ def CompliesHeld (ev : List Case) : Prop :=
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ →
         VerifierOwn p i ∧ InferenceOnly.CompliesRate i.gamma ((i.num : ℝ) / i.den) d
 
-/-- **Remote's acceptance gives `InferenceOnly.CompliesRate`**, the hypothesis `InferenceOnly.Guarantees.SlowdownThreaded` takes: on every input
+/-- **Remote's acceptance gives `InferenceOnly.CompliesRate`**, the hypothesis `Slowdown.Guarantees.SlowdownThreaded` takes: on every input
 remote's check accepts, on any blobs, its cases are `CompliesHeld`. -/
 def AcceptComplies : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),

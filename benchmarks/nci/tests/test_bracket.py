@@ -69,7 +69,7 @@ def test_search_reproduces_the_shard_closed_form():
     c = S.search(U, True, 6 * n_active, 2 * 28672, 0.0, 0.0, K, Gamma)
     i = BASE | {"U_token_bits": U, "crossings": 2.0, "w_cut": 28672.0, "flops_per_token": 6 * n_active}
     assert c["basis"] == "shard"
-    assert c["rho"] == pytest.approx(S.shard(i, K, Gamma), rel=1e-2)
+    assert c["slowdown"] == pytest.approx(S.shard(i, K, Gamma), rel=1e-2)
     assert c["reads"]["state"] == pytest.approx(K / 2, rel=1e-2)
 
 

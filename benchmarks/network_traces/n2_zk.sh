@@ -7,7 +7,7 @@
 # The run: an active network certifier's directory, as its server writes it, from N2_RUN, a tarball sent with `--send`
 # holding it at its top.
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_RUN (the tarball's name under the run's inputs/)
-#      N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one firewalled
+#      N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one ZK server
 #      session at a time)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
 #      kept across runs where writable)  N2_DRY=1 (the execution phases and their references only)
 # Kept in $OUT/n2zk: n2_zk's records and logs, the public files and everything the verifier received; never a prover's
@@ -25,10 +25,10 @@ setup
 (cd verity/protocols/accounting/certifier/verifier/lean && lake build network-records) > "$OUT/build-network-records.log" 2>&1 \
   || { tail -40 "$OUT/build-network-records.log"; exit 7; }
 export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-records
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-  > "$OUT/build-firewall.log" 2>&1
-[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "n2zk: no firewall frame"; exit 7; }
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+  > "$OUT/build-zk-server.log" 2>&1
+[ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "n2zk: no ZK server frame"; exit 7; }
 
 RUN=$W/run
 mkdir -p "$RUN" && tar -xzf "${RESEARCH_RUN_DIR:?}/inputs/${N2_RUN:?}" -C "$RUN" || { log "n2zk: no run in $N2_RUN"; exit 7; }
@@ -38,7 +38,7 @@ for f in deployment.json cells.jsonl certified.jsonl check.json warden.json; do
   [ -f "$RUN/$f" ] && cp "$RUN/$f" "$OUT/run/"
 done
 log "n2zk: proving${N2_DEBUG_CLEAR:+, debug clear}${N2_DRY:+, dry}"
-"$PY" verity/protocols/accounting/certifier/prover/n2_zk.py prove --warden-run "$RUN" \
+"$PY" benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run "$RUN" \
   --bin "$BIN" --lean "$LEAN" --out "$W/n2zk" ${N2_ROUNDS:+--rounds "$N2_ROUNDS"} \
   ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 | tee -a "$OUT/n2zk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}

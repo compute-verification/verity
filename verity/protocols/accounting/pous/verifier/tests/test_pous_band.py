@@ -153,7 +153,7 @@ def test_end_to_end_with_the_parameters_codec():
     data = {p.name: random.Random(p.size).randbytes(p.size) for p in layout.tensors}
     w = layout.pack(data)
     commitment = setup.commit(params, w)
-    salt = setup.draw_salt(b"verifier-secret", commitment)
+    salt = setup.sample_salt(b"verifier-secret", commitment)
     server = [params.codec.encode_segment(params, prims, salt, s, g) for s, g in enumerate(split(params, w))]
     vk = setup.verifier_key(params, prims, w, commitment, salt)
     assert vk == VerifierKey.from_segments(params, salt, server)
