@@ -148,6 +148,9 @@ inputs = [
     "benchmarks/inference_only", "benchmarks/slowdown", "security/lean-audit.json", "security/Properties/lean-audit.json",
     "benchmarks/nci/tiers.py", "benchmarks/nci/bracket.py", "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
     "benchmarks/nci/calibrations.json",
+    # the core benchmarks' interface is benchmarks/README.md's section, whose table a test reads; a directory its table
+    # lists is read there too, so its row and its inputs here come in one change
+    "benchmarks/README.md",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -158,8 +161,10 @@ tests = ["tests/test_bench.py"]
 paths = ["verity/protocols/accounting/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_prove.py", "tests/test_served_table.py",
-         "tests/test_steady_point.py"]
+tests = ["tests/test_breakdown.py", "tests/test_overhead_command.py", "tests/test_overhead_node.py",
+         "tests/test_overhead_points.py", "tests/test_overhead_store.py", "tests/test_prove_command.py",
+         "tests/test_prove_lean_warm.py", "tests/test_prove_rows.py", "tests/test_prove_store.py",
+         "tests/test_prove_store_rows.py", "tests/test_served_table.py", "tests/test_steady_point.py"]
 paths = ["artifacts.json"]
 
 [[tool.verity.tests.reads]]
