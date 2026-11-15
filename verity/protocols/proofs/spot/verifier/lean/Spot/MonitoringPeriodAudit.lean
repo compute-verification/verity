@@ -446,7 +446,8 @@ audit is handed are run without a proof. -/
 def stubInner : Inner := fun p _ e _ =>
   match getD e.base.statement "stub" with
   | .str "accept" =>
-    .accept { drawn := #[], proved := #[], bound := p.base.verifier.log.size, perTemplate := none }
+    .accept { drawn := #[], proved := #[], bound := p.base.verifier.log.size, perTemplate := none,
+              complete := Spot.Record.allRan e.base.verdicts }
       { programs := #[], prescribed := #[], linked := false, covered := #[], levels := #[], delta := p.base.delta,
         drawn := #[] }
   | .str "undecided" => .undecided "the stand-in leaves it undecided"

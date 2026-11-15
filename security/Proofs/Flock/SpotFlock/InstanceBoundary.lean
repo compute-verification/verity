@@ -8,7 +8,7 @@ public import Spot.Partition
 public import Spot.Slots
 public import Spot.Select
 public import Spot.Draw
-public import Spot.Registration
+public import Spot.Docket
 import Proofs.Flock.Soundness.Refine.Walk
 import Std.Data.HashSet.Lemmas
 import Init.Data.Range.Lemmas
@@ -312,15 +312,15 @@ theorem popOk0 : Spot.Slots.popOk program0 query0 1 = true := by
 def subsetJ : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson (1 : ℕ))]
 
 open private digits from Spot.Select in
-theorem designOver0 : (Spot.Select.Rule.law "subset:1").lawOver 1 = .ok subsetJ := by
-  unfold Spot.Select.Rule.lawOver Spot.Select.parseDesign digits
+theorem designOver0 : (Spot.Select.Rule.samplingDesign "subset:1").samplingDesignOver 1 = .ok subsetJ := by
+  unfold Spot.Select.Rule.samplingDesignOver Spot.Select.parseDesign digits
   simp only [split0, toNat_one, String.all_bool_eq]
   kernel_rfl
 
-theorem deriveDesign0 : Spot.Draw.deriveLaw program0 query0 subsetJ none = .ok none := by kernel_rfl
+theorem deriveDesign0 : Spot.Draw.deriveSamplingDesign program0 query0 subsetJ none = .ok none := by kernel_rfl
 
-theorem flockDesign0 : Spot.Draw.flockLaw subsetJ 1 = .ok (.subset 1) := by
-  unfold Spot.Draw.flockLaw
+theorem flockDesign0 : Spot.Draw.flockSamplingDesign subsetJ 1 = .ok (.subset 1) := by
+  unfold Spot.Draw.flockSamplingDesign
   simp (config := {iota := false}) only [Spot.keys?, Spot.sortStrings, QK.qsort_eq]
   kernel_rfl
 
@@ -328,15 +328,15 @@ open Claims Claims.Sampling SamplingDeploy Properties.Spot
 
 /-- **The verifier's copies**: `program0`, `query0` and the sampling design `subset:1`, with no work table, ports,
 anchors or earlier records. -/
-def verifier0 : Spot.Registration.Verifier :=
-  { program := program0, query := query0, law := subsetJ, workTable := none, scheme := "", ports := #[],
+def verifier0 : Spot.Docket.Verifier :=
+  { program := program0, query := query0, samplingDesign := subsetJ, workTable := none, scheme := "", ports := #[],
     leafLayer := none, anchors := #[], log := #[], partition := none }
 
 /-- **The boundary registration**: `verifier0` under the rule `subset:1`, with no closure map. -/
-def reg0 : Reg := { verifier := verifier0, rule := .law "subset:1", closure := none }
+def reg0 : Reg := { verifier := verifier0, rule := .samplingDesign "subset:1", closure := none }
 
 theorem design_reg0 : slotDesign reg0.rule reg0.program reg0.query reg0.table = .ok design1 := by
-  show slotDesign (.law "subset:1") program0 query0 none = .ok design1
+  show slotDesign (.samplingDesign "subset:1") program0 query0 none = .ok design1
   simp only [slotDesign, units0, bind, Except.bind, designOver0, deriveDesign0, Option.map_none, Option.getD_none,
     flockDesign0]
   rfl

@@ -7,9 +7,10 @@ of that form (`warden`'s "The lengths rows") and `--content P,O[,ROWS] ...` its 
 there, the rows of each of its three tables. Under form 2 a class is `P,O`: its tables hold a row a release filed in
 it and no other. `--request-words`, with `--lengths 2`, `--content` and the schedule's `--max-tokens-cap`, gives it
 request words (`content_rows`' "A request's words"): a fourth table a class, each released request's `max_tokens`
-and count of prompt ids as the network certifier reads them. `warden_serve`'s `serve` and `rehearse` take the three
-flags, and `rehearse` passes them to its `serve`. Without them the schedule, its digest and everything the
-run writes are what they were.
+and count of prompt ids as the network certifier reads them. `--head-offset N --head-wait W`, with `--lengths`, hold
+each execution phase's line to a tick (`warden`'s "The head's tick"): N buckets after the close that hands it, or up
+to W ticks later for one that is late. `warden_serve`'s `serve` and `rehearse` take the flags, and `rehearse` passes
+them to its `serve`. Without them the schedule, its digest and everything the run writes are what they were.
 
 **The hand** (`hand`, `Keeper`). With lengths rows the network certifier hands an execution phase's releases once
 the next one's records are published (`Warden.hand_lengths`): on its ticker, after that execution phase's last bucket
@@ -20,7 +21,11 @@ process, which alone holds the key, lays the tables (`connection_rows.tables`), 
 head: a line of `rows.jsonl` (the registration, or the execution phase under `refused`, and the cost: the tables,
 their rows and bytes, and the build's, the commit's and the signature's ms) and the rows' salts in `rows.salts`
 (witness, table by table). It keeps no row: the prover, who holds the records, lays the tables again from them
-(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. A hand the tables refuse
+(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. In a schedule with
+content rows the process also writes a line of `filed.jsonl` an execution phase, after its line of `rows.jsonl`:
+the releases the hand filed in each class, under the digest of the head it signed, or the record with no list for
+an execution phase whose head it did not sign (`connection_rows`' "The filed releases"). It is witness, for the
+prover's serve: which class a release is in turns on how the network certifier ended it. A hand the tables refuse
 has no line and no salts: under form 2 one that files more than R = `WardenParams.phase_releases` releases in a
 class is no execution phase's of the schedule, the keep raises naming the release, the class and R, and `serve`'s
 publisher process ends on it, which fails the run at its next record's close.
@@ -33,6 +38,16 @@ and one blob, in the run's order, and takes one leaf of the key. Under form 2 a 
 so a line's rows, its blob of salts and the publisher's build and commit follow the execution phase's releases, and
 `read` takes each table's salts by the rows the line's registration counts.
 
+In a schedule with a head offset (`WardenParams.head_offset`) the publisher's process writes no line. It keeps the
+salts, which are witness, as it did, and hands each execution phase's line back to the network certifier
+(`Keeper(back=…)`, `Warden.head_back`), whose tick writes it (`Lines`, the network certifier's `leave`) as it
+was handed back. The line holds no tick: the tick it left at is the network certifier's own note, in its log alone
+(`warden.json`'s `heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the
+auditor's side, which is not built. A line that is not back by the last tick it could leave at is never written:
+that execution phase has no head, and the tick writes `{"missed": [link, direction, execution phase]}` in its
+place, the network certifier's own unsigned note of it, so that every execution phase still has one line and one
+blob. A late line may leave after the next execution phase's, so `read` takes the lines by execution phase.
+
 **The check** (`check`). Every execution phase that is handed, and no other, has a registration that
 `connection_rows.check_registration` accepts under the network certifier's key and session, and its head is the head
 of the tables laid from the records' own reading of the same cells, under the kept salts: the rows say what the
@@ -41,13 +56,37 @@ Under form 2 they are those whose records, the ones before theirs and the ones a
 execution phase of the run has the word that it has no head, which `connection_rows.check_no_head` accepts: an
 execution phase with neither, with both, or with the one where the other is due is a problem. The reading takes each
 release's place in the release order from the run's `warden.json` where there is one, since the records stop
-counting it at an execution phase that isn't complete.
+counting it at an execution phase that isn't complete. In a schedule with a head offset an execution phase whose
+line is `missed` has no head, which is no problem of the run, and the summary counts those (`heads`). Reading that
+unsigned note is safe: it stands where a head or the word would, so it can only take one away. What an execution
+phase with no head is charged is its reader's: each class's whole schedule, which no reader here charges yet. The
+summary's `heads` names those execution phases for it.
+
+**The registrations' file** (`connection_rows_check.check`'s ``registrations`` and ``under``,
+`keep_registrations`). The check writes each registration that passed both of its holds, as the publisher kept it, one JSON object a line and in the execution
+phases' order, after a first line that says what they were checked under:
+``{"format": CHECKED, "checked_under": {"key_sha512": HEX, "session": HEX}}``. `CHECKED` is that line's own
+``format`` word, which no registration has, so a reader refuses every other first line by the one word. The
+auditor hands the check the two: the SHA-512 of the network certifier's public key (`key_sha512`: over the LMS
+public key ``I ‖ T[1]``, the bytes a deployment record and the period check's parameters write in hex) and its
+session. The run's deployment record is held to them: one that names a key of another hash, or another session,
+is a problem that says which, the first of the check's problems. So the key and the session the registrations
+verify under are the ones handed, and a run made under any other key, a rehearsal's own among them, gets no file
+under this one. A check that is handed neither writes no file, and one asked for a file without them refuses. It
+is the file a reader of connection rows takes its heads from
+(`stop_verdicts.REGISTRATIONS_FILE`), and the one place the network certifier's signature on such a head is
+checked: that reader holds no key, and reads from the first line what the file was checked under. A refusal, the
+word that no head comes and a registration that fails either hold give no line. Where the check, or the caller's
+check it is part of, found any problem, or did not end, there is no file at all, and one already at that path is
+removed before the check reads anything: a run its check refused vouches for no head, and an execution phase with
+no line is charged its whole schedule. The file is unsigned: it is as good as the run of the check that wrote it,
+and as the hash and the session that run was handed.
 
 **The cost** of a close, for a schedule and its classes:
 
     python connection_rows_run.py cost --out FILE [--lengths 1|2] [--classes P,O[,ROWS] ...] [--request-words]
-        [--load grid|rows] [--phases 5] [--cell-bytes 512] [--slots 8] [--lanes 16] [--window 600] [--every 1]
-        [--delay 30] [--ingress-cells 96] [--egress-cells 4097] [--height 10]
+        [--head-offset N --head-wait W] [--load grid|rows] [--phases 5] [--cell-bytes 512] [--slots 8] [--lanes 16]
+        [--window 600] [--every 1] [--delay 30] [--ingress-cells 96] [--egress-cells 4097] [--height 10]
 
 It loads an execution phase (`loaded`): with `--load grid`, releases of each class in turn, each of its class's
 longest request and most ids, until the classes' rows, the lengths table's slots or the cells the schedule's grids
@@ -63,280 +102,53 @@ reads the words of. It then times, over `--phases` execution phases: the device'
 pickling of the queue's items, which the queue's thread does in the ticker's process (`pickle_ms`, and the longest
 item's), and, in the publisher's process, the build, the commit and the signature (`rows.jsonl`'s cost). The result
 is `--out`'s JSON.
+
+With `--head-offset N --head-wait W` the publisher's process hands each line back, and the cost also times each
+execution phase from its hand to its line back in the network certifier's process (`back_ms`), one execution phase
+at a time and before it times the items' pickling. Under `heads` it counts the lines back later than N buckets and
+within N + W (`late`) and those later still (`missed`: at W = 0, the heads that missed their tick), of the
+`phases` it ran, with the least offset at which none of them would be late (`least_offset`). The cost has no
+ticker: it counts by the host's clock from the hand, and its publisher does nothing else, where a served close has
+it keep the closing window's three records before the hand. So its count is a floor on a served run's; a served
+run's own count is its `missed` lines, and the network certifier's own log has the tick each line left at
+(`warden.json`'s `heads`).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import pickle
-import statistics
+import sys
 import tempfile
+import threading
 import time
-from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import replace
+from collections.abc import Sequence
 from pathlib import Path
 
-import active_replay as ar
-import certifier_serve as cs
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
+import certifier_key as ck
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock, id_request
-from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
+from runner_parts import _class, hand, head_flags
+from verity.protocols.accounting.certifier.verifier.connection_rows_check import ROWS, _spread
 
-#: the publisher queue's name for a hand's items, where a record's rows have their link's
-HAND = "connection-rows"
-ROWS, SALTS = "rows.jsonl", "rows.salts"
-#: a line's key for the word that its execution phase has no head, where a head's line has `registration`
-NO_HEAD = "no_head"
 #: the classes the cost is measured at by default: each (P, O) a power of four apart, 16 rows each under form 1
 CLASSES = tuple((size, size, 16) for size in (2, 16, 64, 256, 1024, 4096))
 
 
 # The schedule's flags.
 
-def _class(text: str) -> tuple[int, ...]:
-    refusal = argparse.ArgumentTypeError(f"a class is P,O,ROWS under --lengths 1 and P,O under --lengths 2, integers, "
-                                         f"not {text!r}")
-    try:
-        numbers = tuple(int(x) for x in text.split(","))
-    except ValueError:
-        raise refusal from None
-    if len(numbers) not in (2, 3):
-        raise refusal
-    return numbers
-
-
-def flags(q: argparse.ArgumentParser) -> None:
-    """The connection rows as `q`'s flags, beside its schedule's."""
-    q.add_argument("--lengths", type=int, choices=LENGTHS_FORMS, default=None,
-                   help="the lengths rows' form (warden's \"The lengths rows\"): the network certifier hands each "
-                        "execution phase's releases, and the publisher commits and signs their tables; under 2 "
-                        "every execution phase of the run ends, the last included, in its head or in the network "
-                        "certifier's signed word that it has none (default: none)")
-    q.add_argument("--content", type=_class, nargs="+", default=None, metavar="P,O[,ROWS]",
-                   help="with --lengths: the content rows' classes, in order (content_rows' \"The classes\"): a "
-                        "class's size of prompt ids, its size of ids released and, under --lengths 1 and only "
-                        "there, its tables' rows; under --lengths 2 its tables hold a row a release filed in it "
-                        "(default: none)")
-    q.add_argument("--request-words", action="store_true",
-                   help="with --lengths 2, --content and --max-tokens-cap: the request words (content_rows' \"A "
-                        "request's words\"), a fourth table a class of each released request's max_tokens "
-                        "and count of prompt ids as the network certifier reads them (default: none)")
-
-
-def schedule(params: WardenParams, args: argparse.Namespace) -> WardenParams:
-    """`params` with the connection rows `args` names (`flags`); the same schedule where it names none."""
-    content = getattr(args, "content", None)
-    return replace(params, lengths=getattr(args, "lengths", None), content=content and tuple(content),
-                   request_words=True if getattr(args, "request_words", False) else None)
-
-
-def flags_of(params: WardenParams) -> list[str]:
-    """The flags that give a schedule `params`' connection rows: none for a schedule without them."""
-    out = [] if params.lengths is None else ["--lengths", str(params.lengths)]
-    out += [] if params.content is None else ["--content", *(",".join(map(str, c)) for c in params.content)]
-    return out + (["--request-words"] if params.request_words else [])
-
 
 # The hand, and the publisher's keep of it.
 
-def hand(window: int, strides: Sequence[Sequence[Released]] | None) -> Iterator[tuple]:
-    """An execution phase's hand as the publisher queue's items: one a slot stride that holds a release, then its
-    close with the strides' count; for an execution phase that ends without releases (`strides` None), its close
-    alone, with no count."""
-    for j, stride in enumerate(strides or ()):
-        if stride:
-            yield HAND, (window, j), stride
-    yield HAND, (window, None), None if strides is None else len(strides)
-
-
-class Keeper:
-    """The publisher's keep of the hands (the module docstring's "The hand"): called with each item of `hand`, less
-    its name, it lays, commits and signs an execution phase's tables at its close, or signs the word that it has no
-    head. `keep` takes a whole hand, or None, as `Warden(lengths=…)` gives it to a publisher in the network
-    certifier's own process."""
-
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, link: str) -> None:
-        self.out, self.issuer, self.params, self.link = out, issuer, params, link
-        self.open: dict[int, dict[int, Sequence[Released]]] = {}
-
-    def __call__(self, at: tuple[int, int | None], data) -> None:
-        window, j = at
-        if j is not None:
-            self.open.setdefault(window, {})[j] = data
-            return
-        got = self.open.pop(window, {})
-        self.keep(window, None if data is None else tuple(tuple(got.get(j, ())) for j in range(data)))
-
-    def keep(self, window: int, strides: Sequence[Sequence[Released]] | None) -> None:
-        if strides is None:
-            t0 = time.perf_counter()
-            cert = CR.attest_no_head(self.issuer, self.link, window, self.params)
-            line = ({"refused": [self.link, Direction.EGRESS.value, window]} if cert is None
-                    else {NO_HEAD: CR.no_head(cert, self.params)})
-            ar.write_blobs(self.out / SALTS, b"")
-            with open(self.out / ROWS, "a") as fh:
-                fh.write(json.dumps(line | {"cost": {"sign_ms": round((time.perf_counter() - t0) * 1000, 3)}}) + "\n")
-            return
-        t0 = time.perf_counter()
-        tables = CR.tables(self.params, strides)
-        t1 = time.perf_counter()
-        rows = CR.Rows.commit(self.link, window, tables, self.params, self.issuer.session)
-        head = rows.head
-        t2 = time.perf_counter()
-        cert = self.issuer.sign(self.link, Direction.EGRESS, window, head.digest())
-        t3 = time.perf_counter()
-        cost = {"tables": len(tables), "rows": sum(len(t) for t in tables.values()),
-                "row_bytes": sum(len(r) for t in tables.values() for r in t),
-                "build_ms": round((t1 - t0) * 1000, 3), "commit_ms": round((t2 - t1) * 1000, 3),
-                "sign_ms": round((t3 - t2) * 1000, 3)}
-        line = ({"refused": [self.link, Direction.EGRESS.value, window]} if cert is None
-                else {"registration": CR.registration(head, cert, self.params)})
-        ar.write_blobs(self.out / SALTS, rows.witness)
-        with open(self.out / ROWS, "a") as fh:
-            fh.write(json.dumps(line | {"cost": cost}) + "\n")
-
 
 # The offline check.
-
-def read(run: Path, params: WardenParams) -> list[tuple[dict, dict[str, list[bytes]]]]:
-    """`rows.jsonl` and `rows.salts`, line by line: each execution phase's registration (or the word that it has no
-    head, or a refusal) and cost, and its rows' salts by table, none where no table was committed. A table's salts
-    are one a row: the schedule's rows, or where a class's rows are a count (`content_rows.counted`) the rows the
-    line's registration gives the table, and there a line without a registration has no salts read."""
-    path = run / ROWS
-    lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
-    blobs = ar.read_blobs(run / SALTS)
-    listed = [(name, rows) for name, rows, _ in CR.tables_of(params)]
-    size = WR.SALT_BYTES * sum(rows for _, rows in listed)
-    counted = CT.counted(params) and params.content is not None
-    if len(blobs) != len(lines) or not (counted or all(len(b) == size or (not b and "registration" not in doc)
-                                                       for doc, b in zip(lines, blobs))):
-        raise ValueError(f"{ROWS} has {len(lines)} lines and {SALTS} {len(blobs)} blobs, each of {size} bytes or, "
-                         f"for a line without a registration, of none")
-    out = []
-    for doc, blob in zip(lines, blobs):
-        salts, at = {}, 0
-        for name, rows in (_counted(doc, blob, listed) if counted else listed if blob else ()):
-            salts[name] = [blob[at + k * WR.SALT_BYTES:at + (k + 1) * WR.SALT_BYTES] for k in range(rows)]
-            at += rows * WR.SALT_BYTES
-        out.append((doc, salts))
-    return out
-
-
-def _counted(doc: Mapping, blob: bytes, listed: Sequence[tuple[str, int]]) -> list[tuple[str, int]]:
-    """Each table's rows in a line's blob of salts where a class's rows are a count: the rows the line's
-    registration gives the table, and no table for a line without one. ValueError for a registration that doesn't
-    list the schedule's tables, a blob that isn't a salt a row of them, or salts beside the word that the execution
-    phase has no head."""
-    if "registration" not in doc:
-        if blob and NO_HEAD in doc:
-            raise ValueError(f"execution phase {_phase(doc)} has the network certifier's word that it has no head, "
-                             f"and {len(blob)} bytes of {SALTS}")
-        return []
-    mine = [(t["name"], t["rows"]) for t in doc["registration"]["tables"]]
-    if [name for name, _ in mine] != [name for name, _ in listed] or \
-            not all(type(rows) is int and rows >= 0 for _, rows in mine) or \
-            len(blob) != WR.SALT_BYTES * sum(rows for _, rows in mine):
-        raise ValueError(f"execution phase {_phase(doc)}'s blob of {SALTS} isn't a salt a row of the schedule's "
-                         f"tables as its registration counts them")
-    return mine
-
-
-def _phase(doc: Mapping) -> int:
-    """The execution phase a line of `rows.jsonl` is of."""
-    if "refused" in doc:
-        return doc["refused"][2]
-    return doc["registration" if "registration" in doc else NO_HEAD]["window"]
-
-
-def _spread(xs: list[float]) -> dict:
-    return {"n": len(xs), "p50": round(statistics.median(xs), 3) if xs else None,
-            "max": round(max(xs), 3) if xs else None}
-
-
-def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[BlockGrid],
-          egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str) -> tuple[dict | None, list[str]]:
-    """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
-    registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
-    with the word that they have no head, of those that have none) and the problems. None, and no problem, for a
-    schedule without lengths rows."""
-    if params.lengths is None:
-        return None, []
-    key, session, windows = cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
-    kept_records = run / "certified.jsonl"
-    withheld = {doc["refused"][2] for doc in map(json.loads, kept_records.read_text().splitlines())
-                if doc.get("withheld")} if kept_records.exists() else set()
-    whole = {w for w in range(windows) if w not in withheld
-             and all(any(r.window == w and r.status.reason is None for r in records)
-                     for records in (ingress, egress, fails))}
-    if params.closes:
-        want = [w for w in range(windows) if all(v in whole for v in (w - 1, w, w + 1) if 0 <= v < windows)]
-    else:
-        want = [w for w in range(windows - 1) if w in whole and w + 1 in whole]
-    without = [w for w in range(windows) if w not in want] if params.closes else []
-    problems: list[str] = []
-    kept: dict[int, tuple[dict, dict]] = {}
-    try:
-        for doc, salts in read(run, params):
-            if _phase(doc) in kept:
-                problems.append(f"execution phase {_phase(doc)} has two lines of connection rows")
-            kept[_phase(doc)] = (doc, salts)
-    except (ValueError, KeyError, TypeError) as e:
-        kept = {}
-        problems.append(f"connection rows: {ROWS} and {SALTS} don't read: {e}")
-    log = run / "warden.json"
-    order = {c["ordinal"]: c["release"] for c in json.loads(log.read_text())["connections"]
-             if c["release"] is not None} if log.exists() else None
-    try:
-        held = CR.of_records(params, ingress, egress, order)
-    except ValueError as e:
-        held = {}
-        problems.append(f"connection rows: the records don't read as releases: {e}")
-    costs, registered, worded = [], 0, 0
-    for w in sorted(set(want) | set(kept) | set(without)):
-        doc, salts = kept.get(w, (None, None))
-        if w not in want and not params.closes:
-            problems.append(f"execution phase {w} has connection rows, and its records or the next one's weren't "
-                            f"published complete")
-            continue
-        if w not in want:
-            if doc is not None and "registration" in doc:
-                problems.append(f"execution phase {w} has connection rows, and it or an execution phase beside it "
-                                f"wasn't published complete")
-            elif doc is None or NO_HEAD not in doc:
-                problems.append(f"execution phase {w} has neither connection rows nor the network certifier's word "
-                                f"that it has none")
-            else:
-                try:
-                    CR.check_no_head(doc[NO_HEAD], key, session, params, link, w)
-                    worded += 1
-                except ValueError as e:
-                    problems.append(f"execution phase {w}'s word that it has no head: {e}")
-            continue
-        ok = False
-        if doc is not None and "registration" in doc and w in held:
-            costs.append(doc["cost"])
-            try:
-                head, _ = CR.check_registration(doc["registration"], key, session, params, link, w)
-                mine = CR.tables(params, held[w])
-                ok = all(len(salts.get(name, ())) == len(rows) for name, rows in mine.items()) and \
-                    CR.Rows.commit(link, w, mine, params, session, salts).head == head
-                if not ok:
-                    problems.append(f"execution phase {w}'s connection rows aren't its records' releases")
-            except ValueError as e:
-                problems.append(f"execution phase {w}'s connection rows: {e}")
-        registered += ok
-        if not ok:
-            problems.append(f"execution phase {w}'s connection rows aren't registered")
-    summary = {"registered": registered, "of": len(want), "tables": sorted({c["tables"] for c in costs}),
-               "rows": sorted({c["rows"] for c in costs}), "row_bytes": sorted({c["row_bytes"] for c in costs}),
-               **{k: _spread([c[k] for c in costs]) for k in ("build_ms", "commit_ms", "sign_ms")}}
-    return summary | ({NO_HEAD: {"signed": worded, "of": len(without)}} if params.closes else {}), problems
 
 
 # The cost of a close.
@@ -415,15 +227,22 @@ def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) 
 
 def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
     """The module docstring's cost of a close of `params` under `load`, over `phases` execution phases."""
-    import warden_serve as ws  # at its use: it imports this module
+    from benchmarks.network_traces import warden_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
-    hands, pickles, longest = [], [], []
+    hands, pickles, longest, backs = [], [], [], []
+    timed, back, lines = params.head_offset is not None, threading.Event(), {}
     with tempfile.TemporaryDirectory(prefix="connection-rows-cost-") as scratch:
         out, key = Path(scratch) / "run", Path(scratch) / "key"
         out.mkdir()
-        cs.load_key(key, height)
-        publish = ws.PublisherProcess(out, key, bytes(32), params)
+        ck.load_key(key, height)
+        publish = ws.PublisherProcess(out, key, bytes(32), params, base_ms=0, ordinal=0)  # a scratch key's first
+        if timed:
+            def taken(window: int, line: dict) -> None:
+                lines[window] = (time.perf_counter(), line)
+                back.set()
+
+            publish.heads(taken)
         try:
             for phase in range(phases):
                 handed: list = []
@@ -433,9 +252,16 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
                     publish.lengths(phase, strides)
 
                 device = _device(params, releases, lengths)
+                back.clear()
                 t0 = time.perf_counter()
                 device._emit_lengths(1, True)
                 hands.append((time.perf_counter() - t0) * 1000)
+                if timed:
+                    # one execution phase at a time, and nothing else of this process's beside the queue's thread
+                    while not back.wait(1.0):
+                        if not publish.process.is_alive():
+                            publish._end()
+                    backs.append((lines[phase][0] - t0) * 1000)
                 each = []
                 for item in hand(phase, handed[0]):
                     t0 = time.perf_counter()
@@ -445,13 +271,21 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
                 longest.append(max(each))
         finally:
             publish.close()
-        kept = [json.loads(x)["cost"] for x in (out / ROWS).read_text().splitlines()]
+        kept = [lines[phase][1]["cost"] for phase in range(phases)] if timed else \
+            [json.loads(x)["cost"] for x in (out / ROWS).read_text().splitlines()]
+    heads = {}
+    if timed:
+        tau, due, last = params.bucket_ms, params.head_offset, params.head_offset + params.head_wait
+        heads = {"heads": {"offset": due, "wait": params.head_wait, "bucket_ms": tau, "of": phases,
+                           "late": sum(due * tau < x <= last * tau for x in backs),
+                           "missed": sum(x > last * tau for x in backs), "back_ms": _spread(backs),
+                           "least_offset": max(1, math.ceil(max(backs) / tau))}}
     return {"parameters": params.digest.hex(), "classes": [list(c) for c in params.content], "load": load,
             "releases": len(releases), "handed_bytes": sum(size + 4 * ids for size, ids in releases),
             "tables": kept[0]["tables"], "rows": kept[0]["rows"], "row_bytes": kept[0]["row_bytes"],
             "phases": phases, "hand_ms": _spread(hands), "pickle_ms": _spread(pickles),
             "pickle_longest_item_ms": _spread(longest),
-            **{k: _spread([c[k] for c in kept]) for k in ("build_ms", "commit_ms", "sign_ms")},
+            **{k: _spread([c[k] for c in kept]) for k in ("build_ms", "commit_ms", "sign_ms")}, **heads,
             "publisher_usage": publish.usage}
 
 
@@ -467,9 +301,10 @@ def parser() -> argparse.ArgumentParser:
     c.add_argument("--request-words", action="store_true",
                    help="under --lengths 2: the schedule has request words, under a response cap of its most ids "
                         "(egress_cells − 1), and each release's request is a canonical id request")
+    head_flags(c)
     c.add_argument("--load", choices=("grid", "rows"), default="grid")
     c.add_argument("--phases", type=int, default=5)
-    c.add_argument("--height", type=int, default=cs.HEIGHT, help="the LMS key's tree height")
+    c.add_argument("--height", type=int, default=ck.HEIGHT, help="the LMS key's tree height")
     for name, default in (("cell_bytes", 512), ("slots", 8), ("lanes", 16), ("window", 600), ("every", 1),
                           ("delay", 30), ("ingress_cells", 96), ("egress_cells", 4097)):
         c.add_argument(f"--{name.replace('_', '-')}", type=int, default=default)
@@ -483,7 +318,7 @@ def costed(args: argparse.Namespace) -> WardenParams:
     return WardenParams(cell_bytes=args.cell_bytes, slots=args.slots, lanes=args.lanes, window=args.window,
                         every=args.every, delay=args.delay, ingress_buckets=args.delay,
                         ingress_cells=args.ingress_cells, egress_cells=args.egress_cells, lengths=args.lengths,
-                        content=tuple(classes), **words)
+                        content=tuple(classes), head_offset=args.head_offset, head_wait=args.head_wait, **words)
 
 
 def main(argv=None) -> int:

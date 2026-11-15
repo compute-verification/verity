@@ -168,7 +168,7 @@ setting each table up at `mPts` link points, `DecodesOnJ` holds at `planPHJ` wit
 streams, single coins as field elements, no final messages, table `j`'s cap from its root `root_B[j]` (`capOfRoot`) and
 its openings `opnPHJ`. -/
 theorem decodesOnPHJ_exec (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (L : Law n)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (L : SamplingDesign n)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (hT : TagsOkZHJ I) (hwr : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     (hdraw : ∀ ω, SampleOkPHJ I dj mPts (L.draw ω)) :

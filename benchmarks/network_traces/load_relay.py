@@ -13,7 +13,6 @@ registrations the verifier pins each load value from (`blocks.pins`).
 
     python benchmarks/network_traces/load_relay.py relay --program HEX --out DIR [--shape h200|tiny] [--format plain|p2]
       [--source PATH|-] [--sink PATH|-|none] [--salt HEX] [--witness PATH] [--key DIR] [--session HEX] [--workers N]
-    python benchmarks/network_traces/load_relay.py bench --out DIR [--shape h200] [--bytes N] [--workers 1,16]
     python benchmarks/network_traces/load_relay.py write --store DIR [--shape h200|tiny] [--workers N] [--out FILE]
     python benchmarks/network_traces/load_relay.py sink --listen HOST:PORT --weights PATH --witness PATH [--streams 4]
 
@@ -59,20 +58,17 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
-* **The certifier's key** is ``--key``'s (`certifier_serve.load_key`'s layout), one LMS leaf a value (733 at H200), in
+* **The certifier's key** is ``--key``'s (`certifier_key.load_key`'s layout), one LMS leaf a value (733 at H200), in
   session ``--session``: the verifier pins a load and the windows' transfers under one key and session, so the load's
   session is the serving certifier's.
 
-`bench` times the relay over the first ``--bytes`` of the H200 manifest's plain link, from random bytes (the commit's cost
-doesn't depend on them) to no sink, at each ``--workers``, and extrapolates the whole load; with ``load_commit.p2_decode``'s
-per-block decode for the ``p2`` link.
+``load_bench.py`` times the relay.
 """
 from __future__ import annotations
 
 import argparse
 import collections
 import hashlib
-import io
 import json
 import multiprocessing as mp
 import os
@@ -91,6 +87,7 @@ from typing import Any, BinaryIO
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 from verity.commitments import hm96  # noqa: E402
 from verity.commitments.hm96 import batch as HB  # noqa: E402
@@ -101,10 +98,10 @@ from verity.protocols.accounting.certifier.verifier import transfer_rows as TR  
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer  # noqa: E402
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.load_check import FORMAT, H200, KIND, LINK, SCHEMA  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.load_check import SHAPES, Shape, TINY, Value, WINDOW  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.load_check import manifest, shape_named  # noqa: E402
 
-FORMAT = "verity-network-certifier/load/v1"
-LINK, KIND, WINDOW = "s0/uplink", "load", 0
-SCHEMA = G.SCHEMA_V2
 _INST = hm96.SHA512
 _KEY = _INST.default_key
 SALT_BYTES = _INST.salt_bytes
@@ -116,104 +113,6 @@ DEMO_SEED, TEST_SEED = b"verity/cmp92/h200/weights/v1", b"verity/seeded-weights/
 
 
 # --- interface 1's manifest ----------------------------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class Shape:
-    """Interface 1's `Shape` (``benchmarks.torch_gpu.p2_stage.served_weights``)."""
-
-    name: str
-    width: int
-    layers: int
-    heads: int
-    head_dim: int
-    kv_heads: int
-    mlp: int
-    vocab: int
-    context: int
-    row_codes: int
-
-
-#: a linear's row the 8,192 codes a FAMILIES ``wrow`` part reads (interface 1's)
-H200 = Shape("cmp92-h200-mqa-w16384-l52", 16384, 52, 256, 64, 1, 65536, 256, 32, 8192)
-TINY = Shape("tiny-h32-l1", 32, 1, 2, 16, 1, 64, 256, 8, 16)
-SHAPES = {"h200": H200, "tiny": TINY}
-
-
-@dataclass(frozen=True)
-class Value:
-    """One registered value of the load: interface 1's tensor ``name``, its bytes ``[offset, offset + nbytes)`` of the
-    weights stream, in ``leaves`` rows of ``words`` u16 words, each row ``schema``'s bit row of `reg_words` leaves of
-    `word_bits`; and how interface 1 generates it, ``rows`` generation rows of ``kind`` elements (``s8``, ``scale`` with
-    exponent ``exponent``, ``gain``, ``embed``)."""
-
-    name: str
-    offset: int
-    nbytes: int
-    words: int
-    kind: str = "s8"
-    rows: int = 1
-    exponent: int = 0
-    schema: str = SCHEMA
-
-    @property
-    def row_bytes(self) -> int:
-        return 2 * self.words
-
-    @property
-    def leaves(self) -> int:
-        return self.nbytes // self.row_bytes
-
-    @property
-    def word_bits(self) -> int:
-        """Its leaves' width read by a program named by its digest: 16, a Boolean program's one-bit leaves rounded up,
-        an f32 scale two 16-bit leaves, its low half first (interface 1's `Tensor.word_bits`)."""
-        return 16
-
-    @property
-    def reg_words(self) -> int:
-        """Its leaves of `word_bits` a registered row (the same row bytes)."""
-        return 16 * self.words // self.word_bits
-
-
-def manifest(shape: Shape) -> tuple[Value, ...]:
-    """Interface 1's tensors in stream order, each a value: ``tok`` (H, V), a coordinate over the tokens a row of V
-    words, ``pos`` (1 word), then per layer ``attn_norm``, ``wq``, ``wk``, ``wv``, ``wo``, ``mlp_norm``, ``wup``, ``wdown``,
-    each linear its s8 rows of ``row_codes`` codes then its f32 ``.scale`` (2 words a row), a gain 1 word a row; then
-    ``final_norm``, ``head`` and ``head.scale``."""
-    s, out, off = shape, [], 0
-
-    def add(name: str, nbytes: int, words: int, kind: str, rows: int = 1, exponent: int = 0,
-            schema: str = SCHEMA) -> None:
-        nonlocal off
-        if nbytes % (2 * words):
-            raise ValueError(f"{name}: {nbytes} bytes are no whole rows of {words} words")
-        out.append(Value(name, off, nbytes, words, kind, rows, exponent, schema))
-        off += nbytes
-
-    def linear(name: str, n: int, k: int, shift: int = 0) -> None:
-        add(name, n * k, s.row_codes // 2, "s8", n)
-        add(name + ".scale", 4 * n, 2, "scale", 1, -(7 + _log2(k) // 2) + shift)
-
-    add("tok", 2 * s.width * s.vocab, s.vocab, "embed", s.width)
-    add("pos", 2 * s.width * s.context, 1, "embed", s.width)
-    q, kv = s.heads * s.head_dim, s.kv_heads * s.head_dim
-    for i in range(s.layers):
-        p = f"l{i}."
-        add(p + "attn_norm", 2 * s.width, 1, "gain")
-        linear(p + "wq", q, s.width, -(_log2(s.head_dim) // 2))
-        linear(p + "wk", kv, s.width)
-        linear(p + "wv", kv, s.width)
-        linear(p + "wo", s.width, q)
-        add(p + "mlp_norm", 2 * s.width, 1, "gain")
-        linear(p + "wup", s.mlp, s.width)
-        linear(p + "wdown", s.width, s.mlp)
-    add("final_norm", 2 * s.width, 1, "gain")
-    linear("head", s.vocab, s.width)
-    return tuple(out)
-
-
-def _log2(n: int) -> int:
-    return n.bit_length() - 1
 
 
 def seeded(seed: bytes, name: str, row: int, n: int) -> bytes:
@@ -284,7 +183,7 @@ class StoreTensor:
 
 
 def store_tensors(shape: Shape, params: P2.P2Params) -> tuple[StoreTensor, ...]:
-    """Interface 2's layout (``benchmarks/pous/p2_v1/store.py``'s `build`) over interface 1's values: per layer
+    """Interface 2's layout (``verity/protocols/accounting/pous/prover/p2/p2_store/store.py``'s `build`) over interface 1's values: per layer
     ``qkv_proj`` (``wq ‖ wk ‖ wv``), ``o_proj``, ``up_proj`` and ``down_proj``, then ``lm_head`` as layer L, each from a
     block boundary and ⌈size / payload⌉ blocks."""
     by = {v.name: v for v in manifest(shape)}
@@ -525,8 +424,25 @@ def _work(args: tuple[Task, bytes]) -> tuple[int, int, bytes, int, bytes | None]
 
 # --- the relay ----------------------------------------------------------------------------------------------------------
 
+#: a refusal's word, which is all a run publishes of it (``load-relay.json``'s ``refused``, a store's record's): the
+#: certifier's own nine, of its store, its link's source and its signer, and ``sink`` for every way the developer's
+#: sink failed, since which way is the developer's to choose
+REFUSALS = ("digest", "decode", "length", "signer", "no-digests", "no-store", "not-interface-1", "no-record",
+            "store-size", "sink")
+
+
 class Refused(Exception):
-    """The certifier refuses the load: it signs nothing."""
+    """The certifier refuses the load: it signs nothing. `code` is its word among `REFUSALS`; the sentence (``str``)
+    may name a value, a path of the auditor's device or what the sink said, and stays with the run's witness."""
+
+    def __init__(self, code: str, why: str) -> None:
+        if code not in REFUSALS:
+            raise ValueError(f"{code!r} is none of REFUSALS' words: a refusal is published by one of them")
+        super().__init__(why)
+        self.code = code
+
+    def __reduce__(self) -> tuple:
+        return type(self), (self.code, self.args[0])
 
 
 @dataclass
@@ -555,8 +471,8 @@ class _Digests:
             k, self.at = k + n, self.at + n
             if self.at == v.offset + v.nbytes:
                 if self.h.hexdigest() != self.want[self.i]:
-                    raise Refused(f"{v.name}: its bytes' SHA-256 {self.h.hexdigest()[:16]}… isn't interface 1's "
-                                  f"{self.want[self.i][:16]}…: the store isn't interface 1's weights")
+                    raise Refused("digest", f"{v.name}: its bytes' SHA-256 {self.h.hexdigest()[:16]}… isn't interface "
+                                  f"1's {self.want[self.i][:16]}…: the store isn't interface 1's weights")
                 self.i, self.h = self.i + 1, hashlib.sha256()
 
 
@@ -660,9 +576,9 @@ def relay(values: Sequence[Value], source: BinaryIO, sink: BinaryIO | None, doma
     if errors:
         if not all(isinstance(e, ValueError) for e in errors):
             raise next(e for e in errors if not isinstance(e, ValueError))
-        raise Refused(f"the link doesn't decode: {errors[0]}") from errors[0]
+        raise Refused("decode", f"the link doesn't decode: {errors[0]}") from errors[0]
     if pos != length:
-        raise Refused(f"the link carried {pos} bytes, and the load is {length}")
+        raise Refused("length", f"the link carried {pos} bytes, and the load is {length}")
     roots = {}
     for i, v in enumerate(values):
         level, d = [got[i][c] for c in range(len(got[i]))], chunk_bits(v, chunk_bytes)
@@ -693,7 +609,7 @@ def sign_heads(issuer: Issuer, heads_: Sequence[TR.TransferHead]) -> list[dict[s
     for head in heads_:
         cert = issuer.sign(head.link, head.direction, head.window, head.digest())
         if cert is None:
-            raise Refused(f"{head.value}: the network certifier's signer refused: {issuer.refused}")
+            raise Refused("signer", f"{head.value}: the network certifier's signer refused: {issuer.refused}")
         out.append(TR.registration(head, cert))
     return out
 
@@ -797,9 +713,9 @@ def write_store(store: Path, shape: Shape, *, workers: int = 1, seed: bytes = DE
     fold to the pinned one (``written``; else removed and refused). Returns the record with ``status``."""
     values, want = manifest(shape), pinned.get(shape.name)
     if want is None:
-        raise Refused(f"no pinned digests of {shape.name}: the store holds {sorted(pinned)}")
+        raise Refused("no-digests", f"no pinned digests of {shape.name}: the store holds {sorted(pinned)}")
     if not store.is_dir():
-        raise Refused(f"no store directory {store}")
+        raise Refused("no-store", f"no store directory {store}")
     data, rec = store_paths(store, shape)
     length = values[-1].offset + values[-1].nbytes
     if data.exists():
@@ -818,10 +734,11 @@ def write_store(store: Path, shape: Shape, *, workers: int = 1, seed: bytes = DE
                else f"its tensors' digests fold to {fold[:16]}…, not interface 1's {want[:16]}…")
         if status == "written":
             path.unlink()
-            raise Refused(f"the generated {shape.name} stream isn't interface 1's ({why}): nothing is kept")
+            raise Refused("not-interface-1",
+                          f"the generated {shape.name} stream isn't interface 1's ({why}): nothing is kept")
         rec.unlink(missing_ok=True)
-        raise Refused(f"the store's {data} isn't interface 1's {shape.name} weights stream ({why}): it is left as it is, "
-                      "unrecorded; remove it and write the store again")
+        raise Refused("not-interface-1", f"the store's {data} isn't interface 1's {shape.name} weights stream ({why}): "
+                      "it is left as it is, unrecorded; remove it and write the store again")
     if status == "written":
         os.replace(path, data)
     doc = {"format": STORE_FORMAT, "shape": shape.name, "model": model_id(shape, seed), "stream_bytes": length,
@@ -840,17 +757,18 @@ def read_store(store: Path, shape: Shape, pinned: Mapping[str, str] = STORE_DIGE
     try:
         doc = json.loads(rec.read_text())
     except (OSError, ValueError):
-        raise Refused(f"no store record {rec}: write the store first (weights-write)") from None
+        raise Refused("no-record", f"no store record {rec}: write the store first (weights-write)") from None
     values, want = manifest(shape), pinned.get(shape.name)
     sha = doc.get("sha256") if isinstance(doc, dict) else None
     if not (isinstance(sha, list) and len(sha) == len(values) and all(isinstance(x, str) for x in sha)
             and doc.get("format") == STORE_FORMAT and doc.get("shape") == shape.name and want is not None
             and doc.get("fold") == want == digests_fold(values, sha)):
-        raise Refused(f"the store record {rec} isn't interface 1's {shape.name} stream: write the store again "
-                      "(weights-write)")
+        raise Refused("not-interface-1", f"the store record {rec} isn't interface 1's {shape.name} stream: write the "
+                      "store again (weights-write)")
     length = values[-1].offset + values[-1].nbytes
     if not data.is_file() or data.stat().st_size != length:
-        raise Refused(f"the store's {data} isn't its {length:,} bytes: write the store again (weights-write)")
+        raise Refused("store-size",
+                      f"the store's {data} isn't its {length:,} bytes: write the store again (weights-write)")
     return data, sha
 
 
@@ -898,7 +816,7 @@ class Streams:
                 self.socks[-1].sendall(HELLO.pack(MAGIC, relay_id, len(self.socks) - 1, len(addresses)))
         except OSError as e:
             self._close()
-            raise Refused(f"the sink at {a[0]}:{a[1]} doesn't answer: {e}") from None
+            raise Refused("sink", f"the sink at {a[0]}:{a[1]} doesn't answer: {e}") from None
         self.queues = [queue.Queue(depth) for _ in self.socks]
         self.errors: list[str] = []
         self._turn, self._lock = 0, threading.Lock()
@@ -923,7 +841,7 @@ class Streams:
 
     def _put(self, kind: int, offset: int, data: bytes | memoryview) -> None:
         if self.errors:
-            raise Refused(f"the link to the sink failed: {self.errors[0]}")
+            raise Refused("sink", f"the link to the sink failed: {self.errors[0]}")
         with self._lock:
             self._start()
             i, self._turn = self._turn, (self._turn + 1) % len(self.queues)
@@ -954,22 +872,22 @@ class Streams:
         acks = []
         try:
             if self.errors:
-                raise Refused(f"the link to the sink failed: {self.errors[0]}")
+                raise Refused("sink", f"the link to the sink failed: {self.errors[0]}")
             for i, s in enumerate(self.socks):
                 got = _read_exactly(s, TOTALS.size)
                 if got is None:
-                    raise Refused(f"the sink closed stream {i} before acknowledging it")
+                    raise Refused("sink", f"the sink closed stream {i} before acknowledging it")
                 w, x = TOTALS.unpack(got)
                 acks.append({"weights": w, "witness": x})
         except OSError as e:
-            raise Refused(f"the sink's acknowledgement didn't arrive: {e}") from None
+            raise Refused("sink", f"the sink's acknowledgement didn't arrive: {e}") from None
         finally:
             self._close()
         sent, acked = (self.weights_bytes, self.witness_bytes), (sum(a["weights"] for a in acks),
                                                                  sum(a["witness"] for a in acks))
         if acked != sent:
-            raise Refused(f"the sink acknowledged {acked[0]:,} bytes of the weights and {acked[1]:,} of the witness, of "
-                          f"{sent[0]:,} and {sent[1]:,} sent")
+            raise Refused("sink", f"the sink acknowledged {acked[0]:,} bytes of the weights and {acked[1]:,} of the "
+                          f"witness, of {sent[0]:,} and {sent[1]:,} sent")
         return acks
 
     def abort(self) -> None:
@@ -1069,13 +987,6 @@ HEADS_FORMAT = "verity-network-certifier/load-heads/v1"
 HEX64 = re.compile(r"[0-9a-f]{128}")
 
 
-def shape_named(name: object) -> Shape:
-    for s in SHAPES.values():
-        if s.name == name:
-            return s
-    raise ValueError(f"no shape {name!r}: one of {[s.name for s in SHAPES.values()]}")
-
-
 def heads_doc(shape: Shape, program: str, roots: Mapping[str, bytes], link: str = LINK) -> dict[str, Any]:
     """``load-heads.json``: what the network certifier's signer signs for the load (`heads_of`), each value's root."""
     return {"format": HEADS_FORMAT, "shape": shape.name, "link": link, "window": WINDOW, "program": program,
@@ -1107,31 +1018,6 @@ def load_doc(shape: Shape, heads_: Sequence[TR.TransferHead], registrations: Seq
             "link_format": "plain", "key": key, "session": session.hex(), "values": list(registrations)}
 
 
-def check_load(doc: Mapping[str, Any], key: Any, session: bytes) -> tuple[dict[str, Any], list[str]]:
-    """A ``load.json`` read as the verifier reads it: each of its shape's values a registration that
-    `transfer_rows.check_registration` accepts under `key` and `session` for the value it expects, at the document's
-    program and link. Returns the count and the problems."""
-    try:
-        shape = shape_named(doc.get("shape"))
-        if doc.get("format") != FORMAT or doc.get("window") != WINDOW or not isinstance(doc.get("link"), str):
-            raise ValueError(f"not a load's registrations ({FORMAT}, window {WINDOW})")
-    except ValueError as e:
-        return {"values": 0, "registered": 0}, [f"load: {e}"]
-    values, regs = manifest(shape), doc.get("values")
-    if not isinstance(regs, list) or len(regs) != len(values):
-        return {"values": len(values), "registered": 0}, [f"load: not one registration of each of {len(values)} values"]
-    problems, ok = [], 0
-    for v, reg in zip(values, regs):
-        try:
-            TR.check_registration(reg, key, session, link=doc["link"], direction=Direction.INGRESS, window=WINDOW,
-                                  kind=KIND, value=v.name, program=doc.get("program"), words=v.reg_words, rows=v.leaves,
-                                  word_bits=v.word_bits, schema=v.schema)
-            ok += 1
-        except ValueError as e:
-            problems.append(f"load {v.name}: {e}")
-    return {"values": len(values), "registered": ok}, problems
-
-
 def relay_load(store: Path, shape: Shape, sinks: Sequence[tuple[str, int]], program: str, out: Path, *,
                workers: int = 1, link: str = LINK, progress: Callable[[int, int], None] | None = None,
                read_bytes: int = READ_BYTES, **streams: Any) -> dict[str, Any]:
@@ -1139,7 +1025,8 @@ def relay_load(store: Path, shape: Shape, sinks: Sequence[tuple[str, int]], prog
     stream a sink address (`Streams`), each value's bytes held to interface 1's digest and committed as they cross
     under the verifier's domain for `program`, the salts sent to the sink with them, never kept here. Writes
     ``load-heads.json`` (`heads_doc`, what the signer signs) and ``load-relay.json`` (the relay's counts and the sink's
-    acknowledgements) to `out`; a refusal is ``load-relay.json``'s ``refused`` and raised, and leaves no heads."""
+    acknowledgements) to `out`; a refusal is ``load-relay.json``'s ``refused``, its word alone (`REFUSALS`), and raised
+    with its sentence, and leaves no heads."""
     out.mkdir(parents=True, exist_ok=True)
     report = out / "load-relay.json"
     try:
@@ -1155,7 +1042,7 @@ def relay_load(store: Path, shape: Shape, sinks: Sequence[tuple[str, int]], prog
             link_to.abort()
             raise
     except Refused as e:
-        report.write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        report.write_text(json.dumps({"refused": e.code}, indent=1) + "\n")
         raise
     (out / "load-heads.json").write_text(json.dumps(heads_doc(shape, program, got.roots, link), indent=1) + "\n")
     rep = {"shape": shape.name, "model": model_id(shape), "values": len(values), "rows": sum(v.leaves for v in values),
@@ -1167,46 +1054,10 @@ def relay_load(store: Path, shape: Shape, sinks: Sequence[tuple[str, int]], prog
 
 # --- the command --------------------------------------------------------------------------------------------------------
 
-class RandomSource(io.RawIOBase):
-    """`n` bytes of the operating system's generator, read as a stream."""
-
-    def __init__(self, n: int) -> None:
-        self.left = n
-
-    def read(self, size: int = -1) -> bytes:
-        size = self.left if size < 0 else min(size, self.left)
-        self.left -= size
-        return os.urandom(size)
-
 
 def first_values(values: Sequence[Value], nbytes: int) -> tuple[Value, ...]:
     """The values that end within the first `nbytes` of the weights stream."""
     return tuple(v for v in values if v.offset + v.nbytes <= nbytes)
-
-
-def bench(shape: Shape, nbytes: int, workers: Sequence[int], witness_dir: Path | None) -> dict[str, Any]:
-    import load_commit as LC
-    values = first_values(manifest(shape), nbytes)
-    rows = sum(v.leaves for v in values)
-    total_rows, total_bytes = sum(v.leaves for v in manifest(shape)), sum(v.nbytes for v in manifest(shape))
-    dom = verifier_domain("00" * 64)
-    out: dict[str, Any] = {"values": len(values), "bytes": sum(v.nbytes for v in values), "rows": rows, "runs": []}
-    for n in workers:
-        wit = None if witness_dir is None else witness_dir / f"witness-{n}.bin"
-        r = relay(values, RandomSource(out["bytes"]), None, dom, workers=n, witness=wit)
-        if wit is not None:
-            wit.unlink()
-        us = r.seconds / rows * 1e6
-        out["runs"].append({"workers": n, "seconds": r.seconds, "row_us_wall": us, "mb_s": out["bytes"] / r.seconds / 1e6,
-                            "load_s": total_rows * us / 1e6, "witness": wit is not None})
-    params = store_params(shape)
-    t0, blocks = time.perf_counter(), 64
-    LC.p2_decode(os.urandom(blocks * params.block_bytes), os.urandom(24))
-    dec = (time.perf_counter() - t0) / blocks
-    out["p2"] = {"decode_block_us": dec * 1e6, "blocks": params.blocks, "decode_core_s": params.blocks * dec,
-                 "by_workers": {n: params.blocks * dec / n for n in workers}}
-    out["shape"] = {"rows": total_rows, "bytes": total_bytes, "witness_bytes": SALT_BYTES * total_rows}
-    return out
 
 
 def progress_lines(every: int = 1 << 33) -> Callable[[int, int], None]:
@@ -1247,12 +1098,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--session", help="the certifier's session, hex (default fresh)")
     r.add_argument("--link", default=LINK)
     r.add_argument("--workers", type=int, default=os.cpu_count() or 1)
-    b = sub.add_parser("bench")
-    b.add_argument("--out", required=True)
-    b.add_argument("--shape", choices=sorted(SHAPES), default="h200")
-    b.add_argument("--bytes", type=int, default=1 << 31)
-    b.add_argument("--workers", default="1")
-    b.add_argument("--witness-dir", help="write each run's salts there (default: none)")
     s = sub.add_parser("stream", help="interface 1's weights stream to stdout: a plain link's source")
     s.add_argument("--shape", choices=sorted(SHAPES), default="h200")
     s.add_argument("--seed", default=DEMO_SEED.decode(), help="interface 1's seed, as text")
@@ -1284,7 +1129,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 doc = serve_sink((host, int(port)), a.streams, a.weights, a.witness,
                                  announce=lambda line: print(json.dumps(line), flush=True))
         except Refused as e:
+            # a refused write says its word, which is what a run publishes of it: the sentence may name the store's
+            # path on the auditor's device and goes to stderr, for the run's witness. The sink is the prover's own
             doc = {"refused": str(e)}
+            if a.cmd == "write":
+                doc = {"refused": e.code}
+                print(f"refused ({e.code}): {e}", file=sys.stderr, flush=True)
         if a.out is not None:
             a.out.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
         print(json.dumps(doc, sort_keys=True), flush=True)
@@ -1293,17 +1143,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     host = {"node": platform.node(), "cpus": os.cpu_count(), "affinity": len(os.sched_getaffinity(0)),
             "python": sys.version.split()[0]}
-    if a.cmd == "bench":
-        res = bench(SHAPES[a.shape], a.bytes, [int(x) for x in a.workers.split(",")],
-                    None if a.witness_dir is None else Path(a.witness_dir)) | {"host": host}
-        (out / "load-relay-bench.json").write_text(json.dumps(res, indent=1, sort_keys=True))
-        for run in res["runs"]:
-            print(f"LOADRELAY workers {run['workers']}: {res['bytes'] / 2**30:.2f} GiB, {res['rows']:,} rows in "
-                  f"{run['seconds']:.1f} s ({run['mb_s']:.0f} MB/s), whole load {run['load_s']:,.0f} s", flush=True)
-        p = res["p2"]
-        print(f"LOADRELAY p2 decode {p['decode_block_us']:.0f} µs/block, {p['decode_core_s']:,.0f} core-s; "
-              + ", ".join(f"{n} workers {s:,.0f} s" for n, s in p["by_workers"].items()), flush=True)
-        return 0
     shape = SHAPES[a.shape]
     values = read_manifest(json.loads(Path(a.manifest).read_text())) if a.manifest else manifest(shape)
     params = store_params(shape) if a.format == "p2" else None
@@ -1311,9 +1150,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--format p2 needs the store's --salt, and takes the whole load")
     if a.bytes:
         values = first_values(values, a.bytes)
-    import certifier_serve as CS
+    import certifier_key as CK
+    from verity.protocols.accounting.certifier.verifier import record_files as RF
     key_dir = Path(a.key) if a.key else out / "certifier"
-    signer = CS.signer(key_dir, a.height)
+    signer = CK.signer(key_dir, a.height)
     session = bytes.fromhex(a.session) if a.session else os.urandom(32)
     dom = verifier_domain(a.program)
     witness = a.witness or str(out / "load-witness.bin")
@@ -1330,7 +1170,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             snk.flush()
     regs = sign(Issuer(signer, session), a.link, a.program, values, got.roots, dom)
     doc = {"format": FORMAT, "link": a.link, "window": WINDOW, "program": a.program, "link_format": a.format,
-           "key": CS.public_json(signer.public_key()), "session": session.hex(), "values": regs}
+           "key": RF.public_json(signer.public_key()), "session": session.hex(), "values": regs}
     (out / "load.json").write_text(json.dumps(doc, indent=1))
     rep = {"host": host, "link_bytes": got.link_bytes, "seconds": got.seconds, "jobs": got.jobs, "workers": a.workers,
            "values": len(values), "rows": sum(v.leaves for v in values), "witness": witness}

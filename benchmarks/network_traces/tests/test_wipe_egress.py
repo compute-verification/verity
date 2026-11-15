@@ -23,17 +23,19 @@ from verity.commitments.crypto import lms
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
+sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
-import certifier_serve as cs  # noqa: E402
-import warden_serve as ws  # noqa: E402
-import wipe_egress as E  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
+from benchmarks.network_traces import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
+from benchmarks.network_traces import wipe_egress as E  # noqa: E402
 
 SCAN = WardenParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
 #: the origin of the rehearsal the record was first read off
 ORIGIN = 1793035442.0242794
 WINDOWS = 6
 SESSION = bytes(range(32))
-LINK, FAILS = ws.LINK, f"{ws.LINK}-fails"
+LINK, FAILS = RC.LINK, f"{RC.LINK}-fails"
 #: the device the gate's `end.json` names for a network certifier run
 DEVICE = "warden"
 MS = 1_000_000
@@ -53,28 +55,29 @@ def _certificate(link: str, w: int, q: int, session: bytes = SESSION) -> dict:
     key, digest = _key(), hashlib.sha512(b"record %s %d" % (link.encode(), w)).digest()
     message = certificate_message(key.I, session, link, Direction.EGRESS, w, digest)
     c = Certificate(key.I, link, Direction.EGRESS, w, digest, lms.sign_at(key, q, message).encode())
-    return {"certificate": cs.certificate_json(c)}
+    return {"certificate": RF.certificate_json(c)}
 
 
 def gate_run(root: Path, *, forged: frozenset = frozenset(), missing: frozenset = frozenset(),
              accepted: bool = True) -> Path:
     """A network certifier run's `end.json` and `out/` as the gate publishes them: each window's egress and fails
-    certificates (signed in another session when (link, w) is in `forged`, left out when in `missing`) and a signer's
-    refusal."""
+    certificates (signed in another session when (link, w) is in `forged`, left out when in `missing`), and of a run
+    its check didn't accept no certificate at all."""
     run = root / "c-test"
     (run / "out").mkdir(parents=True)
     key = LmsKey(_key().params, lms.public_key(_key()))
-    dep = ws.deployment_record(SCAN, key, SESSION, origin_unix=ORIGIN, windows=WINDOWS, listen=("127.0.0.1", 1),
-                               upstream=("127.0.0.1", 2), slack=0.025)
-    lines = [json.dumps({"refused": [LINK, "ingress", WINDOWS - 1]})]
+    dep = ws.deployment_record(SCAN, key, SESSION, origin_unix=ORIGIN, windows=WINDOWS, slack=0.025)
+    lines = []
     for w in range(WINDOWS):
         for i, link in enumerate((LINK, FAILS)):
             if (link, w) not in missing:
                 session = bytes(32) if (link, w) in forged else SESSION
                 lines.append(json.dumps(_certificate(link, w, 2 * w + i, session), sort_keys=True))
     (run / E.DEPLOYMENT).write_text(json.dumps(dep, indent=1))
-    (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines))
-    files = {Path(n).name: hashlib.sha512((run / n).read_bytes()).hexdigest() for n in (E.DEPLOYMENT, E.CERTIFICATES)}
+    if accepted:
+        (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines))
+    files = {Path(n).name: hashlib.sha512((run / n).read_bytes()).hexdigest()
+             for n in (E.DEPLOYMENT, E.CERTIFICATES) if (run / n).is_file()}
     (run / E.END).write_text(json.dumps({"device": DEVICE, "rc": 0, "run": "c-test", "pinned": "0" * 40,
                                          "verdict": {"accepted": accepted}, "files": files}))
     return run
@@ -94,7 +97,7 @@ def test_a_link_window_carries_the_scan_schedules_cells() -> None:
 def test_a_window_within_the_session_is_covered(tmp_path: Path) -> None:
     doc = egress(gate_run(tmp_path), at(4_000), at(9_000))
     assert doc == {"format": "wipe-egress/v1", "gate_run": "c-test", "pinned": "0" * 40, "link": LINK,
-                   "key": cs.public_json(LmsKey(_key().params, lms.public_key(_key()))), "session": SESSION.hex(),
+                   "key": RF.public_json(LmsKey(_key().params, lms.public_key(_key()))), "session": SESSION.hex(),
                    "parameters": SCAN.digest.hex(), "origin_unix_ns": E.origin_ns(ORIGIN), "window_ns": 3_200_000_000,
                    "session_windows": WINDOWS, "t0_unix_ns": at(4_000), "t1_unix_ns": at(9_000),
                    "pad_ns": 1_000_000_000, "windows": [0, 4], "certificates": 8, "covered": True, "why": [],
@@ -139,6 +142,11 @@ def test_a_certificate_that_fails_to_verify_or_is_missing_uncovers_its_window(tm
 def test_the_gates_verdict_and_its_hashes_of_out_bind_the_count(tmp_path: Path) -> None:
     refused = egress(gate_run(tmp_path / "refused", accepted=False), at(4_000), at(9_000))
     assert refused["why"] == [f"the gate's check didn't accept the run (device {DEVICE}, rc 0, accepted False)"]
+    assert (refused["covered"], refused["certificates"], refused["K"]) == (False, 0, None)
+    bare = gate_run(tmp_path / "bare")
+    (bare / E.CERTIFICATES).unlink()
+    with pytest.raises(ValueError, match="which the gate publishes of a run its check accepted"):
+        egress(bare, at(4_000), at(9_000))
     run = gate_run(tmp_path / "swapped")
     lines = (run / E.CERTIFICATES).read_text().splitlines()
     (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines[:-1]))

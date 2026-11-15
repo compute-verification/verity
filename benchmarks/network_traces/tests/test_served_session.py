@@ -53,6 +53,8 @@ STUB = r'''#!PYTHON
 import io, json, os, signal, sys, tarfile
 from pathlib import Path
 d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
+if any("${" in w for w in sys.argv[1:-1]):
+    sys.exit(f"stub ssh: an unfilled destination in {sys.argv[1:-1]!r}")
 if cmd.startswith("warden-rehearse "):
     (d / "prompts.json").write_bytes(sys.stdin.buffer.read())
     (d / "request").write_text(cmd)
@@ -63,13 +65,13 @@ elif cmd == "status RUN":
         signal.pause()
     print(json.dumps({"run": "RUN", "end": {"rc": 0}, "note": os.environ.get("STUB_NOTE")}))
 elif cmd == "fetch RUN":
-    files = {"end.json": json.dumps({"run": "RUN", "rc": 0, "verdict": {"accepted": True, "problems": 0}}).encode(),
+    files = {"end.json": json.dumps({"run": "RUN", "rc": 0, "verdict": {"accepted": True}}).encode(),
              "out/deployment.json": json.dumps({"windows": 4, "origin_unix": 1.5,
                                                 "params": {"window": 32, "bucket_ms": 100}}).encode(),
              "out/certificates.jsonl": b"", "witness/prompts.json": (d / "prompts.json").read_bytes(),
              "witness/certified.jsonl": b"PLANTED\n", "witness/stalls.json": STALLS}
     if (d / "leak").exists():
-        files["out/cells.jsonl"] = (d / "prompts.json").read_bytes()
+        files["out/cells-certificates.jsonl"] = (d / "prompts.json").read_bytes()
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name, data in files.items():
@@ -101,7 +103,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
     assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
         "chain", "ART", None, 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
-    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not demos/vllm/serve.sh",
+    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not adapters/vllm/tools/served_run/serve.sh",
                                                  "--disk-floor-gb 40", "VERITY_STAGING_BOUNDED stays unset"))
     ep = shlex.split(doc["runs"]["endpoint"])
     inner = SS.parser().parse_args(shlex.split(ep[-1])[2:])
@@ -312,11 +314,11 @@ def test_at_waits_on_the_clock_and_a_late_launch_sends_nothing():
 def test_public_is_the_bundle_less_witness():
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        for name in ("r/end.json", "r/out/cells.jsonl", "r/witness/check.json", "r/witness/x/salts.bin"):
+        for name in ("r/end.json", "r/out/certificates.jsonl", "r/witness/cells.jsonl", "r/witness/x/salts.bin"):
             info = tarfile.TarInfo(name)
             info.size = 1
             tar.addfile(info, io.BytesIO(b"x"))
-    assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/cells.jsonl"]
+    assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/certificates.jsonl"]
 
 
 def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
@@ -538,11 +540,13 @@ def _gate_chain(tmp_path, monkeypatch, peer):
     (tmp_path / "gate-key").write_text("")
     (tmp_path / "main.txt").write_text("abc\n")
     buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        data = json.dumps({"device": "warden", "peer": peer}).encode()
-        info = tarfile.TarInfo(f"{RUN}/request.json")
-        info.size = len(data)
-        tar.addfile(info, io.BytesIO(data))
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:  # as the gate's fetch gives the run's own lane its request
+        for name, doc in ((f"{RUN}/request.json", {"device": "warden"}),
+                          (f"{RUN}/witness/request.json", {"device": "warden", "peer": peer})):
+            data = json.dumps(doc).encode()
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
     (tmp_path / "keep" / RUN).mkdir(parents=True, exist_ok=True)
     (tmp_path / "keep" / RUN / "fetch.tar.gz").write_bytes(buf.getvalue())
     return ["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate", "--draw", "8",

@@ -30,7 +30,7 @@ __all__ = ["COMMANDS", "main"]
 def kernel(out: Path) -> dict:
     import torch
     import vllm.v1.sample.ops.topk_topp_triton as TT
-    from verity.definitions.registry.topp_geometry import (
+    from verity_vllm.definitions.registry.topp_geometry import (
         SPLIT_MAX_BATCH,
         registered_splits,
     )
@@ -88,7 +88,7 @@ def served(workload: str, out: Path) -> dict:
     from verity_vllm.engine import engine_profile as prof
 
     prof.apply_env()
-    from verity.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
     from verity_vllm.commit.committer.topp_splits import install_split_kernel_proxies
     from verity_vllm.engine import topp_pin

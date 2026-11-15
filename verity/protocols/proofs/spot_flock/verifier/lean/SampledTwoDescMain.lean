@@ -45,10 +45,10 @@ def clauses (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it :
     .error s!"refsOf ({"; ".intercalate errs})"
   | some f, some (ns, ks), some rs =>
     match (Spot.Slots.layout f.verifier.program f.verifier.query).toOption,
-        (firstLaw f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption with
+        (firstSamplingDesign f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption with
     | none, _ => .error "layout"
     | _, none => .error "firstLaw"
-    | some l, some law =>
+    | some l, some samplingDesign =>
       let T := it.circuits.size
       let names := (it.circuits.map (·.1)).toList
       let links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record
@@ -62,7 +62,7 @@ def clauses (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it :
         ("fits", rs.all fits), ("zkOk", rs.all fun r => zkOk r.spec r.sts), ("templateOk", rs.all templateOk),
         ("scopeOkH", rs.all fun r => ProvedScope.scopeOkH r.stmt),
         ("memberOk", (List.range T).all fun t => memberOk (circ t)),
-        ("designOk", designOk law l), ("a count a template", ks.size == T), ("counts at least 1", ks.toList.all (1 ≤ ·)),
+        ("designOk", designOk samplingDesign l), ("a count a template", ks.size == T), ("counts at least 1", ks.toList.all (1 ≤ ·)),
         ("a cell a template", ns.size == T), ("namesOnce", namesOnce T names),
         ("writersFirst", writersFirst T names wires), ("sourceRowsNamed", sourceRowsNamed T names links wires circ),
         ("wiresMoveRows", wiresMoveRows T names links wires rows circ ns (unitsAt (requests l) ns T)),

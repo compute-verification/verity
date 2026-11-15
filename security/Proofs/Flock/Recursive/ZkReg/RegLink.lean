@@ -77,11 +77,11 @@ noncomputable def linkTermRegZC (k : ℕ) (S : Finset (Fin n)) (R : Reg)
 
 /-- **The registered-values term**: `Q_s/(1 − ρ)·(qW²/2^513 + k/(eR_w))`, with `Q_s = Σ_c π_c` the expected number of
 commit strings the sampled proof blocks read. -/
-noncomputable def regTermZC (L : Law n) (k Rw : ℕ) (ρ qW : ℝ) : ℝ≥0∞ :=
+noncomputable def regTermZC (L : SamplingDesign n) (k Rw : ℕ) (ρ qW : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (ΩcZ A P planZ tab vb L c) : ℝ) / Fintype.card L.Ω) *
     (qW ^ 2 / 2 ^ (513 : ℝ) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The compiled `--zk` audit's analysis against registered values**: `analysisZC`, its committed transcript paired
 with the registration, its incorrect proof blocks also those that read a registered-value disagreement (`regWrongZ`), and its

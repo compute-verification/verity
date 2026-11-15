@@ -1101,7 +1101,7 @@ EOF
   if [ $RELEASE = 1 ]; then
     cp $FWS/record.jsonl $O/oprove/fw-record.jsonl
     python3 verity/protocols/proofs/flock/prover/pod/rec_inner.py release-report --state $FWS --session $SID \
-      --times $(for C in "${ORDER[@]}"; do echo $O/oprove/${C//\//-}-zk-server/prove.err; done) > $O/oprove/release.json
+      --times $(for C in "${ORDER[@]}"; do echo $O/oprove/${C//\//-}-zk_server/prove.err; done) > $O/oprove/release.json
     rr=$?; cat $O/oprove/release.json; [ $rr = 0 ] || { echo "release: the recursive session $SID did not release every part at its time"; exit 1; }
   fi
   python3 - $O/oprove/exits.tsv "${STARTED[@]}" <<'EOF' || exit 1

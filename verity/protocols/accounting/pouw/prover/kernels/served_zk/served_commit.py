@@ -86,9 +86,8 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   `register` refuses every certified execution phase first (``unsalted``), before the stream receives it or the certifier is
   asked anything.  Past that rule, `register` has the stream receive the execution phase, reads the certifier's `committed` on
   that registration, refuses a pass whose weights, stream or prover it doesn't bind, and only then calls `reveal`,
-  failing closed (``certifier``), each through the certifier's client (`CertifierClient`: a signed request, a signed
-  answer it verifies): the certifier gives p's salt once, within its reveal deadline on its own clock, so its
-  parameters carry no ``registration_deadline``.  The execution phase registers once per PoUW execution phase, stream and prover
+  failing closed (``certifier``): the certifier's own rules (its signed answers and when it reveals) bound the
+  execution phase's timing, so its parameters carry no ``registration_deadline``.  The execution phase registers once per PoUW execution phase, stream and prover
   (`salt.WindowOpens`, ``reregistered``), and its sampling coin is its sample session's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
   sample's check of record verifies again, both under the challenger key the execution phase's deployment pins (`Deployment`,
@@ -126,7 +125,6 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.randomness import Key, derive
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.protocols.accounting.certifier.verifier.active import RUN_ID_BYTES
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
 from verity.protocols.accounting.pouw.prover.circuit import pc8
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
@@ -143,6 +141,7 @@ from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
+from verity.protocols.proofs.spot.verifier.one_stage import caller as CA
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
@@ -167,10 +166,12 @@ PROOF_DEADLINE = 86400.0
 REGISTRATION_DEADLINE = 3600.0
 NO_DEADLINE = ("the window's parameters name no registration_deadline, so the service would accept a window EndToEndWindow "
                "doesn't cover: write them with `served_commit.py params` (REGISTRATION_DEADLINE, or --registration-deadline)")
-CERTIFIED_DEADLINE = ("a certified window's time bound is the network certifier's reveal deadline on its own clock "
-                      "(`Proxy(reveal_deadline=…)`), so its parameters carry no registration_deadline and it replays none")
+CERTIFIED_DEADLINE = ("a certified window's time bound is the network certifier's reveal deadline on its own clock, "
+                      "so its parameters carry no registration_deadline and it replays none")
 #: a certified execution phase's stream as the PoUW salt binds it (`stream_id`)
 STREAM_ID = "verity/pouw/served-zk/stream/v3"
+#: a network certifier's run id, sampled when its run starts
+RUN_ID_BYTES = 32
 #: the frame's owner, as Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
 SALT_BYTES = 192
@@ -284,9 +285,8 @@ def certified(params: Mapping[str, Any]) -> bool:
 
 def certifier_run(certifier: Any) -> dict[str, str]:
     """The network certifier's run as a certified execution phase's stream names it: its `certifier_run`, (key id, run id, ingress
-    link), the identity every signed `Revealed` binds, which a `Proxy` and its `CertifierClient` give alike (key id and
-    run id as hex). A proxy started again samples another run id, and a second link has another name; a proxy without a
-    signer has no key id, so no run."""
+    link), the identity the certifier's answers bind (key id and run id as hex). A certifier started again samples
+    another run id, and a second link has another name; a certifier without a signing key has no key id, so no run."""
     try:
         key_id, run_id, link = certifier.certifier_run
     except (AttributeError, TypeError, ValueError) as e:
@@ -339,8 +339,7 @@ def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
 @dataclass(frozen=True, slots=True)
 class Deployment:
     """What a certified execution phase's verifier pins of its deployment: the network certifier's public key and its run's id,
-    the only ones whose answers the challenger takes (its client, `certifier.active.CertifierClient`, must be for them,
-    and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the execution phase's
+    the only ones whose answers the challenger takes (the certifier it reads must be for them), and the key of the verifier's own challenger, under which the challenger reads the execution phase's
     coin record and the sample's check of record verifies it (`core_check.draw_twin`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
@@ -868,13 +867,13 @@ class Challenger:
     `predates_deadline` replays a record whose parameters predate the deadline as it ran, untimed.  The clock counts the
     challenger's reads of it unless `clock` is given.
 
-    With `certifier` the execution phase is certified (module docstring): `certifier` is the network certifier's client
-    (`certifier.active.CertifierClient`), whose `certifier_run` names the stream (`stream_id`) and whose `committed` and
-    `reveal` are the certifier's signed answers to the challenger's signed requests, verified; `prover` is its 64-byte
+    With `certifier` the execution phase is certified (module docstring): `certifier` is the network certifier as the
+    challenger reads it, whose `certifier_run` names the stream (`stream_id`), whose `certifier_key` and `run_id` the
+    deployment pins, and whose `committed` and `reveal` are its answers (`salt.committed`, `salt.revealed`); `prover` is its 64-byte
     id (`salt.prover_id`), `coins` the execution phase's sampling session's challenger (`window.draw_challenger`) whose ``pouw/draw``
     coin 0 the sample opens, `coin_record` the path of the record that challenger signed and wrote on its own host
     (`challenger.write_record`), and `deployment` what the verifier pins of its deployment (`Deployment`): the network
-    certifier's key and run id, which `certifier` must be the client for, and its challenger's key, under which the
+    certifier's key and run id, which `certifier` must be for, and its challenger's key, under which the
     challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
     it, and the sample's check of record verifies the record again under the key the deployment pins, not the one the
     record's coins name (``coin-key``).  `opens` is the deployment's `salt.WindowOpens`,
@@ -903,7 +902,7 @@ class Challenger:
             self.run = certifier_run(certifier)
             if (getattr(certifier, "certifier_key", None) != deployment.certifier_key
                     or getattr(certifier, "run_id", None) != deployment.run_id):
-                raise ValueError("a certified window's certifier client is for the certifier key and run id its "
+                raise ValueError("a certified window's certifier is for the certifier key and run id its "
                                  "deployment pins (`Deployment`)")
             self.trusted, self.signed = _signed_coins(coin_record, deployment.challenger_key)
             self.deployment = deployment
@@ -1007,16 +1006,18 @@ class Challenger:
         return out["how"]
 
     def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
-        """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
-        Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
+        """One-stage's R1-R6 against the challenger's own copies, then where they pass the caller's check
+        (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
+        runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         law = S.selection_law(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
-        codes = self._of_record(name, self.record.registration,
-                                OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"]),
-                                dict(rec), lambda: R.check(rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None,
-                                                          None, None))
+        params = OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"])
+        args = (rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
+        codes = self._of_record(name, self.record.registration, params, dict(rec), lambda: R.check(*args))
+        if not codes:
+            codes = self._of_record(name, self.record.caller, params, dict(rec), lambda: CA.check(*args))
         public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
                                  lambda: S.check_public(st.spec, rec).to_json())
         codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]

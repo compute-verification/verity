@@ -12,24 +12,28 @@ whole against a challenger side on a host of its own (`wipe_side.py`), its recor
 (the links leaving the node, the undeclared tiers, the egress, what a joint store's disks leave outside the
 boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
 session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record
-says `trusted-device` holds only for a session signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's
-host: a run's own pin, or a rehearsal's host name, gives a rehearsal with no bound."""
+says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]` entries
+give the memory challenger for the wipe (`period.json`'s `deployment`): a run's own pin, a rehearsal's host name or a
+configuration nobody committed gives a rehearsal with no bound."""
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
-import re
 import socket
+import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 from pous_fakes import Clock
 import pous_test_signer as ts
+import wipe_judge
 import wipe_side
 from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import memory_challenger as mc
@@ -92,6 +96,21 @@ def test_an_uncounted_egress_bounds_nothing() -> None:
         assert w.verdict == "accept" and w.answer["public"] == VACUOUS and w.answer["profile"]["gaps"] == gaps
         assert json.loads(bytes.fromhex(w.case["evidence"]))["egress_mib"] == egress
     assert W.egress_of(None) == sw.EGRESS_MAX_UNITS and W.egress_of(0) == 0
+
+
+def test_the_counted_check_rejects_a_session_with_no_end_message(monkeypatch) -> None:
+    """Where the signed session's end message can't be formed (a batch record past a field's width), `named` raises
+    and the counted check rejects, as the Lean's `checkCounted` does where its `named` refuses. `outcome` accepts no
+    such session, its signature being over that message, so here `outcome` is made to accept it."""
+    w = _run(egress_mib=2)
+    c, (b0, *rest) = w.signed.commitment, w.signed.batches
+    wide = dataclasses.replace(w.signed, batches=(dataclasses.replace(b0, b=2 ** 32), *rest))
+    with pytest.raises(OverflowError):
+        W.named(c, wide, 2)
+    monkeypatch.setattr(W, "outcome", lambda *a, **kw: ("accept", W.uncounted(c.params), W.profile(c.params, 2)))
+    verdict, reason = W.outcome_counted(c.server, c.session, [], c, wide, egress_mib=2)
+    assert verdict == "reject" and reason not in (W.NO_COUNT, W.NO_MARK), reason
+    assert W.outcome_counted(c.server, c.session, [], c, w.signed, egress_mib=2) == ("reject", W.NO_MARK)
 
 
 @pytest.mark.parametrize("egress", [0, sw.EGRESS_MAX_UNITS - 1])
@@ -232,22 +251,31 @@ def test_the_split_wipe(how: str) -> None:
         assert answered == 3 and c.ended is None and c.signed is None
 
 
+def test_the_module_run_with_no_side_refuses_and_names_the_start_file(tmp_path) -> None:
+    """An old command, `python -m ...wipe_period --expect accept`, exits non-zero naming the file that starts the wipe,
+    so it never reads as the verdict it expected."""
+    r = subprocess.run([sys.executable, "-m", W.__name__, "--period", str(tmp_path), "--out", str(tmp_path / "out"),
+                        "--expect", "accept"], capture_output=True, text=True)
+    assert r.returncode == 1 and r.stdout == "", r.stdout + r.stderr
+    assert "run benchmarks/pous/streamed_wipe/wipe_on_node.py" in r.stderr and not (tmp_path / "out").exists()
+
+
 def test_the_party_follows_period_json(tmp_path) -> None:
-    local = WP.side_of({}, "cpu-node", tmp_path)
+    local = Side.of({}, "cpu-node", "wipe", WP.command(tmp_path), "the wipe")
     assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
     with pytest.raises(RuntimeError, match="auditor-host isn't wired for the wipe"):
-        WP.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
-                   "cpu-node", tmp_path)
-    wired = WP.side_of({"challenger_host": "auditor-host", "challenger": {"wipe": {
-        "command": ["gate", "wipe"], "address": "127.0.0.1:7962"}}}, "cpu-node", tmp_path,
-        ("--streamer", "build"))
+        Side.of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
+                "cpu-node", "wipe", WP.command(tmp_path), "the wipe")
+    wired = Side.of({"challenger_host": "auditor-host", "challenger": {"wipe": {
+        "command": ["gate", "wipe"], "address": "127.0.0.1:7962"}}}, "cpu-node", "wipe",
+        WP.command(tmp_path, ("--streamer", "build")), "the wipe")
     assert wired == Side("auditor-host", ("gate", "wipe"), ("127.0.0.1", 7962))
-    native = WP.side_of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
+    native = Side.of({}, "n0", "wipe", WP.command(tmp_path, ("--streamer", "build", "--threads", "8")), "the wipe")
     assert native.command[-4:] == ("--streamer", "build", "--threads", "8")
     assert WP.placement("n0", "n0", OTHER)["kind"] == "prover-node" and WP.placement("n0", "a", OTHER)["kind"] == "own-host"
     simulated = WP.placement("n0", "n0", OTHER, simulated=True)
     assert simulated["kind"] == "simulated" and simulated[WP.PREMISE] == (
-        f"{REHEARSAL}; the memory challenger ran as a process of its own on the developer's node n0, standing in for a "
+        f"{mc.UNCOMMITTED} (no configuration); the memory challenger ran as a process of its own on the developer's node n0, standing in for a "
         "host the developer doesn't control")
     with pytest.raises(ValueError, match="simulated placement runs the memory challenger on the developer's node"):
         WP.placement("n0", "a", OTHER, simulated=True)
@@ -256,74 +284,108 @@ def test_the_party_follows_period_json(tmp_path) -> None:
 AUDITOR = "vy-auditor-2"
 REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 OTHER = hashlib.sha512(b"a key that is no auditor's").hexdigest()
+PINNED = hashlib.sha512(b"the auditor's wipe key").hexdigest()
+CONF = hashlib.sha512(b"a committed configuration").hexdigest()
+PINS = [{"key-sha512": PINNED, "party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0"},
+        {"key-sha512": OTHER, "party": "memory-challenger", "protocol": "pous", "scheme": "lms-sha512/n64-w1-h20/v0"}]
+UNDER = {"pins": PINS, "configuration": CONF, "committed": frozenset({CONF})}
 
 
-def test_the_auditor_keys_are_sha512s_in_lowercase_hex() -> None:
-    assert WP.AUDITOR_KEYS and all(re.fullmatch("[0-9a-f]{128}", k) for k in WP.AUDITOR_KEYS.values())
-    assert WP.REHEARSAL == REHEARSAL
+def test_the_premise_text_is_the_device_modules() -> None:
+    assert mc.REHEARSAL == REHEARSAL and WP.PREMISE == mc.PREMISE == "trusted-device"
+    assert mc.pinned(PINS, "memory-challenger", "wipe") == {PINNED} and not mc.pinned(PINS, "network-certifier", "wipe")
 
 
 def test_a_rehearsal_on_the_prover_node_names_another_host_and_has_no_bound() -> None:
     """Every party on the prover's node, the challenger's host named `on-node-rehearsal` and its key the run's own: the
     names say `own-host`, and the premise is a rehearsal's all the same, with the key custody left out of the bound."""
-    where = WP.placement("node-a", "on-node-rehearsal", OTHER)
+    where = WP.placement("node-a", "on-node-rehearsal", OTHER, **UNDER)
     assert where["kind"] == "own-host" and not WP.holds(where)
-    assert where[WP.PREMISE] == f"{REHEARSAL}; the memory challenger ran on on-node-rehearsal, not the developer's node-a"
+    assert where[WP.PREMISE] == (f"{REHEARSAL} (configuration {CONF}); the memory challenger ran on on-node-rehearsal, "
+                                 "not the developer's node-a")
     assert W.uncertified(where, None) == [f"key custody: {where[WP.PREMISE]}"]
-    assert not WP.holds(WP.placement("node-a", "on-node-rehearsal", None))
+    assert not WP.holds(WP.placement("node-a", "on-node-rehearsal", None, **UNDER))
 
 
 def test_the_auditor_host_under_its_pinned_key_holds() -> None:
-    where = WP.placement("vy-dc-h200", AUDITOR, WP.AUDITOR_KEYS[AUDITOR])
+    where = WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER)
     assert where["kind"] == "own-host" and WP.holds(where) and W.uncertified(where, None) == []
-    assert where[WP.PREMISE] == ("holds: the session is signed under vy-auditor-2's pinned key; the memory challenger ran "
-                                 "on vy-auditor-2, not the developer's vy-dc-h200")
+    assert where[WP.PREMISE] == (f"holds: the session is signed under the key configuration {CONF} pins for "
+                                 "memory-challenger's wipe sessions; the memory challenger ran on vy-auditor-2, not the "
+                                 "developer's vy-dc-h200")
 
 
 def test_the_auditor_hosts_name_under_another_key_is_a_rehearsal() -> None:
-    """The name `vy-auditor-2` is a label: under any key but its pinned one, the premise is a rehearsal's."""
-    for key in (OTHER, WP.AUDITOR_KEYS[AUDITOR].upper(), None):
-        where = WP.placement("vy-dc-h200", AUDITOR, key)
-        assert where["kind"] == "own-host" and not WP.holds(where) and where[WP.PREMISE].startswith(f"{REHEARSAL}; ")
-    assert not WP.holds(WP.placement("n0", "on-node-rehearsal", WP.AUDITOR_KEYS[AUDITOR]))
+    """The name `vy-auditor-2` is a label: under any key but a pinned one for the wipe (the PoUS pin included), the
+    premise is a rehearsal's."""
+    for key in (OTHER, PINNED.upper(), None):
+        where = WP.placement("vy-dc-h200", AUDITOR, key, **UNDER)
+        assert where["kind"] == "own-host" and not WP.holds(where) and where[WP.PREMISE].startswith(f"{REHEARSAL} (")
+
+
+def test_a_configuration_nobody_committed_bounds_nothing() -> None:
+    """Under a configuration whose hash is not one `tools/verity/cli/verity_cli/configurations.toml` commits, or under none, the pinned key
+    reads rehearsal, no bound, whatever key the session carries."""
+    for configuration in (hashlib.sha512(b"a run's own file").hexdigest(), None):
+        where = WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER | {"configuration": configuration})
+        assert not WP.holds(where) and where[WP.PREMISE].startswith(f"{mc.UNCOMMITTED} (")
+    assert not WP.holds(WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER | {"committed": frozenset()}))
+
+
+@pytest.fixture(autouse=True)
+def committed(monkeypatch) -> None:
+    """`CONF` the one committed configuration, so a leg under it reads its pins."""
+    monkeypatch.setattr(mc, "committed", lambda: frozenset({CONF}))
+
+
+def side_pin() -> list[dict[str, str]]:
+    """The configuration's pin of `wipe_side.py`'s key for the memory challenger's wipe sessions."""
+    return [{"key-sha512": wipe_side.key_sha512(), "party": "memory-challenger", "protocol": "wipe",
+             "scheme": "lms-sha512/n64-w1-h20/v0"}]
 
 
 CONTROL = {"name": "control", "to": "outside", "via": "eth0 192.0.2.13: ssh"}
 
 
-def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
-    """A period whose challenger is `wipe_side.py` on a host of its own, its key the pinned one unless `wipe` says."""
+def _side(tmp_path, wipe: dict, pins: list | None = None) -> tuple[Path, Callable[..., Side]]:
+    """A period whose challenger is `wipe_side.py` on a host of its own, its key the pinned one unless `wipe` says,
+    under the committed configuration `CONF` with `pins` (by default none), and what hands the wipe that side."""
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor",
+                                                    "deployment": {"configuration": CONF, "pins": pins or []},
                                                     "wipe": {"trusted_sha512": wipe_side.key_sha512()} | wipe}))
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
-    return period
+
+    def side_of(doc, node, key, local, what=None):
+        assert (key, what) == ("wipe", "the wipe"), "the wipe's side is period.json's challenger.wipe"
+        return side
+
+    return period, side_of
 
 
 def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
     """The leg whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
-    (`wipe_side.py`, its key here the one `AUDITOR_KEYS` pins for its host), its case and record written, the premise
+    (`wipe_side.py`, its key here one the configuration pins for the wipe), its case and record written, the premise
     recorded as held. No network certifier counted the
     egress and period.json names no count, so the check is given none and its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
     the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
     carries the session's window on the challenger's clock."""
-    monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
-    period = _side(tmp_path, monkeypatch, {"links": [CONTROL]})
-    out = tmp_path / "out"
-    answer = W.leg(period, "n0", out)
+    period, side_of = _side(tmp_path, {"links": [CONTROL]}, side_pin())
+    out, given = tmp_path / "out", wipe_judge.judge(period, monkeypatch)
+    answer = W.leg(period, "n0", out, side_of=side_of)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
-    assert answer["profile"]["placement"]["trusted-device"] == ("holds: the session is signed under auditor's pinned key; "
-                                                              "the memory challenger ran on auditor, not the developer's n0")
+    assert answer["profile"]["placement"]["trusted-device"] == (
+        f"holds: the session is signed under the key configuration {CONF} pins for memory-challenger's wipe sessions; "
+        "the memory challenger ran on auditor, not the developer's n0")
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     assert json.loads(bytes.fromhex(case["evidence"]))["egress_mib"] is None
     record = json.loads((out / "wipe.json").read_text())
-    assert record["lean"] is None and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
+    assert [record["lean"]] == given and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
     assert record["prover"] is None and record["session"]["reads"]["n"] == W.READS
     assert record["wipe"] == W.CONFIG | {"foreign_labels": 0, "k": W.READS, "links": [CONTROL], "memory_bits": M,
                                          "outside_bits": 0, "segments": W.SEGMENTS, "tier": W.TIER,
@@ -347,7 +409,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     s = W.summary(record)
     assert (s["t0"], s["t1"]) == (window["t0"], window["t1"]) and s["uncertified"] == gaps and s["k"] == W.READS
     key, = case["params"]["trusted"]
-    assert s["decided_by"] == record["decided_by"] == {"program": "python", "host": socket.gethostname()}
+    assert s["decided_by"] == record["decided_by"] == {"program": "wipe-protocol", "host": socket.gethostname()}
     assert s["key_sha512"] == record["report"]["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest()
     assert s["key_sha512"] == wipe_side.key_sha512() and s["key_pinned"] is record["report"]["key_pinned"] is True
 
@@ -362,14 +424,30 @@ def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> 
     assert W.decided_by(None) == {"program": "python", "host": host}
 
 
+def test_with_no_wipe_protocol_the_pythons_accept_is_undecided(tmp_path, monkeypatch, capsys) -> None:
+    """The leg with no `wipe-protocol` among the period's tools: the Python accepts the honest session, and that decides
+    nothing. The answer is undecided, with no public outputs and no profile, and `main` exits 1."""
+    period, side_of = _side(tmp_path, {})
+    out = tmp_path / "out"
+    assert W.main(["--period", str(period), "--out", str(out), "--node", "n0"], side_of=side_of) == 1
+    s = json.loads(capsys.readouterr().out)
+    assert (s["verdict"], s["reason"], s["public"]) == ("undecided", W.NO_JUDGE, None)
+    record = json.loads((out / "wipe.json").read_text())
+    assert record["answer"]["profile"] is None and record["lean"] is None and record["report"]["ended"] == sw.COMPLETE
+
+
 def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None:
     """`wipe.reads` starts a challenger on this node with `--reads`; one on its own host chooses its own (here
     `wipe_side.py`'s default), and the leg refuses a session at another count."""
-    period = _side(tmp_path, monkeypatch, {"reads": 5231})
-    extras, of = [], WP.side_of
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or of(doc, node, d, extra))
+    period, of = _side(tmp_path, {"reads": 5231})
+    extras = []
+
+    def side_of(doc, node, key, local, what=None):
+        extras.append(tuple(local[len(WP.command("d")):]))
+        return of(doc, node, key, local, what)
+
     with pytest.raises(RuntimeError, match="ran 2152 reads, not period.json's wipe.reads 5231"):
-        W.leg(period, "n0", tmp_path / "out")
+        W.leg(period, "n0", tmp_path / "out", side_of=side_of)
     assert extras == [("--reads", "5231")]
 
 
@@ -386,9 +464,10 @@ def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypat
     """A session signed under the challenger host's pinned key, with period.json's `wipe.egress_bits = 0`: the premise
     holds and the count is 0, which no network certifier signed, so the wipe is accepted and not certified, and the
     record names the egress as the evidence writer's count."""
-    monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
+    period, side_of = _side(tmp_path, {"egress_bits": 0}, side_pin())
     out = tmp_path / "out"
-    answer = W.leg(_side(tmp_path, monkeypatch, {"egress_bits": 0}), "n0", out)
+    wipe_judge.judge(period, monkeypatch)
+    answer = W.leg(period, "n0", out, side_of=side_of)
     assert answer["verdict"] == "accept", answer
     assert WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
@@ -401,11 +480,16 @@ def test_the_periods_egress_goes_to_the_check_and_never_to_the_challenger(tmp_pa
     """period.json's `wipe.egress_bits` is evidence: the check is given it in whole MiB, wherever the
     challenger runs, and the challenger's command names no egress. The check certifies nothing on it and the record
     names it as the evidence writer's count."""
-    period = _side(tmp_path, monkeypatch, {"egress_bits": 3 * sw.EGRESS_UNIT_BITS - 5})
-    extras, of = [], WP.side_of
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or of(doc, node, d, extra))
+    period, of = _side(tmp_path, {"egress_bits": 3 * sw.EGRESS_UNIT_BITS - 5})
+    wipe_judge.judge(period, monkeypatch)
+    extras = []
+
+    def side_of(doc, node, key, local, what=None):
+        extras.append(tuple(local[len(WP.command("d")):]))
+        return of(doc, node, key, local, what)
+
     out = tmp_path / "out"
-    answer = W.leg(period, "n0", out)
+    answer = W.leg(period, "n0", out, side_of=side_of)
     assert extras == [()]
     assert answer["verdict"] == "accept" and answer["public"] == VACUOUS
     evidence = json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))
@@ -437,10 +521,10 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_
     pins: the session, honest in every read, is rejected, by a case that trusts no key, and the record and the printed
     summary say whose key it was and that it wasn't the pinned one."""
     other = hashlib.sha512(b"another key").hexdigest()
-    period = _side(tmp_path, monkeypatch, {"trusted_sha512": other})
+    period, side_of = _side(tmp_path, {"trusted_sha512": other})
     out = tmp_path / "out"
     argv = ["--period", str(period), "--out", str(out), "--node", "n0"]
-    assert W.main(argv) == 1
+    assert W.main(argv, side_of=side_of) == 1
     s = json.loads(capsys.readouterr().out)
     assert (s["verdict"], s["reason"], s["public"]) == ("reject", UNTRUSTED, None)
     assert (s["key_pinned"], s["key_sha512"]) == (False, wipe_side.key_sha512())
@@ -453,26 +537,27 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_
 def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, monkeypatch) -> None:
     """With no pin the verifier trusts the key the session came with, which only a challenger whose key the run made
     may be given: one on its own host is refused before its session starts."""
-    period = _side(tmp_path, monkeypatch, {"trusted_sha512": None})
+    period, side_of = _side(tmp_path, {"trusted_sha512": None})
     started = []
     monkeypatch.setattr(W, "run", lambda *a, **kw: started.append(a))
     with pytest.raises(ValueError, match="wipe.trusted_sha512 is unset with the memory challenger on auditor"):
-        W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"])
+        W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"], side_of=side_of)
     assert not started and not (tmp_path / "out").exists()
 
 
 def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path, monkeypatch) -> None:
     """The run pins its own challenger's key (`wipe.trusted_sha512`, as `--trusted-sha512` and `WIPE_KEY_SHA512` do), so
-    the verifier accepts its session; the challenger's host is not one `AUDITOR_KEYS` pins that key for, so the record
+    the verifier accepts its session; the configuration pins no such key for the wipe, so the record
     says rehearsal, no bound, and leaves the key custody out of the bound."""
-    period = _side(tmp_path, monkeypatch, {})
-    assert W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"]) == 0
+    period, side_of = _side(tmp_path, {})
+    wipe_judge.judge(period, monkeypatch)
+    assert W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"], side_of=side_of) == 0
     record = json.loads((tmp_path / "out" / "wipe.json").read_text())
     answer = record["answer"]
     assert record["report"]["key_pinned"] is True and record["report"]["key_sha512"] == wipe_side.key_sha512()
     where = record["placement"]
     assert answer["profile"]["placement"] == where and where["kind"] == "own-host" and not WP.holds(where)
-    assert where[WP.PREMISE] == f"{REHEARSAL}; the memory challenger ran on auditor, not the developer's n0"
+    assert where[WP.PREMISE] == f"{REHEARSAL} (configuration {CONF}); the memory challenger ran on auditor, not the developer's n0"
     assert record["uncertified"][0] == f"key custody: {where[WP.PREMISE]}"
 
 
@@ -487,7 +572,7 @@ def test_a_pin_is_a_sha512_in_lowercase_hex(pin) -> None:
 def test_what_the_bound_does_not_cover() -> None:
     """The memory outside the declared tier, a placement off its own host, and a counted link left out."""
     gpu = W.undeclared("gpu-hbm", 100, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
-    assert gpu[0] == {"tier": "gpu-hbm", "bytes": 900, "what": "NVIDIA H200's memory outside the declared tier"}
+    assert gpu[0] == {"tier": "gpu-hbm", "bytes": 900, "what": "the device's memory outside the declared tier"}
     assert gpu[1]["tier"] == "host-dram" and gpu[1]["what"] == "the host's DRAM"
     whole = W.undeclared("gpu-hbm", 1000, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
     assert [u["tier"] for u in whole if u["tier"] == "gpu-hbm"] == []
@@ -498,8 +583,13 @@ def test_what_the_bound_does_not_cover() -> None:
                          undeclared=gpu[:1])
     gaps = W.uncertified(where, None)
     assert gaps[0] == f"key custody: {where[WP.PREMISE]}" and len(gaps) == 3
-    assert gaps[1] == ("tier gpu-hbm: NVIDIA H200's memory outside the declared tier (900 bytes) is undeclared: the fill "
+    assert gaps[1] == ("tier gpu-hbm: the device's memory outside the declared tier (900 bytes) is undeclared: the fill "
                        "doesn't cover it and M doesn't count it")
+    assert where["store_gaps"] == [] and "prover_store" not in where
+    for old in (where | {"prover_store": {"tier": "gpu-hbm", "device": "NVIDIA H200"}},
+                {k: v for k, v in where.items() if k != "store_gaps"}):
+        with pytest.raises(ValueError, match="before the placement named no device"):
+            W.uncertified(old, None)
     assert gaps[2] == ("link control: n0 to outside (eth0) is counted by no network certifier, so what leaves on it is "
                        "outside E")
     assert WP.utc(1_793_088_000_123_456_789) == "2026-10-27T08:00:00.123456Z"
@@ -523,7 +613,8 @@ def test_what_a_joint_store_and_its_disks_leave_out() -> None:
         "of it is outside the boundary, which Covered assumes away"]
     assert W.disk_gaps(disk | {"spare_bytes": 7, "direct": False}) == [gaps[1], (
         "disk: buffered I/O, not O_DIRECT: the page cache can answer a read the disk doesn't keep")]
-    where = WP.placement("n0", "auditor", OTHER, store=joint, links=[])
+    assert W.store_gaps(joint) == gaps and W.store_gaps(None) == []
+    where = WP.placement("n0", "auditor", OTHER, store_gaps=W.store_gaps(joint), links=[])
     assert W.uncertified(where, None)[-2:] == gaps and W.disk_gaps(None) == []
 
 
@@ -548,7 +639,7 @@ def test_an_unmounted_block_device_no_target_is_on_is_undeclared_whole(tmp_path,
     got = [u for u in W.undeclared("disk+host-dram", 0, joint) if u["tier"] == "disk"]
     assert got == [{"tier": "disk", "bytes": 1 << 30, "what": "the host's block device nvme0n1, outside the declared disks"},
                    {"tier": "disk", "bytes": 1 << 20, "what": "the host's block device vdb, outside the declared disks"}]
-    where = WP.placement("n0", "auditor", OTHER, store=joint, links=[], undeclared=got)
+    where = WP.placement("n0", "auditor", OTHER, store_gaps=W.store_gaps(joint), links=[], undeclared=got)
     assert ("tier disk: the host's block device vdb, outside the declared disks (1048576 bytes) is undeclared: the fill "
             "doesn't cover it and M doesn't count it") in W.uncertified(where, None)
 

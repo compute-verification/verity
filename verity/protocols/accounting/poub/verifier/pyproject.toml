@@ -4,9 +4,19 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (lake): keyed on the suite's whole tree
+untraced = ["tests/test_remote_coins.py"]
 # What the tests import of `verity`: the audit's codec, receipts and record, on the commitments, the randomness and the
 # profile; its coins on the one challenger, local and as a service.
 inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
+          # `coins.trusted`'s Lean verifier (`coins.lean_answer`): one_stage's `lean`, and what `lake build
+          # sampled-proofs-verifier` reads, its package and its path requires
+          "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/lean",
+          "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/interface",
+          "verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",
+          "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean", "verity/commitments/lms/lean",
+          "verity/circuits/difftest",
           "verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/__init__.py",
@@ -22,9 +32,16 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/protocols/accounting/pous",
           "verity/protocols/accounting/pous/prover",
-          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), and the
-          # monitoring periods, which `monitoring` reads
+          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), the prover's
+          # party (`session_prover.py`), which test_session_parties.py runs against the verifier's, and the monitoring
+          # periods, which `monitoring` reads
           "verity/channel.py", "verity/runtime", "verity/tests/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
+          "verity/protocols/accounting/poub/prover/__init__.py", "verity/protocols/accounting/poub/prover/session_prover.py",
+          # the honest provers and the period's prover side, which the tests run against the verifier's
+          "verity/protocols/accounting/poub/prover/audit_prover.py", "verity/protocols/accounting/poub/prover/p2_prover.py",
+          "verity/protocols/accounting/poub/prover/period_prover.py",
+          "verity/protocols/accounting/poub/prover/opening_prover.py",
+          "verity/protocols/accounting/poub/prover/p2_party_prover.py",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
           # test_gate_ranges.py recompute from codec.encode_word, the f32 evaluators and property/v1's rules, and
           # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)
@@ -44,4 +61,4 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "verity/protocols/accounting/pouw/verifier/window.py", "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
           "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
-          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py"]
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py"]

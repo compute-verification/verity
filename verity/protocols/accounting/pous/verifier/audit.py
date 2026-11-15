@@ -27,10 +27,9 @@ from typing import Protocol
 from verity.commitments.randomness import Key, derive
 
 from .band import check_deployment
-from .oracle import Cost, Prog, pure, run
+from .oracle import Cost, Prog, run
 from .primitives import Primitives
-from .scheme import Encoding
-from .verifier import MerkleTree, VerifierKey
+from .verifier import VerifierKey
 
 CHALLENGE_DOMAIN = "verity/pous/audit-challenge/v1"
 
@@ -82,25 +81,6 @@ class Responder(Protocol):
     def answer(self, j: int, i: int) -> Prog[int]:
         """Round `j`'s answer to index `i`, block `i` as an `m`-bit label, as an oracle program."""
         ...
-
-
-@dataclass(frozen=True, slots=True)
-class HonestResponder:
-    """Answers from `C`, with no queries; `path` gives a root-only memory challenger the audit path."""
-
-    encoding: Encoding
-    tree: MerkleTree | None = None
-
-    def block(self, i: int) -> bytes:
-        return self.encoding.block(i)
-
-    def path(self, i: int) -> tuple[bytes, ...]:
-        if self.tree is None:
-            raise ValueError("build the responder with the encoding's tree to give paths")
-        return self.tree.path(i)
-
-    def answer(self, j: int, i: int) -> Prog[int]:
-        return pure(self.encoding.blocks[i])
 
 
 @dataclass(frozen=True, slots=True)

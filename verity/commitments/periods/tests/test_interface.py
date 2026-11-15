@@ -1,15 +1,15 @@
 """What an integration hands Verity (`verity.commitments.periods.interface`), against the interface alone: a circuit takes only
-the Definitions a catalog registers, a unit's rows are its Definition's bit rows as Flock stages them, a window tiles the partition and
+the Definitions a catalog registers, a unit's rows are its Definition's bit rows as Flock stages them, a period tiles the partition and
 commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (its bounds where
-the units change inference block, its step and slot and a form of the window's), an integration's outputs are checked
+the units change inference block, its step and slot and a form of the period's), an integration's outputs are checked
 against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
 cut port's rows are each wired from their own writer, a registered read's ports are tables of the registered rows under
 the value's salts, every other input row is
-declared registered, ingress or free and counted from the description, the verifier's window (and its registered
+declared registered, ingress or free and counted from the description, the verifier's period (and its registered
 reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads, and a history table's
-writer commits each row as the table's leaf, whose root the verifier pins from the public bodies. A window written under
+writer commits each row as the table's leaf, whose root the verifier pins from the public bodies. A period written under
 core's registration, and `of_records` against it, are the records audit's tests
-(`verity/protocols/proofs/spot/verifier/tests/test_records_audit.py`), since these may not import core."""
+(`verity/protocols/proofs/spot/prover/tests/test_records_audit.py`), since these may not import core."""
 from __future__ import annotations
 
 import copy
@@ -181,7 +181,7 @@ def test_a_boolean_definitions_rows_are_its_ports_words():
             I.layout(boolean("BooleanBad", (("f", bad),), bad))
 
 
-def test_the_window_tiles_the_partition_in_chunks():
+def test_the_period_tiles_the_partition_in_chunks():
     win, *_ = window(10, 4)
     assert [(m.base, m.n, m.name) for m in win.window.members] == [(0, 4, f"{TID}/c0"), (4, 4, f"{TID}/c1"),
                                                                    (8, 2, f"{TID}/c2")]
@@ -207,10 +207,10 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
     assert changed.close(salt_key=bytes(32)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
 
 
-def test_a_windows_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
+def test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
     """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one sample a port in
     the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
-    of one window sample other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
+    of one period sample other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
     port's index its nonce."""
     win, _ins, _outs = window()
     ports = [m.port(p) for m in win.window.members for p, _ in m.all_rows]
@@ -243,7 +243,7 @@ def test_close_concatenates_each_templates_words_once(monkeypatch):
         assert len({id(d[group][p].base) for d in seen}) == 1
 
 
-def test_a_window_closes_over_every_unit():
+def test_a_period_closes_over_every_unit():
     win = I.Window(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4)
     ins, outs = values(10)
     win.record(COORD, [a[:6] for a in ins], [a[:6] for a in outs])
@@ -268,7 +268,7 @@ HONEST = [(2, {"step": t, "slot": s, "form": FORMS[t % 2]}) for t in range(3) fo
 
 
 def labelled(runs: list[tuple[int, object]], forms: tuple[str, ...] = FORMS) -> I.Window:
-    """A window of `STEPS_SLOTS`' twelve coordinates in members of 4, each run ``(units, label)`` recorded in turn."""
+    """A period of `STEPS_SLOTS`' twelve coordinates in members of 4, each run ``(units, label)`` recorded in turn."""
     win = I.Window(I.Circuit("test", ((COORD, 12),), blocks=STEPS_SLOTS), RUN, LAW, 4, forms=forms)
     (ins, outs), at = values(12), 0
     for n, label in runs:
@@ -279,7 +279,7 @@ def labelled(runs: list[tuple[int, object]], forms: tuple[str, ...] = FORMS) -> 
 
 def test_a_label_in_a_circuit_with_blocks_is_its_runs_class_structure():
     """A labelled run starts and ends where its template's units change inference block, labelled by its step and slot and
-    a form of the window's: the honest labelling commits what the unlabelled window does, and the index shows only those
+    a form of the period's: the honest labelling commits what the unlabelled period does, and the index shows only those
     bounds and the members', an unlabelled stretch of runs one run."""
     win = labelled(HONEST)
     assert win.close(salt_key=bytes(32)).roots == labelled([(12, None)]).close(salt_key=bytes(32)).roots
@@ -289,7 +289,7 @@ def test_a_label_in_a_circuit_with_blocks_is_its_runs_class_structure():
     assert [m["labels"] for m in whole.labels()["members"]] == [[[0, 4, {"step": 0}]],
                                                                 [[4, 6, {"slot": 0, "form": "evaluated"}], [6, 8, None]],
                                                                 [[8, 12, {}]]]
-    with pytest.raises(ValueError, match="a window's forms are names"):
+    with pytest.raises(ValueError, match="a period's forms are names"):
         labelled([], (0,))
 
 
@@ -391,7 +391,7 @@ def test_several_templates_are_one_population():
 
 
 @pytest.mark.parametrize("templates", [((COORD, 10),), ((COORD, 3), (ACC, 2))])
-def test_the_verifiers_window_is_the_circuit_records(templates):
+def test_the_verifiers_period_is_the_circuit_records(templates):
     win = I.Window(I.Circuit("rec", templates), RUN, LAW, 4)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
@@ -498,7 +498,7 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
 
 
 def chain_given(monkeypatch) -> tuple[I.Window, list[dict]]:
-    """A window of `chain` recorded and closed, and the members' data it gave `rows.commit`."""
+    """A period of `chain` recorded and closed, and the members' data it gave `rows.commit`."""
     win = I.Window(chain(), RUN, LAW, 2)
     ins, outs = chain_values()
     win.record(GEMM, ins, outs, {"chain": 0})
@@ -512,7 +512,7 @@ def chain_given(monkeypatch) -> tuple[I.Window, list[dict]]:
 def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch):
     """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root: its rows are its
     writer's output value, its writer units' leaves of its writer's tree (`rows.Binding.held`, `held_leaves`), given as
-    `rows.WIRED`, and its ``b || c`` its writer's. The verifier's window and the record name it under its reader all
+    `rows.WIRED`, and its ``b || c`` its writer's. The verifier's period and the record name it under its reader all
     the same, at the leaves, the domain and the root of the port that holds it (`rows.wired_ports`): one tree at two
     ports. Given as rows it is refused, and so is a wire of several members' units, which no one tree holds, and, in a
     member with no tables, one that isn't its writer's rows in order."""
@@ -614,14 +614,14 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
         I.circuit_record(win.window, "chain", [(GID, 8)], wires=chain().wires)
 
 
-def test_a_record_that_lists_its_members_declares_its_window_ingress_and_is_counted_apart_from_the_runs():
-    """A listed record carries its window's ingress beside its members (the units' ports that read rows before the window
-    at a step, as a served window's do), and `input_count` counts it from those members in ``window_ingress``: the bits the
+def test_a_record_that_lists_its_members_declares_its_period_ingress_and_is_counted_apart_from_the_runs():
+    """A listed record carries its period's ingress beside its members (the units' ports that read rows before the period
+    at a step, as a served period's do), and `input_count` counts it from those members in ``window_ingress``: the bits the
     stated record with the same ports as the run's ingress counts in ``ingress``, but its ``free`` stays the run's, every
-    unwired row, since only the link checks bind those rows. A window ingress on a wired row, outside its template's units,
-    on no input row, at no step, or over another's rows is refused by the record, the verifier's window and the count; a
+    unwired row, since only the link checks bind those rows. A period ingress on a wired row, outside its template's units,
+    on no input row, at no step, or over another's rows is refused by the record, the verifier's period and the count; a
     listed record declares nothing else but its registered reads (the next test), the run's ingress included, and a
-    stated one no window ingress."""
+    stated one no period ingress."""
     win, by_id, W = I.Window(chain(), RUN, LAW, 2), {GID: GEMM}.__getitem__, I.WINDOW_INGRESS
     first = I.Ingress(GID, "x", 0, REQUESTS, 0)
     listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "chain", [(GID, 8)], declared={W: [first.doc()]})))
@@ -648,23 +648,23 @@ def test_a_record_that_lists_its_members_declares_its_window_ingress_and_is_coun
             I.circuit_record(win.window, "chain", [(GID, 8)], declared={k: v})
         with pytest.raises(ValueError, match="one or the other"):
             I.window_of_record({**listed, k: v}, LAW, by_id)
-        with pytest.raises(ValueError, match="declares only its registered reads and its window's ingress"):
+        with pytest.raises(ValueError, match="declares only its registered reads and its period's ingress"):
             I.input_count({**listed, k: v})
-    with pytest.raises(ValueError, match="a window's ingress is a listed record's"):
+    with pytest.raises(ValueError, match="a period's ingress is a listed record's"):
         I.circuit_record(win.window, "chain", [(GID, 8)], cap=2, wires=chain().wires, declared={W: [first.doc()]})
     with pytest.raises(ValueError, match="one or the other"):
         I.window_of_record({**json.loads(I.circuit_bytes(win.circuit_record())), W: [first.doc()]}, LAW, by_id)
 
 
 def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_registered_at_a_held_root():
-    """A listed record carries its registered reads beside its members and its window ingress, as a served window reads its
+    """A listed record carries its registered reads beside its members and its period ingress, as a served period reads its
     model's weights: each layer's units read that layer's weight row into ``w``, their own rows (slice 2's form) or a
     shared-row table of the one row they read (`members`' form for a stated record). `input_count` counts the rows a
-    held parameter's reads fill registered, so the run's free bits are the window ingress alone and the stated record
+    held parameter's reads fill registered, so the run's free bits are the period ingress alone and the stated record
     with the same reads (and those ports as the run's ingress) leaves none; a read of an output row fills none. Without a
-    pin, or where the window's root is another or none, the reads are free. A read over part of a member, of a row a wire
-    fills or the window ingress reads, outside its template's units, of no template or parameter, past its parameter's
-    leaves, off its port's rows, cut, or over another's rows is refused by the record, the verifier's window and the
+    pin, or where the period's root is another or none, the reads are free. A read over part of a member, of a row a wire
+    fills or the period ingress reads, outside its template's units, of no template or parameter, past its parameter's
+    leaves, off its port's rows, cut, or over another's rows is refused by the record, the verifier's period and the
     count, and so is a table that isn't its parameter's every row (the next test takes tables)."""
     layer, by_id, W = REQUESTS * STEPS, {GID: GEMM}.__getitem__, I.WINDOW_INGRESS
     weights = I.Read(GID, "w", "weights", 0, (LAYERS, layer), 0, (256, 0))
@@ -787,7 +787,7 @@ EMB = I.resolve("EmbeddingRead_v1{V=4,H=16}")
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
 EID, G8ID = descriptor_id(EMB), descriptor_id(G8)
 WEIGHTS = 512 + 4 * 16
-#: the verifier's pin of ``weights``, and the root a window whose registration records the same root records
+#: the verifier's pin of ``weights``, and the root a period whose registration records the same root records
 PIN = {"weights": "ab" * 64}
 
 
@@ -945,7 +945,7 @@ def sliced_values(seed: int = 0) -> tuple[list[np.ndarray], ...]:
     return [x8, w8], [y8], [x, w], [np.asarray(evaluate_batch(GEMM, x, w, kernel="reference"), dtype=np.uint16).reshape(3, 16)]
 
 
-def test_a_window_commits_a_cut_ports_rows_each_under_its_writers_salt():
+def test_a_period_commits_a_cut_ports_rows_each_under_its_writers_salt():
     """A port cut in two is committed as two rows, each its words' half: a position's ``x#0`` and ``x#1`` are its slices'
     outputs, the wiring check holds on the committed bodies, the verifier derives the same members from the record, which
     states the cut rows, and a cut row that isn't its writer's output doesn't commit."""
@@ -974,7 +974,7 @@ def test_a_window_commits_a_cut_ports_rows_each_under_its_writers_salt():
 
 def latent(n: int = 6, at: int = 0, capacity: int = 16, **edit) -> I.History:
     """History table ``latent``: `sliced`'s six ``Gemm_v2{K=16, N=8}`` outputs, unit u at position ``at + u``, after ``at``
-    rows the verifier holds from the table's earlier windows."""
+    rows the verifier holds from the table's earlier periods."""
     runs = ([{"start": 0, "count": at, "held": "latent", "row": 0}] if at else []) + [
         {"start": at, "count": n, "writer": G8ID, "out": "o0", "radix": [n], "base": 0, "step": [1]}]
     return I.History(**{"name": "latent", "program": "program", "writer": G8ID, "out": "o0", "words": 8, "runs": runs,
@@ -983,7 +983,7 @@ def latent(n: int = 6, at: int = 0, capacity: int = 16, **edit) -> I.History:
 
 def history_window(table: HT.HistoryTable, seed: int = 0) -> tuple[I.Window, CS.Committed, dict[str, bytes]]:
     """`sliced`, its slices' outputs appended to ``table`` as history table ``latent``'s next rows, committed: -> the
-    window, its commitment and its members' public bodies."""
+    period, its commitment and its members' public bodies."""
     ins8, outs8, ins, outs = sliced_values(seed)
     at = len(table.rows)
     table.append(outs8[0])
@@ -999,8 +999,8 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     """A history table's writer's output rows, and the rows a wire fills from them, are ``hm96-sha512/row-seg/v1`` rows,
     each unit's under the table's salt at its position, so its public string is the table's leaf and the wiring check
     holds; the record states them so, and the verifier derives the same members from it, stated or listed, and the same
-    history tables, whose root the verifier computes from its writers' public bodies, the root the window
-    registers and the verifier pins; a later window's positions follow the rows it holds of the earlier ones."""
+    history tables, whose root the verifier computes from its writers' public bodies, the root the period
+    registers and the verifier pins; a later period's positions follow the rows it holds of the earlier ones."""
     table = HT.HistoryTable("program", "latent", 8, 16)
     win, got, publics = history_window(table)
     ms = win.window.members
@@ -1039,7 +1039,7 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
 
 
 def test_a_history_writers_rows_are_hashed_once_as_the_tables_strings(monkeypatch):
-    """A history writer's output rows reach `rows.commit` as their table's strings (``strings_of``), so the window hashes only
+    """A history writer's output rows reach `rows.commit` as their table's strings (``strings_of``), so the period hashes only
     their leaves and tree, and its commitment is the one hashing the rows in full under the same salts makes; strings of
     the wrong size, or for a port whose salts aren't given, are refused."""
     seen, real = {}, CS.commit
@@ -1066,9 +1066,9 @@ def test_a_history_writers_rows_are_hashed_once_as_the_tables_strings(monkeypatc
 
 
 def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_strings():
-    """The verifier's history tables (`history.params`) hold the window's registered root to the root over its writers'
+    """The verifier's history tables (`history.params`) hold the period's registered root to the root over its writers'
     public strings, the root of the pin the reads are made from (`history.pins`): a registered root over other rows, a
-    body whose strings another unit wrote (under the leaf layer over it, or the window's), a registration naming no root
+    body whose strings another unit wrote (under the leaf layer over it, or the period's), a registration naming no root
     for the table, a table without a pin or with another table's, and a writer member's missing body are each refused."""
     table = HT.HistoryTable("program", "latent", 8, 16)
     win, _got, publics = history_window(table)
@@ -1097,7 +1097,7 @@ def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers
         HW.params(doc, win.window, {k: v for k, v in publics.items() if k != m0.key}, pinned)
 
 
-def test_a_history_tables_window_refuses_rows_it_cant_commit_as_the_tables():
+def test_a_history_tables_period_refuses_rows_it_cant_commit_as_the_tables():
     """The committer refuses a history table not given, or given for another program, rows other than its runs'
     positions, a writer's output that isn't the table's row at its position, a unit writing two positions, and a unit of
     the writer writing none, since its row would need a salt of its own."""
@@ -1137,7 +1137,7 @@ def test_a_history_tables_window_refuses_rows_it_cant_commit_as_the_tables():
 def test_a_history_is_declared_by_its_writers_output_and_runs_and_read_as_a_table():
     """A history table names its writer's output and runs that tile its positions over the writer's units, and is
     refused otherwise; its table reads and openings take its supplied root, domain id and 1 from the verifier's pin of
-    it, a parameter of its own, and count registered where the window registers the pinned root."""
+    it, a parameter of its own, and count registered where the period registers the pinned root."""
     with pytest.raises(ValueError, match="at most its capacity"):
         latent(capacity=4)
     with pytest.raises(ValueError, match="its runs are"):
@@ -1221,7 +1221,7 @@ BOUNDARY = (I.Read(EID, "tok", "ids", at=2, radix=(1,), base=0, step=(0,)),
 
 def test_a_record_without_boundary_reads_ranks_or_free_rows_keeps_its_bytes():
     """The records of circuits that declare no boundary reads, ranks or free rows, a stated one with every other
-    declaration, a plain window's and one with registered reads, are the bytes they were before `Circuit.boundary_reads`,
+    declaration, a plain period's and one with registered reads, are the bytes they were before `Circuit.boundary_reads`,
     `Circuit.ranks` and `Circuit.free` (their SHA-512s pinned)."""
     for doc, digest in [
         (declared().description(), "d35073408e1e86b57c9d7babbf974e1e4a970bb88df064ed1e604ed0d1da2440f99cd9f27f2262f53f971aecf15bb"
@@ -1269,8 +1269,8 @@ def test_a_circuit_declares_its_boundary_reads_and_no_row_twice():
         declared(boundary_reads=(BOUNDARY[0].doc(),))
 
 
-def test_the_verifiers_window_is_the_same_with_boundary_reads_and_a_listed_record_declares_none():
-    """Boundary reads add the record's ``boundary_reads`` and nothing else: the verifier's window from the record
+def test_the_verifiers_period_is_the_same_with_boundary_reads_and_a_listed_record_declares_none():
+    """Boundary reads add the record's ``boundary_reads`` and nothing else: the verifier's period from the record
     (`window_of_record`) is the one without them, and a record that reads one row twice is refused. A record that lists its
     members declares none."""
     reads = (I.Read(TID, "x", "x", 0, (10,), 0, (32,)), I.Read(TID, "o0", "o0", 0, (10,), 0, (1,)))
@@ -1289,7 +1289,7 @@ def test_the_verifiers_window_is_the_same_with_boundary_reads_and_a_listed_recor
         I.input_count({**listed, "boundary_reads": doc["boundary_reads"]})
 
 
-#: the digest `Ranks` names each rank's window by: SHA-512 of its circuit (`circuit_of`) in canonical JSON
+#: the digest `Ranks` names each rank's period by: SHA-512 of its circuit (`circuit_of`) in canonical JSON
 DECLARED_H = hashlib.sha512(canonical_json(I.circuit_of(declared().description()))).hexdigest()
 RANK_PINS = {f"r{r}/weights": "ab" * 64 for r in (0, 1)}
 
@@ -1306,7 +1306,7 @@ JOIN = I.Wire(GID, "x", G8ID, "o0", at=3, radix=(3, 2), base=0, step=(2, 1), cut
 def joined(**edit) -> I.Circuit:
     """`declared` on each of two ranks, joined: rank ``r``'s units follow rank ``r - 1``'s and its names are ``r<r>/``
     before the rank's own, each third token a named free row (advice), and rank 1's ``Gemm_v2{K=16, N=16}`` reading rank
-    0's slices by the join's wire (`JOIN`) where its own window reads its own."""
+    0's slices by the join's wire (`JOIN`) where its own period reads its own."""
     def each(f):
         return tuple(x for r in (0, 1) for x in f(r))
     registered = I.Registered(
@@ -1330,7 +1330,7 @@ def _field(v) -> object:
 
 def test_a_joined_circuit_states_its_ranks_and_names_its_free_rows():
     """`Circuit.ranks` and `Circuit.free` record as the record's ``ranks`` and ``free`` (both of `DECLARED`) and read back
-    (`ranks_of`, `free_of`), each rank's window by its circuit's digest; `input_count` counts the named free rows as
+    (`ranks_of`, `free_of`), each rank's period by its circuit's digest; `input_count` counts the named free rows as
     ``free``, and the joined circuit's count is twice one rank's: the join's wire fills the rows rank 1's own would."""
     c = joined()
     rec = json.loads(json.dumps(c.description()))
@@ -1346,7 +1346,7 @@ def test_a_joined_circuit_states_its_ranks_and_names_its_free_rows():
                          I.Free(GID, "w", 0, 3, "weights"), I.Free(GID, "x", 0, 3, "peer", cut=(1, 1))),
                    wires=(replace(sliced().wires[0], radix=(3, 1), step=(2, 1), cut=(0, 1)),))
     assert split.description()["free"][-1]["cut"] == [1, 1]
-    with pytest.raises(ValueError, match="no window: each rank commits its own"):
+    with pytest.raises(ValueError, match="no period: each rank commits its own"):
         I.Window(joined(), RUN, LAW, 4)
 
 
@@ -1400,8 +1400,8 @@ def test_ranks_and_free_rows_that_dont_fit_the_circuit_are_refused_by_name():
             I.free_of({"free": bad})
 
 
-def test_the_verifiers_window_is_the_same_with_named_free_rows():
-    """Named free rows add the record's ``free`` and nothing else: the verifier's window from the record
+def test_the_verifiers_period_is_the_same_with_named_free_rows():
+    """Named free rows add the record's ``free`` and nothing else: the verifier's period from the record
     (`window_of_record`) is the one without them."""
     free = (I.Free(G8ID, "x", 0, 6, "peer"), I.Free(G8ID, "w", 0, 6, "weights"), I.Free(GID, "w", 0, 3, "weights"))
     with_free, plain = (I.Window(sliced(free=f), RUN, LAW, 4) for f in (free, ()))
@@ -1413,10 +1413,10 @@ def test_the_verifiers_window_is_the_same_with_named_free_rows():
         I.window_of_record({**doc, "free": doc["free"][:2]}, LAW, {G8ID: G8, GID: GEMM}.__getitem__)
 
 
-def test_a_registered_read_is_registered_only_where_the_windows_root_is_the_one_the_verifier_pinned_before_the_run():
-    """The third token read from ``acts``, a parameter whose root the prover commits in the window, is free; the same read
-    at a pinned root the window's registration records is registered. A window whose ``weights`` root is another than the
-    pin, or records none, has every read, table read and opening of ``weights`` free, and so has a window with no pins
+def test_a_registered_read_is_registered_only_where_the_periods_root_is_the_one_the_verifier_pinned_before_the_run():
+    """The third token read from ``acts``, a parameter whose root the prover commits in the period, is free; the same read
+    at a pinned root the period's registration records is registered. A period whose ``weights`` root is another than the
+    pin, or records none, has every read, table read and opening of ``weights`` free, and so has a period with no pins
     (a bare string is none). A set of names is no pins: refused, as is a root not hex."""
     reg = declared().registered
     rec = declared(registered=replace(reg, params={**reg.params, "acts": 2}, reads=(
@@ -1522,8 +1522,8 @@ READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
 def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tuple = (), formats: dict | None = None,
                by_reference: bool = False) -> tuple[I.Window, Bound]:
-    """A window of ``n`` units reading ``w`` (`READ`), committed in its format's leaves; ``by_reference``: ``wrow`` recorded
-    by reference, so the window commits it as the value's rows (`rows.ValueRows`)."""
+    """A period of ``n`` units reading ``w`` (`READ`), committed in its format's leaves; ``by_reference``: ``wrow`` recorded
+    by reference, so the period commits it as the value's rows (`rows.ValueRows`)."""
     reg = I.Registered({"w": 6 * K // 2, **(params or {})}, reads=(READ,), values=held, formats=formats or {})
     schema, bits = I.value_format(reg, "w")
     rows = np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16).view(f"<u{bits // 8}")
@@ -1539,7 +1539,7 @@ def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tupl
 def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_inputs():
     """The record format: the reads in the record's ``registered``, its other fields only when declared, and the free
     input bits counted from the description alone. A pin names its parameter alone: ``w``'s holds no ``w/a@8``, whose
-    reads count registered only at its own pin and the window's same root for it."""
+    reads count registered only at its own pin and the period's same root for it."""
     win, _ = registered()
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     assert I.Registered.of(doc["registered"]) == win.circuit.registered and "ingress" not in doc
@@ -1590,7 +1590,7 @@ def test_a_registered_values_shape_is_the_width_of_the_port_its_reads_name():
 def test_a_circuits_values_are_parameters_of_its_program_ahead_of_its_units():
     """`Registered.values`: registered parameters the circuit's program takes as its own, ahead of its units', in 16-bit
     leaves (`program_values`), so a circuit of one template with values is a ``TemplatePopulations``. Its record names them
-    in its ``registered`` only when there are some, the verifier's window from the record is the circuit's, its members
+    in its ``registered`` only when there are some, the verifier's period from the record is the circuit's, its members
     are the ones without values, and a value that is no registered parameter, or one named twice, is refused."""
     win, w = registered()
     reg = replace(win.circuit.registered, values=("w",))
@@ -1609,7 +1609,7 @@ def test_a_circuits_values_are_parameters_of_its_program_ahead_of_its_units():
             replace(circuit, registered=replace(reg, values=bad))
 
 
-def test_a_window_registers_its_circuits_values_by_their_entries_chained_after_the_last_record(tmp_path):
+def test_a_period_registers_its_circuits_values_by_their_entries_chained_after_the_last_record(tmp_path):
     """With values, `Window.write` registers each by its committed value's entry, in the circuit's order, chained after
     ``previous``, and names the record v2 (core's ``record`` makes it ``verity/registration/v2`` with entries); without,
     none and v1. A value with no committed value is refused before anything is written."""
@@ -1635,9 +1635,9 @@ def test_a_window_registers_its_circuits_values_by_their_entries_chained_after_t
     assert not (tmp_path / "unheld").exists()
 
 
-def test_a_registration_names_the_values_its_window_outputs_after_its_ports(tmp_path):
-    """`rows.registration` names each value the window ``outputs`` for a later record among the record's roots, after the
-    window's own ports and by its port, root, leaves and domain alone; with none, the roots are the ports'. An output named
+def test_a_registration_names_the_values_its_period_outputs_after_its_ports(tmp_path):
+    """`rows.registration` names each value the period ``outputs`` for a later record among the record's roots, after the
+    period's own ports and by its port, root, leaves and domain alone; with none, the roots are the ports'. An output named
     like a port is refused, and `rows.write` hands its ``outputs`` to the record it writes."""
     roots: list = []
 
@@ -1656,7 +1656,7 @@ def test_a_registration_names_the_values_its_window_outputs_after_its_ports(tmp_
     CS.registration(c, {"by": "test"}, registrar=reg, outputs=[{**out, "by": "its writer"}])
     assert roots == [*ports, out]
     taken = ports[0]["port"]
-    with pytest.raises(ValueError, match=re.escape(f"output values ['{taken}'] are named like the window's ports")):
+    with pytest.raises(ValueError, match=re.escape(f"output values ['{taken}'] are named like the period's ports")):
         CS.registration(c, {"by": "test"}, registrar=reg, outputs=[{**out, "port": taken}])
     roots.clear()
     win.write(c, tmp_path / "none", {"by": "test"}, registrar=reg)
@@ -1681,7 +1681,7 @@ def test_a_read_covers_whole_members_and_reads_whole_rows():
                            registered=reg(I.Read(TID, "x", "w", 0, (12, 2), 0, (0, K // 4), cut=(0, 2)))), RUN, LAW, 4)
 
 
-def test_the_window_commits_each_read_port_as_a_table_of_the_registered_rows_under_their_salts():
+def test_the_period_commits_each_read_port_as_a_table_of_the_registered_rows_under_their_salts():
     """A member a read covers is a shared-row member: its read port's table the distinct rows its units read, under the
     registered value's salts, each unit's ref its row; its other ports its units' own rows. The header names the rows'
     positions (`write`), the verifier derives the same members from the record, and its ``--registered`` file names each
@@ -1746,7 +1746,7 @@ FP32_SEG = {"row_schema": SEG, "word_bits": 32}
 def test_a_value_of_a_declared_format_is_read_in_it(tmp_path):
     """`Registered.formats`: ``w`` declared 32-bit leaves in ``row-seg/v1`` rows is read in them. Its port is a ``row-seg/v1``
     row in its template's statement and its members (the verifier's, from the record, the same), its program takes it as
-    32-bit leaves, the window commits its rows (a leaf's two words low first), by reference as in full (`_same_commit`),
+    32-bit leaves, the period commits its rows (a leaf's two words low first), by reference as in full (`_same_commit`),
     `read_shape` gives its rows in 32-bit words, and the ``--registered`` file names its pin's 32-bit words. A 16-bit pin
     of it or 16-bit committed value is refused."""
     win, w = registered(formats={"w": FP32_SEG})
@@ -1902,7 +1902,7 @@ def fed_chain() -> tuple[I.Circuit, Bound, list[np.ndarray], list[np.ndarray], l
 
 def _loop_turns(f) -> int:
     """The jumps Python makes in `verity.commitments.periods`' modules while ``f()`` runs (`sys.monitoring`'s JUMP events: every
-    turn of a loop, a comprehension's included, is one): the work a window does in Python, counted, not timed."""
+    turn of a loop, a comprehension's included, is one): the work a period does in Python, counted, not timed."""
     mon, here, ours = sys.monitoring, str(Path(I.__file__).parent), {}
     tool, turns = next(t for t in range(6) if mon.get_tool(t) is None), 0
 
@@ -1930,8 +1930,8 @@ def _loop_turns(f) -> int:
 def _long_chain(layers: int, d: Path) -> None:
     """A ``Gemm_v2{K=16, N=16}`` chain of ``layers`` layers of two units, a member a unit (cap 1), layer 0's ``x`` a
     ``Gemm_v2{K=32, N=16}`` feed's output and layer l's layer l - 1's, a wire each, and each layer's ``w`` its own row of
-    a registered value, a read each, both recorded by reference: the window built, recorded, closed and written, and the
-    verifier's window, wiring check and ``--registered`` files made from its record."""
+    a registered value, a read each, both recorded by reference: the period built, recorded, closed and written, and the
+    verifier's period, wiring check and ``--registered`` files made from its record."""
     rng = np.random.default_rng(5)
 
     def bf16(a: np.ndarray) -> np.ndarray:
@@ -1963,10 +1963,10 @@ def _long_chain(layers: int, d: Path) -> None:
     assert len(I.registered_reads(doc, mine, pin, registered=REG)) == 2 * layers
 
 
-def test_a_windows_commit_is_linear_in_its_members(tmp_path):
-    """A window's commit and the verifier's rebuild of it from its record (`_long_chain`) run loops whose turns grow with
+def test_a_periods_commit_is_linear_in_its_members(tmp_path):
+    """A period's commit and the verifier's rebuild of it from its record (`_long_chain`) run loops whose turns grow with
     its members, wires and reads, not with their products: from 32 layers to 64 the turns grow at most about twice what
-    they grow from 16 to 32 (the difference drops what a window does once, such as its hiding tables). The 4,32,4 window
+    they grow from 16 to 32 (the difference drops what a period does once, such as its hiding tables). The 4,32,4 period
     class's commit (58,719 members, 166,038 wired member ports, 6,727 reads) ran each port's hashes past every port's, each
     member past every read and each wired port past every member, hours on one core; a timing can't say which, a count
     can."""
@@ -2003,8 +2003,8 @@ class _Counted(list):
         return super().__getitem__(i)
 
 
-def test_a_windows_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
-    """`fed_chain`'s chain members, two a layer, each read their layer's one row of ``w``: committing and writing the window
+def test_a_periods_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
+    """`fed_chain`'s chain members, two a layer, each read their layer's one row of ``w``: committing and writing the period
     reads each row's salt once, however many members read it, and asks for no statement. Core's ``Registered.statement``
     samples a member's salts again (a pure-Python ChaCha20 call each) and makes its rows' ints, and the rows' commit drew
     them a third time: 10,565,136 samples at the 4,32,4 class, whose members read 37,788 distinct rows."""
@@ -2023,9 +2023,9 @@ def test_a_windows_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
     assert w.salts.reads == LAYERS
 
 
-def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_body_is_made_from_them(tmp_path):
+def test_a_periods_value_rows_and_paths_are_written_once_and_a_drawn_members_body_is_made_from_them(tmp_path):
     """`fed_chain` recorded by reference: each chain member's ``m<k>-private.bin`` leaves out its ``w`` rows and salts and
-    its wired ``x``'s, ``v0-private.bin`` holds each row of ``w`` the window reads once, then its salt, and ``window.json``
+    its wired ``x``'s, ``v0-private.bin`` holds each row of ``w`` the period reads once, then its salt, and ``window.json``
     each row's path once; each member's prover body as the files make it (`rows.read_private`: a wired row and its salt off
     its writer's own file; `rows.Bodies`, with as few as one file mapped at a time) and its header (`rows.registered_header`) are the committed ones, and so is the circuit prover's
     file staged from them (`flock_inputs.flock_input_files`). The 4,32,4 class's bodies held 3,200,960 rows of 32,768
@@ -2080,7 +2080,7 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
     row = mem["registered"]["w"]["positions"][0]
     feed = _first(win.window, SID)
     for edit, read, why in [
-            (lambda d: d["value_rows"]["w"].update(positions=[2, 3]), CS.read_private, "rows of 256 words the window's"),
+            (lambda d: d["value_rows"]["w"].update(positions=[2, 3]), CS.read_private, "rows of 256 words the period's"),
             (lambda d: d["registered_paths"]["w"].pop(str(row)), CS.registered_header, "no path for rows"),
             (lambda d: d["members"][k]["registered"]["w"].update(positions=[0, 1]), CS.read_private, "rows of 256 words"),
             (lambda d: d["members"][k]["wired"][0].update(writers=[10 ** 6] * mem["n"]), CS.read_private, "not output rows"),
@@ -2187,7 +2187,7 @@ def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(
 
 
 def given_by_reference(monkeypatch) -> tuple[CS.Binding, list[dict], Bound]:
-    """`fed_chain` with every chain input recorded by reference: the window and each member's rows as `Window.close` hands
+    """`fed_chain` with every chain input recorded by reference: the period and each member's rows as `Window.close` hands
     them to `rows.commit` (each wired ``x`` `rows.WIRED`, each ``w`` a `rows.ValueRows` of the registered value)."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
@@ -2256,7 +2256,7 @@ REFUSED = {
     "two rows for the port's one": (_value_rows(positions=(0, 1)), "2 rows, not 1"),
     "salts short of its rows": (_value_rows(salts=lambda s: s[:-1]), f"salts not one {CS.SALT_BYTES}-byte salt a row"),
     "wired rows on a port no wire writes": (_feed_x_wired, f"given as {CS.WIRED} rows, but no wire writes it"),
-    "rows by reference in a window with row tables": (_beside_a_row_table, "in a window with row tables"),
+    "rows by reference in a period with row tables": (_beside_a_row_table, "in a period with row tables"),
 }
 
 
@@ -2265,7 +2265,7 @@ def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(mo
     """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of another row width (in u16
     words: a 32-bit value's leaves are two each), schema or leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
     than the port's rows, or salts given that aren't one a row; `rows.WIRED` rows on a port no wire writes; and a port by
-    reference in a window with row tables,
+    reference in a period with row tables,
     whose linked members' rows are read off their ``x`` tables. The rows as `Window.close` gives them commit; each one edit
     is refused."""
     window, data, _w = given_by_reference(monkeypatch)
@@ -2349,7 +2349,7 @@ def embedding(**edit) -> I.Circuit:
 
 
 def embedding_window() -> tuple[I.Window, Table]:
-    """`embedding`'s window in members of at most 2 units, its units' values `gates.embedding`'s reference on tokens
+    """`embedding`'s period in members of at most 2 units, its units' values `gates.embedding`'s reference on tokens
     (3, 3, 1)."""
     table = Table()
     win = I.Window(embedding(), RUN, LAW, 2, registered={"embed": table})
@@ -2369,7 +2369,7 @@ def embedding_window() -> tuple[I.Window, Table]:
 
 
 def test_a_tables_reads_and_verdicts_take_its_supplied_values():
-    """A table as registered reads, no window built: a table read takes the table's supplied root or domain id and an
+    """A table as registered reads, no period built: a table read takes the table's supplied root or domain id and an
     opening's verdict its supplied 1, each one row for all its units, made from the entry of the table's parameter alone
     under public salts. A table that isn't its parameter's every row, and an ingress, are refused by the committer."""
     c, table = embedding(), Table()
@@ -2412,14 +2412,14 @@ def listed_embedding(*wired: tuple[str, str, tuple[int, ...]], registered: I.Reg
 
 
 def test_a_listed_records_tables_table_reads_and_openings_count_as_a_stated_records():
-    """A listed record carries a table, its table reads and its openings beside its members, as a served window reads the
+    """A listed record carries a table, its table reads and its openings beside its members, as a served period reads the
     expert a router chose: each read's root and domain rows its table's supplied values, its row, salt and path the units'
     own, which its verdict holds to the table's root at the hidden key. `input_count` counts them as it counts the stated
     record with the same declarations: registered where the table's parameter is held, free without a pin or where the
-    window's root is another, and a key a wire fills still wired. A table that isn't its parameter's every row, a table
+    period's root is another, and a key a wire fills still wired. A table that isn't its parameter's every row, a table
     read of no declared table or off a 64-byte input row, an opening whose members lack its key or verdict, a declaration
     over part of a member, outside its template's units or of no template, over a row a wire fills, or over another's rows
-    is refused by the count, as by the record and the verifier's window (`listed_reads`)."""
+    is refused by the count, as by the record and the verifier's period (`listed_reads`)."""
     c, listed, pins = embedding(), listed_embedding(), {"embed": "ab" * 64}
     lay = I.layout(EMB)
     words = dict(lay.rows)
@@ -2455,8 +2455,32 @@ def test_a_listed_records_tables_table_reads_and_openings_count_as_a_stated_reco
         I.input_count(listed_embedding(("salt", "o0", (5, 6))), pins=pins, roots=pins)
 
 
+def test_an_opening_may_declare_the_output_that_returns_its_row():
+    """An opening may declare its ``row``, the output that returns the row opened: the first of its reader's two
+    outputs, the second its verdict, of a reader of six input rows. Nothing is filled or counted by it: the count is
+    the one without it, stated and listed. Its record names it only where it is declared, so a record that declares
+    none is the bytes it was, and it is read back as written. One that is the verdict's own output, no output of the
+    reader or an input row of it is refused, by the circuit, by the count and by the reading."""
+    c, pins = embedding(), {"embed": "ab" * 64}
+    reg = c.registered
+    opening = reg.openings[0]
+    assert opening.row is None and "row" not in opening.doc()
+    rowed = replace(reg, openings=(replace(opening, row="o0"),))
+    assert rowed.doc()["openings"] == [{**opening.doc(), "row": "o0"}]
+    assert I.Registered.of(rowed.doc()) == rowed and I.Registered.of(reg.doc()) == reg
+    stated = I.input_count(c.description(), pins=pins, roots=pins)
+    assert I.input_count(embedding(registered=rowed).description(), pins=pins, roots=pins) == stated
+    assert I.input_count(listed_embedding(registered=rowed), pins=pins, roots=pins) == {**stated, I.WINDOW_INGRESS: 0}
+    for row in ("o1", "o2", "row"):
+        bad = replace(reg, openings=(replace(opening, row=row),))
+        with pytest.raises(ValueError, match="the row it declares is the first of its reader's two outputs"):
+            embedding(registered=bad)
+        with pytest.raises(ValueError, match=f"outputs are not {row} then o1 over six input rows"):
+            I.input_count(listed_embedding(registered=bad), pins=pins, roots=pins)
+
+
 @pytest.mark.slow
-def test_a_window_commits_its_table_reads_and_verdicts_as_registered_reads():
+def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     """A table's registered reads committed: each table read and verdict a registered read of its supplied value, the opening's row,
     salt and path the units' own; and the verifier derives the same members, and each member's ``--registered`` file, from
     the record and its pin of the table's parameter alone, the record stated or listing the same members, which no cheaper

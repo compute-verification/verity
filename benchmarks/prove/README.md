@@ -28,7 +28,7 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
 - **A row priced from a steady-state row names the Definition that row's statements are of**, with its parameters,
   after the staged type: `` `TYPE` (`DEFINITION`) ``. A row may be staged for a census type in another Definition than
   the type's own, so the line says which form priced the type: `its Boolean version` where the tree registers that
-  Definition as the type's (`verity.definitions.boolean.boolean_version`), `another Definition` otherwise, and nothing
+  Definition as the type's (`verity_vllm.definitions.boolean.boolean_version`), `another Definition` otherwise, and nothing
   where it is the type's own. A family's row names the Definition of the row it is scaled from the same way, after that
   row's own type's. The JSON rows hold it as `definition`, null on a row no steady-state row prices. Which Definition
   was staged changes no figure: a row prices the census type it was staged for.

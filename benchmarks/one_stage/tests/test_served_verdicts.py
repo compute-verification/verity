@@ -1,13 +1,13 @@
 """`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
 with the command it lacks and given no verdict, one that refused to run is missing, and one that ran out of its limit or
-wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to an undecided block record that
+wrote no answer errs; and SPOT's accepted answer composes, with the others missing, to an undecided block record that
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
 block record. The block record's verdict is the Lean check's answer, so with none here it is undecided (the window's
 pending) even when every subprotocol accepted on its node; the record names each one missing, rejecting, malformed or
 about another server. An accepted network certifier's clause names the one link K counts and every other
 link of the node uncounted and uncertified; one whose certifier ran on the node names no link. The wipe composes only
-when its answer accepts on the record's server. Remote's product runs no onsite piece and composes sampled proofs and
+when its answer accepts on the record's server. Remote's product runs no onsite piece and composes SPOT and
 PoUW alone, the others dropped. PoUW's development piece checks the window's gate session and credits
 nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
@@ -74,7 +74,7 @@ import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
-_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "demos" / "vllm" / "serve_load.py")
+_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "adapters" / "vllm" / "tools" / "served_run" / "serve_load.py")
 SL = importlib.util.module_from_spec(_SL)
 _SL.loader.exec_module(SL)
 
@@ -453,7 +453,7 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     """The CERTIFIER-FRONT line carries `FRONT_PUBLIC` of the front's session and none of its prompts, request, kept
     fetch, gate or verdict's cells; a refused front's line names no reason, and a missing session says so."""
     session = {"rc": 0, "run": "c1", "prompts": {"count": 4, "ids": 64}, "request": "warden-rehearse --requests 4",
-               "keep": "/serve/private/fetch.tar.gz", "gate": {"run": "g"}, "ended": "the rehearsal ended",
+               "keep": "/serve/private/fetch.tar.gz", "gate": {"run": "g"}, "ended": "ended",
                "ended_utc": "t", "session_s": 128.0, "pinned": "ab" * 20, "leaked_removed": [], "origin_unix": 1,
                "verdict": {"cells": [7] * 3, "requests": 4, "wire_bits": 9}}
     (tmp_path / "session.json").write_text(json.dumps(session))
@@ -696,11 +696,12 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
 
 
 def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests_on(tmp_path):
-    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, samples
-    and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
-    accept isn't read as the auditor's devices having placed it."""
-    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 192.0.2.84, not the prover's "
-               "vy-dc-h200, but the chain's checks and draws, the period check and their proofs' coins ran on vy-dc-h200")
+    """The network certifier's answer as its piece writes it when it ran on the gate's machine and the piece's steps on
+    the served node: its accept's clause says the piece establishes no trusted-device and gives no bound, and which
+    machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it."""
+    premise = ("unmet: this piece establishes no trusted-device and gives no bound on that ground; the network certifier "
+               "ran on 192.0.2.84, not the developer's vy-dc-h200; the chain's checks and samples ran on vy-dc-h200, and "
+               "the period check and its proofs' challenges on vy-dc-h200")
     (d := tmp_path / "certifier").mkdir()
     (d / "answer.json").write_text(json.dumps({
         "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
@@ -719,15 +720,16 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
     states the premise alone."""
     node, host = "vy-dc-h200", "192.0.2.84"
     gated = {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
-             "trusted-device": f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
-                             f"prover's {node}",
+             "trusted-device": f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the "
+                             f"network certifier ran on {host}, not the developer's {node}",
              "links": [{"name": "certified", "from": host, "to": node, "counted": True,
                         "via": "the warden's tunnel to the endpoint's port"},
                        {"name": "gate", "from": node, "to": host, "counted": False,
                         "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
              "uncounted": f"every link of {node}'s but the certified one"}
     local = {"kind": "prover-node", "parties": {"network_certifier": node, "prover": node, "verifier": node},
-             "trusted-device": f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
+             "trusted-device": f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the "
+                             f"network certifier ran on the developer's node {node} (the front's --gate local)",
              "links": [], "uncounted": f"every link of {node}'s"}
     clause = {}
     for name, place in (("gated", gated), ("local", local)):
@@ -897,7 +899,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
 def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, monkeypatch, capsys):
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
-    composed, whatever their pieces left, and sampled proofs' and PoUW's accepts on its node leave it pending with nothing
+    composed, whatever their pieces left, and SPOT's and PoUW's accepts on its node leave it pending with nothing
     missing, the block record undecided until the remote check answers. The same pieces composed for onsite reject on the
     wipe's answer. The report and the line say they were composed on the
     served node, from the answer files it wrote, and the published line keeps that, as it keeps what the run deferred
@@ -975,6 +977,9 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
     handed = {"host": "vy-auditor-2", "served_node": False, "from": S.HANDED_FROM}
     assert (line["composed_on"], report["composed_on"], line["steps"]) == (handed, handed, [5, 11])
+    assert S.TAKEN_AS_GIVEN == ("a verdict computed off the auditor's device and handed in is taken as given, for the "
+                                "whole chain")
+    assert S.HANDED_FROM.endswith(f"; {S.TAKEN_AS_GIVEN}") and S.TAKEN_AS_GIVEN not in S.COMPOSED_FROM
     assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == handed
     with pytest.raises(SystemExit):
         S.main([*argv, "--steps", "5", "--off-node"])
@@ -992,7 +997,7 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
-#: remote's sampled proofs Lean (`vstar-recursive`) as `record --sampled-lean` runs it: its arguments and the case files
+#: remote's SPOT Lean (`vstar-recursive`) as `record --sampled-lean` runs it: its arguments and the case files
 #: it was handed in $SEEN, and $ANSWER as its answer line (none when empty)
 FAKE_SAMPLED_LEAN = f'''#!{sys.executable}
 import json, os, sys
@@ -1007,7 +1012,7 @@ LEAN_RECORD = {"format": "toy-registration", "window": 7}
 
 
 def _lean_handed(tmp_path: Path) -> tuple[list[str], Path]:
-    """A compose host's copy of a hand-off, off the served node vy-dc-h200: sampled proofs' records audit with the
+    """A compose host's copy of a hand-off, off the served node vy-dc-h200: SPOT's records audit with the
     summary the served node wrote (a refusal of its own), v1's case and v2's naming one proof blob, PoUW's piece's
     accepted answer, and a `FAKE_SAMPLED_LEAN`; then `record --off-node --sampled-lean` on it, remote's product. Its argv
     and the stand-in."""
@@ -1049,7 +1054,7 @@ def _recorded(tmp_path: Path, argv: list[str], capsys) -> tuple[int, dict, dict]
 ])
 def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_unchanged(
         tmp_path, monkeypatch, capsys, edit):
-    """Off the served node, `record --sampled-lean` takes sampled proofs' row from this host's own run of its Lean on the
+    """Off the served node, `record --sampled-lean` takes SPOT's row from this host's own run of its Lean on the
     hand-off's v2 case in the form ``one-stage``, handed the case's files and its proof blob, the answer tied to the
     record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
     them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
@@ -1806,8 +1811,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
     one: its live session checked (`live`), the session's tree and the auditor's ledger as the gate gave them (the lane's
     own reserve in its open Pearl-C period, whose circuit is the SHA-512 of the window-circuit record beside R), its coin
     published, Pearl+'s verdict tied to W, the window's docket R chained after W and its audit tied to W, and the
-    Lean verdict on the same run. Returns the pieces dir, the sampled
-    proofs dir, the compose's key pin and lane."""
+    Lean verdict on the same run. Returns the pieces dir, SPOT dir, the compose's key pin and lane."""
     from verity.protocols.proofs.spot.device import remote
 
     served, verified = _pearlplus_run()
@@ -1878,7 +1882,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
 def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verdict_of_record(tmp_path, monkeypatch,
                                                                                              capsys, live):
     """Pearl+'s accepted piece whose live coins the compose holds to its pin, whose session the lane reserved under its own
-    gate key in its open Pearl-C period, whose passes are tied to the window sampled proofs audited, and which the Lean
+    gate key in its open Pearl-C period, whose passes are tied to the window SPOT audited, and which the Lean
     `PouwCheck.PearlPlus` verdict accepts on the same run with nonzero work, is PoUW's verdict of record: its row is
     Pearl+'s answer with the Lean's work, and remote's record composes it with W_cert that work, nothing missing, pending
     the remote check's answer."""
@@ -1925,7 +1929,7 @@ def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_it
 
 
 def test_the_record_reads_pearlpluss_tie_from_the_window_tied_to_w_under_window_tie(tmp_path, monkeypatch, capsys, live):
-    """Sampled proofs' records audit (``--sampled-proofs``) is the step units' audit, chained after no W; the window tied
+    """SPOT's records audit (``--sampled-proofs``) is the step units' audit, chained after no W; the window tied
     to W, its docket chained right after W and its audit tied to W, is another (``--window-tie``), which the record
     reads Pearl+'s tie from. Without ``--window-tie`` it reads the step units' and composes pending, naming the chain."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
@@ -2630,7 +2634,7 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
     """`served_verdicts.sh block-counts 0` on a window of two slots (two blocks) at the class runs the real
     `verity-vllm block-counts` against the policy at IO_POLICY's default: its line and its public judgment hold n and no
     count, and the exact count is in the serve dir's private/ alone (0600); with no policy it says so and judges nothing."""
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     from verity.commitments.periods import interface as IF
 
     load()
@@ -2756,7 +2760,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(prove_path)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "one_stage" / "records_audit.py").write_text(records_audit)
+    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py").write_text(records_audit)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
@@ -3178,7 +3182,7 @@ def _key(tmp_path: Path) -> Path:
     ({**NO_V3C, "DEVELOPMENT": None, "PP_CHALLENGER": LIVE, "PP_PEER": "vy-dc-h200"}, LIVE_COINS, ""),
 ])
 def test_the_coins_line_says_whose_coins_each_sample_is_on(tmp_path, extra, coins, v3c):
-    """Before step 0 the run says whose coins each sample is on: sampled proofs' (run.sh's local development session
+    """Before step 0 the run says whose coins each sample is on: SPOT's (run.sh's local development session
     unless PP_CHALLENGER names a challenger, and then too while V3c's audit takes its coins there, since both open on the
     window's run root), PoUW H1's, and V3c's audit's when it runs (V3C_CHALLENGER, by default PP_CHALLENGER). Here step
     0's `predict row` then fails, and the run stops there."""
@@ -3280,7 +3284,7 @@ def test_the_preflight_refuses_v3c_on_a_development_session_outside_a_developmen
 
 @pytest.mark.parametrize("challenger", [None, "loopback:127.0.0.1:7000"])
 def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a_development_run(tmp_path, challenger):
-    """With V3c off step 3's audit is the sampled-proofs audit of record, whose sampled proofs the compose gate's Lean
+    """With V3c off step 3's audit is the sampled-proofs audit of record, whose SPOT the compose gate's Lean
     holds to a challenger, so its local or loopback session is refused unless the run is a development run, before
     anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", DEVELOPMENT=None, PP_CHALLENGER=challenger,
@@ -4479,7 +4483,7 @@ def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_fi
     final record reads of each piece (no log), the inference-only verdict, the settings its follow-on composes at (the
     window and its engine steps, picked here, the product, the composite, the served node, COMPOSE_NODE and the tree's
     commit), and its every input, listed for the copy and hashed for the follow-on: the records audits' cases and the
-    blobs a5's v2 case names, H1's log and the records it names, PoUW's period case and sampled proofs' summary and
+    blobs a5's v2 case names, H1's log and the records it names, PoUW's period case and SPOT's summary and
     docket. It lists no witness: no value, instance or prover file, H1's prover state, key, row dir, advice or
     request, and nothing `served_verdicts.py witness` refuses. Its one line names the follow-on's command and no window."""
     run = _handed(tmp_path)
@@ -4926,7 +4930,7 @@ LIVE_VERIFIER = HERE.parents[2] / "verity" / "protocols" / "accounting" / "poub"
 
 def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
                    **extra: str) -> tuple[subprocess.CompletedProcess, Path]:
-    """`_handed`'s serve dir with `_lean_handed`'s sampled proofs cases (v2's naming a5's ``BLOBS``), sent by
+    """`_handed`'s serve dir with `_lean_handed`'s SPOT cases (v2's naming a5's ``BLOBS``), sent by
     `served_verdicts.sh gate-compose` to `GATE_DRIVER`, pinned at GATE_PIN on remote, where the compose runs this tree's
     `served_verdicts.sh compose` and record on vy-auditor-2 with a `FAKE_SAMPLED_LEAN`, no composite and no git (as the
     pinned archive has none). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
@@ -4977,7 +4981,7 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
         tmp_path, edit):
     """`gate-compose` sends the hand-off to the compose gate (lane vllm's key, the word `compose`, the tar on stdin), which
     receives it in a scratch of its own, holds it to the served node's sums, rebases the cases' blobs onto its copy and
-    composes the record there with the pinned tree, off the served node: sampled proofs' row is its Lean's answer on the
+    composes the record there with the pinned tree, off the served node: SPOT's row is its Lean's answer on the
     copy's v2 case and blobs, whatever summary the served node wrote, and the record, pending the remote check's answer
     with both its subprotocols accepted, names the gate's pin and the branch infra pinned it on. The answer lands in the sender's $OUT/compose, and the gate removes its scratch."""
     run, out = _gate_composed(tmp_path, edit)
@@ -6173,7 +6177,8 @@ WEIGHTS_REGISTRATION = (
     "--key TMP/serve/private/weights.key --out TMP/serve/weights_registration.json --deployment-record "
     "TMP/serve/deployment-registration.json")
 NEW_RELEASE_RUN = "-c import uuid; print(uuid.uuid4().hex)"
-SERVE_LOAD = ("TMP/tree/demos/vllm/serve_load.py --port 18190 --model verity-int8/Llama-3.2-1B-INT8 {load} "
+SERVE_LOAD = ("TMP/tree/adapters/vllm/tools/served_run/serve_load.py --port 18190 --model verity-int8/Llama-3.2-1B-INT8 "
+              "{load} "
               f"--prompt-range 16:24 --release {RELEASE_RUN} --seed 1 --out TMP/serve/load.jsonl")
 VARIED_LOAD = SERVE_LOAD.format(load="--varied 4 --rate 1000 --max-tokens 4")
 FIXED_LOAD = SERVE_LOAD.format(load="--fixed 4 --window-steps 256")

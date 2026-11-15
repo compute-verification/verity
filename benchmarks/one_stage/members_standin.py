@@ -3,10 +3,10 @@
     members_standin.py OUT FLOCK_CIRCUIT LEAN_BIN_DIR MEMBERS...        e.g.  300 100
 
 Each window holds MEMBERS members of one unit: `test_audit_two_members`' two templates (`ScaledMmS8Coordinate` at
-K = 128 and K = 256) with half the units each, recorded, committed and written as serving writes a window, under
-``stratified:1``: a template is a stratum, so one member of each is sampled and the rest share their template's circuit
-unsampled, as a served window's members do. The served harness's audit step (``records_audit.py audit`` on a local
-challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) audits it and writes the case; `case_files.run` then runs v2's
+K = 128 and K = 256) with half the units each, recorded, committed and written as serving writes a window, under the
+rule ``stratified-rate:1/1`` (`RULE`): a template is a stratum and every member is sampled, since `link-points` refuses a
+member some sample misses, and the members share their template's circuit file. The served harness's audit step
+(``records_audit.py audit`` on a local challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) audits it and writes the case; `case_files.run` then runs v2's
 ``refusal`` on it. Per window, OUT/m<MEMBERS>/result.json holds the audit's exit, seconds and peak, the members' staged
 directories with no circuit file of their own (each a file the per-member case named before each member named its
 template's), and the refusal's line, exit, seconds and peak, with ``all_passed`` whether the line is
@@ -38,14 +38,19 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members a
 
 KS = (128, 256)
 TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in KS)
-DESIGN = "stratified:1"
+RULE = "stratified-rate:1/1"
 RUN = "ab" * 64
+
+
+def design(n: int) -> dict:
+    """`RULE`'s sampling design over `TEMPLATES` with ``n`` members each: the K its strata need (`draw.strat_k`)."""
+    return D.parse_design(f"stratified:{D.strat_k(1, 1, [n] * len(TEMPLATES), n * len(TEMPLATES))}")
 
 
 def window(d: Path, members: int) -> Path:
     """The stand-in window of ``members`` one-unit members (module docstring), written to ``d``."""
     n = members // len(TEMPLATES)
-    win = IF.Window(IF.Circuit("standin-members", tuple((t, n) for t in TEMPLATES)), RUN, D.parse_design(DESIGN), 1)
+    win = IF.Window(IF.Circuit("standin-members", tuple((t, n) for t in TEMPLATES)), RUN, design(n), 1)
     rng = np.random.default_rng(0)
     for t, k in zip(TEMPLATES, KS):
         x, w = (rng.integers(-128, 128, (n, k)).astype(np.int8) for _ in range(2))
@@ -59,10 +64,10 @@ def window(d: Path, members: int) -> Path:
 def audit_argv(win: Path, out: Path, main: Path, flock: Path, lean: Path) -> list[str]:
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/proofs/flock/prover/python",
                                                   "adapters/vllm"))
-    return [sys.executable, str(ROOT / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "one_stage" / "records_audit.py"), "audit", "--window", str(win),
-            "--law", DESIGN, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
+    return [sys.executable, str(ROOT / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py"), "audit", "--window", str(win),
+            "--law", RULE, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, "--bin", str(flock),
-            "--lean", str(lean / "verity-verify-proof"), "--firewall", str(lean / "flock-firewall"), "--ports", str(len(KS)),
+            "--lean", str(lean / "verity-verify-proof"), "--firewall", str(lean / "flock-firewall"),
             "--out", str(out), "--deployed-key"]
 
 

@@ -37,6 +37,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
@@ -225,6 +226,8 @@ def main() -> int:
     ap.add_argument("--seed-payload-key", action="store_true",
                     help="tests only: salt the payload tree with the device's own key, from --seed, not the "
                          "verifier's, which a verifier with --model refuses")
+    ap.add_argument("--rows", type=int, default=None, choices=device.rb.ROWS,
+                    help="the registration's sketch rows k_s, sent in the hello (default: the receipt kind's, 16)")
     device.add_arguments(ap)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -263,7 +266,7 @@ def main() -> int:
                        warmup_ns=round(a.warmup_ms * 1e6), defer_openings=not a.overlap_openings,
                        seed_payload_key=a.seed_payload_key, log=log)
         out["overlap_openings"] = a.overlap_openings
-        cal = p.register()
+        cal = p.register(rows=a.rows)
         log(f"node: registered, calibration {json.dumps(cal)}")
         out.update({"calibration": cal, "gates": backend.gates, "calibration_trace": backend.calibration_trace,
                     "registration": wire.registration_json(p.registration), "sessions": []})

@@ -2,7 +2,7 @@
 makes visible in place of the opaque `vllm.moe_forward` dispatcher: generic in the block's shape parameters
 (E experts, TOPK, hidden H, intermediate I, tokens M), nothing about a model.
 
-The block, in launch order, and what each rule binds (numerics: `verity.definitions.registry.moe`, difftested bit-exact in
+The block, in launch order, and what each rule binds (numerics: `verity_vllm.definitions.registry.moe`, difftested bit-exact in
 `verity_vllm.program.moe_difftest` against vLLM's `fused_experts`: the two GEMM launches, `silu_and_mul` and `moe_sum`, routing given; the router's difftest is at `TOPK_SOFTMAX_E_TESTED`):
 
     _moe_C.topk_softmax(w!, ids!, tei!, logits, renormalize, bias=None, is_padding=None)
@@ -52,9 +52,9 @@ from verity.circuits.refs import Coll
 from verity.circuits.types import Array
 
 from verity_vllm.log import init_logger
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.derive import Alloc
+from verity_torch.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
+from verity_torch.frontend.rules.common import (
     dtype_is,
     from_rows,
     known,
@@ -414,7 +414,7 @@ class FusedMoeKernelRule(InPlaceRule):
             ids_node = launch_tensor(node, meta, "expert_ids_ptr")
         else:
             ids_node = ctx.val(launch_tensor(node, meta, "sorted_token_ids_ptr")).ids_node
-        from verity.definitions.registry.prims import F32, I32
+        from verity_vllm.definitions.registry.prims import F32, I32
         ids = _flat_pairs(ctx.coll(ids_node), nv, I32)
         ws = _flat_pairs(ctx.coll(launch_tensor(node, meta, "topk_weights_ptr")), nv, F32) if mrw else None
         role, dot = moe_expert_role(mrw)
@@ -468,7 +468,7 @@ class MoeSumRule(InPlaceRule):
     def emit(self, node, ctx):
         y, out = node.args[:2]
         M, TOPK, H = known(shape(ctx, y))
-        from verity.definitions.registry.prims import BF16
+        from verity_vllm.definitions.registry.prims import BF16
         yc = ctx.coll(y).reshape(Array(M, Array(TOPK, Array(H, BF16))))
         fn = ctx.kind("moe_sum", node, TOPK=TOPK, H=H)
         outs = [ctx.call(fn, yc[t], node=node, rule=self, name=f"{ctx.hint_name(node)}[{t}]") for t in range(M)]
@@ -768,7 +768,7 @@ class PaddedViewRule(ViewRule):
                     evidence_domain="structural (no gates): a marker's alias is the marker")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.views import _RESHAPE
+        from verity_torch.frontend.rules.views import _RESHAPE
         return _RESHAPE
 
     def applies(self, node, ctx):

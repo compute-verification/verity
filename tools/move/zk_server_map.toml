@@ -5,6 +5,7 @@
 # and `--firewall-state` are `--zk-server` and `--zk-server-state`. A word takes the spelling `terms_map.toml` gives it
 # (`firewalled` `zk_served`, `unfirewalled` `unserved`), and a kebab-case name its own rows, since the general row
 # would spell `zk_server` inside it. Phrases come first, so a string or data file reads as the prose already does.
+# This map renames the identifiers and `terms_map.toml` (scope prose) the prose, so a word has a row in each.
 #
 # What a served record, a verifier's input or another system already carries keeps its spelling until a format version
 # ([keep]): the domain tags and format ids (`verity/firewall-*/v0`, `firewall/v0/...`), the deployment's party and the
@@ -102,6 +103,7 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 patterns = ['(?<![\w-])verity/firewall-[\w-]*(?:/v\d+)?', '(?<![\w/.-])firewall/v\d+(?:/\w+)*',
             '(?<=[\x22\x27])firewall-(?:salt|coins)(?=[\x22\x27])',
             '(?<=[\x22\x27])firewall(?=[\x22\x27])', '(?<=\\[\x22\x27])firewall(?=\\[\x22\x27])',
-            '(?:(?<=\()|(?<=type == )|(?<=messages = \[))\x22Firewall\x22|\bFirewall(?= \{sha512)',
+            '\x22Firewall\x22|\bFirewall(?= \{sha512)',
             '\bthe firewall(?: serves nothing more of it|\x27s fault)',
             '\b(?:goal:)?proofs/firewall-[\w-]+', '\bfirewall\.slice\b']
+strings = ["dials firewall, workers", "refused listen: firewall, workers", "outer prove (firewall) e2e_s"]

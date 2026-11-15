@@ -91,7 +91,7 @@ private theorem form_members_spec (j : Json) :
 private theorem form_values_spec (j : Json) (w : String) :
     ⦃⌜True⌝⦄ VStar.Recursive.SampledTwo.valuesOf j w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-open private exactly from Spot.OneStageZk
+open Spot.OneStageZk (exactly)
 
 private theorem members_exactly_spec (j : Json) (ks : Array String) (w : String) :
     ⦃⌜True⌝⦄ exactly j ks w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
@@ -197,7 +197,7 @@ window and family after the record's digest. -/
 theorem coinsCode_none {key : Option ChallengerKey} {main coins record : Json} {window family : Option String}
     {read : ByteArray} (h : Spot.Run.coinsCode key main coins record window family read = none) :
     coins = Json.null ∨ ∃ k w label after ξ, key = some k ∧ window = some w ∧ family = some label ∧
-      Spot.Registration.digest record = .ok after ∧ sampleCoins k w label after coins = .ok ξ := by
+      Spot.Docket.digest record = .ok after ∧ sampleCoins k w label after coins = .ok ξ := by
   unfold Spot.Run.coinsCode at h
   by_cases hr : read.isEmpty = true
   · rw [if_pos hr] at h
@@ -214,7 +214,7 @@ theorem coinsCode_none {key : Option ChallengerKey} {main coins record : Json} {
         cases family with
         | none => simp at h
         | some label =>
-          cases hd : Spot.Registration.digest record with
+          cases hd : Spot.Docket.digest record with
           | error _ => rw [hd] at h; simp at h
           | ok after =>
             rw [hd] at h
@@ -259,7 +259,7 @@ theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstRe
     exact Option.some.inj hk'
   rw [hkk] at hK
   have hac : after = c.digest := by
-    have hd' : Spot.Registration.digest j₁ = .ok after := hd
+    have hd' : Spot.Docket.digest j₁ = .ok after := hd
     rw [hdig] at hd'
     exact (Except.ok.inj hd').symm
   subst hac

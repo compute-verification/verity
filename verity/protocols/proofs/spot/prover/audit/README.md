@@ -12,9 +12,16 @@ they sit in `prover/`: a file under `verifier/` loads none under `prover/`.
 - `prove_bundle.py`, `prove_bundle.sh`: a sampled-proof-block replay bundle proved and decided by Lean.
 - `prove_path.py`, `prove_path.sh`: the prove path, below.
 - `class_size.py`: a class circuit's padded size (`../cost/README.md`).
+- `records_audit.py`: a window's audit from its records alone (below), and the template audit's verifier window.
+- `check_memo.py`: the verifier's checks asked once per input, which `window_audit.py` runs under.
+- `compose_circuit.py`: a template's circuit composed by Flock's prover (`verity_flock`), the verifier's own copy;
+  run in the circuit prover's tree.
 
-They still load scripts under `benchmarks/` off `sys.path` (the proof leg, the network certifier's pieces, the
-zero-knowledge mutants) and read the measured data there (`benchmarks/prove_path/sources.json`).
+They still load scripts under `benchmarks/`: `stop_audit.py` the proof leg (`one_stage/prove_leg.py`), `prove_path.py`
+the network certifier's pieces (`network_traces/`), `window_audit.py` the one-stage replay (`one_stage/replay.py`),
+`template_audit.py` the tampered stagings it runs (`one_stage/stage_tampered.py`) and `prove_bundle.py` the bundle's
+format (`one_stage/interfaces/verity_e2e_demo`); and they read the measured data there
+(`benchmarks/prove_path/sources.json`).
 
 ## The shell entry points
 

@@ -32,6 +32,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
+from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
 from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -51,9 +52,9 @@ HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.paren
 SCHEME = "frame-v3-sha512/hm96-sha512"
 #: M0's set-bound frame domains (verity_flock.circuit.BINDING_TAG), each tag with its identity digest; v1 is M0's before
 #: 64-byte bindings, for a pinned tree that old (--binding)
-STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
+STAND_IN_BINDINGS = {FLOCK_CIRCUIT_BINDING: identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
-STAND_IN_BINDING = "verity/flock-circuit/binding/v2"
+STAND_IN_BINDING = FLOCK_CIRCUIT_BINDING
 STATEMENT_ID = "verity/flock-circuit"
 
 
@@ -226,7 +227,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, sample_
     `sample_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
-    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds.
+    both sides' environment (a zk_served prover's, `zk_server_env`). `prove_timeout`: the prover's limit in seconds.
     ``st["tmpl_unit"]``: a templated statement's unit rows at their positions, which both sides read (`--tmpl-unit`)."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
@@ -299,23 +300,23 @@ def lean_sample_test(lean: str, cases: list[dict], out: Path, name: str) -> list
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK")]
 
 
-def firewall_env(st: dict) -> dict:
-    """What a firewalled prover (`FC_FIREWALL=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
+def zk_server_env(st: dict) -> dict:
+    """What a zk_served prover (`FC_ZK_SERVER=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
     `lean_verify` verifies under, and the statement's partition and program."""
     args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
-    return {"FC_FIREWALL_STATEMENT": st.get("statement", STATEMENT_ID), "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+    return {"FC_ZK_SERVER_STATEMENT": st.get("statement", STATEMENT_ID), "FC_ZK_SERVER_HELLO_ARGS": " ".join(args)}
 
 
 #: a `--zk` session's prover with no ZK server, as SPOT[Flock]'s proof server runs it: `flock-circuit prove --zk` itself,
 #: its witness built where the prover builds it (`zk_cost.py`'s `dev` arm, which Figure 1 prices)
-DIRECT = {"FC_FIREWALL": "0", "FC_HOST_WITNESS": None}
+DIRECT = {"FC_ZK_SERVER": "0", "FC_HOST_WITNESS": None}
 
 
-def prover_env(firewall: str | None, st: dict) -> dict:
-    """A `--zk` session's prover environment: behind the ZK server's send check when ``firewall`` names Lean's
-    `flock-firewall` (the core protocols' path), else `DIRECT`."""
-    if firewall:
-        return {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": firewall, **firewall_env(st)}
+def prover_env(zk_server: str | None, st: dict) -> dict:
+    """A `--zk` session's prover environment: behind the ZK server's send check when ``zk_server`` names Lean's
+    `flock-zk-server` (the core protocols' path), else `DIRECT`."""
+    if zk_server:
+        return {"FC_ZK_SERVER": "1", "FC_ZK_SERVER_LEAN": zk_server, **zk_server_env(st)}
     return dict(DIRECT)
 
 

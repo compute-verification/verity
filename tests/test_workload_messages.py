@@ -1,9 +1,8 @@
 """The messages between the workload and the prover are one list: each protocol declares its own in its
-`verifier/workload.py`, in `verity.protocol`'s and `verity.channel`'s types, and this test holds them together. Every
-message is declared once, named in the Glossary's words, and carried on one channel, its writer the channel's sender and
-its reader its receiver. `workload_messages.toml` beside this test lists today's writers and readers of each message, by
-lane. Retired words in a name are the retired-terms lint's to refuse.
-"""
+`prover/workload.py`, the developer's side, in `verity.protocol`'s and `verity.channel`'s types, and this test holds
+them together. Every message is declared once, named in the Glossary's words, and carried on one channel, its writer the
+channel's sender and its reader its receiver. `workload_messages.toml` beside this test lists today's writers and
+readers of each message, by lane. Retired words in a name are the retired-terms lint's to refuse."""
 
 from __future__ import annotations
 
@@ -17,10 +16,10 @@ from verity.protocol import Manifest
 ROOT = Path(__file__).resolve().parents[1]
 LIST = Path(__file__).resolve().parent / "workload_messages.toml"
 MODULES = {
-    "spot": "verity.protocols.proofs.spot.verifier.workload",
-    "pouw": "verity.protocols.accounting.pouw.verifier.workload",
-    "pous": "verity.protocols.accounting.pous.verifier.workload",
-    "certifier": "verity.protocols.accounting.certifier.verifier.workload",
+    "spot": "verity.protocols.proofs.spot.prover.workload",
+    "pouw": "verity.protocols.accounting.pouw.prover.workload",
+    "pous": "verity.protocols.accounting.pous.prover.workload",
+    "certifier": "verity.protocols.accounting.certifier.prover.workload",
 }
 #: The two messages declared in today's direction, prover to workload, against the architecture's, each with the
 #: direction the architecture gives it.

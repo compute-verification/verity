@@ -7,6 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_template_audit_archive_once.py",
+    "tests/test_audit_one_member.py",
     "tests/test_audit_two_members.py",
     "tests/test_template_audit_verify_members.py",
     "tests/test_window_audit_outputs.py",
@@ -14,14 +15,17 @@ untraced = [
     "tests/test_prove_path.py",
     "tests/test_prove_path_sh_keep.py",
     "tests/test_prove_path_sh_request_values.py",
+    "tests/test_check_memo.py",
+    "tests/test_records_audit.py",
 ]
 artifacts = [
     "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
-    "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall",
+    "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-zk-server",
 ]
 # The scripts under `benchmarks/` the moved audit commands still load off `sys.path`, and what their `benchmarks/` suites read
 inputs = [
     "verity",
+    "tools/difftest/python/verity_difftest",
     "benchmarks/one_stage",
     "benchmarks/prove_path",
     "benchmarks/sampling_plan",
@@ -48,12 +52,12 @@ inputs = [
     "tools/verity/circuit_check/src/circuit_check/entries.py",
     "tools/verity/circuit_check/src/circuit_check/targets.py",
     "benchmarks/one_stage/interfaces/verity_e2e_demo",
-    "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
     "verity/commitments/cuda/commit_slots/slots.py",
-    "demos/vllm/serve_load.py",
-    "demos/vllm/serve.sh",
-    "demos/vllm/commit.sh",
-    "demos/vllm/published.sh",
+    "adapters/vllm/tools/served_run/serve_load.py",
+    "adapters/vllm/tools/served_run/serve.sh",
+    "adapters/vllm/tools/served_run/commit.sh",
+    "adapters/vllm/tools/served_run/published.sh",
     "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
     "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
     "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",
@@ -64,6 +68,7 @@ inputs = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
     "verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml",
     "adapters/vllm/verity_vllm",
+    "adapters/torch/verity_torch",
     "benchmarks/pous/p2_v1",
     "benchmarks/pous/onsite_pieces.sh",
     "benchmarks/torch_gpu/p2_stage/layout.py",
@@ -121,12 +126,12 @@ inputs = [
     "benchmarks/census/hardware.json",
     "benchmarks/rho/data/reference.toml",
     "benchmarks/rho/data/hardware.toml",
-    "verity/definitions/registry",
-    "verity/definitions/numerics",
-    "verity/definitions/evidence.py",
-    "verity/definitions/evidence.json",
+    "adapters/vllm/verity_vllm/definitions/registry",
+    "adapters/vllm/verity_vllm/definitions/numerics",
+    "adapters/vllm/verity_vllm/definitions/evidence.py",
+    "adapters/vllm/verity_vllm/definitions/evidence.json",
     "verity/protocols/accounting/certifier",
-    "verity/definitions/__init__.py",
+    "adapters/vllm/verity_vllm/definitions/__init__.py",
     "verity/circuits/ops",
     "verity/circuits/silicon",
     "verity/hardware/__init__.py",
@@ -137,7 +142,7 @@ inputs = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_prove_bundle.py"]
+tests = ["tests/test_prove_bundle.py", "tests/test_records_audit.py"]
 paths = ["verity/circuits/ops"]
 
 [[tool.verity.tests.reads]]

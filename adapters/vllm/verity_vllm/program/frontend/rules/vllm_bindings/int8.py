@@ -7,9 +7,9 @@ import torch
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
 
-from verity_vllm.program.frontend.derive import Alloc, refuse
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.derive import Alloc, refuse
+from verity_torch.frontend.rules.base import OpRule, RuleInfo
+from verity_torch.frontend.rules.common import (
     dtype_is,
     from_rows,
     known,
@@ -26,7 +26,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _norm_attn,
     attn_kind_for,
 )
-from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_torch.frontend.strided_views import _tensor_type
 
 #: `engine.int8_attention_vllm.Int8AttentionImpl`, by name: the frontend reads the instantiated layers, never the engine
 INT8_ATTENTION_IMPL = "Int8AttentionImpl"
@@ -183,7 +183,7 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
         if len(bits) != h.KVH:
             refuse("shape", node, h.mp, f"{len(bits)} K scales for {h.KVH} KV heads")
         S, D, rep = h.P0 + h.T, h.D, h.NH // h.KVH
-        from verity.definitions.registry.int8_exact import row_refusal
+        from verity_vllm.definitions.registry.int8_exact import row_refusal
 
         if why := row_refusal({"D": D, "S": S}):
             refuse("shape", node, h.mp, f"Int8LutAttentionRow_v1 {why}")

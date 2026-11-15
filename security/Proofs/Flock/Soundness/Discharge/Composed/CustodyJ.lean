@@ -28,7 +28,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 at one table (`ZkLink/SampleOk.lean`), the record and its sample file are custody, and the rest of `SampleOkZKJ` is
 verity-verify-proof's own arithmetic. This file splits them:
 
-* `sampleOkZKJ_of_size`: from `SampleFileZK dj law pop` at any sampling design, at a sample `S` whose file decodes only to `q` units, with
+* `sampleOkZKJ_of_size`: from `SampleFileZK dj samplingDesign pop` at any sampling design, at a sample `S` whose file decodes only to `q` units, with
   `nTab I` dividing `q`, `SampleOkZKJ` holds at `mPtsOf c.g (q / nTab I)` link points. The stratified sampling design meets it at
   `q = ∑ s, k s` (`ZkReg/Guarded.lean`, `sampleOkZKJ_of_exec`).
 * `sampleOkZKJ_of_file`: from `SampleFileZK dj (subset kd) pop`, with `nTab I` dividing `kd`, `SampleOkZKJ` holds at
@@ -60,7 +60,7 @@ set_option maxHeartbeats 2000000 in
 theorem ofJson_shape {j : Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson j = .ok D) :
     (∃ a, J.arr j "units" "unit_draw" = .ok a ∧ a.mapM (J.asNat · "U2: a drawn unit") = .ok D.units) ∧
     (j.getObjVal? "closure" = .error "property not found: closure" → D.closure = #[]) ∧
-    (∀ k, D.law = .subset k → D.units.size = k) := by
+    (∀ k, D.samplingDesign = .subset k → D.units.size = k) := by
   unfold Draw.UnitSample.ofJson at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -73,7 +73,7 @@ theorem ofJson_shape {j : Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJso
     | exact (Except.ok.inj ‹(pure #[] : V (Array ℕ)) = Except.ok _›).symm
     | exact absurd (‹j.getObjVal? "closure" = Except.ok _›.symm.trans hcl) (fun h => by cases h)
     | (exfalso; cases hk; done)
-    | (have e : _ = k := Draw.Law.subset.inj hk
+    | (have e : _ = k := Draw.SamplingDesign.subset.inj hk
        subst e
        have hs := ‹¬(decide (_ > _) || _ != _) = true›
        simp only [Bool.or_eq_true, decide_eq_true_eq, bne_iff_ne, ne_eq, not_or, not_not] at hs
@@ -109,8 +109,8 @@ theorem ofJson_partSample {pop count j : ℕ} {units : Array ℕ} {D : Draw.Unit
 dividing `q`: `SampleOkZKJ` at `mPtsOf c.g (q / nTab I)` link points at `S`. Part `j` of the sample (`partSample`) decodes
 to its `q / nTab I` units, which are the units `partOf` sends to table `j`. -/
 theorem sampleOkZKJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (q pop : ℕ) (hdiv : q % nTab I = 0)
-    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj law pop) (S : Finset (Fin n))
+    (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (samplingDesign : Draw.SamplingDesign) (q pop : ℕ) (hdiv : q % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj samplingDesign pop) (S : Finset (Fin n))
     (hsize : ∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → D.units.size = q) :
     SampleOkZKJ I dj (mPtsOf c.g (q / nTab I)) S := by
   intro j
@@ -234,22 +234,22 @@ theorem zk_session_soundJ_custody
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJ_live I ht dj y₀ wr _ hTags hCust.1 fun _ => sampleOkZKJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
-    (∀ ω j, TableCRZ execArith hs512 (planZJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+    (∀ ω j, TableCRZ execArith hs512 (planZJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
         K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
             ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
-      (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
+      (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))
           k Rw M ρ t' (reg σ) (cont σ) :=

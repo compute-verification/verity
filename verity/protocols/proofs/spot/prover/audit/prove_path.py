@@ -44,7 +44,7 @@ Two kinds of committed run:
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...] \\
         [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY] [--checkpoint-dir DIR]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
-        --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --firewall flock-firewall --out DIR [--cap-bits L] \\
+        --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR]
     prove_path.py compiler (--serve-run DIR | --serve FILE) [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
@@ -207,7 +207,7 @@ from typing import Any
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path")
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.protocols.proofs.spot.verifier.one_stage.records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, docket_roots  # noqa: E402, F401
+from verity.protocols.proofs.spot.prover.audit.records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, docket_roots  # noqa: E402, F401
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -371,7 +371,7 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
     from verity.circuits.codec import decode_program, descriptor_id, program_digest
     from verity.circuits.program import is_input
     from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     from verity_vllm.query.manifest import format as MF
 
     p = Path(d) / "descriptor.json.gz"
@@ -1478,9 +1478,10 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
 @contextlib.contextmanager
 def network_traces() -> Iterator[None]:
     """``benchmarks/network_traces``' modules importable inside, then ``sys.path`` and the module ``replay`` as they were:
-    its ``replay``, which its ``active_replay`` imports, isn't one_stage's, which ``a5`` imports."""
+    its ``replay`` isn't one_stage's, which ``a5`` imports."""
     path, replay = list(sys.path), sys.modules.pop("replay", None)
     sys.path.insert(0, str(HERE.parent / "network_traces"))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     try:
         yield
     finally:
@@ -1503,8 +1504,8 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
 
     with network_traces():
         import certifier_piece as CP
-        import warden_chain as WCH
-        import warden_serve as WSV
+        from benchmarks.network_traces import warden_chain as WCH
+        from verity.protocols.accounting.certifier.verifier import relay_check as RC
 
     if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
         return None
@@ -1514,7 +1515,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
         unpacked, kept = CP.unpack(serve_dir / CP.PRIVATE / run / "fetch.tar.gz")
         _, params = WCH.deployment(kept)
         io = WCH.io(kept)
-        records = WSV.read_records(WCH.witness(kept), params)
+        records = RC.read_records(WCH.witness(kept), params)
     except (SystemExit, CP.NotRun) as e:
         raise ValueError(f"the certifier front's kept run: {e}") from None
     finally:
@@ -1533,10 +1534,10 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
                          "served traffic the network certifier didn't see")
     if None in (release := [by[u]["release"] for u in users]):
         raise ValueError("a request of the window has no END in the kept run's ingress")
-    windows = sorted(r.window for r in records[WSV.INGRESS])
+    windows = sorted(r.window for r in records[RC.INGRESS])
     if windows != list(range(len(windows))):
         raise ValueError(f"the kept run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
-    ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
+    ingress = [x for r in sorted(records[RC.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
     outputs = {r["stream"]: r["output"] for r in io["records"]}
     anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
     at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}
@@ -1912,7 +1913,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
-    p.add_argument("--firewall", required=True)
+    p.add_argument("--zk-server", required=True)
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port, rank r's from base + a5.RANK_PORTS·r "
                    "(default a base whose ports are free now, `free_ports`)")

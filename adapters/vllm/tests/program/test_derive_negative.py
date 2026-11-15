@@ -8,7 +8,7 @@ no `Program` is returned AND that the refusal names the right class of reason. A
 is reported distinctly (`REFUSED-WRONG-REASON`) from acceptance (`ACCEPTED-MUST-REFUSE`) and from a crash that is
 not a classified refusal (`CRASH-NOT-REFUSAL`).
 
-The importer (XFER may not edit importer code) is `verity_vllm.program.frontend.derive.derive`, called through its
+The importer (XFER may not edit importer code) is `verity_torch.frontend.derive.derive`, called through its
 `derive_report`; the transfer report records its name. Needs torch; runs on the pod (§37).
 """
 
@@ -30,19 +30,19 @@ from verity.circuits import Program, bind, program_digest
 from verity.circuits.evaluation import evaluate_region
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.definitions.registry import b1
-from verity.definitions.registry.prims import BF16, I32
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.prims import BF16, I32
 
 from tests.program.capture_check import LazyTranscript, Segments, check_call
-from verity_vllm.program.frontend import derive as _D
-from verity_vllm.program.frontend.errors import FrontendError
-from verity_vllm.program.frontend.provenance import registry_version
+from verity_torch.frontend import derive as _D
+from verity_torch.frontend.errors import FrontendError
+from verity_torch.frontend.provenance import registry_version
 
 # ---------------------------------------------------------------------------------------------------------
 # importer adapter: derive_report(...); one normalised Outcome
 # ---------------------------------------------------------------------------------------------------------
 
-IMPORTER_NAME = "verity_vllm.program.frontend.derive.derive"
+IMPORTER_NAME = "verity_torch.frontend.derive.derive"
 
 
 @dataclass
@@ -599,7 +599,7 @@ def _miswired_serve(kind: str):
     L+1), `future` (the row this position itself produces is replaced by the next step's row), `stale` (a
     position is dropped)."""
     from verity.circuits.defs import CompositeDefinition
-    from verity.definitions.registry.b1 import (
+    from verity_vllm.definitions.registry.b1 import (
         Embedding,
         Final,
         LayerPost,

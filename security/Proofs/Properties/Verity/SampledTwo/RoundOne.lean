@@ -10,7 +10,7 @@ public import Proofs.Properties.Verity.SampledTwo.DrawRoots
 public import Proofs.Properties.Verity.SampledTwo.GoodCase
 public import Proofs.Flock.Claims.Sampling.Select.Second
 public import Proofs.Flock.Claims.Sampling.Select.OS
-public import Proofs.Flock.Bridge.SampledLaw
+public import Proofs.Flock.Bridge.SampledDesign
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
@@ -61,8 +61,8 @@ open Lean (Json)
 
 /-- **A design the check does not refuse has a stratum**: where `Draw.strataProblem` is false, the design's `strata`
 are an array that is not empty. -/
-theorem strataProblem_strata {law : Json} {n : Int} (h : ¬ Draw.strataProblem law n = true) :
-    ∃ ss, getD law "strata" = .arr ss ∧ ss.isEmpty = false := by
+theorem strataProblem_strata {samplingDesign : Json} {n : Int} (h : ¬ Draw.strataProblem samplingDesign n = true) :
+    ∃ ss, getD samplingDesign "strata" = .arr ss ∧ ss.isEmpty = false := by
   unfold Draw.strataProblem at h
   split at h
   · rename_i ss hss
@@ -90,26 +90,26 @@ theorem forall₂_size_pos {α β : Type} {R : α → β → Prop} {a : Array α
   have h2 := size_pos_of_isEmpty hne
   omega
 
-/-- **The second stage's design has a stratum**: `Select.secondLaw`'s design, as `Draw.flockLaw` parses it, is the
+/-- **The second stage's design has a stratum**: `Select.secondSamplingDesign`'s design, as `Draw.flockSamplingDesign` parses it, is the
 work design at `k = 1` over at least one stratum, since the check refuses a design with none
 (`Draw.strataProblem`). -/
-theorem second_design_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.Law)
-    (h : Draw.flockLaw (Select.secondLaw sample ns ks) m = .ok parsed) :
+theorem second_design_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.SamplingDesign)
+    (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧ 0 < ws.size := by
-  unfold Draw.flockLaw at h
-  rw [getD_secondLaw_law] at h
+  unfold Draw.flockSamplingDesign at h
+  rw [getD_secondSamplingDesign_samplingDesign] at h
   dsimp only at h
   split at h
   all_goals try (rename_i hs; exact absurd hs (by decide))
   · split at h
     · exact absurd h (throw_bind_ne _ _ _)
-    rw [getD_secondLaw_k, getD_secondLaw_strata, nat_toJson] at h
+    rw [getD_secondSamplingDesign_k, getD_secondSamplingDesign_strata, nat_toJson] at h
     dsimp only at h
     split at h
     · exact absurd h (throw_bind_ne _ _ _)
     rename_i hsp
     obtain ⟨ss, hss', hne⟩ := strataProblem_strata hsp
-    rw [getD_secondLaw_strata] at hss'
+    rw [getD_secondSamplingDesign_strata] at hss'
     injection hss' with hX
     subst hX
     split at h
@@ -123,7 +123,7 @@ theorem second_design_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Floc
 /-- **A work design's first stratum reads at least 64 bytes**: a sample under a work design with a stratum, from
 `src` at `p`, ends no earlier than `p + 64`. -/
 theorem seqMiss_work_size (k : ℕ) (ws : Array Flock.Draw.WorkStratum) (n : ℕ) (miss : ℕ → Array ℕ → Prop)
-    (src : ByteArray) (p : ℕ) (hws : 0 < ws.size) (h : SeqMiss (lawStages (.work k ws) n miss) src p) :
+    (src : ByteArray) (p : ℕ) (hws : 0 < ws.size) (h : SeqMiss (samplingDesignStages (.work k ws) n miss) src p) :
     p + 64 ≤ src.size := by
   obtain ⟨m, hm⟩ : ∃ m, (ws.map (·.toStratum)).size = m + 1 := ⟨ws.size - 1, by rw [Array.size_map]; omega⟩
   have h' : SeqMiss ((List.range' 0 (ws.map (·.toStratum)).size).map fun i =>
@@ -144,17 +144,17 @@ theorem getD_subset_kind (m : ℕ) :
 theorem kind_subset (m : ℕ) : kindOf (_root_.VStar.Recursive.SampledTwo.subsetDesign m) = "subset" := by
   simp [kindOf, getD_subset_kind]
 
-/-- **The second stage's sample reads at least 64 bytes**: the sample the coins `src` give under `Select.secondLaw`'s
+/-- **The second stage's sample reads at least 64 bytes**: the sample the coins `src` give under `Select.secondSamplingDesign`'s
 design, at a verifier whose own design is the subset one, exists only where `src` holds 64 bytes. -/
-theorem second_sample_size (v : _root_.Spot.Registration.Verifier) (m : ℕ) (sample ns ks : Array ℕ) (n : ℕ)
+theorem second_sample_size (v : _root_.Spot.Docket.Verifier) (m : ℕ) (sample ns ks : Array ℕ) (n : ℕ)
     (src : ByteArray) (units : Array ℕ) (read : ℕ)
-    (h : _root_.Spot.OneStage.sampledFrom { v with law := _root_.VStar.Recursive.SampledTwo.subsetDesign m }
-      (Select.secondLaw sample ns ks) n src = .ok (units, read)) : 64 ≤ src.size := by
+    (h : _root_.Spot.OneStage.sampledFrom { v with samplingDesign := _root_.VStar.Recursive.SampledTwo.subsetDesign m }
+      (Select.secondSamplingDesign sample ns ks) n src = .ok (units, read)) : 64 ≤ src.size := by
   unfold _root_.Spot.OneStage.sampledFrom at h
   obtain ⟨derived, hd, h⟩ := bind_eq_ok.1 h
   obtain ⟨parsed, hp, h⟩ := bind_eq_ok.1 h
   obtain ⟨l, hl, h⟩ := bind_eq_ok.1 h
-  obtain rfl := deriveLaw_subset _ _ _ _ _ (kind_subset m) hd
+  obtain rfl := deriveSamplingDesign_subset _ _ _ _ _ (kind_subset m) hd
   rw [Option.getD_none] at hl
   obtain ⟨ws, rfl, hws⟩ := second_design_strata sample ns ks n parsed hp
   obtain rfl := (_root_.Flock.Bridge.coveredDesign_ok hl).1
@@ -175,8 +175,8 @@ theorem second_source_size {form : Bool} {p : Params} {c : OneStage.Commitment} 
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ r i it, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ i.interior = some it ∧ it.source = ξ₂ ∧
       64 ≤ ξ₂.size := by
-  obtain ⟨c₂, ξ₂, r, i, run, law, it, grain, replay, k, ns, ids, ks, hi, -, -, hsc, hit, hsrc, -, -, -, -, -, -,
-    hlaw⟩ := accepted_law_run h
+  obtain ⟨c₂, ξ₂, r, i, run, samplingDesign, it, grain, replay, k, ns, ids, ks, hi, -, -, hsc, hit, hsrc, -, -, -, -, -, -,
+    hlaw⟩ := accepted_samplingDesign_run h
   obtain ⟨n, units, read, -, hdf, -⟩ := secondCheck_read hsc
   subst hlaw
   exact ⟨c₂, ξ₂, r, i, it, hi, hit, hsrc,

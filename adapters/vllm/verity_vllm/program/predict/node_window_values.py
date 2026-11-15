@@ -128,7 +128,7 @@ def _embedding_shard(v: "Values", node: Any, t: int) -> np.ndarray:
 
 
 def _embedding_shard_small() -> tuple[Any, list[np.ndarray], np.ndarray]:
-    from verity.definitions.registry import b1_tp2 as B1T
+    from verity_vllm.definitions.registry import b1_tp2 as B1T
 
     fn = bind(B1T.EmbeddingShard, VS=4, H=3, START=2)
     table = np.arange(1, 13, dtype=np.uint16) * 0x0101
@@ -289,7 +289,7 @@ class Tables:
             return got
         from verity.protocols.proofs.spot.verifier.one_stage import registered as G
         from verity_vllm.pipeline import expert_rows as XR
-        from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
+        from verity.protocols.accounting.pouw.prover.serving import registered_commit
 
         t = self.by[name]
         m = _TABLE.match(t.param)
@@ -312,7 +312,7 @@ class Tables:
                 rows = XR.table_words(stack.view("<u4"), "ws", E, A, Bd, 1, 0, b)
         if rows.shape != (t.rows, t.words):
             raise ValueError(f"table {name}: {rows.shape} words, not ({t.rows}, {t.words})")
-        got = self.held[name] = H1R.commit(self.program, t.param, rows, self.key, len(self.held), keep_rows=True,
+        got = self.held[name] = registered_commit(self.program, t.param, rows, self.key, len(self.held), keep_rows=True,
                                            schema=G.SCHEMA_SEG)
         return got
 

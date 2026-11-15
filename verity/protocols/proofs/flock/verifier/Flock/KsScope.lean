@@ -115,7 +115,7 @@ def sampleWhy (count : Nat) (sample : Option Json) : Option String :=
     | none => some s!"a session of {count} tables without a draw"
     | some j => match Draw.UnitSample.ofJson j with
       | .error e => some s!"a draw that does not parse ({e})"
-      | .ok d => match d.law with
+      | .ok d => match d.samplingDesign with
         | .subset k => if k % count = 0 then none
           else some s!"a subset draw of {k} units over {count} tables, which do not divide it"
         | _ => none
@@ -237,7 +237,7 @@ theorem filesWhy_none {tags : Tags} {count : Nat} {c : Circuit} {pub : Public} {
 
 /-- **At more than one table, a passing sample parses, and its subset `k` is a multiple of the tables.** -/
 theorem sampleWhy_none {count : Nat} {sample : Option Json} (h : sampleWhy count sample = none) (hc : ¬ count ≤ 1) :
-    ∃ j d, sample = some j ∧ Draw.UnitSample.ofJson j = .ok d ∧ ∀ k, d.law = .subset k → k % count = 0 := by
+    ∃ j d, sample = some j ∧ Draw.UnitSample.ofJson j = .ok d ∧ ∀ k, d.samplingDesign = .subset k → k % count = 0 := by
   unfold sampleWhy at h
   rw [if_neg hc] at h
   cases sample with
