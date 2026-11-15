@@ -28,6 +28,21 @@ OFFERED = ["adapters/vllm/**", "verity/protocols/accounting/pouw/**", "benchmark
            "security/**/Certifier/**"]
 if os.environ.get("PIECE1"):
     KERNELS += OFFERED
+ONLY = [g for g in os.environ.get("ONLY", "").split(",") if g]
+if ONLY:
+    inside = [f for f in files if any(R._match(f, g) for g in ONLY)]
+    holding = {"/".join(f.split("/")[:i]) for f in inside for i in range(1, f.count("/") + 1)}
+    cover = set()
+    for f in files:
+        if any(R._match(f, g) for g in ONLY):
+            continue
+        parts = f.split("/")
+        for i in range(1, len(parts) + 1):
+            head = "/".join(parts[:i])
+            if head not in holding:
+                cover.add(head + "/**" if i < len(parts) else head)
+                break
+    KERNELS += sorted(cover)
 # Lean's names and the caps of the Lean lints wait for the Lean part
 KERNELS += ["tests/test_lean_packages.py", "tests/test_lean_vocabulary.py", "tools/verity/lean/**"]
 PROOFS = ["verity/protocols/proofs/**", "security/*/Flock/**", "security/*/Flock.lean", "security/*/Spot/**",
@@ -531,15 +546,20 @@ L.append("""# The retired word "draw", in the Glossary's words: what `tools/move
 # - records of what was (earlier maps, changelogs, the archive), the Glossary's table, the retired-words lints and their
 #   lists, fixtures, pinned and lock files.
 """)
+if ONLY:
+    L.append("# This piece renames only under " + ", ".join(f"`{g}`" for g in ONLY) + "; every other path is excluded, and every")
+    L.append("# name declared there or read from there keeps its spelling.")
+    L.append("")
 L.append("[words]")
 L += [f"{q(k)} = {q(v)}" for k, v in words]
 L.append("")
 if not os.environ.get("PIECE1"):
-    L.append("# the PoUW budget's plan point, which would otherwise be the `Sample` that `Draw` becomes")
-    L.append("[[words_in]]")
-    L.append('files = ["benchmarks/pouw/budget.py"]')
-    L.append('words = { "Sample" = "PlanPoint" }')
-    L.append("")
+    if re.search(r"\bclass Draw\b", (repo / "benchmarks/pouw/budget.py").read_text()):
+        L.append("# the PoUW budget's plan point, which would otherwise be the `Sample` that `Draw` becomes")
+        L.append("[[words_in]]")
+        L.append('files = ["benchmarks/pouw/budget.py"]')
+        L.append('words = { "Sample" = "PlanPoint" }')
+        L.append("")
     L.append("# the replay's sampling design, by the vLLM adapter's names for it")
     L.append("[[words_in]]")
     L.append('files = ["adapters/vllm/verity_vllm/pipeline/c2_replay.py", "adapters/vllm/verity_vllm/pipeline/replay_plan.py"]')
