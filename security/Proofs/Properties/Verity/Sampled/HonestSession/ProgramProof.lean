@@ -7,6 +7,7 @@ public import Proofs.Flock.SessionLoop.Concrete.Inputs
 public import Proofs.Flock.SessionLoop.Concrete.Fwd
 public import Proofs.Pouw.Period.Sort
 public import Proofs.Flock.Recursive.FirewallJson
+public import Std.Data.String.ToNat
 import all Circuits.Program
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
@@ -20,6 +21,10 @@ import all Init.Data.Ord.String
 import all Init.Data.Ord.Basic
 import all Init.Data.String.Basic
 import all Init.Data.String.Defs
+import all Init.Data.String.Legacy
+import all Init.Data.String.Slice
+import all Init.Data.String.Search
+import all Init.Data.ToString.Basic
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 import all Init.Data.List.Control
@@ -44,8 +49,13 @@ What that walk reads, proved here:
   kernel never hashes a string.
 * `domainError_none`: a value `dKf` accepts is in the canonical JSON domain; `dKf` is `domainError`'s acceptance by
   structural recursion on a fuel, which the kernel evaluates, where `domainError`'s well-founded recursion is stuck.
-* `mapM_except`, `stBind`, `stGet`, `stSet`, `stModify`, `iteApp`, `diteApp`: the steps of `Array.mapM` and of `getDef`'s
-  state monad, as rules of `fwd_walk`.
+* `mapM_except`, `stBind`, `stPure`, `stGet`, `stSet`, `stModify`, `iteApp`, `diteApp`, `fst_mk`, `snd_mk`,
+  `forIn_st_nil`, `forIn_range_st`: the steps of `Array.mapM` and of `getDef`'s state monad, its loops unrolled by
+  `forInSt`, as rules of `fwd_walk`; `hs_contains_*`, `hm_get_*`: its `HashSet`'s and `HashMap`'s lookups, for `String`
+  keys, whose instances a rule's left side does not name.
+* `splitOn_root`, `splitOn_unit`, `all_list`, `toNat_one`, `repr_one`, `inputId_not16`: the string functions a
+  composite's id check and the input check read, at the descriptor's ids; the kernel evaluates none of them, `simp`
+  does with their equations.
 -/
 
 @[expose] public section
@@ -246,5 +256,82 @@ theorem iteApp {σ β : Type} (c : Prop) [Decidable c] (a b : σ → β) (s : σ
 
 theorem diteApp {σ β : Type} (c : Prop) [Decidable c] (a : c → σ → β) (b : ¬c → σ → β) (s : σ) :
     (if h : c then a h else b h) s = if h : c then a h s else b h s := by split <;> rfl
+
+theorem stPure {σ ε α : Type} (a : α) (s : σ) : (pure a : StateT σ (Except ε) α) s = .ok (a, s) := rfl
+
+theorem fst_mk {α β : Type} (a : α) (b : β) : (a, b).1 = a := rfl
+
+theorem snd_mk {α β : Type} (a : α) (b : β) : (a, b).2 = b := rfl
+
+theorem forIn_st_nil {σ ε α β : Type} (xs : Array α) (b : β) (f : α → β → StateT σ (Except ε) (ForInStep β)) (s : σ)
+    (h : xs = #[]) : (forIn xs b f : StateT σ (Except ε) β) s = .ok (b, s) := by
+  subst h; rfl
+
+/-- A loop of the state monad over a list, by structural recursion. -/
+def forInSt {σ ε α β : Type} (f : α → β → StateT σ (Except ε) (ForInStep β)) : List α → β → σ → Except ε (β × σ)
+  | [], b, s => .ok (b, s)
+  | a :: as, b, s => f a b s >>= fun p => match p.1 with
+    | .done b => .ok (b, p.2)
+    | .yield b => forInSt f as b p.2
+
+theorem forIn_list_st {σ ε α β : Type} (l : List α) (b : β) (f : α → β → StateT σ (Except ε) (ForInStep β)) (s : σ) :
+    (forIn l b f : StateT σ (Except ε) β) s = forInSt f l b s := by
+  induction l generalizing b s with
+  | nil => rfl
+  | cons a as ih =>
+    rw [List.forIn_cons]
+    show (f a b s >>= fun p => _) = _
+    simp only [forInSt]
+    congr 1
+    funext p
+    rcases p with ⟨r, s'⟩
+    cases r with
+    | done b' => rfl
+    | yield b' => exact ih b' s'
+
+theorem forIn_range_st {σ ε β : Type} (r : Std.Legacy.Range) (b : β) (f : Nat → β → StateT σ (Except ε) (ForInStep β))
+    (s : σ) : (forIn r b f : StateT σ (Except ε) β) s = forInSt f (List.range' r.start r.size r.step) b s := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range', forIn_list_st]
+
+theorem hs_contains_insert (m : Std.HashSet String) (k a : String) :
+    (m.insert k).contains a = (k == a || m.contains a) := by simp [Std.HashSet.contains_insert]
+
+theorem hs_contains_empty (a : String) : (∅ : Std.HashSet String).contains a = false := by simp
+
+theorem hs_contains_erase (m : Std.HashSet String) (k a : String) :
+    (m.erase k).contains a = (!(k == a) && m.contains a) := by simp [Std.HashSet.contains_erase]
+
+theorem hm_get_insert (m : Std.HashMap String Nat) (k a : String) (v : Nat) :
+    (m.insert k v)[a]? = if k == a then some v else m[a]? := by simp [Std.HashMap.getElem?_insert]
+
+theorem hm_get_empty (a : String) : (∅ : Std.HashMap String Nat)[a]? = none := by simp
+
+/-! ## The strings a composite's id check and the input check read -/
+
+theorem splitOn_root (s : String) (h : s = "Root[HsProg_v0]_v1") : s.splitOn "_v" = ["Root[HsProg", "0]", "1"] := by
+  subst h; simp +decide [String.splitOn, String.splitOnAux]
+
+theorem splitOn_unit (s : String) (h : s = "Unit_v1") : s.splitOn "_v" = ["Unit", "1"] := by
+  subst h; simp +decide [String.splitOn, String.splitOnAux]
+
+theorem all_list (s : String) (p : Char → Bool) : s.all p = s.toList.all p := String.all_bool_eq
+
+theorem isNat_one : "1".toSlice.isNat = true :=
+  String.Slice.isNat_of_isDigit (s := "1".toSlice) (by simp +decide) (by simp +decide)
+
+theorem toNat_one (s : String) (h : s = "1") : s.toNat! = 1 := by
+  subst h
+  show "1".toSlice.toNat! = 1
+  unfold String.Slice.toNat!
+  rw [if_pos isNat_one, String.Slice.foldl_eq_foldl_toList]
+  simp +decide
+
+theorem repr_one : toString (1 : Nat) = "1" := by
+  rw [← String.toList_inj]
+  simp [Nat.toDigits_of_lt_base]
+  all_goals decide +kernel
+
+theorem inputId_not16 : Flock.Program.inputId? "Not16_v1" = none := by
+  simp +decide [Flock.Program.inputId?, Flock.Program.widthAfter?]
 
 end Verity.Sampled.Instance.HonestSession.ProgramProof
