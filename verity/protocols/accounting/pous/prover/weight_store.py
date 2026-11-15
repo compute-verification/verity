@@ -38,6 +38,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+__all__ = [
+    "Blocks", "P2_STORE", "Store", "answer", "audit", "commit", "decoder", "encode", "flat", "geometry",
+    "layout_digest", "layout_of", "load_package", "p2_module", "salt_from", "segment", "subprotocol",
+]
+
 #: P2's encoded weights store, loaded as the package its directory names (``p2_store``): ``store.py``, which PoUS
 #: encodes with, ``load.py``, its decode at use on the GPU, and its CUDA library's wrapper.
 P2_STORE = Path(__file__).resolve().parent / "p2" / "p2_store"

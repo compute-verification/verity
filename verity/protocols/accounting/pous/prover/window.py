@@ -27,6 +27,8 @@ from .decode_circuit import P2_BASE_BYTES
 from .session import SessionStatements, SessionUnit
 from .setup_proof import payload_bytes, place, setup_unit, unit_inputs
 
+__all__ = ["DEFINITIONS", "STORE", "SessionIntegration", "SetupIntegration", "WEIGHTS", "write_window"]
+
 DEFINITIONS = (decode_circuit, answer_circuit, verdict_circuit, session_circuit)
 #: the setup's registered parameters: the store's blocks and W's rows
 STORE, WEIGHTS = "store", "weights"

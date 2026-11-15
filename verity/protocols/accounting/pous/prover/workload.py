@@ -14,6 +14,8 @@ from __future__ import annotations
 from verity.channel import Body, Schema
 from verity.protocol import Channel, Role
 
+__all__ = ["BODY", "CHANNELS", "MESSAGES", "PARTIES", "PROVER", "WORKLOAD"]
+
 WORKLOAD = "workload"
 PROVER = "prover"
 PARTIES = (Role(WORKLOAD, "developer"), Role(PROVER, "developer"))
