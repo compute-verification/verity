@@ -86,7 +86,7 @@ def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
         return cp
     # the manifest's local_path is the HF cache it names (checkpoints_hf_home); a pin made or fetched under this process's
     # HF_HOME, which `apply_env` leaves as it found it, is the same revision's snapshot there
-    hf_home = os.environ.get("HF_HOME")
+    hf_home = settings.HF_HOME
     here = snapshot_dir(hf_home, cp["repo"], str(cp["revision"])) if hf_home and cp.get("revision") else None
     if here is None or not here.is_dir():
         raise SystemExit(f"{cp['repo']}: local snapshot {cp['local_path']} missing"
