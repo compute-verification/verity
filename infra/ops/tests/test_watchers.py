@@ -219,6 +219,17 @@ def test_the_relay_runs_every_relay_side_monitor_but_the_one_that_reads_the_node
     assert len(only) == len(set(only))
 
 
+def test_the_loop_that_runs_the_asks_monitor_has_the_file_that_holds_the_notion_key():
+    """The `asks` monitor reads an ask's Notion page with NOTION_API_KEY, which only `notion.env` holds on the pod; a loop
+    running it without that file posts an alert every pass that its asks can't be checked."""
+    _, loops = W.load(CONTROL / "watchers.toml")
+    running = [lp for lp in loops if lp.argv[3:5] == ["research.monitors", "relay"] and "asks" in lp.argv[lp.argv.index("--only") + 1:]]
+    assert [lp.name for lp in running] == ["monitors-relay"]
+    for lp in running:
+        assert "/data/watchers/notion.env" in lp.env_files, f"{lp.name} runs the asks monitor and lacks the file with NOTION_API_KEY"
+        assert "/data/watchers/notion.env" not in lp.needs, f"{lp.name} must start without Notion"
+
+
 def test_an_extra_job_that_exits_0_is_done_and_one_that_fails_starts_again(tmp_path):
     extra = tmp_path / "extra.d"
     extra.mkdir()
