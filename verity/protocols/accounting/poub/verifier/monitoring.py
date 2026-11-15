@@ -184,7 +184,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     text = json.dumps(result, indent=1, sort_keys=True)
     if a.out:
         a.out.write_text(text + "\n")
-    print(text)
+    sys.stdout.write(text + "\n")
     return 0
 
 

@@ -32,7 +32,8 @@ from __future__ import annotations
 
 import hashlib
 import math
-from collections.abc import Mapping
+import sys
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -454,21 +455,21 @@ def _named_bits(k: int, queries_log2: int, binomial: bool) -> int:
     return audit.named_bits(k, queries_log2) if binomial else k * queries_log2
 
 
-def _sizing(gap: int, fig: Figures) -> None:
+def _sizing(gap: int, fig: Figures) -> Iterator[str]:
     rm, chip = fig.read_bytes_per_s, fig.chip_bytes
     gpu_store, hbm = 94 * 10 ** 9, fig.gpus * 96 * 10 ** 9
     store = spanning(gpu_store, fig)
     node = store // BLOCK_BYTES
     p, g_s = store / rm, gap / S
     cap = rm * (p + g_s)
-    print(f"# λ under 0.05%: the node's store over every tier, 94 GB of each GPU's HBM and host DRAM's share "
-          f"({store / 1e9:.0f} GB, {p * 1e3:.1f} ms passes), in the steady state at g = {gap // US} µs.  A receipt of m "
-          f"blocks: its bits for C(q, k) at q = 2^{audit.QUERIES_LOG2} bounded by q^k, or by q^k/k! as ledger charges "
-          "them, and the bits 0.05% allows; an opening on that store with a payload leaf a receipt or a block; τ a pass "
-          "scaled from an 8 GiB pass (sketch 5.82 ms, hash 0.33 ms, tree 0.90 ms, over a 5.60 ms read); "
-          "sketch-sha512's rate a compression at m·128 sectors, log2")
-    print("| m | KiB | q^k bits | λ | q^k/k! bits | λ | bits at 0.05% | opening B, payload a receipt | a block | τ | rate |")
-    print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    yield (f"# λ under 0.05%: the node's store over every tier, 94 GB of each GPU's HBM and host DRAM's share "
+           f"({store / 1e9:.0f} GB, {p * 1e3:.1f} ms passes), in the steady state at g = {gap // US} µs.  A receipt of m "
+           f"blocks: its bits for C(q, k) at q = 2^{audit.QUERIES_LOG2} bounded by q^k, or by q^k/k! as ledger charges "
+           "them, and the bits 0.05% allows; an opening on that store with a payload leaf a receipt or a block; τ a pass "
+           "scaled from an 8 GiB pass (sketch 5.82 ms, hash 0.33 ms, tree 0.90 ms, over a 5.60 ms read); "
+           "sketch-sha512's rate a compression at m·128 sectors, log2")
+    yield "| m | KiB | q^k bits | λ | q^k/k! bits | λ | bits at 0.05% | opening B, payload a receipt | a block | τ | rate |"
+    yield "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
     for m in (1, 2, 3, 4, 8):
         k, units = store // (m * BLOCK_BYTES), node // m
         bits = [_named_bits(k, audit.QUERIES_LOG2, b) for b in (False, True)]
@@ -476,46 +477,46 @@ def _sizing(gap: int, fig: Figures) -> None:
                 + DIGEST_BYTES * math.ceil(math.log2(math.ceil(units / PER_LEAF))))
         rate = min(Fraction(1, 2 ** (8 * r)) + m * SECTORS * sign_rank_at_most(SKETCH_ROWS, r - 1)
                    for r in range(1, SKETCH_ROWS + 1))
-        print(f"| {m} | {m * 4} | {bits[0] / k:.2f} | {(bits[0] + audit.SLACK_LOG2) / 8 / cap:.4%} | {bits[1] / k:.2f} "
-              f"| {(bits[1] + audit.SLACK_LOG2) / 8 / cap:.4%} | {0.0005 * 8 * cap / k:.2f} "
-              f"| {base + SALT_BYTES + DIGEST_BYTES * math.ceil(math.log2(units))} "
-              f"| {base + m * (SALT_BYTES + DIGEST_BYTES * math.ceil(math.log2(node)))} "
-              f"| {(5.82 + (0.33 + 0.90) / m) / 5.60:.3f} | {log2(rate):.2f} |")
+        yield (f"| {m} | {m * 4} | {bits[0] / k:.2f} | {(bits[0] + audit.SLACK_LOG2) / 8 / cap:.4%} | {bits[1] / k:.2f} "
+               f"| {(bits[1] + audit.SLACK_LOG2) / 8 / cap:.4%} | {0.0005 * 8 * cap / k:.2f} "
+               f"| {base + SALT_BYTES + DIGEST_BYTES * math.ceil(math.log2(units))} "
+               f"| {base + m * (SALT_BYTES + DIGEST_BYTES * math.ceil(math.log2(node)))} "
+               f"| {(5.82 + (0.33 + 0.90) / m) / 5.60:.3f} | {log2(rate):.2f} |")
     k = store // BLOCK_BYTES
     q_log2 = 0.0005 * 8 * cap / k + math.lgamma(k + 1) / math.log(2) / k
-    print(f"at 4 KiB, under 0.05% by q^k/k! needs q ≤ 2^{q_log2:.2f} queries to a pass's oracle: "
-          f"{2 ** q_log2 / fig.gpu_sha512_per_s:.0f} s of one GPU's SHA-512, {2 ** q_log2 / fig.sha512_per_s:.0f} s of the "
-          "node's")
-    print()
+    yield (f"at 4 KiB, under 0.05% by q^k/k! needs q ≤ 2^{q_log2:.2f} queries to a pass's oracle: "
+           f"{2 ** q_log2 / fig.gpu_sha512_per_s:.0f} s of one GPU's SHA-512, {2 ** q_log2 / fig.sha512_per_s:.0f} s of the "
+           "node's")
+    yield ""
     hbm_rate = fig.gpus * fig.gpu_read_bytes_per_s
-    print(f"# μ_chip under 0.05%: S_chip/(R·(p + g)) by the store a pass reads at R, {chip / 0.0005 / 1e9:.0f} "
-          f"GB at 0.05%, {chip / 0.0005 / hbm:.1f} times the node's {hbm // 10 ** 9} GB of HBM.  Host DRAM, at its "
-          f"{fig.host_read_bytes_per_s / 1e9:.1f} GB/s, holding more than its share lengthens a pass past the HBM's read only "
-          "by leaving the HBM idle.  A flush of t_F a pass that leaves nothing of the store on chip adds t_F to the gap")
-    print("| GB a GPU | store GB | pass ms | μ_chip |")
-    print("| --- | --- | --- | --- |")
+    yield (f"# μ_chip under 0.05%: S_chip/(R·(p + g)) by the store a pass reads at R, {chip / 0.0005 / 1e9:.0f} "
+           f"GB at 0.05%, {chip / 0.0005 / hbm:.1f} times the node's {hbm // 10 ** 9} GB of HBM.  Host DRAM, at its "
+           f"{fig.host_read_bytes_per_s / 1e9:.1f} GB/s, holding more than its share lengthens a pass past the HBM's read only "
+           "by leaving the HBM idle.  A flush of t_F a pass that leaves nothing of the store on chip adds t_F to the gap")
+    yield "| GB a GPU | store GB | pass ms | μ_chip |"
+    yield "| --- | --- | --- | --- |"
     for gb in (30, 62, 94, 263, 526):
         s_gb = spanning(gb * 10 ** 9, fig)
-        print(f"| {gb} | {s_gb / 1e9:.0f} | {s_gb / rm * 1e3:.1f} | "
-              f"{chip / (rm * (s_gb / rm + g_s)):.4%} |")
-    print(f"| pass ms, {fig.gpus * gpu_store // 10 ** 9} GB of HBM and the rest host DRAM | store GB | μ_chip | idle |")
-    print("| --- | --- | --- | --- |")
+        yield (f"| {gb} | {s_gb / 1e9:.0f} | {s_gb / rm * 1e3:.1f} | "
+               f"{chip / (rm * (s_gb / rm + g_s)):.4%} |")
+    yield f"| pass ms, {fig.gpus * gpu_store // 10 ** 9} GB of HBM and the rest host DRAM | store GB | μ_chip | idle |"
+    yield "| --- | --- | --- | --- |"
     for pass_s in (p, 0.1, 0.2, 1.0):
         reads = min(fig.gpus * gpu_store, hbm_rate * pass_s) + fig.host_read_bytes_per_s * pass_s
-        print(f"| {pass_s * 1e3:.1f} | {reads / 1e9:.1f} | {chip / (rm * pass_s):.3%} "
-              f"| {1 - reads / (rm * pass_s):.2%} |")
-    print("| t_F µs | steady state | added |")
-    print("| --- | --- | --- |")
+        yield (f"| {pass_s * 1e3:.1f} | {reads / 1e9:.1f} | {chip / (rm * pass_s):.3%} "
+               f"| {1 - reads / (rm * pass_s):.2%} |")
+    yield "| t_F µs | steady state | added |"
+    yield "| --- | --- | --- |"
     steady = g_s / (p + g_s)
     for tf in (0, 26, 52, 105):
         x = (g_s + tf * 1e-6) / (p + g_s + tf * 1e-6)
-        print(f"| {tf} | {x:.4%} | {x - steady:.4%} |")
-    print()
-    print(f"# the horizon's whole γ and the worst window's γ_t at the stated T = {audit.WINDOW_NS // S} s, "
-          f"{store / 1e9:.0f} GB over every tier, as stated and with what lowers λ and μ_chip (a flush: its added steady "
-          "state on the timing, μ_chip at 0), and by q^k, the looser count")
-    print("| RTT ms | γ | stated | by q^k | 16 KiB receipts | and a 26 µs flush | λ = μ_chip = 0 |")
-    print("| --- | --- | --- | --- | --- | --- | --- |")
+        yield f"| {tf} | {x:.4%} | {x - steady:.4%} |"
+    yield ""
+    yield (f"# the horizon's whole γ and the worst window's γ_t at the stated T = {audit.WINDOW_NS // S} s, "
+           f"{store / 1e9:.0f} GB over every tier, as stated and with what lowers λ and μ_chip (a flush: its added steady "
+           "state on the timing, μ_chip at 0), and by q^k, the looser count")
+    yield "| RTT ms | γ | stated | by q^k | 16 KiB receipts | and a 26 µs flush | λ = μ_chip = 0 |"
+    yield "| --- | --- | --- | --- | --- | --- | --- |"
     flush = (g_s + 26e-6) / (p + g_s + 26e-6) - steady
     for rtt in (1, 20):
         h = stated(store, audit.WINDOW_NS, 600 * S // audit.WINDOW_NS, figures=fig, rtt_ns=_ns(rtt), samples=audit.SAMPLES)
@@ -524,8 +525,8 @@ def _sizing(gap: int, fig: Figures) -> None:
             lam = {(m, b): terms.counting * (_named_bits(store // (m * BLOCK_BYTES), audit.QUERIES_LOG2, b)
                                              + audit.SLACK_LOG2) / (audit.named_bits(k) + audit.SLACK_LOG2)
                    for m in (1, 4) for b in (False, True)}
-            print(f"| {rtt} | {name} | {gamma:.3%} | {rest + lam[1, False]:.3%} | {rest + lam[4, True]:.3%} "
-                  f"| {rest - terms.chip + lam[4, True] + flush:.3%} | {rest - terms.chip:.3%} |")
+            yield (f"| {rtt} | {name} | {gamma:.3%} | {rest + lam[1, False]:.3%} | {rest + lam[4, True]:.3%} "
+                   f"| {rest - terms.chip + lam[4, True] + flush:.3%} | {rest - terms.chip:.3%} |")
 
 
 def _ns(ms: float) -> int:
@@ -536,65 +537,66 @@ def _pct(x: float) -> str:
     return f"{x:.2%}" if x < 1 else "vacuous"
 
 
-def _grid(fig: Figures) -> None:
+def _grid(fig: Figures) -> Iterator[str]:
+    """The report's lines, each without its newline."""
     from . import ledger  # here, not above: ledger imports this module
 
     gap, jitter = 50 * US, _ns(0.05)
-    print(f"# receipts: {DEFAULT} by default, of the block alone; {', '.join(k for k in KINDS if k != DEFAULT)} kept for "
-          "comparison.  The schedule and openings below are the same under either kind, with no tile evidence unless "
-          "the registration binds z")
-    print()
-    print(f"# μ_timing of chained sessions: g = {gap // US} µs, J = {jitter / MS} ms each way, A = RTT + 2J + pass + g; "
-          "one-way delays RTT/2; isolated is a session of one window; worst window is the largest of a W = 100 "
-          "session's windows' own, each over [b_(t−1), D_t]")
-    print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) "
-          "| worst window |")
-    print("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    yield (f"# receipts: {DEFAULT} by default, of the block alone; {', '.join(k for k in KINDS if k != DEFAULT)} kept for "
+           "comparison.  The schedule and openings below are the same under either kind, with no tile evidence unless "
+           "the registration binds z")
+    yield ""
+    yield (f"# μ_timing of chained sessions: g = {gap // US} µs, J = {jitter / MS} ms each way, A = RTT + 2J + pass + g; "
+           "one-way delays RTT/2; isolated is a session of one window; worst window is the largest of a W = 100 "
+           "session's windows' own, each over [b_(t−1), D_t]")
+    yield ("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) "
+           "| worst window |")
+    yield "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
     for p in (20, 50):
         for w in (1, 20, 60):
             for rtt in (1, 5, 20, 50):
                 kw = dict(gap_ns=gap, down_ns=_ns(rtt) // 2, up_ns=_ns(rtt) - _ns(rtt) // 2, jitter_ns=jitter)
                 runs = [honest(round(w * S), n, _ns(p), **kw) for n in (1, 10, 100)]
-                print(f"| {p} | {w} | {rtt} | {runs[0].passes[0]} | "
-                      + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} "
-                      f"| {max(runs[2].window_timing):.2%} |")
-    print()
+                yield (f"| {p} | {w} | {rtt} | {runs[0].passes[0]} | "
+                       + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} "
+                       f"| {max(runs[2].window_timing):.2%} |")
+    yield ""
     t_s, s = audit.WINDOW_NS // S, audit.SAMPLES
     quarter = samples_for(0.0025, audit.DELTA)
     openings = {1: samples_for(0.01, audit.DELTA), 20: quarter, t_s: s, 90: quarter}
     d = round(-math.log2(audit.DELTA))
-    print(f"# openings at the stated T = {t_s} s, δ = 2^-{d} (it reads {ledger.DELTA_FORM}): s = {s} from the window's "
-          f"coin ({s / t_s:.0f} a second, "
-          f"ε_s = ln(2^{d})/s = {math.log(2.0 ** d) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
-          f"1 s option's 1% is {openings[1]}.  A Fiat–Shamir draw from the window's last root, ground over Q "
-          f"transcripts, needs s(δ/Q) = ⌈s·({d} + log2 Q)/{d}⌉")
-    print("| Q | s | × the coin's |")
-    print("| --- | --- | --- |")
+    yield (f"# openings at the stated T = {t_s} s, δ = 2^-{d} (it reads {ledger.DELTA_FORM}): s = {s} from the window's "
+           f"coin ({s / t_s:.0f} a second, "
+           f"ε_s = ln(2^{d})/s = {math.log(2.0 ** d) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
+           f"1 s option's 1% is {openings[1]}.  A Fiat–Shamir draw from the window's last root, ground over Q "
+           f"transcripts, needs s(δ/Q) = ⌈s·({d} + log2 Q)/{d}⌉")
+    yield "| Q | s | × the coin's |"
+    yield "| --- | --- | --- |"
     for q in (0, 20, 40, audit.QUERIES_LOG2):
         sq = -(-s * (d + q) // d)
-        print(f"| 2^{q} | {sq} | {sq / s:.2f} |")
-    print()
-    print("# openings: bytes a window and Gb/s per node, at each window's openings: "
-          + ", ".join(f"T = {w} s: {openings[w]}" for w in (1, 20, t_s)))
+        yield f"| 2^{q} | {sq} | {sq / s:.2f} |"
+    yield ""
+    yield ("# openings: bytes a window and Gb/s per node, at each window's openings: "
+           + ", ".join(f"T = {w} s: {openings[w]}" for w in (1, 20, t_s)))
     for name, blocks in (("one GPU, 94 GB", 94 * 10 ** 9 // BLOCK_BYTES), ("8 GPUs, 752 GB", 8 * 94 * 10 ** 9 // BLOCK_BYTES),
                          ("8 GPUs + 1.5 TB host", (8 * 94 + 1500) * 10 ** 9 // BLOCK_BYTES)):
         b = opening_bytes(blocks)
-        print(f"{name}: N = {blocks}, {b} B an opening; "
-              + ", ".join(f"T = {w} s: {openings[w] * b / 1e6:.0f} MB a window, {openings[w] * b * 8 / w / 1e9:.3f} Gb/s"
-                          for w in (1, 20, t_s)))
-    print()
+        yield (f"{name}: N = {blocks}, {b} B an opening; "
+               + ", ".join(f"T = {w} s: {openings[w] * b / 1e6:.0f} MB a window, {openings[w] * b * 8 / w / 1e9:.3f} Gb/s"
+                           for w in (1, 20, t_s)))
+    yield ""
     hbm_rate = fig.gpus * fig.gpu_read_bytes_per_s
-    print(f"# the stated claim (§1, §10), T = {t_s} s by default, 20 s and 1 s the options: the worst window's whole γ_t "
-          "over its own span at R measured and at spec, and over a 10 min horizon of W windows the pooled μ_sample and "
-          f"the whole γ, on one node of {fig.gpus} RTX PRO 6000s and their host (R = {fig.read_bytes_per_s / 1e12:.4f} TB/s "
-          f"measured, {fig.spec_bytes_per_s / 1e12:.4f} at spec, S_chip = {fig.chip_bytes:,} B), the default codec at the node's "
-          f"stated ceiling, δ = 2^{math.log2(audit.DELTA):.0f} (it reads {ledger.DELTA_FORM}), g = 50 µs, "
-          "J = 0.05 ms.  Over every tier, the store is GB a GPU of each GPU's HBM "
-          "and host DRAM's share (`spanning`), and a pass its read at R; in HBM, the same GB a GPU and nothing on host "
-          f"DRAM, a pass its read at the GPUs' {hbm_rate / 1e12:.3f} TB/s")
-    print("| T s | openings | GB a GPU | tiers | store GB | pass ms | RTT ms | μ_timing | μ_sample | μ_chip | λ "
-          "| μ_rebuild | worst γ_t | at spec | W | pooled μ_sample | horizon γ |")
-    print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    yield (f"# the stated claim (§1, §10), T = {t_s} s by default, 20 s and 1 s the options: the worst window's whole γ_t "
+           "over its own span at R measured and at spec, and over a 10 min horizon of W windows the pooled μ_sample and "
+           f"the whole γ, on one node of {fig.gpus} RTX PRO 6000s and their host (R = {fig.read_bytes_per_s / 1e12:.4f} TB/s "
+           f"measured, {fig.spec_bytes_per_s / 1e12:.4f} at spec, S_chip = {fig.chip_bytes:,} B), the default codec at the node's "
+           f"stated ceiling, δ = 2^{math.log2(audit.DELTA):.0f} (it reads {ledger.DELTA_FORM}), g = 50 µs, "
+           "J = 0.05 ms.  Over every tier, the store is GB a GPU of each GPU's HBM "
+           "and host DRAM's share (`spanning`), and a pass its read at R; in HBM, the same GB a GPU and nothing on host "
+           f"DRAM, a pass its read at the GPUs' {hbm_rate / 1e12:.3f} TB/s")
+    yield ("| T s | openings | GB a GPU | tiers | store GB | pass ms | RTT ms | μ_timing | μ_sample | μ_chip | λ "
+           "| μ_rebuild | worst γ_t | at spec | W | pooled μ_sample | horizon γ |")
+    yield "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
     for w_s in (t_s, 20, 1, 90):
         for gb, tiers in ((30, "every"), (62, "every"), (94, "every"), (94, "HBM")):
             store, rate = (spanning(gb * 10 ** 9, fig), fig.read_bytes_per_s) if tiers == "every" else (
@@ -604,75 +606,75 @@ def _grid(fig: Figures) -> None:
                 g = stated(store, w_s * S, 600 // w_s, **kw)
                 spec = stated(store, w_s * S, 600 // w_s, capacity_bytes_per_s=fig.spec_bytes_per_s, **kw).worst
                 x = g.worst
-                print(f"| {w_s} | {openings[w_s]} | {gb} | {tiers} | {store / 1e9:.0f} | {store / rate * 1e3:.1f} "
-                      f"| {rtt} | {x.timing:.3%} | {x.sample:.3%} | {x.chip:.3%} | {x.counting:.3%} | {x.rebuild:.3%} "
-                      f"| {x.gamma:.3%} | {spec.gamma:.3%} | {600 // w_s} | {g.horizon:.4%} | {g.gamma_horizon:.3%} |")
-    print()
+                yield (f"| {w_s} | {openings[w_s]} | {gb} | {tiers} | {store / 1e9:.0f} | {store / rate * 1e3:.1f} "
+                       f"| {rtt} | {x.timing:.3%} | {x.sample:.3%} | {x.chip:.3%} | {x.counting:.3%} | {x.rebuild:.3%} "
+                       f"| {x.gamma:.3%} | {spec.gamma:.3%} | {600 // w_s} | {g.horizon:.4%} | {g.gamma_horizon:.3%} |")
+    yield ""
     share = fig.gpus + fig.host_read_bytes_per_s / fig.gpu_read_bytes_per_s
-    print(f"# the store floor (store_floor): below {store_floor(figures=fig) / 1e9:.1f} GB over every tier "
-          f"({store_floor(figures=fig) / share / 1e9:.1f} GB a GPU) μ_chip, λ and μ_rebuild alone exceed 1% at any T; with the "
-          f"chain's steady state at g = {gap // US} µs, no T meets 1% below {store_floor(gap, figures=fig) / 1e9:.1f} GB "
-          f"({store_floor(gap, figures=fig) / share / 1e9:.1f} GB a GPU)")
-    print()
-    _sizing(gap, fig)
-    print()
-    print("# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
-          "deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
-    print("| pass ms | RTT ms | floor | U ms | Δ = pass | Δ* ms | at Δ* | chained |")
-    print("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    yield (f"# the store floor (store_floor): below {store_floor(figures=fig) / 1e9:.1f} GB over every tier "
+           f"({store_floor(figures=fig) / share / 1e9:.1f} GB a GPU) μ_chip, λ and μ_rebuild alone exceed 1% at any T; with the "
+           f"chain's steady state at g = {gap // US} µs, no T meets 1% below {store_floor(gap, figures=fig) / 1e9:.1f} GB "
+           f"({store_floor(gap, figures=fig) / share / 1e9:.1f} GB a GPU)")
+    yield ""
+    yield from _sizing(gap, fig)
+    yield ""
+    yield ("# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
+           "deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
+    yield "| pass ms | RTT ms | floor | U ms | Δ = pass | Δ* ms | at Δ* | chained |"
+    yield "| --- | --- | --- | --- | --- | --- | --- | --- |"
     for p in (20, 50):
         for rtt in (0.2, 1, 5, 20, 50):
             for f in (0, 0.5, 0.9):
                 kw = dict(gap_ns=gap, rtt_ns=_ns(rtt), jitter_ns=jitter, rtt_floor_ns=_ns(f * rtt))
                 star = live_best_interval(_ns(p), **kw)
                 u = _ns(rtt) + 2 * jitter - _ns(f * rtt)
-                print(f"| {p} | {rtt} | {f} | {u / MS:.2f} | {_pct(live_mu(_ns(p), _ns(p), **kw))} | {star / MS:.2f} "
-                      f"| {_pct(live_mu(star, _ns(p), **kw))} | {chained(_ns(p), gap):.2%} |")
-    print()
-    print("| jitter, at Δ*: pass 20 ms, RTT 1 ms, floor 0.5 | " + " | ".join(f"J = {j} ms" for j in (0, 0.05, 0.2, 0.5, 1))
-          + " |")
-    print("| --- | --- | --- | --- | --- | --- |")
+                yield (f"| {p} | {rtt} | {f} | {u / MS:.2f} | {_pct(live_mu(_ns(p), _ns(p), **kw))} | {star / MS:.2f} "
+                       f"| {_pct(live_mu(star, _ns(p), **kw))} | {chained(_ns(p), gap):.2%} |")
+    yield ""
+    yield ("| jitter, at Δ*: pass 20 ms, RTT 1 ms, floor 0.5 | " + " | ".join(f"J = {j} ms" for j in (0, 0.05, 0.2, 0.5, 1))
+           + " |")
+    yield "| --- | --- | --- | --- | --- | --- |"
     row = []
     for j in (0, 0.05, 0.2, 0.5, 1):
         kj = dict(gap_ns=gap, rtt_ns=MS, jitter_ns=_ns(j), rtt_floor_ns=MS // 2)
         row.append(f"{live_mu(live_best_interval(20 * MS, **kj), 20 * MS, **kj):.2%}")
-    print("| live coins | " + " | ".join(row) + " |")
-    print()
-    print(f"# sketch-sha512's rank bound (§4): P(rank ≤ r) of a uniform ±1 rows × {SECTOR_BYTES} block of one sector's "
-          f"signs over Q, bounded through F2; rate(r) = 2^-8r + {SECTORS}·P(rank ≤ r − 1) a SHA-512 compression; r* "
-          "minimizes it")
-    print("| rows | r | P(rank ≤ r), log2 | rate(r), log2 |")
-    print("| --- | --- | --- | --- |")
+    yield "| live coins | " + " | ".join(row) + " |"
+    yield ""
+    yield (f"# sketch-sha512's rank bound (§4): P(rank ≤ r) of a uniform ±1 rows × {SECTOR_BYTES} block of one sector's "
+           f"signs over Q, bounded through F2; rate(r) = 2^-8r + {SECTORS}·P(rank ≤ r − 1) a SHA-512 compression; r* "
+           "minimizes it")
+    yield "| rows | r | P(rank ≤ r), log2 | rate(r), log2 |"
+    yield "| --- | --- | --- | --- |"
     readings = {k: sketch_reading(k) for k in (SKETCH_ROWS, 64)}
     for k, (star, _) in readings.items():
         for r in range(min(k, SECTOR_BYTES) - 1, star - 2, -1):
             mark = " (r*)" if r == star else ""
-            print(f"| {k} | {r}{mark} | {log2(sign_rank_at_most(k, r)):.2f} | {log2(sketch_rate(k, r)):.2f} |")
-    print()
+            yield f"| {k} | {r}{mark} | {log2(sign_rank_at_most(k, r)):.2f} | {log2(sketch_rate(k, r)):.2f} |"
+    yield ""
     for k, (star, rate) in readings.items():
         q100 = -100 - log2(rate)
-        print(f"{k} rows: r* = {star}, 2^{log2(rate):.2f} a compression; a session's failure is "
-              f"2^{log2(sketch_failure(0, k)):.2f} at the prover's budget Q = 2^{audit.QUERIES_LOG2} "
-              f"(`audit.QUERIES_LOG2`), and its guesses stay below 2^-100 up to Q = 2^{q100:.2f} compressions "
-              f"({2 ** q100 / fig.sha512_per_s:.3g} s of {fig.gpus} GPUs at {fig.gpu_sha512_per_s / 1e9:.1f}·10^9/s each)")
-    print()
-    print("# a grinding try reads no block: compressions to make a key straight (at least 5 with the constant "
-          f"midstates kept), at {fig.gpu_sha512_per_s / 1e9:.1f}·10^9/s on one GPU; seeing a sector's 16 × 32 signs is 16 "
-          "more")
-    print(f"| pass | leaves | compressions | ns a try | tries a second, {fig.gpus} GPUs, log2 |")
-    print("| --- | --- | --- | --- | --- |")
+        yield (f"{k} rows: r* = {star}, 2^{log2(rate):.2f} a compression; a session's failure is "
+               f"2^{log2(sketch_failure(0, k)):.2f} at the prover's budget Q = 2^{audit.QUERIES_LOG2} "
+               f"(`audit.QUERIES_LOG2`), and its guesses stay below 2^-100 up to Q = 2^{q100:.2f} compressions "
+               f"({2 ** q100 / fig.sha512_per_s:.3g} s of {fig.gpus} GPUs at {fig.gpu_sha512_per_s / 1e9:.1f}·10^9/s each)")
+    yield ""
+    yield ("# a grinding try reads no block: compressions to make a key straight (at least 5 with the constant "
+           f"midstates kept), at {fig.gpu_sha512_per_s / 1e9:.1f}·10^9/s on one GPU; seeing a sector's 16 × 32 signs is 16 "
+           "more")
+    yield f"| pass | leaves | compressions | ns a try | tries a second, {fig.gpus} GPUs, log2 |"
+    yield "| --- | --- | --- | --- | --- |"
     for name, blocks in (("one leaf", PER_LEAF), ("8 GiB", 2 ** 21), ("94 GB", 94 * 10 ** 9 // BLOCK_BYTES)):
         n = math.ceil(blocks / PER_LEAF)
         c = grind_compressions(n)
-        print(f"| {name} | {n} | {c} | {c / fig.gpu_sha512_per_s * 1e9:.2f} | {math.log2(fig.sha512_per_s / c):.2f} |")
-    print()
-    print(f"| a session at 50 passes a second, its prover's {fig.gpus} GPUs' compressions over it beside the budget "
-          f"Q = 2^{audit.QUERIES_LOG2} | the GPUs' C, log2 | failure at r*, 16 rows | 64 rows |")
-    print("| --- | --- | --- | --- |")
+        yield f"| {name} | {n} | {c} | {c / fig.gpu_sha512_per_s * 1e9:.2f} | {math.log2(fig.sha512_per_s / c):.2f} |"
+    yield ""
+    yield (f"| a session at 50 passes a second, its prover's {fig.gpus} GPUs' compressions over it beside the budget "
+           f"Q = 2^{audit.QUERIES_LOG2} | the GPUs' C, log2 | failure at r*, 16 rows | 64 rows |")
+    yield "| --- | --- | --- | --- |"
     for name, secs in (("1 s", 1), ("10 min", 600), ("1 hour", 3600), ("1 day", 86400), ("30 days", 30 * 86400)):
         p = secs * 50
-        print(f"| {name} | {math.log2(fig.sha512_per_s * secs):.2f} | 2^{log2(sketch_failure(p)):.2f} | "
-              f"2^{log2(sketch_failure(p, rows=64)):.2f} |")
+        yield (f"| {name} | {math.log2(fig.sha512_per_s * secs):.2f} | 2^{log2(sketch_failure(p)):.2f} | "
+               f"2^{log2(sketch_failure(p, rows=64)):.2f} |")
 
 
 __all__ = ["CHIP_BYTES", "DISK_BYTES_PER_S", "GPUS", "GPU_CHIP_BYTES", "GPU_HBM_BYTES", "GPU_READ_BYTES_PER_S",
@@ -681,4 +683,4 @@ __all__ = ["CHIP_BYTES", "DISK_BYTES_PER_S", "GPUS", "GPU_CHIP_BYTES", "GPU_HBM_
            "READ_BYTES_PER_S", "RTX_PRO_6000_NODE", "SPEC_BYTES_PER_S", "SQUARINGS_PER_S", "Figures", "log2"]
 
 if __name__ == "__main__":
-    _grid(RTX_PRO_6000_NODE)
+    sys.stdout.writelines(line + "\n" for line in _grid(RTX_PRO_6000_NODE))
