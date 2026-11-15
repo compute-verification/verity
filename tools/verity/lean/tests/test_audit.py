@@ -2611,7 +2611,8 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
 def test_a_structure_moved_with_its_field_renamed_is_the_same_statement_on_a_real_build(tmp_path):
     """`Facts.lean`'s maps on a real build, for the shape of compute-accounting's two moves: a structure renamed and its
     field `law` renamed `samplingDesign` under it (`RECORD_MOVES`'s form) reads back, so the guarantee over it is the same
-    statement.  Then a map whose old names nest and whose new ones don't, where the build reads the field under the
+    statement, and a map under which a name of the lock doesn't come back fails the audit.  Then a map whose old names
+    nest and whose new ones don't, where the build reads the field under the
     structure's new name: that name maps back to the field's old name, which the map takes elsewhere, and the audit
     refuses to compare under the old names (no other name of the texts shares its old name, so only the round trip
     shows it)."""
@@ -2640,6 +2641,8 @@ def test_a_structure_moved_with_its_field_renamed_is_the_same_statement_on_a_rea
     assert A.move_errors(moved, A.lock_names(A.load(pkg))) == []
     rep = audit(moved=moved)
     assert unshaped(rep) == [] and f"guarantee Control.t: {A.MOVED}" in rep["review"]
+    rep = audit(moved={"Control": "K", "Other": "K.t"})
+    assert "moved: Control.t moves to K.t, which maps back to Other: give Control.t an entry of its own" in rep["failures"]
     (pkg / A.POLICY).write_text(before)
     record.write_text("namespace Control\nstructure E where\n  law : Nat\n"
                       "theorem t (c : E) : c.law + 0 = c.law := rfl\nend Control\n")

@@ -6631,6 +6631,8 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
     def sources() -> dict[str, Path]:
         return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
 
+    if moved and (back := move_errors(moved, lock_names(policy))):
+        fails = [*fails, *(Failure("moved.round-trip", None, f"moved: {e}") for e in back)]
     if bookkeeping is not None and fails and not update:
         ticket = bookkeeping_ticket(policy, bookkeeping)
         fixed = repaired(policy, facts, files, fails, ticket)
@@ -7027,13 +7029,6 @@ def main(argv: list[str]) -> int:
         ap.error(f"{shipped} is a tree `research run --on` shipped, which every run of its commit shares: rerun with "
                  "`research run ... --cwd clone`, or take the records `--update` writes under --out (audit-<pkg>/lean-audit.json)")
     named = set(pkgs)
-    for p in sorted(named) if moved else []:
-        try:
-            names = lock_names(load(p)) if (p / POLICY).is_file() else set()
-        except ValueError:
-            names = set()                               # its audit reports the policy
-        if errs := move_errors(moved, names):
-            ap.error(f"{a.moved}, on {p / POLICY}: " + "; ".join(errs))
     for p in (pkgs if a.facts_from is None else []):    # grows: a package proving another's guarantees is audited beside
         try:                                            # it, but --facts-from already holds the provers' facts (`proved`)
             more = provers(p, load(p)) if (p / POLICY).is_file() else []
