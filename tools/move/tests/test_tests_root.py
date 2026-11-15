@@ -42,7 +42,8 @@ TREE = {
     "adapters/dist/tests/conftest.py": "from __future__ import annotations\n\nINNER = 1\n",
     "adapters/dist/tests/helpers.py": "H = 1\n",
     "adapters/dist/tests/test_d.py": "from pathlib import Path\n\nfrom tests.helpers import H\n\nHERE = Path(__file__).resolve().parent\n"
-                                     "CODE = HERE.parent / \"dist\" / \"__init__.py\"\n\n\ndef test_d():\n    assert H and CODE.is_file()\n",
+                                     "CODE = HERE.parent / \"dist\" / \"__init__.py\"\nNAMES = [p.name for p in HERE.parent.iterdir()]\n\n\n"
+                                     "def test_d():\n    assert H and CODE.is_file() and \"dist\" in NAMES\n",
     "tools/plain/pyproject.toml": '[project]\nname = "plain"\nversion = "0"\n\n[tool.uv]\npackage = false\n\n'
                                   '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["../../verity/a"]\n',
     "tools/plain/tests/test_p.py": "from pathlib import Path\n\nA = Path(__file__).resolve().parents[3] / \"verity\" / \"a\"\n"
@@ -111,7 +112,8 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     """After `split`, `maps`, its move, `suites-map`, its move and `anchors`: every test is under `tests/`, each suite's
     pyproject beside its tests collects them from its own directory and puts the same directories on its path, a suite
     whose own directory held more than its tests reads it still, and a reference through `Path(__file__)` or a name bound
-    to it still reaches what it did: a test's to its code, a test's to another's tests, and code's to its tests."""
+    to it still reaches what it did: a test's to its code, a test's to another's tests, and code's to its tests, in
+    parentheses where a call or a subscript follows it."""
     r = repo(tmp_path)
     TR.run_split(TR.Tree(r), [])
     git(r, "commit", "-q", "-m", "split")
@@ -152,6 +154,8 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert members == ["adapters/dist", "tests/adapters/dist/tests", "tests/tools/plain"]
     assert TR.main(["anchors", base, "--write"], root=r) == 0
     assert 'CODE = HERE.parents[3] / "adapters" / "dist" / "dist" / "__init__.py"' in (
+        r / "tests/adapters/dist/tests/test_d.py").read_text()
+    assert 'NAMES = [p.name for p in (HERE.parents[3] / "adapters" / "dist").iterdir()]' in (
         r / "tests/adapters/dist/tests/test_d.py").read_text()
     assert 'CODE = Path(__file__).parents[3] / "verity" / "a" / "mod.py"' in (r / "tests/verity/a/test_a.py").read_text()
     assert 'HELPER = Path(__file__).resolve().parents[2] / "tests" / "verity" / "a" / "helper.py"' in (
