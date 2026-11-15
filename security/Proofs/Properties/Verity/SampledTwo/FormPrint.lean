@@ -131,7 +131,7 @@ theorem distinct_of_nodup {l : List (String × Json)} (h : (l.map (·.1)).Nodup)
 
 section zk
 
-open private without committedOf in Spot.OneStageZk.paramsOfJson
+open private without committedOf from Spot.OneStageZkStatement
 
 private theorem without_less (j : Json) (k : String) : without j k = less j k := by
   cases j <;> simp [without, less, Spot.entries]
@@ -154,17 +154,16 @@ theorem partition_wf_base {rest : Json} {b : Spot.OneStage.Params} {o : Json}
     (hb : Spot.OneStage.paramsOfJson rest = .ok b) (ho : b.verifier.partition = some o) (hrest : Wf rest) :
     Wf o := by
   unfold Spot.OneStage.paramsOfJson at hb
-  obtain ⟨q, hq, hb⟩ := bind_eq_ok.1 hb
-  split at hb
-  · cases hb
-  cases hb
-  exact partition_wf hrest hq ho
+  do_walk hb to b
+  all_goals
+    cases hb
+    exact partition_wf hrest (by assumption) ho
 
-/-- **The one statement's partition object is well formed**, where the tree its parameters were read from is
+/-- **The one statement's partition object is well formed**, where the tree its parameters were parsed from is
 printable. -/
 theorem partition_wf_zk {J : Json} {p : Spot.OneStageZk.Params} (hJ : Good J)
-    (h : Spot.OneStageZk.paramsOfJson J = .ok p) : Wf p.own.partition := by
-  unfold Spot.OneStageZk.paramsOfJson at h
+    (h : Spot.OneStageZk.paramsParsed J = .ok p) : Wf p.own.partition := by
+  unfold Spot.OneStageZk.paramsParsed at h
   do_walk h to p
   all_goals
     cases h
