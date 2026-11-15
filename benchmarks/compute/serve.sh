@@ -20,28 +20,35 @@
 #      (`benchmarks/one_stage/inference_only.py policy`), which names the class and the model `run.py` counts MACs at;
 #   7. circuit: the class's circuit record cut at Pearl+'s linears (`prove_path.py class-circuit`), into out/record/.
 #   8. verdicts: record/verdicts.json, PoUW's row: `missing`, as the window's compose (which composes it of record)
-#      isn't run here, so the credit is the Pearl+ piece's alone.
+#      isn't run here, so the credit is the Pearl+ piece's alone;
+#   9. publish and piece, after the verdicts: the verifier's coin into pieces/pouw/ (coin.json, coin-put.json: put in
+#      no store) and PoUW's development piece (`served_verdicts.py pearlplus`: development.json, its coin_source);
+#  10. registered: out/registered/circuit.json and log.jsonl (W alone), what training reads; no program.json, as the
+#      tied path writes no Program;
+#  11. share: `benchmarks/compute/run.py --record RUN_DIR`, which prints the share from the record this wrote.
 # Coins (COINS): `local` (default), a local challenger: infra's gate code (`auditor.py`) on a scratch auditor host under
 # PASSES with an LMS test key (W 4, H 6), each session's challenger its own serve.py on 127.0.0.1, whose coins are the
 # Lean spot-verifier's (`benchmarks/one_stage/pearlplus_local_e2e.py init|gate|stop`): the salt coin a salt-only session's
 # and the sample a withheld sample session's on the run's commitment, so the Lean verdict is taken of record. `in-process`:
 # the salt coin the in-process challenger's and the sample the node's own draw (`verify_run.node_draw`), the Lean's verdict
 # a development one. Both are development parameters, which $OUT/compute-run.json and the COINS line say.
-# Writes under OUT ($RESEARCH_RUN_DIR/out under research run, else ./compute-out): pieces/pouw/pearlplus-answer.json,
+# Writes under OUT, RUN_DIR/out: pieces/pouw/pearlplus-answer.json,
 # pearlplus-lean.json, pearlplus-lean-check.json, verify.json, served.json and coin.json; inference-only-policy.json;
 # record/circuit-record.json, record/window-record.json and record/verdicts.json; auditor/ (the local gate's ledger,
 # pins, public key and sessions' public files); compute-run.json and coins.txt. The record writes no Program: the tied
 # path's window record W stands in its place. The passes stay under PASSES (default a directory under SCRATCH, else
 # $TMPDIR), outside OUT: they hold the run's activations and salt key.
 # Env: VERITY_BENCH_VENV (the pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search), HF_HOME, CUDA_HOME,
-# CLASS (4,32,4), GPU (0), DRAWS (459), DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc),
+# RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459), DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc),
 # LEASE_MIN (30). Exit 0 only where Python and Lean both accept.
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 3
 TREE=$PWD
-OUT=${OUT:-${RESEARCH_RUN_DIR:+$RESEARCH_RUN_DIR/out}}
-OUT=${OUT:-$TREE/compute-out}
-COINS=${COINS:-local} CLASS=${CLASS:-4,32,4} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
+RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
+OUT=$RUN/out
+# the benchmark's load: the tied class, SLOTS requests of PROMPT prompt tokens and OUTPUTS output tokens
+CLASS=4,32,4
+COINS=${COINS:-local} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
 IFS=, read -r SLOTS PROMPT OUTPUTS <<< "$CLASS"
 REPO=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da SCHEME=pearl-c-h100-v1-h3
 SPEC=benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml
@@ -127,6 +134,36 @@ open(out, "w").write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 print(f"work: {row['verdict']}: {row['why']}")
 EOF
 }
+publish() {  # the verifier's coin published in OUT alone, put in no store: coin.json and coin-put.json
+  cp "$P/coin.json" "$PIECE/coin.json" && "$PY" - "$PIECE/coin.json" "$PIECE/coin-put.json" "${RESEARCH_RUN_ID:-}" <<'EOF'
+import hashlib, json, sys
+path, out, run = sys.argv[1:4]
+raw = open(path, "rb").read()
+rec = json.loads(raw)
+put = {"sha512": hashlib.sha512(raw).hexdigest(), "commitment": rec["commitment"], "source": rec["source"],
+       "draw": (rec.get("draw") or {}).get("from"), "run": run or None, "art": None, "preserved": False,
+       "error": "not put in the evidence store: a local run's coin, published in its out/ alone", "custody": None}
+open(out, "w").write(json.dumps(put, indent=1, sort_keys=True) + "\n")
+print(f"coin {put['sha512'][:16]}… on {put['commitment'][:16]}…, its sample {put['draw']}, in out/ alone")
+EOF
+}
+piece() {  # PoUW's development piece (served_verdicts.py pearlplus): development.json, its coin_source among it
+  local g=() key
+  if [ "$COINS" = local ]; then
+    "$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["pin"])' "$OUT/auditor-gate.json" > "$OUT/main.txt" \
+      || return 1
+    key=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["key_sha512"])' "$OUT/auditor-gate.json") || return 1
+    g=(--gate "$PEARLC_CHALLENGER_GATE" --main "$OUT/main.txt" --key-sha512 "$key")
+  fi
+  "$PY" benchmarks/one_stage/served_verdicts.py pearlplus "$PIECE" --served "$PIECE/served.json" \
+    --verify "$PIECE/verify.json" --coin "$PIECE/coin-put.json" --tie "$WR" ${g[@]+"${g[@]}"}
+}
+registered() {  # what training reads the run registered: the circuit record and the registration log, W alone
+  mkdir -p "$OUT/registered" && cp "$REC/circuit-record.json" "$OUT/registered/circuit.json" \
+    && "$PY" -c 'import json, sys; print(json.dumps(json.load(open(sys.argv[1])), separators=(",", ":"), sort_keys=True))' \
+      "$WR" > "$OUT/registered/log.jsonl" \
+    && echo "registered: circuit.json and log.jsonl (W alone); no program.json: the tied path writes no Program"
+}
 [ -n "${RESEARCH_RUN_ID:-}" ] && "$PY" -m research keep "$W" --owner @compute-accounting --priority normal \
   --expires "$(date -u -d "+${KEEP_DAYS:-7} days" +%F)" --why "the retained passes of compute serve $RESEARCH_RUN_ID" \
   > "$OUT/logs/keep.log" 2>&1
@@ -160,6 +197,7 @@ if [ "$failed" = 0 ]; then
     --answer "$PIECE/pearlplus-answer.json" --draws "$DRAWS" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} || failed=1
   [ -s "$PIECE/verify.json" ] && step lean "$PY" "$SP" lean --passes "$P" --verify "$PIECE/verify.json" \
     --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$PIECE/pearlplus-lean.json" --timeout "${LEAN_TIMEOUT:-3600}" || failed=1
+  [ -s "$P/coin.json" ] && step publish publish && step piece piece
 fi
 phi() {
   CUDA_VISIBLE_DEVICES='' "$PY" -c '
@@ -180,7 +218,10 @@ step serve-phi phi \
 step circuit env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.py class-circuit --serve "$REC/serve-phi.json" \
   --class "$CLASS" --pearl-tables "$SCHEME" --out "$REC/circuit-record.json"
 step verdicts verdicts
+step registered registered
 gate_down
 trap - EXIT
 coins
+step share "$PY" benchmarks/compute/run.py --record "$RUN" || failed=1
+cat "$OUT/logs/share.log"
 exit "$failed"
