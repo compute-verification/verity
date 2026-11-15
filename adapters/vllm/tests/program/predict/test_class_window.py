@@ -61,15 +61,14 @@ def rank0(program):
 
 
 def _templates(circuit: IF.Circuit, base: str) -> list[str]:
-    return [t for t in circuit.units if t.split("{")[0].startswith(base)]
+    return [t for t in circuit.units if t.split("{")[0] == base]
 
 
 def _selects(circuit: IF.Circuit) -> tuple[str, str, str]:
     """The first select's, the later selects' and the check's templates."""
-    stand = "StandIn" if CW.stand_ins() else ""
-    (first,) = _templates(circuit, f"GreedyCombineFirst{stand}_v")
-    (live,) = [t for t in _templates(circuit, f"GreedyCombine{stand}_v") if t != first]
-    (check,) = _templates(circuit, f"GreedyStopCheck{stand}_v")
+    (first,) = _templates(circuit, "GreedyCombineFirst_v1")
+    (live,) = _templates(circuit, "GreedyCombine_v3")
+    (check,) = _templates(circuit, "GreedyStopCheck_v2")
     return first, live, check
 
 
@@ -165,7 +164,6 @@ def _word16(v: int, n: int) -> np.ndarray:
     return np.array([[(v >> i) & 1 for i in range(16)]] * n, np.uint8)
 
 
-@pytest.mark.skipif("class_select" in CW.stand_ins(), reason="the selects and the check are class_select's, not on this tree yet")
 @pytest.mark.parametrize("stop_at", [1, 3, None])
 def test_a_request_that_stops_early_commits_zeros_past_its_stop_and_the_check_accepts_it_alone(stop_at):
     """On rows of a small V, O = 4 steps of made-up logits, the first select and the later ones wired as the window wires
