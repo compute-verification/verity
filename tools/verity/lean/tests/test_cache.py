@@ -134,7 +134,7 @@ def handler(b: Bucket, name: str):
 @pytest.fixture
 def s3():
     b = Bucket()
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), handler(b, "verity-lean-cache"))
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), handler(b, "verity-lean-cache"))  # pragma: allowlist secret
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
     url = f"http://127.0.0.1:{srv.server_address[1]}"
