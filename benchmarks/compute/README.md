@@ -156,7 +156,8 @@ the command at the clone's root, so a relative DIR is taken from the root. Run i
 directory with a `pyproject.toml` of its own, as this one has for its tests, makes that directory's environment instead
 of the workspace's.
 `tests/fixtures/record/` is a record directory written by hand: its shapes are the served model's and its totals add
-up, but no verifier wrote it and no card served it, and the output's fourth line says so. `--per-call` also prints
+up, but no verifier wrote it and no card served it, and the output's fourth line says so. So it writes no
+`result.json`, below. `--per-call` also prints
 where the MACs the credit leaves out went, by cause and by matrix multiplication call (the top N, 10 by default).
 
 The first lines of the output, on the fixture:
@@ -172,8 +173,8 @@ the run's own process), and that the sample size and δ are development ones.
 The fixture's are the node's own: it is a development run. ε_s and δ_s in the output are sampling's: the credit misses
 more than the share ε_s of the work with probability at most δ_s.
 
-To keep what it prints as files too (`compute.json` and `result.json`, below), set `OUT` to a directory:
-`OUT=/tmp/compute uv run verity bench compute --from benchmarks/compute/tests/fixtures/record`.
+To keep what it prints as files too (`compute.json` and, for a run's record, `result.json`, below), set `OUT` to a
+directory: `OUT=/tmp/compute uv run verity bench compute --from benchmarks/compute/tests/fixtures/record`.
 
 The tests: `cd benchmarks/compute && uv run --project ../.. pytest tests`.
 
@@ -254,7 +255,8 @@ directory, outside one where `OUT` names a directory, and otherwise nothing.
   number under its id (below), `verified` (the credited MACs), `capacity` and `free` (each with no value and why: a
   record holds no registration of its hardware and no span the verifier holds its passes to; `capacity()` in `run.py`
   gives them for a registered site and a span) and `error` (the answer's δ_s, sampling's alone). With no number, only
-  the number's entry, with no value and why.
+  the number's entry, with no value and why. A made-up record, such as the fixture, writes no `result.json`: its
+  entries are marked as measured from a run, which a made-up record's number isn't.
 
 **Exit code:** 0 with the number printed; 1 with none; 2 when the command line, the record or its policy can't be read,
 when the policy's load is not the benchmark's (`load.toml`), or when the split `--per-call` reads is not the answer's.

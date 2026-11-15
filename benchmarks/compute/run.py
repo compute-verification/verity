@@ -122,7 +122,9 @@ resource's names: `verified`, `capacity`, `free` and `error`. A reading is a clo
 registered device's card file (`clock.tensor`, `clock.sm`; `verity.device.load_card`), capacity the registered devices'
 peak e4m3 MACs a second at that clock times the run's span (`capacity`), and free capacity less verified. A recorded
 run's record holds no registration of its hardware and no span the verifier holds its passes to, so capacity and free
-are written as one entry each, with no value and why.
+are written as one entry each, with no value and why. A made-up record (its `job.json`'s ``made_up``) writes no
+`result.json` at all, with a number or without, and says so under the number: the writer marks every entry measured,
+from a run.
 """
 from __future__ import annotations
 
@@ -620,6 +622,13 @@ def made_up(tree: Path) -> str | None:
     return str(said) if said else None
 
 
+def made_up_text(said: str) -> str:
+    """The printed line of a made-up record: what it says of itself, and that its number is written to no `result.json`,
+    whose every entry the kit's writer marks as measured from a run."""
+    return (f"  a made-up record, not a run's: {said}. So nothing is written to result.json: its entries are "
+            "measurements of runs")
+
+
 def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
     """The registered hardware's MACs over `span_s` seconds at each data-sheet reading (`READINGS`): each registered
     device's peak `FORMAT` MACs a second at its card's clock of that reading (`verity.device.rate` on the card
@@ -755,7 +764,7 @@ def text(doc: dict) -> str:
               f"{doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the {100 * doc['target']:g}% target. "
               "This is what the Pearl+ piece's own answer credits, not PoUW's row in the run's record of verdicts")]
     if doc["made_up"]:
-        lines.append(f"  a made-up record, not a run's: {doc['made_up']}")
+        lines.append(made_up_text(doc["made_up"]))
     if ran_with(doc) is None:
         lines.append(coins_text(doc["coins"]))
     at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε_s", "epsilon_s"), ("δ_s", "delta_s")) if doc[name] is not None)
@@ -804,23 +813,32 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     a = ap.parse_args(argv)
     if (a.uncredited or a.top != 10) and not a.per_call:
         ap.error("--uncredited and --top go with --per-call")
+    tree = None
     try:
         if RUN_ID.fullmatch(a.source) and not Path(a.source).is_dir():
             doc = from_run(store_of(), a.source, a.per_call, a.uncredited, a.top)
         else:
-            doc = from_dir(kit.record_dir(a.source), a.per_call, a.uncredited, a.top)
+            tree = kit.record_dir(a.source)
+            doc = from_dir(tree, a.per_call, a.uncredited, a.top)
         measured, said = amounts(doc), ran_with(doc)
     except kit.NoRecord as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
     except NoNumber as e:
         none = {"value": None, "unit": UNIT, "commit": None, "run": a.source, "target": float(TARGET)}
-        return kit.report("compute", "", none, not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]),
-                          ran_with=None, accepted=False, why=str(e))
+        try:
+            up = made_up(tree) if tree else None
+        except Unreadable as u:
+            print(f"compute: {u}", file=sys.stderr)
+            return 2
+        measured = [] if up else not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}])
+        return kit.report("compute", made_up_text(up) if up else "", none | {"made_up": up}, measured, ran_with=None,
+                          accepted=False, why=str(e))
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
-    return kit.report("compute", text(doc), doc, not_an_audit(measured), ran_with=said, accepted=True)
+    return kit.report("compute", text(doc), doc, [] if doc["made_up"] else not_an_audit(measured), ran_with=said,
+                      accepted=True)
 
 
 def not_an_audit(measured: list[dict]) -> list[dict]:

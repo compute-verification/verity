@@ -42,7 +42,9 @@ RAN_WITH = ("ran with: coins in-process; parameters development (draws 459, delt
             "sample from node, salt coins from in-process, Lean verdict development)")
 #: the fixture's own statement that it is made up (its `job.json`'s ``made_up``), and the line that prints it
 SAYS = json.loads((RECORD / "job.json").read_text())["made_up"]
-MADE_UP = f"  a made-up record, not a run's: {SAYS}"
+MADE_UP = C.made_up_text(SAYS)
+#: the edit that makes the fixture a record that doesn't say it is made up, as a run's, whose result.json is written
+REAL = {"JOB": lambda d: d.pop("made_up")}
 
 
 def a_record(tmp_path: Path, **edits) -> Path:
@@ -139,9 +141,10 @@ def no_number(capsys, why: str) -> dict:
     record states no coins and that this is no audit, and its document, with nothing on stderr."""
     out, err = capsys.readouterr()
     lines = out.splitlines()
-    assert err == "" and len(lines) == 4 and lines[0].startswith(f"compute: no number: {why}"), (out, err)
+    assert err == "" and lines[0].startswith(f"compute: no number: {why}"), (out, err)
     assert lines[1:3] == ["ran with: not stated", "a measurement, not an audit"]
-    doc = json.loads(lines[3])
+    doc = json.loads(lines[-1])
+    assert lines[3:-1] == ([C.made_up_text(doc["made_up"])] if doc.get("made_up") else [])
     assert doc["value"] is None and doc["no_number"] == lines[0].removeprefix("compute: no number: ")
     assert doc["audit"] is False
     return doc
@@ -484,7 +487,7 @@ def stamped(monkeypatch):
 
 
 def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp_path, capsys, monkeypatch, stamped):
-    store.add(RUN, a_record(tmp_path))
+    store.add(RUN, a_record(tmp_path, **REAL))
     assert bench(store, "--from", RUN) == 0
     alone = capsys.readouterr()
     out = tmp_path / "run" / "out"
@@ -501,7 +504,7 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
     # with no number the kit writes the document with no value and why, and the metric alone, with no value and why
     none = tmp_path / "none" / "out"
     monkeypatch.setenv("OUT", str(none))
-    store.add(RUN, a_record(tmp_path / "run", ANSWER=to("verdict", value="reject")))
+    store.add(RUN, a_record(tmp_path / "run", **REAL, ANSWER=to("verdict", value="reject")))
     assert bench(store, "--from", RUN) == 1
     doc = no_number(capsys, "Pearl+'s answer is reject")
     assert json.loads((none / "compute.json").read_text()) == doc
@@ -515,7 +518,7 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
     capacity and free are written with no value, each with why, and no reading is named."""
     out = tmp_path / "out"
     monkeypatch.setenv("OUT", str(out))
-    store.add(RUN, a_record(tmp_path))
+    store.add(RUN, a_record(tmp_path, **REAL))
     assert bench(store, "--from", RUN) == 0
     result = json.loads((out / "result.json").read_text())
     assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
@@ -987,15 +990,29 @@ def test_a_record_directory_is_refused_as_the_store_refuses_the_same_record(stor
 
 
 def test_a_record_directory_writes_the_same_outputs_as_the_store(store, tmp_path, capsys, monkeypatch, stamped):
-    store.add(RUN, a_record(tmp_path))
+    real = a_record(tmp_path, **REAL)
+    store.add(RUN, real)
     written = {}
-    for mode, argv in (("store", ["--from", RUN]), ("dir", ["--from", str(RECORD)])):
+    for mode, argv in (("store", ["--from", RUN]), ("dir", ["--from", str(real)])):
         out = tmp_path / mode / "out"
         monkeypatch.setenv("OUT", str(out))
         assert bench(store, *argv) == 0
         written[mode] = [(out / f).read_text() for f in ("compute.json", "result.json")]
     capsys.readouterr()
     assert written["dir"] == written["store"]
+
+
+@pytest.mark.parametrize("edits, rc", [({}, 0), ({"ANSWER": to("verdict", value="reject")}, 1)])
+def test_a_made_up_record_writes_no_measurement(tmp_path, capsys, monkeypatch, stamped, edits, rc):
+    """The kit's writer marks every entry of result.json measured, from a run: a made-up record writes none, with a
+    number or without, and says so under it; compute.json keeps what it says of itself."""
+    out = tmp_path / "out"
+    monkeypatch.setenv("OUT", str(out))
+    assert C.main(["--from", str(a_record(tmp_path, **edits))]) == rc
+    text, doc, _ = printed(capsys)
+    assert MADE_UP in text and MADE_UP.endswith("So nothing is written to result.json: its entries are measurements of runs")
+    assert doc["made_up"] == SAYS and json.loads((out / "compute.json").read_text()) == doc
+    assert not (out / "result.json").exists()
 
 
 def of_record(argv: list[str]) -> list[str]:
