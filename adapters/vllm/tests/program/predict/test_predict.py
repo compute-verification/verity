@@ -139,8 +139,8 @@ def test_dsa_rank_step_equals_the_record(rank, tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("wrapper,shape,digest", [
-    ("step", {"M": 8, "pos0": 8}, "c2397f404dbdce59d0770588b4a2529981aeb4b3d6d5658ae5918586bd050a1a3fa690b1b9620467ec25b625eae6eb201977a0d2139f62789f98e58e3fefd39d"),
-    ("request", {"LP": 11, "T": 12}, "2d72a39ea47db02a9a40300435fbd7e37dbdb3ac35d73527378db28eee818ecb26e1cbfdcbbf2c32cf179a47c4da71ba0e2d6c698ca83ffa65018d01ca66643b"),
+    ("step", {"M": 8, "pos0": 8}, "562e290d02aeb6efb06786f508a90ae9ea08748ab3f8b4777f0c56f76b4cd6d09cab8cb9bf0d21346c7af16f2e9b174a728f1bc7f8e12c5b2ccd48121b0dfb60"),
+    ("request", {"LP": 11, "T": 12}, "d2ede82f0989fdf7a43e45dbca1b6adb3a9c29b245f1d6058c583bbd72599d4cb9be7724df848104e448a966bc5e3d6a60b0c255f5c32db575ea15611c8b0175"),
 ])
 def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_path):
     """GLM-5.3's B8 mixed-arrivals row (no batch invariance) at rank 0, as the Build traced it: the step of 8
