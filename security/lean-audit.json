@@ -274,10 +274,15 @@
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
   },
+  "NetTiming.ExecutionPhaseGoodChecked": {
+   "owner": "@network-accounting",
+   "digest": "80e8edda22a894cf2e2035452649c5d0fe5840b4f256aa77f1d938a6d8001bf3",
+   "why": "A scope of the held and counted clauses: the secrets they count are those whose every window's statement is in scope and registered as that window's, whose extracted witness is in the leak relation at the network certifier's rows with a valid run and holds the registered inputs, and whose observations are complete, of the horizon's length and below the jitter bound; the honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at one placed window, at the witness a passing run extracts."
+  },
   "NetTiming.ExecutionPhasesPlaced": {
    "owner": "@network-accounting",
    "digest": "eb224719d0b462afe48c9b1c9d71e602e1fb77181e5062f27e5a5a0ac3c2fb4d",
-   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as MonitoringPeriodLeakAccepted takes them inline. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a period of no windows only, where it asks nothing, and exhibits no period of one or more windows at which it holds together with `Compiled.KS`; the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov."
+   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as MonitoringPeriodLeakAccepted takes them inline. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a period of one window, with `Compiled.KS` at a code whose verifier accepts a run at that window's statement."
   },
   "NetTiming.FaultyGate": {
    "owner": "@network-accounting",
@@ -2348,12 +2353,6 @@
    "owner": "@proofs",
    "digest": "2eebb5a2c66a215064e7296291ad05c2e4ff9d53f59ec8e916183afa4742814d",
    "issue": "CIR-190",
-   "due": "2026-11-30"
-  },
-  "NetTiming.ExecutionPhaseGoodChecked": {
-   "owner": "@network-accounting",
-   "digest": "80e8edda22a894cf2e2035452649c5d0fe5840b4f256aa77f1d938a6d8001bf3",
-   "issue": "NET-313",
    "due": "2026-11-30"
   },
   "NetTiming.JitterBounded": {

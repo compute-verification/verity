@@ -182,7 +182,8 @@ PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its op
     (rootsOfChecked)
 MonitoringPeriodCheckedChecks.lean  MonitoringPeriodLeakChecked held to the trace's run is false (freeL_traceRun_insufficient,
     monitoringPeriodLeakChecked_traceRun_fails, freeL_certifierRun_miss); its nontrivial lemma, and
-    its honest lemma at the toy code over a period of no windows
+    its honest lemma at one placed window that a run passes, with the window's good event
+    (executionPhaseGoodChecked_placed)
 MonitoringPeriodCheckedExclusion.lean  a placed window: no count without ReadsBy (MonitoringPeriodLeakChecked_readsBy_exclusion);
     premises hold together (MonitoringPeriodLeakChecked_placed)
 MonitoringPeriodFailsChecks.lean  at a placed window whose operator follows the fail pattern: the count without the
