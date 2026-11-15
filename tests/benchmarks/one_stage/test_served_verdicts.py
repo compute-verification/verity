@@ -3118,7 +3118,7 @@ def _one_stage(tree: Path, *, linked: bool = True) -> None:
     tree's own prove_path.py rather than SPOT's."""
     one = tree / "benchmarks" / "one_stage"
     one.mkdir(parents=True, exist_ok=True)
-    for f in HERE.parents[2] / "benchmarks" / "one_stage".iterdir() if linked else ():
+    for f in (HERE.parents[2] / "benchmarks" / "one_stage").iterdir() if linked else ():
         if f.name != "window_commit.py":
             (one / f.name).symlink_to(f, target_is_directory=f.is_dir())
     (one / "window_commit.py").write_text(WINDOW_COMMIT)
