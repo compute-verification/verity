@@ -155,11 +155,14 @@ def test_inside_the_sandbox_a_read_only_dir_is_read_and_never_written(tmp_path):
 
 
 def remount_refused(tmp: Path, monkeypatch, refused: Path, binds: list[tuple[Path, Path]],
-                    locked: Path | None = None) -> subprocess.CompletedProcess:
+                    locked: Path | None = None, cwd: Path | None = None, fakes: dict[str, str] | None = None,
+                    also: str = "") -> subprocess.CompletedProcess:
     """The sandbox, with the tree `tree` and the RO_DIR `cache` under ``tmp`` and the bound ``binds`` (source, target)
     each a mount of its own, made in a mount namespace of the test's own, where a `mount` before the real one refuses the
-    read-only remount of ``refused``, as a node's kernel or mount can; ``locked``, when given, is made mode 0 after the
-    mounts. CMD writes into each target (`no`) and marks that it ran (`ran` in the RW_DIR)."""
+    read-only remount of ``refused``, as a node's kernel or mount can; the sandbox starts in ``cwd`` when given, entered
+    after the mounts, and ``locked``, when given, is made mode 0 after that. ``fakes`` ({name: body}) are programs found
+    before the real ones. CMD writes into each target (`no`), runs ``also``, and marks that it ran (`ran` in the
+    RW_DIR)."""
     tree, cache = tmp / "tree", tmp / "cache"
     (tree / "pkg").mkdir(parents=True)
     cache.mkdir()
@@ -167,14 +170,36 @@ def remount_refused(tmp: Path, monkeypatch, refused: Path, binds: list[tuple[Pat
     (bin_ := tmp / "bin").mkdir()
     (bin_ / "mount").write_text(f'#!/bin/sh\n[ "$*" != "-o remount,bind,ro {refused}" ] || exit 32\n'
                                 f'exec {shutil.which("mount")} "$@"\n')
-    (bin_ / "mount").chmod(0o755)
+    for name, body in {"mount": None, **(fakes or {})}.items():
+        if body is not None:
+            (bin_ / name).write_text(f"#!/bin/sh\n{body}\n")
+        (bin_ / name).chmod(0o755)
     monkeypatch.setenv("PATH", os.pathsep.join([str(bin_), *os.get_exec_path()]))
-    setup = " && ".join(f'mount --bind "{s}" "{t}"' for s, t in binds) + (f' && chmod 0 "{locked}"' if locked else "")
+    setup = " && ".join([*(f'mount --bind "{s}" "{t}"' for s, t in binds), *([f'cd "{cwd}"'] if cwd else []),
+                         *([f'chmod 0 "{locked}"'] if locked else [])])
     writes = " ".join(f'"{t}/no"' for t in (tree / "pkg", *(t for _, t in binds[1:])))
     return subprocess.run(["unshare", "--user", "--map-root-user", "--mount", "--", "bash", "-c", setup + ' && exec "$@"',
                            "_", *UNSHARE, "--", "bash", str(SANDBOX), "--ro", str(cache), str(tree / "pkg" / ".lake"),
-                           "--", "sh", "-c", f'touch {writes} 2>/dev/null; touch "{tree}/pkg/.lake/ran"'],
+                           "--", "sh", "-c", f'touch {writes} 2>/dev/null; {also} touch "{tree}/pkg/.lake/ran"'],
                           capture_output=True, text=True)
+
+
+def refused_before_cmd(r: subprocess.CompletedProcess, tmp: Path, *untouched: Path) -> None:
+    """The sandbox exited 3 naming a writable mount, CMD never ran, and nothing landed in the tree or ``untouched``."""
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert "these mounts stay writable here, which the build could write through:" in r.stderr, r.stderr
+    assert not (tmp / "tree" / "pkg" / ".lake" / "ran").exists(), "CMD never ran"
+    assert not (tmp / "tree" / "pkg" / "no").exists()
+    for d in untouched:
+        assert list(d.iterdir()) == [], d
+
+
+def host_dir() -> Path:
+    """A directory of the host's root (the one holding `sh`): bound as a mount, the command can write nothing through it."""
+    system = Path(shutil.which("sh")).resolve().parent
+    if system.stat().st_uid == os.getuid() or os.access(system, os.W_OK):
+        pytest.skip(f"{system} is the runner's own or writable by it here")
+    return system
 
 
 @needs_unshare
@@ -203,15 +228,109 @@ def test_a_mount_the_command_cannot_write_whose_read_only_remount_fails_leaves_t
     """A directory of the host's root (the one holding `sh`), bound as a mount whose read-only remount fails, as a
     node's tracefs stays writable: the command, which holds no capability and owns nothing there, can write nothing
     through it, so the sandbox runs it, and its write there fails."""
-    system = Path(shutil.which("sh")).resolve().parent
-    if system.stat().st_uid == os.getuid() or os.access(system, os.W_OK):
-        pytest.skip(f"{system} is the runner's own or writable by it here")
+    system = host_dir()
     tmp = tmp_path.resolve()
     (target := tmp / "system").mkdir()
     r = remount_refused(tmp, monkeypatch, target, [(system, target)])
     assert r.returncode == 0, r.stdout + r.stderr
     assert (tmp / "tree" / "pkg" / ".lake" / "ran").exists()
     assert not (system / "no").exists() and not (tmp / "tree" / "pkg" / "no").exists()
+
+
+@needs_unshare
+@pytest.mark.parametrize("tool, body, refused", [
+    ("id", "exit 1", "locked/inner"),
+    ("stat", "exit 0", "locked/inner"),
+    ("find", "exit 1", "tree"),
+    ("grep", "exit 2", "tree"),
+], ids=["id-fails", "stat-says-nothing", "find-fails-silently", "grep-fails"])
+def test_a_probe_tool_that_fails_or_says_nothing_stops_the_sandbox_before_its_command_runs(
+        tmp_path, monkeypatch, tool, body, refused):
+    """The probe decides "out of reach" only on what its tools said. A failing `id` leaves the command's uid unknown, so a
+    locked directory it owns (and could chmod) must not read as someone else's; a `stat` that prints no owner, a `find`
+    that fails without a word, or a failing `grep` over `find`'s errors, likewise: each is doubt, and doubt refuses."""
+    tmp = tmp_path.resolve()
+    (tmp / "locked" / "inner").mkdir(parents=True)
+    (src := tmp / "src").mkdir()
+    try:
+        r = remount_refused(tmp, monkeypatch, tmp / refused, [(src, tmp / "locked" / "inner")], tmp / "locked",
+                            fakes={tool: body})
+    finally:
+        (tmp / "locked").chmod(0o755)
+    refused_before_cmd(r, tmp, src)
+
+
+@needs_unshare
+def test_a_failing_dirname_stops_the_probe_at_once_and_the_sandbox_before_its_command_runs(tmp_path, monkeypatch):
+    """The probe climbs from the mount to `/` with `dirname`. One that fails prints nothing, which never reaches `/`: the
+    climb ends at that failure, with the mount writable. The stand-in counts its calls, and prints `/` after 64 so a climb
+    that ignores its failure ends at all."""
+    tmp = tmp_path.resolve()
+    count = tmp / "tree" / "pkg" / ".lake" / "dirname-calls"
+    monkeypatch.setenv("COUNT", str(count))
+    r = remount_refused(tmp, monkeypatch, tmp / "tree", [], fakes={
+        "dirname": 'n=$(cat "$COUNT" 2>/dev/null || echo 0); echo $((n + 1)) > "$COUNT"; [ "$n" -lt 64 ] || echo /; exit 1'})
+    refused_before_cmd(r, tmp)
+    assert int(count.read_text()) == 1
+
+
+@needs_unshare
+def test_a_mount_point_spelled_like_a_glob_is_probed_at_its_own_path(tmp_path, monkeypatch):
+    """`/mnt/[ab]` beside `/mnt/a`: the stuck mount is `[ab]`, writable, and `a` is a host directory the command can't
+    write. Expanded as a glob, the name would probe `a` and let the build run over `[ab]`."""
+    system = host_dir()
+    tmp = tmp_path.resolve()
+    (glob := tmp / "g" / "[ab]").mkdir(parents=True)
+    (tmp / "g" / "a").mkdir()
+    (src := tmp / "src").mkdir()
+    r = remount_refused(tmp, monkeypatch, glob, [(src, glob), (system, tmp / "g" / "a")])
+    refused_before_cmd(r, tmp, src)
+
+
+@needs_unshare
+@pytest.mark.parametrize("name, escaped", [("sp ace", "sp\\040ace"), ("t\tab", "t\\011ab"), ("back\\slash", "back\\134slash"),
+                                           ("new\nline", "new\\012line")], ids=["space", "tab", "backslash", "newline"])
+def test_a_mount_point_mountinfo_escapes_is_probed_at_its_real_path(tmp_path, monkeypatch, name, escaped):
+    """mountinfo writes a mount point's space, tab, newline and backslash as octal escapes. The stuck mount `name` is
+    writable; a host directory the command can't write sits at the escaped spelling. Read without decoding, the probe
+    would judge that directory and let the build run. A name holding a newline can't be passed on as one line: it is
+    writable without a probe."""
+    system = host_dir()
+    tmp = tmp_path.resolve()
+    (real := tmp / name).mkdir()
+    (tmp / escaped).mkdir()
+    (src := tmp / "src").mkdir()
+    r = remount_refused(tmp, monkeypatch, real, [(src, real), (system, tmp / escaped)])
+    refused_before_cmd(r, tmp, src)
+
+
+@needs_unshare
+def test_a_locked_directory_above_the_commands_own_directory_does_not_put_a_mount_below_it_out_of_reach(
+        tmp_path, monkeypatch):
+    """The command starts in `locked/work`, so it reaches `locked/work/sub` by a relative path without searching `locked`:
+    that `locked` is someone else's (a `stat` stand-in says so) and unsearchable doesn't make the writable mount at
+    `sub` out of reach."""
+    tmp = tmp_path.resolve()
+    (sub := tmp / "locked" / "work" / "sub").mkdir(parents=True)
+    (src := tmp / "src").mkdir()
+    try:
+        r = remount_refused(tmp, monkeypatch, sub, [(src, sub)], tmp / "locked", cwd=tmp / "locked" / "work",
+                            fakes={"stat": "echo 4242"}, also="touch sub/no 2>/dev/null;")
+    finally:
+        (tmp / "locked").chmod(0o755)
+    refused_before_cmd(r, tmp, src)
+
+
+@needs_unshare
+@pytest.mark.skipif(not Path("/var/tmp").is_dir(), reason="no /var/tmp here")
+def test_a_mount_a_later_one_hides_is_still_reached_from_the_commands_own_directory_inside_it(tmp_path, monkeypatch):
+    """The sandbox starts in `/var/tmp`, a writable mount whose read-only remount fails; its private tmpfs then covers
+    `/var/tmp`, but the command's own directory is still the mount below, written by a relative path."""
+    tmp = tmp_path.resolve()
+    (src := tmp / "src").mkdir()
+    r = remount_refused(tmp, monkeypatch, Path("/var/tmp"), [(src, Path("/var/tmp"))], cwd=Path("/var/tmp"),
+                        also="touch no 2>/dev/null;")
+    refused_before_cmd(r, tmp, src)
 
 
 @needs_unshare

@@ -36,11 +36,26 @@ shift
 # a bind mount and /proc/self/mountinfo name a directory by its resolved path, so keep and seen hold the resolved ones
 for i in "${!rw[@]}"; do mkdir -p "${rw[i]}"; rw[i]=$(realpath "${rw[i]}"); done
 for i in "${!ro[@]}"; do ro[i]=$(realpath -m "${ro[i]}"); done
+# mountinfo writes a mount point's space, tab, newline and backslash as octal escapes (\040, \011, \012, \134): `path`
+# decodes them, and gives a name holding a newline (which no line-per-name list carries), any other escape or a stray
+# backslash a newline too, so that each is passed on as no path
+unescape='function path(s,   o, i, d, n) {
+  o = ""
+  while ((i = index(s, "\\")) > 0) {
+    d = substr(s, i + 1, 3)
+    if (d !~ /^[0-7][0-7][0-7]$/) return o substr(s, 1, i - 1) "\n"
+    n = substr(d, 1, 1) * 64 + substr(d, 2, 1) * 8 + substr(d, 3, 1)
+    if (n != 9 && n != 32 && n != 92) return o substr(s, 1, i - 1) "\n"
+    o = o substr(s, 1, i - 1) sprintf("%c", n)
+    s = substr(s, i + 4)
+  }
+  return o s
+}'
 mount --make-rprivate /
 for d in "${rw[@]}"; do mount --bind "$d" "$d"; done
 keep=" ${rw[*]} "
 seen=" ${rw[*]} ${ro[*]} "
-awk '{print $5}' /proc/self/mountinfo | sort -u | while read -r m; do
+LC_ALL=C awk "$unescape"'{ m = path($5); if (m !~ /\n/) print m }' /proc/self/mountinfo | sort -u | while IFS= read -r m; do
   case "$keep" in *" $m "*) continue;; esac
   mount -o remount,bind,ro "$m" 2>/dev/null || true
 done
@@ -109,39 +124,79 @@ fi
 for w in "${rw[@]}"; do
   [ -z "$at" ] || case "$w/" in "$tree"/*) ours+=("$at${w#"$tree"}");; esac
 done
-stuck=$(SANDBOX_KEPT=$(printf '%s\n' "${rw[@]}" "${ours[@]}") awk '
-  BEGIN { n = split(ENVIRON["SANDBOX_KEPT"], k, "\n"); for (i = 1; i <= n; i++) kept[k[i]] = 1 }
-  { m[NR] = $5; o[NR] = $6 }
+# CMD's own directory reaches the mount it is on without a lookup by path. Without --at, CMD starts where the sandbox was
+# started, which a mount made since may cover: a covered mount that holds that directory is still CMD's, so it is not
+# hidden. With --at, CMD starts in the tree bound at FIXED, made after every mount that could cover it.
+started=
+[ -n "$at" ] || started=$(pwd -P)
+# One line per stuck mount, decoded; one whose name doesn't decode to a path is `!` and its escaped name, writable. The
+# kept paths are kept only where the mount at them is the visible one.
+stuck=$(SANDBOX_KEPT=$(printf '%s\n' "${rw[@]}" "${ours[@]}") SANDBOX_STARTED=$started LC_ALL=C awk "$unescape"'
+  BEGIN { n = split(ENVIRON["SANDBOX_KEPT"], k, "\n"); for (i = 1; i <= n; i++) kept[k[i]] = 1; s = ENVIRON["SANDBOX_STARTED"] }
+  { m[NR] = path($5); e[NR] = $5; o[NR] = $6 }
   END {
     for (i = 1; i <= NR; i++) {
+      if (o[i] ~ /^ro(,|$)/) continue
       hid = 0
       for (j = i + 1; j <= NR && !hid; j++) hid = m[j] == "/" || m[j] == m[i] || index(m[i], m[j] "/") == 1
-      if (!hid && o[i] !~ /^ro(,|$)/ && !(m[i] in kept)) print m[i]
+      if (hid ? !(s != "" && (m[i] == "/" || s == m[i] || index(s, m[i] "/") == 1)) : m[i] in kept) continue
+      print (m[i] ~ /\n/ ? "!" e[i] : m[i])
     }
   }' /proc/self/mountinfo)
 echo 0 > /proc/sys/user/max_user_namespaces
 as_cmd=(setpriv --bounding-set=-all --)
 # A stuck mount is out of CMD's reach only where, run as CMD runs, this shows it: a directory above it that CMD can't
-# search and doesn't own (so can't chmod), or nothing in it that CMD may write or owns, and no directory CMD can search
-# but not list. Anything else leaves it writable, a find error other than EACCES included. A kernel filesystem under a
-# directory of the host's root, as tracefs under /sys/kernel/debug, is out of reach.
+# search and doesn't own (so can't chmod), and that doesn't hold CMD's own directory (which CMD is already past); or
+# nothing in it that CMD may write or owns, and no directory CMD can search but not list, with every word find says a
+# "Permission denied". A tool that fails or says nothing it should, a mount holding CMD's own directory, and anything
+# else leave it writable. A kernel filesystem under a directory of the host's root, as tracefs under /sys/kernel/debug,
+# is out of reach.
 unreachable='
-m=$1 me=$(id -u) up=() a=$1
-while [ "$a" != / ]; do a=$(dirname "$a"); up=("$a" "${up[@]}"); done
+m=$1 a=$1 up=()
+me=$(id -u) || exit 1
+here=$(pwd -P) || exit 1
+case $me in "" | *[!0-9]*) exit 1;; esac
+case $m in /*) ;; *) exit 1;; esac
+under() { [ "$2" = / ] || [ "$1" = "$2" ] || case $1 in "$2"/*) ;; *) false;; esac; }
+under "$here" "$m" && exit 1
+while [ "$a" != / ]; do
+  [ ${#up[@]} -lt ${#m} ] || exit 1
+  a=$(dirname -- "$a") || exit 1
+  up=("$a" "${up[@]}")
+done
 for a in "${up[@]}"; do
   [ -x "$a" ] && continue
-  o=$(stat -c %u "$a") && [ "$o" != "$me" ]
+  under "$here" "$a" && exit 1
+  o=$(stat -c %u -- "$a") || exit 1
+  case $o in "" | *[!0-9]*) exit 1;; esac
+  [ "$o" != "$me" ]
   exit
 done
 command -v find >/dev/null || exit 1
 out=$(LC_ALL=C find "$m" -xdev ! -type l \( -writable -o -user "$me" -o -type d -executable ! -readable \) \
   -printf "hit %p\n" -quit 2>&1)
-[ $? -le 1 ] || exit 1
-[ -z "$out" ] || ! printf "%s\n" "$out" | grep -qv "^find: .*: Permission denied$"'
-writable=()
-for m in $stuck; do
-  "${as_cmd[@]}" bash -c "$unreachable" _ "$m" || writable+=("$m")
+s=$?
+[ $s -ne 0 ] || [ -n "$out" ] || exit 0
+[ $s -eq 1 ] && [ -n "$out" ] || exit 1
+nl="
+"
+rest=$out$nl
+while [ -n "$rest" ]; do
+  case ${rest%%"$nl"*} in "find: "*": Permission denied") ;; *) exit 1;; esac
+  rest=${rest#*"$nl"}
 done
+exit 0'
+writable=()
+set -f
+IFS=$'\n'
+for m in $stuck; do
+  case $m in
+    "!"*) writable+=("${m#!}");;
+    *) "${as_cmd[@]}" bash -c "$unreachable" _ "$m" || writable+=("$m");;
+  esac
+done
+unset IFS
+set +f
 if [ ${#writable[@]} -gt 0 ]; then
   echo "sandbox.sh: these mounts stay writable here, which the build could write through:" "${writable[@]}" "(their" \
     "read-only remount failed). Run the build where every mount can be remounted read-only in a user namespace." >&2
