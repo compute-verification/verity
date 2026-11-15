@@ -90,7 +90,6 @@ class _Calls:
         """One all-reduce over the rows on the route vLLM takes at the launch's tokens (`tp_allreduce.served_route`), the captured one
         -> each row's sum."""
         from verity_vllm.definitions.registry import tp_allreduce as AR
-
         from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (
             _ROUTE_KINDS,
         )
@@ -139,8 +138,9 @@ class _Calls:
     def cublas(self, xs: list[Refs], w: Coll, f32: bool = False, sampled: bool = False) -> list[Refs]:
         """An unbiased bf16 GEMM on cuBLAS's captured route at the launch's tokens (its sequences for the `sampled` rows): bf16 out
         (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router family's route, or a direct call's where the shape has its own)."""
-        from verity_vllm.definitions.registry.bf16_gemm_check import default_cublas_route
-
+        from verity_vllm.definitions.registry.bf16_gemm_check import (
+            default_cublas_route,
+        )
         from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import (
             _f32out_phase,
         )
