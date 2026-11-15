@@ -1,13 +1,13 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
-public import Proofs.NetworkCertifier.Carried
-public import Proofs.NetworkCertifier.Checked
-public import Proofs.NetworkCertifier.SampledAuditAccepted
-public import Proofs.NetworkCertifier.SampledCharge
-public import Proofs.NetworkCertifier.SampledLeak
-public import Proofs.NetworkCertifier.SampledLeakReg
-public import Proofs.NetworkCertifier.TapRows
+public import Definitions.Certifier.Guarantees.MonitoringPeriodChecked
+public import Proofs.Certifier.Carried
+public import Proofs.Certifier.Checked
+public import Proofs.Certifier.SampledAuditAccepted
+public import Proofs.Certifier.SampledCharge
+public import Proofs.Certifier.SampledLeak
+public import Proofs.Certifier.SampledLeakReg
+public import Proofs.Certifier.TapRows
 public import Proofs.Flock.Claims.Finder
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Claims.Sampling.Binding

@@ -3,7 +3,7 @@ module
 public import Definitions.Certifier.SampledAudit
 public import Definitions.Certifier.Schedule
 public import Definitions.Certifier.RecordRows
-public import Definitions.NetworkCertifier.Tap
+public import Definitions.Certifier.Tap
 
 /-!
 # The instances the network certifier's honest and nontrivial lemmas are stated at (trusted definitions; used only by

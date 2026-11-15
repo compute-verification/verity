@@ -823,7 +823,7 @@ def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(t
     monkeypatch.setitem(OR.RESTS_ON, ACCEPTED, dict(OR.RESTS_ON[ACCEPTED], takes=takes))
     write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"]})
     assert held_both(tmp_path / "a")["bound"]["of_record"]["open"] == []
-    write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"], "Properties.NetworkCertifier.circuitWiresFit": None})
+    write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"], "Properties.Certifier.circuitWiresFit": None})
     assert held_both(tmp_path / "b")["bound"]["of_record"]["open"] == ["wires-fit"]
     monkeypatch.setitem(OR.RESTS_ON, ACCEPTED, RESTS_ON[ACCEPTED])
     write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"]})
