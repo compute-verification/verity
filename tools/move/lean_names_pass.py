@@ -4,6 +4,7 @@ accounting area and the network attester), the areas that take their protocol's 
 names. Run from the repository root; `tools/move/rename.py --map tools/move/lean_names_pass_map.toml` runs the map.
 
     python3 tools/move/lean_names_pass.py [--part ontology|areas|retired]...   write the map (by default every part)
+    python3 tools/move/lean_names_pass.py --hand                               after the rename: what the map can't carry
 
 The root namespace `Accounting` becomes `ResourceAccounting`, but two other namespaces end in the same word
 (`FlockSoundness.Accounting`, `Pous.Accounting`) and a Flock file names its own as `Accounting.X` under
@@ -204,11 +205,48 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "**/fixtures/**", "
 """
 
 
+REG = "public import Definitions.Registration."
+#: what the map can't carry, for `--hand` after `rename.py`: (file, the region of it the edit is held to, old, new). A lock's
+#: `four_names` and `layers` text is not a name `rename.py` renames, and the area's umbrella keeps importing the modules
+#: part 2 moves out of it, outside the layer, which imports no guarantee.
+HAND = [
+    ("security/lean-audit.json", r'"four_names": \[[^\]]*\]', f'"{WORD}"', f'"{NEW}"'),
+    ("security/Properties/lean-audit.json", r'"Properties\.Ties": \{[^}]*\}', "`Definitions.Accounting.Registration.View`",
+     "`Definitions.Registration.View`"),
+    (f"security/Definitions/{NEW}.lean", None, f"{REG}View\n{REG}Guarantees\n{REG}Guarantees.Witnesses\n", ""),
+    ("security/Definitions.lean", None, f"{REG}Sheets\n",
+     f"{REG}Sheets\n{REG}View\n{REG}Guarantees\n{REG}Guarantees.Witnesses\n"),
+    ("benchmarks/remote_session/auditor_line.py", None, f"passes, {WORD}.Remote.Held", f"passes, {NEW}.Remote.Held"),
+]
+
+
+def hand() -> None:
+    """Apply `HAND` to the renamed tree: each edit once, where its old text stands once in its region; one already
+    applied is left as it is, and any other state is refused, naming the file."""
+    for path, region, old, new in HAND:
+        text = Path(path).read_text(encoding="utf-8")
+        m = re.search(region, text) if region else None
+        if region and not m:
+            raise SystemExit(f"{path}: no {region!r} to edit; write HAND's entry for this tree")
+        lo, hi = (m.start(), m.end()) if m else (0, len(text))
+        part = text[lo:hi]
+        if new and new in part and (old in new or old not in part) or not new and old not in part:
+            print(f"{path}: already applied")
+            continue
+        if part.count(old) != 1:
+            raise SystemExit(f"{path}: {old!r} stands {part.count(old)} times where HAND edits it, not once")
+        Path(path).write_text(text[:lo] + part.replace(old, new) + text[hi:], encoding="utf-8")
+        print(f"{path}: edited")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--part", action="append", choices=["ontology", "areas", "retired"])
     ap.add_argument("--out", type=Path, default=MAP)
+    ap.add_argument("--hand", action="store_true", help="after `rename.py`: apply what the map can't carry (HAND)")
     a = ap.parse_args()
+    if a.hand:
+        return hand()
     parts = a.part or ["areas", "ontology", "retired"]
     body = []
     for p in ["areas", "ontology", "retired"]:
