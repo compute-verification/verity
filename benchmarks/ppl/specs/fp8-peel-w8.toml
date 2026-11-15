@@ -1,0 +1,45 @@
+description = "the int8 design on E4M3's exact integers: activations dithered on -16..16 (floor(x / s) + b, s = absmax / 15), one scale per token; weights rounded to +-8 per output row, served W + U with U uniform on +-1..+-8 (-8 + planes 1, 2, 4, 9) and peeled exactly, after SmoothQuant 0.5 and the rotation; the adopted int8 attention"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act = "dither"
+act_top = 16
+weight_top = 8
+
+[[linear]]
+step = "peel"
+alphabet = "pm"
+width = 8
+top = 16
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q_top = 63
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "q"
+width = 64
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

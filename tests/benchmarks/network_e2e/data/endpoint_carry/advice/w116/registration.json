@@ -1,0 +1,34 @@
+{
+ "schema": "verity-vllm/advice-registration/v1",
+ "scheme": "verity-vllm/advice-windows/advice/v1",
+ "binding": {
+  "compiler": {
+   "name": "verity/prove-path/capped-compiler/v0",
+   "digest": "835c59fe92efe5f799ced3f8af2759435624d2346dbb5f1b855120f41a6155084f3ddb6a44784cdaf59b1e72898443539a1b223f750ad6f00ee2b9ae790533f4"
+  },
+  "advice": {
+   "root": "180d0d241c58ddb8f6d366ba62fc0fe059b82fb0b390d09c5f2782af5474e42f0102b72a33b924da1690cd41122d9aa6e05cf29b36bf8e9e3ef8c8b6b0da92ec",
+   "bits": 1672
+  }
+ },
+ "compiler": {
+  "name": "verity/prove-path/capped-compiler/v0",
+  "digest": "835c59fe92efe5f799ced3f8af2759435624d2346dbb5f1b855120f41a6155084f3ddb6a44784cdaf59b1e72898443539a1b223f750ad6f00ee2b9ae790533f4",
+  "cap_bits": 8388608,
+  "inner": {
+   "name": "verity_vllm.predict.steps.compile_steps",
+   "digest": "160b7f3f63d7e5b3ed3a9c1062d80ff92798af37e02d12ad5f83a52f9b2652cca530655aab6d9702d5fa78bc5b3b873cf1056f594e3c94aba7cb5b669fb43318"
+  }
+ },
+ "rows": 7,
+ "row_bits": 256,
+ "T": 600,
+ "bits_by_window": {
+  "0": 1672
+ },
+ "window": 116,
+ "commit": {
+  "run_id": "r20261025-060356-5c72/w116",
+  "run_root": "3ec528ef735c0da585f8add9f1a84478d8f730eb7eb44b9efe7b06afdb9f9b72618cafd2bfddc4a9bb91085db01947b23c8c1c75cfd80f94bcb16f680a0768ce"
+ }
+}

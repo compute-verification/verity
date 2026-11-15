@@ -1,0 +1,108 @@
+{
+  "base": {
+    "guarantees": {
+      "Flock.SecurityProofs.SampledKSLiveV5": {
+        "owner": "@proofs",
+        "signature": [
+          "Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5"
+        ],
+        "assumptions": [],
+        "premises": {
+          "assumptions": [],
+          "domain": [],
+          "open": [
+            "FlockSoundness.Assumptions.UniformRandomBytes",
+            "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+            "FlockSoundness.Built",
+            "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+            "FlockSoundness.Discharge.ZkLink.LinkCRZC",
+            "FlockSoundness.Discharge.ZkLink.SessCRZ"
+          ],
+          "reads": [
+            "FlockSoundness.Assumptions.HmRowComputes",
+            "FlockSoundness.Assumptions.SHA512CRExpected",
+            "FlockSoundness.Assumptions.SHA512CRStrict"
+          ]
+        },
+        "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
+        "unfolded_hash": "2cef56057778acdc6f45bac893af4b09b610e4748b7ce4e28da13568d411f849"
+      }
+    },
+    "unwitnessed": {
+      "Flock.SecurityProofs.SampledKSLiveV5": {
+        "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
+        "unfolded_hash": "2cef56057778acdc6f45bac893af4b09b610e4748b7ce4e28da13568d411f849"
+      }
+    }
+  },
+  "ours": {
+    "guarantees": {
+      "Flock.SecurityProofs.SampledKSLiveV5": {
+        "owner": "@proofs",
+        "signature": [
+          "Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5"
+        ],
+        "assumptions": [],
+        "premises": {
+          "assumptions": [],
+          "domain": [],
+          "open": [
+            "FlockSoundness.Assumptions.UniformRandomBytes",
+            "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+            "FlockSoundness.Discharge.ZkLink.LinkCRZC",
+            "FlockSoundness.Discharge.ZkLink.SessCRZ"
+          ],
+          "reads": [
+            "FlockSoundness.Assumptions.HmRowComputes",
+            "FlockSoundness.Assumptions.SHA512CRExpected",
+            "FlockSoundness.Assumptions.SHA512CRStrict"
+          ]
+        },
+        "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
+        "unfolded_hash": "d3df0db0e4c645ec3d8cde4bcf707b106c9e573016d3cbe419c5cdc49f458fda"
+      }
+    },
+    "unwitnessed": {
+      "Flock.SecurityProofs.SampledKSLiveV5": {
+        "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
+        "unfolded_hash": "d3df0db0e4c645ec3d8cde4bcf707b106c9e573016d3cbe419c5cdc49f458fda"
+      }
+    }
+  },
+  "theirs": {
+    "guarantees": {
+      "Flock.SecurityProofs.SampledKSLiveV5": {
+        "owner": "@proofs",
+        "signature": [
+          "Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5"
+        ],
+        "assumptions": [],
+        "premises": {
+          "assumptions": [],
+          "domain": [],
+          "open": [
+            "FlockSoundness.Assumptions.UniformRandomBytes",
+            "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+            "FlockSoundness.Built",
+            "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+            "FlockSoundness.Discharge.ZkLink.LinkCRZC",
+            "FlockSoundness.Discharge.ZkLink.SessCRZ"
+          ],
+          "reads": [
+            "FlockSoundness.Assumptions.HmRowComputes",
+            "FlockSoundness.Assumptions.SHA512CRExpected",
+            "FlockSoundness.Assumptions.SHA512CRStrict"
+          ]
+        },
+        "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
+        "unfolded_hash": "cf50487a15ba30695c770baf3219b6fc7f8637aee33c8feabad4c4de52abe8b0"
+      }
+    },
+    "unwitnessed": {
+      "Flock.SecurityProofs.SampledKSLiveV5": {
+        "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
+        "unfolded_hash": "e8931a524eb1910c4f8dabd603fba7120726856113dede6cf66b2076f14acdf8"
+      }
+    }
+  }
+}

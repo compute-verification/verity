@@ -1,0 +1,4 @@
+order = 320
+path = "`pearlc_census.py`"
+runs_on = "CPU"
+what = "TT_OUT's falsification census for Pearl-C's ticket chain, bit-exact, on the H100's atom or sm_120's (`--atom`)"

@@ -1,0 +1,186 @@
+{
+ "schema": "verity-capture/tp2-body/v0",
+ "run": "/workspace/cp/ov-tp2-runs/tp2_b1/capture",
+ "summary": {
+  "unchecked": 828,
+  "body_ok": 116
+ },
+ "checked_examples": [
+  {
+   "step": 0,
+   "op": "_C.vocab_parallel_embedding.default",
+   "ordinal": 0,
+   "module": "model.embed_tokens",
+   "status": "no snapshot bytes (root alloc, oversize, or non-snapshot step)"
+  },
+  {
+   "step": 0,
+   "op": "vllm.all_gather.default",
+   "ordinal": 0,
+   "module": "logits_processor",
+   "out_sha_equal_across_ranks": true,
+   "in_sha": {
+    "0": "f201e2b45efa0ef1",
+    "1": "a591ab8e6731894c"
+   },
+   "out_sha": {
+    "0": "ca8611b6ef9de2b4",
+    "1": "ca8611b6ef9de2b4"
+   },
+   "dtype": "bfloat16",
+   "shape_in": [
+    1,
+    75968
+   ],
+   "shape_out": [
+    1,
+    151936
+   ],
+   "body": "concat(shard_0..shard_1, dim=-1)",
+   "body_matches_rank_outs": {
+    "0": true,
+    "1": true
+   },
+   "status": "ok"
+  },
+  {
+   "step": 0,
+   "op": "vllm.all_reduce.default",
+   "ordinal": 0,
+   "module": "model.embed_tokens",
+   "out_sha_equal_across_ranks": true,
+   "in_sha": {
+    "0": "29e07be15700a8d3",
+    "1": "3a3ed164e42500a1"
+   },
+   "out_sha": {
+    "0": "29e07be15700a8d3",
+    "1": "29e07be15700a8d3"
+   },
+   "dtype": "bfloat16",
+   "shape_in": [
+    32,
+    1536
+   ],
+   "shape_out": [
+    32,
+    1536
+   ],
+   "body": "bf16(sum_r f32(shard_r)) round-to-nearest-even",
+   "body_matches_rank_outs": {
+    "0": true,
+    "1": true
+   },
+   "bf16_chain_equals_f32_sum": true,
+   "mismatching_elements_vs_rank0_out": 0,
+   "shards_identical": false,
+   "status": "ok"
+  },
+  {
+   "step": 0,
+   "op": "vllm.all_reduce.default",
+   "ordinal": 1,
+   "module": "model.layers.0.self_attn.o_proj",
+   "out_sha_equal_across_ranks": true,
+   "in_sha": {
+    "0": "a9ca7272f65bcc62",
+    "1": "54a5da19e7aff3d3"
+   },
+   "out_sha": {
+    "0": "94b629573815b01b",
+    "1": "94b629573815b01b"
+   },
+   "dtype": "bfloat16",
+   "shape_in": [
+    32,
+    1536
+   ],
+   "shape_out": [
+    32,
+    1536
+   ],
+   "body": "bf16(sum_r f32(shard_r)) round-to-nearest-even",
+   "body_matches_rank_outs": {
+    "0": true,
+    "1": true
+   },
+   "bf16_chain_equals_f32_sum": true,
+   "mismatching_elements_vs_rank0_out": 0,
+   "shards_identical": false,
+   "status": "ok"
+  },
+  {
+   "step": 0,
+   "op": "vllm.all_reduce.default",
+   "ordinal": 2,
+   "module": "model.layers.0.mlp.down_proj",
+   "out_sha_equal_across_ranks": true,
+   "in_sha": {
+    "0": "f03f5ff53cf98734",
+    "1": "758e3f7e52ea33a7"
+   },
+   "out_sha": {
+    "0": "62c42404c0733f03",
+    "1": "62c42404c0733f03"
+   },
+   "dtype": "bfloat16",
+   "shape_in": [
+    32,
+    1536
+   ],
+   "shape_out": [
+    32,
+    1536
+   ],
+   "body": "bf16(sum_r f32(shard_r)) round-to-nearest-even",
+   "body_matches_rank_outs": {
+    "0": true,
+    "1": true
+   },
+   "bf16_chain_equals_f32_sum": true,
+   "mismatching_elements_vs_rank0_out": 0,
+   "shards_identical": false,
+   "status": "ok"
+  },
+  {
+   "step": 0,
+   "op": "vllm.all_reduce.default",
+   "ordinal": 3,
+   "module": "model.layers.1.self_attn.o_proj",
+   "out_sha_equal_across_ranks": true,
+   "in_sha": {
+    "0": "6a269ffbce25631d",
+    "1": "e996fe818988edb1"
+   },
+   "out_sha": {
+    "0": "a64dcf301bf9cacc",
+    "1": "a64dcf301bf9cacc"
+   },
+   "dtype": "bfloat16",
+   "shape_in": [
+    32,
+    1536
+   ],
+   "shape_out": [
+    32,
+    1536
+   ],
+   "body": "bf16(sum_r f32(shard_r)) round-to-nearest-even",
+   "body_matches_rank_outs": {
+    "0": true,
+    "1": true
+   },
+   "bf16_chain_equals_f32_sum": true,
+   "mismatching_elements_vs_rank0_out": 0,
+   "shards_identical": false,
+   "status": "ok"
+  }
+ ],
+ "by_op_status": {
+  "_C.vocab_parallel_embedding.default | no snapshot bytes (root alloc, oversize, or non-snapshot step)": 16,
+  "vllm.all_gather.default | ok": 2,
+  "vllm.all_reduce.default | ok": 114,
+  "vllm.all_gather.default | no snapshot bytes (root alloc, oversize, or non-snapshot step)": 14,
+  "vllm.all_reduce.default | no snapshot bytes (root alloc, oversize, or non-snapshot step)": 798
+ }
+}

@@ -1,0 +1,409 @@
+{
+ "authenticatable": true,
+ "authenticity_reasons": [],
+ "binding": {
+  "object_digest": "35a344f48440e15baef325ced99a9fc0b2d569381fa75da8a73508b2b72dd4f1",
+  "public_values": "35a344f48440e15baef325ced99a9fc0b2d569381fa75da8a73508b2b72dd4f1eab37d675f6072a1f0632a2d09814d5199ffc97dde54e9bb541741693af8b7e101",
+  "statement_digest": "eab37d675f6072a1f0632a2d09814d5199ffc97dde54e9bb541741693af8b7e1"
+ },
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"boundary/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"boundary\"},{\"id\":\"boundary/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"boundary\"},{\"id\":\"boundary/2\",\"layout\":{\"value\":8},\"leaf\":2,\"position\":2,\"root\":\"boundary\"},{\"id\":\"kappa_W/0\",\"layout\":{\"value\":8},\"leaf\":0,\"position\":0,\"root\":\"kappa_W\"},{\"id\":\"kappa_W/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"kappa_W\"},{\"id\":\"ru0/0\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru0\"},{\"id\":\"ru0/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"ru0\"},{\"id\":\"ru0/2\",\"layout\":{\"value\":32},\"leaf\":2,\"position\":2,\"root\":\"ru0\"},{\"id\":\"ru0/3\",\"layout\":{\"value\":32},\"leaf\":3,\"position\":3,\"root\":\"ru0\"},{\"id\":\"ru0/4\",\"layout\":{\"value\":32},\"leaf\":4,\"position\":4,\"root\":\"ru0\"},{\"id\":\"ru1/0\",\"layout\":{\"value\":32},\"leaf\":0,\"position\":0,\"root\":\"ru1\"},{\"id\":\"ru1/1\",\"layout\":{\"value\":8},\"leaf\":1,\"position\":1,\"root\":\"ru1\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"x0\",\"w2\"],\"out\":[\"Twice[0]/m\"]},\"declared_interface\":{\"args\":[\"x0\",\"w2\"],\"projection\":{\"args\":[0,1],\"returns\":[2]},\"returns\":[\"Twice[0]/m\"]},\"roots\":[\"boundary\",\"kappa_W\",\"ru0\"],\"subcircuit\":\"8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc\",\"target\":{\"encoding\":\"call\",\"id\":\"Twice[0]\"}}],\"references\":[{\"leaf\":\"ru0/2\",\"offset\":[],\"ref\":\"Twice[0]/m\"},{\"leaf\":\"kappa_W/0\",\"offset\":[],\"ref\":\"w2\"},{\"leaf\":\"boundary/0\",\"offset\":[],\"ref\":\"x0\"}],\"roots\":[{\"count\":3,\"domain\":\"26df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"boundary\",\"owner\":-1,\"root\":\"41bd793ef3f586c63d42497b3e4eb484632fcdb3afc7f0570824730006ac4430\"},{\"count\":2,\"domain\":\"6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"kappa_W\",\"owner\":-2,\"root\":\"e15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b\"},{\"count\":5,\"domain\":\"536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"1d20808c4949a8c081a4e26da1d9e343cc0a30c0114ae751e9c4dfbd6f328660\"},{\"count\":2,\"domain\":\"6a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf54\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru1\",\"owner\":1,\"root\":\"05c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c3\"}],\"subcircuits\":[{\"definition\":{\"name\":\"identity/vu/twice\"},\"digest\":\"8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc\",\"gates\":[{\"args\":[[\"in\",0],[\"in\",1]],\"op\":\"mul8\"}],\"in\":[8,8],\"out\":[0]}]}",
+ "description": "(i) Checking only the downstream multiplication on the inconsistent transcript accepts: Twice reads x0 = 7 unsampled and 7 * 2 = 14.",
+ "digest": "35a344f48440e15baef325ced99a9fc0b2d569381fa75da8a73508b2b72dd4f1",
+ "identity": {
+  "layout": "scalar",
+  "plan": "plan/downstream-only",
+  "transcript": "inconsistent"
+ },
+ "lowered_v3": {
+  "note": "derived by veritor.interface.lowering.lower_v3(): the format-2 lowering with maximal runs of consecutive packed words of one leaf merged into ranges (merge_ranges); expands to `lowering`",
+  "obligations": [
+   {
+    "entries": [
+     {
+      "ref": "x0",
+      "schema": "u8"
+     },
+     {
+      "ref": "w2",
+      "schema": "u8"
+     },
+     {
+      "ref": "Twice[0]/m",
+      "schema": "u32"
+     }
+    ],
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f5165",
+    "outputs": [
+     2
+    ],
+    "ranges": 0,
+    "slots": 3
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "kind": "d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f5165",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     }
+    ],
+    "subcircuit": "8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc"
+   }
+  ]
+ },
+ "lowering": {
+  "note": "derived by veritor.interface.lowering.lower(); legacy backend data, not part of the Verity ontology",
+  "obligations": [
+   {
+    "expected": {},
+    "inputs": [
+     0,
+     1
+    ],
+    "kind": "d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f5165",
+    "outputs": [
+     2
+    ],
+    "positions": [
+     "x0",
+     "w2",
+     "Twice[0]/m"
+    ]
+   }
+  ],
+  "programs": [
+   {
+    "gates": [
+     {
+      "args": [
+       [
+        "port",
+        0
+       ],
+       [
+        "port",
+        1
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "kind": "d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f5165",
+    "outputs": [
+     0
+    ],
+    "ports": [
+     {
+      "ordinal": 0,
+      "width": 8
+     },
+     {
+      "ordinal": 1,
+      "width": 8
+     }
+    ],
+    "subcircuit": "8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc"
+   }
+  ]
+ },
+ "name": "identity/downstream-only-accepts",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "boundary/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "boundary"
+   },
+   {
+    "id": "boundary/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "boundary"
+   },
+   {
+    "id": "boundary/2",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "boundary"
+   },
+   {
+    "id": "kappa_W/0",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "kappa_W"
+   },
+   {
+    "id": "kappa_W/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "kappa_W"
+   },
+   {
+    "id": "ru0/0",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/2",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/3",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 3,
+    "position": 3,
+    "root": "ru0"
+   },
+   {
+    "id": "ru0/4",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 4,
+    "position": 4,
+    "root": "ru0"
+   },
+   {
+    "id": "ru1/0",
+    "layout": {
+     "value": 32
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru1"
+   },
+   {
+    "id": "ru1/1",
+    "layout": {
+     "value": 8
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "ru1"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "x0",
+      "w2"
+     ],
+     "out": [
+      "Twice[0]/m"
+     ]
+    },
+    "declared_interface": {
+     "args": [
+      "x0",
+      "w2"
+     ],
+     "projection": {
+      "args": [
+       0,
+       1
+      ],
+      "returns": [
+       2
+      ]
+     },
+     "returns": [
+      "Twice[0]/m"
+     ]
+    },
+    "roots": [
+     "boundary",
+     "kappa_W",
+     "ru0"
+    ],
+    "subcircuit": "8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc",
+    "target": {
+     "encoding": "call",
+     "id": "Twice[0]"
+    }
+   }
+  ],
+  "references": [
+   {
+    "leaf": "ru0/2",
+    "offset": [],
+    "ref": "Twice[0]/m"
+   },
+   {
+    "leaf": "kappa_W/0",
+    "offset": [],
+    "ref": "w2"
+   },
+   {
+    "leaf": "boundary/0",
+    "offset": [],
+    "ref": "x0"
+   }
+  ],
+  "roots": [
+   {
+    "count": 3,
+    "domain": "26df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a200",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "boundary",
+    "owner": -1,
+    "root": "41bd793ef3f586c63d42497b3e4eb484632fcdb3afc7f0570824730006ac4430"
+   },
+   {
+    "count": 2,
+    "domain": "6627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8b",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "kappa_W",
+    "owner": -2,
+    "root": "e15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b"
+   },
+   {
+    "count": 5,
+    "domain": "536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "1d20808c4949a8c081a4e26da1d9e343cc0a30c0114ae751e9c4dfbd6f328660"
+   },
+   {
+    "count": 2,
+    "domain": "6a4ad6bc481f6858396dafc1a1f543eaf0668e28b08d7e4d34e8bb18da7cdf54",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru1",
+    "owner": 1,
+    "root": "05c051efaa138aa09308a8008a8f98b1506273066eb8dabc4fd13832d98639c3"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "identity/vu/twice"
+    },
+    "digest": "8e0f2d4f6fba07b1f8bcdee0f246cf4435a3c33b4a9003ae1c5a9f905283d7dc",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "in",
+        1
+       ]
+      ],
+      "op": "mul8"
+     }
+    ],
+    "in": [
+     8,
+     8
+    ],
+    "out": [
+     0
+    ]
+   }
+  ]
+ },
+ "relations": "accept",
+ "statement": "76657269746f722f70726f6f66732f73746174656d656e742f7632000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c60000002000000001d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f51650000000100000002000000000000000100000001000000046d756c3800000002000000000000000000010000000100000000000000011111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f516500000003000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a20041bd793ef3f586c63d42497b3e4eb484632fcdb3afc7f0570824730006ac4430000000000000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8be15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b00000000000000020000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d1d20808c4949a8c081a4e26da1d9e343cc0a30c0114ae751e9c4dfbd6f328660000000000000000500000003000000000000000000000000000000000000000000000002753800000000010000000000000000000000000000000000000002753800000000020000000000000002000000000000000200000003753332000000000200000000000000010000000100000002",
+ "statement_digest": "eab37d675f6072a1f0632a2d09814d5199ffc97dde54e9bb541741693af8b7e1",
+ "statement_v3": "76657269746f722f70726f6f66732f73746174656d656e742f7633000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c60000002000000001d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f51650000000100000002000000000000000100000001000000046d756c3800000002000000000000000000010000000100000000000000011111111111111111111111111111111111111111111111111111111111111111222222222222222222222222222222222222222222222222222222222222222200000000000000000000000000000000d21b2ced8e348af28815d54eaee3ad24547564439e15aca0fa584281061f516500000003000000000000000126df7f3b69172f4f771679ad678a6efd89f0e38183e091da4cae10533182a20041bd793ef3f586c63d42497b3e4eb484632fcdb3afc7f0570824730006ac4430000000000000000300000000000000006627adc2322fe7a79cadb86419375a4c8271a7a97f5e077beb55c11c5e583d8be15534923755fc4a72d1f2e1e666f36dd2ef7b1f85da6fa1bac1ff78a2dd905b00000000000000020000000000000002536b42825894575b1f5009d9bc970ad9b978a28a86243eb163feada5ce03b52d1d20808c4949a8c081a4e26da1d9e343cc0a30c0114ae751e9c4dfbd6f328660000000000000000500000003000000000000000000000000000000000000000000000000027538000000000001000000000000000000000000000000000000000275380000000000020000000000000002000000000000000200000003753332000000000200000000000000010000000100000002",
+ "statement_v3_digest": "cb3d32a2710a38342ca70a43d6e7933513c97fec5c2c2cd659bb6eeb98f7752b",
+ "subcircuits_well_formed": [
+  true
+ ],
+ "tags": [
+  "identity",
+  "instance",
+  "witness",
+  "input-equation"
+ ],
+ "values": [
+  [
+   7,
+   2,
+   14
+  ]
+ ],
+ "verdict": "accept",
+ "witness": "76657269746f722f70726f6f66732f7769746e6573732f763200000000010000000300000001070000000244de3aaedb05677f24efe632f3031f8e483d8ef61325428709ae51645011d379871a169c3d990656ce7ed8bba513a6108e07b2b00202dadc0c12b336538f8268000000010200000001d79877baae66daca523baf87e923d13db8f5e0bb753c629d547aa31c0708e3e7000000040000000e000000039f9a07226078afe0933ba0435772ab0c6584ba46ed7d65a8ca22c6ae50f3fe70077af89378ca6670a1a86a084e7112e6cb19ce8f79c53d0cf915b212d84349c997881271d9b39b1f1b78d5ee5a9cd42520453ea3acdc9a33b9986f52ceb50eab",
+ "witness_verdict": "accept"
+}

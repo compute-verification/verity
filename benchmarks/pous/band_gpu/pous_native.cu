@@ -1,0 +1,1825 @@
+// POUS native code for the serving process: batched SHAKE256 and Feistel-10 kernels (one warp per message) and the audit responder,
+// a native thread that answers challenges from C in device memory over TCP, with no Python and no GIL on the path.
+#include <torch/extension.h>
+#include <c10/cuda/CUDAStream.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <cuda_runtime.h>
+
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <sched.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <atomic>
+#include <chrono>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <type_traits>
+
+__constant__ uint64_t KECCAK_RC[24] = {
+    0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808aULL, 0x8000000080008000ULL,
+    0x000000000000808bULL, 0x0000000080000001ULL, 0x8000000080008081ULL, 0x8000000000008009ULL,
+    0x000000000000008aULL, 0x0000000000000088ULL, 0x0000000080008009ULL, 0x000000008000000aULL,
+    0x000000008000808bULL, 0x800000000000008bULL, 0x8000000000008089ULL, 0x8000000000008003ULL,
+    0x8000000000008002ULL, 0x8000000000000080ULL, 0x000000000000800aULL, 0x800000008000000aULL,
+    0x8000000080008081ULL, 0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL};
+__constant__ int KECCAK_RHO[25] = {0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39,
+                                   41, 45, 15, 21, 8, 18, 2, 61, 56, 14};
+
+constexpr int RATE = 136;  // SHAKE256: 1088-bit rate
+constexpr int RATE_WORDS = RATE / 8;
+constexpr int WARPS_PER_BLOCK = 4;
+constexpr int MAX_TWEAK = 62;
+
+// One warp holds one Keccak state: lane x + 5y holds word (x, y); lanes 25..31 shadow lane % 25 and are never read.
+struct Lane {
+  int t1, t2, t3, t4, dm, dp, rho, pi, c1, c2;
+  bool first;
+};
+
+__device__ __forceinline__ Lane lane_of(int lane) {
+  const int v = lane % 25, x = v % 5, y = v / 5;
+  Lane l;
+  l.t1 = x + 5 * ((y + 1) % 5);
+  l.t2 = x + 5 * ((y + 2) % 5);
+  l.t3 = x + 5 * ((y + 3) % 5);
+  l.t4 = x + 5 * ((y + 4) % 5);
+  l.dm = (x + 4) % 5 + 5 * y;
+  l.dp = (x + 1) % 5 + 5 * y;
+  l.rho = KECCAK_RHO[v];
+  l.pi = (x + 3 * y) % 5 + 5 * x;  // pi: word (x, y) moves to (y, 2x + 3y), so lane (X, Y) takes ((X + 3Y) % 5, X)
+  l.c1 = (x + 1) % 5 + 5 * y;
+  l.c2 = (x + 2) % 5 + 5 * y;
+  l.first = lane == 0;
+  return l;
+}
+
+__device__ __forceinline__ uint64_t shfl64(uint64_t v, int src) { return __shfl_sync(0xffffffffu, v, src); }
+__device__ __forceinline__ uint64_t rotlv(uint64_t v, int r) { return r ? (v << r) | (v >> (64 - r)) : v; }
+
+__device__ __forceinline__ uint64_t keccak_f(uint64_t a, const Lane& l) {
+#pragma unroll 1
+  for (int r = 0; r < 24; ++r) {
+    const uint64_t c = a ^ shfl64(a, l.t1) ^ shfl64(a, l.t2) ^ shfl64(a, l.t3) ^ shfl64(a, l.t4);
+    const uint64_t d = shfl64(c, l.dm) ^ rotlv(shfl64(c, l.dp), 1);
+    a = rotlv(a ^ d, l.rho);
+    const uint64_t b = shfl64(a, l.pi);
+    a = b ^ (~shfl64(b, l.c1) & shfl64(b, l.c2));
+    if (l.first) a ^= KECCAK_RC[r];
+  }
+  return a;
+}
+
+// dst[0:olen] (^)= SHAKE256(pre[0:plen] || body[0:blen])[0:olen], computed by the calling warp.
+__device__ void shake_warp(const uint8_t* pre, int plen, const uint8_t* body, int64_t blen, uint8_t* dst, int64_t olen,
+                           bool xor_out, const Lane& l, int lane) {
+  const int64_t len = plen + blen;
+  const int64_t nblk = len / RATE + 1;
+  uint64_t a = 0;
+  for (int64_t b = 0; b < nblk; ++b) {
+    if (lane < RATE_WORDS) {
+      const int64_t base = b * RATE + lane * 8;
+      uint64_t w = 0;
+      if (base >= plen && base + 8 <= len) {
+        const uint8_t* p = body + (base - plen);
+#pragma unroll
+        for (int k = 0; k < 8; ++k) w |= (uint64_t)p[k] << (8 * k);
+      } else {
+#pragma unroll
+        for (int k = 0; k < 8; ++k) {
+          const int64_t pos = base + k;
+          uint8_t byte = 0;
+          if (pos < plen) byte = pre[pos];
+          else if (pos < len) byte = body[pos - plen];
+          if (pos == len) byte ^= 0x1F;
+          w |= (uint64_t)byte << (8 * k);
+        }
+        if (b == nblk - 1 && lane == RATE_WORDS - 1) w ^= 0x80ULL << 56;
+      }
+      a ^= w;
+    }
+    a = keccak_f(a, l);
+  }
+  for (int64_t o = 0; o < olen; o += RATE) {
+    if (o > 0) a = keccak_f(a, l);
+    if (lane < RATE_WORDS) {
+      const int64_t base = o + lane * 8;
+#pragma unroll
+      for (int k = 0; k < 8; ++k) {
+        const int64_t pos = base + k;
+        if (pos < olen) {
+          const uint8_t byte = (uint8_t)(a >> (8 * k));
+          dst[pos] = xor_out ? (uint8_t)(dst[pos] ^ byte) : byte;
+        }
+      }
+    }
+  }
+  __syncwarp();
+}
+
+// Row n: out[n, :olen] (^)= SHAKE256(prefix[n, :plen] || body[n, :blen])[0:olen]; one warp per row.
+__global__ void shake256_kernel(const uint8_t* prefix, int plen, int64_t prefix_stride, const uint8_t* body, int64_t blen,
+                                int64_t body_stride, uint8_t* out, int64_t olen, int64_t out_stride, int xor_out, int64_t rows) {
+  const int lane = threadIdx.x % 32;
+  const int64_t n = (int64_t)blockIdx.x * WARPS_PER_BLOCK + threadIdx.x / 32;
+  if (n >= rows) return;
+  const Lane l = lane_of(lane);
+  shake_warp(prefix + n * prefix_stride, plen, body + n * body_stride, blen, out + n * out_stride, olen, xor_out != 0, l, lane);
+}
+
+// Ten Feistel rounds in place on row n of x (halves A || B of `half` bytes): round i computes
+// F_i = SHAKE256(domain || u8(i) || tweak[n] || src)[0:half] and xors it into the other half, odd rounds A ^= F_i(B),
+// even rounds B ^= F_i(A); the inverse runs i = 10 .. 1.  That is (L, R) -> (R, L ^ F_i(R)) with the output left as A || B.
+__global__ void feistel_kernel(uint8_t* x, int64_t x_stride, int64_t half, const uint8_t* tweak, int tlen, int64_t tweak_stride,
+                               int domain, int inverse, int64_t rows) {
+  __shared__ uint8_t prefix[WARPS_PER_BLOCK][MAX_TWEAK + 2];
+  const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
+  const int64_t n = (int64_t)blockIdx.x * WARPS_PER_BLOCK + warp;
+  if (n >= rows) return;
+  const Lane l = lane_of(lane);
+  uint8_t* pre = prefix[warp];
+  for (int j = lane; j < tlen; j += 32) pre[2 + j] = tweak[n * tweak_stride + j];
+  if (lane == 0) pre[0] = (uint8_t)domain;
+  uint8_t* a = x + n * x_stride;
+  uint8_t* b = a + half;
+  for (int step = 0; step < 10; ++step) {
+    const int i = inverse ? 10 - step : step + 1;
+    if (lane == 0) pre[1] = (uint8_t)i;
+    __syncwarp();
+    if (i % 2) shake_warp(pre, 2 + tlen, b, half, a, half, true, l, lane);
+    else shake_warp(pre, 2 + tlen, a, half, b, half, true, l, lane);
+  }
+}
+
+// ---- one thread per row (throughput): a whole Keccak state in one thread's registers ------------------------------------
+__device__ __forceinline__ uint64_t rotl64(uint64_t x, int n) { return (x << n) | (x >> (64 - n)); }
+
+// ρ and π then χ, fully unrolled: lane s moves to PI_DEST[s] rotated by RHO[s] (the standard offsets, lane s = x + 5y going to
+// (y, 2x + 3y)) into a fresh array, then χ reads it back row by row.  Every rotation is independent, instead of the in-place
+// 24-step cycle whose serial carry costs a move per step.
+__device__ __forceinline__ void keccak_rho_pi_chi(uint64_t st[25]) {
+  constexpr int PI_DEST[25] = {0, 10, 20, 5, 15, 16, 1, 11, 21, 6, 7, 17, 2, 12, 22, 23, 8, 18, 3, 13, 14, 24, 9, 19, 4};
+  constexpr int RHO[25] = {0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14};
+  uint64_t b[25];
+#pragma unroll
+  for (int s = 0; s < 25; ++s) b[PI_DEST[s]] = RHO[s] ? rotl64(st[s], RHO[s]) : st[s];
+#pragma unroll
+  for (int j = 0; j < 25; j += 5) {
+#pragma unroll
+    for (int i = 0; i < 5; ++i) st[j + i] = b[j + i] ^ ((~b[j + (i + 1) % 5]) & b[j + (i + 2) % 5]);
+  }
+}
+
+__device__ __forceinline__ void keccak_f_thread(uint64_t st[25]) {
+  const int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
+  const int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
+#pragma unroll 1
+  for (int r = 0; r < 24; ++r) {
+    uint64_t bc[5];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      uint64_t t = bc[(i + 4) % 5] ^ rotl64(bc[(i + 1) % 5], 1);
+#pragma unroll
+      for (int j = 0; j < 25; j += 5) st[j + i] ^= t;
+    }
+    keccak_rho_pi_chi(st);
+    st[0] ^= KECCAK_RC[r];
+  }
+}
+
+// dst[0:olen] ^= SHAKE256(pre[0:plen] || body[0:blen])[0:olen], computed by the calling thread alone.
+__device__ void shake_thread_xor(const uint8_t* pre, int plen, const uint8_t* body, int64_t blen, uint8_t* dst, int64_t olen) {
+  const int64_t len = plen + blen;
+  const int64_t nblk = len / RATE + 1;
+  uint64_t st[25];
+#pragma unroll
+  for (int i = 0; i < 25; ++i) st[i] = 0;
+  for (int64_t b = 0; b < nblk; ++b) {
+    const int64_t base = b * RATE;
+    if (base >= plen && base + RATE <= len) {
+      const uint8_t* p = body + (base - plen);
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        uint64_t word = 0;
+#pragma unroll
+        for (int k = 0; k < 8; ++k) word |= (uint64_t)p[w * 8 + k] << (8 * k);
+        st[w] ^= word;
+      }
+    } else {
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        uint64_t word = 0;
+#pragma unroll
+        for (int k = 0; k < 8; ++k) {
+          const int64_t pos = base + w * 8 + k;
+          uint8_t byte = 0;
+          if (pos < plen) byte = pre[pos];
+          else if (pos < len) byte = body[pos - plen];
+          if (pos == len) byte ^= 0x1F;
+          if (b == nblk - 1 && w == RATE_WORDS - 1 && k == 7) byte ^= 0x80;
+          word |= (uint64_t)byte << (8 * k);
+        }
+        st[w] ^= word;
+      }
+    }
+    keccak_f_thread(st);
+  }
+  for (int64_t o = 0; o < olen; o += RATE) {
+    if (o > 0) keccak_f_thread(st);
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) {
+#pragma unroll
+      for (int k = 0; k < 8; ++k) {
+        const int64_t i = o + w * 8 + k;
+        if (i < olen) dst[i] ^= (uint8_t)(st[w] >> (8 * k));
+      }
+    }
+  }
+}
+
+// feistel_kernel with one thread per row: many rows at once, where the warp kernel is bound by its shuffles.
+__global__ void feistel_thread_kernel(uint8_t* x, int64_t x_stride, int64_t half, const uint8_t* tweak, int tlen,
+                                      int64_t tweak_stride, int domain, int inverse, int64_t rows) {
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (n >= rows) return;
+  uint8_t pre[MAX_TWEAK + 2];
+  pre[0] = (uint8_t)domain;
+  for (int j = 0; j < tlen; ++j) pre[2 + j] = tweak[n * tweak_stride + j];
+  uint8_t* a = x + n * x_stride;
+  uint8_t* b = a + half;
+  for (int step = 0; step < 10; ++step) {
+    const int i = inverse ? 10 - step : step + 1;
+    pre[1] = (uint8_t)i;
+    if (i % 2) shake_thread_xor(pre, 2 + tlen, b, half, a, half);
+    else shake_thread_xor(pre, 2 + tlen, a, half, b, half);
+  }
+}
+
+// dst ^= SHAKE256(prefix || body)[0:olen] with 64-bit word I/O: `body` and `dst` 8-byte aligned, `blen` and `olen` multiples
+// of 8, the prefix (`plen` < 8 bytes, little-endian in `pre`) shifting the body's words by `plen` bytes in the message.
+__device__ void shake_thread_xor_words(uint64_t pre, int plen, const uint64_t* __restrict__ body, int64_t blen,
+                                       uint64_t* __restrict__ dst, int64_t olen) {
+  const int64_t len = plen + blen;
+  const int64_t nblk = len / RATE + 1;
+  const int sh = 8 * plen;
+  uint64_t st[25];
+#pragma unroll
+  for (int i = 0; i < 25; ++i) st[i] = 0;
+  uint64_t prev = pre;  // message word j is (body[j] << sh) | (body[j - 1] >> (64 - sh)), body[-1] standing in for the prefix
+  for (int64_t b = 0; b < nblk; ++b) {
+    const int64_t base = b * RATE;
+    if (base + RATE <= len && (base + RATE) / 8 <= blen / 8) {
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        const uint64_t cur = body[b * RATE_WORDS + w];
+        st[w] ^= sh ? (cur << sh) | (b == 0 && w == 0 ? prev : prev >> (64 - sh)) : cur;
+        prev = cur;
+      }
+    } else {
+      const uint8_t* bb = reinterpret_cast<const uint8_t*>(body);
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        uint64_t word = 0;
+#pragma unroll
+        for (int k = 0; k < 8; ++k) {
+          const int64_t pos = base + w * 8 + k;
+          uint8_t byte = 0;
+          if (pos < plen) byte = (uint8_t)(pre >> (8 * pos));
+          else if (pos < len) byte = bb[pos - plen];
+          if (pos == len) byte ^= 0x1F;
+          if (b == nblk - 1 && w == RATE_WORDS - 1 && k == 7) byte ^= 0x80;
+          word |= (uint64_t)byte << (8 * k);
+        }
+        st[w] ^= word;
+      }
+    }
+    keccak_f_thread(st);
+  }
+  const int64_t owords = olen / 8;
+  for (int64_t o = 0; o < owords; o += RATE_WORDS) {
+    if (o > 0) keccak_f_thread(st);
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w)
+      if (o + w < owords) dst[o + w] ^= st[w];
+  }
+}
+
+// feistel_thread_kernel with word I/O, for untweaked permutations whose halves are whole words (Π and Π₂).
+__global__ void feistel_words_kernel(uint8_t* x, int64_t x_stride, int64_t half, int domain, int inverse, int64_t rows) {
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (n >= rows) return;
+  uint64_t* a = reinterpret_cast<uint64_t*>(x + n * x_stride);
+  uint64_t* b = a + half / 8;
+  for (int step = 0; step < 10; ++step) {
+    const int i = inverse ? 10 - step : step + 1;
+    const uint64_t pre = (uint64_t)(uint8_t)domain | ((uint64_t)(uint8_t)i << 8);
+    if (i % 2) shake_thread_xor_words(pre, 2, b, half, a, half);
+    else shake_thread_xor_words(pre, 2, a, half, b, half);
+  }
+}
+
+// Two independent Keccak-f[1600] permutations in one round loop, so their instructions interleave.
+__device__ __forceinline__ void keccak_f_pair(uint64_t s[25], uint64_t t[25]) {
+#pragma unroll 1
+  for (int r = 0; r < 24; ++r) {
+    uint64_t bs[5], bt[5];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      bs[i] = s[i] ^ s[i + 5] ^ s[i + 10] ^ s[i + 15] ^ s[i + 20];
+      bt[i] = t[i] ^ t[i + 5] ^ t[i + 10] ^ t[i + 15] ^ t[i + 20];
+    }
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      const uint64_t ds = bs[(i + 4) % 5] ^ rotl64(bs[(i + 1) % 5], 1);
+      const uint64_t dt = bt[(i + 4) % 5] ^ rotl64(bt[(i + 1) % 5], 1);
+#pragma unroll
+      for (int j = 0; j < 25; j += 5) {
+        s[j + i] ^= ds;
+        t[j + i] ^= dt;
+      }
+    }
+    keccak_rho_pi_chi(s);
+    keccak_rho_pi_chi(t);
+    s[0] ^= KECCAK_RC[r];
+    t[0] ^= KECCAK_RC[r];
+  }
+}
+
+// The sponge absorbing prefix (2 bytes, `pre`) || src (`hw` words), padded: `st` is then ready to squeeze.
+__device__ void absorb_words(uint64_t st[25], uint64_t pre, const uint64_t* __restrict__ src, int64_t hw) {
+#pragma unroll
+  for (int i = 0; i < 25; ++i) st[i] = 0;
+  const int64_t len = 8 * hw + 2;
+  const int64_t full = len / RATE;
+  uint64_t carry = pre << 48;
+  for (int64_t k = 0; k < full; ++k) {
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) {
+      const uint64_t cur = src[k * RATE_WORDS + w];
+      st[w] ^= (cur << 16) | (carry >> 48);
+      carry = cur;
+    }
+    keccak_f_thread(st);
+  }
+  const int64_t j0 = full * RATE_WORDS;
+  const int tail = (int)(len - full * RATE);
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w) {
+    const int64_t j = j0 + w;
+    uint64_t m = 0;
+    if (j < hw) {
+      const uint64_t cur = src[j];
+      m = (cur << 16) | (carry >> 48);
+      carry = cur;
+    } else if (j == hw) {
+      m = carry >> 48;
+    }
+    if (w == tail / 8) m ^= (uint64_t)0x1F << (8 * (tail % 8));
+    if (w == RATE_WORDS - 1) m ^= (uint64_t)0x80 << 56;
+    st[w] ^= m;
+  }
+  keccak_f_thread(st);
+}
+
+// Feistel-10 forward with round r's squeeze fused to round r + 1's absorb: the words round r writes into its destination
+// half are absorbed into round r + 1's sponge from registers, so each round reads and writes one half once.
+__global__ void feistel_fused_kernel(uint8_t* x, int64_t x_stride, int64_t half, int domain, int64_t rows) {
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (n >= rows) return;
+  const int64_t hw = half / 8;
+  uint64_t* a = reinterpret_cast<uint64_t*>(x + n * x_stride);
+  uint64_t* b = a + hw;
+  const int64_t len = 8 * hw + 2;
+  const int64_t full = len / RATE;
+  const int tail = (int)(len - full * RATE);
+  const int64_t chunks = (hw + RATE_WORDS - 1) / RATE_WORDS;
+  uint64_t s[25], t[25];
+  absorb_words(s, (uint64_t)(uint8_t)domain | (1ull << 8), b, hw);
+  for (int i = 1; i <= 10; ++i) {
+    uint64_t* dst = (i % 2) ? a : b;
+    const bool next = i < 10;
+#pragma unroll
+    for (int k = 0; k < 25; ++k) t[k] = 0;
+    uint64_t carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
+    for (int64_t c = 0; c < chunks; ++c) {
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        const int64_t j = c * RATE_WORDS + w;
+        if (j < hw) {
+          const uint64_t out = dst[j] ^ s[w];
+          dst[j] = out;
+          if (c < full) t[w] ^= (out << 16) | (carry >> 48);
+          carry = out;
+        }
+      }
+      if (c + 1 < chunks) {
+        if (next && c < full) keccak_f_pair(s, t);
+        else keccak_f_thread(s);
+      } else if (next && c < full) {
+        keccak_f_thread(t);
+      }
+    }
+    if (!next) break;
+    const int64_t j0 = full * RATE_WORDS;
+    const uint64_t* src = dst;
+    uint64_t c2 = j0 > 0 ? src[j0 - 1] : ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) {
+      const int64_t j = j0 + w;
+      uint64_t m = 0;
+      if (j < hw) {
+        const uint64_t cur = src[j];
+        m = (cur << 16) | (c2 >> 48);
+        c2 = cur;
+      } else if (j == hw) {
+        m = c2 >> 48;
+      }
+      if (w == tail / 8) m ^= (uint64_t)0x1F << (8 * (tail % 8));
+      if (w == RATE_WORDS - 1) m ^= (uint64_t)0x80 << 56;
+      t[w] ^= m;
+    }
+    keccak_f_thread(t);
+#pragma unroll
+    for (int k = 0; k < 25; ++k) s[k] = t[k];
+  }
+}
+
+// feistel_fused_kernel with each row on a lane pair: in round r one lane squeezes round r's sponge and writes the destination
+// half, and its partner absorbs the words it writes (sent by shuffle) into round r + 1's sponge; the roles swap each round.  Both
+// lanes run the same Keccak code on their own state, so the pair does not diverge.
+// HALF_FIXED != 0 compiles the kernel for halves of exactly HALF_FIXED bytes, folding every bound and per-word check.
+template <int64_t HALF_FIXED>
+__global__ void feistel_pair_kernel(uint8_t* x, int64_t x_stride, int64_t half_arg, int domain, int64_t rows) {
+  const int64_t tid = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const int64_t n = tid / 2;
+  const int parity = (int)(tid & 1);
+  const bool active = n < rows;
+  const int64_t half = HALF_FIXED ? HALF_FIXED : half_arg;
+  const int64_t hw = half / 8;
+  uint64_t* a = reinterpret_cast<uint64_t*>(x + (active ? n : 0) * x_stride);
+  uint64_t* b = a + hw;
+  const int64_t len = 8 * hw + 2;
+  const int64_t full = len / RATE;
+  const int tail = (int)(len - full * RATE);
+  const int64_t chunks = (hw + RATE_WORDS - 1) / RATE_WORDS;
+  uint64_t st[25];
+#pragma unroll
+  for (int k = 0; k < 25; ++k) st[k] = 0;
+  if (parity == 1 && active) absorb_words(st, (uint64_t)(uint8_t)domain | (1ull << 8), b, hw);
+  __syncwarp();
+  for (int i = 1; i <= 10; ++i) {
+    uint64_t* dst = (i % 2) ? a : b;
+    const bool squeezer = parity == (i % 2);
+    const bool next = i < 10;
+    if (!squeezer) {
+#pragma unroll
+      for (int k = 0; k < 25; ++k) st[k] = 0;
+    }
+    uint64_t carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
+    uint64_t nxt[RATE_WORDS];
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = (squeezer && active && w < hw) ? dst[w] : 0;
+    for (int64_t c = 0; c < chunks; ++c) {
+      uint64_t cur[RATE_WORDS];
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        cur[w] = nxt[w];
+        const int64_t jn = (c + 1) * RATE_WORDS + w;
+        nxt[w] = (squeezer && active && jn < hw) ? dst[jn] : 0;
+      }
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        const int64_t j = c * RATE_WORDS + w;
+        uint64_t out = 0;
+        if (j < hw && squeezer && active) {
+          out = cur[w] ^ st[w];
+          dst[j] = out;
+        }
+        const uint64_t got = __shfl_xor_sync(0xffffffffu, out, 1);
+        if (j < hw && !squeezer && c < full) {
+          st[w] ^= (got << 16) | (carry >> 48);
+          carry = got;
+        }
+      }
+      if (c + 1 < chunks || (next && c < full)) keccak_f_thread(st);
+    }
+    __syncwarp();
+    if (!next) break;
+    if (!squeezer && active) {
+      const int64_t j0 = full * RATE_WORDS;
+      uint64_t c2 = j0 > 0 ? dst[j0 - 1] : ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        const int64_t j = j0 + w;
+        uint64_t m = 0;
+        if (j < hw) {
+          const uint64_t cur = dst[j];
+          m = (cur << 16) | (c2 >> 48);
+          c2 = cur;
+        } else if (j == hw) {
+          m = c2 >> 48;
+        }
+        if (w == tail / 8) m ^= (uint64_t)0x1F << (8 * (tail % 8));
+        if (w == RATE_WORDS - 1) m ^= (uint64_t)0x80 << 56;
+        st[w] ^= m;
+      }
+      keccak_f_thread(st);
+    }
+    __syncwarp();
+  }
+}
+
+// Moves one 17-word chunk of each of the warp's 32 rows between global and shared memory with consecutive lanes on consecutive
+// words, so a warp instruction covers a few contiguous runs of a row instead of 32 rows at once.
+__device__ __forceinline__ void chunk_load(uint64_t (*sm)[RATE_WORDS], const uint8_t* x, int64_t x_stride, int64_t off,
+                                           int64_t n0, int64_t rows, int64_t j0, int64_t hw, int lane) {
+#pragma unroll
+  for (int k = 0; k < RATE_WORDS; ++k) {
+    const int idx = k * 32 + lane;
+    const int r = idx / RATE_WORDS, w = idx % RATE_WORDS;
+    const int64_t n = n0 + r, j = j0 + w;
+    sm[r][w] = (n < rows && j < hw) ? reinterpret_cast<const uint64_t*>(x + n * x_stride)[off + j] : 0;
+  }
+}
+
+__device__ __forceinline__ void chunk_store(uint64_t (*sm)[RATE_WORDS], uint8_t* x, int64_t x_stride, int64_t off,
+                                            int64_t n0, int64_t rows, int64_t j0, int64_t hw, int lane) {
+#pragma unroll
+  for (int k = 0; k < RATE_WORDS; ++k) {
+    const int idx = k * 32 + lane;
+    const int r = idx / RATE_WORDS, w = idx % RATE_WORDS;
+    const int64_t n = n0 + r, j = j0 + w;
+    if (n < rows && j < hw) reinterpret_cast<uint64_t*>(x + n * x_stride)[off + j] = sm[r][w];
+  }
+}
+
+// Absorbs chunk c of message words (w_j << 16 | w_{j-1} >> 48, the 2-byte prefix in the first carry) into `t`, with the
+// pad10*1 of a message of 8 * hw + 2 bytes when chunk c holds its end; `carry` is the previous word.
+__device__ __forceinline__ void absorb_chunk(uint64_t t[25], const uint64_t* vals, int64_t c, int64_t hw, int64_t full, int tail,
+                                             uint64_t& carry) {
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w) {
+    const int64_t j = c * RATE_WORDS + w;
+    if (j < hw) {
+      t[w] ^= (vals[w] << 16) | (carry >> 48);
+      carry = vals[w];
+    } else if (j == hw) {
+      t[w] ^= carry >> 48;
+    }
+  }
+  if (c == full) {
+    t[tail / 8] ^= (uint64_t)0x1F << (8 * (tail % 8));
+    t[RATE_WORDS - 1] ^= (uint64_t)0x80 << 56;
+  }
+}
+
+// feistel_fused_kernel with coalesced memory: every chunk of the warp's 32 rows goes through shared memory, the next chunk's
+// load issued before the current chunk's Keccak work; the last (partial) chunk is the next sponge's final block.
+__global__ void feistel_coalesced_kernel(uint8_t* x, int64_t x_stride, int64_t half, int domain, int64_t rows) {
+  __shared__ uint64_t buf[WARPS_PER_BLOCK][2][32][RATE_WORDS];
+  const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
+  const int64_t n0 = ((int64_t)blockIdx.x * WARPS_PER_BLOCK + warp) * 32;
+  if (n0 >= rows) return;
+  const int64_t hw = half / 8;
+  const int64_t len = 8 * hw + 2;
+  const int64_t full = len / RATE;
+  const int tail = (int)(len - full * RATE);
+  const int64_t chunks = (hw + RATE_WORDS - 1) / RATE_WORDS;
+  uint64_t (*bufs[2])[RATE_WORDS] = {buf[warp][0], buf[warp][1]};
+  uint64_t s[25], t[25], vals[RATE_WORDS];
+#pragma unroll
+  for (int k = 0; k < 25; ++k) s[k] = 0;
+  uint64_t carry = ((uint64_t)(uint8_t)domain | (1ull << 8)) << 48;
+  for (int64_t c = 0; c < chunks; ++c) {
+    chunk_load(bufs[0], x, x_stride, hw, n0, rows, c * RATE_WORDS, hw, lane);
+    __syncwarp();
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) vals[w] = bufs[0][lane][w];
+    __syncwarp();
+    absorb_chunk(s, vals, c, hw, full, tail, carry);
+    keccak_f_thread(s);
+  }
+  if (chunks == full) {
+    s[0] ^= (carry >> 48) ^ ((uint64_t)0x1F << (8 * (tail % 8)));
+    s[RATE_WORDS - 1] ^= (uint64_t)0x80 << 56;
+    keccak_f_thread(s);
+  }
+  for (int i = 1; i <= 10; ++i) {
+    const int64_t off = (i % 2) ? 0 : hw;
+    const bool next = i < 10;
+#pragma unroll
+    for (int k = 0; k < 25; ++k) t[k] = 0;
+    carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
+    chunk_load(bufs[0], x, x_stride, off, n0, rows, 0, hw, lane);
+    for (int64_t c = 0; c < chunks; ++c) {
+      __syncwarp();
+      uint64_t (*cur)[RATE_WORDS] = bufs[c % 2];
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) {
+        vals[w] = cur[lane][w] ^ s[w];
+        cur[lane][w] = vals[w];
+      }
+      __syncwarp();
+      if (c + 1 < chunks) chunk_load(bufs[(c + 1) % 2], x, x_stride, off, n0, rows, (c + 1) * RATE_WORDS, hw, lane);
+      chunk_store(cur, x, x_stride, off, n0, rows, c * RATE_WORDS, hw, lane);
+      if (next) absorb_chunk(t, vals, c, hw, full, tail, carry);
+      if (c + 1 < chunks && next) keccak_f_pair(s, t);
+      else if (c + 1 < chunks) keccak_f_thread(s);
+      else if (next) keccak_f_thread(t);
+    }
+    if (!next) break;
+    if (chunks == full) {
+      t[0] ^= (carry >> 48) ^ ((uint64_t)0x1F << (8 * (tail % 8)));
+      t[RATE_WORDS - 1] ^= (uint64_t)0x80 << 56;
+      keccak_f_thread(t);
+    }
+#pragma unroll
+    for (int k = 0; k < 25; ++k) s[k] = t[k];
+  }
+}
+
+// feistel_fused_kernel over a chunk-major state: the 17 words of chunk c of half h of row r live in a 16-byte-aligned slot of
+// SLOT_WORDS words at ((h * nch + c) * pitch + r) * SLOT_WORDS, so the rows of a warp read one contiguous run per chunk (in
+// 128-bit loads) and a launch sweeps memory chunk by chunk instead of streaming every row's 131 KB at once.  The slot's last
+// word is padding.  Rows `row0 .. row0 + rows` of a state of `pitch` rows; each chunk's load is issued a chunk ahead.
+constexpr int SLOT_WORDS = 18;
+
+__device__ __forceinline__ void slot_load(const uint64_t* p, uint64_t v[RATE_WORDS]) {
+  const ulonglong2* q = reinterpret_cast<const ulonglong2*>(p);
+#pragma unroll
+  for (int k = 0; k < SLOT_WORDS / 2; ++k) {
+    const ulonglong2 x = q[k];
+    v[2 * k] = x.x;
+    if (2 * k + 1 < RATE_WORDS) v[2 * k + 1] = x.y;
+  }
+}
+
+__device__ __forceinline__ void slot_store(uint64_t* p, const uint64_t v[RATE_WORDS]) {
+  ulonglong2* q = reinterpret_cast<ulonglong2*>(p);
+#pragma unroll
+  for (int k = 0; k < SLOT_WORDS / 2; ++k) q[k] = make_ulonglong2(v[2 * k], 2 * k + 1 < RATE_WORDS ? v[2 * k + 1] : 0);
+}
+
+// HW_FIXED != 0 compiles the kernel for halves of exactly HW_FIXED words, folding every bound and per-word check.
+// Round 1's destination (half 0) holds the chain's input block X in its first `xwords` words.  With `xsrc`, those words are
+// not read from the state but from row `xidx[r]` of the row-major `xsrc` (`xwords` words per row), or are the pad block
+// 0x01 || 0 .. 0 || 0x80 where `xidx[r] < 0`: the parent gather and the pad fused into the launch.
+__device__ __forceinline__ void x_chunk_load(const uint64_t* slot, const uint64_t* xrow, int64_t c, int64_t xwords,
+                                             uint64_t v[RATE_WORDS]) {
+  slot_load(slot, v);
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w) {
+    const int64_t j = c * RATE_WORDS + w;
+    if (j < xwords) v[w] = xrow ? xrow[j] : (j == 0 ? 0x01ull : (j == xwords - 1 ? 0x80ull << 56 : 0ull));
+  }
+}
+
+// One Π₂ on row `r` of a chunk-major state (feistel_chunked_kernel's body); with `xfused`, round 1 reads X from `xrow` (the
+// pad when null) instead of the state.
+template <int64_t HW_FIXED>
+__device__ __forceinline__ void pi2_chunked_row(uint64_t* st_words, int64_t pitch, int64_t r, int64_t hw_arg, int domain,
+                                                bool xfused, const uint64_t* xrow, int64_t xwords) {
+  const int64_t hw = HW_FIXED ? HW_FIXED : hw_arg;
+  const int64_t nch = (hw + RATE_WORDS - 1) / RATE_WORDS;
+  const int64_t len = 8 * hw + 2;
+  const int64_t full = len / RATE;
+  const int tail = (int)(len - full * RATE);
+  const int64_t chunks = nch;
+#define CHUNK_AT(h, c) (st_words + (((int64_t)(h) * nch + (c)) * pitch + r) * SLOT_WORDS)
+  uint64_t s[25], t[25], vals[RATE_WORDS], nxt[RATE_WORDS];
+#pragma unroll
+  for (int k = 0; k < 25; ++k) s[k] = 0;
+  uint64_t carry = ((uint64_t)(uint8_t)domain | (1ull << 8)) << 48;
+  slot_load(CHUNK_AT(1, 0), nxt);
+  for (int64_t c = 0; c < chunks; ++c) {
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w];
+    if (c + 1 < chunks) slot_load(CHUNK_AT(1, c + 1), nxt);
+    absorb_chunk(s, vals, c, hw, full, tail, carry);
+    keccak_f_thread(s);
+  }
+  if (chunks == full) {
+    s[0] ^= (carry >> 48) ^ ((uint64_t)0x1F << (8 * (tail % 8)));
+    s[RATE_WORDS - 1] ^= (uint64_t)0x80 << 56;
+    keccak_f_thread(s);
+  }
+  for (int i = 1; i <= 10; ++i) {
+    const int h = (i % 2) ? 0 : 1;
+    const bool next = i < 10;
+#pragma unroll
+    for (int k = 0; k < 25; ++k) t[k] = 0;
+    carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i + 1) << 8)) << 48;
+    const bool fused_x = xfused && i == 1;
+    if (fused_x) x_chunk_load(CHUNK_AT(h, 0), xrow, 0, xwords, nxt);
+    else slot_load(CHUNK_AT(h, 0), nxt);
+    for (int64_t c = 0; c < chunks; ++c) {
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w] ^ s[w];
+      if (c + 1 < chunks) {
+        if (fused_x && (c + 1) * RATE_WORDS < xwords) x_chunk_load(CHUNK_AT(h, c + 1), xrow, c + 1, xwords, nxt);
+        else slot_load(CHUNK_AT(h, c + 1), nxt);
+      }
+      slot_store(CHUNK_AT(h, c), vals);
+      if (next) absorb_chunk(t, vals, c, hw, full, tail, carry);
+      if (c + 1 < chunks && next) keccak_f_pair(s, t);
+      else if (c + 1 < chunks) keccak_f_thread(s);
+      else if (next) keccak_f_thread(t);
+    }
+    if (!next) break;
+    if (chunks == full) {
+      t[0] ^= (carry >> 48) ^ ((uint64_t)0x1F << (8 * (tail % 8)));
+      t[RATE_WORDS - 1] ^= (uint64_t)0x80 << 56;
+      keccak_f_thread(t);
+    }
+#pragma unroll
+    for (int k = 0; k < 25; ++k) s[k] = t[k];
+  }
+#undef CHUNK_AT
+}
+
+template <int64_t HW_FIXED>
+__global__ void feistel_chunked_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int64_t hw_arg,
+                                       int domain, const uint64_t* xsrc, const int64_t* xidx, int64_t xwords) {
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (n >= rows) return;
+  const int64_t r = row0 + n;
+  const int64_t xi = xsrc != nullptr ? xidx[r] : -1;
+  pi2_chunked_row<HW_FIXED>(st_words, pitch, r, hw_arg, domain, xsrc != nullptr, xi >= 0 ? xsrc + xi * xwords : nullptr, xwords);
+}
+
+// Every step of rows `row0 .. row0 + rows`' chains in one launch: row `r` (block `blk[r]` at `base[r]` in the row-major `c`,
+// chain length `len[r]`) runs its `len + 1` Π₂ calls, each reading its parent C_{blk-j} (then the pad) in round 1, and writes
+// W = key ^ C_blk to row `dest[r]` of `out`.  The state must hold each row's h_0 (tag and dom) and nothing else it relies on.
+__global__ void band_chain_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* c,
+                                  const int64_t* base, const int64_t* blk, const int64_t* len, const int64_t* dest,
+                                  uint64_t* out) {
+  constexpr int64_t hw = 8196, xwords = 8192;
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (n >= rows) return;
+  const int64_t r = row0 + n;
+  const int64_t b = blk[r], L = len[r], at = base[r];
+  for (int64_t j = 1; j <= L + 1; ++j)
+    pi2_chunked_row<hw>(st_words, pitch, r, hw, domain, true, j <= L ? c + (at + b - j) * xwords : nullptr, xwords);
+  constexpr int64_t nch = (hw + RATE_WORDS - 1) / RATE_WORDS;
+  const uint64_t* crow = c + (at + b) * xwords;
+  uint64_t* orow = out + dest[r] * xwords;
+  for (int64_t ch = 0; ch * RATE_WORDS < xwords; ++ch) {
+    const uint64_t* slot = st_words + ((0 * nch + ch) * pitch + r) * SLOT_WORDS;
+    uint64_t v[RATE_WORDS];
+    slot_load(slot, v);
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) {
+      const int64_t j = ch * RATE_WORDS + w;
+      if (j < xwords) orow[j] = v[w] ^ crow[j];
+    }
+  }
+}
+
+void band_chain(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t threads, torch::Tensor c,
+                torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest, torch::Tensor out) {
+  TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
+              state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
+              "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
+  TORCH_CHECK(c.is_cuda() && c.scalar_type() == torch::kUInt8 && c.is_contiguous() && c.dim() == 2 && c.size(1) == 65536,
+              "c must be contiguous uint8 [rows, 65536]");
+  TORCH_CHECK(out.is_cuda() && out.scalar_type() == torch::kUInt8 && out.is_contiguous() && out.size(0) == state.size(2) &&
+              out.size(1) == 65536, "out must be contiguous uint8 [pitch, 65536]");
+  for (auto* t : {&base, &blk, &len, &dest})
+    TORCH_CHECK(t->is_cuda() && t->scalar_type() == torch::kInt64 && t->is_contiguous() && t->numel() == state.size(2),
+                "base, blk, len must be int64 with one entry per state row");
+  TORCH_CHECK(row0 >= 0 && rows >= 0 && row0 + rows <= state.size(2), "rows out of range");
+  if (rows == 0) return;
+  c10::cuda::CUDAGuard guard(state.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  band_chain_kernel<<<(unsigned)((rows + threads - 1) / threads), (unsigned)threads, 0, stream>>>(
+      reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
+      reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(),
+      len.data_ptr<int64_t>(), dest.data_ptr<int64_t>(), reinterpret_cast<uint64_t*>(out.data_ptr<uint8_t>()));
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+// ---- the band chain on lane pairs, persistent ----------------------------------------------------------------------------
+__device__ __forceinline__ uint32_t xor3_32(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t d;
+  asm("lop3.b32 %0, %1, %2, %3, 0x96;" : "=r"(d) : "r"(a), "r"(b), "r"(c));
+  return d;
+}
+
+__device__ __forceinline__ uint64_t xor3_64(uint64_t a, uint64_t b, uint64_t c) {
+  return ((uint64_t)xor3_32((uint32_t)(a >> 32), (uint32_t)(b >> 32), (uint32_t)(c >> 32)) << 32) |
+         xor3_32((uint32_t)a, (uint32_t)b, (uint32_t)c);
+}
+
+// The bit-interleaved form of a lane: its even bits in the low word, its odd bits in the high word.  A rotation by 2s rotates
+// both words by s, one by 2s + 1 swaps them and rotates them by s + 1 and s: theta's five rotations by one and lane 1's cost
+// one funnel shift each instead of two.  XOR, AND and NOT act on it as on the lane; a left shift by 16 shifts each word by 8.
+__host__ __device__ constexpr uint64_t il_const(uint64_t x) {
+  uint64_t e = 0, o = 0;
+  for (int i = 0; i < 32; ++i) {
+    e |= ((x >> (2 * i)) & 1) << i;
+    o |= ((x >> (2 * i + 1)) & 1) << i;
+  }
+  return e | (o << 32);
+}
+
+__constant__ uint64_t KECCAK_RC_IL[24] = {
+    il_const(0x0000000000000001ULL), il_const(0x0000000000008082ULL), il_const(0x800000000000808aULL),
+    il_const(0x8000000080008000ULL), il_const(0x000000000000808bULL), il_const(0x0000000080000001ULL),
+    il_const(0x8000000080008081ULL), il_const(0x8000000000008009ULL), il_const(0x000000000000008aULL),
+    il_const(0x0000000000000088ULL), il_const(0x0000000080008009ULL), il_const(0x000000008000000aULL),
+    il_const(0x000000008000808bULL), il_const(0x800000000000008bULL), il_const(0x8000000000008089ULL),
+    il_const(0x8000000000008003ULL), il_const(0x8000000000008002ULL), il_const(0x8000000000000080ULL),
+    il_const(0x000000000000800aULL), il_const(0x800000008000000aULL), il_const(0x8000000080008081ULL),
+    il_const(0x8000000000008080ULL), il_const(0x0000000080000001ULL), il_const(0x8000000080008008ULL)};
+
+// keccak_f⁻¹(0), the state that one Keccak-f[1600] takes to zero, in the bit-interleaved form.
+__constant__ uint64_t KECCAK_INV0_IL[25] = {
+    il_const(0xcc4d1e7d1c79203eULL), il_const(0x6b32368d50535f93ULL), il_const(0x9713d1ce0a8fb28dULL),
+    il_const(0x0470b04a7b61e14dULL), il_const(0x21552170c52cedceULL), il_const(0x5be4fcc94142d55eULL),
+    il_const(0xd9b9a48a12a1eaf5ULL), il_const(0x1f8a488af9cbdda6ULL), il_const(0x365393602d8722f6ULL),
+    il_const(0x01af24a3911bd988ULL), il_const(0x3b5553a4e4b740b6ULL), il_const(0x3afb57db8e1af00eULL),
+    il_const(0x9cd16a0661b88bebULL), il_const(0x65615c31cd1edfbcULL), il_const(0xf6afd3425b23d04bULL),
+    il_const(0x3d193dc58305b252ULL), il_const(0xb0eb3fb00ce6f58aULL), il_const(0xf8d1cc14b89e3232ULL),
+    il_const(0x0c9b488cd8d6e9f9ULL), il_const(0x4e7bee29a28abfeaULL), il_const(0x6b46aa8373a02557ULL),
+    il_const(0x4248f34262c5c631ULL), il_const(0xc77e49e623b73192ULL), il_const(0x999d4f988449fae6ULL),
+    il_const(0x798babf6870ad180ULL)};
+
+__device__ __forceinline__ uint32_t delta_swap32(uint32_t x, uint32_t m, int s) {
+  const uint32_t t = ((x >> s) ^ x) & m;
+  return x ^ t ^ (t << s);
+}
+
+// A word's even bits to its low half, its odd bits to its high half (and back).
+__device__ __forceinline__ uint32_t unshuffle32(uint32_t x) {
+  x = delta_swap32(x, 0x22222222u, 1);
+  x = delta_swap32(x, 0x0c0c0c0cu, 2);
+  x = delta_swap32(x, 0x00f000f0u, 4);
+  return delta_swap32(x, 0x0000ff00u, 8);
+}
+
+__device__ __forceinline__ uint32_t shuffle32(uint32_t x) {
+  x = delta_swap32(x, 0x0000ff00u, 8);
+  x = delta_swap32(x, 0x00f000f0u, 4);
+  x = delta_swap32(x, 0x0c0c0c0cu, 2);
+  return delta_swap32(x, 0x22222222u, 1);
+}
+
+__device__ __forceinline__ uint64_t il64(uint64_t x) {
+  const uint32_t a = unshuffle32((uint32_t)x), b = unshuffle32((uint32_t)(x >> 32));
+  return ((uint64_t)__byte_perm(a, b, 0x7632) << 32) | __byte_perm(a, b, 0x5410);
+}
+
+__device__ __forceinline__ uint64_t de_il64(uint64_t v) {
+  const uint32_t e = (uint32_t)v, o = (uint32_t)(v >> 32);
+  return ((uint64_t)shuffle32(__byte_perm(e, o, 0x7632)) << 32) | shuffle32(__byte_perm(e, o, 0x5410));
+}
+
+__device__ __forceinline__ uint32_t rotl32(uint32_t x, int n) { return n ? __funnelshift_l(x, x, n) : x; }
+
+__device__ __forceinline__ uint64_t il_rotl(uint64_t v, int r) {
+  const uint32_t e = (uint32_t)v, o = (uint32_t)(v >> 32);
+  return (r & 1) ? ((uint64_t)rotl32(e, r >> 1) << 32) | rotl32(o, (r + 1) >> 1)
+                 : ((uint64_t)rotl32(o, r >> 1) << 32) | rotl32(e, r >> 1);
+}
+
+// keccak_f_thread's round on the bit-interleaved form, theta's D folded into each lane's column update: one 3-input XOR
+// (LOP3) per 32-bit half.
+__device__ __forceinline__ void keccak_round_il(uint64_t st[25], uint64_t rc) {
+  constexpr int PI_DEST[25] = {0, 10, 20, 5, 15, 16, 1, 11, 21, 6, 7, 17, 2, 12, 22, 23, 8, 18, 3, 13, 14, 24, 9, 19, 4};
+  constexpr int RHO[25] = {0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14};
+  uint64_t bc[5];
+#pragma unroll
+  for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+#pragma unroll
+  for (int i = 0; i < 5; ++i) {
+    const uint64_t r1 = il_rotl(bc[(i + 1) % 5], 1);
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) st[j + i] = xor3_64(st[j + i], bc[(i + 4) % 5], r1);
+  }
+  uint64_t b[25];
+#pragma unroll
+  for (int s = 0; s < 25; ++s) b[PI_DEST[s]] = il_rotl(st[s], RHO[s]);
+#pragma unroll
+  for (int j = 0; j < 25; j += 5) {
+#pragma unroll
+    for (int i = 0; i < 5; ++i) st[j + i] = b[j + i] ^ ((~b[j + (i + 1) % 5]) & b[j + (i + 2) % 5]);
+  }
+  st[0] ^= rc;
+}
+
+// Rounds per iteration of keccak_f_il's round loop.
+constexpr int PAIRS_UNROLL = 8;
+
+__device__ __forceinline__ void keccak_f_il(uint64_t st[25]) {
+  static_assert(24 % PAIRS_UNROLL == 0, "PAIRS_UNROLL divides 24");
+#pragma unroll 1
+  for (int r = 0; r < 24; r += PAIRS_UNROLL) {
+#pragma unroll
+    for (int u = 0; u < PAIRS_UNROLL; ++u) keccak_round_il(st, KECCAK_RC_IL[r + u]);
+  }
+}
+
+__device__ __forceinline__ int ld_acquire_gpu(const int* p) {
+  int v;
+  asm volatile("ld.acquire.gpu.global.b32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
+  return v;
+}
+
+__device__ __forceinline__ void st_release_gpu(int* p, int v) {
+  asm volatile("st.release.gpu.global.b32 [%0], %1;" ::"l"(p), "r"(v) : "memory");
+}
+
+// A chunk as the SLOT_WORDS / 2 16-byte vectors of its slot (word w is v[w / 2].x or .y; word 17 is the slot's padding),
+// loaded in 128-bit loads.
+constexpr int SLOT_VECS = SLOT_WORDS / 2;
+
+__device__ __forceinline__ unsigned long long& chunk_word(ulonglong2 v[SLOT_VECS], int w) {
+  return (w & 1) ? v[w >> 1].y : v[w >> 1].x;
+}
+
+// slot loads and stores through L2 only: a slot another SM wrote is never read from a stale L1 line.
+__device__ __forceinline__ void slot_load_cg(const uint64_t* p, ulonglong2 v[SLOT_VECS]) {
+  const ulonglong2* q = reinterpret_cast<const ulonglong2*>(p);
+#pragma unroll
+  for (int k = 0; k < SLOT_VECS; ++k) v[k] = __ldcg(q + k);
+}
+
+// In 64-bit stores (the padding word is not written): a 128-bit store would need each pair of words in four aligned
+// registers, which ptxas buys with a MOV per register.
+__device__ __forceinline__ void slot_store_cg(uint64_t* p, ulonglong2 v[SLOT_VECS]) {
+  unsigned long long* q = reinterpret_cast<unsigned long long*>(p);
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w) __stcg(q + w, chunk_word(v, w));
+}
+
+// slot_store_cg on the lanes where `on` holds, in predicated stores: a branch around them would put a convergence barrier
+// in the chunk loop.
+__device__ __forceinline__ void slot_store_cg_if(uint64_t* p, ulonglong2 v[SLOT_VECS], bool on) {
+  unsigned long long* q = reinterpret_cast<unsigned long long*>(p);
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w)
+    asm volatile("{\n\t.reg .pred q;\n\tsetp.ne.u32 q, %2, 0;\n\t@q st.global.cg.u64 [%0], %1;\n\t}" ::"l"(q + w),
+                 "l"(chunk_word(v, w)), "r"((unsigned)on)
+                 : "memory");
+}
+
+// t ^ (s & m), one LOP3 per half (ptxas otherwise turns a mask it can prove all-or-nothing into a SEL before the XOR).
+__device__ __forceinline__ uint64_t xor_and(uint64_t t, uint64_t s, uint64_t m) {
+  uint32_t lo, hi;
+  asm("lop3.b32 %0, %1, %2, %3, 0x78;" : "=r"(lo) : "r"((uint32_t)t), "r"((uint32_t)s), "r"((uint32_t)m));
+  asm("lop3.b32 %0, %1, %2, %3, 0x78;" : "=r"(hi) : "r"((uint32_t)(t >> 32)), "r"((uint32_t)(s >> 32)), "r"((uint32_t)(m >> 32)));
+  return ((uint64_t)hi << 32) | lo;
+}
+
+// absorb_chunk for the Π₂ half of band_chain_pairs_kernel (hw = 8196: chunks 0 .. 481 hold 17 message words each, the last
+// chunk two, then the carry and the pad), in the bit-interleaved form (il_const) throughout, every word's contribution ANDed
+// with m (all ones, or zero on a lane that must not absorb), so both roles of a warp run the same instructions.
+template <bool LAST>
+__device__ __forceinline__ void absorb_masked(uint64_t t[25], ulonglong2 v[SLOT_VECS], uint64_t& carry, uint64_t m) {
+  constexpr int words = LAST ? 2 : RATE_WORDS, tail = 18;
+  auto shifted = [](uint64_t val, uint64_t c) -> uint64_t {  // (val << 16) | (c >> 48)
+    return ((uint64_t)__funnelshift_l((uint32_t)(c >> 32), (uint32_t)(val >> 32), 8) << 32) |
+           __funnelshift_l((uint32_t)c, (uint32_t)val, 8);
+  };
+#pragma unroll
+  for (int w = 0; w < words; ++w) {
+    const uint64_t val = chunk_word(v, w);
+    t[w] = xor_and(t[w], shifted(val, carry), m);
+    carry = val;
+  }
+  if (LAST) {
+    t[words] = xor_and(t[words], shifted(0, carry), m);
+    constexpr uint64_t pad = il_const((uint64_t)0x1F << (8 * (tail % 8))), end = il_const((uint64_t)0x80 << 56);
+    t[tail / 8] = xor_and(t[tail / 8], pad, m);
+    t[RATE_WORDS - 1] = xor_and(t[RATE_WORDS - 1], end, m);
+  }
+}
+
+// band_chain_kernel's chains on lane pairs: a warp holds PAIR_ROWS rows, lane l row l % 16's sponge of role l / 16, one
+// Keccak state per lane where band_chain_kernel's thread permutes two.  In a Feistel round one role squeezes (its sponge
+// absorbed the round's source half) while the other absorbs the half being written (the next round's source); role 0
+// squeezes the odd rounds.  Round 10's absorber takes half 1 under the next call's first prefix, so every call after the first
+// starts squeezing at once.  A row's final call writes W = A ^ C_blk in round 9 and has no round 10 (only half 0 is the key).
+// Persistent: the grid's warps take tasks (group g of PAIR_ROWS rows, step s) in step-major order from `next`, each waiting
+// for `done[g] >= s`.  Step 0 is the first call's first absorb; step 2j - 1 is call j's rounds 1 .. 5 and step 2j its rounds
+// 6 .. 10, so that the last tasks to run are a fifth of a call each.  Between steps the one live sponge (the last round's
+// absorber's) goes through `sponge`.  Same output as band_chain.
+// Both roles run every instruction of a chunk step but the squeezer's loads and stores: the absorber's absorb is masked to
+// nothing on the squeezer.  The absorber takes each chunk one chunk late, reading back the slot the squeezer wrote a Keccak-f
+// earlier (in the same load instructions as the squeezer's next chunk), so the pair exchanges no shuffles.  The state, the
+// slots and the sponges are in the bit-interleaved form (il_const): X is read from `cx`, the caller's interleaved copy of `c`,
+// W is converted as it is written, and the slots' initial contents are the caller's to convert (chunked_interleave_kernel).
+constexpr int PAIR_ROWS = 16;
+constexpr int PAIRS_WARPS_PER_BLOCK = 4;
+
+__global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_kernel(
+    uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* __restrict__ c,
+    const uint64_t* __restrict__ cx, const int64_t* __restrict__ base, const int64_t* __restrict__ blk,
+    const int64_t* __restrict__ len, const int64_t* __restrict__ dest, uint64_t* out, uint64_t* sponge, int* done, int* next,
+    int64_t groups, int calls) {
+  constexpr int64_t hw = 8196, xwords = 8192, nch = (hw + RATE_WORDS - 1) / RATE_WORDS, msg = 8 * hw + 2;
+  constexpr int64_t full = msg / RATE, xch = xwords / RATE_WORDS;
+  static_assert(nch == full + 1 && hw - full * RATE_WORDS == 2 && msg - full * RATE == 18,
+                "absorb_masked's layout: the last chunk holds two words, the carry, and the pad");
+  constexpr unsigned ALL = 0xffffffffu;
+  const int lane = threadIdx.x & 31, rl = lane & 15, role = lane >> 4;
+  const int64_t steps = 2 * (int64_t)calls + 1, tasks = groups * steps, cstride = pitch * SLOT_WORDS;
+  for (;;) {
+    int k = 0;
+    if (lane == 0) k = atomicAdd(next, 1);
+    k = __shfl_sync(ALL, k, 0);
+    if (k >= tasks) break;
+    const int s = (int)(k / groups), j = s == 0 ? 1 : (s + 1) / 2, part = s == 0 ? 0 : (s - 1) & 1;
+    const int64_t g = k % groups, n = g * PAIR_ROWS + rl, r = row0 + n;
+    const int64_t L = n < rows ? len[r] : -1;
+    const bool act = j <= L + 1, fin = j == L + 1, more = j <= L;
+    if (!__any_sync(ALL, act)) continue;
+    // The chunk loop's loads run on every lane, a lane past the last row reading its group's first row's slots (and never
+    // writing).
+    const int64_t ra = n < rows ? r : row0 + g * PAIR_ROWS;
+    const bool any_more = __any_sync(ALL, more), any_fin = __any_sync(ALL, fin);
+    if (s > 0) {
+      if (lane == 0)
+        while (ld_acquire_gpu(done + g) < s) __nanosleep(64);
+      __syncwarp();
+    }
+#define SLOT_AT(h, cc, row) (st_words + (((int64_t)(h) * nch + (cc)) * pitch + (row)) * SLOT_WORDS)
+    // v: a chunk's source, loaded a Keccak-f ahead of its use (after the previous chunk's absorb), and the chunk written,
+    // computed in place.
+    uint64_t x[25];
+    ulonglong2 v[SLOT_VECS];
+#pragma unroll
+    for (int w = 0; w < 25; ++w) x[w] = 0;
+#pragma unroll
+    for (int k2 = 0; k2 < SLOT_VECS; ++k2) v[k2] = make_ulonglong2(0, 0);
+    uint64_t* sp = sponge + (g * PAIR_ROWS + rl) * 25;
+    // keep: this step's last absorber's sponge, which the next step's first squeezer loads.
+    int keeper = 0;
+    if (s == 0) {  // the first call's first absorb (half 1 under prefix 1), on role 0 alone
+      const uint64_t m = role == 0 ? ~0ull : 0;
+      uint64_t carry = il64(((uint64_t)(uint8_t)domain | (1ull << 8)) << 48);
+      const uint64_t* p = SLOT_AT(1, 0, r);
+      if (role == 0 && act) slot_load_cg(p, v);
+      for (int64_t cc = 0; cc < nch; ++cc) {
+        if (cc < full) absorb_masked<false>(x, v, carry, m);
+        else absorb_masked<true>(x, v, carry, m);
+        p += cstride;
+        if (role == 0 && act && cc + 1 < nch) slot_load_cg(p, v);
+        keccak_f_il(x);
+      }
+    }
+    const int rounds = s == 0 ? 0 : any_more ? 10 : 9, i0 = part ? 6 : 1, i1 = s == 0 ? 0 : part ? rounds : 5;
+    if (s > 0 && role == ((i0 & 1) ? 0 : 1) && act) {
+#pragma unroll
+      for (int w = 0; w < 25; ++w) x[w] = __ldcg(sp + w);
+    }
+    if (s > 0) keeper = (i1 & 1) ? 1 : 0;
+    const uint64_t* xrow = more ? cx + (base[r] + blk[r] - j) * xwords : nullptr;
+    const uint64_t* crow = fin ? c + (base[r] + blk[r]) * xwords : nullptr;
+    uint64_t* orow = fin ? out + dest[r] * xwords : nullptr;
+    for (int i = i0; i <= i1; ++i) {
+      const int h = (i & 1) ? 0 : 1;
+      const bool sq = role == ((i & 1) ? 0 : 1), x_in = i == 1, to_out = fin && i == 9, st = act && (i <= 8 || more);
+      const uint64_t m = sq ? 0 : ~0ull;
+      uint64_t carry = il64(((uint64_t)(uint8_t)domain | ((uint64_t)(i == 10 ? 1 : i + 1) << 8)) << 48);
+      // X as read (interleaved); the pad's words are their own interleaved forms.
+      auto xword = [&](int64_t jj) -> uint64_t {
+        return xrow ? __ldg(xrow + jj) : jj == 0 ? 0x01ull : (jj == xwords - 1 ? 0x80ull << 56 : 0ull);
+      };
+      auto src = [&](int64_t cc, const uint64_t* p, ulonglong2 d[SLOT_VECS]) {
+        if (x_in && cc < xch) {
+#pragma unroll
+          for (int k2 = 0; k2 < SLOT_VECS; ++k2) {
+            const int64_t jj = cc * RATE_WORDS + 2 * k2;
+            d[k2] = make_ulonglong2(xword(jj), 2 * k2 + 1 < RATE_WORDS ? xword(jj + 1) : 0);
+          }
+        } else {
+          slot_load_cg(p, d);
+          if (x_in && cc == xch) {
+#pragma unroll
+            for (int w = 0; w < RATE_WORDS; ++w) {
+              const int64_t jj = cc * RATE_WORDS + w;
+              if (jj < xwords) chunk_word(d, w) = xword(jj);
+            }
+          }
+        }
+      };
+      uint64_t* p = SLOT_AT(h, 0, ra);  // chunk cc's slot, then (once stored) cc + 1's
+      if (sq && act) src(0, p, v);
+      auto produce = [&](int64_t cc) {  // the squeezer's chunk cc, written
+#pragma unroll
+        for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) ^= x[w];
+        if (sq && act) {
+          if (to_out) {
+#pragma unroll
+            for (int w = 0; w < RATE_WORDS; ++w) {
+              const int64_t jj = cc * RATE_WORDS + w;
+              if (jj < xwords) orow[jj] = de_il64(chunk_word(v, w)) ^ __ldg(crow + jj);
+            }
+          } else if (st) {
+            slot_store_cg(p, v);
+          }
+        }
+      };
+      // The absorber takes chunk cc - 1 in step cc, so a round is nch + 1 steps.  Its sponge starts as keccak_f⁻¹(0), which
+      // step 0 (absorbing nothing) takes to zero, so that only the last step differs from the rest: the rounds that read X
+      // or may write W run `produce`'s branches, the others predicated stores and no branch.
+#pragma unroll
+      for (int w = 0; w < 25; ++w) x[w] = sq ? x[w] : KECCAK_INV0_IL[w];
+      const uint64_t carry0 = carry;
+      auto chunk_steps = [&](auto plain) {
+        constexpr bool PLAIN = decltype(plain)::value;
+#pragma unroll 1
+        for (int64_t cc = 0; cc < nch; ++cc) {
+          absorb_masked<false>(x, v, carry, cc > 0 ? m : 0);
+          carry = cc > 0 ? carry : carry0;
+          if constexpr (PLAIN) {
+#pragma unroll
+            for (int w = 0; w < RATE_WORDS; ++w) chunk_word(v, w) ^= x[w];
+            slot_store_cg_if(p, v, sq && st);
+          } else {
+            produce(cc);
+          }
+          __syncwarp();
+          if (!PLAIN && x_in && cc + 1 <= xch) {
+            if (sq) src(cc + 1, p + cstride, v);
+            else slot_load_cg(p, v);
+          } else {
+            slot_load_cg(sq && cc + 1 < nch ? p + cstride : p, v);
+          }
+          p += cstride;
+          keccak_f_il(x);
+        }
+      };
+      if (x_in || (i == 9 && any_fin)) chunk_steps(std::false_type{});
+      else chunk_steps(std::true_type{});
+      absorb_masked<true>(x, v, carry, m);
+      keccak_f_il(x);
+    }
+#undef SLOT_AT
+    if (s == 0 || part == 0 || any_more) {
+      if (role == keeper && (s == 0 || part == 0 ? act : more)) {
+#pragma unroll
+        for (int w = 0; w < 25; ++w) __stcg(sp + w, x[w]);
+      }
+      __threadfence();
+      __syncwarp();
+      if (lane == 0) st_release_gpu(done + g, s + 1);
+    }
+  }
+}
+
+// Words 0 .. 16 of chunks c0 .. nch - 1 of both halves of rows row0 .. row0 + rows - 1 into the bit-interleaved form, in place.
+__global__ void chunked_interleave_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int64_t nch,
+                                          int64_t c0) {
+  const int64_t per_chunk = rows * RATE_WORDS, per_half = (nch - c0) * per_chunk;
+  for (int64_t t = (int64_t)blockIdx.x * blockDim.x + threadIdx.x; t < 2 * per_half; t += (int64_t)gridDim.x * blockDim.x) {
+    const int64_t h = t / per_half, cc = c0 + t % per_half / per_chunk, n = t % per_chunk / RATE_WORDS, w = t % RATE_WORDS;
+    uint64_t* q = st_words + ((h * nch + cc) * pitch + row0 + n) * SLOT_WORDS + w;
+    *q = il64(*q);
+  }
+}
+
+// dst = the bit-interleaved form of src, word by word (n16 16-byte pairs of words).
+__global__ void il64_copy_kernel(const ulonglong2* __restrict__ src, ulonglong2* __restrict__ dst, int64_t n16) {
+  for (int64_t t = (int64_t)blockIdx.x * blockDim.x + threadIdx.x; t < n16; t += (int64_t)gridDim.x * blockDim.x) {
+    const ulonglong2 v = __ldcs(src + t);
+    __stcs(dst + t, make_ulonglong2(il64(v.x), il64(v.y)));
+  }
+}
+
+// band_chain in one persistent launch of band_chain_pairs_kernel, one block of PAIRS_WARPS_PER_BLOCK warps per SM (a warp per
+// scheduler).  Chunks interleave_from .. 482 of both halves are converted to the bit-interleaved form first: every word of
+// the earlier chunks must be zero (its own interleaved form), as `_Chunked`'s puts leave them.  X is read from an interleaved
+// copy of c, made first (c.numel() more bytes of device memory), so that each C row is converted once rather than once for
+// every row whose chain absorbs it.
+void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t calls, torch::Tensor c,
+                      torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest, torch::Tensor out,
+                      int64_t interleave_from) {
+  TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
+              state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
+              "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
+  TORCH_CHECK(c.is_cuda() && c.scalar_type() == torch::kUInt8 && c.is_contiguous() && c.dim() == 2 && c.size(1) == 65536,
+              "c must be contiguous uint8 [rows, 65536]");
+  TORCH_CHECK(reinterpret_cast<uintptr_t>(c.data_ptr()) % 16 == 0, "c must be 16-byte aligned");
+  TORCH_CHECK(out.is_cuda() && out.scalar_type() == torch::kUInt8 && out.is_contiguous() && out.size(0) == state.size(2) &&
+              out.size(1) == 65536, "out must be contiguous uint8 [pitch, 65536]");
+  for (auto* t : {&base, &blk, &len, &dest})
+    TORCH_CHECK(t->is_cuda() && t->scalar_type() == torch::kInt64 && t->is_contiguous() && t->numel() == state.size(2),
+                "base, blk, len must be int64 with one entry per state row");
+  TORCH_CHECK(row0 >= 0 && rows >= 0 && row0 + rows <= state.size(2), "rows out of range");
+  TORCH_CHECK(calls >= 1, "calls: the longest chain's calls (its length + 1)");
+  TORCH_CHECK(interleave_from >= 0 && interleave_from <= state.size(1), "interleave_from: a chunk index");
+  if (rows == 0) return;
+  c10::cuda::CUDAGuard guard(state.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  int sms = 0;
+  C10_CUDA_CHECK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, state.get_device()));
+  const int64_t groups = (rows + PAIR_ROWS - 1) / PAIR_ROWS;
+  TORCH_CHECK(groups * (2 * calls + 1) < (1ll << 30), "too many tasks");
+  auto ctl = torch::zeros({groups + 1}, state.options().dtype(torch::kInt32));
+  auto sponge = torch::empty({groups * PAIR_ROWS * 25}, state.options());
+  auto cx = torch::empty_like(c);
+  il64_copy_kernel<<<(unsigned)sms * 4, 256, 0, stream>>>(reinterpret_cast<const ulonglong2*>(c.data_ptr<uint8_t>()),
+                                                         reinterpret_cast<ulonglong2*>(cx.data_ptr<uint8_t>()), c.numel() / 16);
+  if (interleave_from < state.size(1))
+    chunked_interleave_kernel<<<(unsigned)sms * 4, 256, 0, stream>>>(reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()),
+                                                                    state.size(2), row0, rows, state.size(1), interleave_from);
+  band_chain_pairs_kernel<<<(unsigned)sms, 32u * PAIRS_WARPS_PER_BLOCK, 0, stream>>>(
+      reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
+      reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), reinterpret_cast<const uint64_t*>(cx.data_ptr<uint8_t>()),
+      base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(), len.data_ptr<int64_t>(), dest.data_ptr<int64_t>(),
+      reinterpret_cast<uint64_t*>(out.data_ptr<uint8_t>()), reinterpret_cast<uint64_t*>(sponge.data_ptr<int64_t>()),
+      ctl.data_ptr<int>(), ctl.data_ptr<int>() + groups, groups, (int)calls);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+// A Keccak-f[1600] state split across a lane pair: lane parity h holds bits 32h .. 32h + 31 of every 64-bit word.  A 64-bit
+// rotation is one shuffle for the partner's half and one funnel shift, written the same on both lanes, so the pair never
+// diverges; XOR, AND and NOT act on the halves alone.  `half_rot` is rotl64 of (mine, other) restricted to this lane's half.
+__device__ __forceinline__ uint32_t half_rot(uint32_t mine, int r) {
+  const uint32_t other = __shfl_xor_sync(0xffffffffu, mine, 1);
+  if (r == 0) return mine;
+  if (r < 32) return __funnelshift_l(other, mine, r);
+  if (r == 32) return other;
+  return __funnelshift_l(mine, other, r - 32);
+}
+
+// One split state.
+__device__ __forceinline__ void keccak_f_split(uint32_t s[25], int h) {
+  const int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
+  const int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
+#pragma unroll 1
+  for (int r = 0; r < 24; ++r) {
+    uint32_t bs[5];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) bs[i] = s[i] ^ s[i + 5] ^ s[i + 10] ^ s[i + 15] ^ s[i + 20];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      const uint32_t ds = bs[(i + 4) % 5] ^ half_rot(bs[(i + 1) % 5], 1);
+#pragma unroll
+      for (int j = 0; j < 25; j += 5) s[j + i] ^= ds;
+    }
+    uint32_t us = s[1];
+#pragma unroll
+    for (int i = 0; i < 24; ++i) {
+      const int j = piln[i];
+      const uint32_t s0 = s[j];
+      s[j] = half_rot(us, rotc[i]);
+      us = s0;
+    }
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) {
+      uint32_t a[5];
+#pragma unroll
+      for (int i = 0; i < 5; ++i) a[i] = s[j + i];
+#pragma unroll
+      for (int i = 0; i < 5; ++i) s[j + i] ^= (~a[(i + 1) % 5]) & a[(i + 2) % 5];
+    }
+    s[0] ^= (uint32_t)(KECCAK_RC[r] >> (32 * h));
+  }
+}
+
+// Two split states (`s`, `t`) permuted in one round loop, their instructions interleaved.
+__device__ __forceinline__ void keccak_f_split_pair(uint32_t s[25], uint32_t t[25], int h) {
+  const int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
+  const int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
+#pragma unroll 1
+  for (int r = 0; r < 24; ++r) {
+    uint32_t bs[5], bt[5];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      bs[i] = s[i] ^ s[i + 5] ^ s[i + 10] ^ s[i + 15] ^ s[i + 20];
+      bt[i] = t[i] ^ t[i + 5] ^ t[i + 10] ^ t[i + 15] ^ t[i + 20];
+    }
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      const uint32_t ds = bs[(i + 4) % 5] ^ half_rot(bs[(i + 1) % 5], 1);
+      const uint32_t dt = bt[(i + 4) % 5] ^ half_rot(bt[(i + 1) % 5], 1);
+#pragma unroll
+      for (int j = 0; j < 25; j += 5) {
+        s[j + i] ^= ds;
+        t[j + i] ^= dt;
+      }
+    }
+    uint32_t us = s[1], ut = t[1];
+#pragma unroll
+    for (int i = 0; i < 24; ++i) {
+      const int j = piln[i];
+      const uint32_t s0 = s[j], t0 = t[j];
+      s[j] = half_rot(us, rotc[i]);
+      t[j] = half_rot(ut, rotc[i]);
+      us = s0;
+      ut = t0;
+    }
+#pragma unroll
+    for (int j = 0; j < 25; j += 5) {
+      uint32_t a[5], c[5];
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        a[i] = s[j + i];
+        c[i] = t[j + i];
+      }
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        s[j + i] ^= (~a[(i + 1) % 5]) & a[(i + 2) % 5];
+        t[j + i] ^= (~c[(i + 1) % 5]) & c[(i + 2) % 5];
+      }
+    }
+    const uint32_t rc = (uint32_t)(KECCAK_RC[r] >> (32 * h));
+    s[0] ^= rc;
+    t[0] ^= rc;
+  }
+}
+
+// Absorbs message words (w_j << 16 | w_{j-1} >> 48) of chunk c into this lane's half of `t`: the low half needs the partner's
+// previous high half, the high half the partner's current low half, so each lane sends (low: current, high: previous) and
+// both compute (cur << 16) | (got >> 16).  `prev` is this lane's half of the previous word; padding as absorb_chunk.
+__device__ __forceinline__ void absorb_chunk_split(uint32_t t[25], const uint32_t* vals, int64_t c, int64_t hw, int64_t full,
+                                                   int tail, uint32_t& prev, int h) {
+#pragma unroll
+  for (int w = 0; w < RATE_WORDS; ++w) {
+    const int64_t j = c * RATE_WORDS + w;
+    const uint32_t cur = j < hw ? vals[w] : 0;
+    const uint32_t got = __shfl_xor_sync(0xffffffffu, h == 0 ? cur : prev, 1);
+    if (j <= hw) t[w] ^= (cur << 16) | (got >> 16);
+    prev = cur;
+  }
+  if (c == full) {
+    const int pad_word = tail / 8, pad_byte = tail % 8;
+    if ((pad_byte >= 4) == (h == 1)) t[pad_word] ^= (uint32_t)0x1F << (8 * (pad_byte % 4));
+    if (h == 1) t[RATE_WORDS - 1] ^= (uint32_t)0x80 << 24;
+  }
+}
+
+// feistel_chunked_kernel<8196> with every state split across a lane pair (keccak_f_split_pair): twice the threads per row,
+// half the registers per thread.  Same chunk-major slots; each lane reads and writes its 32-bit halves of the slot's words.
+__global__ void feistel_split_kernel(uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain) {
+  constexpr int64_t hw = 8196;
+  const int64_t tid = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const int64_t n = tid / 2;
+  const int h = (int)(tid & 1);
+  const bool active = n < rows;
+  const int64_t r = row0 + (active ? n : 0);
+  constexpr int64_t nch = (hw + RATE_WORDS - 1) / RATE_WORDS;
+  constexpr int64_t len = 8 * hw + 2;
+  constexpr int64_t full = len / RATE;
+  constexpr int tail = (int)(len - full * RATE);
+  constexpr int64_t chunks = nch;
+  uint32_t* halves = reinterpret_cast<uint32_t*>(st_words);
+#define HALF_AT(hh, c) (halves + ((((int64_t)(hh) * nch + (c)) * pitch + r) * SLOT_WORDS) * 2 + h)
+  uint32_t s[25], t[25], vals[RATE_WORDS], nxt[RATE_WORDS];
+#pragma unroll
+  for (int k = 0; k < 25; ++k) s[k] = 0;
+  const uint32_t pre1 = (uint32_t)(uint8_t)domain | (1u << 8);
+  uint32_t prev = h == 1 ? pre1 << 16 : 0;
+  {
+    const uint32_t* p0 = HALF_AT(1, 0);
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = p0[2 * w];
+  }
+  for (int64_t c = 0; c < chunks; ++c) {
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w];
+    if (c + 1 < chunks) {
+      const uint32_t* pn = HALF_AT(1, c + 1);
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = pn[2 * w];
+    }
+    absorb_chunk_split(s, vals, c, hw, full, tail, prev, h);
+    keccak_f_split(s, h);
+  }
+  for (int i = 1; i <= 10; ++i) {
+    const int hh = (i % 2) ? 0 : 1;
+    const bool next = i < 10;
+#pragma unroll
+    for (int k = 0; k < 25; ++k) t[k] = 0;
+    const uint32_t pre = (uint32_t)(uint8_t)domain | ((uint32_t)(i + 1) << 8);
+    prev = h == 1 ? pre << 16 : 0;
+    {
+      const uint32_t* p0 = HALF_AT(hh, 0);
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = p0[2 * w];
+    }
+    for (int64_t c = 0; c < chunks; ++c) {
+#pragma unroll
+      for (int w = 0; w < RATE_WORDS; ++w) vals[w] = nxt[w] ^ s[w];
+      if (c + 1 < chunks) {
+        const uint32_t* pn = HALF_AT(hh, c + 1);
+#pragma unroll
+        for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = pn[2 * w];
+      }
+      uint32_t* dst = HALF_AT(hh, c);
+      if (active) {
+#pragma unroll
+        for (int w = 0; w < RATE_WORDS; ++w)
+          if (c * RATE_WORDS + w < hw) dst[2 * w] = vals[w];
+      }
+      if (next) absorb_chunk_split(t, vals, c, hw, full, tail, prev, h);
+      if (c + 1 < chunks && next) keccak_f_split_pair(s, t, h);
+      else if (c + 1 < chunks) keccak_f_split(s, h);
+      else if (next) keccak_f_split(t, h);
+    }
+    if (!next) break;
+#pragma unroll
+    for (int k = 0; k < 25; ++k) s[k] = t[k];
+  }
+#undef HALF_AT
+}
+
+// Π₂ (untweaked Feistel-10, domain `domain`) on rows `row0 .. row0 + rows` of a chunk-major state (`feistel_chunked_kernel`):
+// `state` is int64 `[2, nch, pitch, SLOT_WORDS]` for halves of `hw` words.
+void feistel_chunked(torch::Tensor state, int64_t row0, int64_t rows, int64_t hw, int64_t domain, int64_t threads,
+                     bool specialize, bool split, c10::optional<torch::Tensor> xsrc, c10::optional<torch::Tensor> xidx) {
+  const uint64_t* xs = nullptr;
+  const int64_t* xi = nullptr;
+  int64_t xwords = 0;
+  if (xsrc.has_value()) {
+    TORCH_CHECK(!split, "the fused parent read is not in the split kernel");
+    TORCH_CHECK(xsrc->is_cuda() && xsrc->scalar_type() == torch::kUInt8 && xsrc->is_contiguous() && xsrc->dim() == 2 &&
+                xsrc->size(1) % 8 == 0 && xsrc->size(1) / 8 <= hw, "xsrc must be contiguous uint8 [rows, 8k]");
+    TORCH_CHECK(xidx.has_value() && xidx->is_cuda() && xidx->scalar_type() == torch::kInt64 && xidx->is_contiguous() &&
+                xidx->numel() == state.size(2), "xidx must be int64 with one entry per state row");
+    xs = reinterpret_cast<const uint64_t*>(xsrc->data_ptr<uint8_t>());
+    xi = xidx->data_ptr<int64_t>();
+    xwords = xsrc->size(1) / 8;
+  }
+  TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
+              state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (hw + RATE_WORDS - 1) / RATE_WORDS &&
+              reinterpret_cast<uintptr_t>(state.data_ptr<int64_t>()) % 16 == 0,
+              "state must be contiguous, 16-byte-aligned int64 [2, nch, pitch, SLOT_WORDS]");
+  TORCH_CHECK(row0 >= 0 && rows >= 0 && row0 + rows <= state.size(2), "rows out of range");
+  if (rows == 0) return;
+  c10::cuda::CUDAGuard guard(state.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  TORCH_CHECK(threads >= 32 && threads <= 1024 && threads % 32 == 0, "threads must be a multiple of 32");
+  const unsigned blocks = (unsigned)((rows + threads - 1) / threads);
+  uint64_t* words = reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>());
+  if (split && hw == 8196) {
+    feistel_split_kernel<<<(unsigned)((2 * rows + threads - 1) / threads), (unsigned)threads, 0, stream>>>(
+        words, state.size(2), row0, rows, (int)domain);
+  } else if (specialize && hw == 8196)
+    feistel_chunked_kernel<8196><<<blocks, (unsigned)threads, 0, stream>>>(words, state.size(2), row0, rows, hw, (int)domain,
+                                                                            xs, xi, xwords);
+  else
+    feistel_chunked_kernel<0><<<blocks, (unsigned)threads, 0, stream>>>(words, state.size(2), row0, rows, hw, (int)domain, xs,
+                                                                         xi, xwords);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+// Rows `row0 + n` of a chunk-major state (`feistel_chunked_kernel`'s layout) take the first `words` words of half 0 from
+// row `index[n]` of the row-major `src` (`src_words` words per row): the parent gather and the transpose in one pass.
+__global__ void chunked_gather_kernel(uint64_t* st_words, int64_t nch, int64_t pitch, int64_t row0, const uint64_t* src,
+                                      int64_t src_words, const int64_t* index, int64_t n_rows, int64_t words) {
+  const int64_t t = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const int64_t n = t / words, j = t % words;
+  if (n >= n_rows) return;
+  const int64_t c = j / RATE_WORDS, w = j % RATE_WORDS;
+  st_words[(c * pitch + row0 + n) * SLOT_WORDS + w] = src[index[n] * src_words + j];
+}
+
+void chunked_gather(torch::Tensor state, int64_t row0, torch::Tensor src, torch::Tensor index, int64_t words) {
+  TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
+              state.size(3) == SLOT_WORDS, "state must be contiguous int64 [2, nch, pitch, SLOT_WORDS]");
+  TORCH_CHECK(src.is_cuda() && src.scalar_type() == torch::kUInt8 && src.is_contiguous() && src.dim() == 2 &&
+              src.size(1) % 8 == 0 && words * 8 <= src.size(1), "src must be contiguous uint8 [rows, 8k]");
+  TORCH_CHECK(index.is_cuda() && index.scalar_type() == torch::kInt64 && index.is_contiguous(), "index must be int64");
+  const int64_t n_rows = index.numel();
+  TORCH_CHECK(row0 >= 0 && row0 + n_rows <= state.size(2), "rows out of range");
+  if (n_rows == 0) return;
+  c10::cuda::CUDAGuard guard(state.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  const int64_t total = n_rows * words;
+  const int threads = 256;
+  chunked_gather_kernel<<<(unsigned)((total + threads - 1) / threads), threads, 0, stream>>>(
+      reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(1), state.size(2), row0,
+      reinterpret_cast<const uint64_t*>(src.data_ptr<uint8_t>()), src.size(1) / 8, index.data_ptr<int64_t>(), n_rows, words);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+// Pure-register Keccak-f throughput: each thread permutes one (`mode` 1) or two interleaved (`mode` 2) independent states
+// `iters` times with no memory traffic, so the rate is the round code's own ceiling at that thread count (issue rate and
+// dependency latency only).  `out[n]` keeps the result live.
+__global__ void keccak_bench_kernel(uint64_t* out, int64_t threads, int64_t iters, int mode) {
+  const int64_t n = (int64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (mode == 3) {
+    // one state split across the lane pair (2n, 2n + 1): `threads` counts states, so 2 * threads lanes run
+    const int64_t state = n / 2;
+    const int h = (int)(n & 1);
+    uint32_t sp[25];
+#pragma unroll
+    for (int i = 0; i < 25; ++i) sp[i] = (uint32_t)((uint64_t)state * 0x9E3779B97F4A7C15ull + (uint64_t)i) ^ (h ? 0x85EBCA6Bu : 0u);
+    for (int64_t it = 0; it < iters; ++it) keccak_f_split(sp, h);
+    uint32_t acc = 0;
+#pragma unroll
+    for (int i = 0; i < 25; ++i) acc ^= sp[i];
+    if (state < threads) out[n] = acc;
+    return;
+  }
+  if (n >= threads) return;
+  uint64_t s[25], t[25];
+#pragma unroll
+  for (int i = 0; i < 25; ++i) {
+    s[i] = (uint64_t)n * 0x9E3779B97F4A7C15ull + (uint64_t)i;
+    t[i] = s[i] ^ 0xC2B2AE3D27D4EB4Full;
+  }
+  if (mode == 1) {
+    for (int64_t it = 0; it < iters; ++it) keccak_f_thread(s);
+  } else {
+    for (int64_t it = 0; it < iters; ++it) keccak_f_pair(s, t);
+  }
+  uint64_t acc = 0;
+#pragma unroll
+  for (int i = 0; i < 25; ++i) acc ^= s[i] ^ t[i];
+  out[n] = acc;
+}
+
+void keccak_bench(torch::Tensor out, int64_t threads, int64_t iters, int64_t mode, int64_t block) {
+  TORCH_CHECK(out.is_cuda() && out.scalar_type() == torch::kInt64 && out.numel() >= (mode == 3 ? 2 : 1) * threads,
+              "out must be int64 [threads], or [2 threads] for the split mode");
+  c10::cuda::CUDAGuard guard(out.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  const int64_t lanes = mode == 3 ? 2 * threads : threads;
+  keccak_bench_kernel<<<(unsigned)((lanes + block - 1) / block), (unsigned)block, 0, stream>>>(
+      reinterpret_cast<uint64_t*>(out.data_ptr<int64_t>()), threads, iters, (int)mode);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+static void check_rows(const torch::Tensor& t, const char* name, int64_t rows) {
+  TORCH_CHECK(t.is_cuda() && t.scalar_type() == torch::kUInt8 && t.dim() == 2, name, " must be a 2-D uint8 CUDA tensor");
+  TORCH_CHECK(t.size(0) == rows || (t.size(0) == 1 && t.stride(0) == 0) || t.size(1) == 0, name, " has the wrong row count");
+  TORCH_CHECK(t.size(1) == 0 || t.stride(1) == 1, name, " rows must be contiguous");
+}
+
+static unsigned grid_of(int64_t rows) { return (unsigned)((rows + WARPS_PER_BLOCK - 1) / WARPS_PER_BLOCK); }
+
+// out (^)= SHAKE256(prefix || body)[0:out.size(1)] row by row, on the current stream.  `prefix` may have stride(0) == 0.
+void shake256_rows(torch::Tensor prefix, torch::Tensor body, torch::Tensor out, bool xor_out) {
+  const int64_t rows = out.size(0);
+  check_rows(prefix, "prefix", rows);
+  check_rows(body, "body", rows);
+  check_rows(out, "out", rows);
+  if (rows == 0) return;
+  const c10::cuda::CUDAGuard guard(out.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  shake256_kernel<<<grid_of(rows), 32 * WARPS_PER_BLOCK, 0, stream>>>(
+      prefix.size(1) ? prefix.data_ptr<uint8_t>() : nullptr, (int)prefix.size(1), prefix.size(0) == 1 ? 0 : prefix.stride(0),
+      body.data_ptr<uint8_t>(), body.size(1), body.stride(0), out.data_ptr<uint8_t>(), out.size(1), out.stride(0),
+      xor_out ? 1 : 0, rows);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+// Feistel-10 in place on the rows of x ([R, 2h]) with round functions SHAKE256(domain || u8(i) || tweak[r] || .): one warp
+// per row below `thread_rows` rows (latency), one thread per row from there (throughput).
+void feistel_rows(torch::Tensor x, torch::Tensor tweak, int64_t domain, bool inverse, int64_t thread_rows, bool word_io,
+                  bool fused, bool pair, int64_t pair_max_rows, bool coalesced) {
+  const int64_t rows = x.size(0);
+  check_rows(x, "x", rows);
+  check_rows(tweak, "tweak", rows);
+  TORCH_CHECK(x.size(1) % 2 == 0, "a balanced Feistel network needs an even width");
+  TORCH_CHECK(tweak.size(1) <= MAX_TWEAK, "tweak longer than ", MAX_TWEAK, " bytes");
+  if (rows == 0) return;
+  const c10::cuda::CUDAGuard guard(x.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  const bool words = word_io && tweak.size(1) == 0 && x.size(1) % 16 == 0 && x.stride(0) % 8 == 0 &&
+                     reinterpret_cast<uintptr_t>(x.data_ptr<uint8_t>()) % 8 == 0;
+  if (thread_rows > 0 && rows >= thread_rows && words && fused && coalesced && !inverse &&
+      !(pair && rows < pair_max_rows)) {
+    feistel_coalesced_kernel<<<(unsigned)((rows + 32 * WARPS_PER_BLOCK - 1) / (32 * WARPS_PER_BLOCK)), 32 * WARPS_PER_BLOCK, 0,
+                               stream>>>(x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, (int)domain, rows);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return;
+  }
+  if (thread_rows > 0 && rows >= thread_rows && words && fused && pair && rows < pair_max_rows && !inverse) {
+    const int threads = 128;
+    const unsigned blocks = (unsigned)((2 * rows + threads - 1) / threads);
+    if (x.size(1) / 2 == 65568)
+      feistel_pair_kernel<65568><<<blocks, threads, 0, stream>>>(x.data_ptr<uint8_t>(), x.stride(0), 65568, (int)domain, rows);
+    else
+      feistel_pair_kernel<0><<<blocks, threads, 0, stream>>>(x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, (int)domain, rows);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return;
+  }
+  if (thread_rows > 0 && rows >= thread_rows && words && fused && !inverse) {
+    const int threads = 128;
+    feistel_fused_kernel<<<(unsigned)((rows + threads - 1) / threads), threads, 0, stream>>>(
+        x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, (int)domain, rows);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return;
+  }
+  if (thread_rows > 0 && rows >= thread_rows && words) {
+    const int threads = 128;
+    feistel_words_kernel<<<(unsigned)((rows + threads - 1) / threads), threads, 0, stream>>>(
+        x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, (int)domain, inverse ? 1 : 0, rows);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return;
+  }
+  if (thread_rows > 0 && rows >= thread_rows) {
+    const int threads = 128;
+    feistel_thread_kernel<<<(unsigned)((rows + threads - 1) / threads), threads, 0, stream>>>(
+        x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, tweak.size(1) ? tweak.data_ptr<uint8_t>() : nullptr,
+        (int)tweak.size(1), tweak.size(0) == 1 ? 0 : tweak.stride(0), (int)domain, inverse ? 1 : 0, rows);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return;
+  }
+  feistel_kernel<<<grid_of(rows), 32 * WARPS_PER_BLOCK, 0, stream>>>(
+      x.data_ptr<uint8_t>(), x.stride(0), x.size(1) / 2, tweak.size(1) ? tweak.data_ptr<uint8_t>() : nullptr, (int)tweak.size(1),
+      tweak.size(0) == 1 ? 0 : tweak.stride(0), (int)domain, inverse ? 1 : 0, rows);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+// ---- the audit responder ----------------------------------------------------------------------------------------------
+// Wire (little-endian): request = u64 op, u64 arg.  op 1 = challenge block `arg`, op 2 = ping (no device work), op 3 = close.
+// Response = u64 status (0 ok, 1 index out of range, 2 CUDA error), u64 device_ns (copy start to end event), u64 server_ns
+// (request received to response ready), then `block_bytes` payload bytes.
+
+// The connection is non-blocking and polled: the thread never sleeps on the socket, so no wake-up sits on the answer's path.
+static bool read_all(int fd, void* buf, size_t n, const std::atomic<bool>& running) {
+  auto* p = static_cast<uint8_t*>(buf);
+  while (n) {
+    ssize_t r = ::recv(fd, p, n, MSG_DONTWAIT);
+    if (r > 0) {
+      p += r;
+      n -= (size_t)r;
+    } else if (r == 0 || (errno != EAGAIN && errno != EWOULDBLOCK) || !running.load(std::memory_order_relaxed)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool write_all(int fd, const void* buf, size_t n) {
+  auto* p = static_cast<const uint8_t*>(buf);
+  while (n) {
+    ssize_t r = ::send(fd, p, n, MSG_NOSIGNAL | MSG_DONTWAIT);
+    if (r > 0) {
+      p += r;
+      n -= (size_t)r;
+    } else if (r == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+class Responder {
+ public:
+  Responder(int64_t base, int64_t blocks, int64_t block_bytes, int device, std::string host, int port, int cpu)
+      : base_(reinterpret_cast<const uint8_t*>(base)), blocks_(blocks), block_bytes_(block_bytes), device_(device),
+        host_(std::move(host)), port_(port), cpu_(cpu) {}
+  ~Responder() { stop(); }
+
+  int start() {
+    TORCH_CHECK(!running_.load(), "responder already running");
+    listen_fd_ = ::socket(AF_INET, SOCK_STREAM, 0);
+    TORCH_CHECK(listen_fd_ >= 0, "socket() failed");
+    int one = 1;
+    ::setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port_);
+    TORCH_CHECK(::inet_pton(AF_INET, host_.c_str(), &addr.sin_addr) == 1, "bad host ", host_);
+    TORCH_CHECK(::bind(listen_fd_, (sockaddr*)&addr, sizeof(addr)) == 0, "bind() failed on ", host_, ":", port_);
+    TORCH_CHECK(::listen(listen_fd_, 4) == 0, "listen() failed");
+    socklen_t len = sizeof(addr);
+    ::getsockname(listen_fd_, (sockaddr*)&addr, &len);
+    port_ = ntohs(addr.sin_port);
+    running_.store(true);
+    thread_ = std::thread([this] { serve(); });
+    return port_;
+  }
+
+  void stop() {
+    if (!running_.exchange(false)) return;
+    ::shutdown(listen_fd_, SHUT_RDWR);
+    ::close(listen_fd_);
+    int c = conn_fd_.load();
+    if (c >= 0) ::shutdown(c, SHUT_RDWR);
+    if (thread_.joinable()) thread_.join();
+  }
+
+  int64_t answered() const { return answered_.load(); }
+  int64_t pings() const { return pings_.load(); }
+  int port() const { return port_; }
+
+ private:
+  void serve() {
+    if (cpu_ >= 0) {
+      cpu_set_t set;
+      CPU_ZERO(&set);
+      CPU_SET(cpu_, &set);
+      pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+    }
+    cudaSetDevice(device_);
+    int least = 0, greatest = 0;
+    cudaDeviceGetStreamPriorityRange(&least, &greatest);
+    cudaStream_t stream;
+    cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, greatest);
+    cudaEvent_t ev0, ev1;
+    cudaEventCreate(&ev0);
+    cudaEventCreate(&ev1);
+    uint8_t* host = nullptr;
+    cudaHostAlloc((void**)&host, (size_t)block_bytes_ + 24, cudaHostAllocDefault);
+    std::memset(host, 0, (size_t)block_bytes_ + 24);
+    while (running_.load()) {
+      int fd = ::accept(listen_fd_, nullptr, nullptr);
+      if (fd < 0) continue;
+      int one = 1;
+      ::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+      ::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+      conn_fd_.store(fd);
+      uint64_t req[2];
+      while (running_.load() && read_all(fd, req, sizeof(req), running_)) {
+        auto t0 = std::chrono::steady_clock::now();
+        uint64_t* head = reinterpret_cast<uint64_t*>(host);
+        uint8_t* payload = host + 24;
+        head[0] = 0;
+        head[1] = 0;
+        if (req[0] == 3) break;
+        if (req[0] == 1) {
+          if (req[1] >= (uint64_t)blocks_) {
+            head[0] = 1;
+          } else {
+            cudaEventRecord(ev0, stream);
+            cudaMemcpyAsync(payload, base_ + (size_t)req[1] * (size_t)block_bytes_, (size_t)block_bytes_,
+                            cudaMemcpyDeviceToHost, stream);
+            cudaEventRecord(ev1, stream);
+            cudaError_t st;
+            while ((st = cudaEventQuery(ev1)) == cudaErrorNotReady) {
+            }
+            if (st != cudaSuccess) {
+              head[0] = 2;
+            } else {
+              float ms = 0.f;
+              cudaEventElapsedTime(&ms, ev0, ev1);
+              head[1] = (uint64_t)((double)ms * 1e6);
+            }
+            answered_.fetch_add(1);
+          }
+        } else {
+          pings_.fetch_add(1);
+        }
+        head[2] = (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
+        if (!write_all(fd, host, (size_t)block_bytes_ + 24)) break;
+      }
+      conn_fd_.store(-1);
+      ::close(fd);
+    }
+    cudaFreeHost(host);
+    cudaEventDestroy(ev0);
+    cudaEventDestroy(ev1);
+    cudaStreamDestroy(stream);
+  }
+
+  const uint8_t* base_;
+  int64_t blocks_, block_bytes_;
+  int device_;
+  std::string host_;
+  int port_;
+  int cpu_;
+  int listen_fd_ = -1;
+  std::atomic<int> conn_fd_{-1};
+  std::atomic<bool> running_{false};
+  std::atomic<int64_t> answered_{0}, pings_{0};
+  std::thread thread_;
+};
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+  m.def("shake256_rows", &shake256_rows, "out (^)= SHAKE256(prefix || body)[0:out.size(1)], row by row");
+  m.def("chunked_gather", &chunked_gather, "parent rows into half 0 of a chunk-major state", pybind11::arg("state"),
+        pybind11::arg("row0"), pybind11::arg("src"), pybind11::arg("index"), pybind11::arg("words"));
+  m.def("keccak_bench", &keccak_bench, "pure-register Keccak-f throughput", pybind11::arg("out"), pybind11::arg("threads"),
+        pybind11::arg("iters"), pybind11::arg("mode"), pybind11::arg("block") = 128);
+  m.def("band_chain", &band_chain, "every step of the rows' chains in one launch, writing W", pybind11::arg("state"),
+        pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("threads"), pybind11::arg("c"),
+        pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"), pybind11::arg("dest"), pybind11::arg("out"));
+  m.def("band_chain_pairs", &band_chain_pairs, "band_chain on lane pairs, in a persistent launch", pybind11::arg("state"),
+        pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("calls"), pybind11::arg("c"),
+        pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"), pybind11::arg("dest"), pybind11::arg("out"),
+        pybind11::arg("interleave_from"));
+  m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
+        pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
+        pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),
+        pybind11::arg("xidx") = pybind11::none());
+  m.def("feistel_rows", &feistel_rows, "Feistel-10 in place, SHAKE256 round functions under a domain byte and per-row tweak",
+        pybind11::arg("x"), pybind11::arg("tweak"), pybind11::arg("domain"), pybind11::arg("inverse"), pybind11::arg("thread_rows") = 0,
+        pybind11::arg("word_io") = false, pybind11::arg("fused") = false, pybind11::arg("pair") = false,
+        pybind11::arg("pair_max_rows") = INT64_MAX, pybind11::arg("coalesced") = false);
+  pybind11::class_<Responder>(m, "Responder")
+      .def(pybind11::init<int64_t, int64_t, int64_t, int, std::string, int, int>())
+      .def("start", &Responder::start)
+      .def("stop", &Responder::stop)
+      .def("answered", &Responder::answered)
+      .def("pings", &Responder::pings)
+      .def("port", &Responder::port);
+}

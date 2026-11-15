@@ -1,0 +1,10 @@
+[Unit]
+Description=vy-keeper tick every minute
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=10s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

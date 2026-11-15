@@ -1,0 +1,6 @@
+#!/bin/sh
+# gh for the verified queue's loop: each call runs as the App, with the token root's vy-vqueue-token.timer keeps in VQ_TOKEN,
+# read now rather than once a tick, which can outlast a token.
+GH_TOKEN=$(cat "${VQ_TOKEN:-/run/vy-vqueue/token}") || exit 1
+export GH_TOKEN
+exec "${VQ_GH:-/usr/bin/gh}" "$@"

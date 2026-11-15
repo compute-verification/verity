@@ -1,0 +1,6 @@
+[Unit]
+Description=remove research's 24 h sudo fallback (/etc/sudoers.d/59-vy-research-fallback) once its expiry has passed (vy-lockout)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /usr/local/sbin/vy-lockout fallback expire

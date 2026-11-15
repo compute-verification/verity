@@ -1,0 +1,26 @@
+# PoUW H1 lowerings (the tile unit, a leaf's lane and combine) as a benchmark (run.py) and the tile's memory profile
+# (mem_profile.py). Not a package: the suite holds the AND-row count to ir_lower's own layout, and the guard to reference.json
+# at the smallest shape.
+[tool.pytest.ini_options]
+testpaths = ["."]
+pythonpath = ["../../../benchmarks/unit_lowering"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["test_unit_lowering.py"]
+# The lowering the guard runs, in a child: `lanes.py tile` (h1_prove's h1form, hidden_zk's fast_stage, and H1's lowering
+# under `verity`, verity_flock's ir_lower and class_statement with it), which the AND-row test reads too; mem_profile.py
+# names the statement as `pouw_h1_circuits` does (adapters/vllm, its tests package's two __init__.py on the way); run.py
+# reads the run's commit through verity_config.settings; h1form.py reads its tile and form from PoUW's settings.py.
+inputs = ["verity", "benchmarks/pouw/h1_prove", "benchmarks/pouw/hidden_zk", "benchmarks/pouw/settings.py",
+          "tests/adapters/vllm/tests/__init__.py",
+          "tests/adapters/vllm/tests/protocols/__init__.py", "tests/adapters/vllm/tests/protocols/pouw_h1_circuits.py",
+          "tools/config/verity_config", "benchmarks/unit_lowering"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["test_unit_lowering.py"]
+paths = ["benchmarks/pouw/hidden_zk", "tests/adapters/vllm/tests"]

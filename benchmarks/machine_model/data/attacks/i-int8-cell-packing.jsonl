@@ -1,0 +1,6 @@
+{"design": "{±1}", "family": "(i) int8 cell packing", "name": "4 INT ops a pair", "program": {"MMA": 0.0001220703125, "ALU": 0.001953125}}
+{"design": "{±1}", "family": "(i) int8 cell packing", "name": "4 INT ops a pair, integer work on UNI", "program": {"MMA": 0.0001220703125, "UNI": 0.0625}, "since": "VF2"}
+{"design": "{±1}", "family": "(i) int8 cell packing", "name": "4 INT ops a pair, ALU on ALU64", "program": {"MMA": 0.0001220703125, "ALU64": 0.0009765625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) int8 cell packing", "name": "4 INT ops a pair, ALU on UNI64", "program": {"MMA": 0.0001220703125, "UNI64": 0.03125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(i) int8 cell packing", "name": "4 INT ops a pair, ALU on W2", "program": {"MMA": 0.0001220703125, "W2": 0.0009765625}, "since": "VF3e"}
+{"design": "{±1}", "family": "(i) int8 cell packing", "name": "4 INT ops a pair, ALU on DMUL", "program": {"MMA": 0.0001220703125, "DMUL": 0.0009765625}, "since": "VF3e"}

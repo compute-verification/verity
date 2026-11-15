@@ -1,0 +1,20 @@
+{
+ "definitions": {
+  "AttentionHeadSoftcap_v3{T=17,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
+   "and": 501142,
+   "type": "0b8c3d2b371532df43df8f30414c4d4af7561fba63fe290835c21a296af56fc04bbf73a34bc71327836778e11fbb3777012a942a71b61b9e9fac5ed7dc5b7168"
+  },
+  "AttentionSoftcap_v3{T=17,NH=1,KVH=1,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
+   "and": 501142,
+   "type": "0b8c3d2b371532df43df8f30414c4d4af7561fba63fe290835c21a296af56fc04bbf73a34bc71327836778e11fbb3777012a942a71b61b9e9fac5ed7dc5b7168"
+  },
+  "AttnBlockSoftcap_v3{D=16,NVIS=1,FIRST=True,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
+   "and": 38977,
+   "type": "8ef6587ec663871ff96338d9fdbf6b983470cee7c9b4cb998dc9c0e6be40990ab31dcd9186d901db3fe57de24accf8946ddcffd25b775a694aa72e90624c8508"
+  },
+  "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=False,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": {
+   "and": 439214,
+   "type": "05a8e97d58ef0ef118d2f9438546f39343e572e47c1d0dc09391b2b58e1c5d6c3f0e7cd3d95a3cc1e795dc3ac18b99a7bb9b100624807af645d22e5677f60ac9"
+  }
+ }
+}

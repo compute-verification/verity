@@ -1,0 +1,27 @@
+# SPOT[Flock] composed with recursion: the recursive audit (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`,
+# `VStarRecursion.Protocol`) over `spot_flock/`'s package and recursion's, which nothing below requires. `vstar-recursive`
+# is its command (`id | check | serve | verdicts`, and SPOT's as `vstar-recursive sampled id | check | serve`,
+# `VStar.Recursive.Sampled.protocol`). Code, not analysis.
+name = "spot_flock_recursion"
+defaultTargets = ["VStarRecursion", "vstar-recursive"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "core_vstar_recursive"
+path = "../../../spot_flock/verifier/lean"
+
+[[require]]
+name = "core_vstar"
+path = "../../../recursion/verifier/vstar_cli"
+
+[[lean_lib]]
+name = "VStarRecursion"
+roots = ["VStarRecursion.Protocol"]
+
+[[lean_exe]]
+name = "vstar-recursive"
+root = "VStarRecursiveMain"

@@ -1,0 +1,221 @@
+--- a/backends/flock/live/src/bin/flock-netlist.rs
++++ b/backends/flock/live/src/bin/flock-netlist.rs
+@@ -752,6 +752,173 @@
+     }
+ }
+ 
++// --- test vectors for the Lean verifier (lane flock-verifier; backends/flock/verifier/tools/vectors.patch) ----------------
++
++fn f128_hex_(v: &F128) -> String {
++    format!("{:016x}{:016x}", v.hi, v.lo)
++}
++
++fn f128_of_hex_(s: &str) -> F128 {
++    F128::new(u64::from_str_radix(&s[16..32], 16).unwrap(), u64::from_str_radix(&s[..16], 16).unwrap())
++}
++
++/// A transport that answers like a verifier but checks nothing: it hands back fixed link points at `Commit` and fresh OS
++/// coins at every round, recording each round as the live server does. Only the vector generator uses it.
++struct Lax {
++    points: Vec<F128>,
++    streams: BTreeMap<String, Vec<RoundRec>>,
++    urandom: std::fs::File,
++}
++
++impl Transport for Lax {
++    fn call(&mut self, req: Req) -> Result<Resp, String> {
++        use std::io::Read;
++        Ok(match req {
++            Req::Hello(_) => Resp::Coins(vec![F128::ZERO; 2]),
++            Req::Commit { .. } => Resp::Coins(self.points.clone()),
++            Req::Link(_) | Req::Open { .. } | Req::Ping(_) | Req::Prime { .. } | Req::Proof { .. } => Resp::Ok,
++            Req::Round { stream, content, n } => {
++                let mut b = vec![0u8; 16 * n as usize];
++                self.urandom.read_exact(&mut b).unwrap();
++                let coins: Vec<F128> = b.chunks(16)
++                    .map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap()))).collect();
++                self.streams.entry(stream).or_default().push(RoundRec { sha: sha256(&content), len: content.len(), n, coins: coins.clone() });
++                Resp::Coins(coins)
++            }
++            Req::Finish => Resp::Verdict(json!({"accepted": false, "why": "lax transport: no verifier"}).to_string()),
++        })
++    }
++}
++
++/// Upstream's offline verdict on a record (`Server::from_record` then `finish`): the agreement oracle.
++fn upstream_offline(st: &Arc<Stmt>, pubi: &Arc<Instances>, rec: &Value, proofs: &[Vec<u8>]) -> Value {
++    let m: BTreeMap<(String, usize), Vec<u8>> = proofs.iter().enumerate().map(|(r, p)| ((TABLE.to_string(), r), p.clone())).collect();
++    let cfg = config(st, sigma(st, pubi));
++    match Server::from_record(cfg, Box::new(NlVerifier { st: st.clone(), inst: pubi.clone() }), rec, m) {
++        Ok(mut s) => {
++            let v = s.finish();
++            json!({"accepted": v["accepted"], "why": v["why"]})
++        }
++        Err(e) => json!({"accepted": false, "why": e}),
++    }
++}
++
++/// One rep verified alone by upstream's statement verifier against a record's stream: no session checks, no root binding.
++fn upstream_rep_alone(st: &Arc<Stmt>, pubi: &Arc<Instances>, streams: &BTreeMap<String, StreamRec>, rep: usize, proof: &[u8], pts: &[Vec<F128>]) -> Value {
++    let root = rep_stream(TABLE, rep);
++    let mut ch = ReplayChallenger::new(Arc::new(streams.clone()), &root, &domain(rep));
++    let ctx = LinkCtx { points: pts, y: &[F128::ZERO, F128::ZERO], publics: &[] };
++    let v = NlVerifier { st: st.clone(), inst: pubi.clone() };
++    match v.verify(TABLE, rep, proof, &mut ch, &ctx).and_then(|cap| ch.finish().map(|_| cap)) {
++        Ok(cap) => json!({"accepted": true, "root_sha256": hex(&sha256(&cap))}),
++        Err(e) => json!({"accepted": false, "why": e}),
++    }
++}
++
++fn rounds_json(rs: &[RoundRec]) -> Value {
++    json!(rs.iter().enumerate().map(|(k, r)| json!({"k": k, "n": r.n, "msg_len": r.len, "msg_sha256": hex(&r.sha),
++        "coins": r.coins.iter().map(f128_hex_).collect::<Vec<_>>()})).collect::<Vec<_>>())
++}
++
++/// `vectors --instances INST --pub PUB --netlist NET --out DIR`: an honest session against the verifier's own server, and
++/// R-BREAK: rep 1 an honest proof of another witness (random mask cells, so another root) at the same link points and public
++/// data, spliced into the honest record. Writes each vector's record and proofs, and upstream's verdicts.
++fn vectors(st: &Arc<Stmt>, inst: &Arc<Instances>, pubi: &Arc<Instances>) {
++    let out = std::path::PathBuf::from(arg("--out", "vectors"));
++    let write = |dir: &str, rec: &Value, proofs: &[Vec<u8>], verdicts: &Value| {
++        let d = out.join(dir);
++        std::fs::create_dir_all(&d).unwrap();
++        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(rec).unwrap()).unwrap();
++        for (r, p) in proofs.iter().enumerate() {
++            std::fs::write(d.join(format!("nl.rep{r}.bin")), p).unwrap();
++        }
++        std::fs::write(d.join("upstream.json"), serde_json::to_string_pretty(verdicts).unwrap()).unwrap();
++        println!("VECTOR\t{}", json!({"vector": dir, "upstream": verdicts}));
++    };
++    let srv = Arc::new(Mutex::new(server(st, pubi)));
++    let (live, _) = session(st, inst, shared(InProc(srv.clone())), &Plan::default());
++    let (rec, proofs) = {
++        let s = srv.lock().unwrap();
++        (s.record_json(), (0..2).map(|r| s.proofs()[&(TABLE.to_string(), r)].clone()).collect::<Vec<_>>())
++    };
++    let pts: Vec<Vec<F128>> = rec["link"]["points"].as_array().unwrap().iter()
++        .map(|p| p.as_array().unwrap().iter().map(|c| f128_of_hex_(c.as_str().unwrap())).collect()).collect();
++    let off = upstream_offline(st, pubi, &rec, &proofs);
++    write("honest", &rec, &proofs, &json!({"live": live["accepted"], "offline": off}));
++
++    let lax = Arc::new(Mutex::new(Lax { points: pts.concat(), streams: BTreeMap::new(), urandom: std::fs::File::open("/dev/urandom").unwrap() }));
++    struct L(Arc<Mutex<Lax>>);
++    impl Transport for L {
++        fn call(&mut self, req: Req) -> Result<Resp, String> {
++            self.0.lock().unwrap().call(req)
++        }
++    }
++    let (_, proofs_b) = session(st, inst, shared(L(lax.clone())), &Plan { mask_random: true, ..Plan::default() });
++    let rounds_b1 = lax.lock().unwrap().streams[&rep_stream(TABLE, 1)].clone();
++    let (cm_b, _): (Commitment, R1csProofLigerito) = bincode::deserialize(&proofs_b[1]).unwrap();
++    let cap_b = cm_b.cap.as_flattened().to_vec();
++    let mut forged = rec.clone();
++    for s in forged["streams"].as_array_mut().unwrap() {
++        if s["stream"] == rep_stream(TABLE, 1) {
++            s["rounds"] = rounds_json(&rounds_b1);
++            s["root_sha256"] = json!(hex(&sha256(&cap_b)));
++        }
++    }
++    for p in forged["proof_sha256"].as_array_mut().unwrap() {
++        if p["stream"] == rep_stream(TABLE, 1) {
++            p["sha256"] = json!(hex(&sha256(&proofs_b[1])));
++            p["bytes"] = json!(proofs_b[1].len());
++        }
++    }
++    let forged_proofs = vec![proofs[0].clone(), proofs_b[1].clone()];
++    let mut streams: BTreeMap<String, StreamRec> = BTreeMap::new();
++    for rep in 0..2 {
++        let rs: Vec<RoundRec> = if rep == 0 {
++            rec["streams"].as_array().unwrap().iter().find(|s| s["stream"] == rep_stream(TABLE, 0)).unwrap()["rounds"].as_array().unwrap().iter()
++                .map(|r| RoundRec { sha: flock_live::netlist::hexb(r["msg_sha256"].as_str().unwrap()).unwrap().try_into().unwrap(),
++                                    len: r["msg_len"].as_u64().unwrap() as usize, n: r["n"].as_u64().unwrap() as u32,
++                                    coins: r["coins"].as_array().unwrap().iter().map(|c| f128_of_hex_(c.as_str().unwrap())).collect() }).collect()
++        } else {
++            rounds_b1.clone()
++        };
++        streams.insert(rep_stream(TABLE, rep), StreamRec { parent: String::new(), label: domain(rep), at: 0, rounds: rs, cap: None });
++    }
++    let verdicts = json!({
++        "offline": upstream_offline(st, pubi, &forged, &forged_proofs),
++        "rep0_alone": upstream_rep_alone(st, pubi, &streams, 0, &forged_proofs[0], &pts),
++        "rep1_alone": upstream_rep_alone(st, pubi, &streams, 1, &forged_proofs[1], &pts),
++        "root_b_sha256": rec["link"]["root_b_sha256"][TABLE],
++        "rep1_root_sha256": hex(&sha256(&cap_b)),
++    });
++    write("r-break", &forged, &forged_proofs, &verdicts);
++}
++
++/// `export-comp --out FILE`: the BLAKE3 compression circuit (`flock_prover`'s `build_block_r1cs(3)`, the compression slot type)
++/// as data for the Lean verifier, `flock-r1cs-rows/v1`: one JSON header line (shape, pin, the circuit digest and the layout
++/// offsets), then A's rows and B's rows, each row `le32 count` then `le32` columns. C is the identity (checked here).
++fn export_comp() {
++    use flock_prover::r1cs_hashes::blake3 as b3;
++    let c = flock_live::chunk::comp();
++    assert!(c.c0_is_identity());
++    let hdr = json!({"format": "flock-r1cs-rows/v1", "circuit": "blake3-compression/flock-b684b12", "m": c.m, "k_log": c.k_log, "k_skip": c.k_skip,
++        "useful_bits": c.useful_bits, "const_pin": c.const_pin, "layout": 0, "rows": c.a_0.num_rows, "cols": c.a_0.num_cols,
++        "digest": hex(&c.statement_digest()), "cv_base": b3::CV_BASE, "out_lo_base": b3::OUT_LO_BASE, "m_base": b3::M_BASE,
++        "t_lo_base": b3::T_LO_BASE, "t_hi_base": b3::T_HI_BASE, "blen_base": b3::BLEN_BASE, "flags_base": b3::FLAGS_BASE,
++        "nnz_a": c.a_0.rows.iter().map(|r| r.len()).sum::<usize>(), "nnz_b": c.b_0.rows.iter().map(|r| r.len()).sum::<usize>()});
++    let mut out = hdr.to_string().into_bytes();
++    out.push(b'\n');
++    for m in [&c.a_0, &c.b_0] {
++        for r in m.rows.iter() {
++            out.extend((r.len() as u32).to_le_bytes());
++            for &x in r {
++                out.extend((x as u32).to_le_bytes());
++            }
++        }
++    }
++    std::fs::write(arg("--out", "comp.rows"), &out).unwrap();
++    println!("EXPORT\t{hdr}");
++}
++
+ fn refuse(why: String) -> ! {
+     println!("REFUSED\t{}", json!({"statement": STATEMENT, "why": why}));
+     std::process::exit(2);
+@@ -759,6 +926,9 @@
+ 
+ fn main() {
+     let cmd = std::env::args().nth(1).unwrap_or_default();
++    if cmd == "export-comp" {
++        return export_comp();
++    }
+     let tb = Instant::now();
+     let c = load_composite(&arg("--netlist", "net.txt"));
+     let pin = arg("--pin", "");
+@@ -806,6 +976,19 @@
+                 println!("LIVE\t{v}");
+             }
+         }
+-        _ => eprintln!("usage: flock-netlist serve|prove|selftest --instances FILE --netlist FILE [--pin SHA256] ..."),
++        "vectors" => {
++            let pubi = Arc::new(Instances::load(&arg("--pub", ""), &st.c).unwrap_or_else(|e| refuse(e)));
++            vectors(&st, &inst, &pubi)
++        }
++        "replay" => {
++            let a: Vec<String> = std::env::args().collect();
++            let dirs = &a[a.iter().position(|x| x == "--sessions").map(|i| i + 1).unwrap_or(a.len())..];
++            for d in dirs {
++                let rec: Value = serde_json::from_slice(&std::fs::read(format!("{d}/session.json")).unwrap()).unwrap();
++                let proofs: Vec<Vec<u8>> = (0..2).map(|r| std::fs::read(format!("{d}/{TABLE}.rep{r}.bin")).unwrap()).collect();
++                println!("UPSTREAM\t{}", json!({"session": d, "verdict": upstream_offline(&st, &inst, &rec, &proofs)}));
++            }
++        }
++        _ => eprintln!("usage: flock-netlist serve|prove|selftest|vectors --instances FILE --netlist FILE [--pin SHA256] ..."),
+     }
+ }
+--- a/backends/flock/live/src/lib.rs
++++ b/backends/flock/live/src/lib.rs
+@@ -1341,8 +1341,9 @@
+                     return Err(bad(&format!("{n}: root_b differs from root_b_sha256")));
+                 }
+                 roots.push((n.clone(), rb));
+-                let p = hx(&l["publics"][n], "publics")?;
+-                if l["publics_sha256"][n].as_str() != Some(hex(&sha256(&p)).as_str()) {
++                // a statement that commits no public words has no entry for the table (the server records none)
++                let p = if l["publics"][n].is_null() && l["publics_sha256"][n].is_null() { Vec::new() } else { hx(&l["publics"][n], "publics")? };
++                if !(p.is_empty() && l["publics_sha256"][n].is_null()) && l["publics_sha256"][n].as_str() != Some(hex(&sha256(&p)).as_str()) {
+                     return Err(bad(&format!("{n}: publics differ from publics_sha256")));
+                 }
+                 publics.push((n.clone(), p));
