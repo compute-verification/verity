@@ -53,7 +53,7 @@ def test_a_step_never_inherits_what_check_set_for_it(tmp_path, monkeypatch):
 def test_checks_own_tests_pass_inside_a_recorded_checks_step():
     """The step's own variables, set by a recorded check, never reach the test of `env()`."""
     leaked = {**os.environ, CHECK.STORE_REQUIRED_ENV: "1", CHECK.CUSTODY_ENV: "/w/requests/r0/custody"}
-    test = "tests/test_check.py::test_a_recorded_runs_steps_require_the_store_and_get_its_custody_dir"
-    p = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", test], cwd=ROOT / "tools" / "check", env=leaked,
+    test = "test_check.py::test_a_recorded_runs_steps_require_the_store_and_get_its_custody_dir"
+    p = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", test], cwd=Path(__file__).resolve().parent, env=leaked,
                        capture_output=True, text=True)
     assert p.returncode == 0 and "1 passed" in p.stdout, p.stdout + p.stderr
