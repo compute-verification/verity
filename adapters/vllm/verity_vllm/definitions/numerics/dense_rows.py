@@ -29,10 +29,10 @@ import ctypes
 import functools
 import os
 import subprocess
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
 

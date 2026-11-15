@@ -2,8 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 #: GLM-5.3's sparse MLA decode at its served statics, over every key count its DSA top-k selects (at most 2,048) and every split
 #: count serving takes, checked at these spots (`circuit_check.ranges`; ``circuit-check --as-call --ranges SparseMlaSplit_v1``)

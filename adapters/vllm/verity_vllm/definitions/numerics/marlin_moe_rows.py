@@ -9,9 +9,9 @@ tests/program/test_marlin_moe.py checks this twin against them word for word, an
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable, Sequence
 from functools import partial
 from typing import Any
-from collections.abc import Callable, Sequence
 
 import numpy as np
 from verity.circuits.evaluation.batch import type_dtype

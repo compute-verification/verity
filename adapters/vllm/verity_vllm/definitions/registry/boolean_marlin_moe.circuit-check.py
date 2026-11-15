@@ -2,8 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 #: the Boolean gathers this module makes only inside other bodies, which no id names alone
 #: (`circuit_check.sidecars.body_family`)

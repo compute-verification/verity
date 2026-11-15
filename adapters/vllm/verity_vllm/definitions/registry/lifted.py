@@ -53,8 +53,8 @@ no payload-only width rule (no `validate_width_lifted`, no `n_max`).  `LAG`: `la
 from __future__ import annotations
 
 import re
-from typing import Any
 from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
 from verity.circuits.defs import (
     REGISTRY,

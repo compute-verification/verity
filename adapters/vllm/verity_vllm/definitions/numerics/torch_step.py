@@ -9,9 +9,9 @@ that is past the walk's bit budget, and a GEMM's shared weight is read once rath
 `adapters/vllm/verity_vllm/definitions/tests/test_torch_step.py` holds each model to its Definition's bits, and the norm and SiLU models to the GPU's words."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import cache
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
 from verity.circuits.ops import mufu as MU

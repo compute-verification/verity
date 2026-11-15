@@ -2,8 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 #: the index units at the served statics (TOPK 2,048, blocks of `dsa_topk_reads.index_block` keys, a row's class N a
 #: multiple of TOPK from 4,096 to 131,072): a block of N keys from AT (the whole row up to `dsa_topk_mask_cut.WHOLE_MAX`, then

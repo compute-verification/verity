@@ -5,8 +5,8 @@ operand or accumulator, declines the row by name, as `rows.gemm_dot` does.  The 
 """
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 

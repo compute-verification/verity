@@ -6,8 +6,8 @@ is declined, never wrapped onto a stop id.  Registers from `rows` (kernel "rows"
 from __future__ import annotations
 
 import json
-from typing import Any
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 

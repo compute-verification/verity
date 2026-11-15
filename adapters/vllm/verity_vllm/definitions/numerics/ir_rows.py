@@ -10,8 +10,8 @@ kernel for itself.  So the words are the Definition's, NaN payloads included, wi
 from __future__ import annotations
 
 import json
-from typing import Any
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 

@@ -6,8 +6,8 @@ of the last operand; the self-check samples that word in the value's served rang
 """
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 

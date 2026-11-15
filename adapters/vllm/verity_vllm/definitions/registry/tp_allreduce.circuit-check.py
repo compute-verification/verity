@@ -2,8 +2,8 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 #: GLM-5.3's hidden size, whose TP8 all-reduces `_glm53_served_roots` binds
 GLM53_N = 6144
