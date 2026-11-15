@@ -259,12 +259,12 @@ def test_with_a_slot_free_on_its_pick_a_check_twins_on_every_other_machine_that_
     pair = launched[0][launched[0].index("--twin") + 1]
     wraps = [c[c.index("--") + 1:] for c in launched]
     assert [w[:w.index("--") + 1] for w in wraps] == [
-        ["python3", "tools/verity/check/slot.py", "--twin", pair, "--"],
-        ["python3", "tools/verity/check/slot.py", "--twin", f"{pair}@{N1}", "--twin-after", str(CHECK.TWIN_AFTER_S), "--"]]
+        ["python3", "tools/check/slot.py", "--twin", pair, "--"],
+        ["python3", "tools/check/slot.py", "--twin", f"{pair}@{N1}", "--twin-after", str(CHECK.TWIN_AFTER_S), "--"]]
     assert (f"check: --on: twins {pair} on {N1}, {N2}: the first to take a check slot runs, and the others leave their line "
             f"(exit 75, not started); {N1} has a slot free, so the others join their lines after {CHECK.TWIN_AFTER_S} s, and "
             "only if none has started by then") in capsys.readouterr().out
-    assert CHECK.slot_wrap(False, "p1") == ["python3", "tools/verity/check/slot.py", "--twin", "p1", "--"]
+    assert CHECK.slot_wrap(False, "p1") == ["python3", "tools/check/slot.py", "--twin", "p1", "--"]
 
 
 def test_with_a_slot_free_at_home_late_twins_go_to_the_two_machines_with_most_slots_free_and_with_none_to_every_machine():

@@ -4284,7 +4284,8 @@ def move_lines_at(repo: Path, at: str) -> dict[str, dict]:
     r = _git(repo, "show", f"{at}:{MOVE_LINES}", check=False)
     try:
         data = tomllib.loads(r.stdout) if not r.returncode else {}
-    except tomllib.TOMLDecodeError:
+    except tomllib.TOMLDecodeError as e:
+        print(f"research queue: {MOVE_LINES} at {at[:12]} doesn't parse ({e}); its corrections are left out, and restack.py refuses the table itself", file=sys.stderr)
         return {}
     return {k: v for k, v in data.items() if isinstance(v, dict)}
 
