@@ -203,8 +203,8 @@ def edited(signer) -> dict[str, tuple[dict, str | None]]:
         "point-k": (dataclasses.replace(s, point=dataclasses.replace(point, k=point.k + 1)),
                     f"the session runs {point.k} rounds, not the point's {point.k + 1}"),
         "point-limit": (dataclasses.replace(s, point=dataclasses.replace(point, limit_ns=s.session.commitment.limit_ns - 1)),
-                        f"the session's limit of {s.session.commitment.limit_ns} ns is past the point's Δ + RTT = "
-                        f"{s.session.commitment.limit_ns - 1} ns"),
+                        (f"the session's limit of {s.session.commitment.limit_ns} ns is past the point's Δ + RTT = "
+                         f"{s.session.commitment.limit_ns - 1} ns")),
         "session-block-bytes": (_commitment(s, block_bytes=q.block_bytes + 1),
                                 f"the session's answers are {q.block_bytes + 1} bytes, not the point's {q.block_bytes}"),
         "session-binding": (_commitment(s, binding=flip(pub.root, 5)),

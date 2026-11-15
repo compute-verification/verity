@@ -109,6 +109,11 @@ def _bit_rows(rows: Sequence[bytes]) -> np.ndarray:
     return np.unpackbits(np.frombuffer(b"".join(rows), dtype=np.uint8).reshape(len(rows), -1), axis=1, bitorder="little")
 
 
+def _octet_rows(rows: Sequence[bytes]) -> np.ndarray:
+    """Byte strings of one length as octets, one row each."""
+    return np.frombuffer(b"".join(rows), dtype=np.uint8).reshape(len(rows), -1)
+
+
 class SessionIntegration:
     """PoUS's session as an integration (`session.session_statements`): the signature check (`PousSessionSig_v1`, one
     unit), the message's hash (`PousSessionDigest_v1`, one unit) and one opened block a round (`PousRound_v1` at slot 0
@@ -139,11 +144,9 @@ class SessionIntegration:
         """Each unit's rows as bytes (a port's words, `octets`) and its outputs: the one-bit ok as a 16-bit integer, m and
         the records rows as bytes."""
         for group in self._templates():
-            def rows(values):
-                return np.frombuffer(b"".join(values), dtype=np.uint8).reshape(len(group), -1)
-            inputs = [rows([u.rows[p] for u in group]) for p in range(len(group[0].rows))]
+            inputs = [_octet_rows([u.rows[p] for u in group]) for p in range(len(group[0].rows))]
             outputs = [np.array([u.outputs[0][0] for u in group], dtype=np.uint16),
-                       *(rows([u.outputs[o] for u in group]) for o in range(1, len(group[0].outputs)))]
+                       *(_octet_rows([u.outputs[o] for u in group]) for o in range(1, len(group[0].outputs)))]
             window.record(group[0].definition, inputs, outputs)
 
 
