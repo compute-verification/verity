@@ -17,7 +17,7 @@ that sends nothing, the program of two inputs sampled whole, the layout `twoLay`
 `certOps`), with no input registered and the free input, the gate `1`, checked. The check (`checkedValid₂`) pins the run at
 the gate `1` to the value the run at the trace with the registered openings holds there (`regRunR`), so it pins the
 checked input (`checkedUnique_pin`) and holds on that run, and its miss is `0` (`PhaseChecks` at `εchk = 0`). The
-network certifier has no connection; its record is the one step's `twoObs` (`oneFormat`). Its last conjunct is the
+network certifier has no connection; its record is the one step's `twoObs` (`checkedFormat₂`). Its last conjunct is the
 guarantee's event there, which is not empty: at every history the phase is accepted, registered as the period's and
 its record complete.
 
@@ -63,27 +63,27 @@ noncomputable abbrev checkedValid₂ : AuditStatement → (ℕ → Bool) → Pro
 
 /-- The record format of a network certifier with no connection over one execution phase: it holds every schedule, its
 record is the one step's record `twoObs`, and no cell reads back from it, as the code sends none. -/
-def oneFormat : RecordFormat Empty Unit (Fin 1 → List (Obs 0 1 1)) :=
+def checkedFormat₂ : RecordFormat Empty Unit (Fin 1 → List (Obs 0 1 1)) :=
   ⟨fun _ _ _ _ => [twoObs], fun _ _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
 
 /-- No connection, so no arrivals. -/
-abbrev oneArr : Unit → Empty → Arrivals Unit := fun _ c => c.elim
+abbrev checkedArr₂ : Unit → Empty → Arrivals Unit := fun _ c => c.elim
 
-/-- The network certifier's device runs its recording code at `oneFormat`. -/
-abbrev oneRun :
+/-- The network certifier's device runs its recording code at `checkedFormat₂`. -/
+abbrev checkedTrace₂ :
     Unit → CertifierSchedule Empty × Unit → (Empty → List (ℕ × CellView Unit)) × (Fin 1 → List (Obs 0 1 1)) :=
-  fun _ p => recordingCode oneFormat p.1 (oneArr p.2)
+  fun _ p => recordingCode checkedFormat₂ p.1 (checkedArr₂ p.2)
 
 /-- The read-back under the one parameter: no connection, so no cell. -/
-abbrev oneRd : Unit → (Fin 1 → List (Obs 0 1 1)) → Empty → List (ℕ × CellView Unit) := fun _ _ c => c.elim
+abbrev checkedRead₂ : Unit → (Fin 1 → List (Obs 0 1 1)) → Empty → List (ℕ × CellView Unit) := fun _ _ c => c.elim
 
 /-- The one schedule, of no connection. -/
-abbrev oneSched : Unit → Ω₂ → CertifierSchedule Empty := fun _ _ => ⟨0, 0, Empty.elim, Empty.elim⟩
+abbrev checkedSched₂ : Unit → Ω₂ → CertifierSchedule Empty := fun _ _ => ⟨0, 0, Empty.elim, Empty.elim⟩
 
 /-- The gate `1` of the program of two inputs is a free input at `twoLay` over one step: an input, and no step's
 ingress, which is the gate `0`. -/
 theorem one_mem_freeInputs : 1 ∈ freeInputs twoStmt.prog twoLay 1 := by
-  first | decide | simp [freeInputs, twoStmt, twoProg]
+  decide
 
 /-- At the honest instance the phase is registered as the period's with no input registered: its statement parses to
 `twoStmt` with the partition `twoPart`. -/
@@ -110,10 +110,10 @@ theorem PooledLeakRegisteredChecked_honest :
       (∀ _ : Fin 1, CheckedUnique twoStmt.prog twoPart twoStmt.design twoLay 1 {1} (checkedValid₂ twoStmt)) ∧
       PhaseChecks shaD D₂ (fun _ => twoLay) (fun _ => 1) checkedValid₂ (fun _ => twoStmt) x₂ P₂ ops₂ (fun _ => 0) ∧
       (twoLay).Fits twoStmt.prog 1 ∧
-      Verity.Assumptions.TrustedDevice () oneRun (fun p => recordingCode oneFormat p.1 (oneArr p.2)) ∧
-      oneFormat.ReadsBy oneRd (fun _ _ => True) ∧
-      (∀ ω : Ω₂, MonitoringPeriodChannelReg oneFormat (fun _ _ => True) Set.univ (Set.univ : Set Unit)
-        (fun z => oneSched z ω) (fun _ => ()) (fun _ => ()) fun p => (oneRun () p).1) ∧
+      Verity.Assumptions.TrustedDevice () checkedTrace₂ (fun p => recordingCode checkedFormat₂ p.1 (checkedArr₂ p.2)) ∧
+      checkedFormat₂.ReadsBy checkedRead₂ (fun _ _ => True) ∧
+      (∀ ω : Ω₂, MonitoringPeriodChannelReg checkedFormat₂ (fun _ _ => True) Set.univ (Set.univ : Set Unit)
+        (fun z => checkedSched₂ z ω) (fun _ => ()) (fun _ => ()) fun p => (checkedTrace₂ () p).1) ∧
       (∀ s, (twoL Bool).parse [] = some s →
         CertifierRegisters shaD (twoL Bool).commit twoLay 1 (fun _ _ => [true]) s certOps [twoObs]) ∧
       ∀ (ω : Ω₂) (i : Fin 1), phaseAcc shaD D₂ x₂ P₂ (fun _ _ _ => le_rfl) () i ω (ω i) ∧
@@ -156,8 +156,8 @@ example (h : Guarantees.PooledLeakRegisteredChecked) :
     ((h shaD D₂ hA (fun _ => hb) (fun _ => hS) (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => {1}) checkedValid₂ 1
       (fun _ => twoStmt) (fun _ => twoPart) (fun _ _ => true) hchk (fun _ _ _ _ => [true]) x₂ P₂
       (fun _ _ _ => le_rfl) ops₂ had (fun _ _ _ s hs => hops s hs) 1 zero_le_one le_rfl
-      (fun _ _ _ s Pt hs hPt => hrate s Pt hs hPt) e₂ he (fun _ => 0) hck (fun _ => hfit) oneArr oneFormat () oneRun
-      htrust oneRd (fun _ _ => True) hread Set.univ Set.univ oneSched (fun _ _ => ()) (fun _ _ => ()) hch
+      (fun _ _ _ s Pt hs hPt => hrate s Pt hs hPt) e₂ he (fun _ => 0) hck (fun _ => hfit) checkedArr₂ checkedFormat₂ () checkedTrace₂
+      htrust checkedRead₂ (fun _ _ => True) hread Set.univ Set.univ checkedSched₂ (fun _ _ => ()) (fun _ _ => ()) hch
       (fun _ _ _ s hs _ => hcert s hs) 1).1 () (Set.mem_univ _))
   exact ⟨fun i => ⟨hω.1 i, (hev ω i).2⟩, hω.2⟩
 
