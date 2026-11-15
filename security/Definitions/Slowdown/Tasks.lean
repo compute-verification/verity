@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Game
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 

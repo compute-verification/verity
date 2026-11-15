@@ -17,7 +17,7 @@ it.
 The count is the statement's, factor by factor, over the network certifier's `m` connections and the period's `n`
 windows: `#Ss · ((∏_c (cap_c + 1)) · ∏_i (2^#(free inputs) · #faultySets · 2^β · Dj^k))`. A reader of `K` (the
 communication audit's bridge to `MonitoringPeriodLeakAccepted`) instantiates it at the run's caps and the windows' facts, and
-supplies each of the statement's quantities as at most the check's number. The windows are the link-windows' scans:
+supplies each of the statement's quantities as at most the check's number. The windows are the execution phases' scans:
 `#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes' lengths), a window's free inputs at most its scan's Program's and its
 tied audits' (`free`: the egress renders the outputs of the audits its scan's `prog` is tied to, so the bits the prover
 chose of their inputs are the window's), each window's incorrect sets at most the sets of at most `b` of its `N` units,
@@ -29,9 +29,9 @@ proof blocks only as the slot entries they can set, since the scan reads the aud
 state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`,
 `RowsStateTied` and `RowsTiedInputWired`, and what it publishes of one sampled in part is `RowsTiedCharged`.
 `RowsProgWired` says it accepts
-no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree the entries port of its chunk
+no execution phase whose scan's `prog` is not a compute audit's slot entries, a lane's tree the entries port of its chunk
 of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
-link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
+execution phase whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
 alters one of the scan's transitions is no Program's input. `RowsTiedInputWired` says it accepts no execution phase
 whose scan's answer names a tied Input other than the scan's lanes' `prog<j>`, which are wired as `RowsProgWired` says:
 a tied Input is a run Input several proof blocks read, which one-stage's registration check lets through only named.
@@ -431,7 +431,7 @@ def RowsExecutionPhaseAccepted : Prop :=
     Lms.key Lms.deployed I seed = .ok k ∧ p.lms = Lms.deployed ∧ (∃ x ∈ p.entries, x.key = k.publicKey) ∧
       p.form = .rows s sd scan ∧ 0 < c.windows.size ∧ 0 < c.audits.size ∧ check p c e = .accept pub prof
 
-/-- The one-stage answers the period check reads: each compute audit's, then each link-window's. -/
+/-- The one-stage answers the period check reads: each compute audit's, then each execution phase's. -/
 def answersRead (e : Evidence) : Array Core.Answer := e.audits ++ e.windows.map (·.answer)
 
 /-- What `AnswersVerified` says of a period its check accepted: each answer the check reads is the one one-stage's
@@ -448,7 +448,7 @@ def AnswersVerifiedOf (chk : Params → Commitment → Evidence → Core.Outcome
     chk p c e = .accept pub prof → AnswersVerifiedAt e
 
 /-- **The period check accepts an execution phase only where the compiled Lean verifier verified every answer it
-reads**: each compute audit's and each link-window's one-stage answer is `Spot.OneStage.protocol.answer`'s on some
+reads**: each compute audit's and each execution phase's one-stage answer is `Spot.OneStage.protocol.answer`'s on some
 inputs (`AnswersVerifiedAt`). Not yet proved: the check reads the answers as the evidence states them. -/
 def AnswersVerified : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
@@ -561,7 +561,9 @@ def RowsSessionsComplete : Prop :=
     check p c e = .accept pub prof → RowsSessionsCompleteAt p e
 
 /-- `RowsSessionsComplete`'s honest witness, unproved: `check` accepts a period at the deployed LMS parameters that
-lists one key in two sessions. -/
+lists one key in two sessions. A period is one execution phase (`startCarriedRefusal`), so its witness is a period
+after the restart, in the second session's stretch: a period spanning a restart is refused, and this says nothing of
+a restarted device's period that holds the restart. -/
 def RowsSessionsCompleteHonest : Prop :=
   ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile) (s : Schedule) (sd : ByteArray)
     (scan : Scan) (a b : Entry),

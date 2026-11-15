@@ -22,6 +22,7 @@ public import Definitions.Core.Game.InterleaveBridge
 public import Definitions.InferenceOnly
 public import Definitions.InferenceOnly.Reads
 public import Definitions.Slowdown.Dark
+public import Definitions.Slowdown.Factor
 public import Definitions.Slowdown.Covering
 public import Definitions.Slowdown.Capability
 public import Definitions.Slowdown.Cut
@@ -44,7 +45,7 @@ public import Definitions.Certifier.RecordRows
 public import Definitions.Certifier.MonitoringPeriod
 public import Definitions.Certifier.Witness
 public import Definitions.Certifier.ResponseTie
-public import Definitions.Accounting.Sheets
+public import Definitions.Registration.Sheets
 public import Definitions.Accounting
 public import Definitions.Spot
 public import Definitions.Claims
@@ -75,7 +76,7 @@ public import Definitions.Slowdown.Guarantees.Fit
 public import Definitions.Slowdown.Guarantees.FitRate
 public import Definitions.Slowdown.Guarantees.Slowdown
 public import Definitions.Slowdown.Guarantees.Remote
-public import Definitions.Slowdown.Guarantees.RemotePeriod
+public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod
 public import Definitions.Slowdown.Assumptions.Capability
 public import Definitions.Slowdown.Guarantees.Capability
 public import Definitions.Slowdown.Guarantees.Coverage
@@ -96,11 +97,11 @@ public import Definitions.Certifier.Assumptions
 public import Definitions.Certifier.Guarantees
 public import Definitions.Certifier.Guarantees.Pooled
 public import Definitions.Flock.Guarantees
-public import Definitions.Accounting.Assumptions.Remote
-public import Definitions.Accounting.Assumptions.RemoteOutside
+public import Definitions.Poub.Assumptions.Remote
+public import Definitions.Poub.Assumptions.RemoteOutside
 public import Definitions.Pouw.Assumptions.CreditedWords
-public import Definitions.Accounting.Assumptions.RemoteP2
-public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Poub.Assumptions.RemoteP2
+public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Pouw.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
 public import Definitions.Hash.Assumptions

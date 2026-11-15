@@ -1085,7 +1085,7 @@ them in a play (`ledger_le`). `draws` are the bits it samples at the close, and 
 A deployment opens only the auditor's live window: the window its ledger's open names (`OpensOn`'s `w`) is the one the
 auditor runs, never one the prover's side chooses, since nothing the verifier keys on comes from the prover's side.
 Here `opens θ a` reads the prover's request `a`, and nothing in this structure ties the window it opens to the
-auditor's. `logged_le_dev` reads only the play's log (`Binding.Logged`), so it holds at every `opens`; the leg's
+auditor's. `logged_le_dev` reads only the play's log (`Binding.Logged`), so it holds at every `opens`; the subprotocol's
 assembly takes the live-window rule as a hypothesis or a field. -/
 structure Deployment where
   run : ByteArray → ByteArray → List Release → ByteArray → List Bool → RunSetup

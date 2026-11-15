@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PH
+from verity_torch.pouw.pearl_c import host as PH
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
@@ -67,7 +67,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.serving import SchemeId
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+from verity_torch.pouw.pearl_c import run_device as PPDR
 
 # the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
@@ -867,7 +867,7 @@ def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(
 def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
     """`screen.excluded_host`, which a device's retained call decides its record by from the bytes its rows' write lands
     (the flags and A's rows as BF16), excludes the rows `screen.excluded` does from the flags and A's FP32 words."""
-    S = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
+    S = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     rng = np.random.default_rng(31)
     words = bf16_words(rng, 64, 1024).view(np.uint32)
     words[::3, 1::8] = 0x47000000                             # 2^15 off the screen's stride: rows live_row rejects
@@ -1173,7 +1173,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
 
 
 @pytest.mark.slow
-def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
+def test_verify_run_accepts_an_honest_pass_as_the_work_sampling_design_does(honest_pass):
     path, s, epoch, prover, tr, splits, records = honest_pass
     source = b"verifier" * 4
     got = VR.verify(path, 3, 1, "test", source, coins=published(path))
@@ -3949,7 +3949,7 @@ def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monk
 
 
 def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPD2R
+    from verity_torch.pouw.pearl_c import run_device as PPD2R
     PF = load("pearl_c_vllm_profile", POUW / "pearl_c_vllm" / "profile_decode.py")
     make, _, weights, *_ = device_run
     before = (PPD2R._steps, PPD2R.call_keys, PPD2R.PearlCDeviceRun.gemm, PPD2R.PearlCDeviceRun.end)
@@ -4089,7 +4089,7 @@ def test_the_screen_launches_tritons_compiled_kernel_directly_only_where_triton_
     """After Triton's own launch at a specialization, `launch` calls its compiled kernel with the same arguments; another
     alignment compiles again, and a launch hook (Triton's chains hold none by default) or a CPU tensor takes Triton's path."""
     # the module itself: under the layout move its package re-exports a function named as the module
-    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
+    PS = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     enter, exit_ = types.SimpleNamespace(calls=[]), types.SimpleNamespace(calls=[])
     knobs = types.SimpleNamespace(runtime=types.SimpleNamespace(debug=False, add_stages_inspection_hook=None, launch_enter_hook=enter,
                                                                 launch_exit_hook=exit_),
@@ -4144,7 +4144,7 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
     """A graph's last launch under Triton's CPU interpreter: the flags it writes at the slot's flag offset are `screen_into`'s
     for its first `rows` rows, its leaves and A root land at their offsets, and no other byte of the pass's buffers changes."""
     interpreted_triton(monkeypatch)
-    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
+    PS = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4161,7 +4161,7 @@ def test_a_grouped_scatter_screens_each_flag_pair_at_its_row_of_the_map(monkeypa
     """A grouped call's scatter under Triton's CPU interpreter, with a row map: flag pair i is `screen_into`'s for row at[i]
     (of x, α and (s, ρ)), at the slot's flag offset, and the leaves and A root land as without one."""
     interpreted_triton(monkeypatch)
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c.run_device import screen as PS
+    from verity_torch.pouw.pearl_c.run_device import screen as PS
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4762,7 +4762,7 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     lane the rest behind the main lane's end, then waits for the tree; below a full tile the call's side lane replays the
     tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
     nothing, and its side lane's end becomes the set's event."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
+    from verity_torch.pouw.pearl_c import host as PPH
     from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as PPL
     make, *_ = sm90_run
     run = make()
@@ -4806,7 +4806,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
     waits for stats_a before E' (``form_ep_a``, under FORM_EP) and for the whole fork at its end, so the per-row keying's
     end moves one step (the fork's).  Where A's tree stays on the main lane the scatter copies A's root, so it runs last on
     the lane; without the driver (no graphs) the steps are as they were."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import graphs as PPG
+    from verity_torch.pouw.pearl_c import graphs as PPG
     make, kernel, *_ = sm90_run
     run = make()
     calls = []
@@ -4849,7 +4849,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
 
 
 def test_the_lane_graphs_driver_calls_take_raw_handles_and_raise_with_the_drivers_code():
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
+    from verity_torch.pouw.pearl_c import host as PPH
     got = []
 
     def cu(rc=0):

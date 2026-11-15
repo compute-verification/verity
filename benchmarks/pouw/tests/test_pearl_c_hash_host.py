@@ -369,7 +369,7 @@ def y_trees(host, monkeypatch):
     """served_y's `DeviceTrees` over the host build, for a run of the sm120 variant whose salt and salt key are fixed."""
     torch = pytest.importorskip("torch")
     from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y_device as SYD
+    from verity_torch.pouw.pearl_c import served_y_device as SYD
     salt_key = bytes(range(100, 132))
     const = host.put(salt_key.ljust(256, b"\0") + audit.hm96_kernel_constants())
     run = SimpleNamespace(kernel=SimpleNamespace(run=R, dev=host), device=torch.device("cpu"), variant="sm120",

@@ -22,7 +22,7 @@ from verity_vllm.protocols.interface import Context, Option, Target
 NAME = "sampled-proofs"
 DEFAULT_SCHEME = step_rows.NAME
 RECORDED = recorded_scheme.NAME
-LAW = ("every replay stratum drawn, and a uniform min(k, size)-subset of its units with k = the Commit's "
+DESIGN = ("every replay stratum drawn, and a uniform min(k, size)-subset of its units with k = the Commit's "
        "--replay-per-stratum (commit.challenge.stratum_picks)")
 #: its settings: ``cut``, the executor whose sites the window's circuit is cut at (`protocol_options.CUT`)
 KEYS = ("cut",)
@@ -57,7 +57,7 @@ def requires_build(scheme: str, ctx: Context) -> bool:
 def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     return Option(name=entry, hooks=target.hooks(entry),
-                  details={"commitment_scheme": scheme, "law": LAW,
+                  details={"commitment_scheme": scheme, "law": DESIGN,
                            "challenge": "verity.commitments.randomness.derive from an auditor key"})
 
 

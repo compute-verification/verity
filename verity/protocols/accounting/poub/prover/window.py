@@ -27,7 +27,7 @@ GOAL = "memory-accounting/read-session-in-zero-knowledge"
 #: the registered parameter the units' ``block`` rows read: the store's encoded blocks, a block's BYTES/2 leaves each
 STORE = "store"
 #: the registered parameters the verifier makes, a row a unit, each read by the unit's row of its name
-SUPPLIED = ("pub", "signs")
+SUPPLIED = span.SUPPLIED
 
 
 def statics(reg: audit.Registration, samples: Sequence[audit.PositionSample]) -> SimpleNamespace:
@@ -81,10 +81,9 @@ class SessionIntegration:
                                              reads=reads, supplied=SUPPLIED))
 
     def supplied(self) -> dict[str, list[bytes]]:
-        """Each supplied parameter's rows, a unit's each in read order, as the verifier makes them (`span.public_rows`)
-        and `Window.give` takes them: u16 words w0, w1, ... as big-endian 32-bit halves w1·2^16 + w0, ..."""
-        rows = [span.public_rows(d, self.registration.codec_seed, self.S) for d in self.samples]
-        return {r: [_halves(x[r]) for x in rows] for r in SUPPLIED}
+        """Each supplied parameter's rows, a unit's each in read order, as the verifier makes them and `Window.give` takes
+        them (`span.supplied`)."""
+        return span.supplied(self.samples, self.registration.codec_seed, self.S)
 
     def run(self, window: Window) -> None:
         """Each unit's prover rows (``block`` and the supplied rows by reference to their registered reads) and its
@@ -114,8 +113,3 @@ class SessionIntegration:
         return BC.opening_args_v2(self.S, public, store.blocks[j], store.payload(j), leaf, ps.salts[c], pay_salt,
                                   tuple(ps.tree.open(c).path), tuple(pay_path), ())
 
-
-def _halves(words: Sequence[int]) -> bytes:
-    if len(words) % 2:
-        raise ValueError(f"a supplied row is whole 32-bit halves, not {len(words)} u16 words")
-    return b"".join((words[k + 1] << 16 | words[k]).to_bytes(4, "big") for k in range(0, len(words), 2))

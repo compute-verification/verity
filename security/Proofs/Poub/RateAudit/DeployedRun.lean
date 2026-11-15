@@ -2,7 +2,7 @@ module
 
 public import Definitions.Poub.Guarantees.RateAuditDeployed
 public import Proofs.Poub.RateAudit.Deployed
-public import Proofs.Accounting.Remote
+public import Proofs.Poub.Remote
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

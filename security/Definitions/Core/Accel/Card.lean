@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Accel.Isa
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Mathlib.Data.NNRat.Floor
 
 /-!

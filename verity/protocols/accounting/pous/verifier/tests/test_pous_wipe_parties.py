@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+import logging
 import socket
 import threading
 import types
@@ -58,8 +59,9 @@ def verify(public: bytes, message: bytes, signature: bytes) -> bool:
     return lms.verify(KEY, public, message, lms.Signature.decode(KEY, signature))
 
 
-def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> WC.WipeMemoryChallenger:
-    """`wipe_challenger.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins."""
+def serve(monkeypatch, params: sw.WipeParams, secret: bytes, stop_after: int | None = None) -> WC.WipeMemoryChallenger:
+    """`wipe_challenger.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins; the prover
+    leaves after `stop_after` batches when given."""
     coins = S.SeededCoins(SEED)
     monkeypatch.setattr(WC, "secrets", types.SimpleNamespace(token_bytes=coins.draw))
     monkeypatch.setattr(WC, "os", types.SimpleNamespace(urandom=coins.draw))
@@ -75,12 +77,12 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> WC.WipeMemoryCha
     t = threading.Thread(target=side)
     t.start()
     with b, b.makefile("rwb") as f:
-        wipe_run.answer(f, WS.Prover(params))
+        wipe_run.answer(f, WS.Prover(params), stop_after)
     t.join()
     return got["c"]
 
 
-def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
+def challenger_capabilities(secret: bytes, params: sw.WipeParams) -> dict:
     return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "reads": params.k}
 
 
@@ -88,13 +90,13 @@ def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int
          prover=WR.Prover, state=None, request=None, sources=None):
     """One wipe on the runtime: in a live run on `sources` (the challenger's virtual clock and `SEED`'s coins unless
     given; `{}` for the runtime's own)."""
-    caps = {C: challenger_caps(secret, params), P: {"store": store}}
+    capabilities = {C: challenger_capabilities(secret, params), P: {"store": store}}
     protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryChallengerParty(chunk), P: prover})
     if sources is None:
         sources = {C: {"clock": S.VirtualClock(S.VirtualTime(T0), STEP), "coins": S.SeededCoins(SEED)}}
     given = {} if mode == "simulated" else {"sources": sources}
     return run({"protocol": WPS.ID, "params": request or WP.request_of("n0", params)}, BOTH, mode, state,
-               protocols={WPS.ID: protocol}, keys={p: PartyKey(p) for p in BOTH}, verify=verify, capabilities=caps,
+               protocols={WPS.ID: protocol}, keys={p: PartyKey(p) for p in BOTH}, verify=verify, capabilities=capabilities,
                seed=SEED if mode == "simulated" else None, clock_step_ns=STEP, **given)
 
 
@@ -185,6 +187,16 @@ def test_a_prover_that_leaves_leaves_the_session_unsigned():
     assert verdict(out, b"left")["verdict"] == "undecided"
 
 
+def test_serve_says_that_the_prover_left(monkeypatch, caplog):
+    """`wipe_challenger.serve`, whose `log` is its session log, leaves the session unsigned and says so on the module's
+    logger."""
+    with caplog.at_level(logging.WARNING, logger=WC.__name__):
+        c = serve(monkeypatch, PARAMS, b"left", stop_after=3)
+    assert c.ended is None and c.signed is None
+    said = [r.getMessage() for r in caplog.records if r.name == WC.__name__]
+    assert len(said) == 1 and said[0].startswith("the prover left before the wipe ended, so its session stays unsigned: ")
+
+
 def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_path):
     params = sw.WipeParams(1 << 12, 16, 1, 10_000, (("host-dram", (1 << 12) * sw.LABEL_BYTES),))
     r = wipe(params, b"replay", mode="simulated", chunk=1 << 11, state=tmp_path)
@@ -193,10 +205,10 @@ def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_pa
     fills = [e for e in t if e.dir == "out" and e.channel == P and e.kind == "private"]
     assert [(e.elided, len(e.data)) for e in fills] == [(True, 64), (True, 64)]
     assert all(e.kind != "private" for e in t.public())
-    caps = {C: challenger_caps(b"replay", params)}
+    capabilities = {C: challenger_capabilities(b"replay", params)}
     protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryChallengerParty(1 << 11), P: WR.Prover})
     again = run({"protocol": WPS.ID, "params": WP.request_of("n0", params)}, [C], "replay", None,
-                protocols={WPS.ID: protocol}, capabilities=caps, replay_dir=tmp_path / "runs/1")
+                protocols={WPS.ID: protocol}, capabilities=capabilities, replay_dir=tmp_path / "runs/1")
     assert (again.status, again.divergence) == ("completed", None)
     assert again.outcomes[C]["outcome"]["signed"] == r.outcomes[C]["outcome"]["signed"]
 

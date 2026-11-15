@@ -1,14 +1,14 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.Window.Leg
+public import Proofs.Properties.Verity.Sampled.Window.Subprotocol
 public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.Verity.Sampled.Window.FilesSent
 public import Proofs.Properties.Verity.Sampled.Digest
 
 /-!
-# SPOT's leg over a window, assembled from its pieces
+# SPOT's subprotocol over a window, assembled from its pieces
 
-`executionPhaseSpotSound_of_sample` at the cut the one-session leg uses (`couplingTarget_assembled`): the log v2's check read
+`executionPhaseSpotSound_of_sample` at the cut the one-session subprotocol uses (`couplingTarget_assembled`): the log v2's check read
 is the device's (`Binding.Logged Binding.readsV2`), v2 reads each pinned table at its registered file (`TablesSent`)
 and each member's files at its registered files (`FilesSent`), and v2 samples at the strategy's `afterAt`
 (`SampledDigest`). The binding, the digest and the sample's coins are stated of the period's game and not of a
@@ -78,7 +78,7 @@ noncomputable def ExecutionPhaseConstructions.withBinding {V : Vocab d α} (K : 
     bindFinder := executionPhaseBindFinder V k
     bind_calls := executionPhaseBindFinder_calls V k }
 
-/-- **SPOT's leg over a window of several members, assembled from its pieces**: `executionPhaseSpotSound_of_sample` at the
+/-- **SPOT's subprotocol over a window of several members, assembled from its pieces**: `executionPhaseSpotSound_of_sample` at the
 binding's cut and the digest's. Soundness's vocabulary at `.sampled` reading, at the deployment's windows `S` and the
 constructions with the binding's finders at the device's history `dev`, the window's projection at the readings `rd`,
 the members' decoders `D` and the sample-coupled coin maps at the family `label`, the strategy's `afterAt` and the

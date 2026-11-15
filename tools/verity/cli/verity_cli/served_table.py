@@ -86,7 +86,7 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 
 # --- what each component and the workload declare -------------------------------------------------------------------
 
-def _law(law: str, params: Mapping[str, Any]) -> None:
+def _design(law: str, params: Mapping[str, Any]) -> None:
     """The served window's rule is a rate, which its audit states to its stream (`service.SamplingDesign`): a fixed count is refused
     by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
     strata = parse_strata_rate(law)
@@ -148,7 +148,7 @@ def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ..
 _P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), law=_law, default_law="rate:1/3481648"),
+              needs=frozenset({"windows"}), law=_design, default_sampling_design="rate:1/3481648"),
     Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
@@ -424,18 +424,18 @@ def _certifier_piece(cfg, params, bound):
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
-              "(C-Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
+              "(Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
               scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 #: each listed component's party -> its piece
 PARTIES: dict[str, dict[str, Piece]] = {
     "sampled-proofs": {
         CHALLENGER: Piece("sampled-proofs", CHALLENGER, GATE, "the gate: the auditor's live challenger, whose coins "
-                          "draw the proof blocks after the window's commitment"),
+                          "sample the proof blocks after the window's commitment"),
         ZK_SERVER: Piece("sampled-proofs", ZK_SERVER, SERVED_WINDOW, "the Lean ZK server every outer proof goes through, "
                         "one at a time, in the records audit"),
         WORKERS: Piece("sampled-proofs", WORKERS, SERVED_WINDOW, "the window's values committed under hiding leaves "
-                       "and sealed, its registration before the draw, and the drawn proof blocks proved in C-Flock --zk; "
-                       "the draw on the live challenger when its gate is bound, else on a local development session's "
+                       "and sealed, its registration before the sample, and the sampled proof blocks proved in Flock --zk; "
+                       "the sample on the live challenger when its gate is bound, else on a local development session's "
                        "coins in a development run", reaches=CHALLENGER, optional=tuple(_PP), hooks=_spot_challenger),
         VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: served_verdicts.py record over the "
                         "window's rows (the records audit's verdict the integrity row), the composed verdict and the "
@@ -473,8 +473,8 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
                        "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
                        binds=("gate",), hooks=_certifier_piece),
-        NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
-                                 "warden in front of serve-openai before the requests"),
+        NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate, "
+                                 "in front of serve-openai before the requests"),
         VERIFIER: Piece("certifier", VERIFIER, CHECK, "the network certifier's row"),
     },
     "wipe": {

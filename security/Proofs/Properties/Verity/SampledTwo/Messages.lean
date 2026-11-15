@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.Recursion.Inner
 public import Proofs.Properties.Verity.Sampled.Messages
 
 /-!
-# The two-stage leg's messages: the frame's prover, and the messages fixed by their digests
+# The two-stage subprotocol's messages: the frame's prover, and the messages fixed by their digests
 
 The projection (`Proofs.Properties.Verity.SampledTwo.Projection`) reads a play of the period's game as a run of the
 two-stage verifier `A.L.V` at a prover the strategy is read as (`Frame.P`). This module builds that prover and states
@@ -20,7 +20,7 @@ the two pieces about it, `CallsLe` and `MessagesFixed`.
   bytes shows the coin (`shownCoin`); the statements' round and a session's deciding round show none.
 * **The calls** (`VerifierCallsLe`, `callsLe_of`): the prover's calls are none, so `CallsLe` is the verifier's calls
   within the strategy's, `V.cost`. That is a fact about the instance's declared cost, not about the prover: at a
-  vocabulary whose `cost` is `0` it fails as soon as the verifier hashes once. The recursive leg takes the same fact as
+  vocabulary whose `cost` is `0` it fails as soon as the verifier hashes once. The recursive subprotocol takes the same fact as
   a field of its session (`SessionIn.calls_le`).
 * **The rounds the run reaches** (`MessagesReached`, `RunsThrough`, `messagesFixed_of_reached`): `MessagesFixed` asks
   the messages to agree at every round below `k`, but a run that refuses early has no message past its last round, so
@@ -38,7 +38,7 @@ the two pieces about it, `CallsLe` and `MessagesFixed`.
   miss is at most the square root of a two-continuation finder's success. The classes are the frame's run's histories
   before round `i`; the finder flips the coins again the history does not show (`merge`) and outputs the two messages the
   two plays read when they differ, a SHA-512 collision since both open one digest. The finder's cost is declared, as
-  in the one-stage leg's.
+  in the one-stage subprotocol's.
 * **The messages' bound** (`MessagesBound`, `messagesBound`): `MessagesFixed` at the sum over the rounds of those
   square roots.
 
@@ -160,7 +160,7 @@ theorem frame_out (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F :
 /-! ## The calls -/
 
 /-- **The verifier's calls in each run of the prover `P` are within the strategy's** (the instance's, as the recursive
-leg's `SessionIn.calls_le`): `V.cost` is declared, so nothing else ties it to the verifier's SHA-512 calls. -/
+subprotocol's `SessionIn.calls_le`): `V.cost` is declared, so nothing else ties it to the verifier's SHA-512 calls. -/
 def VerifierCallsLe (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (P : Claims.Prover (TapeOf V θ F c σ)) : Prop :=
   ∀ (ω : TapeOf V θ F c σ) (r : Coins A x),

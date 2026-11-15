@@ -20,9 +20,10 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the sample** is a sample of the registered sampling design over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
-  one of the record's own values, less a read named by one of its own ports taken at that port's own root, is of a
-  registered value, opened against its registered root (`UnitsProved`; a registered value needs no reported read), and
-  the receipt names the commitment's digest (`Receipt`);
+  one of the record's own values, less a read named by one of its own ports taken at that port's own root, and each of a
+  window value the verifier names (`Params.windowValues`), not one of the record's own, less a read taken at the root of
+  that value's entry in the record's `window.activations.values`, is of a registered value, opened against its
+  registered root (`UnitsProved`; a registered value needs no reported read), and the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
@@ -146,7 +147,7 @@ let through (`Docket.tiedThrough`, published as `rests_on_period_check`). The ne
 `Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
 port. It accepts that audit at any sample and charges one sampled in part: `Properties.NetworkPeriod.RowsTiedCharged`
 has its δ in the period's ε and, where its bound is at least one incorrect proof block, every slot entry bit of each
-link-window whose scan's `prog` is its output counted as faulty. `Properties.NetworkPeriod.RowsTiedInputWired` holds
+execution phase whose scan's `prog` is its output counted as faulty. `Properties.NetworkPeriod.RowsTiedInputWired` holds
 the names an answer carries to the ones the check ties: every name an accepted period's scan's answer carries under
 `rests_on_period_check` is one of that scan's lanes' `prog<j>`; that the answer carries every Input the registration
 piece let through, and that the name `prog<j>` is the Input the entry `scan/prog<j>` registers, are not said there.
@@ -419,11 +420,12 @@ def Receipt (c : Commitment) (e : Evidence) : Prop :=
 
 /-- The roots the verifiers that accepted report opening the sessions' registered reads against, for the
 record's own values (its roots' ports and its registered values), less the reads of its own ports at their own roots
-(each port's last root, `Record.byPort`): `{value: root}`, a value reported under two roots mapped to null; none when no
-such verdict reports any (`audit.session_registered` and `audit.less_own_reads`, which `Record.sessionRegistered`,
-`Record.ownRegistered` and `Record.lessOwnReads` compute from the verdicts). -/
-def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
-  Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs))
+(each port's last root, `Record.byPort`), and for the window values `named` that are not its own, less the reads at the
+roots of their entries in its `window.activations.values`: `{value: root}`, a value reported under two roots mapped to
+null; none when no such verdict reports any (`audit.held_reads`, which `Record.sessionRegistered` and
+`Record.heldReads` compute from the verdicts). -/
+def openedRoots (named : Array String) (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
+  Record.heldReads named rec (Record.sessionRegistered vs)
 
 /-- Each opened read is of a registered value at its registered root: every entry of `opened`, a `{value: root}`, has its
 value and root in `registered`. It asks nothing of a registered value that `opened` lacks. -/
@@ -434,18 +436,19 @@ def OpenedRegistered (opened registered : Array (String × Json)) : Prop :=
 exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
-each port); and each of the record's own values the verifiers report a read of, less those of its own ports at their
-own roots (`openedRoots`), is a value the record registers, the read opened against the record's root for it
+each port); and each of the record's own values and of the window values `named` the verifiers report a read of, less
+those of its own ports at their own roots and those of a window value at its window entry's root (`openedRoots`), is a
+value the record registers, the read opened against the record's root for it
 (`Record.registeredRoots`, each value's last entry). A registered value no verifier reports a read of is not required
 to have one. -/
-def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
+def UnitsProved (named : Array String) (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
-  OpenedRegistered ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record)
+  OpenedRegistered ((openedRoots named c.record e.verdicts).getD #[]) (Record.registeredRoots c.record)
 
 /-- The verdicts accept (`verdict` of `audit_record`): every verdict that ran (`accepted` not null) accepted; at least
 one is of record (`of_record` truthy); and every verdict of record ran. -/
@@ -491,7 +494,7 @@ def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
       ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
-        UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+        UnitsProved p.windowValues c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileSample samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n
 

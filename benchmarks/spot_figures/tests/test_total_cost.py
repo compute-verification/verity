@@ -458,7 +458,7 @@ def test_a_lines_counts_are_one_whole_count_a_block_type(tmp_path):
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory) -> dict:
     """One scope at four shares, with (A)'s tax measured, planned without Lean's checks (`test_figure1.py` stubs (C)'s
-    and the two-stage lines', and the sampled-proofs suite runs both)."""
+    and the two-stage lines', and the SPOT suite runs both)."""
     mp = pytest.MonkeyPatch()
     load = cards.load
 

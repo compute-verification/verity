@@ -84,7 +84,7 @@ def certificates(run: Path, w: int) -> list[dict]:
         link, d = RC.CERTIFIED[name]
         got = [c for c in docs if (c["link"], c["direction"], c["window"]) == (link, d.value, w)]
         if len(got) != 1:
-            raise SystemExit(f"{run}: link-window {w}'s {name} record has {len(got)} certificates, not 1")
+            raise SystemExit(f"{run}: execution phase {w}'s {name} record has {len(got)} certificates, not 1")
         out.append({k: got[0][k] for k in CERTIFICATE_KEYS})
     return out
 

@@ -10,7 +10,7 @@ subprotocol's own proof discharges it. This page says where it is, what it reads
 **Imports.** These modules import what the `Properties.Verity` entry of `layers` lists
 (`security/Properties/lean-audit.json`): the composites' compiled code, the definitions and the composition's
 properties, never a proof. Their proofs (`security/Proofs/Properties/Verity/`) import them, and so do two readers of
-`Sha512.lean`: `security/Proofs/Poub/ReadUnit/Gates.lean` and `security/Properties/Spot/HistoryTable.lean`.
+`Sha512.lean`: `security/Proofs/Accounting/ReadUnit/Gates.lean` and `security/Properties/Spot/HistoryTable.lean`.
 
 ## The theorem
 
@@ -98,7 +98,7 @@ In this order:
 
 - **The five period subprotocols** (SPOT, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
-  `security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee. PoUW's in
+  `security/Definitions/Compose/JointLive.lean`), so each discharges its target by proving that guarantee. PoUW's in
   a composite that lists Pearl+'s id (remote) is Pearl+'s claim in MACs instead, which reads `Properties.Pouw.PearlPlus`.
 - **SPOT** at the one-stage form: `Verity.Sampled.spotSound_of_targets`
   (`security/Proofs/Properties/Verity/Sampled/Target.lean`) proves `SpotSound` at every composite, for a vocabulary whose

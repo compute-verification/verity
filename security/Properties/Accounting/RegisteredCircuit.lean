@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.RegisteredCircuit
-public import Properties.Accounting.Remote.Schedule
+public import Properties.Poub.Remote.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap

@@ -30,9 +30,9 @@ opening verifies to its index).
 `RunGives`, in `Verity.InProofs`'s shape at `K₀ = 1`: if an accepted run leaves a proof block whose value `right`
 rejects with probability at most `ε`, `right ≤ PieceOk`, and an accepted run's proof blocks open the carried rows to one
 value or its SHA-512 inputs hold a collision (`Carried`), then the event `r.accepts ∧ ClearOk ∧ verdict rejects the
-session the run opens (sessionOf) ∧ no collision in r.hashInputs` has probability at most `ε`. The guarantee that
-instantiates it builds `r.ports` from the counted extractor `IntegrityPeriod` reads and `r.hashInputs` from the run, sets
-`right` to each proof block's circuit, takes `Gives` from `IntegrityPeriod` at `K₀ = 1` over the session's statements
+session the run opens (challengePhaseOf) ∧ no collision in r.hashInputs` has probability at most `ε`. The guarantee that
+instantiates it builds `r.ports` from the counted extractor `IntegrityMonitoringPeriod` reads and `r.hashInputs` from the run, sets
+`right` to each proof block's circuit, takes `Gives` from `IntegrityMonitoringPeriod` at `K₀ = 1` over the session's statements
 (sampling term `0` under `All`, so `ε` is the statements' `ε_ks + ε_bind` summed) and `Carried` from the carried form;
 `cr/sha-512` then bounds the collision at a finder built from the prover, outside this lemma.
 -/
@@ -56,7 +56,7 @@ structure Vals where
 
 /-- **The session a run opens**: the commitment, scheme and key the verifier holds, how it ended and its rounds at the
 signed digest's proof block, and the signature at the signature's. -/
-def sessionOf (c : ChallengePhaseCommitment) (scheme : String) (pk : ByteArray) (sd sg : Vals) : SignedChallengePhase :=
+def challengePhaseOf (c : ChallengePhaseCommitment) (scheme : String) (pk : ByteArray) (sd sg : Vals) : SignedChallengePhase :=
   { commitment := c, ended := sd.ended, rounds := sd.rounds, scheme := scheme, publicKey := pk, signature := sg.sig }
 
 /-- **The verifier's clear checks**: the scheme is accepted, the key trusted, and each round `j`'s coin opening (the last
@@ -105,7 +105,7 @@ def RunGives : Prop :=
     Carried c r →
     prPMF μ (fun ω => r.accepts ω ∧ ClearOk schemes trusted scheme pk c openings idx ∧
         (verdict schemes trusted expected
-          (sessionOf c scheme pk (r.ports ⟨1, by omega⟩ ω) (r.ports ⟨0, by omega⟩ ω)) c openings).accepted = false ∧
+          (challengePhaseOf c scheme pk (r.ports ⟨1, by omega⟩ ω) (r.ports ⟨0, by omega⟩ ω)) c openings).accepted = false ∧
         ¬ Hash.CollisionIn Verity.sha512 (r.hashInputs ω)) ≤ ε
 
 /-- The run that always accepts, holds `v u` at proof block `u` and hashes nothing. -/
@@ -124,7 +124,7 @@ def RunGivesHonest : Prop :=
       Gives (PMF.pure ()) (constRun v) (PieceOk SCHEMES LMS k.publicKey c expected idx) 1 0 ∧
       Carried c (constRun v) ∧ ClearOk SCHEMES [k.publicKey] LMS k.publicKey c openings idx ∧
       (verdict SCHEMES [k.publicKey] expected
-        (sessionOf c LMS k.publicKey ((constRun v).ports ⟨1, by omega⟩ ()) ((constRun v).ports ⟨0, by omega⟩ ())) c
+        (challengePhaseOf c LMS k.publicKey ((constRun v).ports ⟨1, by omega⟩ ()) ((constRun v).ports ⟨0, by omega⟩ ())) c
         openings).accepted = true
 
 /-- **`RunGives`' conclusion fails without its hypotheses**: under S1's scheme (`SCHEMES`, `LMS`) and a trusted key,
@@ -134,7 +134,7 @@ def RunGivesNontrivial : Prop :=
   ∃ (c : ChallengePhaseCommitment) (pk : ByteArray) (v : Fin (c.k + 2) → Vals),
     ¬ prPMF (PMF.pure ()) (fun ω => (constRun v).accepts ω ∧ ClearOk SCHEMES [pk] LMS pk c #[] (fun _ => 0) ∧
         (verdict SCHEMES [pk] (fun _ => none)
-          (sessionOf c LMS pk ((constRun v).ports ⟨1, by omega⟩ ω) ((constRun v).ports ⟨0, by omega⟩ ω)) c
+          (challengePhaseOf c LMS pk ((constRun v).ports ⟨1, by omega⟩ ω) ((constRun v).ports ⟨0, by omega⟩ ω)) c
           #[]).accepted = false ∧
         ¬ Hash.CollisionIn Verity.sha512 ((constRun v).hashInputs ω)) ≤ 0
 
@@ -181,12 +181,12 @@ theorem runGives : RunGives := by
     rw [← hm]
     exact h0 p hp
   · intro j hj
-    have hj' : j < c.k := by simp only [sessionOf] at hj; omega
+    have hj' : j < c.k := by simp only [challengePhaseOf] at hj; omega
     obtain ⟨o, ho, hoi, hvc⟩ := hco j hj'
     have hpj := hok ⟨j + 2, by omega⟩
     simp only [PieceOk, show j + 2 ≠ 0 by omega, show j + 2 ≠ 1 by omega, ↓reduceIte, Nat.add_sub_cancel] at hpj
     obtain ⟨hrj, hri, hb, hd⟩ := hpj
-    simp only [sessionOf] at hj ⊢
+    simp only [challengePhaseOf] at hj ⊢
     simp only [hround j hj]
     have ht := htime j hj
     simp only [hround j hj] at ht
@@ -283,11 +283,11 @@ theorem runGives_honest : RunGivesHonest := by
     rfl
   · refine verdict_accepted_of _ _ _ _ _ _ Lms.deployed hlook (List.mem_singleton.2 rfl) m hm hlms rfl rfl rfl ?_
     intro j hj
-    obtain rfl : j = 0 := by simp [sessionOf, constRun, V] at hj; omega
+    obtain rfl : j = 0 := by simp [challengePhaseOf, constRun, V] at hj; omega
     exact ⟨⟨honestOpening, by simp [honestOpening], rfl, rfl, hcoin⟩,
-      by simp [sessionOf, constRun, V, honestRound, honestCommitment], rfl,
-      by simp [sessionOf, constRun, V, honestRound, Round.elapsedNs],
-      by simp [sessionOf, constRun, V, honestRound, Round.elapsedNs, honestCommitment]⟩
+      by simp [challengePhaseOf, constRun, V, honestRound, honestCommitment], rfl,
+      by simp [challengePhaseOf, constRun, V, honestRound, Round.elapsedNs],
+      by simp [challengePhaseOf, constRun, V, honestRound, Round.elapsedNs, honestCommitment]⟩
 
 /-- The values of a session that ended nowhere: no digest, no signature, no rounds. -/
 def noRun : Vals := ⟨.empty, .empty, "", #[], default⟩
@@ -297,16 +297,16 @@ theorem runGives_nontrivial : RunGivesNontrivial := by
   have hclear : ClearOk SCHEMES [ByteArray.empty] LMS .empty default #[] (fun _ => 0) :=
     ⟨⟨_, rfl⟩, List.mem_singleton.2 rfl, fun j hj => absurd hj (Nat.not_lt_zero _)⟩
   have hrej : (verdict SCHEMES [ByteArray.empty] (fun _ => none)
-      (sessionOf default LMS .empty noRun noRun) default #[]).accepted = false := by
+      (challengePhaseOf default LMS .empty noRun noRun) default #[]).accepted = false := by
     rw [Bool.eq_false_iff]
     intro ha
     obtain ⟨-, -, he, -⟩ := verdictAccepts _ _ _ _ _ _ ha
     exact absurd he (by decide)
   have hn : ¬ Hash.CollisionIn Verity.sha512 [] := by simp [Hash.CollisionIn]
   simp only [prPMF, PMF.toOuterMeasure_pure_apply, Set.mem_ofPred_eq] at h
-  simp only [sessionOf] at hrej
+  simp only [challengePhaseOf] at hrej
   simp only [constRun] at h
-  simp only [hclear, hrej, hn, sessionOf, and_true, not_false_eq_true, ↓reduceIte] at h
+  simp only [hclear, hrej, hn, challengePhaseOf, and_true, not_false_eq_true, ↓reduceIte] at h
   exact absurd h (by simp)
 
 end MemoryChallenger.Properties.InProofs.SecurityProofs

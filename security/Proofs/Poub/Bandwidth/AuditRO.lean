@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Poub.Guarantees.Bandwidth
-public import Definitions.Accounting.Guarantees.RemotePass
+public import Definitions.Poub.Guarantees.RemotePass
 public import Proofs.Poub.Bandwidth.Chip
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

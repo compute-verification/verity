@@ -1202,7 +1202,7 @@ def _worst_miss(strata: list[tuple[int, int, int]], eps: Fraction, total: int) -
     return worst
 
 
-def test_the_eps_holds_at_the_work_laws_cap():
+def test_the_eps_holds_at_the_work_sampling_designs_cap():
     """At K = n the work sampling design samples a stratum of little work only in part, so the cap is K >= W, not the unit count:
     1,000 units of work 1 and 1,000 of work 1,000, all credited, sampled at K = n = 2,000. The reported ε, `eps_at` at
     (C, W, 1), about 1.38%, holds: every set holding that share of the work is missed with probability at most δ. The
