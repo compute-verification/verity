@@ -20,7 +20,9 @@ against it, and the audit's verifier and the random challenges it sends (its coi
 command prints the share of the GPU's memory read rate that the session leaves uncertified, with its error, as text
 and as one line of JSON, and exits 0; a session the verifier refuses prints no number and exits 1. Until PoUB's Lean
 verifier gives its answer for the share's terms (`gamma_answer` in `verifier/session/verifier.py`), an accepted
-session's share is undecided, and every way in prints "no number: … undecided" and exits 1. **Because the
+session's share is undecided: this command and `--loopback` print the Python ledger's share and error, which the
+verifier records beside it, and say in their first lines and in the JSON's `gamma_decided_by` (`python-ledger`) that
+the Lean verifier has not decided them; a recorded run's (`--from`, `PERIOD`) prints no number. **Because the
 verifier and its coins run on the machine being measured, this is a measurement to improve on, not an audit:** the
 second line of the text and the JSON's `local` say so. Lower is better: 0 would mean the whole of the GPU's memory
 read rate over the session was certified as spent reading the audited store. The target is 0.14 at an error of at most

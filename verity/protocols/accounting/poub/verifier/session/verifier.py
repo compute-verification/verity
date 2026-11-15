@@ -1422,7 +1422,10 @@ class Verifier:
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
         establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
-        had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
+        had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  A reading
+        whose Lean answer isn't written (`gamma_answer`) is undecided and declares nothing; it carries the Python
+        ledger's reading as `python_ledger`, as `declared` does its forms when both readings have one, which no
+        verdict, credit or certificate reads.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s
         forms carry.
@@ -1468,30 +1471,38 @@ class Verifier:
         bounds = self.checks.bounds(profiles) if self.checks else [p.bound() for p in profiles]
         by = {id(p): x for p, x in zip(profiles, bounds)}
         readings: dict[str, ledger.Gamma] = {}
+        python: dict[str, ledger.Gamma] = {}
         for name, r in (("spec", spec), ("measured", measured)):
             try:
-                g = readings[name] = ledger.gamma(record, stated, r, wrong=lambda p: by[id(p)])
+                g = python[name] = ledger.gamma(record, stated, r, wrong=lambda p: by[id(p)])
             except ValueError as e:
                 out[name] = {"capacity_bytes_per_s": r, "refused": str(e)}
                 continue
+            whole = r * record.span_ns / 1e9
+            reading = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
+                       "certified_bytes": (1 - g.gamma) * whole,
+                       "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
+            if parts:
+                reading["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
             try:
                 gamma_answer(self.lean, record, stated, r, g.ledger.to_json())
             except NotImplementedError:
-                del readings[name]
-                out[name] = {"capacity_bytes_per_s": r, "undecided": coins.undecided("γ terms")}
+                out[name] = {"capacity_bytes_per_s": r, "undecided": coins.undecided("γ terms"),
+                             "python_ledger": reading}
                 continue
-            whole = r * record.span_ns / 1e9
-            out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "named": ledger.NAMED_TERMS,
-                         "certified_bytes": (1 - g.gamma) * whole,
-                         "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
-            if parts:
-                out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
+            readings[name] = g
+            out[name] = reading
         out["delta"] = {k: line.text(v) for k, v in ledger.delta_parts(record).items()}
         out["named"] = ledger.NAMED_TERMS
-        out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
-                                           ledger.memory(record, stated)).to_json()
-                           if len(readings) == 2 else next({w: out[n][w]} for w in ("refused", "undecided")
-                                                           for n in ("spec", "measured") if w in out[n]))
+        def declare(by_name: dict[str, ledger.Gamma]) -> dict:
+            return ledger.Declared(len(record.windows), by_name["spec"], by_name["measured"],
+                                   ledger.memory(record, stated)).to_json()
+
+        out["declared"] = (declare(readings) if len(readings) == 2
+                           else next({w: out[n][w]} for w in ("refused", "undecided")
+                                     for n in ("spec", "measured") if w in out[n]))
+        if "undecided" in out["declared"] and len(python) == 2:
+            out["declared"]["python_ledger"] = declare(python)
         out["sketch_failure"] = {"queries_log2": audit.QUERIES_LOG2,
                                  "log2": timing.log2(timing.sketch_failure(record.passes, record.rows,
                                                                            blocks=record.blocks))}

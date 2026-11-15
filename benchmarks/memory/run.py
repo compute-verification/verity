@@ -119,6 +119,11 @@ LOCAL_CASE = "LLAMA32_1B_INT8"
 BOOTSTRAP = ROOT / "adapters" / "vllm" / "verity_vllm" / "ops" / "pod_bootstrap.sh"
 #: why `--local` prints no reference beside its number
 NO_STORE = "a --local run reads no evidence store, and the references are other runs' numbers in ours"
+#: `gamma_decided_by` for a share read from the Python ledger where the Lean's answer for γ's terms isn't written, and
+#: the line the text prints for it
+PYTHON_LEDGER = "python-ledger"
+PYTHON_LEDGER_WORDS = ("python ledger: the share and its error are the Python ledger's reading of the accepted session; "
+                       "the Lean verifier has not decided them, so no audit reads them")
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
 #: what an unbound session's number rests on, in its Metrics row's verdict
 HELD_NONE = "the verifier held no checkpoint"
@@ -215,18 +220,21 @@ def _at(ledger: dict, *keys: str) -> float | None:
     return None if isinstance(x, bool) or not isinstance(x, (int, float)) else x
 
 
-def error_of(ledger: dict) -> float | None:
+def error_of(ledger: dict, *keys: str) -> float | None:
     """The session's error as its verifier's ledger declares it at the reading the number is printed at, read window
     by window as γ is: the windows' δ summed, with the sketch's term and the sample's rejection and binding terms.
-    None where the record holds none."""
-    return _at(ledger, "declared", "gamma", next(iter(READINGS)), "error", "windows")
+    None where the record holds none. `keys` reads it inside the declaration (`python_ledger`)."""
+    return _at(ledger, "declared", *keys, "gamma", next(iter(READINGS)), "error", "windows")
 
 
-def session(record: Path, k: int | None) -> dict:
+def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict:
     """Session `k` (the only one when `k` is None) of the verifier's record at `record`, as the printer reads it:
     `NoNumber` unless the Lean verifier accepted it (`accepted`, with `verdict` `lean`) and its ledger holds γ at the
     specification's rate, which is
-    `remote_session/summary.py`'s `gamma_spec` of the session."""
+    `remote_session/summary.py`'s `gamma_spec` of the session. Where the Lean's answer for γ's terms isn't written,
+    the reading is undecided and there is no number, unless `python_ledger`, which only `--loopback` and `--local`
+    pass: then γ and its error are the Python ledger's reading the record carries beside it (`python_ledger`), and
+    `gamma_decided_by` says so (`PYTHON_LEDGER`); else it is `lean`."""
     try:
         v = json.loads(record.read_text())
         sessions = {s["k"]: s for s in v["sessions"]}
@@ -249,13 +257,17 @@ def session(record: Path, k: int | None) -> dict:
         raise NoNumber(f"session {vs['k']} is recorded accepted, but its record names no Lean verdict "
                        f"({vs.get('verdict')!r}): only the Lean verifier's accept has a number")
     ledger = vs.get("ledger") or {}
-    if (undecided := (ledger.get("spec") or {}).get("undecided")) is not None:
-        raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
-    gamma = (ledger.get("spec") or {}).get("gamma")
+    spec, decided_by, under = ledger.get("spec") or {}, "lean", ()
+    if (undecided := spec.get("undecided")) is not None:
+        if not python_ledger or not isinstance(spec.get("python_ledger"), dict):
+            raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
+        spec, decided_by, under = spec["python_ledger"], PYTHON_LEDGER, ("python_ledger",)
+    gamma = spec.get("gamma")
     if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
         raise NoNumber(f"session {vs['k']} was accepted and its ledger holds no γ at the specification's rate")
     binding = v.get("binding") or {}
-    return {"value": gamma, "session": vs["k"], "verdict": vs.get("verdict"), "error": error_of(ledger),
+    return {"value": gamma, "gamma_decided_by": decided_by, "session": vs["k"], "verdict": vs.get("verdict"),
+            "error": error_of(ledger, *under),
             "rate_bytes_per_s": (ledger.get("inputs") or {}).get("spec_bytes_per_s"),
             "store_bytes": blocks * BLOCK_BYTES,
             "node_gpu_bytes": (ledger.get("memory") or {}).get("hbm_bytes"),
@@ -274,8 +286,8 @@ def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, ho
     it)."""
     why = None if s.get("error") is None else no_bound(s["error"])
     return {"value": None if why else s["value"], "unit": UNIT, "commit": commit, "run": run, "loopback": loopback,
-            "local": LOCAL if local else None, "host_run": host_run, "no_bound": why,
-            **{k: v for k, v in s.items() if k != "value"}}
+            "local": LOCAL if local else None, "gamma_decided_by": s["gamma_decided_by"], "host_run": host_run,
+            "no_bound": why, **{k: v for k, v in s.items() if k not in ("value", "gamma_decided_by")}}
 
 
 def left(tree: Path) -> dict:
@@ -353,7 +365,7 @@ def loopback(run: Callable = subprocess.run) -> dict:
         done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
         if done.returncode:
             raise NoNumber(f"the loopback's processes failed (run.sh exited {done.returncode}); their logs are above")
-        s = session(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json", None)
+        s = session(Path(env["RESEARCH_RUN_DIR"]) / "out" / "verifier.json", None, python_ledger=True)
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
 
 
@@ -406,7 +418,7 @@ def local(run: Callable = subprocess.run) -> dict:
     if done.returncode:
         raise NoNumber(f"the served session failed (run.sh exited {done.returncode}); its logs are above and in "
                        f"{held}/out")
-    s = session(Path(held) / "out" / "verifier.json", None)
+    s = session(Path(held) / "out" / "verifier.json", None, python_ledger=True)
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=False, local=True)
 
 
@@ -614,6 +626,8 @@ def text(doc: dict) -> str:
         lines.append(f"  {LOOPBACK}")
     elif doc.get("local"):
         lines.append(f"  {doc['local']}")
+    if doc.get("gamma_decided_by") == PYTHON_LEDGER:
+        lines.append(f"  {PYTHON_LEDGER_WORDS}")
     if not doc["loopback"] and doc["value"] is not None and doc["value"] >= 1:
         lines.append(f"  {NOTHING}")
     where = ("" if doc["loopback"] or doc.get("local") else f", on the auditor's verifier host (its run {doc['host_run']})"

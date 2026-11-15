@@ -63,6 +63,16 @@ def an_undecided_session() -> dict:
     return s
 
 
+def a_python_ledger_session(gamma: float = 0.199, error: float = 2.0 ** -40) -> dict:
+    """An accepted session whose γ the Lean leaves undecided, with the Python ledger's reading the verifier records
+    beside it (`python_ledger`): γ at the data sheet's rate and the declared error."""
+    s = an_undecided_session()
+    del s["ledger"]["spec"]["gamma"]
+    s["ledger"]["spec"]["python_ledger"] = {"gamma": gamma}
+    s["ledger"]["declared"] = {"undecided": UNDECIDED, "python_ledger": {"gamma": {"spec": {"error": {"windows": error}}}}}
+    return s
+
+
 def with_amounts(s: dict, *, span_ns: int = 4 * 10 ** 9, error: float = 2.0 ** -30) -> dict:
     """Session `s` with what a verifier's ledger holds beside γ: the session's span, each reading's read rate (2 TB/s
     at the data sheet's, 1.6 TB/s measured), γ and certified bytes, the same bytes at both, and the declared error."""
@@ -680,7 +690,8 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     doc = json.loads(line)
     assert (held / "out" / "memory.json").read_text() == line + "\n"
     assert sorted(p.name for p in (held / "out").iterdir()) == ["memory.json"]
-    assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "host_run", "no_bound", "session",
+    assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "gamma_decided_by", "host_run",
+                         "no_bound", "session",
                          "verdict",
                          "error", "rate_bytes_per_s", "store_bytes", "node_gpu_bytes", "model", "bound", "beside"]
     got = written(held)
@@ -1062,3 +1073,40 @@ def test_a_cheating_plan_reaches_run_sh_and_its_refusal_prints_no_number(store, 
     assert env["PLAN"] == "servedrop:1"
     out, err = capsys.readouterr()
     assert out == "" and err.count("memory: no number: session 0 was not accepted") == 2
+
+
+@pytest.mark.parametrize("way", ["--loopback", "--local"])
+def test_where_the_lean_leaves_gamma_undecided_the_one_machine_ways_print_the_python_ledgers_and_say_so_first(
+        store, capsys, work, monkeypatch, way):
+    """A fresh session prints a number: where the Lean's answer for γ's terms isn't written, `--loopback` and `--local`
+    print the Python ledger's γ and error, which the verifier's record carries beside the undecided reading, and the
+    text's first lines and the JSON's `gamma_decided_by` say the Lean verifier has not decided them."""
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
+    machine = Machine(record=a_record(a_python_ledger_session(gamma=0.199, error=2.0 ** -40)))
+    assert bench(store, way, run=machine) == 0
+    text, doc, _ = printed(capsys)
+    assert text[0].startswith("memory: 0.199 of the node's memory read rate") and "δ = 9.09e-13" in text[0]
+    assert text[1] == f"  {M.LOOPBACK if way == '--loopback' else M.LOCAL}"
+    assert text[2] == f"  {M.PYTHON_LEDGER_WORDS}" and "has not decided" in text[2]
+    assert (doc["value"], doc["error"], doc["gamma_decided_by"]) == (0.199, 2.0 ** -40, M.PYTHON_LEDGER)
+
+
+def test_no_audit_reads_the_python_ledgers_gamma(store, capsys, tmp_path):
+    """The node run and `--from` read a recorded run, which is an audit's: a γ the Lean left undecided prints no number
+    there, though the record carries the Python ledger's, and the session harness reads none from it either. A γ the
+    Lean decided is `gamma_decided_by` `lean`."""
+    record = a_record(a_python_ledger_session())
+    store.add(RUN, {"out/verifier.json": record})
+    assert bench(store, "--from", RUN) == 1
+    out, err = capsys.readouterr()
+    assert out == "" and f"session 0 was accepted and its γ at the specification's rate is {UNDECIDED}" in err
+    (tmp_path / "verifier.json").write_text(json.dumps(record))
+    with pytest.raises(M.NoNumber):
+        M.session(tmp_path / "verifier.json", None)
+    (tmp_path / "prover.json").write_text(json.dumps({"sessions": [{"mode": "honest", "opened": [{"bytes": 10}]}]}))
+    (row,) = summary.summarize(tmp_path)["honest"]
+    assert row["gamma_spec"] is None
+    store.add(FIRE, {"out/verifier.json": a_record(a_session(gamma=0.125))})
+    assert bench(store, "--from", FIRE) == 0
+    _, doc, _ = printed(capsys)
+    assert doc["gamma_decided_by"] == "lean"
