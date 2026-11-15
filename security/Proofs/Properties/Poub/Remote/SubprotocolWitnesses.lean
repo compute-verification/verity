@@ -638,7 +638,7 @@ theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial :
       (_ : Counted ((recordCommitted node recs correct).play com)
         (traceBy T node (fun _ _ => True) (played recs com))),
       ¬ (Pouw.pr (fun ω => True ∧
-          ¬ (Quiet (traceBy T node (fun _ _ => True) (played recs com)) I.counted ω →
+          ¬ (Accounting.Remote.Held.Quiet (traceBy T node (fun _ _ => True) (played recs com)) I.counted ω →
             ReadBy (fun _ _ => some Toy.sm) (traceBy T node (fun _ _ => True) (played recs com)) ω node
               (played recs com ω))) ≤
         δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
@@ -693,7 +693,7 @@ theorem SecurityProofs.lineHeldAtSubprotocol_nontrivial :
         (traceBy T node (fun _ _ => True) (played recs com))),
       ¬ (Pouw.pr (fun ω => (fun _ _ _ _ _ => True : Node → Record → ByteArray → ByteArray → ByteArray → Prop)
             node (played recs com ω) (a ω) (b ω) (e ω) ∧
-          ¬ (Quiet (traceBy T node (fun _ _ => True) (played recs com)) I.counted ω →
+          ¬ (Accounting.Remote.Held.Quiet (traceBy T node (fun _ _ => True) (played recs com)) I.counted ω →
             ReadBy (fun _ _ => some Toy.sm) (traceBy T node (fun _ _ => True) (played recs com)) ω node
               (played recs com ω))) ≤
         δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
