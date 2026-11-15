@@ -116,9 +116,10 @@ def committer_args(opts: Any) -> SimpleNamespace:
 def manifest_of_record(opts: Any) -> dict[str, Any]:
     """The row's required manifest, held to its partition of record (`commit.partition.require_partition`), as the Commit
     loads it."""
+    from verity_vllm import messages as M
     from verity_vllm.commit.partition import require_partition
 
-    man = require_partition(json.loads(Path(opts.required_manifest).read_text()), programs_root_of(opts), None)
+    man = require_partition(json.loads(M.read(Path(opts.required_manifest), "Circuit")), programs_root_of(opts), None)
     if why := manifest_refusal(opts.required_manifest, man):
         raise UsageError(why)
     return man

@@ -136,7 +136,7 @@ told its other turns run on another model.
 
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
-every run clone do; without origin/main, from the checkout's own when lean-audit's is unset. A VM that never ran boot.sh (a
+every run clone do; without origin/main it sets none, since the hook runs no file of a checkout's own. A VM that never ran boot.sh (a
 cloud worker's) otherwise merges each lean-audit.json line by line and shows conflicts the queue never sees: 359 in one trial
 merge of a PR onto `next`; and one that kept an older command runs the merged-into branch's own merge.py, which collapsed
 Security's lock to one `reads` group when an old branch merged main.
@@ -1547,8 +1547,8 @@ def poll(conversation: str, repo: str) -> bool:
     with open(mark, "a"):
         os.utime(mark)
     with open(os.path.join(INBOX, conversation + ".pull.log"), "a") as log:
-        subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox.py"), "pull",
-                          conversation, "--repo", repo], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+        subprocess.Popen([sys.executable, "-E", "-S", os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox.py"),
+                          "pull", conversation, "--repo", repo], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                          env={**os.environ, "AGENT_INBOX": INBOX}, start_new_session=True)
     return True
 
@@ -1558,8 +1558,8 @@ CLONE_PY = "tools/research/src/research/clone.py"
 
 
 def merge_drivers(command: str, cwd: str) -> None:
-    """Set the record merge drivers in ``cwd``'s repository before a merge there: origin/main's, each that differs, else the
-    checkout's when lean-audit's is unset (module doc)."""
+    """Set the record merge drivers in ``cwd``'s repository before a merge there: origin/main's, each that differs, and none
+    without origin/main (module doc)."""
     if not MERGE.search(command):
         return
     import importlib.util
@@ -1572,13 +1572,13 @@ def merge_drivers(command: str, cwd: str) -> None:
     if not (top := git("rev-parse", "--show-toplevel").stdout.strip()):
         return
     main = git("show", f"origin/main:{CLONE_PY}")
-    if main.returncode and git("config", "--get", "merge.lean-audit.driver").stdout.strip():
+    if main.returncode:
+        print(f"shell_hook: merge drivers not set in {top}: it has no origin/main to read {CLONE_PY} from, and the hook "
+              f"runs no file of a checkout's own", file=sys.stderr)
         return
     with tempfile.TemporaryDirectory(prefix="agent-guard-clone-") as tmp:
-        path = os.path.join(top, CLONE_PY)
-        if not main.returncode:
-            with open(path := os.path.join(tmp, "clone.py"), "w") as f:
-                f.write(main.stdout)
+        with open(path := os.path.join(tmp, "clone.py"), "w") as f:
+            f.write(main.stdout)
         spec = importlib.util.spec_from_file_location("agent_guard_clone", path)
         if spec is None or spec.loader is None:
             return
@@ -1605,22 +1605,22 @@ def main() -> int:
         event, command, conversation, cwd, root = {}, raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
-    except Exception:                                   # a bug here must not allow what the fallback would refuse
+    except Exception:  # noqa: BLE001 (a bug here must not allow what the fallback would refuse)
         deny = (ENVIRONMENT if FALLBACK.search(command) or re.search(r"/proc/\S*environ", command)
                 else ARGV if LISTING_FALLBACK.search(command) else "")
     try:
         low = None if deny else block_reason(command)
-    except Exception:                                   # a bug in the block gate must not stop every command
+    except Exception:  # noqa: BLE001 (a bug in the block gate must not stop every command)
         low = None
     try:
         low = low or (None if deny else local_work_reason(command))
-    except Exception:                                   # a bug in the local-work gate must not stop every command
+    except Exception:  # noqa: BLE001 (a bug in the local-work gate must not stop every command)
         low = None
     try:
         low = low or (None if deny else shell_identity_reason(command) or kept_code_reason(command))
         low = low or (None if deny or ("git" not in command and "worktree_guard" not in command)
                       else checkout_reason(command, conversation, cwd))
-    except Exception:                                   # nor one in the checkout guard, or in the rule for a name left in the shell
+    except Exception:  # noqa: BLE001 (nor one in the checkout guard, or in the rule for a name left in the shell)
         pass
     low = low or (None if deny else kept_session_reason(command))
     low = secret_file_reason(command, stated_cwd(raw)) or low   # ahead of the gates' reasons: the one about a secret is the one to act on

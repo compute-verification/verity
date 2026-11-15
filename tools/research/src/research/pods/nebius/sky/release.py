@@ -72,6 +72,12 @@ def log(msg):
 
 
 def bundles_gb():
+    """Raises where sudo refuses the reads (find and du, here and in written_gb) to this login, as after a lock-out
+    (pods/nebius/lockout): their errors go to /dev/null, so a refusal would read as 0 GB and release Commits into a full disk."""
+    for tool in ("/usr/bin/find", "/usr/bin/du"):
+        if subprocess.run(["sudo", "-n", "-l", tool], capture_output=True).returncode:
+            raise SystemExit(f"release.py: sudo refuses {tool} to this login, so the bundles can't be measured; nothing released. "
+                             "A locked node grants only `vy-sudo du-bundles` (pods/nebius/lockout): run the pacer as a root unit")
     r = subprocess.run("sudo find /workspace/jobs/cov /workspace/jobs/probe-jit -xdev -name 'replay_bundle_p*' -prune -print0 2>/dev/null"
                        " | sudo xargs -0r du -sb 2>/dev/null | awk '{t+=$1} END {print t+0}'", shell=True, capture_output=True, text=True)
     return int(r.stdout.strip() or 0) / 1e9
