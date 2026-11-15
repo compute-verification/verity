@@ -2,7 +2,9 @@ module
 
 public import Definitions.Assumptions
 public import Definitions.InferenceOnly
+public import Definitions.Slowdown.Assumptions.Untied
 public import Definitions.Slowdown.Cut.Toy
+public import Definitions.Slowdown.Untied
 
 /-!
 # The min-cut bound and its slowdown
@@ -16,15 +18,18 @@ partition into blocks of at most `c` gates, each priced at `c`. `CountHE` is `HE
 on the circuit is the verdict itself, `CompliesAtMost c k n`, at most `n` proof blocks of a `(c, k)`-partition, and
 both bounds are at `n`. `HECharged` is `HE`'s count over a set of the blocks, each of them within the budget and the
 rest charged whole, with what all the blocks read as a total and what the set's blocks read squared and summed.
+`HEChargedUntied` is `HECharged` over a monitoring period whose untied words a block reads as fresh input, at a
+limit on how many words are untied that it takes as a premise (`Slowdown.Assumptions.PeriodUntiedAtMost`).
 
-The witnesses that each says something are at the toy (`Slowdown.Cut.Toy`): `Cut_honest`, `CountHE_honest` and
-`HECharged_honest`, their premises holding together, and each statement's `_nontrivial`, the toy beating its bound
-once the block cap `ReadsAtMost`, the verdict, or `ReadsOn` is dropped.
+The witnesses that each says something are at the toy (`Slowdown.Cut.Toy`): `Cut_honest`, `CountHE_honest`,
+`HECharged_honest` and `HEChargedUntied_honest`, their premises holding together, and each statement's `_nontrivial`,
+the toy beating its bound once the block cap `ReadsAtMost`, the verdict, `ReadsOn` or the period's limit is dropped.
 -/
 
 @[expose] public section
 
 open InferenceOnly
+open Verity.Game renaming prPMFReal → prob
 
 namespace Slowdown.Cut.Guarantees
 
@@ -196,5 +201,79 @@ def HECharged_nontrivial : Prop :=
     ¬ ReadsOn Toy.d Toy.P1 univ 0 0 0 ∧
     ¬ ((Toy.W.N : ℝ) ≤ ((∑ u ∈ (univ : Finset (Fin 1))ᶜ, (Toy.W.inside (Toy.P1.gates u)).card : ℕ) : ℝ) +
         workHEOn 0 0 (1 * 1) 1 Toy.W.O)
+
+/-- **The charged count over a monitoring period, with its untied words as fresh input.** A monitoring period's
+circuit `d`, partitioned into `m` blocks (`P`), and its coins `Ω`, uniform. On each outcome `x`, the words `untied x`
+are those nothing ties to registered data, each of at most `z` gates and read by at most one block, and each block of
+`G x` reads at most `w` of them (`UntiedWords`). Tied, each block of `G x` reads at most `k` gates outside `θ`, all the
+blocks at most `T` between them and `G x`'s blocks at most `S` summed in squares (`ReadsOn` at `d`). The charged work
+`W x` meets `HECharged`'s premises with (H) at the untied circuit, `d.untie ((untied x).biUnion id)`, and the cap
+`k + z w`. If the period is accepted with more than `U` words untied with probability at most `ε`
+(`PeriodUntiedAtMost`), then it is accepted while `HECharged`'s conclusion fails at the untied reads with probability at
+most `ε`: at `k + z w` a block of `G x`, `T + z U` for all the blocks and `S + z (2 k + z w) min(U, |G x| w)` for
+`G x`'s squares; and when each block outside `G x` reads more than `w` untied words, at most `U / (w + 1)` blocks are
+charged whole.
+
+A block that reads `r` gates outside `θ` tied, and `v` untied words, reads at most `r + z v` untied. So a block of
+`G x` reads at most `k + z w`; all the blocks read at most `T + z ∑ v ≤ T + z U`, each word having one reader; and
+`(r + z v)² ≤ r² + z (2 k + z w) v` sums over `G x` to `S + z (2 k + z w) min(U, |G x| w)`, the words `G x`'s blocks
+read being at most all of them and at most `w` a block. A block outside `G x` that reads more than `w` words takes
+`w + 1` of the at most `U`, none shared. On an outcome where at most `U` words are untied all three hold outright, so
+the probability is only that of the premise's event.
+
+It does not prove the period's limit, which PoUW's period bound on untied cells would give; it ties nothing to PoUW's
+accept, `accepted` and `untied` being whatever the premise is stated at; and (H) and (E) stay named assumptions. -/
+def HEChargedUntied : Prop :=
+  ∀ (Ω ι V : Type) [Fintype Ω] [Nonempty Ω] [Fintype ι] [DecidableEq ι] [DecidableEq V] (d : RegisteredCircuit)
+    (W : Ω → Work d.D ι) (val : Ω → Finset (Fin d.D.N) → V) (k m c γ T S z w U : ℕ) (P : Partition d.D m)
+    (G : Ω → Finset (Fin m)) (untied : Ω → Finset (Finset (Fin d.D.N))) (accepted : Ω → Prop) (βw βx b ε : ℝ),
+    0 < βw → 0 < βx → 0 < b → (∀ x, ValuesInjective (W x) (val x)) → (∀ x, NoSharedPair (W x) (val x)) →
+    (∀ x, Assumptions.Hardness (d.untie ((untied x).biUnion id)) ![(W x).allW, (W x).allX] (val x) ![βw, βx]
+      (k + z * w)) →
+    (∀ x, Assumptions.Exports (W x) b) → (∀ x, ReadsOn d P (G x) k T S) →
+    (∀ x, UntiedWords d P (G x) (untied x) z w) → _root_.Slowdown.Assumptions.PeriodUntiedAtMost accepted untied U ε →
+      prob (PMF.uniformOfFintype Ω) (fun x => accepted x ∧ ¬ (
+        ((W x).N : ℝ) ≤ ((∑ u ∈ (G x)ᶜ, ((W x).inside (P.gates u)).card : ℕ) : ℝ) +
+            workHEOn (T + z * U) (S + z * (2 * k + z * w) * min U ((G x).card * w)) (βw * βx) b (W x).O ∧
+          ((∀ s, γ ≤ ((W x).mac s).card) → (∀ u ∈ (G x)ᶜ, (P.gates u).card ≤ c) →
+            (γ : ℝ) * (W x).N ≤ ((G x)ᶜ.card : ℝ) * c +
+              γ * workHEOn (T + z * U) (S + z * (2 * k + z * w) * min U ((G x).card * w)) (βw * βx) b (W x).O) ∧
+          ((∀ u ∈ (G x)ᶜ, w < (wordsRead d.D (untied x) (P.gates u)).card) → (w + 1) * (G x)ᶜ.card ≤ U))) ≤ ε
+
+/-- **The premises hold together** at an honest period of one outcome: `HECharged_honest`'s toy, values, costs, (H)
+(at the circuit untied at no word) and (E), its blocks' reads `ReadsOn Toy.d Toy.P2 {0} 2 4 4`, no untied word, and the
+period accepted with more than `0` words untied with probability `0`. -/
+def HEChargedUntied_honest : Prop :=
+  (∀ _x : Unit, ValuesInjective Toy.W Toy.val) ∧ (∀ _x : Unit, NoSharedPair Toy.W Toy.val) ∧
+    (∀ _x : Unit, Assumptions.Hardness (Toy.d.untie ((∅ : Finset (Finset (Fin Toy.C.N))).biUnion id)) Toy.arrays
+      Toy.val ![1, 1] (2 + 32 * 0)) ∧
+    (∀ _x : Unit, Assumptions.Exports Toy.W 1) ∧ (∀ _x : Unit, ReadsOn Toy.d Toy.P2 {0} 2 4 4) ∧
+    (∀ _x : Unit, UntiedWords Toy.d Toy.P2 {0} ∅ 32 0) ∧
+    _root_.Slowdown.Assumptions.PeriodUntiedAtMost (fun _ : Unit => True)
+      (fun _ => (∅ : Finset (Finset (Fin Toy.C.N)))) 0 0
+
+/-- **`HEChargedUntied` without the period's limit**: the toy with its three inputs registered (`Toy.dReg`), one block
+holding both MACs, which reads nothing outside `θ` tied (`ReadsOn` at `k = T = S = 0`). On the one outcome all three
+input words are untied, one gate each and one reader (`UntiedWords` at `z = 1`, `w = 3`), and the period is accepted;
+(H) holds at the untied circuit and (E) at `1`. At `U = 0` and `ε = 0` the limit fails, and so does the bound: untied,
+the block reads three gates, and at `T + z U = 0`, `S + z (2 k + z w) min(U, |G| w) = 0` the bound is `0`, below
+`N = 2`. -/
+def HEChargedUntied_nontrivial : Prop :=
+  (0 : ℝ) < 1 ∧ (∀ _x : Unit, ValuesInjective Toy.W Toy.val) ∧ (∀ _x : Unit, NoSharedPair Toy.W Toy.val) ∧
+    (∀ _x : Unit, Assumptions.Hardness (Toy.dReg.untie (Toy.inputWords.biUnion id)) Toy.arrays Toy.val ![1, 1]
+      (0 + 1 * 3)) ∧
+    (∀ _x : Unit, Assumptions.Exports Toy.W 1) ∧ (∀ _x : Unit, ReadsOn Toy.dReg Toy.P1 univ 0 0 0) ∧
+    (∀ _x : Unit, UntiedWords Toy.dReg Toy.P1 univ Toy.inputWords 1 3) ∧
+    ¬ _root_.Slowdown.Assumptions.PeriodUntiedAtMost (fun _ : Unit => True) (fun _ => Toy.inputWords) 0 0 ∧
+    ¬ (prob (PMF.uniformOfFintype Unit) (fun _ => True ∧ ¬ (
+        (Toy.W.N : ℝ) ≤ ((∑ u ∈ (univ : Finset (Fin 1))ᶜ, (Toy.W.inside (Toy.P1.gates u)).card : ℕ) : ℝ) +
+            workHEOn (0 + 1 * 0) (0 + 1 * (2 * 0 + 1 * 3) * min 0 ((univ : Finset (Fin 1)).card * 3)) (1 * 1) 1
+              Toy.W.O ∧
+          ((∀ s, 1 ≤ (Toy.W.mac s).card) → (∀ u ∈ (univ : Finset (Fin 1))ᶜ, (Toy.P1.gates u).card ≤ 1) →
+            ((1 : ℕ) : ℝ) * Toy.W.N ≤ ((univ : Finset (Fin 1))ᶜ.card : ℝ) * (1 : ℕ) +
+              ((1 : ℕ) : ℝ) * workHEOn (0 + 1 * 0) (0 + 1 * (2 * 0 + 1 * 3) * min 0 ((univ : Finset (Fin 1)).card * 3))
+                (1 * 1) 1 Toy.W.O) ∧
+          ((∀ u ∈ (univ : Finset (Fin 1))ᶜ, 3 < (wordsRead Toy.dReg.D Toy.inputWords (Toy.P1.gates u)).card) →
+            (3 + 1) * (univ : Finset (Fin 1))ᶜ.card ≤ 0))) ≤ 0)
 
 end Slowdown.Cut.Guarantees
