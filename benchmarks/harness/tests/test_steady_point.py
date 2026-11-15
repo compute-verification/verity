@@ -1028,7 +1028,7 @@ def test_a_point_on_a_booked_card_is_launched_through_the_booked_slot_and_names_
     for command, item in zip(ran, plan.points, strict=True):
         workload = command[command.index("--") + 1:]
         assert workload[:7] == ["taskset", "-c", "34-43", "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3",
-                                "tools/verity/check/slot.py"]
+                                "tools/check/slot.py"]
         assert workload[workload.index("--", 7) + 1:] == [
             "bash", "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,
             "--identity", item.identity, "--card", "3"]
