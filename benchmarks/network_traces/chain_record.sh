@@ -56,7 +56,8 @@
 # (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
 # found of the traffic (which execution phases were certified or refused, and how many problems: network_certifier_chain's
 # WITNESS_KEYS), nor what n2's public summary leaves out (n2_zk.py --witness: its timings, values in the clear and
-# which execution phases its members' signer refused, and its log of them, n2.log). Those are witness,
+# which execution phases its members' signer refused, and its log of them with its stderr and its children's, n2.log),
+# nor a child's log in a step's output (a session's prove.log and serve.log). Those are witness,
 # kept on the chain's private side, $Q/witness/STEP (0700, outside the run dir and the hold), where the period's case
 # reads the answers (certifier_piece.py), and never released.
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
@@ -100,7 +101,7 @@ leak_guard() {   # on every exit: the guard on the run dir and the hold, then jo
   if [ -n "$SIGNALED" ]; then withhold "$SIGNALED ended the run before the leak guard read it"
   elif [ "$OUT" = "$PUB" ]; then withhold "no hold at $Q/held"; rc=3
   else
-    "${PY:-python3}" -m verity.protocols.accounting.certifier.device.leak_guard "$RUN" "$Q" --gates "$G" --hold "$OUT" \
+    "${PY:-python3}" -m benchmarks.network_traces.leak_guard "$RUN" "$Q" --gates "$G" --hold "$OUT" \
       --release-to "$PUB" --keys --report "$PUB/leak-guard.json" > "$W/leak-guard.out" 2> "$W/leak-guard.err"
     g=$?
     if [ "$g" = 0 ] || [ "$g" = 3 ]; then OUT=$PUB; log "chain: $(cat "$W/leak-guard.out")"
@@ -185,9 +186,11 @@ export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "chain: no ZK server frame"; exit 7; }
 
 # ---- n2 and scan -------------------------------------------------------------------------------------------------------
-WHOLE=(-name 'warden-registration*.json' -o -name answers.json)   # a step's files that hold a row registration whole
+WHOLE=(-name 'warden-registration*.json' -o -name answers.json   # a step's files that hold a row registration whole,
+  -o -name '*.log' -o -name '*.err' -o -name '*.out')              # and its children's logs (a session's prove.log)
 keep() {   # keep FROM TO: the public files and what the verifier received, never a prover's file, circuit or archive;
-           # a file holding a row registration whole goes to the chain's private side, $Q/witness/STEP, and not to TO
+           # a file holding a row registration whole, or a child's log, goes to the chain's private side,
+           # $Q/witness/STEP, and not to TO
   mkdir -p "$2" "$Q/witness/${2##*/}"
   (cd "$1" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name prover-instances.bin ! -name instances.bin \
     ! -name signer-state.json ! -path '*/archive/*' ! \( "${WHOLE[@]}" \) -print0 | xargs -0 -r -I{} cp --parents {} "$2/")
@@ -200,7 +203,9 @@ n2() {
     --bin $BIN --lean $LEAN --out $N2OUT --witness $Q/witness/n2/summary.json ${CR_N2_GPU:+--gpu} \
     ${CR_N2_DRAW:+--draw $CR_N2_DRAW}"}
   log "chain: n2: $cmd"
-  bash -c "$cmd" > "$OUT/n2.log" 2>&1
+  case $cmd in *--debug-clear*) log "chain: n2: --debug-clear is a run by hand's, never the chain's"; exit 3;; esac
+  mkdir -p "$Q/witness/n2"
+  bash -c "$cmd" > "$OUT/n2.log" 2>> "$Q/witness/n2/n2.log"
   echo $? > "$W/n2.rc"; keep "$N2OUT" "$OUT/n2"; log "chain: n2 done, rc $(cat "$W/n2.rc")"
   [ "$(cat "$W/n2.rc")" = 0 ] || tail -n 1 "$OUT/n2.log" | cut -c1-600 > "$W/n2.why"
 }
