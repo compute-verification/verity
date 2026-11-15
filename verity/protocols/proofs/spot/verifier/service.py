@@ -1224,11 +1224,11 @@ class _Control:
             raise ValueError(f"the state holds no entry {order}")
         return self.at[order]
 
-    def _entry(self, order: Any, registration: str) -> dict[str, Any]:
+    def _entry(self, order: Any, docket: str) -> dict[str, Any]:
         if not (_nat(order) and order < self.s["size"]):
             _no("unknown", {"order": order})
         e = self._held(order)
-        if e["registration"] != registration:
+        if e["registration"] != docket:
             _no("unknown", {"order": order})
         return e
 
@@ -1262,9 +1262,9 @@ class _Control:
                 self.s["ended"] = {"received_at": received, "salted_at": at}
                 return {"refused": ["late-registration"], "detail": self._ended()}
         self._checks(op)
-        registration = _token(_need(op, "registration"), "registration")
+        docket = _token(_need(op, "registration"), "registration")
         order = self.s["size"]
-        self.at[order] = {"order": order, "registration": registration, "draw": None, "proved": 0, "drawn_at": None,
+        self.at[order] = {"order": order, "registration": docket, "draw": None, "proved": 0, "drawn_at": None,
                           "delivered": False, "session": None, "final": False}
         self.s["size"] = order + 1
         self.s["opened"].append(order)
@@ -1334,8 +1334,8 @@ class _Control:
         draws = self._draws(op)
         if not 1 <= len(draws) <= self.params["rounds"]:
             _no("rounds", {"rounds": len(draws), "most": self.params["rounds"]})
-        for order, registration, draw in draws:
-            e = self._entry(order, registration)
+        for order, docket, draw in draws:
+            e = self._entry(order, docket)
             if e["draw"] != draw:
                 _no("not-drawn", {"order": order})
             self._open_entry(e, order)
@@ -1385,8 +1385,8 @@ class _Control:
         if stream != self.params["stream"] or not draws:
             _no("not-session", {"stream": stream})
         entries = []
-        for order, registration, _ in draws:
-            e = self._entry(order, registration)
+        for order, docket, _ in draws:
+            e = self._entry(order, docket)
             if e["session"] != draws:
                 _no("not-session", {"order": order})
             if e["final"]:
@@ -2249,7 +2249,7 @@ class Stream:
             op["second"] = _draw_token(draw)
         return op
 
-    def select(self, registration: WindowCommitmentRecord, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
+    def select(self, docket: WindowCommitmentRecord, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The sample, once per docket, from the challenger's own randomness after the receipt: indices in [0, N) by
         the selection rule's sampling design (`select_draw`; `All` samples every proof block and reads no coins). A `closure`,
         the challenger's closure map, is refused before any coin is read (`closure`, as the Lean's `Run.run` refuses it): a
@@ -2265,16 +2265,16 @@ class Stream:
         (`register_interiors`) the second (`select_second`, by `verifier.select_second`): `k` proof blocks in each
         sampled replay block, on the coins opened after the interior docket's digest, once (`drawn`), and only
         on the entry's own interior docket (`no-interior`)."""
-        o = registration.order
+        o = docket.order
         if self.n_rho is not None and _nat(o) and o < len(self._entries) and self._entries[o].interior is not None \
-                and self._entries[o].interior == registration:
+                and self._entries[o].interior == docket:
             return self._select_second(self._entries[o])
-        op: dict[str, Any] = {"op": "select", "order": _order(registration),
-                              "registration": _docket_token(registration)}
+        op: dict[str, Any] = {"op": "select", "order": _order(docket),
+                              "registration": _docket_token(docket)}
         got: dict[str, Any] = {}
 
         def checks() -> list[str] | None:
-            e = self._entries[registration.order]
+            e = self._entries[docket.order]
             read = bytearray()
 
             def coins(n: int) -> bytes:
@@ -2285,35 +2285,35 @@ class Stream:
                 if closure is not None:
                     raise _refuse("closure", "a closure map widens a work sample, which the sampled audit's soundness "
                                              "statement doesn't cover")
-                self._placed(registration)
-                obj = select_draw(self.spec.selection, e.law, registration.record["population"], coins, closure=closure,
+                self._placed(docket)
+                obj = select_draw(self.spec.selection, e.law, docket.record["population"], coins, closure=closure,
                                   sampler=self._sampler)
                 if self._sampler is None:
                     obj, v = V.select(obj, bytes(read), self.spec.selection.to_json(), e.program, self.query,
                                       e.work_table, closure)
                     if not v.ok:
                         raise Refused(v)
-                v = V.check_draw(obj, registration.record, e.law)
+                v = V.check_draw(obj, docket.record, e.law)
                 if not v.ok:
                     raise Refused(v)
             except Refused as r:
                 got["checks"] = r.verdict
                 return list(r.verdict.codes)
-            draw = Draw(registration, e.law, obj)
+            draw = Draw(docket, e.law, obj)
             got.update(draw=draw, drawn_at=self._clock(), read=None if self._sampler is not None else bytes(read))
             op.update(draw=_draw_token(draw), proved=len(draw.proved), at=float(got["drawn_at"]))
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
-        e = self._entries[registration.order]
+        e = self._entries[docket.order]
         e.draw, e.drawn_at, e.read, e.closure = got["draw"], got["drawn_at"], got["read"], closure
         e.family = self._family(e.read)
         return e.draw
 
-    def _placed(self, registration: WindowCommitmentRecord) -> None:
+    def _placed(self, docket: WindowCommitmentRecord) -> None:
         """`Refused` (`place`) where the sample's coins are of another family of the challenger's than the one of the
         place the record's window names (`window_place.family`): the sample's family is its record's, never its coin
         source's to choose. A window that names no place is held to none."""
-        window = registration.record.get("window")
+        window = docket.record.get("window")
         if not isinstance(self._coins, ChallengerCoins) or not _names_place(window):
             return
         mine = WP.family(window)
