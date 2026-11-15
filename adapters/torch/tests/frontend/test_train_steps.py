@@ -10,9 +10,10 @@ import torch
 from verity.circuits.boundary import gate_width
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 
+from verity_torch.frontend import train_trace
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.train_step import export_steps, steps_program
-from verity_torch.frontend.train_trace import STEP, CaptureRefused
+from verity_torch.frontend.train_trace import ATTENTION, BACKWARD, STEP, CaptureRefused
 
 BATCH = (torch.zeros(2, 4), torch.zeros(2, 1))
 
@@ -81,6 +82,35 @@ def test_a_step_that_deep_copies_the_model_is_refused():
     with pytest.raises(CaptureRefused) as e:
         export_steps([lambda model, batch, opts: copy.deepcopy(model)], m, BATCH, measured=None)
     assert e.value.reason == "deep_copy"
+
+
+class _Attending(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.proj = torch.nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        q = self.proj(x).view(x.shape[0], 1, x.shape[1], 8)
+        return torch.nn.functional.scaled_dot_product_attention(q, q, q, is_causal=True).sum()
+
+
+def _attend(m, batch, opts):
+    m(batch).backward()
+
+
+def test_an_attention_calls_forward_and_backward_are_marked_with_the_dtype_it_computes_in():
+    gm, _, _ = export_steps([_attend], _Attending(), torch.zeros(2, 4, 8), measured=None)
+    marks = [str(n.args[0]) for n in gm.graph.nodes if "record_function_enter" in str(n.target)]
+    assert marks.count(f"{ATTENTION}float32") >= 2 and BACKWARD in marks
+
+
+def test_an_attention_call_that_returns_in_another_dtype_than_it_is_marked_is_refused(monkeypatch):
+    monkeypatch.setattr(train_trace, "_computes_in", lambda query: torch.float16)
+    with pytest.raises(CaptureRefused) as e:
+        export_steps([_attend], _Attending(), torch.zeros(2, 4, 8), measured=None)
+    assert (e.value.reason, e.value.op) == ("trace", "scaled_dot_product_attention")
+    assert "an attention call marked torch.float16 returned torch.float32" in str(e.value)
 
 
 def test_measured_names_one_of_the_steps():
