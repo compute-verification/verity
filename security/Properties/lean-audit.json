@@ -73,6 +73,7 @@
   "Properties.InferenceOnly.Protocol",
   "Properties.InferenceOnly.Record",
   "Properties.Verity.Soundness",
+  "Properties.Verity.LedgerPinned",
   "Properties.Verity.Game",
   "Properties.Verity.Sha512",
   "Properties.Verity.Subprotocols",
