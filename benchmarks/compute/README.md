@@ -186,10 +186,24 @@ The tests: `cd benchmarks/compute && uv run --project ../.. pytest tests`.
 ## Making a record on your own card
 
 A record is the directory a served run writes: the Pearl+ verifier's answer and the Lean verifier's verdict on it,
-the run's policy, and the rest listed below. Making one is not yet one command in this clone: serve.sh, which serves the
-load on one card under Pearl+ and verifies it into a record directory, is on the branch
-`cursor/pouw-serve-1b-from-main-1de3` of this repository, not yet merged. Until it is, records come from runs on our
-machines. Once it is, it runs as bash benchmarks/compute/serve.sh from the clone's root, and needs:
+the run's policy, and the rest listed below. One command makes one: `serve.sh` serves the load on one card under
+Pearl+, takes Pearl+'s verdict in Python and in Lean, writes the record directory and ends with `run.py --from` on it,
+which prints the number:
+
+~~~text
+bash benchmarks/compute/serve.sh
+research run --on NODE --project verity --source . --cwd clone --timeout 2h -- bash benchmarks/compute/serve.sh
+~~~
+
+The record directory is `RUN_DIR`, else the run directory under `research run`, else `./compute-run`. The command
+exits 0 only where both verdicts accept and the number prints. Each step's log is `out/logs/STEP.log`, its status a
+line of `out/steps.txt`, and its seconds are in `out/compute-run.json`'s `steps`. `COINS=local`, the default, runs a
+local challenger: infra's gate code on a scratch auditor host with a test key, each session's challenger its own
+process on 127.0.0.1, so the Lean verdict is taken of record. `COINS=in-process` holds the challenger in the serving
+process. `out/compute-run.json` says which (`challenger`), and the salt coin as the piece states it (`salt_coin`). The
+serving machine's passes stay outside the record and are removed on exit, so the run leaves nothing in `/tmp`.
+
+It needs:
 
 - one H100 or H200 (the scheme follows the H100's FP8 tensor core);
 - nvcc from CUDA 13.0 (12.8 or newer) at /usr/local/cuda-13.0, or wherever `CUDA_HOME` names: the kernel is built by
@@ -201,9 +215,27 @@ machines. Once it is, it runs as bash benchmarks/compute/serve.sh from the clone
   `cd adapters/vllm && WORK=$HOME/verity-work bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B --gpu`, then
   back at the root, WORK=$HOME/verity-work bash benchmarks/compute/serve.sh;
 - Lean v4.34.0, through [elan](https://github.com/leanprover/elan), to build the Lean verifier;
-- about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment.
+- about 2 GB of disk for the run's passes, besides the checkpoint and the vLLM environment; the record itself is about
+  200 MB;
+- memory for the Python verdict's workers, one a core unless `JOBS` says otherwise: on a 96-core H200 node the run's
+  processes peaked at 400 GB resident, summed over the workers.
 
-How long a run takes is not yet measured.
+A run takes about an hour. Run `r20261115-200421-8c63`, on one H200 of a 96-core node with `COINS=local`, took 59
+minutes. The steps took:
+
+| step | seconds |
+|---|---|
+| the kernel's cubin (`cubin`) | 136 |
+| the local challenger's gate, its Lean spot-verifier built (`gate`) | 293 |
+| serving the load (`serve`) | 60 |
+| the Python verdict (`verify`) | 868 |
+| the Lean verdict, `pouw-pearlplus` built (`lean`) | 1,917 |
+| the policy (`policy`) | 126 |
+| the class's circuit (`circuit`) | 118 |
+| the rest (`retain`, `publish`, `piece`, `verdicts`, `registered`, `share`) | 5 |
+
+The `gate` and `lean` times include building their Lean programs from a fresh clone. The run was alone on its card,
+but for the first few minutes of `verify` another run's Lean verdict was also running on the same node.
 
 ## A record directory
 

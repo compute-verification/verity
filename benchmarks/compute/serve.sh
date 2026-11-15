@@ -25,8 +25,8 @@
 #      no store) and PoUW's development piece (`served_verdicts.py pearlplus`: development.json, its coin_source);
 #  10. registered: out/registered/circuit.json and log.jsonl (W alone), what training reads; no program.json, as the
 #      tied path writes no Program;
-#  11. share: `benchmarks/compute/run.py --record RUN_DIR`, which prints the share from the record this wrote.
-# Coins (COINS): `local` (default), a local challenger: infra's gate code (`auditor.py`) on a scratch auditor host under
+#  11. share: `benchmarks/compute/run.py --from RUN_DIR`, which prints the share from the record this wrote.
+# Coins (COINS): `local` (default), a local challenger: infra's gate code (AUDITOR) on a scratch auditor host under
 # PASSES with an LMS test key (W 4, H 6), each session's challenger its own serve.py on 127.0.0.1, whose coins are the
 # Lean spot-verifier's (`benchmarks/one_stage/pearlplus_local_e2e.py init|gate|stop`): the salt coin a salt-only session's
 # and the sample a withheld sample session's on the run's commitment, so the Lean verdict is taken of record. `in-process`:
@@ -45,6 +45,8 @@
 # benchmarks/compute/load.toml's, which run.py holds the record to. Exit 0 only where Python and Lean both accept and
 # run.py prints the share.
 set -euo pipefail
+# the one path under verity/ this names, which a layout move may change
+AUDITOR=verity/protocols/compose/device/live_challenger/auditor.py
 cd "$(dirname "$0")/../.." || exit 3
 TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
@@ -100,22 +102,25 @@ cubin() {
 }
 coins() {  # the coins and parameters the run used, as a line and as compute-run.json
   "$PY" - "$OUT/compute-run.json" "$COINS" "$CLASS" "$DRAWS" "$DELTA" "$SCHEME" "$REPO" "$REV" \
-    "$(git -C "$TREE" rev-parse HEAD 2> /dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}")" "$OUT/auditor-gate.json" <<'EOF'
+    "$(git -C "$TREE" rev-parse HEAD 2> /dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}")" "$OUT/auditor-gate.json" \
+    "$AUDITOR" "$PIECE/development.json" <<'EOF'
 import json, os, sys
-out, mode, cls, draws, delta, scheme, repo, rev, commit, gate = sys.argv[1:11]
+out, mode, cls, draws, delta, scheme, repo, rev, commit, gate, auditor, piece = sys.argv[1:13]
 if mode == "local":
     g = json.load(open(gate)) if os.path.exists(gate) else {}
     w, h = g.get("params") or (None, None)
-    held = {"challenger": "local", "gate": "verity/protocols/compose/device/live_challenger/auditor.py on a scratch host "
+    held = {"challenger": "local", "gate": f"{auditor} on a scratch host "
             "(benchmarks/one_stage/pearlplus_local_e2e.py), each session's challenger serve.py on 127.0.0.1",
             "key": f"LMS test key (W {w}, H {h}), made for this run", "key_sha512": g.get("key_sha512"),
-            "lane": g.get("lane"), "salt_coin": "a salt-only session's (live)",
+            "lane": g.get("lane"), "salt_coin_from": "a salt-only session's (live)",
             "sample_coin": "a withheld sample session's on the run's commitment (live)", "lean": "of record (--of-record)"}
     line = f"local challenger (scratch auditor gate, serve.py on 127.0.0.1, LMS test key {w},{h}, Lean spot-verifier's coins)"
 else:
-    held = {"challenger": "in-process", "salt_coin": "in-process challenger",
+    held = {"challenger": "in-process", "salt_coin_from": "in-process challenger",
             "sample_coin": "node draw (verify_run.node_draw)", "lean": "development (no --of-record)"}
     line = "in-process challenger (salt) and the node's draw (sample)"
+# the salt coin as the piece states it (development.json's coin_source), null until the piece is written
+held["salt_coin"] = json.load(open(piece)).get("coin_source") if os.path.exists(piece) else None
 steps = {}
 if os.path.exists(os.path.join(os.path.dirname(out), "steps.txt")):
     for x in open(os.path.join(os.path.dirname(out), "steps.txt")):
@@ -198,6 +203,7 @@ export PEARLC_KERNEL PEARLC_CUBIN PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 unset PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER PEARLC_CHALLENGER_LANE VLLM_BATCH_INVARIANT
 case $COINS in
   local)
+    [ -f "$AUDITOR" ] || { echo "no $AUDITOR in this tree: set AUDITOR at the top of serve.sh to the gate's path" >&2; exit 3; }
     step gate gate_up || exit 1
     { read -r PEARLC_CHALLENGER_GATE; read -r PEARLC_CHALLENGER_PEER; read -r PEARLC_CHALLENGER_LANE; } < <("$PY" -c '
 import json, sys
@@ -242,7 +248,7 @@ step circuit env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.
 step verdicts verdicts || failed=1
 step registered registered || failed=1
 coins
-step share "$PY" benchmarks/compute/run.py --record "$RUN" || failed=1
+step share "$PY" benchmarks/compute/run.py --from "$RUN" || failed=1
 coins > "$OUT/coins.txt"
 cat "$OUT/logs/share.log"
 exit "$failed"
