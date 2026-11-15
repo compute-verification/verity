@@ -12,10 +12,10 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_global_program_regress import _derived_dir, _manifest
-from tests.pipeline.test_workload import _generate
 from verity_vllm import config as C
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as gp
+from verity_vllm.pipeline import workload as W
 
 #: A research workload whose request 0 stops by EOS before its cap.
 EOS_ROW = "olmoe-1b-7b__bf16__l40s__tp1__b2__i32__o32__mixedstop__greedy__bi-eager"
@@ -41,12 +41,19 @@ def test_every_row_of_record_is_done_at_its_public_cap():
         assert all(isinstance(r["max_tokens"], int) and r["max_tokens"] >= 1 for r in cfg.workload["requests"]), row
 
 
+def _from_its_id(tmp_path: Path, row: str) -> dict:
+    """The row `workload.main` writes from its id alone (`workloads/generation.toml`), without its prompts' tokens."""
+    out = tmp_path / "w.json"
+    assert W.main(W.Options(row=row, lengths_only=True, out=str(out))) == 0
+    return json.loads(out.read_text())
+
+
 def test_the_generator_writes_a_row_of_record_at_its_public_cap_and_a_research_row_as_before(tmp_path):
     row = sorted(C.rows_of_record())[0]
-    rec = _generate(tmp_path, row)
+    rec = _from_its_id(tmp_path, row)
     assert rec["sampling"]["ignore_eos"] is True and "done only at its public cap" in rec["note"]
     assert C.done_source(C.RowConfig.of(rec).workload) == "public-cap"
-    research = _generate(tmp_path, SINGLE)
+    research = _from_its_id(tmp_path, SINGLE)
     assert "ignore_eos" not in research["sampling"] and research["note"].endswith("EOS untouched.")
 
 
