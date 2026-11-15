@@ -234,7 +234,7 @@ def recorded(session: dict) -> str:
     f = session.get("failure")
     if session.get("accepted"):
         return "accepted"
-    return f"{f['failure']} at window {f['t']}" + (f", sample {f['at']}" if f.get("at") else "") if f else "unended"
+    return f"{f['failure']} at window {f['t']}" + (f", draw {f['at']}" if f.get("at") else "") if f else "unended"
 
 
 def held(session: dict, verdict: dict) -> tuple[bool, str]:
@@ -261,7 +261,7 @@ def held(session: dict, verdict: dict) -> tuple[bool, str]:
     if session.get("accepted") and len(want) != coins.openings_coins(W, g):
         return False, f"an accepted session with {len(want)} of {coins.openings_coins(W, g)} samples taken"
     if session.get("accepted"):
-        return True, "every sample taken, as many as recorded"
+        return True, "every draw drawn, as many as recorded"
     return True, "no rejection in what the record keeps; its failure is in what it doesn't"
 
 

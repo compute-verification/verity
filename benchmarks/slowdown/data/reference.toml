@@ -74,7 +74,7 @@ bits = { value = 6.4e12, unit = "bit", source = "ruled: the weights at FP4 (0.8 
 bits = { value = 1.68e8, unit = "bit", source = "ruled: 100M tokens of R1-style rollouts (21 MB at 17 bits a token, about 10x compressed)", status = "ruled" }
 
 # The incorrect-outputs channel (operating.incorrect): steps SPOT lets go unchecked return outputs the
-# adversary chose; the regime's identities each end at their first drawn incorrect step.
+# adversary chose; the regime's identities each end at their first sampled incorrect step.
 # The incorrect-outputs row (operating.incorrect): delta is the confidence it reports at; step_bits and floor_steps are
 # an unsampled regime's, where every unit is proved (q = 1); a sampled regime gives its own. step_bits is not set here:
 # a block's outputs fit its Definition's public size class, a power of two from 16 to 262,144 bits, and the registry

@@ -179,10 +179,13 @@ def asked(j: Any) -> Any:
 
 def stand_in(params: dict, record: dict, evidence: dict, blobs: list[str]) -> tuple[str, Any, Any]:
     """`stubInner`: the audit as the case's statement tells it, an accept publishing how many records the parameters'
-    log holds."""
+    log holds, and whether every verdict of the evidence ran (`Record.allRan`)."""
     match evidence["statement"].get("stub"):
         case "accept":
-            return ("accept", {"bound": len(params["log"]), "drawn": [], "per_template": None, "proved": []},
+            ran = all(isinstance(v, dict) and v.get("accepted") is not None
+                      for v in evidence.get("verdicts", {}).values())
+            return ("accept", {"bound": len(params["log"]), "complete": ran, "drawn": [], "per_template": None,
+                               "proved": []},
                     {"covered": [], "delta": params["delta"], "drawn": {}, "levels": [], "linked": False,
                      "prescribed": [], "programs": []})
         case "undecided":

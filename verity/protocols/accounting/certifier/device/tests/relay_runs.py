@@ -10,15 +10,15 @@ import asyncio
 import json
 from pathlib import Path
 
-from verity.protocols.accounting.certifier.device import runner_parts as rp, warden_serve as ws
-from verity.protocols.accounting.certifier.verifier import relay_check as RC, warden_rows as WR
+from verity.protocols.accounting.certifier.device import runner_parts as rp, network_certifier_serve as ws
+from verity.protocols.accounting.certifier.verifier import relay_check as RC, network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
-from verity.protocols.accounting.certifier.verifier.warden import (END, INTEGER_FIELDS, REFUSED, W63K4, Shim, Warden,
-                                                    WardenParams, cells, read_cell)
+from verity.protocols.accounting.certifier.verifier.network_certifier import (END, INTEGER_FIELDS, REFUSED, W63K4, Shim, NetworkCertifier,
+                                                    NetworkCertifierParams, cells, read_cell)
 
 #: a text rehearsal's schedule: its responses are vLLM's stock framing, so its egress form is bytes
-PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
+PARAMS = NetworkCertifierParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
                       ingress_buckets=30, egress_cells=128, egress="bytes")
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
@@ -28,11 +28,11 @@ SLOW_COMMIT_S = 0.4
 
 
 class _Writer:
-    def __init__(self, warden: Warden | None = None) -> None:
-        self.warden, self.writes, self.closed, self.transport = warden, [], False, self
+    def __init__(self, network_certifier: NetworkCertifier | None = None) -> None:
+        self.network_certifier, self.writes, self.closed, self.transport = network_certifier, [], False, self
 
     def write(self, data: bytes) -> None:
-        self.writes.append((self.warden.ticks if self.warden else None, bytes(data)))
+        self.writes.append((self.network_certifier.ticks if self.network_certifier else None, bytes(data)))
 
     def can_write_eof(self) -> bool:
         return False
@@ -68,9 +68,9 @@ def refusing_commit(*args, **kwargs):
 
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
-         process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
+         process: bool = False, servers: list | None = None, params: NetworkCertifierParams = PARAMS,
          id_payload: int | None = None, load_heads: Path | None = None, arrive: dict[int, int] | None = None,
-         late: dict[int, float] | None = None, back: dict[int, int | None] | None = None) -> Warden:
+         late: dict[int, float] | None = None, back: dict[int, int | None] | None = None) -> NetworkCertifier:
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
     `process`, which first signs the load's heads `load_heads` when given), the session's start certified at base 0
@@ -89,7 +89,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     assert not back or (timed and not process)
     lines = rp.Lines(out, ws.LINK) if timed else None
     held: dict[int, dict] = {}
-    device: list[Warden] = []
+    device: list[NetworkCertifier] = []
 
     def taken(window: int, line: dict) -> None:
         if window in (back or {}):
@@ -98,10 +98,10 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
             device[0].head_back(window, line)
 
     if process:
-        from verity.protocols.accounting.certifier.device import warden_serve  # by name, so that the spawned process finds its functions
+        from verity.protocols.accounting.certifier.device import network_certifier_serve  # by name, so that the spawned process finds its functions
 
         ws.ck.load_key(key, height)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0,
+        publisher = network_certifier_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0,
                                                   ordinal=0)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release,
                  "lengths": publisher.lengths}
@@ -125,14 +125,14 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
             servers.append(writer)
         return reader, writer
 
-    def settled(w: Warden) -> bool:
+    def settled(w: NetworkCertifier) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
 
-    async def main() -> tuple[list[_Writer], Warden]:
+    async def main() -> tuple[list[_Writer], NetworkCertifier]:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, leave=lines,
+        network_certifier = NetworkCertifier(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, leave=lines,
                         **hooks)
-        device.append(warden)
+        device.append(network_certifier)
         over: list[bool] = []
         if process and timed:
             loop = asyncio.get_running_loop()
@@ -144,21 +144,21 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
 
             # the process's end wakes a wait for a line that then never comes, and `close` raises its failure
             publisher.heads(lambda window, line: on_loop(taken, window, line),
-                            ended=lambda: on_loop(lambda: (over.append(True), warden._changed.set())))
-        running = asyncio.create_task(warden.run())
-        running.add_done_callback(lambda _: warden._changed.set())
+                            ended=lambda: on_loop(lambda: (over.append(True), network_certifier._changed.set())))
+        running = asyncio.create_task(network_certifier.run())
+        running.add_done_callback(lambda _: network_certifier._changed.set())
         clients, tasks = [], []
 
         async def tick(t: int) -> None:
             # the lines the process was handed are back before tick t runs, and `back`'s are handed back
             if process and timed:
-                await warden.until(lambda w: over or not w.awaited)
+                await network_certifier.until(lambda w: over or not w.awaited)
             for window, at in (back or {}).items():
                 if at == t:
-                    warden.head_back(window, held.pop(window))
+                    network_certifier.head_back(window, held.pop(window))
             # tick t runs `late[t]` seconds past its time
             clock.advance(t * tau + (late or {}).get(t, 0))
-            await warden.until(lambda w: w.ticks > t or running.done())
+            await network_certifier.until(lambda w: w.ticks > t or running.done())
 
         async def connect_due(t: int) -> None:
             # request j connects before the run's first tick, or just before tick `arrive[j]`: a later request no
@@ -168,9 +168,9 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
                     reader = asyncio.StreamReader()
                     reader.feed_data(cells(request, params.cell_bytes))
                     reader.feed_eof()
-                    clients.append(_Writer(warden))
-                    tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
-            await warden.until(lambda w: w.ordinals + w.refused + w.turned_away == len(clients))
+                    clients.append(_Writer(network_certifier))
+                    tasks.append(asyncio.create_task(network_certifier.handle(reader, clients[-1])))
+            await network_certifier.until(lambda w: w.ordinals + w.refused + w.turned_away == len(clients))
 
         await connect_due(0)
         PROCESS_CLOCK.append(clock)
@@ -178,7 +178,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
             for t in range(windows * params.window):
                 if t:
                     await connect_due(t)
-                await warden.until(settled)
+                await network_certifier.until(settled)
                 await tick(t)
             t = windows * params.window
             while timed and not running.done():
@@ -188,14 +188,14 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         finally:
             PROCESS_CLOCK.remove(clock)
         await asyncio.gather(*tasks)
-        return clients, warden
+        return clients, network_certifier
 
-    clients, warden = asyncio.run(main())
+    clients, network_certifier = asyncio.run(main())
     publisher.close()
     if lines is not None:
         lines.close()
-    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows, slack=warden.slack,
-                                      run_id=warden.run_id, start=start, origin_raw=0.0)
+    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows, slack=network_certifier.slack,
+                                      run_id=network_certifier.run_id, start=start, origin_raw=0.0)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -210,7 +210,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         shim.outcome = "refused" if REFUSED in kinds else "end" if END in kinds else "cut"
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0, id_payload))
     (out / "client.json").write_text(json.dumps({"connections": log}))
-    return warden
+    return network_certifier
 
 
 def _session_argv(out: Path, windows: int, listen_fd: int | None = None) -> list[str]:

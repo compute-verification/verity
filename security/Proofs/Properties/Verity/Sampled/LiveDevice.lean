@@ -56,8 +56,9 @@ open Verity.Sampled.Device (RunSetup Deployment pubOf)
 /-- **The auditor device the live challenger runs on**, as it stands when an audit starts at the parameters `θ`: its LMS
 key at the deployed parameters (`deployed`), its name and pinned commit, and at each `θ` the session id the gate
 reserves, the key's next unused leaf, the ledger's next `seq` and its last line's SHA-512 (`prev`, `ZERO` on an empty
-ledger), its clock's UTC reading at the audit's `k`-th entry, and the body fields of its own the entry of each kind
-adds (`extra`). -/
+ledger), its clock's UTC reading at the audit's `k`-th entry, the body fields of its own the entry of each kind
+adds (`extra`), and the files the audit registers: at each `θ` the circuit and public files, and the pinned table
+files (`circuitFile`, `publicFile`, `tables`). -/
 structure Host where
   key : Lms.PrivateKey
   deployed : key.params = Lms.deployed
@@ -69,10 +70,16 @@ structure Host where
   prev : ByteArray → String
   clock : ByteArray → ℕ → String
   extra : ByteArray → String → List (String × Json)
+  circuitFile : ByteArray → ByteArray
+  publicFile : ByteArray → ByteArray
+  tables : Array ByteArray
 
 namespace Host
 
 variable (H : Host)
+
+/-- The host's pinned table lookup, derived from the table bytes it registers. -/
+def tableFiles : PinnedTables := .ofFiles H.tables
 
 /-- The host's public key, `I ‖ T[1]` (`lms.public_key`). -/
 def pub : ByteArray := H.key.publicKey
@@ -336,17 +343,18 @@ noncomputable def cost (H : Host) (θ : ByteArray) (F : Array ByteArray) (c : By
 /-! ## A vocabulary at the deployment -/
 
 /-- **v2's reading at the deployed device**: `Idle.vocab δ 1` with the deployment's families, signer and signature count,
-v2's reading of the committed files and its digests, the files the digests name as the registered files
-(`registeredOf`), the declared calls `cost`, and every name that reads a strategy of the play at them. -/
+v2's reading of the committed files at the host's pinned tables (`Host.tableFiles`) and its digests, the host's
+circuit and public files then its pinned table files as the registered files, the declared calls `cost`, and every
+name that reads a strategy of the play at them. -/
 noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
   { Verity.Idle.vocab δ 1 with
     families := families
     signer := signer H
-    read := readOf
+    read := fun θ F => .one (readOf H.tableFiles θ F)
     programDigest := programDigestOf
     publicDigest := publicDigestOf
-    registered := registeredOf
-    place := fun θ F _ g => placeOfRead (readOf θ F) g
+    registered := fun θ => #[H.circuitFile θ, H.publicFile θ] ++ H.tables
+    place := fun θ F _ g => placeOfFiles (.one (readOf H.tableFiles θ F)) g
     extract := fun _ _ _ _ _ => 0
     finder := fun _ _ _ _ _ => Verity.Idle.finder
     cost := cost H
@@ -363,12 +371,10 @@ noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device U
     world := fun _ _ _ _ _ => Verity.Idle.world
     world_window := fun _ _ _ _ _ => rfl
     world_capacity := fun _ _ _ _ _ => rfl
-    theta := fun _ _ => ∅
-    theta_input := fun _ _ _ h => absurd h (Finset.notMem_empty _)
-    schedule := fun θ F => Instance.Honest.blocks (readOf θ F).circuit
-    wipe := fun θ F => Instance.Honest.wipe (readOf θ F).circuit
+    schedule := fun θ F => Instance.Honest.blocks (readOf H.tableFiles θ F).circuit
+    wipe := fun θ F => Instance.Honest.wipe (readOf H.tableFiles θ F).circuit
     wipeRun := fun θ F c _ =>
-      Instance.Honest.ofRun (readOf θ F).circuit (Verity.play (families θ) (signer H θ) θ F c)
+      Instance.Honest.ofRun (readOf H.tableFiles θ F).circuit (Verity.play (families θ) (signer H θ) θ F c)
     honest := fun θ F c =>
       Verity.requestThen (families θ) (signer H θ) θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩ }
 
