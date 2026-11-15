@@ -10,3 +10,26 @@ POLICYROWS2 to lead: both of SCANLEAN2's Lean errors are mended, unbuilt, and pu
 [2026-11-15T00:10Z] ebbd088d1159
 SCANCOUNT2: benchmarks/scan_cost's red is mended, pushed 4:10 PM PST, collect head 942d97893b0c (commit 749adaab29d). Cause: benchmarks/scan_cost/tests/test_scan_cost.py:195-196 called R.pinned("test", 1), the old two-argument form; e36b5514b06 (ours, the certifier scan's one shape) dropped pinned's group argument, so result.py:198's pinned(cls, pins=None) took 1 as its pins dict and result.py:202's 'cls not in pins' raised. The test came from d2fcf3862cc (one-stage's 'complete', on the other side of the merge), which e36b5514b06 never saw. Mend: both calls are R.pinned("test") (the class's one execution phase, as group 1 meant). Suite [ran, suites.py --fresh]: at 60b097e444a 1 failed, 26 passed; after the mend and at 942d97893b0c, 27 passed. No Lean, check or statement change; no move's old word in the two lines.
 
+[2026-11-15T00:23Z] 20490e94e1c0
+NETSEATS2, push 1 of 2: collect 14ff649845c to 90439459327 (n2: the summary's measurements, values in the clear and scan finds go to --witness). This is your parts (1), (2) and (4) in one commit, since they share one writer.
+
+How I carried it: I cherry-picked onto 14ff649845cd, then ran `rename.py --map tools/move/link_window_words_map.toml` over my lines (the next push). I crossed no move by hand: my branch was rebuilt on the tip, the moves already in the tip's history. [ran] No old name of any word map is in the lines I add, except the summary's own JSON keys `draw`, `drawn` and `warden`; the tip's n2_zk still writes them under those names.
+
+`n2/summary.json`, before: every key, including:
+- `run`, `gpu`, `instances_s`;
+- `staging/{evaluate_s,reference_s,write_s}`, `stager/lower_s`;
+- `members/*/reference/*/failed`;
+- `members/*/windows/*/{failed, prove/*, verify_s, clear}`;
+- `members/*/received/{verifier_bytes, verifier_found, public_pieces, placed, structured, control/{bytes,blobs_found,missing}}`;
+- per-window lists and `link/windows` whatever the signer refused.
+
+After, public: `debug_clear`, `received/*`, `draw/*`, `warden_run`, `warden/*`, `link/*`, `stager/{unit,k_log,pin,circuit_sha512,bits/*,ands}`, `staging/statements`, `members/*/{certifier_refused, ok, reference/*/{window,word,expect}, windows/*/{window, registration, accepted, public, service_public, late, decided_by, proof/*, expect, word, server_verdict, as_expected}, network/*, period/*, received/{needles, blobs, files, padded_tails, leaked, control/{file,of,holds_all}}}`, `sampled/*`, `ok`.
+
+The witness side, `$Q/witness/n2/summary.json`, gets everything listed under "before" (all of `prove/*`, including `proof_bytes`, `k_log` and `prover_accepted`), plus `members/*/issuer_refused`.
+
+Your ruling (4): I took the smaller option. If the signer refused any execution phase, the public summary holds each member's `{certifier_refused: true, ok}` and nothing per window, and `link/windows` and `sampled` go to the witness. [ran] A refusal at window 0 and one at window 1 give equal public summaries.
+
+Reader changed: `chain_record.n2_step`. It now reads prove_s, verify_s and `structured` from the witness through `report --n2-witness`, which `chain_record.sh` passes. Its control message no longer reads `blobs_found`.
+
+`--debug-clear` [read]: only `benchmarks/network_traces/n2_zk.sh` reaches it (`N2_DEBUG_CLEAR`), and by hand. No served or demo driver, and not `chain_record.sh`.
+
