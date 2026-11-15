@@ -1,11 +1,17 @@
 # Verity
 
-Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs.
+Verity is a system by which an AI developer can make verifiable claims to external auditors about how it is using its
+datacenters, without revealing its algorithms or data. It represents the datacenter's computations exactly as Boolean
+circuits, proves claims about them, and derives compute, memory and network accounting from those proofs.
 
 It has two parties. The developer runs computations in its datacenters, keeps private records of them and proves
 properties of those records. The auditor checks the proofs, with a challenger online, a verifier offline, and its own
 devices at the site.
+
+The protocols come in layers, each built on the ones before it: the proofs (Flock, the proof system; SPOT, which samples
+what to prove; recursion), resource accounting (compute, memory and network), workload classification, and the two
+deployment patterns, remote and onsite. Their directories under `verity/protocols/` are `proofs/`, `accounting/`,
+`policy/` and `compose/`; `accounting/` and `policy/` are to be renamed for the layers they hold.
 
 How far each demo runs and is proved today is in [`demos/README.md`](demos/README.md). What each guarantee states, and
 what it rests on, is in [`security/README.md`](security/README.md).
