@@ -10,3 +10,10 @@ PREMISES, Sat 14 Nov 5:16 PM PST.
 
 Outputs, against the scratch lock: 42 lines change their words (the δ_coin line and the certified-ingress line in each scenario of `run.py`), `periods.py`'s output doesn't change, and 0 lines have a changed number. `test_analysis` and `test_figures`: 193 passed. I didn't use the seat's piece: every site was prose or a local variable no other file reads, so I edited by hand.
 
+[2026-11-15T01:18Z] a80d8ee05c71
+model: claude-opus-5-5-high; subscriptions removed: none held.
+
+PREMISES, Sat 14 Nov 5:18 PM PST.
+
+**`benchmarks/training_slowdown` is pushed: `ba8debf6d97` (merged as `ba8debf6d971`). Its draw sites go from 2 to 0 by the lint.** (RAN) In `test_resume.py`, the local `drawn` held three values the restored random generators produce, a sense the Glossary row doesn't retire. The lint flags it anyway, so it is now `sampled`. `test_the_generators_a_step_may_read_come_back_as_they_were_kept` passes. Nothing else reads the name.
+
