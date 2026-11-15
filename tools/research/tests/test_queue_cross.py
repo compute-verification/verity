@@ -88,11 +88,14 @@ def test_a_clean_crossing_is_pushed_only_with_push_and_its_mark_and_verdict_carr
     assert _kept(labels, 1, new) == (True, [("land", "reviewer")])
 
 
-def test_a_head_lacking_an_earlier_move_crosses_the_later_one_named_and_its_mark_and_verdict_carry(world, monkeypatch):
+@pytest.mark.parametrize("named", [True, False], ids=["second-named", "none-named"])
+def test_a_head_lacking_an_earlier_move_crosses_the_later_one_named_and_its_mark_and_verdict_carry(world, monkeypatch,
+                                                                                                  named):
     """#1 is based on a commit `main` took after the first move's base, before that move landed, so it lacks that move, which
-    restack.py won't cross (`based-after`).  Naming only the second, the step lets restack.py cross that one, and the loop's
-    mapping skips the first as that crossing does: the crossed head's own change is the old one mapped across the second, so
-    it crosses clean, keyed by both moves as the loop keys it, and its mark and verdict carry."""
+    restack.py won't cross (`based-after`).  Naming only the second, or no move, as the step crosses every move by default,
+    the step lets restack.py cross that one (`named_moves`), and the loop's mapping skips the first as that crossing does: the
+    crossed head's own change is the old one mapped across the second, so it crosses clean, keyed by both moves as the loop
+    keys it, and its mark and verdict carry."""
     first = _move(world)
     _push_main(world, other := world.change({"c.txt": "c landed meanwhile\n"}))
     _open(world, 1, old := world.change({"new_proto/extra.py": "X = 1\n"}))
@@ -101,7 +104,7 @@ def test_a_head_lacking_an_earlier_move_crosses_the_later_one_named_and_its_mark
     _push_main(world, _git(world.dev, "commit-tree", tree, "-p", other, "-p", first, "-m", "Queue: #9 the move"))
     _land(world, second := _move(world, LIB))
     out = world.tmp / "out"
-    assert _cross(world, monkeypatch, "--move-commit", second, "--out", str(out)) == 0
+    assert _cross(world, monkeypatch, *(("--move-commit", second) if named else ()), "--out", str(out)) == 0
     report = _report(out)
     assert report["refused"] == [] and [(c["pr"], c["old"], c["src"]) for c in report["crossed"]] == [(1, old, old)]
     new = report["crossed"][0]["new"]
@@ -110,6 +113,79 @@ def test_a_head_lacking_an_earlier_move_crosses_the_later_one_named_and_its_mark
     q = _queue(world)
     assert _git(q.workdir, "show", f"{new}:lib/new_proto/extra.py") == "X = 1" and q.own_change(new) != q.own_change(old)
     assert json.loads((out / Q.CROSS_MAPPED).read_text()) == {Q.mapped_key(old, [(first, []), (second, [])]): q.own_change(new)}
+    labels = StoreLabels(world.store, change=q.own_change, moved=q.mapped_change, owners=lambda n: {f"lane-{n}"})
+    assert _kept(labels, 1, new) == (True, [("land", "reviewer")])
+
+
+def test_the_moves_named_are_those_restack_crosses_finding_them_itself_as_the_branch_it_carries_moves_on(tmp_path):
+    """restack.py refuses a named move a head is based after, so `cross_one` names it only the moves it crosses finding them
+    itself (`named_moves`).  A branch of moves lands as one: each made on the branch, which merges `main` between them.  A
+    head based before them all is named all three; one on a commit of `main`'s the first move's base lacks and the second's
+    holds, the second and third; one the third's base holds, the third; one after every move's base, the last, which
+    restack.py refuses.  Of two moves made on one base, the branch carried across the first is based after the second, which a
+    later move's base holds: it isn't named."""
+    _git(tmp_path, "init", "-q")
+    tree = _git(tmp_path, "hash-object", "-t", "tree", "-w", "/dev/null")
+
+    def commit(msg: str, *parents: str) -> str:
+        return _git(tmp_path, "commit-tree", tree, *(a for p in parents for a in ("-p", p)), "-m", msg)
+
+    def move(name: str, on: str) -> str:
+        return commit(f"Move by {name}\n\nMove: tools/move/{name}.toml", on)
+
+    def named(main: str, at: str) -> list[str]:
+        head = commit("its own change", at)
+        return [m for m, _ in Q.named_moves(tmp_path, head, main, Q.moves_between(tmp_path, main, head))]
+
+    c1 = commit("main moved on", b0 := commit("base"))
+    c3 = commit("main moved on", c2 := commit("main moved on", c1))
+    m2 = move("two", commit("Merge main into the branch", m1 := move("one", b0), c1))
+    m3 = move("three", commit("Merge main into the branch", m2, c2))
+    main = commit("The branch lands", c3, m3)
+    assert [named(main, at) for at in (b0, c1, c2, c3)] == [[m1, m2, m3], [m2, m3], [m3], [m3]]
+
+    a, b = move("a", p := commit("another base")), move("b", p)
+    c = move("c", commit("Merge the two moves", a, b))
+    (first, _), (second, _), _ = Q.moves_between(tmp_path, c, p)
+    assert {first, second} == {a, b} and named(c, p) == [first, c]
+
+
+def test_a_head_based_before_two_moves_made_on_one_base_crosses_the_first_and_the_move_after_them(world, monkeypatch):
+    """Two moves made on one base, `old_proto/` to `new_proto/` and `d/` to `e/d/`, land one after the other, and a third,
+    `new_proto/` to `lib/new_proto/`, on what they made.  #1, based before them all, edits `old_proto/a.py`.  Carried across
+    the first, it is based after the second (`based-after`), which restack.py skips finding the moves itself, as the third
+    move's base merge brings it in, and would refuse named: the step names the first and the third, and #1 crosses clean with
+    its edit at `lib/new_proto/a.py`, its mark and verdict carrying."""
+    dmap = "tools/move/demo_d_map.toml"
+    _push_main(world, base := world.change({
+        "d/__init__.py": "", "d/x.py": "X = 1\n",
+        dmap: '[roots]\nold = { d = "d" }\nnew = { d = "e/d" }\n\n[paths]\n"d/" = "e/d/"\n\n'
+              '[rewrite]\nexclude = ["tools/move/**"]\n'}))
+    _open(world, 1, old := world.change({"old_proto/a.py": A.replace("return 2", "return 3")}))
+    _mark(world, 1, old)
+    first, second = _move(world, on=base), _move(world, dmap, on=base)
+    _land(world, first)
+    record = "tools/research/src/research/store/moves.json"
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    subprocess.run(["git", "merge", "-q", "--no-commit", second], cwd=world.dev, capture_output=True)
+    (world.dev / record).write_text(json.dumps({"moves": [
+        *json.loads(_git(world.dev, "show", f"origin/main:{record}"))["moves"],
+        *json.loads(_git(world.dev, "show", f"{second}:{record}"))["moves"]]}, indent=2) + "\n")
+    _git(world.dev, "add", record)
+    _git(world.dev, "commit", "-q", "-m", "Queue: #10 the second move, with both moves' records")
+    _push_main(world, _git(world.dev, "rev-parse", "HEAD"))
+    _land(world, third := _move(world, LIB))
+    out = world.tmp / "out"
+    assert _cross(world, monkeypatch, "--out", str(out)) == 0
+    report = _report(out)
+    assert report["refused"] == [] and [(c["pr"], c["old"]) for c in report["crossed"]] == [(1, old)], report
+    assert set(report["moves"]) == {first, second, third}
+    new = report["crossed"][0]["new"]
+    assert _cross(world, monkeypatch, "--push", "--from", str(out)) == 0 and _branch(world, 1) == new
+    world.gh.put(1, new, ready=False)
+    q = _queue(world)
+    assert _git(q.workdir, "show", f"{new}:lib/new_proto/a.py").endswith("return 3")
+    assert _git(q.workdir, "show", f"{new}:e/d/x.py") == "X = 1"
     labels = StoreLabels(world.store, change=q.own_change, moved=q.mapped_change, owners=lambda n: {f"lane-{n}"})
     assert _kept(labels, 1, new) == (True, [("land", "reviewer")])
 

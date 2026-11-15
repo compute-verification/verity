@@ -4599,12 +4599,29 @@ def restack_why(x: dict) -> str:
     return f"{RESTACK}: {x.get('status')}: {((x.get('error') or '').splitlines() or [''])[0][:300]}"
 
 
+def named_moves(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
+    """Those of ``moves`` that `tools/move/restack.py` carries ``head`` across when it finds them itself, which `cross_one`
+    names to it: it skips a move the branch it carries is based after (shares with ``main`` a commit the move's base lacks,
+    the moves it crossed among them) where a later move's base contains it, as `mapped_change` skips one, and refuses a named
+    move it is based after (`based-after`), since it never skips a named one."""
+    shared, out = _git(repo, "merge-base", "--all", head, main, check=False).stdout.split(), []
+    for i, (move, parents) in enumerate(moves):
+        later = [q[0] for _, q in moves[i + 1:] if len(q) == 1]
+        if (len(parents) == 1 and later and _out(repo, "rev-list", "-n1", *shared, f"^{parents[0]}")
+                and not _out(repo, "rev-list", "-n1", move, "--not", *later)):
+            continue
+        out.append((move, parents))
+        shared.append(move)
+    return out
+
+
 def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]]], onto: str | None = None,
               kept: bool = False, src: str | None = None, drivers: dict[str, str] | None = None) -> dict:
     """``head`` carried across ``moves`` by ``main``'s own `tools/move/restack.py`, run from a `scratch` directory as `map_one`
     runs it and as `mapped_tree` runs a move's script, without the queue's credentials or the store's keys (`tree_env`):
-    `--move-commit` each move, `--onto` ``onto`` (the crossed head of the PR below it in its stack), else ``main``, `--main`
-    ``main``, and `--kept` with ``kept``.  restack.py and the carry check's merge run with ``drivers`` in their environment (`cross_drivers`).
+    `--move-commit` each move it crosses (`named_moves`), `--onto` ``onto`` (the crossed head of the PR below it in its
+    stack), else ``main``, `--main` ``main``, and `--kept` with ``kept``.  restack.py and the carry check's merge run with
+    ``drivers`` in their environment (`cross_drivers`).
     {"new": the crossed head, "own": its own change, "key": `mapped_key` of ``src``} when restack.py says clean
     and the crossed head's own change from its merge base with ``main`` is the own change of ``src`` (the head whose labels
     would carry, default ``head``) mapped across the moves that base has and it lacks (`map_one`): the equality the loop
@@ -4618,7 +4635,8 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
         if not restack.is_file():
             return {"why": f"{main[:12]} has no {RESTACK}"}
         env = tree_env(_script_env())
-        argv = [sys.executable, str(restack), head, *(a for m, _ in moves for a in ("--move-commit", m)), "--onto", onto or main,
+        named = named_moves(repo, head, main, moves)
+        argv = [sys.executable, str(restack), head, *(a for m, _ in named for a in ("--move-commit", m)), "--onto", onto or main,
                 "--main", main, "--json", *(("--kept",) if kept else ())]
         rc, out = run_group(argv, repo, RESTACK_WAIT_S,
                             env={**env, **(drivers or {}), "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
@@ -6973,7 +6991,8 @@ def main(argv: list[str]) -> int:
                     "and whose tools/move/restack.py crosses them (default origin/main)")
     ap.add_argument("--move-commit", action="append", default=[], metavar="SHA", help="cross: a move to cross, a commit of "
                     "--main with a `Move:` or `Layout-move:` line, repeated (default: every move --main has and a head lacks); "
-                    "a head lacking others besides crosses the named ones, as restack.py --move-commit crosses it")
+                    "a head crosses those of them restack.py crosses finding them itself, which skips one the branch it "
+                    "carries is based after where a later one's base holds it (`named_moves`)")
     ap.add_argument("--only", type=int, nargs="+", metavar="N", help="cross: only these PRs; one stacked on a PR it doesn't name "
                     "is skipped, as its stack doesn't cross")
     ap.add_argument("--push", action="store_true", help="cross: push each crossing that is clean to its PR's own branch, with a "
