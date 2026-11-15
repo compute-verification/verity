@@ -48,7 +48,7 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
 
 The run's exit is its record's verdict. 0 means the compiled Lean composite of record accepted, and only a composite
-computed off the served node, on an auditor host, is of record. 2 means pending: no composite of record yet. That is
+computed off the served node, on an auditor device, is of record. 2 means pending: no composite of record yet. That is
 what a window run on the served node ends with, since its own composite is a development check; it is not a crash. 1
 means a rejection, a refused composite, or a failed step.
 

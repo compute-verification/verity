@@ -33,8 +33,8 @@ states.
 row digest, salt digest, hm96 leaf and frame leaf, then the frame's pads and nodes, and three for each member's domain.
 `held` makes none: it reads the registration's `roots` once and compares strings and counts.
 
-`verity.protocols.certifier.verifier.scan_ok` mirrors it. Code: it imports Flock's registered reads at known content
-(`Flock.RegKnown`) and core's identity hash and table of domain separators.
+`verity.protocols.accounting.certifier.verifier.scan_ok` mirrors it. Code: it imports Flock's registered reads at known
+content (`Flock.RegKnown`) and core's identity hash and table of domain separators.
 -/
 
 @[expose] public section

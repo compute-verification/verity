@@ -3,10 +3,14 @@ run: each execution phase committed, registered on the link's own stream (`servi
 system's `Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkTransferBlocks_v5`,
 both ends' head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and
 decided by `TransferBlocks.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to
-the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
-comparison to each verdict, which decides nothing and goes to ``--witness``, the public summary keeping the flag alone.
+the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear`, a run by hand's,
+adds the in-the-clear comparison to each verdict, which decides nothing and goes to ``--witness`` alone (it needs one),
+the public summary keeping the flag and the outcome the verifier receives carrying none of it.
 The public summary (``summary.json``) holds only the keys its list of released_keys.json declares; the run's path,
 the device, timings and memory, the references' failed parts and the scan's finds go to ``--witness``.
+The printed log is the summary's split too (`log`, `wlog`, `sides`): stdout carries only public lines, a failure as its
+name alone; the process's stdout and stderr, which every child it starts inherits, its tracebacks and failures' text and
+the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness`` nowhere.
 
     python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
@@ -54,13 +58,16 @@ the device, timings and memory, the references' failed parts and the scan's find
 from __future__ import annotations
 
 import argparse
+import contextlib
 import functools
 import gc
 import hashlib
 import json
 import os
 import socket
+import sys
 import time
+import traceback
 from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
@@ -90,15 +97,48 @@ RECEIVED = {"registration.json": "the registration record", "draw.json": "the st
             "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
 
 
+#: where `log` writes inside `sides`: the stdout the process had, which the chain releases as ``n2.log``
+PUBLIC = None
+
+
 def log(msg: str) -> None:
-    print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+    print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", file=PUBLIC or sys.stdout, flush=True)
+
+
+@contextlib.contextmanager
+def sides(witness: Path | None):
+    """The process's stdout and stderr, which every child it starts inherits and where a traceback, a stray print or a
+    child's message lands, sent to ``n2.log`` beside ``witness``, or to nowhere without one; `log` writes to the
+    stdout the process had."""
+    global PUBLIC
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if witness is not None:
+        witness.parent.mkdir(parents=True, exist_ok=True)
+    sink = os.open(witness.with_name("n2.log") if witness is not None else os.devnull,
+                   os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    saved, streams = (os.dup(1), os.dup(2)), (sys.stdout, sys.stderr)
+    PUBLIC = os.fdopen(os.dup(1), "w", buffering=1)
+    os.dup2(sink, 1)
+    os.dup2(sink, 2)
+    sys.stdout = sys.stderr = os.fdopen(sink, "w", buffering=1)
+    try:
+        yield
+    finally:
+        sys.stdout.close()
+        sys.stdout, sys.stderr = streams
+        PUBLIC.close()
+        PUBLIC = None
+        for fd, kept in zip((1, 2), saved):
+            os.dup2(kept, fd)
+            os.close(kept)
 
 
 def wlog(a, msg: str) -> None:
-    """A line of what the public summary leaves out: appended to ``n2.log`` beside ``--witness``, or printed when
-    there is no witness side (a run by hand, which releases nothing)."""
+    """A line of what the public summary leaves out: appended to ``n2.log`` beside ``--witness``, and dropped without
+    one."""
     if a.witness is None:
-        return log(msg)
+        return
     a.witness.parent.mkdir(parents=True, exist_ok=True)
     with open(a.witness.with_name("n2.log"), "a") as f:
         f.write(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}\n")
@@ -130,6 +170,17 @@ def _record_lean_runs(PF) -> None:
     if not hasattr(verify, "recorded"):
         recorded.recorded = True
         PF.verify = recorded
+
+
+def _without_clear(body: dict) -> dict:
+    """The outcome record as the verifier receives it: without `--debug-clear`'s in-the-clear check, which is witness
+    (the window's ``clear``)."""
+    verdict = ((body.get("audit") or {}).get("verdicts") or {}).get(SVC.VERIFIER) or {}
+    if "clear" not in verdict:
+        return body
+    body = json.loads(json.dumps(body, default=str))
+    del body["audit"]["verdicts"][SVC.VERIFIER]["clear"]
+    return body
 
 
 # --- the run's execution phases ---------------------------------------------------------------------------------------
@@ -436,7 +487,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                  "certified": lw.certified(x.window, x.certificates)}
         files = {"registration.json": reg.record, "draw.json": dict(sample.draw),
                  "certificates.json": [_certificate(c) for c in x.certificates],
-                 "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": body,
+                 "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": _without_clear(body),
                  "delivered.json": {"salts": {r: s.hex() for r, s in x.statement.salts.items()},
                                     "output": x.statement.output}}
         for f, v in files.items():
@@ -673,7 +724,22 @@ def main(argv=None) -> int:
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
-    return prove(a)
+    if a.debug_clear and a.witness is None:
+        raise SystemExit("--debug-clear writes the in-the-clear check to the witness side alone: it needs --witness")
+    if a.witness is not None and Path(a.out).resolve() in a.witness.resolve().parents:
+        raise SystemExit("--witness is under --out, which the chain releases: put it on the private side")
+    with sides(a.witness):
+        if a.witness is None:
+            log("no --witness asked for: what the public summary leaves out is not written (witness lines, stderr and "
+                "every child's output)")
+        try:
+            return prove(a)
+        except BaseException as e:  # noqa: BLE001 - any failure's text, an interrupt's too, stays off stdout
+            if isinstance(e, SystemExit) and e.code in (0, None):
+                return 0
+            traceback.print_exc()
+            log(f"failed: {type(e).__name__}")
+            return e.code if isinstance(e, SystemExit) and isinstance(e.code, int) else 1
 
 
 if __name__ == "__main__":

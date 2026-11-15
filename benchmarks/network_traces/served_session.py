@@ -158,7 +158,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 #: the record's leak guard, which chain_record.sh runs on its way out and `release` runs on a session's record
-LEAK_GUARD = "verity.protocols.accounting.certifier.device.leak_guard"
+LEAK_GUARD = "benchmarks.network_traces.leak_guard"
 TREE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE / "verity/protocols/compose/device/live_challenger"))
 import auditor as A  # noqa: E402

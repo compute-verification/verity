@@ -333,7 +333,7 @@ def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_i
 
 def test_the_memory_challengers_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
                                                                                                      capsys):
-    """On the auditor's host each memory challenger's start checks its key against `demos/onsite_full.toml`'s pin
+    """On the auditor's device each memory challenger's start checks its key against `demos/onsite_full.toml`'s pin
     first: a state with no key is refused ``key``, and one whose key the configuration doesn't pin ``pin``, before any
     request is read or any party or the served window starts."""
     state = tmp_path / T.AUDITOR_HOST

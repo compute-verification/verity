@@ -1176,11 +1176,11 @@ Moved to [protocol/advice-v0.md](protocol/advice-v0.md).
 ## The replay's state chain (`verity_vllm.compiler.replay_chain`)
 
 Under advice v1 (the next section's end) the compile slice's proof block replays the scheduler one step proof block per
-engine step. Each proof block is `ReplayStep_v1` (`verity_vllm.compiler.replay_step`): the committed queue state, the next A certified
-arrivals and the next A decisions go in, and the step's rows and next state come out. The chain hands the state from
-proof block to proof block as the state rows of one produced value a window (`one_stage.produced`, value `replay-state`,
-`hm96-sha512/row/v2` bit rows), beside a window row (value `replay-window`). Each proof block reads its rows at public
-positions, and no gate hashes a row: the Lean verifier checks each read's path.
+engine step. Each proof block is `ReplayStep_v1` (`verity_vllm.compiler.replay_step`): the committed queue state, the
+next A certified arrivals and the next A decisions go in, and the step's rows and next state come out. The chain hands
+the state from proof block to proof block as the state rows of one produced value a window (`one_stage.produced`, value
+`replay-state`, `hm96-sha512/row/v2` bit rows), beside a window row (value `replay-window`). Each proof block reads its
+rows at public positions, and no gate hashes a row: the Lean verifier checks each read's path.
 
 **The step's cursors are private.** The step reads its arrivals and decisions at the scan's cursors, which move by its
 `taken` and `used`, and where a step stands in the certified arrivals or the window's decisions is the schedule
@@ -1194,11 +1194,11 @@ cursor. So:
   log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
   the whole queue would take Q·bitlen(A).
 
-**The rows'** layouts are `verity_vllm.compiler.replay_chain`'s (`row_fields`, `window_fields`). The state row's state group is
-ReplayStep_v1's state input and next-state output, bit for bit, at the shape's AS and EW (`Shape`'s two statics):
-with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It adds
-the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at most
-Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its cap (O = max_tokens): `q_cap
+**The rows'** layouts are `verity_vllm.compiler.replay_chain`'s (`row_fields`, `window_fields`). The state row's state
+group is ReplayStep_v1's state input and next-state output, bit for bit, at the shape's AS and EW (`Shape`'s two
+statics): with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It
+adds the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at
+most Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its cap (O = max_tokens): `q_cap
 Q×1` after `q_O`, as the step's `arr_cap` and the network certifier slots' `a_cap`. In every row the valid elements of
 each group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
 
@@ -1231,7 +1231,7 @@ window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows,
 path of depth ⌈log2(P + 2)⌉, or 1 for a window row. A session adds one `ReplayClose` (13 ANDs at the sync
 KV-pressure trace's shape) and its two reads.
 
-## Advice v0's validity (`advice_check`)
+## Advice v0's validity (`verity_vllm.compiler.advice_check`)
 
 The compile slice's proof block's first part ("The charge, and what is committed", above), that the committed bit string
 decodes to a well-formed v0 advice, is the Boolean Definition
@@ -1240,13 +1240,13 @@ decodes to a well-formed v0 advice, is the Boolean Definition
 
 with L the public cap in bits, a multiple of 40, and LW = bitlen(L / 8). `bits` is the string in stream order and
 `length` its byte count, least significant bit first; bits past 8·length aren't read. The output is 1 exactly when
-`advice_check.reference` holds: length ≤ L / 8, and `decode` takes the bytes up to three refusals the circuit doesn't
-make yet (`DEFERRED`). It makes every other refusal of `decode`: the grammar (version, minimal `uvar`s, the least
-widths, no truncation, zero padding under a byte, no trailing byte), UTF-8 ids, the lengths ≥ 1, first-row order, every
-request admitted, a first row that doesn't resume and starts at its hit, hits only on admitting rows and their sources
-summing to them, adjacent sources of different requests, own KV only on a resume, sources admitted by their step's end,
-continuity, no row past the known tokens (so at most one past the last output), the derived `kind`, no resume of a
-finished request, no request twice in a step, and exactly `output_len` kept outputs.
+`verity_vllm.compiler.advice_check.reference` holds: length ≤ L / 8, and `decode` takes the bytes up to three refusals
+the circuit doesn't make yet (`DEFERRED`). It makes every other refusal of `decode`: the grammar (version, minimal
+`uvar`s, the least widths, no truncation, zero padding under a byte, no trailing byte), UTF-8 ids, the lengths ≥ 1,
+first-row order, every request admitted, a first row that doesn't resume and starts at its hit, hits only on admitting
+rows and their sources summing to them, adjacent sources of different requests, own KV only on a resume, sources
+admitted by their step's end, continuity, no row past the known tokens (so at most one past the last output), the
+derived `kind`, no resume of a finished request, no request twice in a step, and exactly `output_len` kept outputs.
 
 **Deferred**, refused by `decode` and not yet by the circuit:
 - **Unique ids.** Exact equality of variable-length strings needs the ids sorted lexicographically (prefix doubling, a
@@ -1399,10 +1399,10 @@ charge (the composition below): what the bound counts is the charge, not the com
 - *v0's per-window parts.* Each window's part is self-delimited.
 **Composition**, all in one ZK proof under the advice's hiding root:
 1. *The values are the committed advice.* The advice's hiding rows hold each window's residual raw, as
-   `verity_vllm.compiler.replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window (4,391 on the corpus'
-   largest), in `dec` with their count `left`; its `hits` group ("The rows" below), which v1 leaves empty; and its
-   order entries (position, rank). No decoder runs in the circuit: the scan reads each field at a private head of the
-   chain's (`dh`, `hh`).
+   `verity_vllm.compiler.replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window
+   (4,391 on the corpus' largest), in `dec` with their count `left`; its `hits` group ("The rows" below), which v1
+   leaves empty; and its order entries (position, rank). No decoder runs in the circuit: the scan reads each field at a
+   private head of the chain's (`dh`, `hh`).
 2. The scan of `ReplayStep_v1` over the session's steps, from the empty engine. The window row holds a queue of the
    next Q released requests not yet arrived, in (a, ordinal) order, Q a public cap like H, and arrival p takes the one
    at its order entry's rank (0 where none names p; a rank of Q or more is refused). Q = 128 holds the network certifier's traces'
@@ -1474,11 +1474,11 @@ charge (the composition below): what the bound counts is the charge, not the com
 coding of the hits, the order entries and their counts, and the length terms' tail):
 [protocol/charge-chain.md](protocol/charge-chain.md), "The whole window".
 
-**The prefix cache in the scan.** `CacheStep_v1` (`cache_step`) is the walk's prefix rules (`Prefixes`) as a Boolean
-Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its parent entry and its owner,
-the lowest-numbered request that computed it), compared on tokens, with no hash in the circuit. Each engine step of the
-scan (item 2) is one `ReplayStep_v1` and the `CacheStep_v1` calls on its rows, which carry the table from call to call
-in `ReplayStep_v1`'s scheduling order:
+**The prefix cache in the scan.** `CacheStep_v1` (`verity_vllm.compiler.cache_step`) is the walk's prefix rules
+(`Prefixes`) as a Boolean Definition: one row's pass over a table of at most N cached units (a unit's U tokens, its
+parent entry and its owner, the lowest-numbered request that computed it), compared on tokens, with no hash in the
+circuit. Each engine step of the scan (item 2) is one `ReplayStep_v1` and the `CacheStep_v1` calls on its rows, which
+carry the table from call to call in `ReplayStep_v1`'s scheduling order:
 - *The calls.* Each running row comes first, from its slot's walk entry `pfx` over the units from its start's: it owns
   or appends the units it completes.
   - Each candidate (the W waiting slots, then the A arrivals) then gets a lookup from the root (`admit`, nins = 0),
@@ -1492,8 +1492,9 @@ in `ReplayStep_v1`'s scheduling order:
     calls a step.
 - *The owner.* A call's r is the row's request id, the arrival ordinal `ReplayStep_v1` carries (RW = IW). FCFS admits
   new requests in arrival order, so the lowest id is the earliest-admitted request, the one I1 numbers lowest. A hit's
-  canonical sources are its lookup's trail entries' owners in the table at the step's end (`cache_step.sources`), where
-  an owner may have dropped to a lower request later in the step. The walk (item 4) reads them as I1's `sources`.
+  canonical sources are its lookup's trail entries' owners in the table at the step's end
+  (`verity_vllm.compiler.cache_step.sources`), where an owner may have dropped to a lower request later in the step. The
+  walk (item 4) reads them as I1's `sources`.
 - *The derive bit.* Each step takes one bit `sent`: 0 while the no-eviction bound holds, when every shortfall is 0;
   1 past it, when the step reads one sent shortfall per lookup. The bound counts the step's own admissions,
   ⌈(P + O)/B⌉ blocks per admitted request, while the lookups that size those admissions read the bit. So the bit is
@@ -1526,17 +1527,17 @@ in `ReplayStep_v1`'s scheduling order:
   holds, so a shortfall is at least 0. v1 sends none: past the bound each hit is the pool's, which `CacheStep_v3`
   derives, so the window row's `hits` group and `CacheStep_v1`'s own `sent` = 1 mode, a hit checked only as a cached
   prefix, are unused.
-- *Cost* (`cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs each. That is 5,856
-  ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048): about 1.1G a step at
-  (R, W, A) = (4, 8, 4), where `ReplayStep_v1` is 12,235. The linear table is a slice's size class, and its difftest
-  (`cache_vectors`) runs it over two traces' slices at N = 128, against `Prefixes` over the whole traces. A static
-  window would let a continuing row's call walk only the units its chunk touches, not all ⌈L / U⌉.
+- *Cost* (`verity_vllm.compiler.cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs
+  each. That is 5,856 ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048):
+  about 1.1G a step at (R, W, A) = (4, 8, 4), where `ReplayStep_v1` is 12,235. The linear table is a slice's size class,
+  and its difftest (`cache_vectors`) runs it over two traces' slices at N = 128, against `Prefixes` over the whole
+  traces. A static window would let a continuing row's call walk only the units its chunk touches, not all ⌈L / U⌉.
 
 **Scaling: offline memory checking** (the design to build; nothing of it is built). The linear table compares every
 entry at every unit, and past the bound N is the session's units. On corpus-smallkv's fixture (NB = 100, L = 4,096,
 1,934 steps) N = 961, which makes a unit about 561K ANDs and a call (256 units) 144M. That is about 4G a step at
 (R, W, A) = (4, 8, 4), and 7.8e12 for the session. Offline memory checking replaces the table with the session's
-memory operations as records, sorted once, as `advice_check` sorts its events.
+memory operations as records, sorted once, as `verity_vllm.compiler.advice_check` sorts its events.
 - *The argument: a sorting network.* A Batcher network in the circuit sorts the records by (key, time), so the sort
   is a permutation by construction, and needs no coin. One linear pass over the sorted records then checks two
   things: each read returns the latest write before it under its key (or none, for a miss), and each append finds
@@ -1604,19 +1605,22 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   `ingress="client"`), and the release buckets are the engine's. The two network certifier traces' `.released` views carry the network
   certifier's (a, ordinal).
 
-## The compile slice (`compile_slice`)
+## The compile slice (`verity_vllm.compiler.compile_slice`)
 
 `CompileSlice_v1` is the compile slice's proof block's pieces ("Advice v1" above) composed whole for one window, each
 hit ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified tokens from the empty cache. Its circuit,
-verdict flags, reference (`check`), stand-ins and the phase-9 attack's cases (`phase9`) are `compile_slice`'s docstring.
-Its step rows are held to the committed ``srv`` row, which the verifier holds by b‖c to the served rows the Commit side
-registers before the sample (`served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
-blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
-`ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
-chain. `CompileSlice_v7` (`compile_slice_v7`), the served windows' slice except under the certified tick, is v1 charging the length terms too:
-`ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
-advised window is proved, a served window at its engine's class (w212 under its AsyncScheduler, 1,021,302 ANDs, and
-857,866 at the sync class), and its `--zk` runs through `benchmarks/network_traces/compile_slice_zk.py`.
+verdict flags, reference (`check`), stand-ins and the phase-9 attack's cases (`phase9`) are
+`verity_vllm.compiler.compile_slice`'s docstring. Its step rows are held to the committed ``srv`` row, which the
+verifier holds by b‖c to the served rows the Commit side registers before the sample
+(`verity_vllm.compiler.served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
+blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its
+charge is `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's
+carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the served windows' slice except under the
+certified tick, is v1 charging the length terms too: `ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified
+arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and
+what binds its inputs, why every advised window is proved, a served window at its engine's class (w212 under its
+AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class), and its `--zk` runs through
+`benchmarks/network_traces/compile_slice_zk.py`.
 
 ## The replay at the served shape
 

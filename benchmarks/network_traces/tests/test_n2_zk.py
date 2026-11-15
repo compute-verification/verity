@@ -3,7 +3,9 @@ honest execution phase's output word is verdict 1 and deadline 1, and window 0's
 by the prover, fails on its signed digest alone. The verifier's own ``pub`` row, from public fields and the
 certificates alone, is the prover's, in whole u16 words. The scan of what the verifier received leaves out exactly the
 witness pieces the public circuit holds. ``--jobs`` is 1 unless given and 2 is refused, naming the rule
-(`n2_zk.ONE_SESSION`). Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
+(`n2_zk.ONE_SESSION`). The printed log is public: a child's or the driver's failure text and every witness line go to
+the witness side's ``n2.log``, and without ``--witness`` nowhere. Nothing here lowers or proves (`n2_zk.prove` does, on
+a node)."""
 
 from __future__ import annotations
 
@@ -21,7 +23,7 @@ from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()
 
-RELEASED_KEYS = Path(n2.__file__).resolve().parents[1] / "device" / "released_keys.py"
+RELEASED_KEYS = Path(n2.__file__).resolve().parents[0] / "released_keys.py"
 
 
 @pytest.fixture(scope="module")
@@ -99,15 +101,15 @@ def _public_lines(out: str) -> list[str]:
     return [line.split(" ", 2)[2] for line in out.splitlines() if line.startswith("N2ZK ")]
 
 
-def test_the_summary_holds_its_released_keys_and_the_rest_goes_to_the_witness(tmp_path, capsys):
+def test_the_summary_holds_its_released_keys_and_the_rest_goes_to_the_witness(tmp_path, capfd):
     """The public summary holds only keys its list of released_keys.json declares; the run's path, the device, the
     timings, the reference's failed parts and which execution phases the signer refused are written to ``--witness``
     alone, which the list refuses, and without it nowhere. The printed log is the summary's split too: the failed
     parts go to ``n2.log`` beside the witness."""
     run = gate_run(tmp_path / "g")
-    capsys.readouterr()
+    capfd.readouterr()
     doc, witness = _summary(run, tmp_path)
-    said = "\n".join(_public_lines(capsys.readouterr().out))
+    said = "\n".join(_public_lines(capfd.readouterr().out))
     assert "execution phases, words" in said and "failed parts" not in said
     assert "failed parts" in (tmp_path / "witness" / "n2" / "n2.log").read_text()
     assert _released(doc, tmp_path / "public") == (0, "released keys: 1 files checked by key, 0 with a key not declared "
@@ -123,7 +125,7 @@ def test_the_summary_holds_its_released_keys_and_the_rest_goes_to_the_witness(tm
     assert "issuer_refused" not in (tmp_path / "again" / "summary.json").read_text()
 
 
-def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_it_fell(tmp_path, monkeypatch, capsys):
+def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_it_fell(tmp_path, monkeypatch, capfd):
     """When the signer refused an execution phase, the public summary is each member's flag alone, with no window
     count, so nothing public says where the refusal fell; the witness holds the members whole, and the log's
     per-phase lines go to the witness's ``n2.log``."""
@@ -139,9 +141,9 @@ def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_i
     seen, printed = [], []
     for w in (0, 1):
         monkeypatch.setattr(n2, "phases", refused_at(w))
-        capsys.readouterr()
+        capfd.readouterr()
         doc, witness = _summary(run, tmp_path / str(w))
-        printed.append(_public_lines(capsys.readouterr().out))
+        printed.append(_public_lines(capfd.readouterr().out))
         assert "execution phases" in (tmp_path / str(w) / "witness" / "n2" / "n2.log").read_text()
         assert doc["members"] == {k: {"certifier_refused": True} for k in doc["members"]} and "windows" not in doc["link"]
         assert witness["members"]["honest"]["issuer_refused"] == [w] and witness["link"]["windows"]
@@ -156,3 +158,55 @@ def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
     assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1
     with pytest.raises(SystemExit, match="outer proofs go through the ZK server one at a time"):
         n2.main([*argv, "--jobs", "2"])
+
+
+SECRET = "N2-SECRET-9f3c1e"
+
+
+def _failing_child(r, **kw):
+    subprocess.run([sys.executable, "-c", f"import sys; print('{SECRET} out'); print('{SECRET} err', file=sys.stderr)"])
+    print(f"{SECRET} stray", file=sys.stderr)
+    raise SystemExit(f"{SECRET}: the run is refused")
+
+
+@pytest.mark.parametrize("witness", [True, False])
+def test_a_failure_and_its_childrens_output_reach_only_the_witness_side(tmp_path, monkeypatch, capfd, witness):
+    """A child that prints a secret on stdout and stderr, a stray print and a failure whose text holds it: the public
+    stream says the failure's name alone, and the text is in the witness's ``n2.log``, or nowhere without one."""
+    monkeypatch.setattr(n2, "phases", _failing_child)
+    w = tmp_path / "witness" / "n2" / "summary.json"
+    capfd.readouterr()
+    rc = n2.main(["prove", "--warden-run", "r", "--out", str(tmp_path / "out"), "--dry",
+                  *(["--witness", str(w)] if witness else [])])
+    said = capfd.readouterr()
+    assert rc == 1 and SECRET not in said.out + said.err
+    assert _public_lines(said.out)[-1] == "failed: SystemExit" and not said.err
+    if witness:
+        held = w.with_name("n2.log").read_text()
+        assert all(f"{SECRET} {k}" in held for k in ("out", "err", "stray")) and f"{SECRET}: the run is refused" in held
+    else:
+        assert not (tmp_path / "witness").exists()
+        assert _public_lines(said.out)[0].startswith("no --witness asked for")
+
+
+def test_a_run_without_witness_prints_no_witness_line(tmp_path, capfd):
+    run = gate_run(tmp_path / "g")
+    _summary(run, tmp_path / "with")
+    lines = {x.split(" ", 2)[2] for x in (tmp_path / "with" / "witness" / "n2" / "n2.log").read_text().splitlines()}
+    assert lines
+    capfd.readouterr()
+    assert n2.main(["prove", "--warden-run", str(run), "--out", str(tmp_path / "out"), "--dry"]) == 0
+    said = capfd.readouterr()
+    assert not lines & set(_public_lines(said.out)) and "failed parts" not in said.out + said.err
+
+
+def test_debug_clear_writes_only_to_the_witness_side(tmp_path):
+    argv = ["prove", "--warden-run", "r", "--out", str(tmp_path / "out"), "--dry", "--debug-clear"]
+    with pytest.raises(SystemExit, match="it needs --witness"):
+        n2.main(argv)
+    with pytest.raises(SystemExit, match="--witness is under --out"):
+        n2.main([*argv, "--witness", str(tmp_path / "out" / "w.json")])
+    verdict = {"accepted": True, "clear": {"accepted": True}}
+    body = {"audit": {"verdicts": {n2.SVC.VERIFIER: verdict}}}
+    assert n2._without_clear(body) == {"audit": {"verdicts": {n2.SVC.VERIFIER: {"accepted": True}}}}
+    assert "clear" in verdict and n2._without_clear({"audit": {}}) == {"audit": {}}

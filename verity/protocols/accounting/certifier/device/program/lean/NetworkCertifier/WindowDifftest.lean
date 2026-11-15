@@ -8,11 +8,11 @@ public import Lean.Data.Json.Parser
 # The execution phase charge's difftest: advice v1's whole execution phase against `window_charge.reference_window`, on random instances
 
 `scripts/window_vectors.py` generates instances and runs
-`verity.ml.protocols.certifier.window_charge.reference_window` on them. `NetworkCertifier/WindowDifftestMain.lean`
-reads both files and fails unless `evaluate`, which computes the same results from the program's definitions
+`verity.protocols.accounting.certifier.prover.window_charge.reference_window` on them.
+`NetworkCertifier/WindowDifftestMain.lean` reads both files and fails unless `evaluate`, which computes the same results from the program's definitions
 (`NetworkCertifier.WindowCharge`), gives every one of them. The Lean audit runs it (`runs` in `lean-audit.json`):
 compiled evaluation, a test and not a proof. `Proofs.Certifier.Code` (`CodeChargesWhole`) proves `charges` equal
-to the reference's (`Security/Definitions/Certifier/WindowCharge.lean`).
+to the reference's (`security/Definitions/Certifier/WindowCharge.lean`).
 
 An instance is an execution phase's slot counts `N`, `H`, `O` and `L`, a book (each of `window_charge.SYMBOLS`' tables, its
 frequencies at the bins an execution phase reaches and its total, and the contexts' `priors`), a carry, and windows, each its `N`

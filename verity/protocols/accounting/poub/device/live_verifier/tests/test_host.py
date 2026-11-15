@@ -900,7 +900,7 @@ def test_the_served_nodes_own_settings_are_received_as_the_script_reads_them(tmp
 
 def test_a_compose_answers_no_byte_a_link_in_its_out_points_at(composer, tmp_path):
     """The answer is $OUT's own files: a link there, to a file or a directory outside it, is named and never followed,
-    so no byte of the auditor's host outside $OUT reaches the caller."""
+    so no byte of the auditor's device outside $OUT reaches the caller."""
     (tmp_path / "secret").write_text("SECRET\n")
     (tmp_path / "secrets").mkdir()
     (tmp_path / "secrets" / "key").write_text("KEY\n")
