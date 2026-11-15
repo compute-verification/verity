@@ -29,22 +29,25 @@ query_ast.evaluate(program, "//GemmCoordinate")   # its 8 output coordinates, ea
 | Path | What it holds |
 | --- | --- |
 | [`circuits/`](circuits/README.md) | The circuit language: Definitions, Programs, the descriptor codec, queries and partitions. Its format is [`circuits/PROTOCOL.md`](circuits/PROTOCOL.md). Beside it, the circuits written in it: `ops/` (the primitive operations), `silicon/` (the GPUs' exact arithmetic), `kernels/` (fast code, each checked against its Definition) and `private_circuits/` (the universal circuit). |
-| `commitments/` | Hiding commitments ([frame-v3](commitments/frame_v3/PROTOCOL.md), [hm96](commitments/hm96/PROTOCOL.md)), shared hash code, hash-based signatures and transport (`crypto/`, with `lms.py`; its Lean in `lms/`), the one challenge derivation (`randomness/`), an auditor device's signed period roots (`attest/`), what an adapter hands Verity (`periods/`), the security claims' ids (`claim_ids.py`), and the same commitments on a GPU (`cuda/`). |
-| `protocols/` | The protocols, each in up to three parts: `verifier/` (the auditor's check), `prover/` (the developer's side) and `device/` (the auditor's devices at the site). The layers are below. |
+| `commitments/` | Hiding commitments ([frame-v3](commitments/frame_v3/PROTOCOL.md), [hm96](commitments/hm96/PROTOCOL.md)), shared hash code, hash-based signatures and transport (`crypto/`, with `lms.py`; its Lean in `lms/`), the one challenge derivation (`randomness/`), an attester's signed period roots (`attest/`), what an adapter hands Verity (`periods/`), the security claims' ids (`claim_ids.py`), and the same commitments on a GPU (`cuda/`). |
+| `protocols/` | The protocols, each in up to three parts: `verifier/` (the auditor's check), `prover/` (the developer's side) and `device/` (an attester, the auditor's own hardware at the site, or the challenger, the verifier's online half). The layers are below. |
 | [`runtime/`](runtime/README.md) | Runs a protocol's parties over channels and keeps each party's log of the run. It knows no protocol. |
 | `party.py`, `channel.py`, `protocol.py` | What a party is (a next-message machine), what its messages declare, and what a protocol declares with the placement check. |
 | `device.py` | The registered hardware (the Site), the check each registration entry passes, and the readers of the data sheets in [`hardware/`](../hardware/README.md). |
 | `config.py` | The deployment configuration a run starts from (`verity run CONFIG`). |
 
-The protocols, by layer. `accounting/` holds resource accounting and `policy/` workload classification; both
-directories are to be renamed for the layers they hold.
+The protocols, by layer, with registration beside them. After the landing, `accounting/` moves to
+`resource_accounting/` by resource (`compute/pouw`, `memory/pous`, `memory/poub`, `network/certifier`), `policy/` to
+`workload_classification/` and `accounting/registration/` to `protocols/registration/`; an attester's `device/` becomes
+`attester/`, and the challenger's code moves under `verifier/`.
 
 | Layer | Directory | Protocols |
 | --- | --- | --- |
 | Proofs | `protocols/proofs/` | [`flock/`](protocols/proofs/flock/verifier/README.md) (the proof system), [`spot/`](protocols/proofs/spot/verifier/README.md) (sampling), `recursion/`, `spot_flock/`, `spot_flock_recursion/` |
-| Resource accounting | `protocols/accounting/` | [`registration/`](protocols/accounting/registration/README.md) (runs once, before any challenge), [`pouw/`](protocols/accounting/pouw/verifier/README.md) (compute), [`pous/`](protocols/accounting/pous/verifier/README.md) and [`poub/`](protocols/accounting/poub/verifier/README.md) (memory), [`certifier/`](protocols/accounting/certifier/verifier/README.md) (network) |
+| Registration | `protocols/accounting/registration/` | [The registration log and its check](protocols/accounting/registration/README.md), run once, before any challenge |
+| Resource accounting | `protocols/accounting/` | [`pouw/`](protocols/accounting/pouw/verifier/README.md) (compute), [`pous/`](protocols/accounting/pous/verifier/README.md) and [`poub/`](protocols/accounting/poub/verifier/README.md) (memory), [`certifier/`](protocols/accounting/certifier/verifier/README.md) (network) |
 | Workload classification | `protocols/policy/` | [`inference_only/`](protocols/policy/inference_only/verifier/README.md) |
-| Deployment patterns | `protocols/compose/` | [`remote`](protocols/compose/verifier/remote/README.md) and `onsite`, each a list of protocols on one registration |
+| Configurations | `protocols/compose/` | [`remote`](protocols/compose/verifier/remote/README.md) and `onsite`, each a list of protocols on one registration |
 | Being tried | `protocols/experimental/` | `dither/`, [`pearl_c4/`](protocols/experimental/pearl_c4/README.md) |
 | Shared | [`protocols/interface/`](protocols/interface/README.md) | The Lean interface each protocol's check implements |
 
