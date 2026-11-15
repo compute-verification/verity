@@ -2982,9 +2982,9 @@ def test_a_run_that_reserved_less_than_its_floor_is_refused_with_the_command_at_
     (cg / "memory.max").write_text(f"{8 * 2**30}\n")
     (cg / "memory.swap.max").write_text("max\n")
     got = A.memory(tmp_path / "proc", cg)
-    assert (round(got[0], 1), got[1]) == (11.8, "its cgroup's cap, swap included")
+    assert (round(got[0], 1), got[1]) == (11.8, "its cgroup's limit, swap included")
     (cg / "memory.swap.max").write_text("0\n")
-    assert A.memory(tmp_path / "proc", cg) == (8, "its cgroup's cap, swap included")
+    assert A.memory(tmp_path / "proc", cg) == (8, "its cgroup's limit, swap included")
     heavy, mathlib, light = tmp_path / "Proofs", tmp_path / "Spec", tmp_path / "Tool"
     for p, deps in ((heavy, ["mathlib", "Arklib"]), (mathlib, ["mathlib"]), (light, ["batteries"])):
         p.mkdir()
@@ -3010,18 +3010,18 @@ def test_a_run_that_reserved_less_than_its_floor_is_refused_with_the_command_at_
     why = A.memory_refusal([mathlib], unread, env={}, steps=("build",))
     assert "this run reserved nothing it can read (CHECK_SLOT_MEM_GB='lots' is no number of GiB)" in why, why
     assert A.memory_refusal([light], unread, env={}) is None
-    cap = "its cgroup's cap, swap included"
-    monkeypatch.setattr(A, "memory", lambda: (float(R.REPLAY_ARKLIB_GIB), cap))
+    bound = "its cgroup's limit, swap included"
+    monkeypatch.setattr(A, "memory", lambda: (float(R.REPLAY_ARKLIB_GIB), bound))
     queued = {"RESEARCH_RUN_ID": "r1"}
-    assert A.reserved(queued) == (R.REPLAY_ARKLIB_GIB, f"none of {', '.join(n for n, _ in R.RESERVATIONS)} declared, so {cap}")
-    assert A.memory_refusal([mathlib, heavy], A.reserved(queued), env={}) is None, "a queued run plans by its cgroup's cap"
+    assert A.reserved(queued) == (R.REPLAY_ARKLIB_GIB, f"none of {', '.join(n for n, _ in R.RESERVATIONS)} declared, so {bound}")
+    assert A.memory_refusal([mathlib, heavy], A.reserved(queued), env={}) is None, "a queued run plans by its cgroup's limit"
     declared = {**queued, "CHECK_SLOT_MEM_GB": str(R.REPLAY_ARKLIB_GIB - 1)}
     why = A.memory_refusal([mathlib, heavy], A.reserved(declared), env={})
     assert f"reserved {R.REPLAY_ARKLIB_GIB - 1:.1f} GiB (CHECK_SLOT_MEM_GB={R.REPLAY_ARKLIB_GIB - 1}, in GiB)" in why, \
-        "a declared reservation below the floor refuses, whatever the cap"
-    monkeypatch.setattr(A, "memory", lambda: (R.REPLAY_ARKLIB_GIB - 1.0, cap))
+        "a declared reservation below the floor refuses, whatever the limit"
+    monkeypatch.setattr(A, "memory", lambda: (R.REPLAY_ARKLIB_GIB - 1.0, bound))
     why = A.memory_refusal([mathlib, heavy], A.reserved(queued), env={})
-    assert why and f"declared, so {cap})" in why, "and so does a cap below it"
+    assert why and f"declared, so {bound})" in why, "and so does a limit below it"
 
 
 def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_run_reserved(tmp_path):
@@ -3038,7 +3038,7 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_run_reserved(tmp_pat
     (cg / "memory.max").write_text("max\n")
     assert A.memory(proc, cg) == (512, "this machine's memory, swap included")
     (cg / "user.slice" / "cluster-r1.scope" / "memory.max").write_text(f"{64 * 2**30}\n")
-    assert A.memory(proc, cg) == (64, "its cgroup's cap, swap included")
+    assert A.memory(proc, cg) == (64, "its cgroup's limit, swap included")
     (cg / "user.slice" / "memory.max").write_text(f"{32 * 2**30}\n")
     assert A.memory(proc, cg)[0] == 32, "a parent's smaller limit holds"
     heavy, light = tmp_path / "heavy", tmp_path / "light"

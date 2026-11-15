@@ -248,7 +248,7 @@ def reserve():
 def memory(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> tuple[float, str]:
     """(the GiB this process may use, swap included, what bounds it): the machine's memory, bounded by the limits of its
     cgroup and every cgroup above it (`/proc/self/cgroup`: a queued run's limit is on its own scope, below the hierarchy's
-    root), which is then its cgroup's cap."""
+    root), which is then its cgroup's limit."""
     info = {}
     for line in (proc / "meminfo").read_text().splitlines():
         k, _, v = line.partition(":")
@@ -268,7 +268,7 @@ def memory(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) ->
     machine = info.get("MemTotal", 0), info.get("SwapTotal", 0)
     m, s = limit("memory.max"), limit("memory.swap.max")
     ram, swap = machine[0] if m is None else min(machine[0], m), machine[1] if s is None else min(machine[1], s)
-    return (ram + swap) / 2**30, ("its cgroup's cap" if (ram, swap) != machine else "this machine's memory") + \
+    return (ram + swap) / 2**30, ("its cgroup's limit" if (ram, swap) != machine else "this machine's memory") + \
         ", swap included"
 
 

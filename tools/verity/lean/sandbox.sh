@@ -16,7 +16,8 @@
 # /var/tmp got no private tmpfs, or is a link (CMD's physical directory is not under FIXED), --at refuses: a tree bound
 # elsewhere would compile to other bytes.
 # CMD is PID 1, so every process a build starts (compile-time code included) ends with it. It runs with no capability
-# and can make no user namespace (this one's count is capped at 0, which only a capability here lifts), so it can't
+# (a new user namespace starts with empty inheritable and ambient sets, so an empty bounding set leaves its root none
+# after the `exec`) and can make no user namespace (this one's count is capped at 0, which only a capability here lifts), so it can't
 # remount, mount over or unmount anything, here or in a namespace it opens: the mounts above are the ones it gets.
 set -euo pipefail
 rw=()
@@ -99,4 +100,4 @@ elif [ -z "$tmp" ]; then
 fi
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
 echo 0 > /proc/sys/user/max_user_namespaces
-exec setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all -- "$@"
+exec setpriv --bounding-set=-all -- "$@"

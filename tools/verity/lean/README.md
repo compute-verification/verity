@@ -112,7 +112,7 @@ of `check.py` unless it says otherwise, or the lock's section below.
 Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), which reads
 the tree at one fixed path, so a module compiles to the same bytes wherever the tree is (`FIXED`, `--tree`, `bound`),
 after taking one of the node's Lean audit slots (`lean_slot`). What a run reserved is the least of what it declares (a slot's
-`mem=`, `research run --mem-gb`) and what the machine lets it hold, its cgroup's cap else its memory; a run that declares
+`mem=`, `research run --mem-gb`) and what the machine lets it hold, its cgroup's limit else its memory; a run that declares
 nothing plans by the latter, and says which (`reserved`, `memory`). A run is refused where that is less than the largest
 floor among the steps it takes of every package it audits, or where a reservation is no number, with the command to run
 at its ask, in GB, and the ask in GiB under it (`memory_refusal`; `--ask` prints the ask). A heavy build runs as many jobs
