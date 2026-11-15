@@ -511,18 +511,22 @@ def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
 
 
 def report(name: str, text: str, doc: Mapping[str, Any], measured: Iterable[Mapping[str, Any]] = (), *,
-           document: bool = True, mark: str = "measured") -> Path | None:
+           document: bool = True, mark: str = "measured", out: str | os.PathLike | None = None) -> Path | None:
     """A command's last step, the one way it prints and writes its number: prints `text`, then `doc` as one line of
-    JSON, and where it has a place to write (under a research run its `out/`, `$RESEARCH_RUN_DIR/out`, and outside one
-    `$OUT` where set) writes that line to `<name>.json` there and appends each of `measured`, the keywords of a
-    `Writer.measurement`, at `mark` to the run's result (`writer`). With `document` False the place keeps the
-    `<name>.json` it holds. The place it wrote to, or None where there is none and nothing is written."""
+    JSON, and where it has a place to write (`out` where the caller names one, its `--out`; else under a research run its
+    `out/`, `$RESEARCH_RUN_DIR/out`, and outside one `$OUT` where set) writes that line to `<name>.json` there and
+    appends each of `measured`, the keywords of a `Writer.measurement`, at `mark` to the run's result (`writer`). An
+    empty variable names no place. With `document` False the place keeps the `<name>.json` it holds. The place
+    it wrote to, or None where there is none and nothing is written."""
 
     print(text)
     line = json.dumps(doc)
     print(line)
-    place = Path(settings.RESEARCH_RUN_DIR) / "out" if settings.is_set("RESEARCH_RUN_DIR") else settings.OUT
-    if place is None:
+    if out is not None:
+        place = out
+    else:
+        place = Path(settings.RESEARCH_RUN_DIR) / "out" if settings.is_set("RESEARCH_RUN_DIR") else settings.OUT
+    if not place:
         return None
     place = Path(place)
     if document:

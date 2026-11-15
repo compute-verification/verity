@@ -182,7 +182,7 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     served, built = doc["policies"]
     assert served["units"] == built["units"] == P.UNITS and f"{served['c']:,} Boolean gates a block" in out
     assert (doc["value"], doc["check"], doc["rests_on"]) == (served["value"], served["check"], served["rests_on"])
-    assert doc["value"] == 1 and doc["check"]["verdict"] == "not run" and "run" not in doc and doc["commit"] == "0" * 40
+    assert doc["value"] == 1 and doc["check"]["verdict"] == "not run" and doc["run"] is None and doc["commit"] == "0" * 40
     assert "nothing on this tree builds or checks" in doc["rests_on"]
     assert (built["label"], built["check"]["verdict"], built["check"]["failed"]) == ("built", "refused", "k")
     assert built["rests_on"].startswith("the Python count of what a block reads") and "does not establish" in built["rests_on"]

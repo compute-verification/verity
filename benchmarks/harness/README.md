@@ -418,14 +418,16 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   to the result's directory and named once, in `measurement_files` or `artifacts`. The first writes all three keys; a
   result that uses none holds none. **`kit.writer(out, kind)`** writes a result of that `kind` (`NAME/vN`), the artifact
   kind `research` stores it as (`bench-result/v1` where a result has none), and refuses a result of another kind.
-- **`kit.report(name, text, doc, measured=(), *, document=True, mark="measured")`:** a command's last step, the one way
-  `verity bench compute` and `verity bench memory` print and write their number. It prints `text`, then `doc` as one
-  line of JSON, whose first keys are `value`, `unit`, `commit` and `run`. Where it has a place to write
-  (`$RESEARCH_RUN_DIR/out` under a research run, else `$OUT` where set) it writes that line to `<name>.json` there
+- **`kit.report(name, text, doc, measured=(), *, document=True, mark="measured", out=None)`:** a command's last step,
+  the one way `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write their
+  number. It prints `text`, then `doc` as one line of JSON, whose first keys are `value`, `unit`, `commit` and `run`.
+  Where it has a place to write (`out` where the caller names one, its `--out`; else `$RESEARCH_RUN_DIR/out` under a
+  research run, else `$OUT` where set; an empty variable is no place) it writes that line to `<name>.json` there
   (unless `document` is false) and each of `measured`, the keyword arguments of one measurement, to the run's result
   through the writer, so under a research run the result is `$RESEARCH_RUN_DIR/result.json` and outside one
-  `$OUT/result.json`. With no place it writes nothing. It returns the place, or None. `tests/test_report.py` holds
-  both commands to it on their own suites' fixtures.
+  `result.json` beside the line. With no place it writes nothing. It returns the place, or None.
+  `tests/test_report.py` holds the three commands to it: compute and memory on their own suites' fixtures,
+  inference_only on its stated policy.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
 verdict of record or a seal, so the writer refuses a value that isn't a number, a missing or unknown mark, an unknown
