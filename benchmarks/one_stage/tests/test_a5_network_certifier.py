@@ -199,7 +199,7 @@ def test_the_audits_case_is_written_where_replay_names_another_module(tmp_path, 
     """A process that holds another module under the name `replay` (here a stand-in) holds one with none of what a5
     writes an audit's case with. a5 reads the `replay.py` beside it by its path, so the case is written and no error
     stands in its place."""
-    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
+    from benchmarks.one_stage import a5 as a5
     other = tmp_path_factory.mktemp("other")
     (other / "replay.py").write_text('"""A module named replay that is not the audit\'s."""\n')
     monkeypatch.syspath_prepend(str(other))

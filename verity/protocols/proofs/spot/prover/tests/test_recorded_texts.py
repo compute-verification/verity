@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-SOURCE = Path(__file__).resolve().parents[1] / "audit" / "prove_bundle.py"
+SOURCE = Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage" / "prove_bundle.py"
 
 #: name -> a regex over prove_bundle.py whose first group is the text it writes
 SITES = {

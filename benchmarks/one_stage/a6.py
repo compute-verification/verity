@@ -39,8 +39,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "served_units"))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
-from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
+from benchmarks.one_stage import a0 as a0  # noqa: E402
+from benchmarks.one_stage import r2_population as R2  # noqa: E402
 import stage as SU  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402

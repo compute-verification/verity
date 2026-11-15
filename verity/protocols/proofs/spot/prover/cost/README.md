@@ -137,6 +137,6 @@ record (`native_host.schedule_stream_bound`), whole and without the attention in
 reads after the seal:
 
 ~~~text
-python verity/protocols/proofs/spot/prover/cost/window_cost.py PROBE.json --target h200 --project 8,1024,64 \
+python benchmarks/prove_path/window_cost.py PROBE.json --target h200 --project 8,1024,64 \
     [--measure-cpu SCRATCH] [--stream adapters/vllm/tests/pipeline/fixtures/admission/b16.json] [--out FILE]
 ~~~

@@ -49,7 +49,7 @@ def main(argv: list[str]) -> int:
     phi, cls_arg, scheme, policy, out = argv[:5]
     rejects = "--rejects" in argv[5:]
 
-    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
+    from benchmarks.prove_path import prove_path as PP
     import served_cases as SC
     from verity.circuits import codec
     from verity.circuits.types import type_from_json

@@ -32,7 +32,8 @@ def proof_drivers() -> SimpleNamespace:
     import redigest
     from verity_flock import circuit, class_statement
     from verity.protocols.proofs.spot.device import challenger_session as a5_coins
-    from verity.protocols.proofs.spot.prover.audit import local_challenger, template_audit as a0
+    from verity.protocols.proofs.spot.prover.audit import local_challenger
+    from benchmarks.one_stage import a0 as a0
     from benchmarks.network_traces import network_certifier_chain
 
     return SimpleNamespace(a0=a0, a5_coins=a5_coins, local_challenger=local_challenger, a7=a7, a8=a8, prove_subprotocol=prove_subprotocol, circuit=circuit, class_statement=class_statement,

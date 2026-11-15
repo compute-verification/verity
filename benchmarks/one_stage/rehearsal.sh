@@ -329,7 +329,7 @@ link_test() {  # LEAN DIR: the real Lean verifier at LEAN on a circuit file link
 import hashlib, json, os, subprocess, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[3]).resolve().parents[1]))
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0
+from benchmarks.one_stage import a0 as a0
 lean, root = sys.argv[1], Path(sys.argv[2])
 root.mkdir(parents=True, exist_ok=True)
 circuit = root / "circuit.txt"
@@ -456,7 +456,7 @@ open(sys.argv[3], "w").write(json.dumps(doc, indent=1) + "\n")
 print(json.dumps(doc, sort_keys=True))
 ' "${REPO:-unsloth/Llama-3.2-1B}" "${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da}" "$D/pearlplus/serve-phi.json"
   cp "$D/pearlplus/serve-phi.json" "$OUT/serve-phi.json" 2> /dev/null
-  step class-circuit 30m "$PY" verity/protocols/proofs/spot/prover/audit/prove_path.py class-circuit --serve "$D/pearlplus/serve-phi.json" \
+  step class-circuit 30m "$PY" benchmarks/prove_path/prove_path.py class-circuit --serve "$D/pearlplus/serve-phi.json" \
     --class "$CLASS" --pearl-tables "$SCHEME" --out "$D/pearlplus/circuit-record.json"
   # a stand-in window of the class through what its close reads of it: its row dir's Builds, its served rows and W
   step served-window 30m "$PY" benchmarks/one_stage/rehearsal_window.py "$D/pearlplus/serve-phi.json" "$CLASS" "$SCHEME" \

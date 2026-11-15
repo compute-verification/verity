@@ -43,8 +43,8 @@ import pytest
 from verity.commitments.periods import history as HW, interface as I, rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0, window_audit as a5
-from verity.protocols.proofs.spot.prover.audit import check_memo as AM
+from benchmarks.one_stage import a0 as a0, a5 as a5
+from benchmarks.one_stage import a5_memo as AM
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]

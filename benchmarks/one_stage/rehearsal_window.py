@@ -167,7 +167,7 @@ def cut(PP: Any, serve: dict, cls: Any, tables: Any, scheme: str, w: Path) -> di
 def main(argv: list[str]) -> int:
     phi_file, cls_arg, scheme, engine_arg, out = argv
 
-    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
+    from benchmarks.prove_path import prove_path as PP
     from verity_vllm.program.predict.window_class import PearlTables
 
     cls, tables = PP.window_class_of(cls_arg), PearlTables(scheme)
