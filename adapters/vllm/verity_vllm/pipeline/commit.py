@@ -63,10 +63,13 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+# The imports from here to `isort: on` run after code (the process clock above, the engine profile's environment below),
+# each with its `noqa: E402`; the import sort would split each aliased one into one import per alias and leave the marker
+# on the first, so they keep this form.
+# isort: off
 from verity_vllm import protocols as PO
+from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
-from verity_vllm.acquire.sources import hidden_source as HS
-from verity_vllm.acquire.sources import taps as TAPS  # noqa: E402
 from verity_vllm.config import UsageError, group, option, workload_arg
 from verity_vllm.engine import engine_profile as prof
 
@@ -74,23 +77,16 @@ prof.apply_env()
 
 import torch  # noqa: E402
 
-from verity_vllm.commit import opened as OV  # noqa: E402
-from verity_vllm.commit import step_rows as SR  # noqa: E402
-from verity_vllm.engine import arrivals as AR  # noqa: E402
-from verity_vllm.engine import served as SV  # noqa: E402
-from verity_vllm.engine import vllm_adapter as va  # noqa: E402
+from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
 from verity_vllm.engine.handle import Steps, scheduler_or_none  # noqa: E402
-from verity_vllm.pipeline import boundary_plan as BP  # noqa: E402
-from verity_vllm.pipeline import c2_replay as C2  # noqa: E402
-from verity_vllm.pipeline import commit_coins as CC  # noqa: E402
-from verity_vllm.pipeline import commit_plan as CP  # noqa: E402
-from verity_vllm.pipeline import gpu_lease as GL  # noqa: E402
-from verity_vllm.pipeline import remote_session as RS  # noqa: E402
-from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
-from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
-from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
-from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
+from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
+from verity_vllm.commit import opened as OV, step_rows as SR  # noqa: E402
+from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
+from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
+from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
+# isort: on
 
 if TYPE_CHECKING:
     from verity_vllm.acquire.sources import call_boundary_plan as CBP
@@ -401,13 +397,12 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
                      "and plugin:<module>:<factory>")
 
 
-from verity_vllm.check.commit_rules import (  # noqa: E402
-    REQUIRED_CLASSES_DEFAULT,
-    class_coverage,
-    required_classes_default,
-)
+# Imports after code too, each with its `noqa: E402`, kept out of the sort as the ones under the first `isort: off` are.
+# isort: off
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp  # noqa: E402
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03 fail-closed verdict)
+# isort: on
 
 
 def tensor_digests(com, out, pair: int, prev: dict) -> int:
