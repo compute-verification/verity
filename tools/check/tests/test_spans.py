@@ -46,6 +46,10 @@ def test_a_check_in_its_own_scope_records_its_memory_and_a_shared_scope_records_
     monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r2")
     assert SPANS.check_memory(tmp_path) == {}, "a cgroup that isn't the named scope (a shared session) is other runs' too"
     monkeypatch.setenv(SPANS.SCOPE_ENV, "check-b-r1")
+    # the scope is gone when the check ends: what it held without the page cache and the CPU seconds it used are kept too
+    (cg / "memory.stat").write_text("anon 30000000000\nfile 95049999999\nshmem 5000000000\nslab_reclaimable 7\n")
+    (cg / "cpu.stat").write_text("usage_usec 46800000000\nuser_usec 40000000000\nnr_periods 0\n")
+    assert SPANS.check_memory(tmp_path) == {"mem_peak_gb": 312.4, "mem_current_gb": 120.0, "mem_held_gb": 30.0, "cpu_s": 46800.0}
     monkeypatch.setattr(SPANS, "check_memory", lambda root=Path("/"): {"mem_peak_gb": 312.4, "mem_current_gb": 120.0})
     log = SPANS.SpanLog(tmp_path, trace_id="r-test")
     log.step({"step": "pytest", "status": "passed", "rc": 0, "seconds": 1.0, "ended_utc": "2026-10-14T20:00:00Z"})
