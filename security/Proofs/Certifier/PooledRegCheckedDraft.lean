@@ -159,13 +159,57 @@ theorem pr_acc_meets_all_le {H : Msg → Msg} {D : Compiled Coin A} (hS : D.Sess
         ∃ u ∈ D.checked x p.2, u ∈ F) ≤ c) :
     Pr (fun p : Ω × (Fin (D.V.k x) → Coin) => (run H P D.V x p.1 p.2).out = .acc ∧
         ¬Disjoint F (allSlots s.design Pt)) ≤ c := by
-  sorry
+  by_cases hd : Disjoint F (allSlots s.design Pt)
+  · refine (Claims.Pr_mono (q := fun _ => False) fun p hp => hp.2 hd).trans ?_
+    rw [Claims.Pr_false]
+    exact (Claims.Pr_nonneg _).trans h1
+  · have hpart : D.part s = Pt := by simp only [Compiled.part, hPt, Option.getD_some]
+    have hz : s.design.Pa (D.part s) F = 0 := by
+      rw [hpart]
+      exact NetTiming.SampledAuditProof.classesPa_eq_zero s.design.rules Pt.classes 0 F hd
+    have hmiss : Pr (fun r : Fin (D.V.k x) → Coin => ∀ u ∈ D.checked x r, u ∉ F) ≤ 0 := by
+      refine (Claims.Pr_mono fun r hr => ⟨fun hM => ?_, hr⟩).trans
+        (Compiled.pr_miss_le hS hs hPt hin F hF (δ := 0) le_rfl)
+      simp only [Design.M, Set.mem_ofPred_eq] at hM
+      rw [hz] at hM
+      exact lt_irrefl _ hM
+    have hsnd : Pr (fun p : Ω × (Fin (D.V.k x) → Coin) => ∀ u ∈ D.checked x p.2, u ∉ F) ≤ 0 :=
+      (Claims.SamplingGeneric.Pr_snd (α := Ω)
+        (fun r : Fin (D.V.k x) → Coin => ∀ u ∈ D.checked x r, u ∉ F)).trans_le hmiss
+    have h2 := Claims.Sampling.Pr_or_le
+      (p := fun p : Ω × (Fin (D.V.k x) → Coin) => (run H P D.V x p.1 p.2).out = .acc ∧
+        ¬Disjoint F (allSlots s.design Pt))
+      (fun p hp => by
+        by_cases h : ∃ u ∈ D.checked x p.2, u ∈ F
+        · exact Or.inl ⟨hp.1, h⟩
+        · exact Or.inr fun u hu hu' => h ⟨u, hu, hu'⟩) h1 hsnd
+    linarith
 
-/-- **One phase's bound at every history lifts to the period's coins.** -/
+/-- **One phase's bound at every history lifts to the period's coins**: `pr_adaptive_add_le` at the rate `0`, with
+phase `i` counted once and every other phase's event always true. -/
 theorem pr_phase_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} (i : Fin m) (E : (Fin m → Ω) → Ω → Prop)
     (hE : ∀ ω ω', (∀ j, j < i → ω j = ω' j) → E ω = E ω') {c : ℝ} (h : ∀ ω, Pr (E ω) ≤ c) :
     Pr (fun ω => E ω (ω i)) ≤ c := by
-  sorry
+  classical
+  have hc0 : 0 ≤ c := (Claims.Pr_nonneg _).trans (h fun _ => Classical.arbitrary Ω)
+  have key := pr_adaptive_add_le (Ω := Ω) (r := 0) le_rfl zero_le_one m
+    (fun j ω a => j = i → E ω a) (fun j _ => if j = i then 1 else 0) (fun j => if j = i then c else 0)
+    (fun j ω ω' hω => by
+      by_cases hj : j = i
+      · subst hj
+        rw [hE ω ω' hω]
+      · funext a
+        simp only [hj, false_implies])
+    (fun _ _ _ _ => rfl)
+    (fun j => by split_ifs <;> first | exact hc0 | exact le_rfl)
+    (fun j ω => by
+      by_cases hj : j = i
+      · subst hj
+        simpa using h ω
+      · simpa [hj] using Claims.Pr_le_one (fun _ : Ω => True))
+    1
+  refine le_trans (Claims.Pr_mono fun ω hω => ⟨fun j hj => by subst hj; exact hω, by simp⟩)
+    (key.trans_eq (by simp))
 
 section Phases
 
@@ -185,7 +229,7 @@ theorem phaseLeaksChecked_regR [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D :
     (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool))
     (obs : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → List (Obs Lk K S))
     (R : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prop) (had : PhasesAdaptive x Pv ops)
-    {e εchk : Fin m → ℝ}
+    {e εchk : Fin m → ℝ} (he0 : ∀ i, 0 ≤ e i)
     (hev : ∀ z ∈ Zs, ∀ ω i, (D (x z ω i)).Scope (x z ω i) →
       Pr (fun p : Tp × (Fin ((D (x z ω i)).V.k (x z ω i)) → Coin) =>
         (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) p.1 p.2).out = .acc ∧
@@ -203,8 +247,70 @@ theorem phaseLeaksChecked_regR [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D :
     ∀ z ∈ Zs, ∀ i, Pr (fun ω => phaseAcc H D x Pv hk z i ω (ω i) ∧
       ¬(R z ω i → LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (obs z ω) i))
         (WregR H D x Pv ops z ω i) (obs z ω i))) ≤ e i + εchk i := by
-  sorry
+  intro z hz i
+  let Bad1 : (Fin m → Tp × (Fin kV → Coin)) → Tp × (Fin kV → Coin) → Prop := fun ω c =>
+    phaseAcc H D x Pv hk z i ω c ∧ ∃ s Pt, (D (x z ω i)).parse (x z ω i) = some s ∧
+      (D (x z ω i)).partition s = some Pt ∧ ¬Disjoint (WregR H D x Pv ops z ω i) (allSlots s.design Pt)
+  let Bad2 : (Fin m → Tp × (Fin kV → Coin)) → Tp × (Fin kV → Coin) → Prop := fun ω c =>
+    phaseAcc H D x Pv hk z i ω c ∧ ∃ s Pt, (D (x z ω i)).parse (x z ω i) = some s ∧
+      (D (x z ω i)).partition s = some Pt ∧ Disjoint (WregR H D x Pv ops z ω i) (allSlots s.design Pt) ∧
+      ¬valid (sw i) (regRunR H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i) lay k s Pt)
+  have h1 : Pr (fun ω => Bad1 ω (ω i)) ≤ e i := by
+    refine pr_phase_le i Bad1 (fun ω ω' hω => ?_) (fun ω => ?_)
+    · simp only [Bad1]
+      rw [phaseAcc_prefix H D x Pv hk had.1 had.2.1 z i ω ω' hω, wreg_prefix H D had z i ω ω' hω,
+        had.1 z i ω ω' hω]
+    · by_cases hsc : (D (x z ω i)).Scope (x z ω i)
+      · obtain ⟨s, Pt, hs, hPt, hin⟩ := hsc
+        have hc := pr_castLE (hk z ω i) (fun (t : Tp) (r : Fin ((D (x z ω i)).V.k (x z ω i)) → Coin) =>
+          (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) t r).out = .acc ∧
+            ¬Disjoint (FregR H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i)) (allSlots s.design Pt))
+        refine le_trans (Claims.Pr_mono fun c hc' => ?_) (hc.trans_le
+          (pr_acc_meets_all_le (hS (x z ω i)) hs hPt hin Tp (Pv z ω i) _
+            (fregR_lt H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i)) (hev z hz ω i ⟨s, Pt, hs, hPt, hin⟩)))
+        obtain ⟨ha, s', Pt', hs', hPt', hd⟩ := hc'
+        obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
+        obtain rfl : Pt' = Pt := Option.some.inj (hPt'.symm.trans hPt)
+        exact ⟨ha, hd⟩
+      · refine (Claims.Pr_mono (q := fun _ => False) fun c hc' => hsc ?_).trans
+          (by rw [Claims.Pr_false]; exact he0 i)
+        exact (hS (x z ω i)).refuses _ _ _ _ _ hc'.1
+  have h2 : Pr (fun ω => Bad2 ω (ω i)) ≤ εchk i := by
+    refine pr_phase_le i Bad2 (fun ω ω' hω => ?_) (fun ω => ?_)
+    · simp only [Bad2]
+      rw [phaseAcc_prefix H D x Pv hk had.1 had.2.1 z i ω ω' hω, wreg_prefix H D had z i ω ω' hω,
+        had.1 z i ω ω' hω, had.2.1 z i ω ω' hω, had.2.2 z i ω ω' hω]
+    · exact (pr_castLE (hk z ω i) (fun (t : Tp) (r : Fin ((D (x z ω i)).V.k (x z ω i)) → Coin) =>
+        (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) t r).out = .acc ∧
+          ∃ s Pt, (D (x z ω i)).parse (x z ω i) = some s ∧ (D (x z ω i)).partition s = some Pt ∧
+            Disjoint (FregR H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i)) (allSlots s.design Pt) ∧
+            ¬valid (sw i) (regRunR H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i) lay k s Pt))).trans_le
+        (hck z ω i)
+  refine Claims.Sampling.Pr_or_le (fun ω hω => ?_) h1 h2
+  obtain ⟨hacc, hnot⟩ := hω
+  by_contra hc
+  simp only [not_or] at hc
+  refine hnot fun hR => ?_
+  have hacc' : (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) (ω i).1
+      (fun j => (ω i).2 (Fin.castLE (hk z ω i) j))).out = .acc := hacc
+  obtain ⟨s, Pt, hs, hPt, hin⟩ := (hS (x z ω i)).refuses _ _ _ _ _ hacc'
+  obtain ⟨hsame, hPw, hfit, hcert, hcov, hlen, hj, hreg⟩ := hyp z hz ω i s hs hacc hR
+  have hdisj : Disjoint (WregR H D x Pv ops z ω i) (allSlots s.design Pt) :=
+    by_contra fun hd => hc.1 ⟨hacc, s, Pt, hs, hPt, hd⟩
+  have hval : valid (sw i) (regRunR H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i) lay k s Pt) :=
+    by_contra fun hv => hc.2 ⟨hacc, s, Pt, hs, hPt, hdisj, hv⟩
+  have hPtw : Pt = Pw i := Option.some.inj (hPt.symm.trans hPw)
+  subst hPtw
+  have hl := leakAtChecked_regR lay k reg (fun _ => valid (sw i)) Dj hs hPt hin hfit (Pv z ω i) (ops z ω i)
+    (op i (runsBefore (obs z ω) i)) (obs z ω i) hcert hcov hlen hj (fun g hg => (hreg g hg).1) hdisj hval
+  exact leakAtChecked_congr lay k reg Dj hsame.1 hsame.2.1 hsame.2.2.1 hsame.2.2.2.1 hsame.2.2.2.2.1 rfl
+    (fun g hg => (hreg g hg).2) hl
 
 end Phases
 
 end NetTiming
+
+#print axioms NetTiming.leakAtChecked_regR
+#print axioms NetTiming.pr_acc_meets_all_le
+#print axioms NetTiming.pr_phase_le
+#print axioms NetTiming.phaseLeaksChecked_regR
