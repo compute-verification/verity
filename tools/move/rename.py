@@ -669,9 +669,11 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
     """The declaration renames the locks' records need: for each guarantee and read definition whose name the words rename
     where it is declared (a read definition in its module's file, a guarantee in its lock), its first renamed prefix, and
     the full name too when that prefix alone would rename it otherwise; none implied by another. A prefix with such a name
-    under it is listed as its names in full instead, since `check.py --moved` reads no move under another move's new name
-    that maps back elsewhere (its `move_errors`). A lock under a `tests/fixtures/` directory is a test's data, in whatever
-    form its test needs, and no package's record, so it is not read: `check.py --update --moved` re-records packages.
+    under it is listed as its names in full instead, so that no entry sits under another's new name with its old name
+    elsewhere, and every name the map takes comes back to itself, as `check.py --moved` requires of the lock's names and
+    the build's (its `move_errors`, `Facts.lean`'s `moved_conflicts`). A lock under a `tests/fixtures/` directory is a
+    test's data, in whatever form its test needs, and no package's record, so it is not read: `check.py --update --moved`
+    re-records packages.
 
     A module two packages define (`module_files`) is read from the lock's own package when that package is one of them;
     otherwise every file defining it must rename the definition alike, and a map that renames it apart in them is refused
@@ -710,7 +712,7 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
                             if n.startswith(q + ".") and o != p + n[len(q):]}):
         if nested[0] in want:
             raise SystemExit(f"{nested[0]} is renamed {moves[nested[0]]} and a name under it is renamed elsewhere: "
-                             "`check.py --moved` can't read both back, so rename them in two moves")
+                             "this map nests no entry under another's new name, so rename them in two moves")
         del moves[nested[0]]
         moves |= {o: n for o, n in want.items() if o.startswith(nested[0] + ".")}
     for old in sorted(moves, key=lambda k: -k.count(".")):

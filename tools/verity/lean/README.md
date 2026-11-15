@@ -264,7 +264,8 @@ One line per mechanism; a new one gets its line here and its detail in the docst
 - **A lift is not a change** when the type, with `G` unfolded once, hashes to the record's (`lifted_into`,
   `Facts.lean`'s `liftOf`); `--lift` writes lifts into the four-name form (`lift`).
 - **A move is not a change**: `--update --moved MOVES.json` compares the build with the records under the old names
-  (`review`, `facts_of`, `move_errors`, `Facts.lean`).
+  (`review`, `facts_of`, `move_errors`, `Facts.lean`). Both ways take the longest moved prefix, and a name of the lock
+  or of the compared texts that does not come back to itself is refused.
 - **Merging**: `merge.py` merges `lean-audit.json` entry by entry and leaves git's conflict only at its three guards;
   a merged record is a candidate, which the Lean check rebuilds, so a merge that is clean but wrong (a definition that
   changed on one side without a guarantee there reading it, while the other side's new guarantee reads it) fails there

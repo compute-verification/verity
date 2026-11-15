@@ -1531,7 +1531,7 @@ def read_cached_facts(cache: Path, key: str) -> dict | None:
 
 def renamed(name: str, moved: dict[str, str]) -> str:
     """``name`` after the moves ``moved`` ({old: new}, a declaration or a namespace each): its longest moved prefix
-    replaced by the new name (`Facts.lean`'s `renameName` maps back the same way)."""
+    replaced by the new name (`unrenamed` and `Facts.lean`'s `renameName` map back the same way)."""
     parts = name.split(".")
     for i in range(len(parts), 0, -1):
         if (p := ".".join(parts[:i])) in moved:
@@ -1539,48 +1539,89 @@ def renamed(name: str, moved: dict[str, str]) -> str:
     return name
 
 
-def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
+def unrenamed(name: str, moved: dict[str, str]) -> str:
+    """``name`` before the moves ``moved`` ({old: new}, one old name to each new one): its longest prefix that is a new
+    name replaced by the old one, as `Facts.lean`'s `renameName` maps the build's names back."""
+    return renamed(name, {new: old for old, new in moved.items()})
+
+
+def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]) -> dict:
     """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed`, `trust_gap` and `ids` with
-    every guarantee, theorem and premise they name `renamed` by ``moved``."""
+    every guarantee, theorem and premise they name `renamed` by ``moved`` (or mapped by it, a function)."""
+    rn = moved if callable(moved) else lambda n: renamed(n, moved)
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
     if name_list(policy.get("deployed")):
-        out["deployed"] = sorted(renamed(n, moved) for n in policy["deployed"])
+        out["deployed"] = sorted(rn(n) for n in policy["deployed"])
     if isinstance(trust := policy.get("trust"), dict):
         def keyed(m):
-            return {renamed(p, moved): why for p, why in m.items()} if isinstance(m, dict) else m
-        out["trust"] = {k: {renamed(g, moved): keyed(ps) for g, ps in v.items()}
+            return {rn(p): why for p, why in m.items()} if isinstance(m, dict) else m
+        out["trust"] = {k: {rn(g): keyed(ps) for g, ps in v.items()}
                         if k == "extra" and isinstance(v, dict) else keyed(v) for k, v in trust.items()}
     if isinstance(gap := policy.get("trust_gap"), dict):
-        out["trust_gap"] = {renamed(g, moved): sorted(renamed(p, moved) for p in name_list(ps)) for g, ps in gap.items()}
+        out["trust_gap"] = {rn(g): sorted(rn(p) for p in name_list(ps)) for g, ps in gap.items()}
     if isinstance(taken := policy.get("witnesses_assumed"), dict):
-        out["witnesses_assumed"] = {renamed(a, moved): why for a, why in taken.items()}
+        out["witnesses_assumed"] = {rn(a): why for a, why in taken.items()}
     if isinstance(ids := policy.get("ids"), dict):
-        out["ids"] = {renamed(p, moved): i for p, i in ids.items()}
+        out["ids"] = {rn(p): i for p, i in ids.items()}
     if isinstance(ws, dict):
-        out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
-                                                if isinstance(v, list) else renamed(v, moved) if isinstance(v, str) else v
-                                                for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
+        out["witnesses"] = {rn(g): {k: [rn(n) if isinstance(n, str) else n for n in v]
+                                    if isinstance(v, list) else rn(v) if isinstance(v, str) else v
+                                    for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
     if isinstance(allow, dict):
-        out["unwitnessed"] = {renamed(g, moved): h for g, h in allow.items()}
+        out["unwitnessed"] = {rn(g): h for g, h in allow.items()}
     if isinstance(spec := policy.get("shape"), dict) and isinstance(spec.get("inline"), dict):
-        out["shape"] = spec | {"inline": {renamed(g, moved): h for g, h in spec["inline"].items()}}
+        out["shape"] = spec | {"inline": {rn(g): h for g, h in spec["inline"].items()}}
     return out
 
 
-def move_errors(moved: dict[str, str]) -> list[str]:
-    """Why ``moved`` cannot be read back: two old names moved to one new name, a name moved to itself, or a new name under
-    another new name whose old names are not nested the same way (the build's names would map back to the wrong ones)."""
+def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
+    """Why ``moved`` cannot be read back: a name moved to itself, two old names moved to one new name (a name of the build
+    under it has no one old name), or a name of ``names`` (a lock's, `lock_names`) whose new name maps back to another
+    (`unrenamed`).  Both maps take the longest prefix, so the names under an entry nested under another's new name map
+    back under its own old name whether or not the old names nest alike; only a name that falls under a longer entry
+    than its own on one way, and not on the other, fails to come back.  Which names do is a fact of the lock and the
+    build, not of the map: here the lock's, and the build's in the texts `Facts.lean` compares (`moved_conflicts`)."""
     errs = [f"{old} moves to itself" for old, new in sorted(moved.items()) if old == new]
     by_new: dict[str, list[str]] = {}
     for old, new in moved.items():
         by_new.setdefault(new, []).append(old)
     errs += [f"{', '.join(sorted(olds))} all move to {new}" for new, olds in sorted(by_new.items()) if len(olds) > 1]
-    for old, new in sorted(moved.items()):
-        for old2, new2 in sorted(moved.items()):
-            if new2 != new and under([new], new2) and old2 != old + new2[len(new):]:
-                errs.append(f"{old2} moves to {new2}, under {new}, where {old} moves; the names under {new2} would map back "
-                            f"under {old}, not {old2}")
+    if errs:
+        return errs
+    for n in sorted(set(names)):
+        if (m := renamed(n, moved)) != n and (b := unrenamed(m, moved)) != n:
+            errs.append(f"{n} moves to {m}, which maps back to {b}: give {n} an entry of its own")
     return errs
+
+
+def moves_file(path: Path) -> dict[str, str]:
+    """The moves file ``path``, {old name: new name}; ValueError for any other JSON, and for an old name it gives twice
+    (`json` would keep the last)."""
+    twice: list[str] = []
+
+    def pairs(ps: list) -> dict:
+        seen: dict = {}
+        for k, v in ps:
+            if k in seen and seen[k] != v:
+                twice.append(f"{k} moves to both {seen[k]} and {v}")
+            seen[k] = v
+        return seen
+    moved = json.loads(path.read_text(), object_pairs_hook=pairs)
+    if not isinstance(moved, dict) or not all(isinstance(v, str) for v in [*moved, *moved.values()]):
+        raise ValueError("a JSON object of old names to new names")
+    if twice:
+        raise ValueError("; ".join(twice))
+    return moved
+
+
+def lock_names(policy: dict) -> set[str]:
+    """Every name of ``policy`` that `renamed_current` renames, and every name its `shape.inline` texts print (`paired`
+    renames those): the lock's names that a moves file must take forward and back to themselves."""
+    seen: set[str] = set()
+    renamed_current(policy, lambda n: seen.add(n) or n)
+    inline = (policy.get("shape") or {}).get("inline")
+    return seen | {n for es in inline.values() if isinstance(es, dict) for t in es for n in NAMES.findall(t)} \
+        if isinstance(inline, dict) else seen
 
 
 #: hex digits of the hashes in records written before SHA-256: a guarantee's `type_hash` (Lean's 32-bit `Expr.hash`) and a read
@@ -1817,7 +1858,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     fails += orphan_failures(policy, files, modules) + layer_failures(policy, modules, facts["imports"], graph, own)
     if conflicts := facts.get("moved_conflicts"):
         more = f" and {len(conflicts) - 8} more" if len(conflicts) > 8 else ""
-        clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" for c in conflicts[:8])
+        clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" if "with" in c else
+                          f"{c['name']} would be {c['as']}, which moves to {c['back']}" for c in conflicts[:8])
         fails.append(Failure("moved.conflict", None, f"moved: under the old names, {clash}{more}: the map cannot tell them "
                              f"apart, so the review compares nothing under the old names; map only the declarations that moved"))
     assumed = policy.get("assumptions", {})
@@ -2930,8 +2972,8 @@ NAMES = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
 def moved_fields(op: list[str], np: list[str], start: int, fields: dict, moves: dict) -> list[tuple[str, str]] | None:
     """The renames that take the dotted name ``op`` to ``np`` (each split at its dots) through its fields: the two alike up
     to ``start`` (past a variable, or the constant ``np`` starts with) and as long, and each field that differs standing,
-    in ``np``, for one constant (``fields``), which `--moved` moved from the constant of the old field's name; None for
-    any other pair."""
+    in ``np``, for one constant (``fields``), which `--moved` moved from the constant of the old field's name in the
+    structure's old namespace (`unrenamed`: a structure moved with its field); None for any other pair."""
     if len(op) != len(np) or op[:start] != np[:start]:
         return None
     out = []
@@ -2941,8 +2983,10 @@ def moved_fields(op: list[str], np: list[str], start: int, fields: dict, moves: 
         if len(cs := fields.get((".".join(np[:k]), np[k])) or set()) != 1:
             return None
         n = next(iter(cs))
-        o = n[:len(n) - len(np[k])] + op[k]
-        if not n.endswith("." + np[k]) or renamed(o, moves) != n:
+        if not n.endswith("." + np[k]):
+            return None
+        o = f"{unrenamed(n[:len(n) - len(np[k]) - 1], moves)}.{op[k]}"
+        if renamed(o, moves) != n:
             return None
         out.append((o, n))
     return out or None
@@ -6151,15 +6195,16 @@ def anonymous_failures(found: list[dict]) -> list[Failure]:
                     f"Write `instance {i['id']}` there (`check.py --name-instances` writes each one)") for i in found]
 
 
-def renamed_current(policy: dict, moved: dict[str, str] | None) -> dict:
-    """``policy`` with its guarantees and witnesses renamed by ``moved`` ({old: new}), the lock the audit judges against
-    (`current` in `audit`): the records read under the old names resolve to the build's new ones."""
+def renamed_current(policy: dict, moved: dict[str, str] | Callable[[str], str] | None) -> dict:
+    """``policy`` with its guarantees and witnesses renamed by ``moved`` ({old: new}, or a function), the lock the audit
+    judges against (`current` in `audit`): the records read under the old names resolve to the build's new ones."""
     if not moved:
         return policy
+    rn = moved if callable(moved) else lambda n: renamed(n, moved)
     renames: dict[str, dict] = {}
     for n, r in sorted(policy.get("guarantees", {}).items()):
-        if r or renamed(n, moved) not in renames:
-            renames[renamed(n, moved)] = r
+        if r or rn(n) not in renames:
+            renames[rn(n)] = r
     return policy | {"guarantees": renames} | renamed_witnesses(policy, moved)
 
 
@@ -6959,9 +7004,10 @@ def main(argv: list[str]) -> int:
     if a.moved:
         if not a.update:
             ap.error("--moved goes with --update")
-        moved = json.loads(a.moved.read_text())
-        if not isinstance(moved, dict) or not all(isinstance(v, str) for v in [*moved, *moved.values()]):
-            ap.error(f"{a.moved}: a JSON object of old names to new names")
+        try:
+            moved = moves_file(a.moved)
+        except ValueError as e:
+            ap.error(f"{a.moved}: {e}")
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
@@ -6981,6 +7027,13 @@ def main(argv: list[str]) -> int:
         ap.error(f"{shipped} is a tree `research run --on` shipped, which every run of its commit shares: rerun with "
                  "`research run ... --cwd clone`, or take the records `--update` writes under --out (audit-<pkg>/lean-audit.json)")
     named = set(pkgs)
+    for p in sorted(named) if moved else []:
+        try:
+            names = lock_names(load(p)) if (p / POLICY).is_file() else set()
+        except ValueError:
+            names = set()                               # its audit reports the policy
+        if errs := move_errors(moved, names):
+            ap.error(f"{a.moved}, on {p / POLICY}: " + "; ".join(errs))
     for p in (pkgs if a.facts_from is None else []):    # grows: a package proving another's guarantees is audited beside
         try:                                            # it, but --facts-from already holds the provers' facts (`proved`)
             more = provers(p, load(p)) if (p / POLICY).is_file() else []

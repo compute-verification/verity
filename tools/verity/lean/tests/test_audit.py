@@ -6,8 +6,10 @@ import ast
 import gzip
 import hashlib
 import importlib.util
+import itertools
 import json
 import os
+import random
 import shutil
 import subprocess
 import sys
@@ -2605,6 +2607,48 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     assert [f.split(":")[0] for f in unshaped(rep)] == ["moved"] and "Control.Protocol.f would be Control.f" in rep["failures"][0]
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_structure_moved_with_its_field_renamed_is_the_same_statement_on_a_real_build(tmp_path):
+    """`Facts.lean`'s maps on a real build, for the shape of compute-accounting's two moves: a structure renamed and its
+    field `law` renamed `samplingDesign` under it (`RECORD_MOVES`'s form) reads back, so the guarantee over it is the same
+    statement.  Then a map whose old names nest and whose new ones don't, where the build reads the field under the
+    structure's new name: that name maps back to the field's old name, which the map takes elsewhere, and the audit
+    refuses to compare under the old names (no other name of the texts shares its old name, so only the round trip
+    shows it)."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Record\n")
+    record = pkg / "Control" / "Record.lean"
+    record.write_text("namespace Control\nstructure W where\n  law : Nat\n"
+                      "theorem t (c : W) : c.law + 0 = c.law := rfl\nend Control\n")
+    pol = unclaimed(A.load(pkg))
+    A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Record": {"imports": []}},
+                       "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.t")}})
+
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def audit(**kw):
+        return A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
+    build()
+    assert unshaped(audit()) == []
+    before = (pkg / A.POLICY).read_text()
+    record.write_text("namespace Control\nstructure E where\n  samplingDesign : Nat\n"
+                      "theorem t (c : E) : c.samplingDesign + 0 = c.samplingDesign := rfl\nend Control\n")
+    build()
+    moved = {"Control.W": "Control.E", "Control.W.law": "Control.E.samplingDesign"}
+    assert A.move_errors(moved, A.lock_names(A.load(pkg))) == []
+    rep = audit(moved=moved)
+    assert unshaped(rep) == [] and f"guarantee Control.t: {A.MOVED}" in rep["review"]
+    (pkg / A.POLICY).write_text(before)
+    record.write_text("namespace Control\nstructure E where\n  law : Nat\n"
+                      "theorem t (c : E) : c.law + 0 = c.law := rfl\nend Control\n")
+    build()
+    rep = audit(moved={"Control.W": "Control.E", "Control.W.law": "Control.Law"})
+    assert [f.split(":")[0] for f in unshaped(rep)] == ["moved"]
+    assert "Control.E.law would be Control.W.law, which moves to Control.Law" in rep["failures"][0]
+
+
 SPLIT_KEPT = "def pick : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\ndef three : Fin 5 := ⟨3, by decide⟩\n"
 SPLIT_OFF = "def pick' : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\ndef three' : Fin 5 := ⟨3, by decide⟩\n"
 
@@ -3434,12 +3478,80 @@ def test_a_map_that_cannot_tell_declarations_apart_compares_nothing_under_the_ol
 
 
 def test_a_move_map_renames_by_its_longest_prefix_and_must_map_back():
+    """Both ways take the longest prefix, so an entry under another's new name reads back whatever its old name; what is
+    refused is a name moved to itself, one new name for two old ones, and a lock name the two ways don't return."""
     moved = {"A": "X", "A.b": "Y"}
     assert [A.renamed(n, moved) for n in ("A", "A.b.c", "A.d", "Ab.c", "Z")] == ["X", "Y.c", "X.d", "Ab.c", "Z"]
+    assert [A.unrenamed(n, moved) for n in ("X", "Y.c", "X.d", "X.b", "Z")] == ["A", "A.b.c", "A.d", "A.b", "Z"]
     assert A.move_errors(moved) == [] and A.move_errors({"A": "X", "A.y": "X.y"}) == []
     assert A.move_errors({"A": "A", "B": "X", "C": "X"}) == ["A moves to itself", "B, C all move to X"]
-    assert A.move_errors({"A": "X", "B": "X.y"}) == [
-        "B moves to X.y, under X, where A moves; the names under X.y would map back under A, not B"]
+    assert A.move_errors({"A": "X", "B": "X.y"}) == []
+    assert A.move_errors({"A": "X", "B": "X.y"}, ["A.y.z", "A.w", "B.v", "Q"]) == [
+        "A.y.z moves to X.y.z, which maps back to B.z: give A.y.z an entry of its own"]
+    assert A.move_errors({"A": "X", "B": "X.y", "A.y.z": "X.y.z"}, ["A.y.z", "A.w", "B.v"]) == []
+
+
+def test_the_nested_moves_of_a_structure_and_its_field_read_back_but_their_shadows_do_not():
+    """The two cases the rule refused before it asked the names (`fixtures/moved/nested.json`): a structure renamed, and
+    its field `law` renamed `samplingDesign` under it.  Every old name of the lock and new name of the build comes back
+    to itself, but for the one name under the outer entry that lands on the inner one's other side: an old
+    `….samplingDesign` (the lock's, refused here) or a new `….law` (the build's, which `Facts.lean` refuses)."""
+    for case, c in json.loads((HERE / "fixtures" / "moved" / "nested.json").read_text()).items():
+        moves = c["moves"]
+        assert A.move_errors(moves) == [], case
+        assert A.move_errors(moves, c["old"]) == [], case
+        assert all(A.unrenamed(A.renamed(n, moves), moves) == n for n in c["old"]), case
+        assert all(A.renamed(A.unrenamed(n, moves), moves) == n for n in c["new"]), case
+        for n, back in c["old_refused"].items():
+            assert A.move_errors(moves, [n]) == [f"{n} moves to {A.renamed(n, moves)}, which maps back to {back}: give {n} "
+                                                 "an entry of its own"], case
+        for n, forth in c["new_refused"].items():
+            assert A.renamed(A.unrenamed(n, moves), moves) == forth, case
+
+
+def test_every_name_a_move_map_and_its_lock_are_accepted_with_comes_back_to_itself():
+    """A property over seeded random maps and names (two-letter alphabet, names of up to four parts): whenever
+    `move_errors` accepts a map and a lock's names, each of those names under an old name of the map maps forward and
+    back to itself, and such a name is refused exactly when it doesn't (a name the map leaves alone stays where it is, as
+    in a lock already recorded under the new names); nested entries whose old names nest otherwise are accepted, and
+    some of the drawn maps have them."""
+    rng, parts = random.Random(20261115), ["a", "b"]
+    universe = [".".join(p) for k in range(1, 5) for p in itertools.product(parts, repeat=k)]
+    otherwise = refused = 0
+    for _ in range(400):
+        moved: dict[str, str] = {}
+        for _ in range(rng.randint(1, 4)):
+            moved.setdefault(rng.choice(universe[:14]), rng.choice(universe[:14]))
+        if A.move_errors(moved):
+            continue
+        otherwise += any(n2 != n and n2.startswith(n + ".") and o2 != o + n2[len(n):]
+                         for o, n in moved.items() for o2, n2 in moved.items())
+        names = rng.sample(universe, 12)
+        under = [n for n in names if A.renamed(n, moved) != n]
+        back = [n for n in under if A.unrenamed(A.renamed(n, moved), moved) == n]
+        assert A.move_errors(moved, back) == [], moved
+        assert [e.split(" ")[0] for e in A.move_errors(moved, names)] == sorted(set(under) - set(back)), moved
+        refused += len(set(under) - set(back))
+    assert otherwise >= 20 and refused >= 20
+
+
+def test_a_moves_file_that_gives_one_name_two_new_names_is_refused(tmp_path):
+    f = tmp_path / "moves.json"
+    f.write_text('{"P.a": "Q.a", "P.b": "Q.b", "P.a": "R.a"}')
+    with pytest.raises(ValueError, match="P.a moves to both Q.a and R.a"):
+        A.moves_file(f)
+    f.write_text('{"P.a": "Q.a", "P.a": "Q.a"}')
+    assert A.moves_file(f) == {"P.a": "Q.a"}
+    f.write_text('["P.a", "Q.a"]')
+    with pytest.raises(ValueError, match="a JSON object of old names to new names"):
+        A.moves_file(f)
+
+
+def test_the_lock_names_a_moves_file_must_bring_back_are_those_the_move_renames():
+    lock = {"guarantees": {"P.t": {}}, "deployed": ["P.t"], "open": {"P.Hyp": {}},
+            "witnesses": {"P.t": {"honest": ["P.t_h"], "nontrivial": "P.t_n"}}, "unwitnessed": {"P.u": "00"},
+            "shape": {"inline": {"P.t": {"P.Fits n ∧ x.f": WHY}}}}
+    assert A.lock_names(lock) == {"P.t", "P.t_h", "P.t_n", "P.u", "P.Fits", "n", "x.f"}
 
 
 def test_a_closed_hypothesis_must_be_a_named_assumption():
@@ -5315,6 +5427,25 @@ def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_say
             pol, f = renamed_inline(was, now, INFERENCE_ONLY_CONSTS, INFERENCE_ONLY_CONSTANTS, moves, shown)
             assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], (was, moves, shown)
             assert A.inline_failures(pol, f)[1] == {}, (was, moves, shown)
+
+
+#: compute-accounting's structure move, with `law_lean_moves.json`'s entry for its field under it
+RECORD_MOVES = {"PouwCheck.WindowCommitmentRecord": "PouwCheck.ExecutionPhaseCommitmentRecord",
+                "PouwCheck.WindowCommitmentRecord.law": "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"}
+
+
+def test_a_field_renamed_with_its_structure_follows_both_moves():
+    """`c.law` to `c.samplingDesign` where the structure moved too: the old field's constant is the field's old name in
+    the structure's old namespace, so the premise takes its entry's place; with the field's entry alone it doesn't."""
+    was, now = "Eq (P.view c.law) P.zero", "Eq (P.view c.samplingDesign) P.zero"
+    shown = [["c", "samplingDesign", "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"]]
+    constants = {"P.view": ("def", "view"), "P.zero": ("def", "zero")}
+    pol, f = renamed_inline(was, now, ["Eq", "P.view", "P.zero"], constants, RECORD_MOVES, shown)
+    assert inline_codes(pol, f) == []
+    assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
+    field_only = {k: v for k, v in RECORD_MOVES.items() if k.endswith(".law")}
+    pol, f = renamed_inline(was, now, ["Eq", "P.view", "P.zero"], constants, field_only, shown)
+    assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"]
 
 
 def test_a_field_of_another_structure_that_shares_the_moved_word_keeps_its_text():

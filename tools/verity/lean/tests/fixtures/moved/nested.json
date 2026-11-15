@@ -1,0 +1,33 @@
+{
+ "PouwCheck.WindowCommitmentRecord": {
+  "moves": {
+   "PouwCheck.WindowCommitmentRecord": "PouwCheck.ExecutionPhaseCommitmentRecord",
+   "PouwCheck.WindowCommitmentRecord.law": "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"
+  },
+  "old": ["PouwCheck.WindowCommitmentRecord", "PouwCheck.WindowCommitmentRecord.mk", "PouwCheck.WindowCommitmentRecord.bytes",
+          "PouwCheck.WindowCommitmentRecord.population", "PouwCheck.WindowCommitmentRecord.law",
+          "PouwCheck.WindowCommitmentRecord.roots", "PouwCheck.WindowCommitmentRecord.window", "PouwCheck.recordOf",
+          "Properties.Pouw.Check.acceptMeans"],
+  "new": ["PouwCheck.ExecutionPhaseCommitmentRecord", "PouwCheck.ExecutionPhaseCommitmentRecord.mk",
+          "PouwCheck.ExecutionPhaseCommitmentRecord.bytes", "PouwCheck.ExecutionPhaseCommitmentRecord.population",
+          "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign", "PouwCheck.ExecutionPhaseCommitmentRecord.roots",
+          "PouwCheck.ExecutionPhaseCommitmentRecord.window", "PouwCheck.recordOf"],
+  "old_refused": {"PouwCheck.WindowCommitmentRecord.samplingDesign": "PouwCheck.WindowCommitmentRecord.law"},
+  "new_refused": {"PouwCheck.ExecutionPhaseCommitmentRecord.law": "PouwCheck.ExecutionPhaseCommitmentRecord.samplingDesign"}
+ },
+ "Flock.Draw.UnitDraw": {
+  "moves": {
+   "Flock.Draw.UnitDraw": "Flock.Draw.UnitSample",
+   "Flock.Draw.UnitDraw.ofJson": "Flock.Draw.UnitSample.ofJson",
+   "Flock.Draw.UnitDraw.law": "Flock.Draw.UnitSample.samplingDesign"
+  },
+  "old": ["Flock.Draw.UnitDraw", "Flock.Draw.UnitDraw.mk", "Flock.Draw.UnitDraw.law", "Flock.Draw.UnitDraw.population",
+          "Flock.Draw.UnitDraw.units", "Flock.Draw.UnitDraw.closure", "Flock.Draw.UnitDraw.proved",
+          "Flock.Draw.UnitDraw.ofJson", "Flock.Draw.Law"],
+  "new": ["Flock.Draw.UnitSample", "Flock.Draw.UnitSample.mk", "Flock.Draw.UnitSample.samplingDesign",
+          "Flock.Draw.UnitSample.population", "Flock.Draw.UnitSample.units", "Flock.Draw.UnitSample.closure",
+          "Flock.Draw.UnitSample.proved", "Flock.Draw.UnitSample.ofJson"],
+  "old_refused": {"Flock.Draw.UnitDraw.samplingDesign": "Flock.Draw.UnitDraw.law"},
+  "new_refused": {"Flock.Draw.UnitSample.law": "Flock.Draw.UnitSample.samplingDesign"}
+ }
+}

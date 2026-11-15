@@ -73,9 +73,10 @@ With `moved` (pairs of a new name, a declaration or a namespace, and the old nam
 written once more with the names as they were before the move (the longest moved prefix renamed back), and a pinned
 statement that is such a definition also with that definition unfolded (`liftOf`), so that
 `check.py` can compare them with records made before the move. `moved_conflicts` lists each constant of those texts (or
-pin) whose old name would be another one's too: there the comparison would not tell the two apart. A constant that keeps
-its name stands for itself, and an old name that only a declaration outside the texts still has (an old theorem kept as a
-lemma) is no conflict.
+pin) whose old name would be another one's too (`with`), or whose old name the moves take forward to another name
+(`back`, the longest old prefix renamed): either way the comparison would not show that the text says what its record
+says. A constant that keeps its name stands for itself, and an old name that only a declaration outside the texts still
+has (an old theorem kept as a lemma) is no conflict.
 -/
 
 open Lean Meta
@@ -1401,12 +1402,17 @@ unsafe def main (args : List String) : IO UInt32 := do
       h.putStrLn l.get
     let (kept, renamed) := (named.toArray.qsort Name.lt).partition fun c => rn c == c
     let mut took : Std.HashMap Name Name := kept.foldl (fun m c => m.insert c c) {}
+    let fwd : Std.HashMap Name Name := back.toList.foldl (fun m (n, o) => m.insert o n) {}
     for c in renamed do
       if let some d := took[rn c]? then
         conflicts := conflicts.push <| Json.mkObj [("name", toJson c.toString), ("as", toJson (rn c).toString),
           ("with", toJson d.toString)]
       else
         took := took.insert (rn c) c
+      let there := renameName fwd (rn c)
+      if there != c then
+        conflicts := conflicts.push <| Json.mkObj [("name", toJson c.toString), ("as", toJson (rn c).toString),
+          ("back", toJson there.toString)]
   lap "canon" conflicts.size
   let mut graph := #[]
   for h : i in [0:mnames.size] do
