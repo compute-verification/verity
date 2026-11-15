@@ -76,7 +76,7 @@ compute, each memory leaf's memory held and memory read, and each boundary link'
 host and the auditor's devices hold none of their own: a host has no compute rate, and its memory is its memory leaves'.
 -/
 def parts (S : Site) : Set (String × Accountable) :=
-  {xr | (∃ x ∈ S.locs, x.kind = .device ∧ xr = (x.id, .resource .compute)) ∨
+  {xr | (∃ x ∈ S.locs, x.kind = .accelerator ∧ xr = (x.id, .resource .compute)) ∨
     (∃ x ∈ S.locs, x.kind = .memory ∧ (xr = (x.id, .resource .capacity) ∨ xr = (x.id, .resource .bandwidth))) ∨
     ∃ k ∈ S.links, S.Boundary k ∧ xr = (k.id, .egress)}
 
@@ -182,7 +182,7 @@ SKU the auditor `A` has a data sheet for, whose figures registration accepted ag
 (`DeviceFigures.Accepted`) and whose memory figures are the auditor's. So both readings of its figures exist, and its
 device model (`Site.device`) is defined. -/
 def Devices (D : Digests) (A : Auditor) : Prop :=
-  ∀ x ∈ v.site.locs, x.kind = .device →
+  ∀ x ∈ v.site.locs, x.kind = .accelerator →
     ∃ k ∈ v.site.sheet? D.sheet x, ∃ a ∈ A.sheet k.sku,
       k.figures.Accepted (A.estimate a) ∧ k.bw = a.bw ∧ k.chip = a.chip ∧ k.mem = a.mem
 
@@ -265,7 +265,7 @@ def AccountedFor (D : Digests) (L : Lists) (as : List Answer) (v : View) (k : Co
     (charged : List (String × Site.Accountable)) (unaccounted : List (String × ℕ)) : Prop :=
   charged.Nodup ∧
     (∀ x r, (x, r) ∈ v.site.parts → (∃ a ∈ as, a.1 ∈ L.protocols k ∧ Credits v.site a x r) ∨ (x, r) ∈ charged) ∧
-    ∀ x ∈ v.site.locs, x.kind = .device → 0 < v.unaccounted D L as k x → (x.id, v.unaccounted D L as k x) ∈ unaccounted
+    ∀ x ∈ v.site.locs, x.kind = .accelerator → 0 < v.unaccounted D L as k x → (x.id, v.unaccounted D L as k x) ∈ unaccounted
 
 end Registration
 

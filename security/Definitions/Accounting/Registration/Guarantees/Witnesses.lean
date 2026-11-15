@@ -35,7 +35,7 @@ def auditor : Auditor :=
   ⟨fun s => if s = sheet.sku then some sheet else none, ⟨1 / 10⟩, fun i => if i = "cert0" then some "key0" else none⟩
 
 /-- The device, on the host, naming the sheet. -/
-def gpu : Loc := { id := "gpu0", kind := .device, parent := some "node0", sheet := sheet.sku }
+def gpu : Loc := { id := "gpu0", kind := .accelerator, parent := some "node0", sheet := sheet.sku }
 
 /-- The host's uplink, to the certifier that splits it. -/
 def uplink : Link := ⟨"uplink0", ("node0", "cert0"), 100000, 100000⟩
@@ -51,7 +51,7 @@ def entry : Entry := .site "genesis"
 def log : Registration := [entry]
 
 /-- A log whose one entry registers a device naming no sheet. -/
-def unnamed : Registration := [.site "genesis" { locs := [{ id := "gpu9", kind := .device }] }]
+def unnamed : Registration := [.site "genesis" { locs := [{ id := "gpu9", kind := .accelerator }] }]
 
 end Verity.Registration.Witness
 
