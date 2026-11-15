@@ -7,7 +7,7 @@ Lower is better; the tree holds no site a lint finds at zero.
     research run --on auto --cwd source -- uv run python benchmarks/tree/lint_sites.py
 
 A list `lint_counts.py` couldn't count is left out of both sums, which are then `partial`, and the validation's detail
-names it with its reason beside each counted list's totals. It counts the checkout's HEAD and writes under `--out`
+names it with its reason beside each counted list's totals; where it counted none, nothing is written. It counts the checkout's HEAD and writes under `--out`
 (`out/` outside a research run).
 """
 from __future__ import annotations
@@ -88,6 +88,8 @@ def detail(rows: list[tuple[str, str, int, int]], uncounted: list[str], stderr: 
 
 def write(w: kit.Writer, rows: list[tuple[str, str, int, int]], uncounted: list[str], handles: list[dict],
           stderr: str) -> None:
+    if not rows and not log(stderr)[0]:
+        raise SystemExit(f"lint_counts.py counted no list, so there is no number to write: {detail(rows, uncounted, stderr)}")
     mark = "partial" if uncounted else "measured"
     for member, (f, a) in sums(rows, handles).items():
         w.measurement(FOUND, f, "sites", target=0, mark=mark, member=member)

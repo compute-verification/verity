@@ -1,12 +1,14 @@
 """The lint sites' readings (`lint_sites.py`) on made-up `lint_counts.py` output: each file goes to the lead whose `owns`
 entry is its longest prefix, or to `unowned`; a list that couldn't be counted is named, with its reason, and summed
-into nothing; and the result holds the total and one reading for each lead of each of the two numbers."""
+into nothing; the result holds the total and one reading for each lead of each of the two numbers; and a run that
+counted no list writes none."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import lint_sites as S
+import pytest
 
 RUN = "r20000101-000000-aaaa"
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
@@ -64,6 +66,12 @@ def test_the_result_holds_the_totals_and_each_leads_readings(tmp_path: Path) -> 
     assert got == {**{(S.FOUND, m): (v, 0, "partial", "sites") for m, v in found.items()},
                    **{(S.ALLOWED, m): (v, None, "partial", "sites") for m, v in allowed.items()}}
     assert doc["validation"]["status"] == "passed" and "repo_ruff" in doc["validation"]["detail"]
+
+
+def test_a_run_that_counted_no_list_writes_nothing(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="counted no list.*repo_ruff"):
+        result(tmp_path, "repo_ruff\t-\t-\t-\n", "repo_ruff: not counted: no ruff\n")
+    assert not (tmp_path / S.kit.RESULT).exists()
 
 
 def test_a_count_with_every_list_counted_is_measured(tmp_path: Path) -> None:
