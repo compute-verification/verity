@@ -1092,7 +1092,7 @@ play.
 
 **The device numbers its ledger** (`numbered`): its key's ledger, over the key's whole life, holds one line per
 sequence number. It is a fact of the device's own ledger code, which writes each line's `seq` as the count of the
-lines before it; that code is the auditor host's challenger service, in Python, so the fact is this field of the
+lines before it; that code is the auditor device's challenger service, in Python, so the fact is this field of the
 device until the ledger's writer is in Lean and proves it. -/
 structure Challenger where
   pin : AuditorPin

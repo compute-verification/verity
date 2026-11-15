@@ -278,7 +278,7 @@ class Held(NamedTuple):
 
 def held(piece: Piece, role: Role) -> Held:
     """What this machine hands ``role``, ``piece``'s party: on the prover node the served store (``store``: the card's
-    fill, P2's C*, the engine's store), on the auditor's host its signer and session log (``signing-key``), and on each
+    fill, P2's C*, the engine's store), on the auditor's device its signer and session log (``signing-key``), and on each
     its party key and the request the store's registration gives. None of it reaches the table yet."""
     raise NotImplementedError(NOT_YET)
 

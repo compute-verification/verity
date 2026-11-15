@@ -260,7 +260,7 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
 
 def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_it_nothing(tmp_path, capsys,
                                                                                          monkeypatch):
-    """The prover node's and the auditor's host's runtime parties need what their machine hands them (`held`: the
+    """The prover node's and the auditor's device's runtime parties need what their machine hands them (`held`: the
     served store, the auditor's signer and log, the party key, the request), which doesn't reach the table yet: the
     run raises by the row's name before the served window starts."""
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
