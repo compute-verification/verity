@@ -9,6 +9,7 @@
  "Flock.SecurityProofs.JointHorizonV5": "Flock.SecurityProofs.JointPooledV5",
  "Flock.SecurityProofs.JointStratifiedHorizon": "Flock.SecurityProofs.JointStratifiedPooled",
  "Flock.SecurityProofs.JointStratifiedHorizonMT": "Flock.SecurityProofs.JointStratifiedPooledMT",
+ "FlockSoundness.Audit.audit_window_split_of_record": "FlockSoundness.Audit.audit_executionPhase_split_of_record",
  "Properties.Pouw.Window.drawMisses": "Properties.Pouw.Window.sampleMisses",
  "Properties.Spot.SecurityProofs.drawMisses": "Properties.Spot.SecurityProofs.sampleMisses"
 }
