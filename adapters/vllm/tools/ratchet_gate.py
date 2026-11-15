@@ -194,7 +194,7 @@ KIND = "vllm-ratchet-gate/v2"
 #: this file's bytes, part of every cached verdict's key, so a changed gate judges every change again
 SELF = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 INTEGRATION = "adapters/vllm"
-TESTS = f"{INTEGRATION}/tests/"
+TESTS = f"tests/{INTEGRATION}/tests/"
 LINT = f"{TESTS}lint"
 #: the ruff lint (``test_ruff.py``, by its slug), its config, and the pyproject whose ``dev`` group pins its ruff
 RUFF_LINT = "ruff"
