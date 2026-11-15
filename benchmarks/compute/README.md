@@ -190,7 +190,8 @@ relative to it.
 - `out/pieces/pouw/verify.json` (optional): the Pearl+ verifier's document. Its per-call split says whether the
   passes hold the LM head's calls, and `--per-call` prints it.
 - `out/pieces/pouw/development.json` (optional): the Pearl+ piece's own document. Only its `coin_source`, where the
-  passes' salt coins came from, is read, for the coins line below.
+  passes' salt coins came from, is read, for the coins line below. In the evidence store, a withdrawal of it leaves
+  the record readable: `--from` then fetches and reads it as absent, where a withdrawn required file refuses the record.
 - `job.json` (optional): the run's own record of itself. The command prints its `run.id` as the run, and the commit
   its `store.conditions` name (`source.commit`, with `-dirty` when `source.dirty`). Without it the run is the
   directory's name and the commit is unknown.

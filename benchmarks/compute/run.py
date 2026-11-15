@@ -131,7 +131,8 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_config.settings import SHARED
 
-__all__ = ["ABSENT", "ANSWER", "DELTA_S", "DEVELOPMENT", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY",
+__all__ = ["ABSENT", "ANSWER", "DELTA_S", "DEVELOPMENT", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
+           "POLICY",
            "RECORDS", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
            "amounts", "capacity", "coins", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
 
@@ -154,6 +155,8 @@ VERDICTS = "out/record/verdicts.json"
 #: the Pearl+ piece's own document (`served_verdicts.py pearlplus`), read for its ``coin_source`` alone
 DEVELOPMENT = "out/pieces/pouw/development.json"
 RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS, DEVELOPMENT]
+#: the files of `RECORDS` a withdrawal of which leaves the record readable: the file is then neither fetched nor read
+OPTIONAL = frozenset({DEVELOPMENT})
 #: the verifier's document, read by `--per-call` alone
 VERIFY = "out/pieces/pouw/verify.json"
 #: the run's own record of itself, where `--record` reads the run's id and commit
@@ -230,7 +233,8 @@ class EvidenceStore:
     def files(self, run: str, paths: list[str]) -> tuple[Path | None, list[str]]:
         """A directory holding the files of `run`'s record at `paths`, each a file's whole path in the run (None when
         the record holds none of them), and what was withdrawn of the rest of the record, each as its label says it.
-        A record withdrawn whole, or in a part that holds one of `paths`, is refused before any of it is fetched."""
+        A record withdrawn whole, or in a part that holds one of `paths` other than `OPTIONAL`'s, is refused before any
+        of it is fetched; an `OPTIONAL` file withdrawn is left out of the fetch, as if the record held none."""
         a = self.attempt(run)
         if a is None:
             raise Unreadable(f"{run} is not in the evidence store this machine reads")
@@ -247,8 +251,10 @@ class EvidenceStore:
                 prefixes = scoped.group(1).split(", ") if scoped else []
                 # a reason can end like a list of prefixes without being one: each must hold a file of this record
                 partial = bool(prefixes) and all(any(_under(n, p) for n in names) for p in prefixes)
-                if not partial or any(_under(f, p) for f in paths for p in prefixes):
+                hit = {f for f in paths for p in prefixes if _under(f, p)}
+                if not partial or hit - OPTIONAL:
                     raise Unreadable(f"{run} was withdrawn ({said}): nothing of it is fetched")
+                paths = [f for f in paths if f not in hit]
                 gone.append(said)
             if not any(n in paths for n in names):
                 return None, gone

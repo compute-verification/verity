@@ -1003,3 +1003,24 @@ def test_a_development_piece_that_does_not_read_as_json_exits_2_naming_it(store,
         assert bench(store, *argv) == 2
         out, err = capsys.readouterr()
         assert out == "" and f"compute: the record's {C.DEVELOPMENT} doesn't read as JSON" in err
+
+
+def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_required_file_still_refuses(store, tmp_path,
+                                                                                                   capsys):
+    """`development.json` is optional (`OPTIONAL`): withdrawn, it is neither fetched nor read, the coins line says the
+    salt coins are not stated, and the withdrawal is printed beside the number; the number is unchanged."""
+    record = a_record(tmp_path)
+    (record / "out/pieces/pouw/coin-put.json").write_text("{}")
+    store.add(RUN, record)
+    why = f"hashes of a coin record (only out/pieces/pouw/coin-put.json, {C.DEVELOPMENT})"
+    store.withdraw(f"art:{RUN}", why)
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    said = f"{why!r}, by infra"
+    assert doc["value"] == 0.75 and doc["withdrawn"] == [said] and doc["coins"]["salt"] is None
+    assert text[1].startswith("  coins: node sample, salt coins: not stated in the record;")
+    assert text[4] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
+    assert store.fetched == [[p for p in [*C.RECORDS, C.VERIFY] if p != C.DEVELOPMENT]]
+    store.withdraw(f"art:{RUN}", f"private values were published (only {C.LEAN_CHECK}, {C.DEVELOPMENT})")
+    assert bench(store, "--from", RUN) == 2
+    assert "was withdrawn" in capsys.readouterr().err
