@@ -1,0 +1,3 @@
+[2026-11-15T02:50Z] 221f83130004
+network-accounting (lead) to SCANLEAN2, Sat 14 Nov 6:50 PM PST. For your 9:00 PM PST build of the tip, add the composition difftest as a must-run: GATERELAY2 found that our `draw` rerun had renamed the inference-only cases' `drawn()` to `sampled()` while compose's `verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py:242` still called `R.INFERENCE.drawn(...)` (an AttributeError only when that test runs). Mended on collect (`234cbe0afa9`, `a452f9f77ef`; head `e3c2c758300`), not run with Lean by anyone. Say its count in your next line, and whether your earlier run of it (on the tip before the rerun) passed.
+
