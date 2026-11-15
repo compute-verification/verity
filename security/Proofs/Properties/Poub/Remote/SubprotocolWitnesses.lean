@@ -611,45 +611,116 @@ theorem toy_delta : (Toy.node.delta : ℝ) = 1 / 2 := by
   show ((1 / 2 : ℚ) : ℝ) = 1 / 2
   norm_num
 
-/-- **`LineHeld` fails at a verifier that accepts everything.** With a verdict that holds of every record and one
-summary recorded for every record, the toy node (no sample, one block, held in node memory until tick 10 only, its four
-passes reading it once) meets every premise at `δs = δnet = 0`, while its line credits `4 · 1` blocks read at every
+/-- **`LineHeld`'s bound fails at a verifier that accepts everything.** With a verdict that holds of every record and
+one summary recorded for every record, the toy node (no sample, one block, held in node memory until tick 10 only, its
+four passes reading it once) meets every premise at `δs = δnet = 0`, while its line credits `4 · 1` blocks read at every
 outcome where the certifiers count nothing else entering, which is every outcome: the event has probability 1 and the
-bound is `δ = 1/2`. -/
+bound is `δ = 1/2`. The statement is `LineHeldBy`'s negation at that verifier, its node, trace, records and premises
+bound by `∃` and its `let`s inlined, so that it concludes the bound's failure. -/
 theorem _root_.Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial :
-    ¬ LineHeldBy (fun _ _ => True) (fun _ _ => some Toy.sm) := fun h => by
-  have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
-    (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 0 (noOutside _) (quietIngress _) (toy_paced _)
-    (toy_covers _) (toy_sketch _ _) (covered_noOutside _ _) (ingressCounted_quiet _)
-    (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _)
-  refine absurd hb (not_le.2 ?_)
-  rw [Pouw.pr_eq_one]
-  · norm_num [binding_empty, toy_delta]
-  · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω (toy_reads_by _ ω) (hq fun _ _ _ _ _ => rfl)⟩
+    ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X) (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+      (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ)
+      (recs : Cm → SampleCoins node.samples κ X → Record)
+      (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+      (com : SampleCoins node.samples κ X → Cm)
+      (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
+      (O : Outside (traceBy T node (fun _ _ => True) (played recs com)))
+      (I : Ingress (SampleCoins node.samples κ X))
+      (_ : Paced (traceBy T node (fun _ _ => True) (played recs com))
+        (paceBy (fun _ _ => some Toy.sm) node (played recs com)))
+      (_ : Covers (traceBy T node (fun _ _ => True) (played recs com)))
+      (_ : SketchBoundAt (traceBy T node (fun _ _ => True) (played recs com)) O δs)
+      (_ : Covered (traceBy T node (fun _ _ => True) (played recs com)) O I)
+      (_ : IngressCounted (traceBy T node (fun _ _ => True) (played recs com)) I δnet)
+      (_ : ∀ c, Live ((recordCommitted node recs correct).view c))
+      (_ : Refused ((recordCommitted node recs correct).play com) prf rest
+        (traceBy T node (fun _ _ => True) (played recs com)) R)
+      (_ : Counted ((recordCommitted node recs correct).play com)
+        (traceBy T node (fun _ _ => True) (played recs com))),
+      ¬ (Pouw.pr (fun ω => True ∧
+          ¬ (Quiet (traceBy T node (fun _ _ => True) (played recs com)) I.counted ω →
+            ReadBy (fun _ _ => some Toy.sm) (traceBy T node (fun _ _ => True) (played recs com)) ω node
+              (played recs com ω))) ≤
+        δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
+          (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
+            (((recordCommitted node recs correct).play (Committed.junk com t)).distinguisher prf
+              (node.delta : ℝ) t)).toReal +
+          (∑ t, (recordCommitted node recs correct).hide com prf (node.delta : ℝ) t).toReal +
+          (R.binding ((recordCommitted node recs correct).play com) prf rest).toReal)) :=
+  ⟨Toy.node, 0, Unit, Unit, inferInstance, fun t => isEmptyElim t, fun _ _ _ => 0, fun _ _ => Toy.rec,
+    fun _ _ _ => ∅, fun _ => (), Toy.trace, Toy.receipts, 0, 0, noOutside _, quietIngress _, toy_paced _,
+    toy_covers _, toy_sketch _ _, covered_noOutside _ _, ingressCounted_quiet _, fun _ t => isEmptyElim t,
+    fun _ _ t => isEmptyElim t, counted_of _ _ fun _ _ => Finset.Subset.refl _, not_le.2 (by
+      rw [Pouw.pr_eq_one]
+      · norm_num [binding_empty, toy_delta]
+      · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω (toy_reads_by _ ω) (hq fun _ _ _ _ _ => rfl)⟩)⟩
+
+/-- **`LineHeld` fails at a verifier that accepts everything**, closed at the toy summary. -/
+theorem lineHeldBy_acceptAll : ¬ LineHeldBy (fun _ _ => True) (fun _ _ => some Toy.sm) := fun h => by
+  obtain ⟨node, κ, X, Cm, _, prf, rest, recs, correct, com, T, R, δs, δnet, O, I, hP, hCv, hSk, hCov, hIc, hL, hRef,
+    hCnt, hn⟩ := Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial
+  exact hn (h node κ X Cm prf rest recs correct com T R δs δnet O I hP hCv hSk hCov hIc hL hRef hCnt)
 
 theorem lineHeld_nontrivial : ∃ sm : Poub.Session.Summary,
     ¬ LineHeldBy (fun _ _ => True) (fun _ _ => some sm) :=
-  ⟨Toy.sm, Properties.Poub.Line.SecurityProofs.lineHeld_nontrivial⟩
+  ⟨Toy.sm, lineHeldBy_acceptAll⟩
 
-/-- **`LineHeldAtSubprotocol` fails at a verifier that accepts everything.** With an acceptance and a verdict that hold
-of every record and one summary recorded for every record, the toy node meets every premise at `δs = δnet = 0`, while
-its line credits `4 · 1` blocks read where its passes read one: the event has probability 1 and the bound is
-`δ = 1/2`. -/
+/-- **`LineHeldAtSubprotocol`'s bound fails at a verifier that accepts everything.** With an acceptance and a verdict
+that hold of every record and one summary recorded for every record, the toy node meets every premise at
+`δs = δnet = 0`, while its line credits `4 · 1` blocks read where its passes read one: the event has probability 1 and
+the bound is `δ = 1/2`. The statement is `LineHeldAtSubprotocolBy`'s negation at that verifier, its node, trace,
+records, outputs and premises bound by `∃` and its `let`s inlined, so that it concludes the bound's failure. -/
 theorem SecurityProofs.lineHeldAtSubprotocol_nontrivial :
+    ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X) (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
+      (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ)
+      (recs : Cm → SampleCoins node.samples κ X → Record)
+      (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+      (com : SampleCoins node.samples κ X → Cm)
+      (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
+      (a b e : SampleCoins node.samples κ X → ByteArray)
+      (O : Outside (traceBy T node (fun _ _ => True) (played recs com)))
+      (I : Ingress (SampleCoins node.samples κ X))
+      (_ : Paced (traceBy T node (fun _ _ => True) (played recs com))
+        (paceBy (fun _ _ => some Toy.sm) node (played recs com)))
+      (_ : Covers (traceBy T node (fun _ _ => True) (played recs com)))
+      (_ : SketchBoundAt (traceBy T node (fun _ _ => True) (played recs com)) O δs)
+      (_ : Covered (traceBy T node (fun _ _ => True) (played recs com)) O I)
+      (_ : IngressCounted (traceBy T node (fun _ _ => True) (played recs com)) I δnet)
+      (_ : ∀ c, Live ((recordCommitted node recs correct).view c))
+      (_ : Refused ((recordCommitted node recs correct).play com) prf rest
+        (traceBy T node (fun _ _ => True) (played recs com)) R)
+      (_ : Counted ((recordCommitted node recs correct).play com)
+        (traceBy T node (fun _ _ => True) (played recs com))),
+      ¬ (Pouw.pr (fun ω => (fun _ _ _ _ _ => True : Node → Record → ByteArray → ByteArray → ByteArray → Prop)
+            node (played recs com ω) (a ω) (b ω) (e ω) ∧
+          ¬ (Quiet (traceBy T node (fun _ _ => True) (played recs com)) I.counted ω →
+            ReadBy (fun _ _ => some Toy.sm) (traceBy T node (fun _ _ => True) (played recs com)) ω node
+              (played recs com ω))) ≤
+        δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
+          (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
+            (((recordCommitted node recs correct).play (Committed.junk com t)).distinguisher prf
+              (node.delta : ℝ) t)).toReal +
+          (∑ t, (recordCommitted node recs correct).hide com prf (node.delta : ℝ) t).toReal +
+          (R.binding ((recordCommitted node recs correct).play com) prf rest).toReal)) :=
+  ⟨Toy.node, 0, Unit, Unit, inferInstance, fun t => isEmptyElim t, fun _ _ _ => 0, fun _ _ => Toy.rec,
+    fun _ _ _ => ∅, fun _ => (), Toy.trace, Toy.receipts, 0, 0, fun _ => .empty, fun _ => .empty, fun _ => .empty,
+    noOutside _, quietIngress _, toy_paced _, toy_covers _, toy_sketch _ _, covered_noOutside _ _,
+    ingressCounted_quiet _, fun _ t => isEmptyElim t, fun _ _ t => isEmptyElim t,
+    counted_of _ _ fun _ _ => Finset.Subset.refl _, not_le.2 (by
+      rw [Pouw.pr_eq_one]
+      · norm_num [binding_empty, toy_delta]
+      · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω (toy_reads_by _ ω) (hq fun _ _ _ _ _ => rfl)⟩)⟩
+
+/-- **`LineHeldAtSubprotocol` fails at a verifier that accepts everything**, closed at the toy summary. -/
+theorem lineHeldAtSubprotocolBy_acceptAll :
     ¬ LineHeldAtSubprotocolBy (fun _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => some Toy.sm) := fun h => by
-  have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
-    (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 0 (fun _ => .empty) (fun _ => .empty) (fun _ => .empty)
-    (noOutside _) (quietIngress _) (toy_paced _) (toy_covers _) (toy_sketch _ _)
-    (covered_noOutside _ _) (ingressCounted_quiet _) (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t)
-    (counted_of _ _ fun _ _ => Finset.Subset.refl _)
-  refine absurd hb (not_le.2 ?_)
-  rw [Pouw.pr_eq_one]
-  · norm_num [binding_empty, toy_delta]
-  · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω (toy_reads_by _ ω) (hq fun _ _ _ _ _ => rfl)⟩
+  obtain ⟨node, κ, X, Cm, _, prf, rest, recs, correct, com, T, R, δs, δnet, a, b, e, O, I, hP, hCv, hSk, hCov, hIc,
+    hL, hRef, hCnt, hn⟩ := SecurityProofs.lineHeldAtSubprotocol_nontrivial
+  exact hn (h node κ X Cm prf rest recs correct com T R δs δnet a b e O I hP hCv hSk hCov hIc hL hRef hCnt)
 
 theorem lineHeldAtSubprotocol_nontrivial : ∃ sm : Poub.Session.Summary,
     ¬ LineHeldAtSubprotocolBy (fun _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => some sm) :=
-  ⟨Toy.sm, SecurityProofs.lineHeldAtSubprotocol_nontrivial⟩
+  ⟨Toy.sm, lineHeldAtSubprotocolBy_acceptAll⟩
 
 /-- **The line credits only what the passes read**: on one node, record and summary, the line's bits-read claim holds
 of a trace whose four passes each read the store in node memory, and fails of the same trace with node memory emptied
