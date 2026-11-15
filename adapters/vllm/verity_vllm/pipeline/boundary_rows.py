@@ -37,7 +37,8 @@ a class is laid out under is the verifier's own copy, as its check template is (
 names another rule is refused.
 
 **History tables** (`Layout.layers`, off by default): each span's latent rows at each of those layers, one
-`boundary_tables` table a (slot, layer) of `boundary_tables.WORDS` words and ``capacity`` leaves under its own
+`boundary_tables` table a (slot, layer) of `Layout.row_words` words (the cache's layout's: `boundary_tables.WORDS` for bf16
+rows, which the record leaves unnamed, 328 for fp8_ds_mla's, which it names) and ``capacity`` leaves under its own
 `history.domain` (the class's program and the table's name, from the run, the class and the slot), listed beside the class's
 values in slot then layer order. Rank 0 builds them once the window assigns each span its slot (`boundary_tables.Builder`),
 and the class's commitment waits for their roots, so they are fixed before any coin, as the values are. A serve under a
@@ -330,7 +331,7 @@ class Layout:
     (``per_prompt`` a prompt row, ``per_output`` an output), the class (``prompt``, ``outputs``), the spans N and the run.
     ``inline``: the replay block holds them `inlined`, and the check's proof blocks are the templates the check template's
     body calls (`templates`); else they are its instances (`population`). ``layers``: each span's history tables' layers,
-    of ``capacity`` leaves (the module docstring). ``stop``: the serve's registered stop rule (a `boundary_stop.Stop`),
+    of ``capacity`` leaves and ``row_words`` words a row (the module docstring). ``stop``: the serve's registered stop rule (a `boundary_stop.Stop`),
     under which the class's values are `PARTS` and it has no history tables; ``held``, under a rule: the class is a stop
     class, its outputs the rule's T, with a stop block a span in a population of its own (`stop_program`) whose output
     it commits as `b.stop`. ``verdicts`` or ``ids`` (a class says at most one): the replay block returns the check's
@@ -352,6 +353,7 @@ class Layout:
     held: bool = True
     verdicts: bool = False
     ids: bool = False
+    row_words: int = BT.WORDS
 
     def __post_init__(self) -> None:
         for k in ("prompt", "outputs"):
@@ -365,6 +367,8 @@ class Layout:
             raise ValueError(f"a class's table layers are distinct natural numbers in order, not {ls!r}")
         if not HT.cap_ok(self.capacity):
             raise ValueError(f"a table's capacity is a power of two of at least 2, not {self.capacity!r}")
+        if self.row_words not in BT.LAYOUT_WORDS.values() or type(self.row_words) is not int:
+            raise ValueError(f"a table's words are a layout's, {tuple(BT.LAYOUT_WORDS.values())}, not {self.row_words!r}")
         if self.verdicts and self.ids:
             raise ValueError(ONE_RETURN)
         if self.n_rho < 2:
@@ -516,13 +520,13 @@ class Layout:
         where no rule is registered."""
         rows = {INGRESS: 2 * (HEAD_U32 + self.prompt), EGRESS: 2 * (self.outputs + (2 if self.stop is None else 0)),
                 REQUEST: 2 * HEAD_U32, PROMPT: 2 * self.prompt, STOP: 1}
-        return -(-self.return_rows[1] // 16) if port == self.returned else rows.get(port, BT.WORDS)
+        return -(-self.return_rows[1] // 16) if port == self.returned else rows.get(port, self.row_words)
 
     def domain(self, port: str) -> CommitmentDomain:
         """``port``'s domain: a history table's own, or a row value's window domain, over the program of the record it is
         a port of: the class's, or for `b.stop` the stop population's."""
         if port not in ROWS and port != self.returned:
-            return HT.domain(self.partition["program"], port, BT.WORDS, self.capacity)
+            return HT.domain(self.partition["program"], port, self.row_words, self.capacity)
         part, n = self.stop_partition if port == STOP else self.partition, self.leaves(port)
         binding = identity_digest_sha512(CS.DOMAIN_TAG, {"program": part["program"], "partition": P.digest(part),
                                                          "port": port, "schema": SCHEMA, "leaves": n, "run": self.run})
@@ -546,7 +550,8 @@ class Layout:
         return {**dict.fromkeys(self.values, SCHEMA), **dict.fromkeys(self.tables, HT.SCHEMA)}
 
     def provenance(self) -> dict[str, Any]:
-        tables = {"tables": {"layers": list(self.layers), "capacity": self.capacity}} if self.layers else {}
+        wide = {} if self.row_words == BT.WORDS else {"words": self.row_words}
+        tables = {"tables": {"layers": list(self.layers), "capacity": self.capacity, **wide}} if self.layers else {}
         return {"prompt": self.prompt, "outputs": self.outputs, "check": P.template_id(self.check),
                 "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline, **tables,
                 **({} if self.stop is None else {"stop": self.stop.to_json(), "stopped": self.held}),
@@ -650,10 +655,13 @@ def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Any = 
     if (c.stop is None) != (c.stopped is None):
         raise ValueError(f"a {FORMAT} commitment says whether it is a stop class (stopped) exactly under a stop rule (stop)")
     t = c.tables or {"layers": [], "capacity": HT.CAPACITY}
-    if set(t) != {"layers", "capacity"} or not isinstance(t["layers"], list):
-        raise ValueError(f"a {FORMAT} commitment's tables are its layers and capacity, not {sorted(t)}")
+    if not {"layers", "capacity"} <= set(t) <= {"layers", "capacity", "words"} or not isinstance(t["layers"], list) \
+            or t.get("words") == BT.WORDS:
+        raise ValueError(f"a {FORMAT} commitment's tables are its layers and capacity, and words where they aren't "
+                         f"{BT.WORDS}, not {sorted(t)}")
     L = Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run, c.inline, tuple(t["layers"]),
-               t["capacity"], stop=stop, held=c.stopped is not False, verdicts=bool(c.verdicts), ids=bool(c.ids))
+               t["capacity"], stop=stop, held=c.stopped is not False, verdicts=bool(c.verdicts), ids=bool(c.ids),
+               row_words=t.get("words", BT.WORDS))
     listed = (*L.ports(), *L.stop_ports())
     if tuple(c.values) != listed:
         raise ValueError(f"the commitment's values {list(c.values)[:4]} are not its layout's {list(listed)[:4]}")
@@ -701,7 +709,7 @@ def table_roots(answer: Mapping[str, Any], layout: Layout) -> dict[str, bytes]:
     if [e.get("value") for e in got] != list(layout.tables):
         raise ValueError(f"rank 0 answered tables {[e.get('value') for e in got][:2]}, not the class's {list(layout.tables)[:2]}")
     for e in got:
-        want = {"value": e["value"], "leaves": layout.capacity, "words": BT.WORDS, "domain": ports[e["value"]]["domain"]}
+        want = {"value": e["value"], "leaves": layout.capacity, "words": layout.row_words, "domain": ports[e["value"]]["domain"]}
         if {k: e.get(k) for k in want} != want or len(bytes.fromhex(e["root"])) != HT.DIGEST_BYTES:
             raise ValueError(f"rank 0's table {e['value']} isn't at the class's leaves, words and domain")
     return {e["value"]: bytes.fromhex(e["root"]) for e in got}
