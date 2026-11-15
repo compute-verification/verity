@@ -99,7 +99,7 @@ def _lean(accepted=True, sessions=(SESSION,), **extra) -> dict:
 
 
 def _round(stream: S.Stream, accepted=True, n: int = 6) -> S.Outcome:
-    previous = R.digest(stream._entries[-1].registration.record) if stream._entries else None
+    previous = R.digest(stream._entries[-1].docket.record) if stream._entries else None
     reg = stream.register(_record(n, row=len(stream._entries), previous=previous), _ports(n))
     draw = stream.select(reg)
     assert stream.deliver(draw, [SESSION]) is None
@@ -483,7 +483,7 @@ def test_a_late_proof_is_a_reject():
         stream.outcome(draw, _lean(), {})
     assert stream.symbols == ("late",) and stream.records[0]["audit"] is None
 
-    reg = stream.register(_record(row=1, previous=draw.registration.digest), _ports(6))
+    reg = stream.register(_record(row=1, previous=draw.docket.digest), _ports(6))
     draw = stream.select(reg)
     clock.now = 100.0
     with pytest.raises(S.Pending):
@@ -508,13 +508,13 @@ def test_a_proof_that_never_arrives_ends_late():
         clock.now = now
         with pytest.raises(S.Pending, match="no proof delivered"):
             stream.outcome(draw, _lean(), {})
-        assert _refused(lambda: stream.register(_record(row=1, previous=draw.registration.digest), _ports(6))) == ("open",)
+        assert _refused(lambda: stream.register(_record(row=1, previous=draw.docket.digest), _ports(6))) == ("open",)
     clock.now = 60.5
     out = stream.outcome(draw, _lean(), {})
     assert not out.accepted and out.verdict.codes == ("late",) and out.profile is None and stream.symbols == ("late",)
     assert stream.records[0]["sessions"] == [] and stream.records[0]["audit"] is None and stream.failures == 1
     assert _refused(lambda: stream.deliver(draw, [SESSION])) == ("final",)
-    assert stream.register(_record(row=1, previous=draw.registration.digest), _ports(6)).order == 1
+    assert stream.register(_record(row=1, previous=draw.docket.digest), _ports(6)).order == 1
 
 
 OUTCOME_KEYS = {"format", "stream", "order", "registration", "receipt", "draw", "sessions", "symbol", "public", "audit"}
