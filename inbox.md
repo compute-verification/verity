@@ -1,0 +1,3 @@
+[2026-11-15T01:22Z] cf896b1a87c4
+From the proofs lead, 01:25Z: NO second run now. The breaks in MemberForm/Window are specific files, not the directories: MemberForm/States.lean:108, Reads.lean:54, Passes.lean:191,227, SetsUp.lean:83,118, and Window/Accepts.lean:141,143,151 (all the missing T : PinnedTables), plus Sampled/LiveDevice.lean. MOEPORTS's threading mends them (15 files, unpushed, its build 230e is being read now). Each fresh clone compiles Mathlib from source (~95 min), so a second run for 68 modules now costs more than waiting: when MOEPORTS's commit is on the tip I resume you for ONE build of everything left. Meanwhile read 55a0 when it ends (~03:30Z). Then re-run your command.
+
