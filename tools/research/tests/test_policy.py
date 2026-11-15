@@ -4,6 +4,7 @@ its check code and family, and only until it expires; `research merge` requires 
 quick tier passes a run whose every failure `main`'s policy allows."""
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -78,7 +79,7 @@ def test_merge_requires_every_job_but_those_off_the_gate_and_refuses_an_unreadab
 
 
 def _tier(*rows: dict) -> dict:
-    return {"kind": quick_tier.KIND, "head": "h" * 40, "rc": 1, "rows": list(rows)}
+    return {"kind": quick_tier.KIND, "head": "h" * 40, "rc": 1 if rows else 0, "rows": list(rows)}
 
 
 def test_the_quick_tier_passes_a_run_whose_every_failure_mains_policy_allows(tmp_path):
@@ -91,9 +92,38 @@ def test_the_quick_tier_passes_a_run_whose_every_failure_mains_policy_allows(tmp
     assert quick_tier.judge(_tier(row), "h" * 40, covers=covers) is None
     assert quick_tier.judge(_tier(row, other), "h" * 40, covers=covers).startswith("pkg: ")
     assert quick_tier.judge(_tier(row), "h" * 40) is not None                      # the run judges itself with no policy
-    res = SimpleNamespace(doc={"tier": _tier(row)}, validation_status="failed")
-    assert Q.judge_report(res, "r", "m", "h" * 40, {"state": "done", "rc": 1}, covers) is None
-    assert "ended done (exit 0)" in Q.judge_report(res, "r", "m", "h" * 40, {"state": "done", "rc": 0}, covers)
-    assert Q.judge_report(res, "r", "m", "h" * 40, {"state": "done", "rc": 1}) is not None
     _move_main(world, {"tools/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", EXPIRED))})
     assert quick_tier.judge(_tier(row), "h" * 40, covers=Q.allowed(world.origin, _main(world))) is not None
+
+
+ALLOWED_ROW = {"name": "pkg", "status": "failed", "failed_tests": [TEST], "beyond_tests": False}
+OTHER_ROW = {"name": "other", "status": "failed", "failed_tests": ["tests/test_o.py::test_o"], "beyond_tests": False}
+
+
+def _covers(row: dict) -> bool:
+    return row.get("failed_tests") == [TEST]
+
+
+@pytest.mark.parametrize("rows, end, covers, refusal", [
+    ((ALLOWED_ROW,), ("failed", 1, "failed"), _covers, None),
+    ((), ("done", 0, "passed"), None, None),
+    ((ALLOWED_ROW,), ("done", 1, "failed"), _covers, r"facts show a pass, but it ended done \(exit 1\) with validation failed"),
+    ((ALLOWED_ROW,), ("failed", 1, "passed"), _covers, r"ended failed \(exit 1\) with validation passed"),
+    ((ALLOWED_ROW,), ("failed", 2, "failed"), _covers, r"ended failed \(exit 2\) with validation failed"),
+    ((ALLOWED_ROW,), ("cancelled", 1, "failed"), _covers, r"ended cancelled \(exit 1\)"),
+    ((ALLOWED_ROW,), ("done", 0, "failed"), _covers, r"ended done \(exit 0\)"),
+    ((ALLOWED_ROW,), ("failed", 1, "failed"), None, r"^pkg: "),
+    ((ALLOWED_ROW, OTHER_ROW), ("failed", 1, "failed"), _covers, r"^pkg: .*; other: "),
+    ((), ("failed", 1, "passed"), None, r"ended failed \(exit 1\) with validation passed"),
+], ids=["every failure allowed, ended as the runner records exit 1", "no failure, ended done", "ended done with exit 1",
+        "ended failed with validation passed", "ended failed with exit 2", "cancelled", "ended done with exit 0",
+        "a failure nothing allows", "a failure the policy doesn't allow beside one it does", "no failure, ended failed"])
+def test_the_quick_tier_passes_a_run_whose_every_failure_is_allowed_only_when_it_ended_as_the_runner_records_its_exit_1(
+        rows, end, covers, refusal):
+    """`quick_tier.py` judges itself with no policy, so a run whose every failure is allowed exits 1 with validation failed,
+    and the runner records exit 1 as `failed`: that end, and the clean tier's `done`, exit 0 and validation passed, are the
+    only ends of a pass; an uncovered failure, another exit, a validation that disagrees and a cancelled run each refuse."""
+    state, rc, validation = end
+    res = SimpleNamespace(doc={"tier": _tier(*rows)}, validation_status=validation)
+    why = Q.judge_report(res, "r", "m", "h" * 40, {"state": state, "rc": rc}, covers)
+    assert why is None if refusal is None else re.search(refusal, why), why

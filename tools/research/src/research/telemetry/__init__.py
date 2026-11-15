@@ -44,3 +44,8 @@ CANCEL_ACTORS = ("deadman", "timeout", "guardian", "manual")
 FAILURE_CLASSES = ("SUCCESS", "WORKLOAD_CHECK_FAILED", "CUDA_ALLOC_FAIL", "STORAGE_EXHAUSTED", "STAGE_TIMEOUT",
                    "CANCELLED_DEADMAN", "CANCELLED_GUARDIAN", "CANCELLED_MANUAL", "CGROUP_OOM_ATTRIBUTED",
                    "OOM_UNRESOLVED_ORIGIN", "UNKNOWN_SIGNAL", "UNKNOWN_EXIT")
+
+
+def end_state(rc: int, timed_out: bool = False) -> str:
+    """The state the runner records for a job that exited ``rc``: `done` only for exit 0."""
+    return "cancelled" if timed_out else ("done" if rc == 0 else "failed")
