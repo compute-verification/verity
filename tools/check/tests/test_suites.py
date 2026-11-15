@@ -2627,3 +2627,20 @@ def test_a_suite_is_lent_only_with_its_fixtures_and_build_sources_as_they_are(tm
     assert lent() == ["plain"], "its build output is built from other sources"
     (root / "plain" / "tests" / "test_it.py").write_text(_PASSES + "\n")
     assert lent() == []
+
+
+def test_the_runner_names_suites_by_the_layout_rule_of_the_tree_it_is_in(tmp_path):
+    """post_train runs another tree's `suites.py` with its own interpreter: the suites are named by that tree's
+    `research.suite_layout`, not by the research the interpreter imports."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"a": "def test_a():\n    pass\n"})
+    (root / "pyproject.toml").write_text((root / "pyproject.toml").read_text() + '\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    rule = root / "tools" / "research" / "src" / "research" / "suite_layout.py"
+    rule.parent.mkdir(parents=True)
+    rule.write_text((HERE.parent / "research" / "src" / "research" / "suite_layout.py").read_text()
+                    .replace('ROOT_SUITE = "repository"', 'ROOT_SUITE = "the-trees-root"'))
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "its own rule")
+    r = _run_suite(root, tmp_path, "--list")
+    assert r.returncode == 0, r.stderr
+    assert "the-trees-root" in r.stdout and "repository" not in r.stdout, r.stdout

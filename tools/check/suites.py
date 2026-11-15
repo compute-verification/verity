@@ -205,10 +205,25 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from research import suite_layout as LAYOUT
-
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
+
+
+def _layout():
+    """The tree's own suite layout rule (`research.suite_layout`), so a run over another tree (post_train's `--list`) names and
+    keys its suites by that tree's rule rather than its interpreter's; a copy of the check tool without research beside it (a
+    test's tree) reads the interpreter's."""
+    path = ROOT / "tools" / "research" / "src" / "research" / "suite_layout.py"
+    if not path.is_file():
+        from research import suite_layout
+        return suite_layout
+    spec = importlib.util.spec_from_file_location("suites_layout", path)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+LAYOUT = _layout()
 GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
@@ -2186,7 +2201,7 @@ def read_report(report: Path) -> dict | None:
 
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
         reuse: list[str] = (), timeout_s: float = 0.0, threads: int = 0, part: Part | None = None) -> Result:
-    slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
+    slug = suite.path.replace("/", "_") if suite.path != "." else LAYOUT.ROOT_SUITE
     log, report = logs / f"{slug}.log", logs / f"{slug}.json"
     report.unlink(missing_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
