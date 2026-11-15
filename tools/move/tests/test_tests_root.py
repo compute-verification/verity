@@ -46,7 +46,9 @@ TREE = {
     "tools/plain/pyproject.toml": '[project]\nname = "plain"\nversion = "0"\n\n[tool.uv]\npackage = false\n\n'
                                   '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["../../verity/a"]\n',
     "tools/plain/tests/test_p.py": "from pathlib import Path\n\nA = Path(__file__).resolve().parents[3] / \"verity\" / \"a\"\n"
-                                   "HELPER = A / \"tests\" / \"helper.py\"\n\n\ndef test_p():\n    assert HELPER.is_file()\n",
+                                   "HELPER = A / \"tests\" / \"helper.py\"\nROOT = Path(__file__).resolve().parents[3]\n"
+                                   "CODE = ROOT / \"verity\" / \"a\"\n\n\ndef test_p():\n"
+                                   "    assert HELPER.is_file() and (CODE / \"tests/helper.py\").is_file()\n",
     "tools/research/src/research/store/moves.json": '{"moves": []}\n',
 }
 
@@ -154,5 +156,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert 'CODE = Path(__file__).parents[3] / "verity" / "a" / "mod.py"' in (r / "tests/verity/a/test_a.py").read_text()
     assert 'HELPER = Path(__file__).resolve().parents[2] / "tests" / "verity" / "a" / "helper.py"' in (
         r / "verity/a/reader.py").read_text()
-    assert 'HELPER = A.parents[1] / "tests" / "verity" / "a" / "helper.py"' in (r / "tests/tools/plain/test_p.py").read_text()
+    p = (r / "tests/tools/plain/test_p.py").read_text()
+    assert 'HELPER = A.parents[1] / "tests" / "verity" / "a" / "helper.py"' in p and "assert HELPER.is_file() and" in p
+    assert '(CODE.parents[1] / "tests" / "verity" / "a" / "helper.py").is_file()' in p
     assert TR.anchors(TR.Tree(r), base, write=False) == {}
