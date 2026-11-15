@@ -18,8 +18,10 @@
 #   `Compiler.run`) keep it.
 # Format constants (`WINDOW_*`, `*_SESSION`, the `Domains` tags) and the code's record fields keep the word until a
 # format version. Duplicates are merged by a refactor, not by this move: `Accounting.Window` becomes a use of
-# `Verity.TickSpan`, `NetTiming.WindowCharge`'s `Window` and `Carry` uses of `NetworkCertifier.WindowCharge`'s, and
-# `Verity.Sampled.Device.RunSetup` a use of `Properties.Challenger.Run`; `Accounting.Compose.PeriodRun` is deleted.
+# `Verity.TickSpan`, and `Verity.Sampled.Device.RunSetup` a use of `Properties.Challenger.Run`;
+# `Accounting.Compose.PeriodRun` is deleted. `NetTiming.WindowCharge.Advice` and `Carry` are no duplicates: each is the
+# specification's form of a type whose code form is `NetworkCertifier.WindowCharge`'s, and
+# `security/Proofs/NetworkCertifier/Code.lean` holds the two together.
 # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
 # --moved` takes.
 

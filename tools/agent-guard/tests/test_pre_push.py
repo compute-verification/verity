@@ -535,11 +535,11 @@ def test_the_one_identity_let_through_beside_the_checkouts_is_the_queues_and_an_
 
 
 #: a real author `main` has, and one it hasn't, as a person's own git writes them
-PERSON = {"GIT_AUTHOR_NAME": "Ada Lovelace", "GIT_AUTHOR_EMAIL": "ada@lovelace.example",
-          "GIT_COMMITTER_NAME": "Ada Lovelace", "GIT_COMMITTER_EMAIL": "ada@lovelace.example"}
-STRANGER = {"GIT_AUTHOR_NAME": "Grace Hopper", "GIT_AUTHOR_EMAIL": "grace@hopper.example",
-            "GIT_COMMITTER_NAME": "Grace Hopper", "GIT_COMMITTER_EMAIL": "grace@hopper.example"}
-PERSON_AS = "Ada Lovelace <ada@lovelace.example>"
+PERSON = {"GIT_AUTHOR_NAME": "Ada Lovelace", "GIT_AUTHOR_EMAIL": "ada@lovelace.dev",
+          "GIT_COMMITTER_NAME": "Ada Lovelace", "GIT_COMMITTER_EMAIL": "ada@lovelace.dev"}
+STRANGER = {"GIT_AUTHOR_NAME": "Grace Hopper", "GIT_AUTHOR_EMAIL": "grace@hopper.dev",
+            "GIT_COMMITTER_NAME": "Grace Hopper", "GIT_COMMITTER_EMAIL": "grace@hopper.dev"}
+PERSON_AS = "Ada Lovelace <ada@lovelace.dev>"
 CARRY = "another author's commits are carried by a merge, not by a rebase or a cherry-pick"
 
 
@@ -569,7 +569,7 @@ def test_a_cherry_pick_of_a_commit_whose_author_authors_on_main_passes(vm):
     a real name this push does not bring in."""
     on_main(vm, PERSON)
     picked(vm, their_line(vm, PERSON))
-    assert vm.who("-1") == {f"Ada Lovelace <ada@lovelace.example> | {OWN}"}
+    assert vm.who("-1") == {f"Ada Lovelace <ada@lovelace.dev> | {OWN}"}
     p = vm.push("origin", "HEAD:refs/heads/work")
     assert p.returncode == 0, p.stderr
 
@@ -587,7 +587,7 @@ def test_an_author_main_has_not_is_refused_with_the_carry_by_merge_and_no_filter
     sha = picked(vm, their_line(vm, STRANGER))
     p = vm.push("origin", "HEAD:refs/heads/work")
     assert p.returncode != 0 and "work" not in vm.heads()
-    assert f"{sha[:12]} author Grace Hopper <grace@hopper.example>." in p.stderr
+    assert f"{sha[:12]} author Grace Hopper <grace@hopper.dev>." in p.stderr
     assert CARRY in p.stderr and "`git merge <their-branch-or-commit>`" in p.stderr
     assert "the first push of that author's own commits is the author's to make" in p.stderr
     assert "filter-branch" not in p.stderr
@@ -614,7 +614,7 @@ def test_with_no_ref_of_the_remotes_main_here_the_refusal_says_to_fetch_it_and_t
     vm.git("update-ref", "-d", "refs/remotes/origin/main")
     sha = picked(vm, their_line(vm, PERSON))
     p = vm.push("origin", "HEAD:refs/heads/work")
-    assert p.returncode != 0 and f"{sha[:12]} author Ada Lovelace <ada@lovelace.example>." in p.stderr
+    assert p.returncode != 0 and f"{sha[:12]} author Ada Lovelace <ada@lovelace.dev>." in p.stderr
     assert "`refs/remotes/origin/main` is not here" in p.stderr and "`git fetch origin main` first" in p.stderr
     vm.git("fetch", "-q", "origin", "main")
     assert vm.push("origin", "HEAD:refs/heads/work").returncode == 0
@@ -634,7 +634,7 @@ def test_the_filter_branch_a_refusal_prints_writes_again_the_made_up_names_alone
     done = vm.shell("\n".join([EXPORTS, unset, switch, again, "git push origin again"]).replace("<new-branch>", "again"))
     assert done.returncode == 0, done.stderr
     assert vm.git("log", "--format=%s: %an <%ae> | %cn <%ce>", "again", "--not", "main", cwd=vm.origin).splitlines() == [
-        f"made: {OWN} | {OWN}", f"their change: Ada Lovelace <ada@lovelace.example> | {OWN}"]
+        f"made: {OWN} | {OWN}", f"their change: Ada Lovelace <ada@lovelace.dev> | {OWN}"]
 
 
 def remedy(stderr: str) -> list[str]:
@@ -670,8 +670,9 @@ def test_the_filter_branch_leaves_a_real_persons_own_unpushed_commit_on_the_same
 
 
 @pytest.mark.parametrize("who", ["ci <ci@x>", "coordinator <coordinator@verity>", "hp2-host <hp2-host@lane>",
-                                 "lane pipe-race <pipe-race@verity.local>"])
-def test_an_author_with_a_dotless_or_local_domain_is_made_up_and_refused_though_main_has_it(vm, who):
+                                 "lane pipe-race <pipe-race@verity.local>", "tester <tester@verity.test>",
+                                 "demo <demo@verity.example>", "box <box@machine.localhost>"])
+def test_an_author_with_a_dotless_or_reserved_domain_is_made_up_and_refused_though_main_has_it(vm, who):
     name, _, address = who.removesuffix(">").partition(" <")
     names = {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": address, "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": address}
     on_main(vm, names)
@@ -699,3 +700,43 @@ def test_past_fifty_made_up_commits_the_filter_names_fifty_and_the_next_refusal_
     assert done.returncode == 0, done.stderr
     assert vm.who("later", vm.origin) == {f"{OWN} | {OWN}"}
     assert vm.git("rev-list", "--count", "later", cwd=vm.origin).strip() == "53", "the 52 and the checkout's first"
+
+
+CURSOR = "Cursor Agent <cursoragent@cursor.com>"
+LAKE = {"GIT_AUTHOR_NAME": "LAKE", "GIT_AUTHOR_EMAIL": "cursoragent@cursor.com", "GIT_COMMITTER_NAME": "LAKE",
+        "GIT_COMMITTER_EMAIL": "cursoragent@cursor.com"}
+
+
+def as_cursor(vm: VM) -> None:
+    """The checkout's identity a real address, as every VM's is; the remote's `main` holds the checkout's first commit."""
+    vm.git("push", "-q", "origin", "main")
+    vm.config.write_text("[user]\n\tname = Cursor Agent\n\temail = cursoragent@cursor.com\n")
+    vm.git("switch", "-q", "-c", "work")
+
+
+def test_a_committer_with_the_checkouts_address_under_another_name_is_refused_and_named_in_the_filter(vm):
+    as_cursor(vm)
+    sha = vm.commit("committed", GIT_COMMITTER_NAME="LAKE", GIT_COMMITTER_EMAIL="cursoragent@cursor.com")
+    p = vm.push("origin", "work")
+    assert p.returncode != 0 and f"{sha[:12]} committer LAKE <cursoragent@cursor.com>." in p.stderr
+    unset, switch, again = remedy(p.stderr)
+    assert f'case "$GIT_COMMIT" in {sha}) unset GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL;; esac' in again
+    assert "GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL;;" not in again, "its author is the checkout's"
+    done = vm.shell("\n".join([unset, switch, again, "git push origin again"]).replace("<new-branch>", "again"))
+    assert done.returncode == 0, done.stderr
+    assert vm.who("again", vm.origin) == {f"{CURSOR} | {CURSOR}", f"{OWN} | {OWN}"}
+
+
+def test_the_checkouts_address_under_another_name_as_author_and_committer_is_made_up_not_a_persons_own(vm):
+    """A tool's own name over the VM's address, `LAKE <cursoragent@cursor.com>`, is no person whose first push is theirs."""
+    as_cursor(vm)
+    sha = vm.commit("both", **LAKE)
+    p = vm.push("origin", "work")
+    assert p.returncode != 0 and f"{sha[:12]} author and committer LAKE <cursoragent@cursor.com>." in p.stderr
+    assert CARRY not in p.stderr
+    unset, switch, again = remedy(p.stderr)
+    for role in ("AUTHOR", "COMMITTER"):
+        assert f'case "$GIT_COMMIT" in {sha}) unset GIT_{role}_NAME GIT_{role}_EMAIL;; esac' in again
+    done = vm.shell("\n".join([unset, switch, again, "git push origin again"]).replace("<new-branch>", "again"))
+    assert done.returncode == 0, done.stderr
+    assert vm.who("again", vm.origin) == {f"{CURSOR} | {CURSOR}", f"{OWN} | {OWN}"}

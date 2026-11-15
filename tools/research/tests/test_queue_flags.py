@@ -306,3 +306,18 @@ def test_an_entry_with_a_slash_before_its_end_keeps_that_one_file_off():
         assert not lowrisk(["README.md", f], excludes), f
     assert lowrisk(["verity/protocols/resource_accounting/compute/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/channel.py",
                     "x/verity/channel.py", "verity/channel.pyc"], excludes)
+
+
+def test_a_directory_entry_holds_its_tests_under_the_roots_tests_and_tests_holds_only_the_repository_suites_own():
+    """An entry `D/` keeps `D`'s tests at `tests/D/` off too, and `tests/` keeps off only the repository suite's own: the
+    files of `tests/` itself and of its own directories (`suite_layout.ROOT_OWN`), not the tests of another directory."""
+    excludes = ("verity/core/", "tests/", "tools/check/", "verity/protocols/__init__.py", "*.lean")
+    for f in ("tests/verity/core/test_claims.py", "tests/verity/core/sub/test_x.py", "tests/tools/check/test_suites.py",
+              "tests/test_boundaries.py", "tests/lint/test_repo_ruff.py", "tests/conftest.py", "tests/verity/X.lean"):
+        assert not lowrisk(["README.md", f], excludes), f
+    assert lowrisk(["tests/verity/circuits/test_ops.py", "tests/verity/protocols/__init__.py", "tests/verity/corex/test_a.py",
+                    "tests/benchmarks/pouw/test_a.py", "tests/tools/research/test_queue.py", "verity/circuits/tests/test_x.py"],
+                   excludes)
+    assert lowrisk(["tests/lint/test_y.py"], ("lint/",)) and not lowrisk(["tests/verity/core/test_claims.py"], ("verity/",))
+    assert not lowrisk(["tests/verity/core/test_claims.py"], ("tests/verity/",))
+    assert not lowrisk(["tests/test_boundaries.py"], ("tests/",)) and lowrisk(["tests/verity/test_a.py"], ("tests/",))

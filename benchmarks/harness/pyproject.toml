@@ -138,6 +138,16 @@ inputs = [
     # test checks against the interface's list of public modules
     "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e",
     "benchmarks/recursion_figures", "tests/test_vllm_public_api.py",
+    # `verity bench compute` and `verity bench memory` print and write through the kit's report, which a test holds
+    # each to on its own suite's fixtures and stand-in store, and they read what their own suites declare
+    "benchmarks/compute", "benchmarks/memory", "benchmarks/remote_session/summary.py", "verity/protocol.py",
+    "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/party.py", "verity/runtime/__init__.py",
+    "verity/runtime/handshake.py", "verity/runtime/framing.py", "tools/config/verity_config",
+    # and `verity bench inference_only --stated-only`, run as its own process, prices the stated policy with the
+    # slowdown calculator, which reads the census, the NCI catalog and each name's standing from the locks
+    "benchmarks/inference_only", "benchmarks/slowdown", "security/lean-audit.json", "security/Properties/lean-audit.json",
+    "benchmarks/nci/tiers.py", "benchmarks/nci/bracket.py", "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
+    "benchmarks/nci/calibrations.json",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -148,8 +158,10 @@ tests = ["tests/test_bench.py"]
 paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_prove.py", "tests/test_served_table.py",
-         "tests/test_steady_point.py"]
+tests = ["tests/test_breakdown.py", "tests/test_overhead_command.py", "tests/test_overhead_node.py",
+         "tests/test_overhead_points.py", "tests/test_overhead_store.py", "tests/test_prove_command.py",
+         "tests/test_prove_lean_warm.py", "tests/test_prove_rows.py", "tests/test_prove_store.py",
+         "tests/test_prove_store_rows.py", "tests/test_served_table.py", "tests/test_steady_point.py"]
 paths = ["artifacts.json"]
 
 [[tool.verity.tests.reads]]

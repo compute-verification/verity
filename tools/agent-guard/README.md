@@ -86,8 +86,8 @@ commit whose committer is not the checkout's configured identity (`git config us
 where the push runs), or whose author is neither that identity nor one that already authors a commit on the remote's
 `main` as the checkout last fetched it (`refs/remotes/REMOTE/main`, read only once an author differs). So a commit
 carried from a real author the remote has (a cherry-pick, a rebase) passes, while a name nobody has seen on `main`, and
-a made-up address however many commits `main` holds under it (a domain with no dot, or one under `invalid` or `local`),
-is refused. The refusal names the commits; for another author's commits it says to carry them by a merge (`git merge
+a made-up address however many commits `main` holds under it (a domain with no dot, or one under `invalid`, `test`,
+`example`, `localhost` or `local`), or the checkout's own address under another name, is refused. The refusal names the commits; for another author's commits it says to carry them by a merge (`git merge
 <their-branch-or-commit>`), the first push of an author's own commits being theirs, and for made-up names taken from
 git's environment or a tool it gives the `filter-branch` that writes again, in only the commits it names by sha (at most
 `MENDED`, the next refusal naming the rest), each committer that is not the checkout's and each made-up author under the
