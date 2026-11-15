@@ -1,0 +1,551 @@
+{
+ "batch": "S3",
+ "run": "r20261115-055204-bdae",
+ "kinds": 18,
+ "accepted": 18,
+ "stopped": [],
+ "hours": 5.26,
+ "peak_gb": 29.47,
+ "records": [
+  {
+   "tag": "s3-nv64",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 16702243,
+   "k_log": 27,
+   "circuit_bytes": 5243300709,
+   "seconds": 1220,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 20.24,
+    "prove": 29.47,
+    "serve": 19.52,
+    "lean": 21.56
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv63",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 16441680,
+   "k_log": 27,
+   "circuit_bytes": 5156956421,
+   "seconds": 1190,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 19.94,
+    "prove": 29.39,
+    "serve": 19.44,
+    "lean": 21.2
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv62",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 16181117,
+   "k_log": 27,
+   "circuit_bytes": 5071028888,
+   "seconds": 1180,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 19.65,
+    "prove": 29.31,
+    "serve": 19.37,
+    "lean": 20.85
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv61",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 15920554,
+   "k_log": 27,
+   "circuit_bytes": 4985096148,
+   "seconds": 1151,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 19.35,
+    "prove": 29.23,
+    "serve": 19.29,
+    "lean": 20.5
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv60",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 15659991,
+   "k_log": 27,
+   "circuit_bytes": 4898782576,
+   "seconds": 1130,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 19.06,
+    "prove": 28.9,
+    "serve": 18.46,
+    "lean": 20.06
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv59",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 15399428,
+   "k_log": 27,
+   "circuit_bytes": 4812827352,
+   "seconds": 1110,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 18.77,
+    "prove": 28.82,
+    "serve": 18.39,
+    "lean": 19.68
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv58",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 15138865,
+   "k_log": 27,
+   "circuit_bytes": 4726524856,
+   "seconds": 1100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 18.47,
+    "prove": 28.74,
+    "serve": 18.31,
+    "lean": 19.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv57",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 14878302,
+   "k_log": 26,
+   "circuit_bytes": 4640628031,
+   "seconds": 1080,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 18.18,
+    "prove": 16.96,
+    "serve": 11.73,
+    "lean": 19.1
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv56",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 14617739,
+   "k_log": 26,
+   "circuit_bytes": 4554689169,
+   "seconds": 1061,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 17.89,
+    "prove": 16.88,
+    "serve": 11.66,
+    "lean": 18.76
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv55",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 14357176,
+   "k_log": 26,
+   "circuit_bytes": 4441278320,
+   "seconds": 1061,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 17.52,
+    "prove": 16.78,
+    "serve": 11.58,
+    "lean": 18.26
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv54",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 14096613,
+   "k_log": 26,
+   "circuit_bytes": 4354982636,
+   "seconds": 1020,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 17.23,
+    "prove": 16.7,
+    "serve": 11.5,
+    "lean": 17.91
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv53",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 13836050,
+   "k_log": 26,
+   "circuit_bytes": 4269088984,
+   "seconds": 1010,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 16.93,
+    "prove": 16.61,
+    "serve": 11.43,
+    "lean": 17.56
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv52",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 13575487,
+   "k_log": 26,
+   "circuit_bytes": 4182872956,
+   "seconds": 960,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 16.64,
+    "prove": 16.53,
+    "serve": 11.35,
+    "lean": 17.21
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv51",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 13314924,
+   "k_log": 26,
+   "circuit_bytes": 4096942599,
+   "seconds": 960,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 16.35,
+    "prove": 16.44,
+    "serve": 11.27,
+    "lean": 16.86
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv50",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 13054361,
+   "k_log": 26,
+   "circuit_bytes": 4010744316,
+   "seconds": 960,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 16.05,
+    "prove": 16.37,
+    "serve": 11.2,
+    "lean": 16.51
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv49",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 12793798,
+   "k_log": 26,
+   "circuit_bytes": 3924545916,
+   "seconds": 920,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 15.76,
+    "prove": 16.28,
+    "serve": 11.12,
+    "lean": 16.16
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv48",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 12533235,
+   "k_log": 26,
+   "circuit_bytes": 3838645565,
+   "seconds": 900,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 15.46,
+    "prove": 16.2,
+    "serve": 11.04,
+    "lean": 15.81
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "s3-nv47",
+   "kind": "SparseMlaHeadScoresCols_v2{DR=64,DV=512,NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "staged": "SparseMlaHeadScoresCols_v1{DR=64,DV=512,NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"},G=64}",
+   "ands": 12272672,
+   "k_log": 26,
+   "circuit_bytes": 3752489689,
+   "seconds": 900,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 15.17,
+    "prove": 16.12,
+    "serve": 10.97,
+    "lean": 15.46
+   },
+   "outcome": "accepted"
+  }
+ ]
+}
