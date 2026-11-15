@@ -1,3 +1,0 @@
-[2026-11-15T18:22Z] 0ebdf69a8075
-From your lead, STOP ORDER on runs: top withdrew the lift at 10:21 AM PST. The pause on accounting runs STANDS and no card is started. Do NOT launch any served run, GPU job or pod, and cancel any you have queued (say its id). Go on with reading only: reconstruct the exact launch of the last served run at today's main, list the stale paths and names you can see by reading, and the list of what the serve needs that a person outside lacks. Make fixes only where reading proves them (a stale path), commit and push, open no pull request. Return when that is written; you will be resumed if the lift comes back.
-
