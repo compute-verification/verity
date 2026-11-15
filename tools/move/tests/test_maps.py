@@ -19,10 +19,11 @@ def tables(data: dict) -> list[tuple[list[str] | None, dict[str, str]]]:
     return [(None, data.get("words", {})), *((t.get("files", []), t.get("words", {})) for t in data.get("words_in", []))]
 
 
-def meet(a: list[str] | None, b: list[str] | None) -> bool:
-    """Whether two tables can rename in one file: [words] meets every table, and two globs meet when one matches the
-    other or both hold a wildcard and neither's text before its first wildcard rules out the other's (no tree is read,
-    so two such patterns are taken to share a file), unless each ends in a file extension and the two differ."""
+def meet(a: list[str] | None, b: list[str] | None) -> list[tuple[str | None, str | None]]:
+    """The pairs of globs, one of each table's, in which two tables can rename in one file: [words] (None) meets every
+    glob, and two globs meet when one matches the other or both hold a wildcard and neither's text before its first
+    wildcard rules out the other's (no tree is read, so two such patterns are taken to share a file), unless each ends in
+    a file extension and the two differ."""
     def head(g: str) -> str:
         return g[:m.start()] if (m := re.search(r"[*?\[]", g)) else g
 
@@ -34,8 +35,14 @@ def meet(a: list[str] | None, b: list[str] | None) -> bool:
 
     def apart(x: str, y: str) -> bool:
         return None not in (ext(x), ext(y)) and ext(x) != ext(y)
-    return a is None or b is None or any(not apart(x, y) and (x == y or R._match(x, y) or R._match(y, x) or both(x, y))
-                                         for x in a for y in b)
+    return [(x, y) for x in ([None] if a is None else a) for y in ([None] if b is None else b)
+            if x is None or y is None or not apart(x, y) and (x == y or R._match(x, y) or R._match(y, x) or both(x, y))]
+
+
+def stands(words: R.Words, word: str, where: tuple[str | None, str | None]) -> bool:
+    """Whether a map leaves ``word`` standing in every file both globs of ``where`` match, as `rename.py` decides a file's
+    words: either glob, read as a path, is one the map's [rewrite] exclude or a [keep_in] glob listing the word holds."""
+    return any(g is not None and (words.excluded(g) or word in words.held(g)) for g in where)
 
 
 def everywhere(data: dict) -> R.Words:
@@ -46,9 +53,12 @@ def everywhere(data: dict) -> R.Words:
 
 def two_names(maps: dict[str, dict]) -> list[str]:
     """Each word two of ``maps`` rename in one file so that the order of their moves decides its name (words compared case
-    folded, a map's words applied to the other's name as `rename.py` applies them to an identifier). A prose map
-    (`scope = "prose"`) and an identifier map are two kinds, so one word may have a row in one map of each."""
+    folded, a map's words applied to the other's name as `rename.py` applies them to an identifier). Two rows meet only
+    where their tables' files meet and neither map leaves its word standing there (`stands`), so two senses of one word,
+    each map's in files the other keeps or excludes, are two names. A prose map (`scope = "prose"`) and an identifier
+    map are two kinds, so one word may have a row in one map of each."""
     words = {p: everywhere(d) for p, d in maps.items()}
+    scopes = {p: R.Words(d) for p, d in maps.items()}
     out = []
     ps = sorted(maps)
     for i, a in enumerate(ps):
@@ -57,13 +67,15 @@ def two_names(maps: dict[str, dict]) -> list[str]:
                 continue
             for ga, ta in tables(maps[a]):
                 for gb, tb in tables(maps[b]):
-                    if not meet(ga, gb):
+                    if not (where := meet(ga, gb)):
                         continue
                     theirs = {}
                     for old, new in tb.items():
-                        theirs.setdefault(old.casefold(), set()).add(new)
+                        theirs.setdefault(old.casefold(), set()).add((new, old))
                     for old, x in ta.items():
-                        for y in sorted(theirs.get(old.casefold(), ())):
+                        for y, by in sorted(theirs.get(old.casefold(), ())):
+                            if all(stands(scopes[a], old, p) or stands(scopes[b], by, p) for p in where):
+                                continue
                             xy, yx = words[b].sub(x, "name", protect=False), words[a].sub(y, "name", protect=False)
                             if xy.casefold() != yx.casefold():
                                 out.append(f"{old!r}: {a} renames it to {x!r}, which {b} makes {xy!r}; {b} renames it to "
@@ -105,3 +117,19 @@ def test_maps_that_agree_or_compose_pass_and_a_second_name_is_found():
                                                                      "words": {"session": "attachment"}}]}}) == [
         "'Session': d.toml renames it to 'Run', which f.toml makes 'Run'; f.toml renames it to 'attachment', which "
         "d.toml makes 'attachment'"]
+
+
+def test_two_senses_of_a_word_in_files_one_map_keeps_or_excludes_pass_and_files_both_rename_fail():
+    fanin = {"words": {}, "words_in": [{"files": ["bench/slow/model.py", "bench/slow/tests/test_model.py"],
+                                        "words": {"legs": "fanin"}}]}
+    kept = {"fanin.toml": fanin, "leg.toml": {"words": {"legs": "subprotocols"}, "keep_in": {"bench/slow/**": ["legs"]}}}
+    assert two_names(kept) == []
+    assert two_names({**kept, "leg.toml": {"words": {"legs": "subprotocols"}, "rewrite": {"exclude": ["bench/**"]}}}) == []
+    clash = ["'legs': fanin.toml renames it to 'fanin', which leg.toml makes 'fanin'; leg.toml renames it to "
+             "'subprotocols', which fanin.toml makes 'subprotocols'"]
+    assert two_names({**kept, "leg.toml": {"words": {"legs": "subprotocols"}, "keep_in": {"bench/fast/**": ["legs"]}}}) \
+        == clash
+    assert two_names({**kept, "leg.toml": {"words": {"legs": "subprotocols"},
+                                           "keep_in": {"bench/slow/model.py": ["legs"]}}}) == clash
+    assert two_names({**kept, "leg.toml": {"words": {"Legs": "Subprotocols"}, "keep_in": {"bench/slow/**": ["legs"]}}}) \
+        == [clash[0].replace("'subprotocols'", "'Subprotocols'")]
