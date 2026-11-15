@@ -7,7 +7,7 @@ import json
 import os
 import sys
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -77,7 +77,7 @@ def _end(text: str) -> float:
     """`--end`'s instant, a UTC time as `2026-11-15T03:30Z`, in seconds since the epoch."""
 
     try:
-        return datetime.strptime(text, "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc).timestamp()
+        return datetime.strptime(text, "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC).timestamp()
     except ValueError:
         raise argparse.ArgumentTypeError(f"{text!r} is not a UTC time as 2026-11-15T03:30Z") from None
 
