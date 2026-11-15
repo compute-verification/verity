@@ -20,17 +20,18 @@ stream its name, its label and its rounds (`jsz_streamObj_le`).
 
 namespace FlockComplete
 
-open Flock Transcript
+open Flock Transcript JsonRT
 open Lean (Json)
 
 /-! ## Values -/
 
 theorem size_le_length (s : String) : s.utf8ByteSize ≤ 4 * s.length := by
-  simpa using ofList_size_le s.toList
+  have h : s.utf8ByteSize ≤ 4 * s.toList.length := by simpa using ofList_size_le s.toList
+  simpa only [String.length_toList] using h
 
 theorem jsz_toJson_le {n : ℕ} (hn : n < 10 ^ 20) : jsz (Lean.toJson n) ≤ 80 := by
   have h1 : jsz (Lean.toJson n) = (Int.repr (n : Int)).utf8ByteSize := rfl
-  rw [Int.repr_eq_if, if_pos (by omega)] at h1
+  rw [Int.repr_eq_ite, if_pos (by omega)] at h1
   simp only [Int.toNat_natCast] at h1
   have h2 := (Nat.length_repr_le_iff (n := n) (k := 20) (by decide)).2 hn
   have h3 := size_le_length (Nat.repr n)
@@ -78,7 +79,7 @@ theorem jsz_str (s : String) : jsz (Json.str s) = 18 * s.length + 2 := rfl
 
 theorem jsz_arr_le (a : Array Json) {B : ℕ} (h : ∀ j ∈ a, jsz j ≤ B) : jsz (.arr a) ≤ a.size * (B + 1) + 2 := by
   rw [jsz_arr]
-  have := List.sum_le_card_nsmul (a.toList.map fun j => jsz j + 1) (B + 1) (by
+  have := List.sum_le_length_nsmul (a.toList.map fun j => jsz j + 1) (B + 1) (by
     intro x hx
     obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hx
     have := h j (Array.mem_toList_iff.1 hj)

@@ -15,7 +15,7 @@ each (`jsz_recordObjZk_le`).
 
 namespace FlockComplete
 
-open Flock Transcript
+open Flock Transcript JsonRT
 open Lean (Json)
 
 theorem jsz_zeros (n : ℕ) : jsz (Json.str (zeros n)) = 18 * n + 2 := by
