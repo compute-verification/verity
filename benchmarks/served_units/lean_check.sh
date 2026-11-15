@@ -31,14 +31,16 @@ EOF
 }
 
 # lean_check NAME SESSION_DIR STATEMENT_DIR KEPT_DIR OUT_DIR EXE TSV: one run of lean-verify on the session, at the statement
-# STATEMENT_DIR holds (circuit.txt, stage.json, program-word.json) with KEPT_DIR's public files (pub.bin, partition.json,
-# tables/); its record OUT_DIR/lean-verify.json and its row in TSV (name, session, accepted, label or why, wall s, peak GiB,
-# circuit bytes). 0 only when the verifier accepts.
+# STATEMENT_DIR holds (circuit.txt, stage.json, and its Program: the stager's program.json, the Program a bound statement's
+# partition names, else program-word.json) with KEPT_DIR's public files (pub.bin, partition.json, tables/); its record
+# OUT_DIR/lean-verify.json and its row in TSV (name, session, accepted, label or why, wall s, peak GiB, circuit bytes).
+# 0 only when the verifier accepts.
 lean_check() {
-  local name=$1 sd=$2 d=$3 k=$4 o=$5 exe=$6 tsv=$7 sid t st rc
+  local name=$1 sd=$2 d=$3 k=$4 o=$5 exe=$6 tsv=$7 sid t st rc p=program-word.json
   sid=$(basename "$sd"); t=$LEAN_TMP/lean-$name-$sid
   rm -rf "$t"; mkdir -p "$t" "$o"
-  cp -r "$sd" "$t/session"; ln -s "$d/circuit.txt" "$t/circuit.txt"; ln -s "$d/program-word.json" "$t/program-word.json"
+  [ -e "$d/program.json" ] && p=program.json
+  cp -r "$sd" "$t/session"; ln -s "$d/circuit.txt" "$t/circuit.txt"; ln -s "$d/$p" "$t/$p"
   ln -s "$d/stage.json" "$t/stage.json"
   for f in pub.bin partition.json; do [ -e "$k/$f" ] && ln -s "$k/$f" "$t/$f"; done
   [ -d "$k/tables" ] && cp -r "$k/tables" "$t/tables"   # rglob descends into no linked directory
