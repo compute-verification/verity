@@ -133,6 +133,10 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
 include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
 
 
+[split]
+# the docstring names the engine's code, which stays; only its tests leave
+"verity/commitments/cuda/commit_slots/tests/test_host_twin.py: verity/commitments/cuda/sha512_rows" = { to = "verity/commitments/cuda/sha512_rows", why = "the host twin is the engine's code, not its tests" }
+
 # the rename [paths] implies (`layout.py --modules`)
 [modules]
 "verity.circuits.evaluate.tests" = "tests.verity.circuits.evaluate"
