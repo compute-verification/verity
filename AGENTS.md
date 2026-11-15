@@ -259,8 +259,8 @@ no new failure: each gating task passed, failed only where an unexpired allowanc
 fails on its base too. Under `--gate verdict` a plain candidate lands on its members' land verdicts and the quick tier,
 `main`'s whole check follows each landing, and a red check reverts the one culprit or, with no culprit, sends plain
 candidates back to the whole check until `main` is green; a candidate is plain when each member has a land verdict of its
-own, is no move and touches nothing drive.toml's `lowrisk_excludes` or `verdict_excludes` names (with either empty, none
-is plain), so every other candidate (Lean, a lock, a move, a verifier or device, the soundness path, the landing code
+own, is no move and touches nothing drive.toml's `verdict_excludes` names, nor any entry of its `lowrisk_excludes` that
+`verdict_plain` doesn't list (with either of the first two empty, none is plain), so every other candidate (Lean, a lock, a move, a verifier or device, the soundness path, the landing code
 itself) keeps the whole check before landing. A failure the candidate's base shares blames none of its PRs;
 any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
 names), every PR when none does: a lone suspect is ejected, several are bisected, and in the same tick the candidate and
@@ -340,6 +340,11 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
   baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
   run` compute. Each measured run carries a label with its numbers, and the best one that passes the guard lands.
+- **A slip made twice becomes a tool.** When you make the same kind of mistake a second time, or see that two agents
+  have each made it, a note to be more careful is no fix. That day, change the tool so that kind of mistake can't happen,
+  or fails with the fix in its message (a refusal in the shell hook, a default, a check), in a PR that names the slips it
+  ends. Watch for the signs in your own work and in what you read of others': a rule kept by hand, a slip listed for a
+  later review. Another owner's tool gets the PR all the same, and its owner is told.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a

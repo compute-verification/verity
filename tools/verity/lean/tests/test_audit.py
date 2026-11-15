@@ -260,6 +260,21 @@ def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
     assert text == [f"guarantee P.t: owner @lean -> @compute-accounting: {A.OWNED}"] and A.statement_changes(text) == []
 
 
+def test_a_premise_entry_s_claim_id_is_kept_by_an_update_and_held_to_its_form():
+    """A premise entry's `id`, the claim id that names it, is written by hand: a check and an update keep it, and one that
+    is no claim id fails."""
+    pol = recorded()
+    for cid in ("cr/sha-512", "trusted-device"):
+        named = {**pol, "assumptions": {"P.Hyp": {"id": cid} | pol["assumptions"]["P.Hyp"]}}
+        assert A.judge(named, facts(), FILES) == ([], named)
+        assert A.judge(named, facts(), FILES, update=True)[1] == named
+    for bad in ("CR SHA-512", "cr/sha-512/x", "", 7):
+        odd = {**pol, "assumptions": {"P.Hyp": pol["assumptions"]["P.Hyp"] | {"id": bad}}}
+        assert [f.code for f in A.judge(odd, facts(), FILES)[0]] == ["assumptions.id-form"], bad
+        fails, written = A.judge(odd, facts(), FILES, update=True)
+        assert [f.code for f in fails] == ["assumptions.id-form"] and "id" not in written["assumptions"]["P.Hyp"], bad
+
+
 def laneless(lock: dict) -> dict:
     """``lock`` with no entry's owner, issue or due date, and no section of their defaults."""
     return {k: {n: {f: v for f, v in r.items() if f not in ("owner", "issue", "due")} if isinstance(r, dict) else r
@@ -1984,7 +1999,7 @@ def test_a_facts_or_replay_cache_that_a_build_could_write_is_refused(tmp_path, c
 
     ctl = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", ctl, ignore=shutil.ignore_patterns(".lake"))
-    for flag in ("--facts-cache", "--replay-cache"):
+    for flag in ("--facts-cache", "--replay-cache", "--program-cache"):
         with pytest.raises(SystemExit):
             A.main([str(ctl), flag, str(ctl / ".lake" / "cache"), "--out", str(tmp_path / "out")])
         assert f"{flag} {ctl / '.lake' / 'cache'} overlaps {(ctl / '.lake').resolve()}" in capsys.readouterr().err

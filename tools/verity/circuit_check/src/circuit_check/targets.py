@@ -346,7 +346,8 @@ HOOKS = {
 }
 _HANDS: dict[str, Any] = {}
 #: the hooks a catalog may hand none of: then the table is empty, and every check that would read it fails or warns by name
-#: (``correspondence/unprobed-table``, ``correspondence/operand-unread``, ``partition/unpartitioned``)
+#: (``correspondence/unprobed-table``, ``correspondence/operand-unread``, ``partition/over-cost-target`` or, over the leaf
+#: budget, ``partition/unpartitioned``)
 OPTIONAL = frozenset({"table_probes", "lazy_operands", "operand_probes", "callee_calls"})
 
 

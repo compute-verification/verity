@@ -193,6 +193,177 @@ def test_the_shim_runs_origin_mains_code_for_a_stale_checkout_and_the_checkouts_
     assert [env["PYTHONPATH"].split(os.pathsep)[0] for _, env in ran] == [str(repo / "tools/research/src")]
 
 
+#: a research package's `__main__`, which says whose copy it is and what it was asked
+WHOSE = "import sys\nprint({!r}, *sys.argv[1:])\n"
+
+
+def two_researches(tmp_path: Path) -> Path:
+    """A repository on branch `lane`, cut from main, whose research `python -m research` runs, saying it is the
+    checkout's, with `origin/main` one research commit ahead, whose research says it is origin/main's."""
+    repo, main_py = tmp_path / "repo", "tools/research/src/research/__main__.py"
+    git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    commit(repo, "tools/research/src/research/__init__.py", "")
+    commit(repo, main_py, WHOSE.format("the checkout's"))
+    git(repo, "checkout", "-q", "-b", "lane")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "update-ref", "refs/remotes/origin/main", commit(repo, main_py, WHOSE.format("origin/main's")))
+    git(repo, "checkout", "-q", "lane")
+    return repo
+
+
+def as_the_shim_runs_it(repo: Path, cache: Path, *argv: str, **env: str) -> subprocess.CompletedProcess:
+    """`research ARGV` as /usr/local/bin/research (`tools/agent-guard/research.sh`) runs it: this file's source as
+    `python -c SOURCE ARGV`, with no package, and `RESEARCH_CHECKOUT` naming the checkout."""
+    base = {k: v for k, v in ENV.items() if k != at_main.OPT_OUT}
+    return subprocess.run([sys.executable, "-c", Path(at_main.__file__).read_text(), *argv], cwd=repo, capture_output=True,
+                          text=True, env={**base, "RESEARCH_CHECKOUT": str(repo), "XDG_CACHE_HOME": str(cache), **env})
+
+
+def test_the_shims_script_form_runs_origin_mains_copy_or_with_the_opt_out_the_checkouts(tmp_path):
+    """A read of the settings registry that needs the package (`from . import settings`) failed every command the shim
+    ran, before any of this module ran; the tests above import it as `research.at_main`, where it has one."""
+    repo, cache = two_researches(tmp_path), tmp_path / "cache"
+    behind = as_the_shim_runs_it(repo, cache, "--version")
+    assert behind.returncode == 0 and "Traceback" not in behind.stderr, behind.stderr
+    assert behind.stdout == "origin/main's --version\n"
+    assert behind.stderr.startswith("research: this checkout's research code is 1 commit(s) behind origin/main")
+    opted_out = as_the_shim_runs_it(repo, cache, "--version", RESEARCH_AT_CHECKOUT="1")
+    assert (opted_out.returncode, opted_out.stdout, opted_out.stderr) == (0, "the checkout's --version\n", "")
+
+
+#: an agent's conversation id, as Cursor's shell sets it
+AGENT = "bc-00000000-0000-4000-8000-000000000001"
+
+
+def tree_at(root: Path, git_checkout: bool = True) -> Path:
+    """A tree at `root` holding a research package, a git checkout's (its `.git` a worktree's file) unless not: the
+    package's directory."""
+    package = root / "tools/research/src/research"
+    package.mkdir(parents=True)
+    if git_checkout:
+        (root / ".git").write_text("gitdir: elsewhere\n")
+    return package
+
+
+def on_an_agents_vm(tmp_path: Path, monkeypatch) -> Path:
+    """An agent's VM: its venv /workspace's, the shell in /workspace, no PYTHONPATH and no shim's checkout. /workspace."""
+    workspace = tmp_path / "workspace"
+    tree_at(workspace)
+    monkeypatch.setattr(sys, "prefix", str(workspace / ".venv"))
+    monkeypatch.chdir(workspace)
+    monkeypatch.setenv("CURSOR_CONVERSATION_ID", AGENT)
+    for name in ("PYTHONPATH", "RESEARCH_CHECKOUT", "RESEARCH_AT_CHECKOUT"):
+        monkeypatch.delenv(name, raising=False)
+    return workspace
+
+
+def said(tmp_path: Path, monkeypatch, here: Path, under_test: bool = False) -> str | None:
+    """What `pythonpath_notice` says for the package `here`, as a command outside a test (unless `under_test`) says it."""
+    if not under_test:
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    return at_main.pythonpath_notice(tmp_path / "cache", here, tmp_path / "marks")
+
+
+def test_a_pythonpath_that_runs_a_third_trees_research_is_said_once_an_agents_session(tmp_path, monkeypatch, capsys):
+    """A startup file's PYTHONPATH ran another tree's research on every command, and nothing said so."""
+    on_an_agents_vm(tmp_path, monkeypatch)
+    third = tree_at(tmp_path / "wt-main")
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join([str(third.parent), "/elsewhere"]))
+    line = (f"research: PYTHONPATH puts {tmp_path / 'wt-main'}'s research ahead of this checkout's and of origin/main's, "
+            f"so that copy runs; unset PYTHONPATH, or put it on the one command")
+    assert said(tmp_path, monkeypatch, third) == line and capsys.readouterr().err == line + "\n"
+    assert said(tmp_path, monkeypatch, third) is None and capsys.readouterr().err == "", "once a session"
+
+
+def at_mains_re_exec(tmp_path, monkeypatch, workspace):
+    here = tree_at(tmp_path / "cache/0123456789ab/tree")
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join([str(here.parent), str(workspace / "tools/research/src")]))
+    monkeypatch.setenv("RESEARCH_AT_CHECKOUT", "1")
+    return here
+
+
+def a_worktrees_own_from_inside_it(tmp_path, monkeypatch, workspace):
+    here = tree_at(tmp_path / "wt")
+    monkeypatch.setenv("PYTHONPATH", str(here.parent))
+    monkeypatch.setenv("RESEARCH_AT_CHECKOUT", "1")
+    monkeypatch.chdir(here.parents[2])
+    return here
+
+
+def the_shims_checkout(tmp_path, monkeypatch, workspace):
+    here = tree_at(tmp_path / "wt")
+    monkeypatch.setenv("PYTHONPATH", str(here.parent))
+    monkeypatch.setenv("RESEARCH_CHECKOUT", str(tmp_path / "wt"))
+    monkeypatch.chdir(tmp_path)
+    return here
+
+
+def the_venvs_own_from_outside_any_checkout(tmp_path, monkeypatch, workspace):
+    monkeypatch.setenv("PYTHONPATH", str(workspace / "tools/research/src"))
+    monkeypatch.chdir(tmp_path)
+    return workspace / "tools/research/src/research"
+
+
+def a_third_tree_not_on_pythonpath(tmp_path, monkeypatch, workspace):
+    monkeypatch.setenv("PYTHONPATH", "/elsewhere")
+    return tree_at(tmp_path / "wt-main")
+
+
+def a_nodes_installed_copy(tmp_path, monkeypatch, workspace):
+    here = tree_at(tmp_path / "usr/local/lib/vy-monitoring/check-slot", git_checkout=False)
+    monkeypatch.setenv("PYTHONPATH", str(here.parent))
+    return here
+
+
+def a_node_with_no_agent(tmp_path, monkeypatch, workspace):
+    monkeypatch.delenv("CURSOR_CONVERSATION_ID")
+    return a_third_tree_on_pythonpath(tmp_path, monkeypatch, workspace)
+
+
+def a_third_tree_on_pythonpath(tmp_path, monkeypatch, workspace):
+    here = tree_at(tmp_path / "wt-main")
+    monkeypatch.setenv("PYTHONPATH", str(here.parent))
+    return here
+
+
+@pytest.mark.parametrize("case", [at_mains_re_exec, a_worktrees_own_from_inside_it, the_shims_checkout,
+                                  the_venvs_own_from_outside_any_checkout, a_third_tree_not_on_pythonpath,
+                                  a_nodes_installed_copy, a_node_with_no_agent, "a test"], ids=lambda c: getattr(c, "__name__", c))
+def test_the_copy_a_command_is_meant_to_run_and_a_node_or_a_test_say_nothing_of_pythonpath(tmp_path, monkeypatch, capsys,
+                                                                                         case):
+    workspace = on_an_agents_vm(tmp_path, monkeypatch)
+    if case == "a test":
+        assert said(tmp_path, monkeypatch, a_third_tree_on_pythonpath(tmp_path, monkeypatch, workspace), under_test=True) is None
+    else:
+        assert said(tmp_path, monkeypatch, case(tmp_path, monkeypatch, workspace)) is None
+    assert capsys.readouterr().err == ""
+
+
+def test_research_run_from_a_third_tree_by_pythonpath_says_so_once_and_exits_as_it_would_have(tmp_path):
+    """The line comes from the package that runs: a copy of this one, in a git checkout no command is for."""
+    third = tmp_path / "wt-main"
+    shutil.copytree(Path(at_main.__file__).parent, third / "tools/research/src/research",
+                    ignore=shutil.ignore_patterns("__pycache__"))
+    git(tmp_path, "init", "-q", str(third))
+    git(tmp_path, "init", "-q", str(tmp_path / "checkout"))
+    (tmp_path / "tmp").mkdir()
+    base = {k: v for k, v in ENV.items() if k not in ("PYTEST_CURRENT_TEST", "CURSOR_CONVERSATION_ID", "RESEARCH_CHECKOUT",
+                                                      at_main.OPT_OUT)}
+    base |= {"PYTHONPATH": str(third / "tools/research/src"), "TMPDIR": str(tmp_path / "tmp"),
+             "XDG_CACHE_HOME": str(tmp_path / "cache")}
+
+    def research(**env: str) -> subprocess.CompletedProcess:
+        return subprocess.run([sys.executable, "-m", "research", "--version"], cwd=tmp_path / "checkout",
+                              capture_output=True, text=True, env={**base, **env})
+
+    plain, told, again = research(), research(CURSOR_CONVERSATION_ID=AGENT), research(CURSOR_CONVERSATION_ID=AGENT)
+    line = (f"research: PYTHONPATH puts {third}'s research ahead of this checkout's and of origin/main's, so that copy "
+            f"runs; unset PYTHONPATH, or put it on the one command\n")
+    assert (plain.returncode, plain.stderr) == (0, ""), plain.stderr
+    assert (told.returncode, told.stdout, told.stderr) == (plain.returncode, plain.stdout, line)
+    assert (again.returncode, again.stdout, again.stderr) == (plain.returncode, plain.stdout, "")
+
+
 def at_worktree_add(does):
     """A runner that is git's, but for `git worktree add`, where ``does(argv, timeout)`` stands in."""
     return lambda argv, timeout, **kw: does(argv, timeout) if argv[3:5] == ["worktree", "add"] else subprocess.run(argv, **kw)
