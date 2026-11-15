@@ -8,6 +8,7 @@ checks and no GPU check, so a GPU-less pod gets its readiness.json instead of dy
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -175,3 +176,33 @@ def test_step3_stages_a_checkpoint_it_downloads_and_checks_and_no_other(tmp_path
     assert step3("hello") == 0 and not marker.exists(), "weights already on the host are not a staging"
     (local / "model.safetensors").unlink()
     assert step3("tampered") == 1 and not marker.exists(), "a shard whose sha256 fails is not staged"
+
+
+def test_gpu_readiness_reads_the_taps_under_fa2_and_the_disk_of_work(tmp_path: Path) -> None:
+    """Step 5 checks the tap builds where steps 4 put them ($FA2) and measures $WORK's disk: a bootstrap with its WORK and FA2 outside
+    /workspace never reads a host's /workspace/cp builds instead of its own."""
+    so = tmp_path / "fa2" / "build" / "fa3_matReq" / "verity_fa3_matReq.so"
+    so.parent.mkdir(parents=True)
+    so.write_bytes(b"fa3 tap")
+    src = tmp_path / "readiness.py"
+    src.write_text(_readiness_source())
+    out = tmp_path / "readiness.json"
+    b = _bin(tmp_path, nvidia_smi=True)
+    root, core, research = VLLM, TREE, TREE / "tools" / "research" / "src"
+    env = dict(os.environ, PATH=f"{b}{os.pathsep}{os.environ.get('PATH', '')}", FA2=str(tmp_path / "fa2"), WORK=str(tmp_path),
+               PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research)),
+               https_proxy="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9")
+    r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "9.0", str(research), "gpu"],
+                       capture_output=True, text=True, env=env)
+    assert out.exists(), f"readiness.json not written\nstdout: {r.stdout}\nstderr: {r.stderr}"
+    rec = json.loads(out.read_text())
+    assert rec["checks"]["fa3_tap_so"] == {"ok": True, "value": {"path": str(so), "sha256": hashlib.sha256(b"fa3 tap").hexdigest()}}
+    assert rec["measurements"]["disk"]["path"] == str(tmp_path)
+
+
+def test_bootstrap_removes_no_cache_at_a_fixed_home() -> None:
+    """The install's caches are removed where uv and pip resolve them ($UV_CACHE_DIR, $HOME), never at a fixed /root/.cache, which on a
+    shared host is another user's."""
+    code = [ln for ln in SCRIPT.read_text().splitlines() if not ln.lstrip().startswith("#")]
+    assert not [ln for ln in code if "rm " in ln and "/root/" in ln], "a fixed /root path removed"
+    assert any('rm -rf "$(uv cache dir' in ln for ln in code)
