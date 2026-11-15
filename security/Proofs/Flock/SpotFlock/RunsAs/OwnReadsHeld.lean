@@ -15,7 +15,7 @@ public import Proofs.Properties.Spot
 is how a value the verdicts report under two roots is reported. A record that passed the registration check has no
 such port where the verifier lists each port once: R3 holds each of the verifier's ports to a hex root at the record's
 last root naming it (`Properties.Spot.R3`), `Record.byPort` keeps for each name the last root naming it
-(`rootFor_of_byPort`), and a record that passed names exactly the verifier's ports (`RecordNames.recordOk_of_check`),
+(`rootFor_of_byPort`), and a record that passed names exactly the verifier's ports (`RecordNames.names_of_check`),
 so each of the record's ports has a root that is a string (`byPort_root_str`), which `jeq` never holds to null.
 
 The registration check does not ask that the verifier list each port once: a verifier listing one port twice passes a
@@ -98,7 +98,7 @@ theorem byPort_root_str {rec : Json} {v : Spot.Docket.Verifier} (h : Spot.Docket
   obtain ⟨samplingDesign, -, -, h3, -⟩ := (Properties.Spot.docket_nil rec v).1 h
   -- `Properties.Spot.R3` by position: `hroot` is its roots clause (`RootIs`), the last of its seven
   obtain ⟨-, -, -, -, -, -, hroot⟩ := h3
-  obtain ⟨⟨ps, hps, -, hmem⟩, -⟩ := recordOk_spec (RecordNames.recordOk_of_check h hn)
+  obtain ⟨ps, hps, -, hmem⟩ := namesEq_spec (RecordNames.names_of_check h hn).1
   have hp : p ∈ ps := (AddressRow.byPort_isSome_iff hps p).1 (find?_isSome_of ⟨(p, x), hx, rfl⟩)
   have hp' : p ∈ (v.ports.map (·.1)).toList := (hmem p).1 hp
   rw [Array.toList_map, List.mem_map] at hp'

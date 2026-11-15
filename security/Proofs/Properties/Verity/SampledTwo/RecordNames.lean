@@ -5,18 +5,20 @@ public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.RunsAs.Outcome
 public import Proofs.Flock.Soundness.ExecSample
 public import Proofs.Properties.Verity.SampledTwo.JpWalk
+public import Proofs.Properties.Spot
 
 /-!
-# A registration check with no code names its registration's names
+# The names a registration check with no code leaves in the record
 
 `Docket.check rec v` collects R1–R8's failure codes for the record `rec` at the verifier `v`. Where it collects
-none and `v` lists each port once, `rec` names `v`'s names (`recordOk_of_check`): its roots' ports are `v`'s ports and
-its registered values `v`'s registered values, each once. R3-ports holds the roots' distinct ports to `v`'s ports by
-count and membership, and R7-values the registered values to the verifier's own entries the same way; a record with no
-registered value has no `registered` key, since its keys are exactly R1's `KEYS`.
+none and `v` lists each port once (`names_of_check`), `rec`'s roots' ports are `v`'s ports, and its registered values
+are the values `v` expects registered and the values it holds a certified entry for, each once. R3-ports holds the
+roots' distinct ports to `v`'s ports by count and membership (`ports_names_of_r3`), and R7-values the registered
+values to the verifier's own entries and its certified entries the same way; a record whose verifier expects neither
+has no `registered` key, since its keys are exactly R1's `KEYS`. Both read the registration check through
+`Properties.Spot.docket_nil`.
 
-The two checks with no code are walked down the one path that adds none (`JpWalk`'s `jp_walk`): `check`'s
-(`checkFacts_of_check`) and R7's (`checkRegistered_pass`).
+R7's check with no code is also walked down the one path that adds none (`JpWalk`'s `jp_walk`, `checkRegistered_pass`).
 -/
 
 @[expose] public section
@@ -25,7 +27,6 @@ namespace SpotFlock.RecordNames
 
 open Lean (Json)
 open Spot.Docket
-open SpotFlock.HeldOf (namesOf)
 
 /-! ## Counting names -/
 
@@ -358,52 +359,7 @@ theorem checkOutputs_pass {c : Array String} {got : Json} {mine : Flock.V (Array
     obtain ⟨g, hg, hvh⟩ := checkRegistered_pass (c := c') (mine := m') (held := held') h
     exact ⟨m, g, m', rfl, hg, hv, hvh⟩
 
-/-- **What a check with no code says of the names**: the record's keys are R1's, its roots a list R3-ports holds to the
-ports, and with registered values, its `registered` a list R7-values holds to the verifier's own entries. -/
-def CheckFacts (rec : Json) (v : Verifier) : Prop :=
-  Spot.keys? rec = some (if !v.registered.isEmpty then KEYS_V2 else KEYS) ∧
-  (∃ rs, Spot.getD rec "roots" = .arr rs ∧ (portIndex rs).count = rs.size ∧ (portIndex rs).count = v.ports.size ∧
-    ∀ p ∈ v.ports, (portIndex rs).has p.1 = true) ∧
-  (v.registered.isEmpty = false → ∃ mine g mine', ownEntries v = .ok mine ∧ Spot.getD rec "registered" = .arr g ∧
-    mine'.map (·.value) = mine.map (·.value) ∧ ValuesHold g mine')
-
-set_option maxHeartbeats 4000000 in
-theorem checkFacts_of_check {rec : Json} {v : Verifier} (h : check rec v = #[]) : CheckFacts rec v := by
-  have h' : (check rec v).isEmpty = true := by rw [h]; rfl
-  unfold check at h'
-  lift_lets at h'
-  extract_lets at h'
-  name_lets
-  cases hv2 : v.registered.isEmpty
-  all_goals
-    jp_mono [VStar.Recursive.Caller.poolMarks, r8Codes, isEmpty_checkOutputs, hv2, l_v2]
-    jp_walk h' [VStar.Recursive.Caller.poolMarks, r8Codes, isEmpty_checkOutputs, hv2, l_v2]
-  -- the branch of `if v2` the registered values rule out
-  all_goals
-    first
-    | (exfalso; exact ‹¬(!false) = true› rfl)
-    | (exfalso; exact absurd ‹(!true) = true› (by decide))
-    | skip
-  -- `hc0` is the keys' test, `hc9` R3-roots' and `hc10` R3-ports'
-  all_goals
-    have hk : Spot.keys? rec = some (if !v.registered.isEmpty then KEYS_V2 else KEYS) := by
-      rw [hv2]
-      simpa using hc0
-    have hr : ∃ rs, Spot.getD rec "roots" = .arr rs ∧ l_roots = rs := by
-      cases hr : Spot.getD rec "roots" with
-      | arr rs => exact ⟨rs, rfl, by simp only [l_roots, l_get, hr]⟩
-      | _ => exact absurd (by simp [l_roots, l_get, hr]) hc9
-    obtain ⟨rs, hrs, hl⟩ := hr
-    simp only [l_ix, hl, Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, Decidable.not_not, Bool.not_eq_true',
-      Bool.not_eq_false] at hc10
-    obtain ⟨⟨hp1, hp2⟩, hp3⟩ := hc10
-    refine ⟨hk, ⟨rs, hrs, hp1, hp2, fun p hp => ?_⟩, fun hne => ?_⟩
-    · exact Array.all_eq_true_iff_forall_mem.1 hp3 p hp
-    · first
-        | (rw [hv2] at hne; cases hne; done)
-        | exact checkOutputs_pass h'
-
-/-! ## The record names its registration's names -/
+/-! ## The names a record that passed holds -/
 
 theorem entries_values {d : Flock.TemplateQuery.Desc} {ps : Array Spot.Registered.Param} {values : Array (String × Nat)}
     {schemas : Array (String × String)} {window : Option String} {fixed : Array String}
@@ -419,33 +375,71 @@ theorem entries_values {d : Flock.TemplateQuery.Desc} {ps : Array Spot.Registere
     | focus (cases hx; done)
     | (cases hx; rfl)
 
-theorem recordOk_of_facts {rec : Json} {v : Verifier} (hf : CheckFacts rec v) (hn : (v.ports.map (·.1)).toList.Nodup) :
-    recordOk rec (namesOf v) = true := by
-  obtain ⟨hk, ⟨rs, hrs, h1, h2, h3⟩, h7⟩ := hf
-  unfold recordOk
-  rw [Bool.and_eq_true]
-  refine ⟨ports_names hn hrs h1 h2 h3, ?_⟩
-  show namesEq (namesAt rec "registered" "value") (v.registered.map (·.1)).toList = true
-  cases hv : v.registered.isEmpty
-  · obtain ⟨mine, g, mine', hmine, hg, hm', hv1, hv2, hv3, hv4⟩ := h7 hv
-    have hvals : mine'.map (·.value) = v.registered.map (·.1) := by rw [hm', entries_values hmine]
-    have hR : (v.registered.map (·.1)).toList.length = mine'.size := by
-      have := congrArg Array.size hvals
-      simpa using this.symm
-    refine values_names hg hv1 hv2 (by omega) (fun x hx => ?_)
-    obtain ⟨e, he, rfl⟩ := hv4 x hx
-    have : e.value ∈ mine'.map (·.value) := Array.mem_map_of_mem he
-    rw [hvals] at this
-    exact Array.mem_def.1 this
-  · simp only [hv, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hk
-    have : v.registered = #[] := Array.isEmpty_iff.1 hv
-    unfold namesAt
-    rw [registered_null hk, this]
-    simp [namesEq]
+/-- **R3 names the ports**: a record R3 holds to the verifier names the verifier's ports each once at its roots, where
+the verifier lists each port once. -/
+theorem ports_names_of_r3 {rec : Json} {v : Verifier} (hn : (v.ports.map (·.1)).toList.Nodup)
+    (h3 : Properties.Spot.R3 rec v) : namesEq (namesAt rec "roots" "port") (v.ports.map (·.1)).toList = true := by
+  obtain ⟨-, hne, -, h1, h2, hhas, -⟩ := h3
+  have hr : ∃ rs, Spot.getD rec "roots" = .arr rs ∧ Properties.Spot.rootsOf rec = rs := by
+    unfold Properties.Spot.rootsOf at hne ⊢
+    cases hr : Spot.getD rec "roots" with
+    | arr rs => exact ⟨rs, rfl, rfl⟩
+    | _ => simp [hr] at hne
+  obtain ⟨rs, hrs, hro⟩ := hr
+  have hpo : Properties.Spot.portsOf rec = rs.foldl (fun (acc : Array Json) r =>
+      if acc.any (Spot.jeq · (Spot.getD r "port")) then acc else acc.push (Spot.getD r "port")) #[] := by
+    unfold Properties.Spot.portsOf
+    rw [hro]
+  refine ports_names hn hrs ?_ ?_ ?_
+  · rw [portIndex_count, ← hpo, h1, hro]
+  · rw [portIndex_count, ← hpo, h2]
+  · intro p hp
+    rw [portIndex_has, ← hpo]
+    obtain ⟨q, hq, hj⟩ := hhas p hp
+    exact Array.any_eq_true'.2 ⟨q, hq, hj⟩
 
-/-- **A registration check with no code names the registration's names**, where the verifier lists each port once. -/
-theorem recordOk_of_check {rec : Json} {v : Verifier} (h : check rec v = #[])
-    (hn : (v.ports.map (·.1)).toList.Nodup) : recordOk rec (namesOf v) = true :=
-  recordOk_of_facts (checkFacts_of_check h) hn
+/-- **A registration check with no code names the ports and the values the record registers**: the record's roots'
+ports are the verifier's ports, and its registered values are the values the verifier expects registered and those it
+holds a certified entry for, each a string named once, where the verifier lists each port once. R3-ports gives the
+ports; R7-values the values, at the verifier's own entries and its certified entries; and a record whose verifier
+expects neither has R1's `KEYS` and so no `registered` key. -/
+theorem names_of_check {rec : Json} {v : Verifier} (h : check rec v = #[]) (hn : (v.ports.map (·.1)).toList.Nodup) :
+    namesEq (namesAt rec "roots" "port") (v.ports.map (·.1)).toList = true ∧
+      namesEq (namesAt rec "registered" "value")
+        ((v.registered.map (·.1)).toList ++ (v.certified.map (·.1.value)).toList) = true := by
+  obtain ⟨_, h1, -, h3, -, -, -, h7, -, -⟩ := (Properties.Spot.docket_nil rec v).1 h
+  refine ⟨ports_names_of_r3 hn h3, ?_⟩
+  cases he : (v.registered.isEmpty && v.certified.isEmpty)
+  · obtain ⟨mine, es, mine', held', hmine, hes, -, happ, -, hva, -, -⟩ := (h7 he).1
+    have hm2 : Spot.Registered.entries v.program.desc v.params v.registered v.schemas v.windowRoot (fixedOf v) =
+        .ok mine := hmine
+    have ha := applyOutputs_values (#[] : Array String) mine (v.pinned ++ heldRoots v.log (ownEntries v)) v.outputs
+      v.log
+    rw [happ] at ha
+    dsimp only at ha
+    have hR : (v.registered.map (·.1)).toList ++ (v.certified.map (·.1.value)).toList =
+        ((mine' ++ v.certified.map (·.1)).map (·.value)).toList := by
+      rw [Array.map_append, ha, entries_values hm2, Array.toList_append, Array.map_map]
+      rfl
+    obtain ⟨hv1, hv2, hv3, hv4⟩ := hva
+    have hN : (es.map (Spot.getD · "value")).filterMap strOf = Properties.Spot.namesOf es := by
+      rw [Array.filterMap_map]
+      rfl
+    rw [hR]
+    refine values_names hes (by rw [hN]; exact hv1) (by rw [hN]; exact hv2) ?_ (fun x hx => ?_)
+    · rw [Array.length_toList, Array.size_map]
+      omega
+    · rw [hN] at hx
+      obtain ⟨m, hm, rfl⟩ := hv4 x hx
+      exact Array.mem_toList_iff.2 (Array.mem_map_of_mem hm)
+  · have hk : Spot.keys? rec = some KEYS := by
+      have := h1.1
+      simp only [he, ↓reduceIte] at this
+      exact this
+    simp only [Bool.and_eq_true, Array.isEmpty_iff] at he
+    obtain ⟨hreg, hcert⟩ := he
+    unfold namesAt
+    rw [registered_null hk, hreg, hcert]
+    simp [namesEq]
 
 end SpotFlock.RecordNames
