@@ -21,3 +21,6 @@ sampled_unit_words
 sass_gate_regs_max
 verifier_of_record_words
 workload_of_record_words
+compile_unit_words_certifier
+draw_words_certifier
+draw_words_network_benchmarks
