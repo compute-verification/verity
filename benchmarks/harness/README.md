@@ -439,7 +439,8 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   the `ran with` line after the text's first, with `a measurement, not an audit` below it unless the coins are the
   deployed challenger's, verified, at deployed parameters, and the document's `ran_with` and `audit`; with `made_up`,
   `a made-up record, not a run's` below those, `made_up: true` in the document, and each measurement marked `modeled`
-  with `made_up: true`; with `accepted` false, `NAME: no number: WHY` first, `value` null beside `no_number` and each
+  with `made_up: true`; with `accepted` false, `NAME: no number: WHY` in place of the text's headline (a first line opening with `NAME:`),
+  `value` null beside `no_number` and each
   measurement with no value and its why; `withdrawn` printed last and the document's `withdrawn`. Given none of them it
   prints and writes as before. It returns the exit code: 1 with no number, else 0. `tests/test_report.py` holds
   compute, memory and inference_only to it (compute and memory on their own suites' fixtures, inference_only on its
