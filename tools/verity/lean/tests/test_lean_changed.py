@@ -202,7 +202,8 @@ def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_from_every_b
             _reported(argv, True, failing=("Req",) if rc else ())
         return type("P", (), {"returncode": rc})()
 
-    def fake_put(self, reports, since=None, log=print):
+    def fake_put(self, reports, since=None, log=print, staged=None):
+        assert staged is not None and all(staged.resolve() in Path(at).resolve().parents for at in reports), staged
         put.append((self.store, reports, since))
         return 3
 
@@ -240,7 +241,7 @@ def test_a_run_stores_what_the_run_before_it_compiled_and_never_stored_before_it
     sync = LC.sync
     monkeypatch.setattr(LC, "sync", lambda *a: events.append("sync") or sync(*a))
     monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
-                        lambda self, reports, since=None, log=print: events.append(("put", reports, since)) or 2)
+                        lambda self, reports, since=None, log=print, staged=None: events.append(("put", reports, since)) or 2)
     said = []
     for left in ({"phase": "check", "since": 1234.5, "out": str(old)}, {"phase": "try"}, {"phase": "build"},
                  {"phase": "deps"}, {"phase": "check", "killed": -9}):
@@ -1832,7 +1833,7 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
     (slots := tmp_path / "lean-slots").write_text("build 1\n")
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
     put, marks, ran = [], [], []
-    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: (
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print, staged=None: (
         ran.append(len(calls["build"])), put.append((self.store, reports, since))) and 4)
     mark = LC.mark
     monkeypatch.setattr(LC, "mark", lambda t, **what: marks.append(what) or mark(t, **what))

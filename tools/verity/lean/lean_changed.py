@@ -687,14 +687,15 @@ def compiled(text: str) -> list[str]:
     return sorted({m.replace("«", "").replace("»", "") for m in BUILT.findall(text)})
 
 
-def put_built(artifacts, reps: dict[Path, dict], since: float, log=print, who: str = "lean-records") -> None:
-    """Put what the builds of ``reps`` ({package: what says its build ran in the sandbox}) compiled since ``since`` into the
+def put_built(artifacts, reps: dict[Path, dict], since: float, tree: Path, log=print, who: str = "lean-records") -> None:
+    """Put what the builds of ``reps`` ({package: what says its build ran in the sandbox}, each in ``tree``, the slot's
+    copy of the tree) compiled since ``since`` into the
     node's artifact cache (`LakeArtifacts.put`), whatever became of the run: a module is stored for what its compile read,
     which a failure elsewhere in the package, or a kill, doesn't change, unless a source of the build runs code while it
     compiles (`LA.runs_code`). Before anything writes the tree again: a key is computed from the sources the tree
     holds, and those are the sources `put` reads for such code."""
     try:
-        log(f"{who}: {artifacts.put(reps, since, log)} module version(s) new in the artifact cache")
+        log(f"{who}: {artifacts.put(reps, since, log, tree)} module version(s) new in the artifact cache")
     except (OSError, ValueError) as e:
         log(f"{who}: the artifact cache was not written: {e}")
 
@@ -718,7 +719,7 @@ def put_left(tree: Path, left: dict | None, artifacts, log=print) -> None:
         return
     reps = LA.built(Path(str(left.get("out"))))
     if reps := {at: rep for at, rep in reps.items() if tree.resolve() in at.resolve().parents}:
-        put_built(artifacts, reps, since, log, f"lean-records: {tree}: of what {left.get('run', 'a run')} left")
+        put_built(artifacts, reps, since, tree, log, f"lean-records: {tree}: of what {left.get('run', 'a run')} left")
 
 
 def storable(sandbox: bool) -> bool:
@@ -1724,7 +1725,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
 
                 all_got = audit(batch, all_out, first)
                 shared = store, redone
-                put_built(artifacts, LA.built(all_out), since, log, f"lean-records: {who}")
+                put_built(artifacts, LA.built(all_out), since, tree, log, f"lean-records: {who}")
                 log(f"lean-records: {who}: check.py exit {all_got} in {time.monotonic() - t0:.0f} s on {tree} ({n} files "
                     f"changed there{', audited twice' if redone else ''}), without the kernel replay or the tests: a "
                     f"{FAST_KIND} result, which check and research merge refuse; reports in {all_out}")
@@ -1735,7 +1736,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                         t1, since, (store, redone) = time.monotonic(), time.time(), shared
                         mark(tree, package=p, phase="check", since=since, out=str(mine_out))
                         up, got = True, audit([p], mine_out, True)
-                        put_built(artifacts, LA.built(mine_out), since, log, f"lean-records: {p}")
+                        put_built(artifacts, LA.built(mine_out), since, tree, log, f"lean-records: {p}")
                         log(f"lean-records: {p}: check.py exit {got} in {time.monotonic() - t1:.0f} s on {tree}, audited again "
                             f"with --update{', twice' if redone and not shared[1] else ''}; reports in {mine_out}")
                     if AUDIT.killed(got):
@@ -1991,7 +1992,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             bind = bound(pkg, tree)
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox, at=bind)
             if storing:                                 # before `lean` reads the file itself, whose code then runs
-                put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, log, f"lean-try: {pkg}")
+                put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, tree, log, f"lean-try: {pkg}")
 
             def ask(args: list[str]) -> tuple[int, str, float, int]:
                 argv = [lake, *args]
@@ -2150,7 +2151,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                 bind = bound(pkg, tree)
                 rc, text = build(pkg, tree, lake, mods, sandbox, at=bind)
                 if storing:
-                    put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, log, f"lean-build: {pkg}")
+                    put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, tree, log, f"lean-build: {pkg}")
                 errs = first_errors(text, pkg, have)
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     errs = {f: e for f, e in errs.items() if not CLASH.search(e)}

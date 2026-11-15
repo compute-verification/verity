@@ -1088,6 +1088,35 @@ def test_a_build_whose_sources_run_code_while_they_compile_indexes_nothing(tmp_p
     assert LA.runs_code(pkg) == "dep/lakefile.lean runs code whenever Lake loads the package"
 
 
+def test_a_staged_package_takes_its_path_dependency_outside_its_parent_and_refuses_one_outside_the_staged_tree(tmp_path):
+    """`lean_audit` builds in a scratch tree it made and `lean_changed` in its slot, both outside the checkout, so
+    `check.home` took a staged package's parent directory for its tree: the certifier's in-tree path dependency
+    (`../../../../../commitments/identity`) lay outside it, and `put` raised `OutsideTree` and ended the audit. Given the
+    tree its caller staged, `put` takes that dependency, and still stores nothing of a build whose path dependency
+    resolves out of that tree."""
+    staged = tmp_path / "scratch"
+    pkg = _package(staged / "protocols" / "certifier")
+    (dep := staged / "commitments" / "identity" / "D").mkdir(parents=True)
+    (dep / "X.lean").write_text("def x := 1\n")
+    (dep.parent / "lakefile.toml").write_text('name = "core_identity"\n\n[[lean_lib]]\nname = "D"\n')
+
+    def requires(where: str) -> None:
+        (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": [
+            {"type": "path", "name": "core_identity", "dir": where}]}))
+
+    requires("../../../commitments/identity")
+    assert f"outside {pkg.resolve().parent}" in (LA.runs_code(pkg) or ""), "unstaged, its home is its parent directory"
+    assert LA.runs_code(pkg, staged) is None
+    said = []
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED}, log=said.append, staged=staged) == 3, said
+    shutil.copytree(dep.parent, tmp_path / "outside")
+    requires("../../../../outside")
+    why = LA.runs_code(pkg, staged)
+    assert why and "'core_identity'" in why and f"outside {staged.resolve()}" in why, why
+    assert LA.LakeArtifacts(tmp_path / "store-2").put({pkg: SANDBOXED}, log=said.append, staged=staged) == 0
+    assert why in said[-1], said
+
+
 def test_a_build_that_compiled_nothing_hashes_nothing(tmp_path, monkeypatch):
     """Every build puts now, and most compile a handful of modules: only those and what they load are read."""
     pkg = _package(tmp_path)

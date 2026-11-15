@@ -4811,10 +4811,18 @@ class OutsideTree(Exception):
     take as a policy's error and go on without."""
 
 
-def home(pkg: Path) -> Path:
-    """Where the packages a build of ``pkg`` writes must lie, resolved: `TREE` when ``pkg`` is in it, named by its path there
-    or its resolved one, and then ``pkg`` itself must resolve inside it (`OutsideTree`: a directory the tree holds as a
-    link out of it); else the directory holding ``pkg`` (a control's fixture, a test's package), which no tree chose."""
+def home(pkg: Path, staged: Path | None = None) -> Path:
+    """Where the packages a build of ``pkg`` writes must lie, resolved: ``staged``, the copy of a tree a caller made and
+    built ``pkg`` in (`lean_audit`'s scratch tree, `lean_changed`'s slot), or else `TREE` when ``pkg`` is in it, named by
+    its path there or its resolved one; and then ``pkg`` itself must resolve inside it (`OutsideTree`: a directory the tree
+    holds as a link out of it). Else the directory holding ``pkg`` (a control's fixture, a test's package), which no tree
+    chose."""
+    if staged is not None:
+        tree = staged.resolve()
+        if not pkg.resolve().is_relative_to(tree):
+            raise OutsideTree(f"{pkg} resolves to {pkg.resolve()}, outside the tree {tree} it was built in, so its build "
+                              f"would write there: a package of the tree must be a directory in it")
+        return tree
     tree, p = TREE.resolve(), Path(os.path.abspath(pkg))
     if p.is_relative_to(os.path.abspath(TREE)) or p.is_relative_to(tree):
         if not pkg.resolve().is_relative_to(tree):
@@ -4824,13 +4832,14 @@ def home(pkg: Path) -> Path:
     return pkg.resolve().parent
 
 
-def path_deps(pkg: Path) -> list[Path]:
-    """The packages ``pkg`` requires by path (its manifest lists the inherited ones too), each inside ``pkg``'s `home`:
-    its build writes their `.lake`, so a manifest entry that resolves outside is refused (`OutsideTree`)."""
+def path_deps(pkg: Path, staged: Path | None = None) -> list[Path]:
+    """The packages ``pkg`` requires by path (its manifest lists the inherited ones too), each inside ``pkg``'s `home`
+    (``staged``: the tree a caller copied and built it in): its build writes their `.lake`, so a manifest entry that
+    resolves outside is refused (`OutsideTree`)."""
     manifest = pkg / "lake-manifest.json"
     if not manifest.exists():
         return []
-    root, deps = home(pkg), []
+    root, deps = home(pkg, staged), []
     for d in json.loads(manifest.read_text()).get("packages", []):
         if d.get("type") == "path":
             if not (dep := (pkg / d["dir"]).resolve()).is_relative_to(root):
