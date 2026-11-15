@@ -394,7 +394,7 @@ def SparseMlaHeadEnd(B, S, l, o):
 LIVE = "live"
 BIT = Value(1)
 LIVE_WORD = Array(16, BIT)
-_LIVE_CONF = ("model-untested: {0}'s (its conformance); the mask is protocol-defined, each output word {1}(live, word, +0) "
+_LIVE_CONF = ("model-untested: {0}'s (its conformance); the mask is protocol-defined, each output word {1}(live[0], word, +0) "
               "after it")
 
 
@@ -440,8 +440,9 @@ def _head_keys_live_type(S, bf16=BF16):
 def SparseMlaHeadKeysWireLive(B, S, kv, live):
     """A decode step's writer of column block C of a key block's rows switched by its step's bit, bit 0 of ``live``, the last
     parameter (`LIVE_WORD`): one Call of `SparseMlaHeadKeysWire_v1` at the same statics, then each word selected by that bit
-    (`SelectBf16_v1(live[0], word, +0)`): the rows where it is 1 and zeros where it is 0.  In a chain cut at P it is the one unit of a key block
-    that reads the cache; the scores and values units read its output row, so past the stop they read zero keys."""
+    (`SelectBf16_v1(live[0], word, +0)`): the rows where it is 1 and zeros where it is 0.  In a chain cut at P it is the one
+    unit of a key block that reads the cache; the scores and values units read its output row, so past the stop they read
+    zero keys."""
     from verity.circuits.ops.scalar import SelectBf16
 
     r = B.call(bind(SparseMlaHeadKeysWire, NVIS=S.NVIS, W=S.W, C=S.C), kv)
