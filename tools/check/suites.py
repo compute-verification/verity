@@ -493,7 +493,7 @@ def metadata() -> list[str]:
 
 
 def discover() -> list[Suite]:
-    suites, dirs = [], LAYOUT.member_dirs(_pyproject)
+    suites, dirs = [], LAYOUT.member_dirs(lambda d: _pyproject(d) if (ROOT / d / "pyproject.toml").is_file() else {})
     for f in metadata()[:-1]:
         path = str(Path(f).parent)
         data = _pyproject(path)

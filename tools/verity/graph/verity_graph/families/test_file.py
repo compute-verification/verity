@@ -871,7 +871,11 @@ class Imports:
 
 def discover(tree: Tree) -> list[Suite]:
     """Every suite, as `suites.discover` finds and names them: each directory whose `pyproject.toml` configures pytest."""
-    out, dirs = [], suite_layout.member_dirs(lambda d: tree.toml(_join("" if d == "." else d, "pyproject.toml")))
+    def pyproject(d: str) -> dict:
+        f = _join("" if d == "." else d, "pyproject.toml")
+        return tree.toml(f) if f in tree.files else {}
+
+    out, dirs = [], suite_layout.member_dirs(pyproject)
     for f in tree.sorted:
         if f != "pyproject.toml" and not f.endswith("/pyproject.toml"):
             continue
