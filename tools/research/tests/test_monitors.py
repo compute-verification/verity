@@ -1800,8 +1800,8 @@ def test_a_check_is_cancelled_for_no_step_while_policy_toml_is_unread_and_the_po
     assert [g.text for g in M.failed_checks(M.Ctx(now=T0 + 60, memo=memo, run=answer, act=True))] == [f.text] and reads == []
 
 
-CREDIT = "tests/protocols/test_credit_gate.py::test_the_drawn_set_from_a_fixed_coin_is_cores"
-LIVE, EXPIRED = "2026-10-04T00:00:00Z", "2026-10-03T20:00:00Z"      # T0 is 20:40Z on 3 Oct
+CREDIT = "tests/protocols/test_credit_gate.py::test_a_window_out_of_order_is_refused"
+LIVE, EXPIRED = iso(T0 + 3 * 3600)[:19] + "Z", iso(T0 - 2400)[:19] + "Z"
 CANDIDATE = ["Queue: #10001 vllm: split the adapter", "Queue: #9998 infra: a monitor", "Queue: #9990 lean: a lemma"]
 TRAIN = ["Merge #1466 (ea2f79691)"]
 
@@ -1845,9 +1845,8 @@ def waited_on(rows: list[dict], calls: list, policy: str | None, reads: list | N
 @pytest.mark.parametrize("policy", [credit_policy(LIVE), credit_policy(None), None], ids=["allowed", "unallowed", "unread"])
 @pytest.mark.parametrize("beyond", [False, True], ids=["test", "beyond"])
 def test_a_check_of_a_verified_queue_candidate_is_never_cancelled_and_the_post_says_why(monkeypatch, records, policy, beyond):
-    """r20261115-185311-0984: the monitor cancelled a part of #10001's candidate for verity-vllm's allowed credit-gate tests while
-    a run waited for its slot; had the part not finished its steps, the queue would have lost a passing candidate's evidence.
-    The loop judges its own parts as each step ends (`vqueue_slim`), under the allowances at the candidate's base, which the
+    """Cancelling a candidate's part for verity-vllm's allowed credit-gate tests while a run waits for its slot loses a passing
+    candidate's evidence, unless the part had already finished its steps.  The loop judges its own parts as each step ends (`vqueue_slim`), under the allowances at the candidate's base, which the
     monitor doesn't read, and a red its base shares still lands the candidate: so a check of a candidate (its commit's tip a
     `Queue: #N` merge, under the queue's records commit or not) is never cancelled, for an allowed red or a real one, and with
     no policy read at all; the post says why, once."""
