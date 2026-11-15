@@ -5722,7 +5722,7 @@
   "Pous.SecurityProofs.ObligationWide320": {
    "type_hash": "13eba7d1271f1b1a203a29a5a705cec12bad77b8cacff6abe06439152470f339",
    "missing": "nontrivial",
-   "why": "its nontrivial lemma, Pous.SecurityProofs.ObligationWide320_nontrivial, stays listed but is a closed statement (¬ pr (fun _ => True) ≤ 2⁻¹ ^ 20) that states nothing headed by Pous.Guarantees.RoundsBound at the term the guarantee fixes, RoundsBound p ε₀ 320 (2⁻¹ ^ 20), so it shows no instance the guarantee speaks of; a nontrivial lemma that builds one, tying RoundsBound at 320 rounds and 2⁻²⁰ through P2RingRoundSecureWide and the responder to the probability it negates, is owed by @memory-accounting under MEM-354 by Fri 20 Nov",
+   "why": "the closed nontrivial lemma stays and states no RoundsBound p ε₀ 320 (2⁻¹ ^ 20); a lemma at that instance needs P2RingRoundSecureWide p ε₀ D Q L proved at one, P2's open round-security assumption, so owed under MEM-354 by Fri 20 Nov (@memory-accounting): the guarantee restated at the registered point with RoundsBound proved inside, then its nontrivial lemma",
    "unfolded_hash": "7dcea540da02da5e0afc1f05a0ae7f7395c6c8bc3bb698ecb13482417041d948"
   }
  },
