@@ -16,7 +16,8 @@ uv run verity bench inference_only --stated-only --served RUN
 `RUN` is a served run's directory, or its `out/`, on your disk; nothing else is read, no store, host or key. The
 command runs the policy's record check on the run's files. Its first lines say that the number is a measurement and not
 an audit, name the record read, and say in one line which coins and parameters the record states PoUW's piece was made
-with (its `coin_source`, where its sample's coins came from, its `scheme`), or that the record does not say. Then comes the run's
+with: the challenger's live session its coins came from (`coins.check.session`, which the piece writes only for live
+coins) and its parameter set (`scheme`), or that the record names none. Then comes the run's
 number, which is the command's number and the JSON's `value`, with its own mark (`measured`, or `partial` under the
 tie), with the run it read (the record's own `run`, else the directory's name), the PoUW verdict it found, the share
 of the blocks' work that no PoUW verdict of record credits, and why the number is 1 where it is: the check refused the

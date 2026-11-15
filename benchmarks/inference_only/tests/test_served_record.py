@@ -261,18 +261,19 @@ def test_a_record_that_states_no_run_is_named_by_its_directory(case, stand_in, t
 
 def test_the_first_lines_say_which_coins_and_parameters_the_record_states(case, stand_in, tmp_path, capsys) -> None:
     """One line says which coins and parameters PoUW's piece was made with where the record states them, its accept
-    of record's piece or a development row's, and says the record does not where it doesn't."""
-    piece = {"coin_source": "challenger", "coins": {"draw": {"from": "challenger"}}, "scheme": "development"}
-    said = ("Made with, as the record states it: PoUW's coins from 'challenger', its sample's from 'challenger'; its "
+    of record's piece or a development row's: the challenger's live session and the parameter set, or that the record
+    names none."""
+    piece = {"coins": {"check": {"session": "s-made", "reason": None}}, "scheme": "development"}
+    said = ("Made with, as the record states it: PoUW's coins from the challenger's live session 's-made'; its "
             "parameters 'development'.")
     assert R.made_with({"protocols": {"work": {"piece": piece}}}) == said
     assert R.made_with({"protocols": {"work": {"development": piece}}}) == said
-    assert R.made_with({"protocols": {"work": {"piece": {"coin_source": "in-process"}}}}) == (
-        "Made with, as the record states it: PoUW's coins from 'in-process'; the record does not say which parameters "
-        "PoUW's piece was made with.")
+    assert R.made_with({"protocols": {"work": {"piece": {"coins": {}, "scheme": "development"}}}}) == (
+        "Made with, as the record states it: the record names no live challenger session for PoUW's coins; its "
+        "parameters 'development'.")
     assert R.made_with({}) == R.made_with({"protocols": {"work": "missing"}}) == (
-        "Made with, as the record states it: the record does not say which coins or parameters PoUW's piece was made "
-        "with.")
+        "Made with, as the record states it: the record names no live challenger session for PoUW's coins; the record "
+        "names no parameters for PoUW's piece.")
     args = made(case, tmp_path)
     verdicts = tmp_path / "out" / "record" / "verdicts.json"
     doc = json.loads(verdicts.read_text())

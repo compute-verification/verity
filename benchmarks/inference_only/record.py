@@ -124,22 +124,19 @@ def _class_of(count: Path) -> str:
 
 
 def made_with(verdicts: Mapping[str, Any]) -> str:
-    """One line: the coins and the parameters PoUW's piece says it was made with (its `coin_source`, where its sample's
-    coins came from, `coins.draw.from`, and its `scheme`), each as the record states it, or that the record does not
-    say."""
+    """One line: the coins and the parameters PoUW's piece says it was made with, as the record states them: the
+    challenger's live session its coins came from (`coins.check.session`, which the piece writes only for live coins),
+    and its parameter set (`scheme`); or that the record names none."""
     row = (verdicts.get("protocols") or {}).get("work")
     piece = (row.get("piece") or row.get("development")) if isinstance(row, dict) else None
     piece = piece if isinstance(piece, dict) else {}
-    source, scheme = piece.get("coin_source"), piece.get("scheme")
-    sample = piece["coins"].get("draw") if isinstance(piece.get("coins"), dict) else None
-    sample = sample.get("from") if isinstance(sample, dict) else None
-    if not source and not scheme:
-        return ("Made with, as the record states it: the record does not say which coins or parameters PoUW's piece "
-                "was made with.")
-    coins = (f"PoUW's coins from {source!r}" + (f", its sample's from {sample!r}" if sample else "") if source else
-             "the record does not say which coins PoUW's piece was made with")
-    params = (f"its parameters {scheme!r}" if scheme else
-              "the record does not say which parameters PoUW's piece was made with")
+    live = piece["coins"].get("check") if isinstance(piece.get("coins"), dict) else None
+    session = live.get("session") if isinstance(live, dict) else None
+    scheme = piece.get("scheme")
+    coins = (f"PoUW's coins from the challenger's live session {session!r}" if isinstance(session, str) and session else
+             "the record names no live challenger session for PoUW's coins")
+    params = (f"its parameters {scheme!r}" if isinstance(scheme, str) and scheme else
+              "the record names no parameters for PoUW's piece")
     return f"Made with, as the record states it: {coins}; {params}."
 
 
