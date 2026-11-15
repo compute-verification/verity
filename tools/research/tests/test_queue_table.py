@@ -269,14 +269,14 @@ def test_the_slots_row_says_which_free_slots_a_run_sent_with_on_auto_can_take(mo
     assert row["now"] == text
     assert "the one `research run --on auto` places a run in (`auto.SPILL_POOL`), on every CPU node read" in row["how"]
     groups = [
-        {"group": "check", "pools": ["check"], "nodes": 2, "slots": 4, "busy": 3, "blocked": 0, "waiting": 3, "free": 1,
-         "free_no_line": 1, "longest": {"node": "vy-nebius-cpu-7", "waiting": 3}, "unread": []},
-        {"group": "executor", "pools": ["executor"], "nodes": 2, "slots": 6, "busy": 1, "blocked": 0, "waiting": 3, "free": 5,
-         "free_no_line": 2, "longest": {"node": "vy-nebius-cpu-1", "waiting": 3}, "unread": []},
-        {"group": "shared", "pools": ["research"], "nodes": 3, "slots": 22, "busy": 17, "blocked": 1, "waiting": 6, "free": 4,
-         "free_no_line": 1, "longest": {"node": "vy-nebius-cpu-7", "waiting": 5}, "unread": []},
-        {"group": "own", "pools": ["lean-train"], "nodes": 1, "slots": 3, "busy": 0, "blocked": 1, "waiting": 0, "free": 2,
-         "free_no_line": 2, "longest": None, "unread": []}]
+        {"group": "check", "pools": ["check"], "nodes": 2, "slots": 4, "busy": 3, "blocked": 0, "waiting": 3, "distinct": 3,
+         "free": 1, "free_no_line": 1, "longest": {"node": "vy-nebius-cpu-7", "waiting": 3}, "unread": []},
+        {"group": "executor", "pools": ["executor"], "nodes": 2, "slots": 6, "busy": 1, "blocked": 0, "waiting": 3, "distinct": 3,
+         "free": 5, "free_no_line": 2, "longest": {"node": "vy-nebius-cpu-1", "waiting": 3}, "unread": []},
+        {"group": "shared", "pools": ["research"], "nodes": 3, "slots": 22, "busy": 17, "blocked": 1, "waiting": 6, "distinct": 6,
+         "free": 4, "free_no_line": 1, "longest": {"node": "vy-nebius-cpu-7", "waiting": 5}, "unread": []},
+        {"group": "own", "pools": ["lean-train"], "nodes": 1, "slots": 3, "busy": 0, "blocked": 1, "waiting": 0, "distinct": 0,
+         "free": 2, "free_no_line": 2, "longest": None, "unread": []}]
     assert qt.slot_groups(d) == groups
 
     # the command's own output: the row as printed, and as JSON beside the nodes' slots files, whose fields are as they were
@@ -715,6 +715,38 @@ def test_a_node_says_why_a_slots_file_gave_no_answer(tmp_path):
     assert asked == [(["python3", "/src/t/slot.py", "--status", "--json"], "/locks/research/slots", 30)]
     assert read(types.SimpleNamespace(run=slow, TimeoutExpired=subprocess.TimeoutExpired)) == (None, "no answer in 30 s")
     assert read(answers("usage: slot.py --status")) == (None, "JSONDecodeError('Expecting value: line 1 column 1 (char 0)')")
+
+
+def test_a_checks_twins_in_line_on_several_machines_count_as_one_shard_waiting(tmp_path):
+    """A check's shard waits in the line of each machine it twins on (`slot.py --twin PAIR[@HOME]`), and the first slot free
+    runs it: the runs in line count every ticket, `distinct` the shards they are."""
+    keys = node_function("line_keys", tmp_path)
+    assert keys([{"twin": "20261115T222031Z-062e", "run": "r1"}, {"twin": "20261115T222031Z-062e@vy-nebius-cpu-1", "run": "r2"},
+                 {"run": "r3"}, {"pid": 7}]) == ["20261115T222031Z-062e", "7", "r3"]
+    d = slots_doc()
+    d["nodes"]["vy-nebius-cpu-1"]["slots"][0].update(waiting=2, shards=["P1", "P2"])
+    d["nodes"]["vy-nebius-cpu-7"]["slots"][0].update(shards=["P1", "P2", "r9"])
+    assert qt.slot_groups(d)[0]["distinct"] == 3
+    assert {r["name"]: r for r in qt.table(d)}[SLOTS_ROW]["now"].startswith(
+        "check slots: 3 of 4 busy, 0 free but blocked, 5 runs in line (3 distinct, a check's twins counted once), 3 of them on cpu-7")
+
+
+def test_the_shards_that_ended_say_by_part_what_their_scope_used():
+    """What a shard's scope used outlives the scope in its slot.json (`used`), so the hour and the 24 hours read it by part."""
+    d = doc()
+    row = {r["name"]: r for r in qt.table(d)}["Reserved against used, a check's shard"]
+    assert row["hour"] == row["day"] == ("not measured: none of the 1 that ended kept what its scope used (`used` in its "
+                                         "slot.json)")
+    shard = d["nodes"]["vy-nebius-cpu-1"]["runs"][0]
+    shard["used"] = {"cores_max": 34.0, "anon_max_gib": 110.1, "peak_gib": 129.9, "file_at_current_max_gib": 17.2}
+    d["nodes"]["vy-nebius-cpu-1"]["runs"].append(dict(shard, id="r20261110-011000-ffff", shard="2/3", end=shard["took"] + 600,
+                                                      used={"cores_max": 25.0, "anon_max_gib": 51.0, "peak_gib": 68.6}))
+    row = {r["name"]: r for r in qt.table(d)}["Reserved against used, a check's shard"]
+    one = "1/1 (n=1): cores at the busiest minute p50 34, most 34; anon at its highest p50 110, most 110 GiB; memory.peak p50 130, most 130 GiB"
+    assert row["hour"] == one
+    assert row["day"] == ("1/1 (n=1): cores at the busiest minute p50 34, most 34; anon at its highest p50 110, most 110 GiB; "
+                          "memory.peak p50 130, most 130 GiB; 2/3 (n=1): cores at the busiest minute p50 25, most 25; anon at its "
+                          "highest p50 51, most 51 GiB; memory.peak p50 69, most 69 GiB")
 
 
 def test_a_node_says_why_an_audit_log_that_is_there_was_not_read(tmp_path):
