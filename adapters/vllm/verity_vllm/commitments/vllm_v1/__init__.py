@@ -579,7 +579,7 @@ def id_leaf_layout(canonical_id: str, dtype: str, shape: Sequence[int], nbytes: 
 
 Domain = SemanticDomain | StepDomain | StreamDomain | ThreadDomain
 
-DOMAIN_DIGEST_TAG = "verity/vllm-v1/domain/v1"
+DOMAIN_DIGEST_TAG = domains.VLLM_V1_DOMAIN
 _DOMAIN_KIND = {SemanticDomain: "semantic", StepDomain: "step", StreamDomain: "stream", ThreadDomain: "thread"}
 
 

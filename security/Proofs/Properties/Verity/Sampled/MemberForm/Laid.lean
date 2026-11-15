@@ -46,8 +46,8 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 of units and no unit is in two members' ranges: the members are in the order of their first units, each at the range
 from its first unit, inside the population, and their counts sum to it (`ExecutionPhaseOn.total`), so each member's proof
 blocks sit after the earlier members' (`emb_of_tiles`). -/
-theorem ExecutionPhaseOn.laid {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
-    (h : ExecutionPhaseOn V θ F W) (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
+theorem ExecutionPhaseOn.laid {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
+    (h : ExecutionPhaseOn V T θ F W) (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
     {ms : Array _root_.Spot.OneStageZk.Member} (hpa : ParamsAt θ p) (hms : p.members = some ms)
     (hone : ∀ vm ∈ ms, ∃ lo hi, vm.units = #[(lo, hi)]) (hapart : Apart ms.toList) : W.Laid := by
   obtain ⟨p', ms', vms, hp', hms', hperm, hsorted, hall, -⟩ := h.members

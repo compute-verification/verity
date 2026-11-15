@@ -130,8 +130,9 @@ theorem ExecutionPhase.Laid.extend {W : ExecutionPhase} (h : W.Laid) (S : Wideni
 
 /-- **The deployment over windows, before SPOT's names**: the other subprotocols' vocabulary over the deployed device
 (`base`), whose signer is the deployed device's (`deployment`, `signer`), which reads the committed files as v2 reads
-the members' registered files (`read`, `MemberForm.membersRead`: v2 reads each member's files on the blobs sent,
-which are the registered files where `FilesSent` holds), which places each gate at its files' place (`place`), and
+the members' registered files at the pinned table files the deployment registers (`read`, `MemberForm.membersRead`,
+`tables`, `pinned`: v2 reads each member's files on the blobs sent, which are the registered files where `FilesSent`
+holds), which places each gate at its files' place (`place`), and
 whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`); and the window the
 deployment runs at each parameters (`window`), whose bound's parameters `θ` fixes. A deployed instance fills
 `signer`, `read` and `place` at its construction; no theorem takes any of them as a hypothesis of its own. -/
@@ -139,7 +140,9 @@ structure ExecutionPhaseInstance (d : Accounting.Device ι) (α : Type) [Fintype
   base : Vocab d α
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
-  read : ∀ θ F, base.read θ F = MemberForm.membersRead (base.registered θ) θ
+  /-- Every pinned table file the deployment can register at one of its sessions. -/
+  tables : Array ByteArray
+  read : ∀ θ F, base.read θ F = MemberForm.membersRead (PinnedTables.ofFiles tables) (base.registered θ) θ
   place : ∀ θ F c g, base.place θ F c g = placeOfFiles (base.read θ F) g
   costs : CostsRead base (Device.dev (deployment.setupOf base.families))
   window : ByteArray → Option ExecutionPhase
@@ -148,18 +151,21 @@ namespace ExecutionPhaseInstance
 
 variable (I : ExecutionPhaseInstance d α)
 
+/-- The deployment's pinned table lookup, derived from the table bytes it registers. -/
+def pinned : PinnedTables := .ofFiles I.tables
+
 /-- **The committed files the verifier sets the window `W` up on**, at the per-member form
 (`MemberForm.MembersSetUp`). -/
-def SetsUp (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) : Prop := MemberForm.MembersSetUp I.base θ F W
+def SetsUp (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) : Prop := MemberForm.MembersSetUp I.base I.pinned θ F W
 
 /-- A window the verifier sets up reads `MAX_COINS` frames' bytes. -/
 theorem lb (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) (h : I.SetsUp θ F W) :
     W.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64 :=
-  (show MemberForm.MembersSetUp I.base θ F W from h).lb
+  (show MemberForm.MembersSetUp I.base I.pinned θ F W from h).lb
 
 /-- A window the verifier sets up has members of its one table with hm96-sha512 rows. -/
 theorem members (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) (h : I.SetsUp θ F W) : MembersAt W W.table :=
-  (show MemberForm.MembersSetUp I.base θ F W from h).toExecutionPhaseOn.membersAt
+  (show MemberForm.MembersSetUp I.base I.pinned θ F W from h).toExecutionPhaseOn.membersAt
 
 /-- **The deployed device's history at each play** (`Device.dev`), at the base's layouts. -/
 noncomputable abbrev dev : Exchange → Properties.Challenger.History :=
@@ -171,7 +177,7 @@ noncomputable def coinsReadOf : Subprotocol → Sent → Option (List Release)
 
 noncomputable def finderOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Verity.Game.Strategy (I.base.game θ F c) → Claims.Finder
-  | .sampled => executionPhaseReadFinder I.base I.dev
+  | .sampled => executionPhaseReadFinder I.base I.pinned I.dev
   | a => I.base.finder a
 
 noncomputable def forgerOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
@@ -516,7 +522,7 @@ theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
 (`ExecutionPhaseConstructions.withBinding`): the subprotocol's per-finder premises are `error`'s condition at this strategy
 (`strictSpecs`, `rootsSpecs`, `premisesOf`), and the published δ is the window's, which doesn't read the widening
 (`ExecutionPhase.delta_extend`). -/
-theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = executionPhaseReadFinder I.base I.dev θ F c σ)
+theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = executionPhaseReadFinder I.base I.pinned I.dev θ F c σ)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hC : I.ClaimReads K) :
     ExecutionPhaseDeployed (I.vocab K) (I.liftOf K K) I.executionPhases where
   finder θ F c σ := (hKr θ F c σ).symm
@@ -537,7 +543,7 @@ members' files at their registered files (`TablesSent`, `FilesSent`), are files 
 on. -/
 def ExecutionPhaseAt (k : Verity.Registration.Composite) : Prop :=
   ∀ θ F W, I.window θ = some W → (∃ p, ParamsAt θ p) →
-    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent ∧
+    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent I.pinned o.sent ∧
       FilesSent I.base o) → I.SetsUp θ F W
 
 /-- **Where the deployment runs a window the verifier doesn't set up on the committed files, an accepted play is a
@@ -548,8 +554,8 @@ theorem uncovered_le (k : Verity.Registration.Composite) (hWa : I.ExecutionPhase
     {F : Array ByteArray} {W : ExecutionPhase} (hA : I.window θ = some W) (hP : ∃ p, ParamsAt θ p)
     (hS : I.executionPhases θ F = none) (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)) :
     Verity.Game.prob (fun o => I.base.Verdict k .sampled o) (I.base.game θ F c) σ ≤
-      ENNReal.ofReal ((executionPhaseReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg) :=
-  verdict_le_files I.base k I.dev θ F c σ fun t hv ht hf => by
+      ENNReal.ofReal ((executionPhaseReadFinder I.base I.pinned I.dev θ F c σ).Pr Verity.sha512Msg) :=
+  verdict_le_files I.base I.pinned k I.dev θ F c σ fun t hv ht hf => by
     have hs := hWa θ F W hA hP ⟨c, _, Verity.Game.Tape.reaches_out _ σ t, hv, ht, hf⟩
     rw [I.executionPhases_of hA hs] at hS
     cases hS
@@ -565,7 +571,7 @@ theorem vocab_verdict_le (k : Verity.Registration.Composite) {θ : ByteArray} {F
 /-- The deployed vocabulary's sampled finder is the window's read finder, and its bound `sampledBound`. -/
 theorem vocab_finder_le {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (h : (I.vocab K).FinderCR .sampled θ F c σ) :
-    (executionPhaseReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤
+    (executionPhaseReadFinder I.base I.pinned I.dev θ F c σ).Pr Verity.sha512Msg ≤
       I.sampledBound θ ((I.vocab K).cost θ F c σ) := by
   have h' := (I.vocab K).finderPr_le_crBound h
   exact h'
@@ -593,14 +599,14 @@ theorem covers (k : Verity.Registration.Composite) (hWa : I.ExecutionPhaseAt k) 
 /-- **The deployment's window is the parameters' members on the registered files**, at parameters naming the
 one-stage form: a statement of `I.window θ` and the registered files alone. -/
 def ExecutionPhaseRegistered : Prop :=
-  ∀ θ W, I.window θ = some W → (∃ p, ParamsAt θ p) → MemberForm.ExecutionPhaseOn I.base θ (I.base.registered θ) W
+  ∀ θ W, I.window θ = some W → (∃ p, ParamsAt θ p) → MemberForm.ExecutionPhaseOn I.base I.pinned θ (I.base.registered θ) W
 
 /-- **At an accepted play, the deployment's window is laid out in order and its members' files pass**: wherever the
 deployment's window is the parameters' members on committed files on which some play's sampled verdict accepts,
 with blobs sent holding v2's tables and the members' files at their registered files. -/
 def ExecutionPhasePasses (k : Verity.Registration.Composite) : Prop :=
-  ∀ θ F W, I.window θ = some W → MemberForm.ExecutionPhaseOn I.base θ F W →
-    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent ∧
+  ∀ θ F W, I.window θ = some W → MemberForm.ExecutionPhaseOn I.base I.pinned θ F W →
+    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent I.pinned o.sent ∧
       FilesSent I.base o) →
     W.Laid ∧ ∀ m ∈ W.ms, MemberForm.FilesPass m
 
@@ -611,10 +617,10 @@ def ExecutionPhasePasses (k : Verity.Registration.Composite) : Prop :=
 theorem executionPhaseAt_members (k : Verity.Registration.Composite) (hW : I.ExecutionPhaseRegistered)
     (hpass : I.ExecutionPhasePasses k) : I.ExecutionPhaseAt k := by
   intro θ F W hw hP hplay
-  have hon : MemberForm.ExecutionPhaseOn I.base θ F W :=
+  have hon : MemberForm.ExecutionPhaseOn I.base I.pinned θ F W :=
     (hW θ W hw hP).of_read ((I.read θ _).trans (I.read θ F).symm)
   obtain ⟨hlaid, hpassed⟩ := hpass θ F W hw hon hplay
-  exact (⟨hon, hlaid, hpassed⟩ : MemberForm.MembersSetUp I.base θ F W)
+  exact (⟨hon, hlaid, hpassed⟩ : MemberForm.MembersSetUp I.base I.pinned θ F W)
 
 /-! ## The subprotocol at the deployment -/
 
@@ -628,7 +634,7 @@ noncomputable def constructionsAt (K₀ : ExecutionPhaseConstructions I.base) (k
     (filesDec : Claims.Msg → Array ByteArray)
     (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg) : ExecutionPhaseConstructions I.base :=
-  (K₀.withBinding I.dev k).withProject I.base (sessionReadings ExecutionPhase.table ev record₀ recordDigest)
+  (K₀.withBinding I.pinned I.dev k).withProject I.base (sessionReadings ExecutionPhase.table ev record₀ recordDigest)
     (fun W _ _ _ _ _ => sessionDecoders reg W.table filesDec)
     (executionPhaseSampleMaps fieldEnc I.base (sessionReadings ExecutionPhase.table ev record₀ recordDigest)
       (fun θ _ _ _ => labelAt θ) (afterAt I.base k) fun W => W.srcCoinsAt _root_.Spot.Challenger.MAX_COINS)
@@ -644,7 +650,7 @@ def ExecutionPhaseReads (k : Verity.Registration.Composite) (ev : ℕ → Exchan
   ∀ (c : ByteArray) (σ : Strategy (I.base.game θ F c)) (z : CoinTape (I.base.game θ F c) σ),
     I.base.Verdict k .sampled (CoinTape.run (I.base.game θ F c) σ z) →
     Binding.Logged Binding.readsV2 (CoinTape.run (I.base.game θ F c) σ z) →
-    TablesSent (CoinTape.run (I.base.game θ F c) σ z).sent →
+    TablesSent I.pinned (CoinTape.run (I.base.game θ F c) σ z).sent →
     FilesSent I.base (CoinTape.run (I.base.game θ F c) σ z) →
     SampledDigest k (CoinTape.run (I.base.game θ F c) σ z).sent (afterAt I.base k θ F c σ) →
     ExecutionPhaseRead W W.table ev filesDec (labelAt θ) (afterAt I.base k θ F c σ) _root_.Spot.Challenger.MAX_COINS
@@ -666,7 +672,7 @@ theorem spotSound (K₀ : ExecutionPhaseConstructions I.base) (k : Verity.Regist
     (hWa : I.ExecutionPhaseAt k) (hWR : I.ExecutionPhaseReads k ev filesDec) :
     (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)).SpotSound k :=
   executionPhaseSpotSound_sessions (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)) k
-    (I.liftOf (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) K₀) I.dev reg ExecutionPhase.table ev filesDec
+    (I.liftOf (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) K₀) I.pinned I.dev reg ExecutionPhase.table ev filesDec
     record₀ recordDigest (fun θ _ _ _ => labelAt θ) _root_.Spot.Challenger.MAX_COINS
     (I.deployed (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) (fun _ _ _ _ => rfl)
       (fun _ _ _ _ => rfl) hC)
