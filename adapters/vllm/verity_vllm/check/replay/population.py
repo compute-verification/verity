@@ -316,10 +316,10 @@ NOT_EXECUTED_SCOPE = ("NOT-EXECUTED-BY-RULE is an active-reference implementatio
                       "there is no not-required-because-not-executed category.")
 
 #: the executed prefix of a request, as the C2 population CLASSIFIES it (never as it shrinks by it).
-EXECUTED_PREFIX_RULE = ("a request that served a_r < max_tokens tokens (its served token a_r-1 a declared EOS id of the Program's stop rule) "
-                        "executed exactly n_exec = min(a_r + LAG, max_tokens) request-relative steps; a request served to its max_tokens executed "
-                        "max_tokens (a length stop: no post-EOS row even if the last token is an EOS). RequiredValues(P, Q_module_v1) stays the "
-                        "full-length manifest of record (fixed population across stopping points; digest unchanged): its identities "
+EXECUTED_PREFIX_RULE = ("a request that served a_r < cap tokens (its served token a_r-1 a declared EOS id of the Program's stop rule) "
+                        "executed exactly n_exec = min(a_r + LAG, cap) request-relative steps; a request served to its cap executed cap "
+                        "(a length stop: no post-EOS row even if the cap token is an EOS). RequiredValues(P, Q_module_v1) stays the "
+                        "cap-length manifest of record (fixed population across stopping points; digest unchanged): its identities "
                         "at request-relative steps >= n_exec are the named class not-executed(a_r, LAG) -- counted in query_total, "
                         "absent from the sampling pool, never 'not evaluated' and never silently absent; reached + uncovered + not-executed "
                         "== |Q(P)|. CONDITIONS: (a) a_r is READ from the Match record of record (G6 lengths_by_request / tokens.json) "

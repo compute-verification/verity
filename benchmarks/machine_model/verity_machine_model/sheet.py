@@ -362,9 +362,9 @@ def _doc(text: str) -> list[str]:
 
 
 def cited(s: Sheet) -> str:
-    """How generated text names the sheet's file: as the committed Lean files do, by a path under `benchmarks/pouw/`
-    that the data no longer has. A change of that text changes those Lean files with it."""
-    return f"`benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}`"
+    """How generated text names the sheet's file: as the committed Lean files do. A change of that text changes those
+    Lean files with it."""
+    return f"`benchmarks/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}`"
 
 
 def _simp(head: str, names: list[str]) -> list[str]:
