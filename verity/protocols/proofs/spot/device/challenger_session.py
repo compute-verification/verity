@@ -548,7 +548,7 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
     -> {name: {refused, ...}}, refused only where both the stream (or the Lean's run) and, for the evidence, Python
     refuse for that reason."""
     neg: dict[str, dict] = {}
-    read, after = bytes(coins.read), bytes.fromhex(draw.registration.digest)
+    read, after = bytes(coins.read), bytes.fromhex(draw.docket.digest)
     for name, replay, evidence in (("verifier-coins-claimed-as-challenger", Replay(read), None),
                                    ("verifier-coins-with-evidence", OwnReplay(read), FOREIGN_EVIDENCE)):
         s = stream_of(replay)
@@ -565,10 +565,10 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
         if isinstance(replay, Replay):
             row["python"] = CC.coins_reason(s.key, list(s.main), evidence, window, FAMILY, after, read, lms_verify)
         neg[name] = {"refused": accepted is False and at == SELECT_COINS and row.get("python", "") is not None, **row}
-    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration), "drawn", lambda: len(coins.read))
+    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.docket), "drawn", lambda: len(coins.read))
     fresh = OwnReplay(read)
     neg["verifier-coins-before-the-registration"] = stream_refusal(
-        lambda: stream_of(fresh).select(draw.registration), "unknown", lambda: fresh.at)
+        lambda: stream_of(fresh).select(draw.docket), "unknown", lambda: fresh.at)
     return neg
 
 
