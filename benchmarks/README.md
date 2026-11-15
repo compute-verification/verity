@@ -144,7 +144,8 @@ passes `made_up=True` wherever it is reported, whatever its own files say of its
 last step, and the printed and written forms are the kit's (`harness/README.md`'s "The kit"). These commands follow the
 interface; a command's row is added in the change that makes it follow, and `harness/tests/test_interface.py` then
 holds its README's three headings, its call of `kit.report` with `ran_with` and `accepted`, and each measurement name
-its source gives as a row of its `metrics.toml` with a `goal`:
+its source gives as a row of its `metrics.toml` with a `goal` (rule 6, for a directory the test's `DASHBOARD_NOT_YET`
+doesn't name, each entry saying what it writes that is no row):
 
 | command | directory | owner |
 |---|---|---|
