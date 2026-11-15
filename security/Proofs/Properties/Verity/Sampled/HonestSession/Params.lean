@@ -355,10 +355,11 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
   have hdec : (Core.canonicalJson θ₀ >>= Core.Composition.decodeParams) = .ok
       [({ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ } : Core.Composition.Named)] := by
     rw [hA, hNθ]
-    show Core.Composition.decodeParams θJ = _
     unfold θJ
     generalize hgpj : paramsJ = gpj
     have rC : Flock.canon gpj = .ok (Firewall.printJson gpj) := by rw [← hgpj]; exact hBp
+    -- Rebuild the `Eq` head so the walk's `eq?` is not defeated by `mdata` left on the goal by `unfold`/`generalize`.
+    refine Eq.trans ?g rfl
     fwd_walk [rC] block [Flock.canon] shallow []
   -- The parameters and every field `paramsOfJson` reads. `paramsJ` is canon-tainted only through `partitionObj`, whose
   -- one tainted leaf is the program digest `hexOf programSha`; expose it (unfold the partition builder) and generalize it
