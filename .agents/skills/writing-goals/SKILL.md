@@ -28,7 +28,6 @@ The page is how Daniel sees what is being done, so it moves when the work does:
   and its PR names that issue and the goal: `research queue open --issue KEY` writes a `Goal <id>` line for each live
   goal KEY's labels name, and `open` and `research queue ready` warn, never refusing, of a body naming no live goal so
   and not saying `Issue: none: REASON`. Work that serves none starts by writing its goal, or asking top.
-- **One outcome, one goal.** Before adding one, look for it under another owner's goal, and make yours its subgoal.
 
 `research goals audit` names, and once a day top rings the owner of, a goal past its due, an off-track goal not written
 in 24 hours, and a goal due within 24 hours not written in the 24 before its due. A goal only under `top/parked` is
@@ -45,7 +44,7 @@ left out.
   - a run, which is evidence for the goal that needs its result;
   - a worker started, a brief written, a review fix, a handoff.
 - **A title is a headline.** Daniel reads the page by its titles, and a title he has to open to understand is
-  shorthand. Read yours cold before you save it; top reads every one.
+  shorthand. Read yours cold before you save it.
   1. Short: usually three to six words, never more than about ten. It names the outcome at the level Daniel would
      say it. What the goal tests, counts or accepts goes in the description, which he clicks through to.
   2. No numbers on goals. A goal is named by its title, never "goal 5" or "the eleven", in titles or descriptions.
@@ -69,16 +68,15 @@ left out.
   | GLM-5.3's long DSA rows in provable units | 128k-context attention fits in proof blocks |
   | Remote theorem rests on no open proof | Remote demo's soundness fully proved |
   | The Commit's share of the served step, measured | Commitment overhead measured |
-- **One owner** (`--owner`): the lead of the area the goal mostly builds, who keeps it true. Another area's part of
-  it is that lead's goal, linked; a check the remote demo runs is the demo lead's goal even when proofs writes it in
-  Lean.
+- **One owner** (`--owner`): the lead of the area the goal builds, who keeps it true. A check the remote demo runs is
+  the demo lead's goal even when proofs writes it in Lean.
 - **A due date**, more precise as it nears (`--due YYYY-MM-DD`, the end of that day, or `YYYY-MM-DDTHH:MM-08:00`):
   - more than a week away, a day;
   - inside a week, the day you now expect, moved the day your estimate moves;
   - inside 24 hours, the hour its last step ends (a run's or a check's end), set that day: 6 PM only when that is
     the estimate. `research goals confirm ID` if the hour you gave stands.
-- **A priority**, 1 to 3: anyone may set one (`research goals priority ID 1|2|3|clear`), and the page shows
-  who set it and when. A goal nobody set takes the highest priority of the goals waiting on it.
+- **A priority**, 1 to 3: anyone may set one (`research goals priority ID 1|2|3|clear`). A goal nobody set
+  takes the highest priority of the goals waiting on it.
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
     with neither. The reason is today's: each day it stays off track, rewrite it, or `confirm` it if every word holds.
@@ -95,22 +93,25 @@ left out.
     so it's `remote-demo`.
   - One tag is work inside an area; several mark joint work that can't be done at their interfaces.
   - `proofs` is the proof system; `lean` is Lean's code and build (the module system, the Lean check, toolchain bumps).
-  - The list is at Daniel's level. Finer areas, such as kernels, benchmarks, compute-research, soundness
-    and comms, are real to the leads but below it: their goals take the tag of the area they belong to at his
-    level. A kernel the demo serves is `compute-accounting` or `vllm`, and the demo's cost measurements are
+  - Finer areas (kernels, benchmarks, compute-research, soundness, comms) take the tag of the area they belong to at
+    Daniel's level. A kernel the demo serves is `compute-accounting` or `vllm`, and the demo's cost measurements are
     `remote-demo`.
   - Why a goal matters isn't a tag: it's the goal above it.
 - **Goals and subgoals.** Everything is a goal, and a goal under another is its subgoal: the goal waits on it
-  (`--wait goal:ID`). Don't call a goal a "project", a "piece", a "step" or a "tier", in a title or a description.
+  (`--wait goal:ID`). Don't call a goal a "project", a "piece", a "step" or a "tier".
   - A goal nothing waits on is one of Daniel's own: about a dozen across the plan, each one he would name himself.
     Its description opens with the state that finishes it.
   - A subgoal is a dated outcome you can check: the soundness theorem and the H200 accounting are subgoals of the
-    remote demo. A day's step toward one is not.
-  - **Before adding a goal nothing waits on,** ask whether it's a subgoal of one already in the plan. If nothing
-    holds it only because an umbrella is missing, add the umbrella or ask its owner to. A merge isn't a goal of
-    Daniel's.
-  - The page derives how deep a goal sits from what waits on what, down to three levels. The command's `--tier N`,
-    which keeps its old name, overrides that, and `--no-tier` goes back to the derived one.
+    remote demo.
+  - **A goal several leads build is split:** each part is its builder's subgoal, with its own date and blockers, and
+    what the parts share is a subgoal they wait on. "Core benchmarks run from main on a small model" was one goal of
+    top's with one blockers text for three benchmarks. It waits on the compute, memory and proof benchmarks, each
+    its lead's goal, and those on the interface they share.
+  - **Before adding a goal,** look for it under every owner, and ask whether it's a subgoal of one in the plan. If
+    nothing holds it only because an umbrella is missing, add the umbrella or ask its owner to. A merge isn't a goal
+    of Daniel's.
+  - The page derives how deep a goal sits from what waits on what, down to three levels. The command's `--tier N`
+    overrides that, and `--no-tier` goes back to the derived one.
 
 ## What it waits on
 
