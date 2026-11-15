@@ -133,18 +133,27 @@ theorem ExecutionPhase.Laid.extend {W : ExecutionPhase} (h : W.Laid) (S : Wideni
 the members' registered files at the pinned table files the deployment registers (`read`, `MemberForm.membersRead`,
 `tables`, `pinned`: v2 reads each member's files on the blobs sent, which are the registered files where `FilesSent`
 holds), which places each gate at its files' place (`place`), and
-whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`); and the window the
-deployment runs at each parameters (`window`), whose bound's parameters `θ` fixes. A deployed instance fills
-`signer`, `read` and `place` at its construction; no theorem takes any of them as a hypothesis of its own. -/
+whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`); the pins registered
+for the period (`registeredPins`), wired (`wired`), which are the base's (`pins_eq`), SPOT's live challenger the
+deployment's pin, first (`spot_first`), at the sessions the deployment designates (`sessions_eq`), whose `Q` covers the
+pinned key's lifetime signatures (`signatures`); and the window the deployment runs at each parameters (`window`),
+whose bound's parameters `θ` fixes. A deployed instance fills `signer`, `read` and `place` at its construction; no
+theorem takes any of them as a hypothesis of its own. -/
 structure ExecutionPhaseInstance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
+  registeredPins : AuditorPins
+  wired : registeredPins.Wired
+  pins_eq : base.pins = registeredPins
+  spot_first : registeredPins.keys.head? = some deployment.pin
+  sessions_eq : registeredPins.sessions .challenger = deployment.sessions
+  signatures : ∀ θ, deployment.signatures θ ≤ base.signatures θ
   /-- Every pinned table file the deployment can register at one of its sessions. -/
   tables : Array ByteArray
   read : ∀ θ F, base.read θ F = MemberForm.membersRead (PinnedTables.ofFiles tables) (base.registered θ) θ
   place : ∀ θ F c g, base.place θ F c g = placeOfFiles (base.read θ F) g
-  costs : CostsRead base (Device.dev (deployment.setupOf base.families))
+  costs : CostsRead base (deployment.dev base.families)
   window : ByteArray → Option ExecutionPhase
 
 namespace ExecutionPhaseInstance
@@ -168,8 +177,26 @@ theorem members (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) (h :
   (show MemberForm.MembersSetUp I.base I.pinned θ F W from h).toExecutionPhaseOn.membersAt
 
 /-- **The deployed device's history at each play** (`Device.dev`), at the base's layouts. -/
-noncomputable abbrev dev : Exchange → Properties.Challenger.History :=
-  Device.dev (I.deployment.setupOf I.base.families)
+noncomputable abbrev dev : Exchange → Properties.Challenger.History := I.deployment.dev I.base.families
+
+/-- SPOT's pinned key is the deployment's. -/
+theorem spotKey_eq : I.base.pins.spotKey = I.deployment.pin.key := by
+  simp [AuditorPins.spotKey, I.pins_eq, I.spot_first]
+
+/-- The base's pins designate the deployment's sessions for the challenger. -/
+theorem designated : I.base.pins.sessions .challenger = I.deployment.sessions := by
+  rw [I.pins_eq, I.sessions_eq]
+
+/-- **The deployed device's history at each play signed at most `Q` messages under SPOT's pinned key**, over its
+life (`Device.Deployment.signedBy_le`). -/
+theorem signedBy_le (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (o : Exchange)
+    (ho : Verity.Game.Reaches (I.base.game θ F c) o) :
+    (Properties.Challenger.signedBy (I.dev o) ⟨I.base.pins.spotKey.toArray⟩).length ≤ I.base.signatures θ := by
+  obtain ⟨hθ, -, -⟩ := Binding.play_reaches ho
+  rw [I.spotKey_eq]
+  refine (I.deployment.signedBy_le I.base.families o).trans ?_
+  rw [hθ]
+  exact I.signatures θ
 
 noncomputable def coinsReadOf : Subprotocol → Sent → Option (List Release)
   | .sampled => Verity.Sampled.coinsRead
@@ -180,9 +207,9 @@ noncomputable def finderOf : Subprotocol → (θ : ByteArray) → (F : Array Byt
   | .sampled => executionPhaseReadFinder I.base I.pinned I.dev
   | a => I.base.finder a
 
-noncomputable def forgerOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+noncomputable def forgerOf : Subprotocol → ℕ → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Verity.Game.Strategy (I.base.game θ F c) → Hash.Assumptions.LmsForger
-  | .sampled => Binding.forger I.base I.dev
+  | .sampled => fun _ => Binding.forger I.base I.dev
   | a => I.base.forger a
 
 def callsMulOf (θ : ByteArray) : Subprotocol → ℕ
@@ -331,31 +358,45 @@ theorem finderOf_calls : ∀ a θ F c σ (x : (I.finderOf a θ F c σ).S),
   | .network, θ, F, c, σ, x => I.base.finder_calls .network θ F c σ x
   | .wipe, θ, F, c, σ, x => I.base.finder_calls .wipe θ F c σ x
 
-theorem forgerOf_calls : ∀ a θ F c σ (x : (I.forgerOf a θ F c σ).S),
-    (I.forgerOf a θ F c σ).cost x ≤ I.callsMulOf θ a * I.base.cost θ F c σ + I.callsAddOf θ a
-  | .sampled, θ, F, c, σ, x =>
-    calc (I.forgerOf .sampled θ F c σ).cost x
+theorem forgerOf_pinned : ∀ a i θ F c σ, i ∈ I.base.pins.reads a →
+    (I.forgerOf a i θ F c σ).key = ((I.base.pins.keys[i]?).map (·.key)).getD []
+  | .sampled, i, _, _, _, _, hi => by
+    obtain rfl : i = 0 := List.mem_singleton.1 hi
+    show I.base.pins.spotKey = _
+    unfold AuditorPins.spotKey
+    rw [List.head?_eq_getElem?]
+  | .pouw, i, θ, F, c, σ, hi => I.base.forger_pinned .pouw i θ F c σ hi
+  | .inferenceOnly, i, θ, F, c, σ, hi => I.base.forger_pinned .inferenceOnly i θ F c σ hi
+  | .pous, i, θ, F, c, σ, hi => I.base.forger_pinned .pous i θ F c σ hi
+  | .poub, i, θ, F, c, σ, hi => I.base.forger_pinned .poub i θ F c σ hi
+  | .network, i, θ, F, c, σ, hi => I.base.forger_pinned .network i θ F c σ hi
+  | .wipe, i, θ, F, c, σ, hi => I.base.forger_pinned .wipe i θ F c σ hi
+
+theorem forgerOf_calls : ∀ a i θ F c σ (x : (I.forgerOf a i θ F c σ).S),
+    (I.forgerOf a i θ F c σ).cost x ≤ I.callsMulOf θ a * I.base.cost θ F c σ + I.callsAddOf θ a
+  | .sampled, i, θ, F, c, σ, x =>
+    calc (I.forgerOf .sampled i θ F c σ).cost x
         = I.base.cost θ F c σ + Binding.breakCalls (I.dev (Verity.Game.Tape.out _ σ x))
             (Verity.Game.Tape.out _ σ x).sent := rfl
       _ ≤ I.base.cost θ F c σ + I.base.cost θ F c σ :=
           Nat.add_le_add_left ((Nat.le_add_right _ _).trans (I.costs θ F c σ x)) _
       _ = 2 * I.base.cost θ F c σ + 0 := by omega
-  | .pouw, θ, F, c, σ, x => I.base.forger_calls .pouw θ F c σ x
-  | .inferenceOnly, θ, F, c, σ, x => I.base.forger_calls .inferenceOnly θ F c σ x
-  | .pous, θ, F, c, σ, x => I.base.forger_calls .pous θ F c σ x
-  | .poub, θ, F, c, σ, x => I.base.forger_calls .poub θ F c σ x
-  | .network, θ, F, c, σ, x => I.base.forger_calls .network θ F c σ x
-  | .wipe, θ, F, c, σ, x => I.base.forger_calls .wipe θ F c σ x
+  | .pouw, i, θ, F, c, σ, x => I.base.forger_calls .pouw i θ F c σ x
+  | .inferenceOnly, i, θ, F, c, σ, x => I.base.forger_calls .inferenceOnly i θ F c σ x
+  | .pous, i, θ, F, c, σ, x => I.base.forger_calls .pous i θ F c σ x
+  | .poub, i, θ, F, c, σ, x => I.base.forger_calls .poub i θ F c σ x
+  | .network, i, θ, F, c, σ, x => I.base.forger_calls .network i θ F c σ x
+  | .wipe, i, θ, F, c, σ, x => I.base.forger_calls .wipe i θ F c σ x
 
-theorem forgerOf_signed : ∀ a θ F c σ (x : (I.forgerOf a θ F c σ).S),
-    ((I.forgerOf a θ F c σ).signed x).length ≤ I.base.signatures θ
-  | .sampled, θ, F, c, σ, x => Binding.forger_signed_le I.base I.dev θ F c σ x
-  | .pouw, θ, F, c, σ, x => I.base.forger_signed .pouw θ F c σ x
-  | .inferenceOnly, θ, F, c, σ, x => I.base.forger_signed .inferenceOnly θ F c σ x
-  | .pous, θ, F, c, σ, x => I.base.forger_signed .pous θ F c σ x
-  | .poub, θ, F, c, σ, x => I.base.forger_signed .poub θ F c σ x
-  | .network, θ, F, c, σ, x => I.base.forger_signed .network θ F c σ x
-  | .wipe, θ, F, c, σ, x => I.base.forger_signed .wipe θ F c σ x
+theorem forgerOf_signed : ∀ a i θ F c σ (x : (I.forgerOf a i θ F c σ).S),
+    ((I.forgerOf a i θ F c σ).signed x).length ≤ I.base.signatures θ
+  | .sampled, _, θ, F, c, σ, x => Binding.forger_signed_le I.base I.dev θ F c σ (I.signedBy_le θ F c) x
+  | .pouw, i, θ, F, c, σ, x => I.base.forger_signed .pouw i θ F c σ x
+  | .inferenceOnly, i, θ, F, c, σ, x => I.base.forger_signed .inferenceOnly i θ F c σ x
+  | .pous, i, θ, F, c, σ, x => I.base.forger_signed .pous i θ F c σ x
+  | .poub, i, θ, F, c, σ, x => I.base.forger_signed .poub i θ F c σ x
+  | .network, i, θ, F, c, σ, x => I.base.forger_signed .network i θ F c σ x
+  | .wipe, i, θ, F, c, σ, x => I.base.forger_signed .wipe i θ F c σ x
 
 /-- **The extractor at the deployment's windows**: at a window, the seats of the window's members at the projected
 strategy, each member's transcript at its own files' circuit, side by side in the order the vocabulary reads the
@@ -398,6 +439,7 @@ noncomputable def vocab : Vocab d α :=
     finders := I.findersOf K
     premises := I.premisesOf K
     forger := I.forgerOf
+    forger_pinned := I.forgerOf_pinned
     forger_calls := I.forgerOf_calls
     forger_signed := I.forgerOf_signed
     delta := I.deltaOf
@@ -658,8 +700,8 @@ def ExecutionPhaseReads (k : Verity.Registration.Composite) (ev : ℕ → Exchan
 
 /-- **SPOT's subprotocol at the deployment's windows** (`executionPhaseSpotSound_sessions`, at the deployed vocabulary and the
 constructions `constructionsAt` assembles): `ExecutionPhaseDeployed` and `ExecutionPhaseCovers` are `deployed`'s and `covers`'s, the
-deployed device printed each play's log and signed what its signatures are on (`Device.printsLog_dev`,
-`Device.signsPlay_dev`, at the base's signer, `ExecutionPhaseInstance.signer`), and each window the verifier sets up reads
+deployed device binds each accepted play's log under the pinned key at the sessions the pins designate
+(`Device.Deployment.binds`, `designated`), and each window the verifier sets up reads
 `MAX_COINS` frames' bytes and has members of its one table (`lb`, `members`). What is left is what the claim reads of
 the window (`ClaimReads`), the verifier's window at an accepted play (`ExecutionPhaseAt`) and what the verifier's acceptance
 gives of each play (`ExecutionPhaseReads`). -/
@@ -677,9 +719,7 @@ theorem spotSound (K₀ : ExecutionPhaseConstructions I.base) (k : Verity.Regist
     (I.deployed (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) (fun _ _ _ _ => rfl)
       (fun _ _ _ _ => rfl) hC)
     (I.covers (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) k hWa)
-    (fun _ _ _ _ o _ => Device.printsLog_dev _ o)
-    (fun θ F _ _ c => Device.signsPlay_dev (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
-      I.deployment θ F c (I.signer θ))
+    (fun θ _ _ _ => I.deployment.binds _ k I.base.families θ I.designated)
     (fun θ F W h => I.lb θ F W (I.executionPhases_some h).2)
     (fun θ F W h => I.members θ F W (I.executionPhases_some h).2)
     (fun θ F W h c σ z hv hl ht hf hd => hWR θ F W h c σ z hv hl ht hf hd)
