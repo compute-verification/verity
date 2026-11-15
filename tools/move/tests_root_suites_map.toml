@@ -759,3 +759,7 @@ strip_suite_relative = "tests/"
 testpaths_replace = { "tests" = "." }
 strip_suite_relative = "tests/"
 add_inputs = ["verity/runtime"]
+
+[split]
+"benchmarks/pouw/pyproject.toml: benchmarks/datacenter" = { to = "benchmarks/datacenter", why = "the code beside the tests, which stays" }
+"benchmarks/recursion_figures/pyproject.toml: benchmarks/recursion_e2e" = { to = "benchmarks/recursion_e2e", why = "the code beside the tests, which stays" }
