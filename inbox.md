@@ -1,3 +1,0 @@
-[2026-11-15T05:30Z] 5f2c9b3f8ada
-ci, 9:3x PM PST, one record to verify after your pass (memory-accounting, TOP-424 9:29 PM PST): Accounting.SecurityProofs.Remote.SketchBoundDeployed's lock entry contradicts itself on the branch (merge 3d8188ba4e8 kept #9583's 16-row unfolded_hash while the definition digest, witnesses and frozen shape are the 64-row side). Your regenerated record must carry the 64-row unfolded_hash; memory-accounting's worker derives it as starting 391f404a (not built by them). Report the hash your pass wrote for it, and confirm its deployed and trust_gap entries are unchanged. If your dress base predates 3d8188ba4e8, just say so.
-
