@@ -13,6 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity.channel import Refused
 from verity.circuits.codec import canonical_json
 from verity.commitments import advice as AC
 from verity.protocols.resource_accounting.network.prover import window_chain as WC
@@ -218,3 +219,36 @@ def test_bind_reads_the_run_on_stdin_writes_nothing_and_prints_what_served_advic
     assert gone.returncode == 1
     assert json.loads(gone.stdout) == {"error": "FileNotFoundError(2, 'No such file or directory')"}
     assert _bind(ep, {"deployment": dep, "io": io}).returncode == 2
+
+
+def test_a_run_document_the_command_cant_read_is_one_error_line_exit_1_and_no_traceback(tmp_path, monkeypatch, capsys):
+    """Every refusal of ``--bind``'s document exits 1 with exactly one JSON line on stdout, ``error`` and the repr of what
+    refused it, and nothing on stderr that is a traceback: not JSON, a missing key, a wrong type (the document's, a
+    deployment's, a request's), a file that isn't there, and a message read its declaration refuses."""
+    ep = tmp_path / "ep"
+    shutil.copytree(EP, ep)
+    dep = {"origin_unix": AB.first_steps(_jsonl(ep / "advice_trace.jsonl"))[0] - 0.05, "windows": 2, "window_s": 6.0}
+    cases = {
+        "not JSON": ("-", "{not json", "JSONDecodeError("),
+        "a missing key": ("-", json.dumps({"io": []}), "KeyError('deployment')"),
+        "a wrong type": ("-", json.dumps([]), "TypeError("),
+        "a deployment of the wrong type": ("-", json.dumps({"deployment": [], "io": []}), "TypeError("),
+        "a request of the wrong type": ("-", json.dumps({"deployment": dep, "io": [1]}), "TypeError("),
+        "a missing file": (str(tmp_path / "absent.json"), "", "FileNotFoundError(2, 'No such file or directory')"),
+    }
+    for case, (bind, text, error) in cases.items():
+        p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "advice", str(ep), "--bind", bind,
+                            "--eos", "128001", "--T", "60"], input=text, capture_output=True, text=True, check=False)
+        assert p.returncode == 1, (case, p.stderr)
+        assert p.stdout.count("\n") == 1 and list(json.loads(p.stdout)) == ["error"], (case, p.stdout)
+        assert json.loads(p.stdout)["error"].startswith(error), (case, p.stdout)
+        assert "Traceback" not in p.stderr, (case, p.stderr)
+
+    def refuse(path: Path, type_: str) -> bytes:
+        raise Refused("body.max", f"{path.name} as {type_}")
+
+    monkeypatch.setattr(AB.M, "read", refuse)
+    run = tmp_path / "run.json"
+    run.write_text(json.dumps({"deployment": dep, "io": json.loads((ep / "io.json").read_text())["requests"]}))
+    assert AB.main(ep, None, str(run), 60, "128001") == 1
+    assert capsys.readouterr().out == json.dumps({"error": "Refused('body.max: serve.json as ServingConfiguration')"}) + "\n"

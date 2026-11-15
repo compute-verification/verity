@@ -21,6 +21,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from verity.channel import Refused
 from verity.protocols.resource_accounting.network.prover import window_chain as WC
 from verity.protocols.resource_accounting.network.verifier import advice as I1
 from verity_vllm import messages as M
@@ -261,14 +262,15 @@ def served_advice(ep: Path, adv_dir: Path, deployment: Mapping[str, Any], io: Se
 
 def main(run: str | Path, adv_dir: str | Path | None, bind: str, T: int, eos: str) -> int:
     """``--bind``: `served_advice` over ``run``'s records and ``adv_dir`` (default ``run/advice``) for the run ``bind``
-    names (a file, or ``-`` for stdin), printed as one JSON document; ``error`` holds the repr of an OSError, KeyError or
-    ValueError the records raised, and the exit code is then 1."""
+    names (a file, or ``-`` for stdin), printed as one JSON document; ``error`` holds the repr of what refused the run's
+    document or the records (an OSError, KeyError, TypeError, ValueError or a message read's `Refused`), and the exit
+    code is then 1."""
     run = Path(run)
-    doc = json.load(sys.stdin) if bind == "-" else json.loads(Path(bind).read_text())
     try:
+        doc = json.load(sys.stdin) if bind == "-" else json.loads(Path(bind).read_text())
         info, b = served_advice(run, Path(adv_dir) if adv_dir else run / "advice", doc["deployment"], doc["io"], int(T),
                                 [int(t) for t in eos.split(",")])
-    except (OSError, KeyError, ValueError) as err:
+    except (OSError, KeyError, TypeError, ValueError, Refused) as err:
         write(json.dumps({"error": repr(err)}))
         return 1
     write(json.dumps({"advice": info, "bits": b}))
