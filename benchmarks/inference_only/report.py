@@ -7,7 +7,8 @@ tree builds, which is not served (`built.py`): its policy by the integration's c
 its number, and the record's three divisions. Then both over monitoring periods. Then the served class under the value
 tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW check credits: `--uncredited-share`, which has
 no default, so without it no figure of the tied policy prints, and with it every one prints under a label saying it
-rests on no PoUW verdict. With `--served OUT`, after the stated policy, a served run's record (`record.py`): the
+rests on no PoUW verdict. With `--served RUN` (or where `record.OF_RECORD` names a served run of record), after the
+stated policy, a served run's record (`record.py`): the
 check's verdicts in their public form (`InferenceOnlyCheck.Record.check`, `InferenceOnlyCheck.RecordCount.check`) and its cost, PoUW's
 share and tie, and the value at the record's share. Then one JSON object, printed last and written to `--out`, where
 the served policy's number is also written into the run's result under the metric's id (`METRIC`), unless a record
@@ -34,6 +35,9 @@ from slowdown import lean, min_cut
 from verity_bench import kit
 from verity_config.settings import SHARED
 
+#: the command's first line under its title: what its number is not
+MEASUREMENT = ("A MEASUREMENT, NOT AN AUDIT: this command prices a policy, and reads a served run's record, on whatever "
+               "machine runs it; an audit runs the verifier and its coins as processes on a machine of their own.")
 UNIT = ("the least slowdown of training run inside one inference block of the policy, max(1, N / limit): N the block's "
         "work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
 #: the metric's id (benchmarks/inference_only/metrics.toml), the name the served policy's value is written under in the run's result
@@ -432,20 +436,34 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
                     help="the share of a block's work that no PoUW check credits, from 0 to 1 or as a percentage with "
                          "%% (no default): print the served class under the value tie (tied.toml) at it, under a "
                          "label saying its figures rest on no PoUW verdict")
-    ap.add_argument("--served", type=Path, metavar="OUT",
-                    help="a served run's out/ (record.OUT_FILES): run the inference-only check on its record and print its "
-                         "value at the share of its blocks' work that no PoUW verdict of record credits; with --program, "
-                         "--circuit and --log, the files the run registered")
+    ap.add_argument("--served", type=Path, metavar="RUN",
+                    help="a served run's directory, or its out/ (record.OUT_FILES): run the inference-only check on its "
+                         "record and print its value at the share of its blocks' work that no PoUW verdict of record "
+                         "credits; the files the run registered are out/'s "
+                         f"{', '.join(R.REGISTERED.values())}, or --program, --circuit and --log (default: the run "
+                         f"{R.OF_RECORD.name} names, else none)")
     ap.add_argument("--program", type=Path, metavar="FILE", help="the served run's Program")
     ap.add_argument("--circuit", type=Path, metavar="FILE", help="the served run's circuit record")
     ap.add_argument("--log", type=Path, nargs="+", metavar="FILE",
-                    help="the served run's registration log, in order, its own registration last")
+                    help="the served run's registration log, in order, its own registration last: a record a file, or "
+                         "a .jsonl file of one a line")
     ap.add_argument("--out", type=Path, default=SHARED.OUT, metavar="DIR",
                     help="write inference_only.json here (default: $OUT; unset: only printed)")
     args = ap.parse_args(argv)
     named = [x for x in ("program", "circuit", "log") if getattr(args, x)]
-    if (args.served is None) != (not named) or (args.served and len(named) != 3):
-        ap.error("--served OUT takes --program, --circuit and --log, and they take it")
+    if named and (args.served is None or len(named) != 3):
+        ap.error("--program, --circuit and --log take --served RUN, and come all three or none: without them --served "
+                 f"reads {', '.join(R.REGISTERED.values())} in the run's out/")
+    try:
+        where = args.served or R.of_record()
+    except R.Refused as e:
+        ap.error(str(e))
+    files = None if where is None else R.files_of(where, args.program, args.circuit, tuple(args.log or ()))
+    if (record_check is None and files is not None) or (not args.stated_only and check is B.lean_count):
+        try:
+            B.need_lake()
+        except B.NoLake as e:
+            ap.exit(1, f"{ap.prog}: {e}\n")
 
     def say(line: str) -> None:
         print(f"[inference_only] {line}", file=sys.stderr, flush=True)
@@ -455,7 +473,8 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
         ap.error(f"{args.policy.name} is the served class under the value tie, whose number is never printed alone: "
                  "leave --policy out and state --uncredited-share S, which prints it beside its limit at that share")
     served = priced(stated, P.shape(stated.model))
-    print("Inference-only: the least slowdown of training run inside the policy's inference blocks\n")
+    print("Inference-only: the least slowdown of training run inside the policy's inference blocks")
+    print(MEASUREMENT + ("" if files is None else f" The served run's record read: {files.out}") + "\n")
     print(f"AS SERVED: {_n(served['value'])}" if stated.label == "served" else f"AS STATED: {_n(served['value'])}")
     print("\n".join("  " + line for line in headline(served, stated)))
     print("  Not checked here: this tree builds no circuit of this class, so no check ran on it, and the number is priced "
@@ -463,10 +482,9 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     print(f"The {stated.label} policy (stated, not built)")
     print("\n".join(detail(served, stated, P.shape(stated.model))), flush=True)
     record = None
-    if args.served:
+    if files is not None:
         try:
-            record = served_record(R.Files(args.served, args.program, args.circuit, tuple(args.log)), clock,
-                                   record_check)
+            record = served_record(files, clock, record_check)
         except R.Refused as e:
             ap.error(f"the record is refused: {e}")
         print("\n" + "\n".join(record_lines(record)), flush=True)

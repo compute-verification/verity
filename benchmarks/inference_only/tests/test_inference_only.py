@@ -274,7 +274,7 @@ def test_with_no_share_no_figure_of_the_tied_policy_prints(capsys) -> None:
     tied policy's figures are absent, and its number is nowhere in the print or the JSON."""
     doc = report.main(["--stated-only"], commit=lambda: None)
     out = capsys.readouterr().out
-    assert doc["tied"] is None and doc["value"] == 1 and out.splitlines()[2] == "AS SERVED: 1"
+    assert doc["tied"] is None and doc["value"] == 1 and out.splitlines()[1:4] == [report.MEASUREMENT, "", "AS SERVED: 1"]
     assert "no figure printed" in out and "--uncredited-share S" in out and "has no default" in out
     assert report.TIED_LABEL not in out and "limit at s" not in out and "37,653" not in out
     assert P.WORK_IS in out and doc["work_is"] == P.WORK_IS and "embedding table outside the registered weights" in out
