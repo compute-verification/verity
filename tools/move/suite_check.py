@@ -16,7 +16,7 @@ nothing, and exits 1, naming the paths, when after the maps:
    through the modules they import, that its inputs cover today (`tools/check/suites.py`'s `inputs_of`: its
    directory, its workspace dependencies' directories, the paths `[tool.verity.tests] inputs` declares, each `X` with
    its mirror `tests/X`) and that lands outside them. An input is read as `layout.py` rewrites it: a file's row, a directory's row or `[tokens]` row, else
-   unchanged.
+   unchanged; a map's `[pyproject]` `add_inputs` adds its own.
 
 **Archive wins.** A test file goes to `archive/` with the code it tests, and a suite that stays never loads `archive/`.
 So a test file the maps archive is in no suite and parted from none (`tests/test_repository.py` exempts `archive/`
@@ -259,7 +259,8 @@ def check(m: Moved) -> dict:
         if path in m.tracked:
             return m.new[path]
         if path + "/pyproject.toml" in m.tracked and m.directory(path) is None:     # a package: where its pyproject lands
-            return posixpath.dirname(m.new[path + "/pyproject.toml"]) or "."
+            lands = posixpath.dirname(m.new[path + "/pyproject.toml"]) or "."
+            return path if lands == f"{MIRROR}/{path}" else lands       # a suite's pyproject beside its mirrored tests
         return m.directory(path) or path
 
     lost, loads, reached, outside = {}, {}, set(), {}
@@ -268,6 +269,7 @@ def check(m: Moved) -> dict:
             continue
         own = inputs_of(p)
         now = [(posixpath.dirname(m.new[p]) or "." if why == "its directory" else reads(path)) for why, path in own]
+        now += [i.rstrip("/") for layout in m.layouts for i in layout.data.get("pyproject", {}).get(m.new[p], {}).get("add_inputs", [])]
         # a test file sent into this suite: what its suite's inputs cover today must land in this suite's
         for files, inputs in [(collects[p], own), *(([f], inputs_of(q)) for f, q in sent[p])]:
             opened = imports.reach(files, at_import=True)       # what importing the test files imports
