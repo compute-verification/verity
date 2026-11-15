@@ -152,14 +152,17 @@ def snapshot_download(repo, revision, allow_patterns, cache_dir):
 
 def test_step3_stages_a_checkpoint_it_downloads_and_checks_and_no_other(tmp_path: Path) -> None:
     """The step-3 heredoc writes the staging marker (repo, revision, UTC time, dir) that the step records with `verity-vllm records
-    staged` only when this run downloaded the weights and every shard's sha256 checked."""
+    staged` only when this run downloaded the weights and every shard's sha256 checked. The weights are the pin's snapshot under
+    the run's HF_HOME, not at the manifest's `local_path`, which is the machine's that made the manifest."""
     m = re.search(r'\$PY - "\$CASE" manifests/checkpoints\.json "\$OUT/staged-\$CASE" <<\'EOF\'.*?\n(.*?)\nEOF\n', SCRIPT.read_text(), re.S)
     assert m, "step-3 checkpoint heredoc not found (argument list or heredoc marker changed)"
     (tmp_path / "step3.py").write_text(m.group(1))
     (tmp_path / "hub" / "huggingface_hub").mkdir(parents=True)
     (tmp_path / "hub" / "huggingface_hub" / "__init__.py").write_text(HUB_STUB)
-    local, rev = tmp_path / "ck", "a" * 40
-    (tmp_path / "ckpts.json").write_text(json.dumps({"checkpoints": [{"role": "T", "repo": "o/m", "revision": rev, "local_path": str(local),
+    rev = "a" * 40
+    local = tmp_path / "hf" / "hub" / "models--o--m" / "snapshots" / rev
+    (tmp_path / "ckpts.json").write_text(json.dumps({"checkpoints": [{"role": "T", "repo": "o/m", "revision": rev,
+        "local_path": str(tmp_path / "elsewhere"),
         "safetensors_sha256": {"model.safetensors": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"}}]}))
     marker = tmp_path / "staged-T"
 
