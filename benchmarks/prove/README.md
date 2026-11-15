@@ -2,7 +2,9 @@
 
 `verity bench prove` is the one command for what a proof system's prover costs on a workload. Its code is
 `verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_flock.py` Flock's prover,
-`prove_records.py` the store side and the table); this directory holds its runner. It reads the store's labelled
+`prove_records.py` the store side and the table, its code in `prove_common.py` (the slots, the workloads, reading a
+record), `prove_rows.py` (a steady-state row), `prove_store.py` (each input), `prove_table.py` (the table and what a
+runner records) and `prove_render.py` (the text)); this directory holds its runner. It reads the store's labelled
 records and runs on any machine that reaches the store, with no GPU and no node.
 
 ```text
@@ -15,6 +17,8 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
     [--steady-rows FILE]                                            also write the steady-state rows the planner reads
     [--local-only]                                                  this machine's catalog alone, not the store's remote
 verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean verifier timed on one kept proof (below)
+verity bench prove layers --flock R --zk R --sampling R --recursion R
+                                                                    the proof system by layer, a row each (below)
 ```
 
 ## What it prints
@@ -267,6 +271,36 @@ as the measured one:
 
 Both figures assume full statements, as the proving time's steady-state rows do. They are a model from one block type
 until more types have runs of their own.
+
+## The proof system by layer
+
+`verity bench prove layers` prints one table of four rows, Flock, Flock with zero knowledge, with sampling and with
+recursion, each read from what its own command wrote (`verity_bench/proof_layers.py`). It runs nothing. Each flag takes
+a run's `out/` directory (or the run directory holding it), read with no store, or a run id, fetched through the
+evidence store where `research` is installed. A layer not given is printed as "not run".
+
+```text
+verity bench prove layers [--flock DIR|RUN] [--zk DIR|RUN] [--sampling DIR|RUN] [--recursion DIR|RUN]
+```
+
+| layer | reads | prover seconds | Lean verifier |
+|---|---|---|---|
+| `--flock` | `benchmarks/prove_path` with `PP_PLAIN=1`: an arm's `audit.log` (its `PROVE-PATH` and `A5` lines) and `summary.json` | Flock's prover a drawn block, the mean over every rank's drawn blocks | every rank accepted, each with `lean-verify/m0` true |
+| `--zk` | `prove_path`'s zk arm, or `benchmarks/one_stage/a5_llama1b_h200.sh`'s out | as above | as above |
+| `--sampling` | `a5_llama1b_h200.sh`'s out (`summary.txt`, `verdicts.txt`, `machine.txt`, a5.sh's `a5/a5.log` and `a5/a5/summary.json`), or a `prove_path` arm | as above, from the audit's `summary.json` timing | the audit accepted, with `lean-verify/m0` true |
+| `--recursion` | `benchmarks/recursion_e2e`'s `recursion_e2e.json` | wall, one recursive run's path without Lean's step | the headline's `ok` and `composed` both true |
+
+The directory's files decide its reader, and a flag refuses another command's output. A `prove_path` directory holding
+more than one honest arm is refused: give the arm's directory. A `--flock` or `--zk` row whose output states the other
+proof, or none, prints no number, whichever command wrote it.
+
+A row prints its numbers only when its Lean verdict is an accept. Any other row prints none, and says why under the
+table. Its last column is one line, `ran with: coins COINS; parameters PARAMETERS (DETAIL)`: COINS is `deployed
+challenger`, `local challenger` or `in-process` and PARAMETERS `deployed` or `development`, each only where the output
+says so outright, "not stated" for a half it doesn't say, and `ran with: not stated` where it says neither. DETAIL, the
+output's own words, is also the JSON's `detail`. No output yet states development or deployed parameters. The table is followed by its JSON line. Under a research run, or
+with `$OUT` set, it writes `proof-layers.json` and one `prover-seconds` measurement a row, its `member` the layer, through
+the kit's writer.
 
 ## The metrics
 

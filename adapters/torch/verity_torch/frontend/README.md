@@ -5,7 +5,7 @@ Definition. `derive` exports the model and walks its graph (the walk's state is 
 graph, the one `torch.func` and `make_fx` produce, is `derive_graph`'s), `rules/` holds the rules on ATen ops the walk
 applies, `report` is what a derivation produced, `outcomes` and `errors` are its refusals, `boolean` gives its Program
 on bits, and `emit` writes a finished derivation's runtime correspondence. `train_step` derives one training step as a
-Program. Each module's docstring says what it holds.
+Program, and consecutive steps with torch's own optimizers, which `train_trace` traces as one graph. Each module's docstring says what it holds.
 
 ## What other packages import
 

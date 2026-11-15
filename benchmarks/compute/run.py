@@ -3,8 +3,9 @@ one served run served: the MACs the Pearl+ verifier credits over the MACs the mo
 and as one line of JSON (`value`, `unit`, `commit`, `run`), beside its target (`TARGET`). An answer that isn't an
 accept prints no number and exits 1.
 
-    verity bench compute --from RUN                                  a recorded run
-    verity bench compute --from RUN --per-call [--uncredited F] [--top N]   and where the rest of its MACs went
+    verity bench compute --record DIR                                a run's record in a directory on disk
+    verity bench compute --from RUN                                  a recorded run in our evidence store
+    verity bench compute --record DIR|--from RUN --per-call [--uncredited F] [--top N]   and where the rest of its MACs went
 
 The number, for a run whose inference-only policy registers one class of S slots, each P prompt tokens then O output
 tokens, served by a model of L layers, hidden size d, H attention heads of d_h = d / H, H_kv key and value heads, MLP
@@ -28,8 +29,16 @@ linears' (and the LM head's with the head), which the text prints beside it, and
 passes are not one load of the class. A record that holds no split, as runs before Pearl+'s verifier wrote it do, holds
 no head.
 
-`--from RUN` reads the verifier's side of the run's record in the evidence store, and nothing the developer's node
-reports of what it served:
+A run's record is its run directory as `research run` leaves it and the evidence store keeps it: the run's `job.json`,
+and what the run wrote under `out/`. `--record DIR` reads it from the directory DIR, through no store: nothing of
+research's is imported, no credential is looked up and nothing goes over the network. DIR must hold the answer and the
+policy below (exit 2 naming the file it lacks). The run printed is the `run.id` its `job.json` states and the commit its
+`store.conditions` state (`source.commit`, `-dirty` when `source.dirty`), as the store's attempt states them; without
+them, the directory's name and no commit. Nothing is withdrawn from a directory. `--from RUN` reads the record of run
+RUN from the evidence store, through research's client. The two options are separate so that neither is a guess: a
+path that names no directory is refused as a path, and a run id never reads a local file.
+
+Either way it reads the verifier's side of the record, and nothing the developer's node reports of what it served:
 
 - `out/pieces/pouw/pearlplus-answer.json`, the Pearl+ verifier's answer: its verdict, its credit, and its sample's
   ε_s at δ_s (`epsilon_s`, `delta_s`): a sample that accepts misses more than the share ε_s of the credited work with
@@ -103,11 +112,10 @@ from typing import Any, NamedTuple
 
 from verity.device import Site, load_card, rate
 from verity_bench import kit
-from verity_config.settings import SHARED
 
-__all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
-           "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
-           "amounts", "capacity", "from_run", "main", "model_macs", "uncredited_words"]
+__all__ = ["ABSENT", "ANSWER", "DELTA_S", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY",
+           "RECORDS", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
+           "amounts", "capacity", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
 #: the number's id in metrics.toml beside this file, the name result.json records it under
@@ -124,6 +132,10 @@ VERDICTS = "out/record/verdicts.json"
 RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS]
 #: the verifier's document, read by `--per-call` alone
 VERIFY = "out/pieces/pouw/verify.json"
+#: the run's own record of itself, where `--record` reads the run's id and commit
+JOB = "job.json"
+#: the files a record directory must hold, and what each is
+REQUIRED = {ANSWER: "the Pearl+ verifier's answer", POLICY: "the run's inference-only policy"}
 #: the causes of the per-call split's give-up, in the order printed
 CAUSES = {"lm_head": "LM head, which Pearl+ doesn't credit", "lm_head_outside": "LM head calls outside the passes",
           "attention": "attention, which Pearl+ doesn't credit",
@@ -522,7 +534,31 @@ def from_run(store: EvidenceStore, run: str, per_call: bool = False, given: Path
     tree, withdrawn = store.files(run, RECORDS + [VERIFY] * (given is None))
     if tree is None or not (tree / ANSWER).is_file():
         raise NoNumber(f"{run} left no Pearl+ answer (it ended rc {(attempt.get('status') or {}).get('rc')})")
-    doc = document(tree, commit_of(attempt), run, withdrawn, given)
+    return _with_split(document(tree, commit_of(attempt), run, withdrawn, given), tree, per_call, given, top)
+
+
+def from_dir(record: Path, per_call: bool = False, given: Path | None = None, top: int = 10) -> dict:
+    """The printed document of the run record in the directory `record` (module docstring), through no store: the run
+    is the `run.id` its `job.json` states, else the directory's name, and the commit the one its `store.conditions`
+    state, else None. `Unreadable` unless it holds every file of `REQUIRED`."""
+    if not record.is_dir():
+        raise Unreadable(f"{record} is not a directory: --record names a run's directory, the one holding out/")
+    for path, what in REQUIRED.items():
+        if not (record / path).is_file():
+            moved = (record / Path(path).relative_to("out")).is_file()
+            raise Unreadable(f"the record directory {record} holds no {path} ({what})"
+                             + (": it is a run's out/ directory; name the directory holding it" if moved else ""))
+    try:
+        job = _held(record, JOB) or {}
+        run = (job.get("run") or {}).get("id") or record.resolve().name
+        conds = (job.get("store") or {}).get("conditions") or {}
+        commit = commit_of({"source": {"commit": conds.get("source.commit"), "dirty": conds.get("source.dirty")}})
+    except (OSError, ValueError, AttributeError) as e:
+        raise Unreadable(f"the record's {JOB} doesn't read as the run's ({type(e).__name__}: {e})") from e
+    return _with_split(document(record, commit, str(run), [], given), record, per_call, given, top)
+
+
+def _with_split(doc: dict, tree: Path, per_call: bool, given: Path | None, top: int) -> dict:
     if per_call:
         doc["per_call"] = split(tree, given, doc["macs"], doc["credited_macs"], MODELS[doc["model"]], top)
     return doc
@@ -585,10 +621,14 @@ def text(doc: dict) -> str:
 
 def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore] = opened) -> int:
     """The command: 0 with the number printed, 1 with none, 2 when the command line, the run or its policy can't be
-    read. `store_of` opens the evidence store."""
+    read. `store_of` opens the evidence store, which `--record` never calls."""
     ap = argparse.ArgumentParser(prog="verity bench compute", description=__doc__.split("\n\n")[0])
-    ap.add_argument("--from", dest="run", metavar="RUN", required=True,
-                    help="a recorded run: print from its record in the evidence store")
+    source = ap.add_mutually_exclusive_group(required=True)
+    source.add_argument("--record", type=Path, metavar="DIR",
+                        help="a run's record in the directory DIR: the run's directory, holding out/ (and job.json, "
+                             "for the run's id and commit), read from disk alone, through no store")
+    source.add_argument("--from", dest="run", metavar="RUN",
+                        help="a recorded run of our evidence store: print from its record there")
     ap.add_argument("--per-call", action="store_true",
                     help="also print where the model's MACs the credit leaves out went, by cause and by matmul call")
     ap.add_argument("--uncredited", type=Path, metavar="F",
@@ -599,7 +639,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     if (a.uncredited or a.top != 10) and not a.per_call:
         ap.error("--uncredited and --top go with --per-call")
     try:
-        doc = from_run(store_of(), a.run, a.per_call, a.uncredited, a.top)
+        doc = (from_dir(a.record, a.per_call, a.uncredited, a.top) if a.record is not None
+               else from_run(store_of(), a.run, a.per_call, a.uncredited, a.top))
         measured = amounts(doc)
     except NoNumber as e:
         print(f"compute: no number: {e}", file=sys.stderr)
@@ -607,15 +648,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)
         return 2
-    print(text(doc))
-    line = json.dumps(doc)
-    print(line)
-    if out := SHARED.OUT:
-        Path(out).mkdir(parents=True, exist_ok=True)
-        (Path(out) / "compute.json").write_text(line + "\n")
-        writer = kit.writer(out)
-        for m in measured:
-            writer.measurement(**m, mark="measured")
+    kit.report("compute", text(doc), doc, measured)
     return 0
 
 
