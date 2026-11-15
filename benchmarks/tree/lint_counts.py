@@ -83,7 +83,7 @@ DROPPED = ("PYTHONPATH", "MYPYPATH")
 #: a JSON list with, for each job, ``{"list", "found", "allowed", "keys"}`` (each file's count, as the lint names the
 #: file, and the counts by key) or ``{"list", "refused"}``.
 CHILD = r'''
-import importlib, importlib.util, json, sys, traceback, types
+import importlib, importlib.util, json, os, sys, traceback, types
 from collections import Counter
 from pathlib import Path
 
@@ -127,7 +127,11 @@ def superseded(name, module):
     path = tree / module
     sys.path.insert(0, str(path.parent))
     mod = importlib.import_module(path.stem)
-    now = mod.superseded(mod.registered())
+    os.chdir(out.parent)                                 # else its loader imports verity from the tree, whose files the
+    try:                                                 # registries don't count as authored
+        now = mod.superseded(mod.registered())
+    finally:
+        os.chdir(tree)
     entries, held = mod.listed()
     return Counter(f for f, _ in now.values()), Counter([*entries.values(), *(now[i][0] for i in held if i in now)])
 
