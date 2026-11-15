@@ -458,7 +458,7 @@ def test_the_drawn_units_are_the_draw_coins(seed):
     args = [d[k] for k in cases.DRAWN_KEYS]
     got, refused = Cr.drawn_twin(*args)
     ss, _ = Cr.strata(d["layout"])
-    assert Cr.law(ss, d["k"]) is None
+    assert Cr.sampling_design(ss, d["k"]) is None
     assert refused is None and got == sorted(set(got))
     for s in ss:
         assert sum(any(lo <= u < hi for lo, hi in s["units"]) for u in got) == s["k"]
@@ -1210,7 +1210,7 @@ def test_the_eps_holds_at_the_work_sampling_designs_cap():
     is missed with probability about 1/4."""
     lay = {"calls": [["a", 0], ["b", 0]], "linears": [["a", 1, 1000], ["b", 1000, 1000]], "m": 1, "tile": [1, 1]}
     ss, why = Cr.strata(lay)
-    assert why is None and Cr.law(ss, 2000) is None
+    assert why is None and Cr.sampling_design(ss, 2000) is None
     total = sum(s["work"] * (s["units"][0][1] - s["units"][0][0]) for s in ss)
     drawn = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
     assert total == 1_001_000 and drawn == [(1000, 1, 2), (1000, 1000, 1000)]
@@ -1233,7 +1233,7 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
     lay = {"calls": [["a", 0], ["b", 0]], "linears": [["a", w_a, n_a], ["b", w_b, n_b]], "m": 1, "tile": [1, 1]}
     n = n_a + n_b
     ss, why = Cr.strata(lay)
-    assert why is None and Cr.law(ss, n) is None
+    assert why is None and Cr.sampling_design(ss, n) is None
     drawn = [(s["units"][0][1] - s["units"][0][0], s["work"], s["k"]) for s in ss]
     total = sum(size * w for size, w, _k in drawn)
     assert drawn[0][0] == n_a and drawn[0][2] < n_a and drawn[1][2] == n_b

@@ -788,15 +788,15 @@ def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Ke
     return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
 
-def draw_bytes(key: Key, law: Mapping[str, Any], n: int) -> bytes:
+def draw_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
     """The bytes a subset:k sample over N reads (Lean's ``2 k · width(N) + 64``)."""
-    if law.get("law") != "subset":
-        raise _refused("law", f"the window's draw is a subset law's, not {dict(law)}")
-    return key.stream("draw", 2 * law["k"] * CC.width(n) + 64)
+    if sampling_design.get("law") != "subset":
+        raise _refused("law", f"the window's draw is a subset law's, not {dict(sampling_design)}")
+    return key.stream("draw", 2 * sampling_design["k"] * CC.width(n) + 64)
 
 
-def python_sampler(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
-    units = CC.stream_subset(law["k"], n, src)
+def python_sampler(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
+    units = CC.stream_subset(sampling_design["k"], n, src)
     if units is None:
         raise _refused("sampler", "the draw's stream ran out")
     return units
@@ -1028,11 +1028,11 @@ class Challenger:
         (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
         runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
-        law = S.selection_sampling_design(st.spec.selection, n)
+        sampling_design = S.selection_sampling_design(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
-        params = OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"])
-        args = (rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
+        params = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports_, list(st.log), self.params["delta"])
+        args = (rec, prog, q, sampling_design, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
         codes = self._of_record(name, self.record.registration, params, dict(rec), lambda: R.check(*args))
         if not codes:
             codes = self._of_record(name, self.record.caller, params, dict(rec), lambda: CA.check(*args))
@@ -1042,10 +1042,10 @@ class Challenger:
         if codes:
             raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6 and the public-items rule, of record" for c in codes}))
 
-    def _keyed(self, law: Mapping[str, Any], n: int) -> list[int]:
+    def _keyed(self, sampling_design: Mapping[str, Any], n: int) -> list[int]:
         if self._key is None:
             raise _refused("coin", "no draw coin is open for this draw")
-        return self.sampler(law, n, draw_bytes(self._key, law, n))
+        return self.sampler(sampling_design, n, draw_bytes(self._key, sampling_design, n))
 
     def stream(self, name: str, ell: int, sampler: Callable[[Mapping[str, Any], int], list[int]]) -> S.Stream:
         if (name, ell) not in self.streams:
@@ -1080,7 +1080,7 @@ class Challenger:
         how = self.pass_epoch(manifest, recorded, name) if replay is None else None
         ell = level_of(rec)
         replayed = None if replay is None else self._drawn(replay)
-        sampler = self._keyed if replay is None else (lambda law, n: replayed.units)
+        sampler = self._keyed if replay is None else (lambda sampling_design, n: replayed.units)
         st = self.stream(stream, ell, sampler)
         if not self.predates_deadline and self.salt_released_at is not None and (stream, ell) not in self._salted:
             st.salt_released(self.openings["salt"].coin, self.salt_released_at)
@@ -1449,8 +1449,8 @@ def cmd_edit(a) -> int:
 
 def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
     """The execution phase's sample by Lean ``verity-verify-proof draw --stream``: the units of a subset sampling design over N, on the key's stream."""
-    def sample(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
-        p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(law["k"]), "--stream", src.hex()],
+    def sample(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
+        p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(sampling_design["k"]), "--stream", src.hex()],
                            capture_output=True, text=True)
         lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
         if p.returncode != 0 or len(lines) != 1:

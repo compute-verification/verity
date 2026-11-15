@@ -45,7 +45,7 @@ def RecordKeeps (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fixed) : 
   f.rootW = (c.roots.find? (·.port = "W")).map (·.root) ∧
   (∀ kv ∈ expected p f, cs (get c.window.items kv.1) = cs kv.2) ∧
   c.population = f.work.n ∧
-  cs c.samplingDesign = cs (subsetLaw f.sampling.k) ∧
+  cs c.samplingDesign = cs (subsetSamplingDesign f.sampling.k) ∧
   c.query = p.query ∧ c.scheme = p.check.scheme
 
 /-- The service accepted this record (`e` is one-stage's answer for its digest) with `prof` and `draw`: the profile
@@ -89,7 +89,7 @@ def AcceptedDraw : Prop :=
       pub.work = Work.at p.gridBits pub.work.level ∧
       PouwWindow.kPrime (toRat p.eps) (toRat p.delta) ((pub.work.credited : Int) * p.check.tileWork) pub.work.n
         p.check.tileWork = .ok pub.sampling.k ∧
-      c.population = pub.work.n ∧ cs c.samplingDesign = cs (subsetLaw pub.sampling.k) ∧
+      c.population = pub.work.n ∧ cs c.samplingDesign = cs (subsetSamplingDesign pub.sampling.k) ∧
       pub.drawn.size = pub.sampling.k ∧ Ascending pub.drawn.toList ∧ ∀ u ∈ pub.drawn.toList, u < pub.work.n
 
 /-- An accepted window's outcome is the service's, for this record: one-stage's answer citing its digest, and the

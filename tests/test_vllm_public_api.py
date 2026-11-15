@@ -151,6 +151,9 @@ PUBLIC = {
                                           "verifier's (Supply) and the replay's own (Operand), and the challenger's "
                                           "copies of them (span_values, link_words, link_schemas, sources, history), which "
                                           "verity/protocols/proofs/spot/prover/audit/two_stage.py registers",
+    "verity_vllm.pipeline.long_row": "I1: the check template of a two-stage window over one of DSA's long rows "
+                                     "(DsaTopKReadRowsCut, at the served statics SERVED and served) and the window's "
+                                     "class over it (layout), which benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
@@ -175,6 +178,10 @@ PUBLIC = {
     "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
                                                 "certifier's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
+    "verity_vllm.compiler.replay_step": "I1: one scheduler step of the compiler's replay (its statics, inputs, state, "
+                                        "outputs and reference), which benchmarks/network_e2e's replay vectors are held to",
+    "verity_vllm.compiler.replay_chain": "I1: the replay chain's rows, windows and units (load, advance, close), which "
+                                         "benchmarks/network_e2e and benchmarks/network_traces run over their windows",
     "verity_vllm.pipeline.advice_code.arith": "I1: the arithmetic coder advice v1's window code runs on",
     "verity_vllm.pipeline.advice_code.by_class": "I1: advice v1's charge by class: each window's bits split by the field "
                                                  "that put them there, and the fields a registration holds at 0 with "

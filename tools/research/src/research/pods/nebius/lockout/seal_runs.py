@@ -49,9 +49,12 @@ REFUSED = 3
 
 
 def _read(p: Path) -> dict:
+    if not p.exists():
+        return {}
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"vy-seal-runs: {p} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return d if isinstance(d, dict) else {}
 
@@ -143,8 +146,9 @@ def seal_dir(parent_fd: int, name: str, uid: int = 0, gid: int = 0) -> int:
                 continue
             try:
                 fd = os.open(entry, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_NOCTTY, dir_fd=rootfd)
-            except OSError:
-                continue                                  # swapped for a symlink, or gone
+            except OSError as e:
+                print(f"vy-seal-runs: {entry} was swapped for a symlink or is gone, so it is not sealed ({type(e).__name__})", file=sys.stderr, flush=True)
+                continue
             try:
                 fst = os.fstat(fd)
                 if (fst.st_dev, fst.st_ino) == (st.st_dev, st.st_ino) and stat.S_ISREG(fst.st_mode):
@@ -165,7 +169,8 @@ def candidates(root: Path, uid: int = 0) -> list[str]:
     out = []
     try:
         entries = sorted(os.scandir(root), key=lambda e: e.name)
-    except OSError:
+    except OSError as e:
+        print(f"vy-seal-runs: {root} unlisted, so nothing in it is sealed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return out
     for e in entries:
         try:
@@ -183,9 +188,12 @@ def seal_pass(roots: list[str], *, dry_run: bool, max_dirs: int = MAX, quiet_s: 
     t = time.time() if now is None else now
     rep: dict = {"sealed": [], "skipped": 0, "errors": []}
     for root in roots:
+        if not os.path.lexists(root):
+            continue
         try:
             rst = os.lstat(root)
         except FileNotFoundError:
+            say(f"vy-seal-runs: {root} went away while it was read, so nothing in it is sealed this pass")
             continue
         if stat.S_ISLNK(rst.st_mode) or not stat.S_ISDIR(rst.st_mode):
             rep["errors"].append(f"{root}: not a directory (a symlink is never followed)")
@@ -280,9 +288,12 @@ def evict(path: str, roots: list[str], min_bytes: int, uid: int = 0, gid: int = 
         if size < min_bytes:
             continue
         f = p / rel
+        if not os.path.lexists(f):
+            continue
         try:
             st = f.lstat()
-        except OSError:
+        except OSError as e:
+            print(f"vy-seal-runs evict: {rel} not evicted, its lstat failed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if st.st_size != size or st.st_mtime >= t0 or not stat.S_ISREG(st.st_mode):
             continue

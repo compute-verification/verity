@@ -278,12 +278,12 @@ theorem sum_work (ss : Array Flock.Draw.WorkStratum) (S : Array Flock.Draw.Strat
 theorem workDrawMisses : WorkDrawMisses := by
   intro layout ss K strata eps δ C k' _ hlaw hk' B hk'K hB
   classical
-  obtain ⟨hK1, -, hstrata⟩ := Properties.Pouw.Strata.law_ok hlaw
+  obtain ⟨hK1, -, hstrata⟩ := Properties.Pouw.Strata.samplingDesign_ok hlaw
   have hsz : strata.size = ss.size := by rw [hstrata, Array.size_map]
   have hS : ∀ s : Fin strata.size,
       strata[s] = Properties.Pouw.Strata.samplingDesignOf K (Flock.Draw.totalWork ss) ss[s.val]! := by
     subst hstrata
-    exact Properties.Pouw.Strata.getElem_lawOf ss K _
+    exact Properties.Pouw.Strata.getElem_samplingDesignOf ss K _
   have hWsum' := sum_work ss strata hsz
   generalize hWdef : Flock.Draw.totalWork ss = W at hS hk' hWsum'
   obtain ⟨he0, he1, hd0, -, hW1, -, hC0, hCW⟩ := Properties.Pouw.Window.kPrimeRefuses _ _ _ _ _ _ hk'
@@ -488,7 +488,7 @@ theorem groupedDrawMisses : GroupedDrawMisses := by
 
 /-! ## `GroupedDrawMisses`'s witnesses
 
-The compiled `strata` and `samplingDesign` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `law_lanes`);
+The compiled `strata` and `samplingDesign` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `samplingDesign_lanes`);
 `kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
 
 /-- **`K′ ≤ 8` at ε = 1/2 and δ = 1/256 over the whole window's work**: `q = 1/2`, and `q^8 = δ`. -/
@@ -524,26 +524,26 @@ accept it at `K = 8`, `kPrime` answers `K′ ≤ 8` at ε = 1/2 and δ = 1/256 o
 than the leaf, and the blocks do at least ε of the work. -/
 theorem groupedDrawMisses_honest :
     ∃ k', PouwCheck.Credit.strata lanesLayout = .ok lanesStrata ∧
-      PouwCheck.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesLaw ∧
+      PouwCheck.Credit.samplingDesign lanesStrata (toJson lanesK) = .ok lanesSamplingDesign ∧
       PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata) (Flock.Draw.totalWork lanesStrata) 1 =
         .ok k' ∧ k' ≤ lanesK ∧
       (∀ u, ∑ b ∈ lanesBlocks.filter (fun b => lanesLeaf b = u), lanesWork b ≤ unitWork lanesStrata u) ∧
       (1 / 2 : ℚ) * (Flock.Draw.totalWork lanesStrata : ℚ) ≤ ((∑ b ∈ lanesBlocks, lanesWork b : ℕ) : ℚ) := by
   obtain ⟨k', hk', hkK⟩ := kPrime_lanes
-  refine ⟨k', strata_lanes, law_lanes, hk', hkK, leaves_lanes, ?_⟩
+  refine ⟨k', strata_lanes, samplingDesign_lanes, hk', hkK, leaves_lanes, ?_⟩
   rw [work_lanes]
   have : (0 : ℚ) ≤ (Flock.Draw.totalWork lanesStrata : ℚ) := Nat.cast_nonneg _
   linarith
 
 /-- **`GroupedDrawMisses`'s nontrivial lemma**: its conclusion fails under the strata a sampling design that accepts everything may
-give, none (`idleLaw`): the sample is empty whatever the streams, so the lanes window's blocks all missProb, with
+give, none (`idleSamplingDesign`): the sample is empty whatever the streams, so the lanes window's blocks all missProb, with
 probability 1 > 1/256. -/
 theorem groupedDrawMisses_nontrivial :
-    ¬ Pouw.RelativeSecurity.prob (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) ≤
+    ¬ Pouw.RelativeSecurity.prob (fun g => ∃ d, drawnOn idleSamplingDesign g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) ≤
       ((1 / 256 : ℚ) : ℝ) := by
   classical
-  have hall : ∀ g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256,
-      ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d := fun g => by
+  have hall : ∀ g : (i : Fin idleSamplingDesign.size) → Fin idleSamplingDesign[i].need → Fin 256,
+      ∃ d, drawnOn idleSamplingDesign g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d := fun g => by
     refine ⟨(#[] : Array ℕ).qsort (· < ·), ?_, fun b _ hb =>
       absurd ((SampleExec.mem_qsort (#[] : Array ℕ) _ _).1 hb) (by simp)⟩
     unfold drawnOn Flock.Draw.stratified
@@ -551,10 +551,10 @@ theorem groupedDrawMisses_nontrivial :
     rw [Std.Legacy.Range.forIn_eq_forIn_range']
     rfl
   have h1 : Pouw.RelativeSecurity.prob
-      (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) = 1 := by
+      (fun g => ∃ d, drawnOn idleSamplingDesign g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) = 1 := by
     unfold Pouw.RelativeSecurity.prob Claims.prUniform
-    have hf : ∀ inst : DecidablePred (fun g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256 =>
-        ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d),
+    have hf : ∀ inst : DecidablePred (fun g : (i : Fin idleSamplingDesign.size) → Fin idleSamplingDesign[i].need → Fin 256 =>
+        ∃ d, drawnOn idleSamplingDesign g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d),
         @Finset.filter _ _ inst Finset.univ = Finset.univ := fun _ => Finset.filter_true_of_mem fun g _ => hall g
     rw [hf, Finset.card_univ]
     exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
