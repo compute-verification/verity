@@ -57,7 +57,7 @@ PLACES = {"under": ["stacks/s/pk", F.CHECKER, "uv.lock", "verity"],
           "at": ["", "adapters/vllm", "stacks", "stacks/s", "tools", "tools/config", "tools/verity"]}
 
 TOY = {"pyproject.toml": '[tool.uv.workspace]\nmembers = ["tools/config", "adapters/*"]\nexclude = ["adapters/skip"]\n',
-       f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", "stacks/s/pk", "uv.lock"]\n',
+       F.SUITE: '[tool.verity.tests]\ninputs = ["verity", "stacks/s/pk", "uv.lock"]\n',
        f"{F.CHECKER}/README.md": "prose\n", f"{F.CHECKER}/tests/test_x.py": "", f"{F.SOURCE}/__init__.py": "",
        F.SIDECARS: NEVER_RUN + 'PACKAGES = ("verity", "verity.ml.sub")\nTREES = ("stacks",)\n', F.TARGETS: TARGETS,
        "verity/__init__.py": "", "verity/ml/__init__.py": "", "verity/ml/x.py": "", "verity/ml/x.circuit-check.py": SIDECAR,
@@ -199,8 +199,8 @@ def test_an_edit_to_any_file_moves_no_task_s_lookups_and_only_an_input_s_moves_i
 @pytest.mark.parametrize(("files", "error"), [
     ({X: "TEMPLATE_PARAMS = dict(t={})\n"}, "TEMPLATE_PARAMS is a dict literal"),
     ({X: "TEMPLATE_PARAMS = {KEY: {}}\n"}, "TEMPLATE_PARAMS is a dict literal"),
-    ({f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["uv.lock"]\n'}, "outside what circuit-check's suite"),
-    ({f"{F.CHECKER}/pyproject.toml": "[project]\n"}, "no [tool.verity.tests] inputs"),
+    ({F.SUITE: '[tool.verity.tests]\ninputs = ["uv.lock"]\n'}, "outside what circuit-check's suite"),
+    ({F.SUITE: "[project]\n"}, "no [tool.verity.tests] inputs"),
     ({F.SIDECARS: "ROOTS = ()\n"}, "no PACKAGES tuple"),
     ({F.SIDECARS: 'PACKAGES = ("verity",)\n'}, "no TREES tuple"),
     ({"pyproject.toml": "[project]\n"}, "no [tool.uv.workspace]")])
