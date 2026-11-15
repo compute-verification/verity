@@ -46,7 +46,7 @@ import subprocess
 import sys
 import time
 import tomllib
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo
@@ -98,7 +98,7 @@ PROBE = ("echo gpu=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheade
 
 
 def utc(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def nb(*args: str, timeout: float = 120) -> dict:
@@ -277,12 +277,12 @@ def sync_registry(message: str) -> None:
 
 
 def load_samples(start: float, end: float) -> list[dict]:
-    rows, day = [], datetime.fromtimestamp(start, timezone.utc).date()
-    while day <= datetime.fromtimestamp(end, timezone.utc).date():
+    rows, day = [], datetime.fromtimestamp(start, UTC).date()
+    while day <= datetime.fromtimestamp(end, UTC).date():
         f = FLEET_DIR / f"samples-{day.strftime('%Y%m%d')}.jsonl"
         for line in f.read_text().splitlines() if f.exists() else []:
             r = json.loads(line)
-            t = datetime.strptime(r["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+            t = datetime.strptime(r["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp()
             if start <= t < end:
                 rows.append(r)
         day += timedelta(days=1)
@@ -642,7 +642,7 @@ def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] 
             try:
                 found = [(f"{q['quota']}@{q['region']}", f"{q['quota']} in {q['region']}: {q['usage']} of {q['limit']} "
                           f"({q['share']:.0%})") for q in quota_findings()]
-                start = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
+                start = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=UTC).timestamp()
                 if c := card_finding(load_samples(start, now)):
                     found.append(("card", f"the card's day so far: ${c['spent']:,.0f} of its ${c['limit']:,.0f} daily limit"))
                 for key, line in found:
@@ -654,7 +654,7 @@ def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] 
                              f"the card: Daniel), before it stops a launch. (fleet.py quota)")
             except Exception as e:  # noqa: BLE001
                 print(f"{utc(now)} quota failed: {e}", file=sys.stderr, flush=True)
-        if datetime.fromtimestamp(now, timezone.utc).hour == REPORT_HOUR_UTC and reported != day:
+        if datetime.fromtimestamp(now, UTC).hour == REPORT_HOUR_UTC and reported != day:
             reported = day
             daily(now, send)
         try:
@@ -701,7 +701,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(errors) or "published")
         return 1 if errors else 0
     elif a.cmd == "report":
-        end = datetime.strptime(a.now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() if a.now else time.time()
+        end = datetime.strptime(a.now, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp() if a.now else time.time()
         rep = report(load_samples(end - a.hours * 3600, end), a.hours)
         if a.lanes:
             for lane, rows in sorted(idle_by_lane(rep, registry()).items()):
