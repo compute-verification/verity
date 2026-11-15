@@ -21,8 +21,8 @@ of record accepted, so a rejected or late window, one with no outcome, and a gap
 reject the link. A run's is the AND over its links'.
 
 **The period sample** (`TransferBlocks.period_draw`) samples the execution phases instead. The prover first commits the
-period: every window's salted root (`root`), which the challenger records before it reads a coin (a coin source with
-a `commit` is first committed to the period's digest, as a remote challenger's is). It then samples `subset:K` of the n
+period: every window's salted root (`root`), which the challenger records before it reads a coin (coins with a `commit`
+are first committed to the period's digest, as a remote challenger's is). It then samples `subset:K` of the n
 windows, and only the drawn windows are registered, in window order, each held to its committed root
 (`register(drawn=…)`), selected and proved. `network_verdict(drawn=…)` accepts when exactly the drawn windows are
 registered, in order, each under its committed root, with an accepted outcome of record, and it states what the sample
@@ -945,7 +945,7 @@ class TransferBlocks:
         """The period's sample over its execution phases 0 … n − 1, after the prover committed them: `roots`, window w's
         salted root (`root`, hex) at w, n of them (by default the link's windows, which `network_verdict` takes). Every
         window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n (the rule `rate:k/n`), on `coins`
-        (a callable of a byte count, as a stream's); a coin source with a `commit` method is first committed to the
+        (a callable of a byte count, as a stream's); coins with a `commit` method are first committed to the
         period's digest (`commitment`), so the coins come after every commitment of the period. Call it before the
         stream's first registration. The object is `{format, stream, law, k, population, units, roots, commitment,
         read}`, `read` the coin bytes the sample read, in order (hex), from which the network verdict's Lean samples its

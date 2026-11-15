@@ -767,7 +767,7 @@ a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
 each template's
 circuit file, reference header and registered reads (`Run.templateCircuits`) and never `certified` entries, and no
 `links` or `wires`, which the verifier derives; null otherwise.
-The verifier flips no coins of its own: an input whose `coin_source` is not the challenger's is refused. -/
+The verifier flips no coins of its own: an input whose `coins_from` is not the challenger's is refused. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
