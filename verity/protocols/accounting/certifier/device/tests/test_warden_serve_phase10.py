@@ -28,7 +28,7 @@ from verity.protocols.accounting.certifier.verifier.certificate import record_he
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.warden import END, Shim, Warden, cells, read_cell
 
-from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
+from verity.protocols.accounting.certifier.device.tests.relay_runs import PARAMS, SESSION, _response, _Writer, ws
 from verity.protocols.accounting.certifier.verifier import relay_check as RC
 
 REQUESTS = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]

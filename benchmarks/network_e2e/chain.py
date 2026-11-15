@@ -48,9 +48,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 
-import window_chain as WC  # noqa: E402
+from verity.protocols.accounting.certifier.prover import window_chain as WC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments import advice as AC  # noqa: E402
@@ -297,7 +296,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
             return last[rid]
 
         try:
-            adv = WC.join([(w, a) for w, a, _ in chained], released)
+            adv = WC.join([(w, a) for w, a, _ in chained], released, WA)
         except I1.MalformedAdvice as err:
             problems.append(str(err))
             for w, a, row in chained:

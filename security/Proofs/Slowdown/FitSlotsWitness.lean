@@ -24,7 +24,9 @@ window uses two, so `Fits` charges window 0 `2 b_w ≤ 6 ≤ S`, while `Reach` a
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs.FitSlotsWitness
+open InferenceOnly
+
+namespace Slowdown.SecurityProofs.FitSlotsWitness
 
 open Verity Finset
 
@@ -136,4 +138,4 @@ theorem bound :
     4 * (1 : ℝ) * ((2 : ℕ) * 4 - 6) * threading.M.card ≤ (2 : ℕ) * threading.reuse * (2 : ℕ) * (6 : ℝ) ^ 2 :=
   FitBoundSlots decl threading slots 2 executionPhases start 2 6 4 1 gap reads_le reachSlots fitsSlots
 
-end InferenceOnly.SecurityProofs.FitSlotsWitness
+end Slowdown.SecurityProofs.FitSlotsWitness

@@ -21,9 +21,11 @@ so `ThreadedReadsSlots` applies here (`reads`).
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs.WeightsSlotsWitness
+open InferenceOnly
 
-open Verity Finset InferenceOnly.SecurityProofs.FitSlotsWitness
+namespace Slowdown.SecurityProofs.WeightsSlotsWitness
+
+open Verity Finset Slowdown.SecurityProofs.FitSlotsWitness
 
 /-- `{4, 6, 8}` uses two weight gates, both versions of slot 0. -/
 theorem span :
@@ -69,4 +71,4 @@ theorem reads (Γ : ℕ) (S : ℝ) (R : Finset (Fin 10)) (hR : Small decl Γ S R
   ThreadedReadsSlots decl threading slots Γ S 4 1 1 0 (by norm_num) (by norm_num) one_pos (threaded Γ S)
     (weightsIncompressibleSlots Γ S) R hR
 
-end InferenceOnly.SecurityProofs.WeightsSlotsWitness
+end Slowdown.SecurityProofs.WeightsSlotsWitness

@@ -28,7 +28,7 @@ baseline). The statement counts gates; in the Boolean profile (`w = 1`) a gate i
 
 @[expose] public section
 
-namespace InferenceOnly.Covering
+namespace Slowdown.Covering
 
 open Verity Finset
 
@@ -100,4 +100,4 @@ def Cuts (j : Fin B.nt) (A X : Finset (Fin d.D.N)) (i' : Fin B.nw) : Prop :=
 
 end MulBlocks
 
-end InferenceOnly.Covering
+end Slowdown.Covering

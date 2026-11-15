@@ -14,7 +14,7 @@ public import Proofs.Core.Formalism
 
 @[expose] public section
 
-namespace InferenceOnly.Capability
+namespace Slowdown.Capability
 
 open Verity Finset
 
@@ -27,7 +27,7 @@ theorem holds_mono {C : Circuit} {S T : Finset (Fin C.N)} (h : S ⊆ T) : holds 
     · exact Or.inl haT
     · exact Or.inr ⟨haT, g, h hg, hag⟩
 
-end InferenceOnly.Capability
+end Slowdown.Capability
 
 namespace Verity
 
@@ -43,7 +43,7 @@ theorem Circuit.bits_congr (C : Circuit) {X Y : C.Trace} {l : List (Fin C.N)} (h
 
 theorem Committed.recompute_congr (R : Committed) {X Y : R.d.D.Trace} {u : Fin R.d.n}
     (h : ∀ g ∈ R.d.unregistered (R.d.𝓘.gates u), X g = Y g) :
-    ∀ g ∈ InferenceOnly.Capability.holds R.d.D (R.d.𝓘.gates u), R.recompute X u g = R.recompute Y u g := by
+    ∀ g ∈ Slowdown.Capability.holds R.d.D (R.d.𝓘.gates u), R.recompute X u g = R.recompute Y u g := by
   intro g
   induction g using WellFoundedLT.induction with
   | _ g ih => ?_

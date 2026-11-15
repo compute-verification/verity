@@ -5,7 +5,7 @@ public import Definitions.Slowdown.Capability
 /-!
 # Local bounds: caps from dependency
 
-What a block finishes, and what that costs it. Every consumer (`InferenceOnly.Capability.Consumers`: a use of counted products, an
+What a block finishes, and what that costs it. Every consumer (`Slowdown.Capability.Consumers`: a use of counted products, an
 output accumulating many of them, and so on) a block finishes is either **imported** (it spends a fresh bit of the
 consumer's region) or **recomputed** (the block contains the consumer's required gates):
 
@@ -16,9 +16,9 @@ consumer's region) or **recomputed** (the block contains the consumer's required
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+namespace Slowdown.Guarantees
 
-open Verity Finset InferenceOnly.Capability
+open Verity Finset Slowdown.Capability
 
 /-- **Import or recompute.** Under the upstream certificate and overlap weights `ω`, the weight of the consumers a proof
 block finishes is at most its unregistered input bits plus the weight of the consumers whose required gates it contains:
@@ -44,4 +44,4 @@ def RecomputeByState : Prop :=
   ∀ (R : Committed) {ι : Type} (W : Items R.d.D ι) {κ : Type} (K : Consumers R.d κ) (h : ℝ),
     HeldPriceAtMost R W h → K.RequiresState W h → ∀ (u : Fin R.d.n) (c : κ), ¬ K.G c ⊆ R.d.𝓘.gates u
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

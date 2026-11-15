@@ -20,10 +20,8 @@ reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, 
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import re
-import sys
 from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,23 +33,15 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
-    spec = importlib.util.spec_from_file_location("network_traces_scan_zk", HERE / "scan_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-sz = _load()
+from verity.protocols.accounting.certifier.prover import scan_zk as sz
 from verity.protocols.accounting.certifier.device import warden_serve as WS
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
+from verity.protocols.accounting.certifier.verifier import scan_answer as SA
+
+ROOT = Path(__file__).resolve().parents[6]
+PERIOD_CASE = ROOT / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
 def test_each_rounds_host_read_is_the_rounds(tmp_path):
@@ -607,10 +597,10 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     cls = SimpleNamespace(NR=2, EVERY=every, KO=1, IDB=1)
     G, T, NE = 1, 8, sz.IS.entry_bits(cls)
     nb = G * T // every
-    defs = {"first": _lanes("ScanZkTestScanFirst", ("row",), cls.NR, NE),
+    defs = {"start": _lanes("ScanZkTestScanStart", ("sin",), 0, NE),
             "ingress": _lanes("ScanZkTestScanBucket", ("row", "sin"), cls.NR, NE),
             "egress": _lanes("ScanZkTestScanEgress", ("state",), 0, NE)}
-    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
+    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     root = sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.TEMPLATES], nb, every)
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
     N, design = sum(counts.values()), sz.DR.parse_design(f"stratified:{2 * G * T}")
