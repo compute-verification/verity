@@ -1,7 +1,7 @@
 """`released_keys`: every JSON file a chain record releases holds only keys its declared list names, each with its
 kind; a file is read strictly, by key and never by bytes; and a JSON file whose list isn't written yet is counted as
 not yet checked and one under no list fails. The leak guard's pass by key (``--keys``) is tested with the guard
-(`benchmarks/network_traces/tests/test_leak_guard.py`)."""
+(`verity/protocols/resource_accounting/network/prover/tests/test_leak_guard.py`)."""
 from __future__ import annotations
 
 import json

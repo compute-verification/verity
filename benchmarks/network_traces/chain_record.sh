@@ -101,7 +101,7 @@ leak_guard() {   # on every exit: the guard on the run dir and the hold, then jo
   if [ -n "$SIGNALED" ]; then withhold "$SIGNALED ended the run before the leak guard read it"
   elif [ "$OUT" = "$PUB" ]; then withhold "no hold at $Q/held"; rc=3
   else
-    "${PY:-python3}" -m benchmarks.network_traces.leak_guard "$RUN" "$Q" --gates "$G" --hold "$OUT" \
+    "${PY:-python3}" -m verity.protocols.resource_accounting.network.prover.leak_guard "$RUN" "$Q" --gates "$G" --hold "$OUT" \
       --release-to "$PUB" --keys --report "$PUB/leak-guard.json" > "$W/leak-guard.out" 2> "$W/leak-guard.err"
     g=$?
     if [ "$g" = 0 ] || [ "$g" = 3 ]; then OUT=$PUB; log "chain: $(cat "$W/leak-guard.out")"

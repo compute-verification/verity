@@ -141,13 +141,13 @@ def main() -> int:
         if a.old is not None and k in a.old_scale:
             shutil.copyfile(b["hold"] / "planted.json", b["run"] / "out" / "planted.json")
             row["old"] = timed([sys.executable, str(a.old), str(b["run"]), str(w / "q-old"), "--gates", str(b["gate"]),
-                                "--dry", "--declared", str(Path(importlib.util.find_spec("benchmarks.network_traces.leak_guard").origin).with_suffix(".json")), "--report", str(w / "old.json")],
+                                "--dry", "--declared", str(Path(importlib.util.find_spec("verity.protocols.resource_accounting.network.prover.leak_guard").origin).with_suffix(".json")), "--report", str(w / "old.json")],
                                a.out / f"old-x{k}", a.old_cap)
             if (w / "old.json").is_file():
                 r = json.loads((w / "old.json").read_text())
                 row["old"] |= {"verdict": r.get("verdict"), "found": [d["path"] for d in r.get("found", [])]}
             (b["run"] / "out" / "planted.json").unlink()
-        row["new"] = timed([sys.executable, "-m", "benchmarks.network_traces.leak_guard", str(b["run"]), str(w / "q"), "--gates",
+        row["new"] = timed([sys.executable, "-m", "verity.protocols.resource_accounting.network.prover.leak_guard", str(b["run"]), str(w / "q"), "--gates",
                             str(b["fetch"]), "--hold", str(b["hold"]), "--release-to", str(b["run"] / "out"),
                             "--report", str(w / "new.json")], a.out / f"new-x{k}")
         if (w / "new.json").is_file():

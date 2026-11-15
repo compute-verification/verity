@@ -8,7 +8,7 @@ import random
 import tarfile
 from pathlib import Path
 
-from benchmarks.network_traces import leak_guard as LG
+from verity.protocols.resource_accounting.network.prover import leak_guard as LG
 
 GATE = "c20261027T000000Z-0000"
 _rnd = random.Random(7)

@@ -4839,6 +4839,14 @@
         "verity/protocols/resource_accounting/network/verifier/tests/test_network_certifier_window_charge_slots.py": "verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_window_charge_slots.py",
         "verity/protocols/resource_accounting/network/verifier/tests/test_network_certifier_window_lean_difftest.py": "verity/protocols/resource_accounting/network/verifier/tests/test_network_attester_window_lean_difftest.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/network_traces/leak_guard.py": "verity/protocols/resource_accounting/network/prover/leak_guard.py",
+        "benchmarks/network_traces/leak_guard.json": "verity/protocols/resource_accounting/network/prover/leak_guard.json",
+        "benchmarks/network_traces/tests/test_leak_guard.py": "verity/protocols/resource_accounting/network/prover/tests/test_leak_guard.py",
+        "benchmarks/network_traces/tests/gate_runs.py": "verity/protocols/resource_accounting/network/prover/tests/gate_runs.py"
+      }
     }
   ]
 }

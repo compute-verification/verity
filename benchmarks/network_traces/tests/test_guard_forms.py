@@ -7,9 +7,9 @@ from __future__ import annotations
 import json
 import os
 
-from benchmarks.network_traces import leak_guard as LG
-from benchmarks.network_traces.tests.gate_runs import _gate, _put
-from benchmarks.network_traces.tests.test_leak_guard import _guard
+from verity.protocols.resource_accounting.network.prover import leak_guard as LG
+from verity.protocols.resource_accounting.network.prover.tests.gate_runs import _gate, _put
+from verity.protocols.resource_accounting.network.prover.tests.test_leak_guard import _guard
 from verity.protocols.resource_accounting.network.attester import runner_parts as rp
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 

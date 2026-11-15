@@ -21,10 +21,10 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.network_traces import leak_guard as LG
+from verity.protocols.resource_accounting.network.prover import leak_guard as LG
 from verity.protocols.resource_accounting.network.prover.tests.test_released_keys import GOOD, LIST, _declared, _put as _put_json
 from verity.protocols.resource_accounting.network.prover import released_keys as RK
-from benchmarks.network_traces.tests.gate_runs import (
+from verity.protocols.resource_accounting.network.prover.tests.gate_runs import (
     CERTIFIED, DEPLOYMENT, GATE, INDENTED, LINES, SALTS, _gate, _put, _sig_piece, _tar)
 
 
