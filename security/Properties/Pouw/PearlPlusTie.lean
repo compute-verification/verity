@@ -25,7 +25,8 @@ root and the call's index: `yCell`, the unscale (`Rule.yOf`) of the tile's U at 
   round's calls.
 * `AcceptedIsHeldToW`: an accepted verdict on an input that names W is a run held to W (`Run.HeldToW`) whose every
   opened tile is accepted (`TilesAccepted`): the bridge from `check` to the statements below, which are on `tieOf`,
-  `todo` and `checkTile`.
+  `todo` and `checkTile`. It reads the tie at `tieAt`, as `plan` takes it: `tieOf`'s, with the passes held to the
+  window's class's fixed load where the input names one, and that class in the tie.
 * `YAtWIsTheCall`, **the run's statement**: over `t` uniform work-weighted tickets, with the prover's openings any
   function of the tickets, the run is accepted on openings its table holds while the tiles that are not tied at W's
   entries (`TileTiedAtW`) hold more than ε of the run's ticket weight with probability at most δ + q / 2^256, wherever
@@ -113,7 +114,7 @@ whatever X_O the run's credit is taken at (`creditAtAssumption`).
 **y words are whole.** A cell's y word is the word the table's y row holds at the cell's column (`[j]?`): a row that
 ends before the column ties no cell, and `Rule.yReason` refuses such a row before it reads any word of it.
 
-**Proofs, all of them the next step.** `TieMeans` and `AcceptedIsHeldToW` unfold `tieOf` and `check`. The run's
+**Proofs, all of them the next step.** `TieMeans` unfolds `tieOf`; `AcceptedIsHeldToW`, `tieAt` and `check`. The run's
 statement: an accepted tile's rows are the table's or the finder outputs a collision (`TileAcceptMeans`, `TieMeans`,
 `openingBinds`, and `collisionIn` finding a collision where its list holds one); `yCell` is the tile's cell (`encode`
 and `checked` act row by row and column by column); so on accept without a collision no sample is on a wrong tile, and
@@ -355,13 +356,14 @@ def runOf (i : Input) (passes : List Pass) (w : Lean.Json) (T : Table) : Run :=
   { coins := i.coins, manifests := i.manifests, passes := passes, w := w, rounds := i.rounds, dropped := i.dropped,
     overCap := i.overCap, table := T }
 
-/-- **An accepted verdict on an input that names W is a run held to W**: the plan's passes are W's by `tieOf`, the
-verdict answers with that tie, and, where the tie's weights are tied, the run (`runOf`, at any table) is accepted on
-the plan's sample with the openings the verdict took (`Run.Accepts`). -/
+/-- **An accepted verdict on an input that names W is a run held to W**: the plan's passes are W's by `tieAt`, the
+tie `plan` takes, which is `tieOf`'s and, where the input names the window's class (`Input.load`), holds the passes to
+the class's fixed load and names it; the verdict answers with that tie, and, where the tie's weights are tied, the run
+(`runOf`, at any table) is accepted on the plan's sample with the openings the verdict took (`Run.Accepts`). -/
 def AcceptedIsHeldToW : Prop :=
   ∀ (i : Input) (opener : Opener) (w : Lean.Json), (check i opener).accept = true →
     i.tie = some w → ∃ (pl : Plan) (tied : Tied), plan i = .ok pl ∧
-      tieOf w (i.manifests.zip pl.passes) i.rounds i.dropped = .ok tied ∧ (check i opener).tie = some tied ∧
+      tieAt i.load w (i.manifests.zip pl.passes) i.rounds i.dropped = .ok tied ∧ (check i opener).tie = some tied ∧
       (tied.weights = none → ∀ T : Table, (runOf i pl.passes w T).Accepts opener pl.picks)
 
 /-! ## The run's statement -/
