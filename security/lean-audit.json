@@ -3637,6 +3637,7 @@
   "Properties.InferenceOnly",
   "Properties.Verity.ExecutionPhaseFiles",
   "Properties.Verity.Committed",
+  "Properties.Verity.GateARow",
   "Properties.Spot.Wires",
   "Spot.RecordText",
   "Proofs.Certifier.JointBridge.Guarantees",
