@@ -88,7 +88,7 @@ theorem executionPhaseSessions_of_reach (W : ExecutionPhase) (rd : Reading W.rou
       ((W.extend (executionPhaseSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)).widening).L.draw ω) x := by
   rw [executionPhaseFirstStop_sampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc) ω] at hreach
   obtain ⟨L, hc, hO⟩ := walkFill_req (label := label) (after := after) hrd (frames (Parties.families (V.devices θ) ++ V.families θ)) (Parties.families (V.devices θ) ++ V.families θ)
-    (V.signer θ) θ F c _ (fun a => releases_bind _ _ _ _) σ (roundCuts V θ F c rd) (roundCuts_heq V θ F c rd) nc
+    (V.signer θ) (V.devices θ) θ F c _ (fun a => releases_bind _ _ _ _) σ (roundCuts V θ F c rd) (roundCuts_heq V θ F c rd) nc
     (W.srcCoinsAt nc ω.1) ω.2 id
   obtain ⟨log', hlog, htail⟩ := hO x hreach
   have hP := hR.fresh

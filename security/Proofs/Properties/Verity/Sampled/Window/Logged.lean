@@ -196,7 +196,7 @@ theorem stopOf_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c
 round live, where each round's reading picks only openings (`stopOf_rootStop`). -/
 theorem stopsAt_rootStop {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ)
     (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n) :
-    StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 (Pos.root (roundCuts V θ F c rd) x).toStop :=
+    StopsAt rd.round rd.reveal (V.signer θ) (V.devices θ) θ F c σ.1 (Pos.root (roundCuts V θ F c rd) x).toStop :=
   ⟨[], _, fun _ => True, fun _ => rfl, stopOf_rootStop V θ F c rd σ x hP⟩
 
 /-- **The members' steps at a window, at where the walk stops**, at an invariant `I` of the widened coins, the position
@@ -220,7 +220,7 @@ structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop
     (out : LiveOutJ (memberTabs ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) m) (memberPts m)),
     ((W.extend M.widening).joint t).ms[i]? = some m → (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
     I ω r i p → p.Inv (roundCuts V θ F c rd) →
-    StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 p.toStop →
+    StopsAt rd.round rd.reveal (V.signer θ) (V.devices θ) θ F c σ.1 p.toStop →
     MemberReach D M BL B ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) i m p q out → q.Past r →
     r.Inv (roundCuts V θ F c rd) →
     V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
@@ -250,7 +250,7 @@ theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange
     (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n)
     (h : MemberSteps V θ F c k P W t rd σ D M BL B I) :
     MemberDecodes V θ F c k P W t rd σ D M BL B fun ω r i p =>
-      I ω r i p ∧ p.Inv (roundCuts V θ F c rd) ∧ StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 p.toStop where
+      I ω r i p ∧ p.Inv (roundCuts V θ F c rd) ∧ StopsAt rd.round rd.reveal (V.signer θ) (V.devices θ) θ F c σ.1 p.toStop where
   start ω r := ⟨h.start ω r, Pos.inv_root _ _, stopsAt_rootStop V θ F c rd σ (M.start ω) hP⟩
   step ω i m p q r out hm hd hI hmr hqr hri hacc := by
     obtain ⟨hI', hacc'⟩ := h.step ω i m p q r out hm hd hI.1 hI.2.1 hI.2.2 hmr hqr hri hacc

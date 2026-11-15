@@ -176,7 +176,7 @@ theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchang
         (memberPts (m.toV5 t))),
       W.ms[i]? = some m → ((m.toV5 t).part ((W.extend M.widening).L.draw ω)).Nonempty →
       I ω r i p → p.Inv (roundCuts V θ F c rd) →
-      StopsAt rd.round rd.reveal (V.signer θ) θ F c σ.1 p.toStop →
+      StopsAt rd.round rd.reveal (V.signer θ) (V.devices θ) θ F c σ.1 p.toStop →
       MemberReach D M BL B ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) i (m.toV5 t) p q out →
       q.Past r → r.Inv (roundCuts V θ F c rd) →
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧

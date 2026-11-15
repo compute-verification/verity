@@ -471,7 +471,7 @@ theorem session_step {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
       (fun _ => roundEmpty fieldEnc (finish (V.signer θ) (V.devices θ) θ F c σ.1)) S Rg i (m.toV5 t) p q out := by
     refine hmr.weaken (fun q' => q'.Inv (roundCuts V θ F c (sessionReading R tb ev record₀ recordDigest)) ∧
         StopsAt (sessionReading R tb ev record₀ recordDigest).round
-          (sessionReading R tb ev record₀ recordDigest).reveal (V.signer θ) θ F c σ.1 q'.toStop)
+          (sessionReading R tb ev record₀ recordDigest).reveal (V.signer θ) (V.devices θ) θ F c σ.1 q'.toStop)
       (fun q' φ hq => ⟨Pos.inv_consume (Pos.inv_rewrite (Pos.toStop_spec hq.1).2.2 φ), StopsAt.next hP hq.2 φ⟩)
       (fun pts hL0 _ hE => ?_)
       (fun pts => ⟨Pos.inv_consume (Pos.inv_rewrite hpi' _), StopsAt.next hP ⟨pre, f, a, hf, hSO⟩ _⟩)
