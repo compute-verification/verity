@@ -117,7 +117,7 @@ print("spot first stage:", pick, {k: tokens[v] for k, v in pick.items()}, classe
 EOF
   STEPS=$("$PY" -c "import json; p = json.load(open('$OUT/first_stage.json'))['steps']; print(','.join(dict.fromkeys(str(p[k]) for k in ('long', 'big', 'small') if k in p)))")
 fi
-[ -n "$STEPS" ] || { echo "spot: no step drawn"; exit 2; }
+[ -n "$STEPS" ] || { echo "spot: no step sampled"; exit 2; }
 if [ "${KEEP_TENSORS:-opened}" = all ] && [ -z "${KEEP_STEPS:-}" ] && [ -f "$OUT/first_stage.json" ]; then
   # whole steps in the order sampled (long, big, small) while about GB_PER_TOKEN (0.5: about 64 MB a token on each of 8
   # ranks, the tensors up to capture.py's keep cap)

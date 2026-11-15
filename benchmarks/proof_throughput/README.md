@@ -71,7 +71,7 @@ imported as it is and checked by its `validate()` before it is written:
 - `fixed.setup_seconds`: staging the population, once per point. `rounds.protocol`: the live session's rounds.
 - The identity (`contract.IDENTITY_FIELDS`): proof class `NON_ZK_PROOF`, profile, K, B, the probed hardware, the security
   target (Fast100, 2 repetitions, 2^-100), plus the workload, its proof block, the configuration, the population's reference
-  (`population`) and the sample (`draw`: stratified, k = B). `instances` is null: a sample fixes no id range.
+  (`population`) and the sample (`sample`: stratified, k = B). `instances` is null: a sample fixes no id range.
 
 `compare` and `table` refuse results that don't conform, didn't pass, or whose identities differ (`table` lets B alone
 vary). Tables are rendered on demand from results, never committed. The hill-climb baseline is `baseline.json`: per
