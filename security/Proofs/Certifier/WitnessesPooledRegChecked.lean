@@ -3,6 +3,10 @@ module
 public import Definitions.Certifier.Guarantees.PooledRegChecked
 public import Proofs.Certifier.WitnessesPooledReg
 public import Proofs.Certifier.PooledRegChecked
+import Proofs.Flock.SamplingGeneric.Efficient
+import Proofs.Flock.Claims.Recursion.BitsLin2
+import Proofs.Flock.Claims.Sampling.Runs
+import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
 
 /-!
 # The witnesses of the checked pooled bound at the trace with the registered openings
@@ -17,8 +21,9 @@ network certifier has no connection; its record is the one step's `twoObs` (`one
 guarantee's event there, which is not empty: at every history the phase is accepted, registered as the period's and
 its record complete.
 
-Its nontrivial lemma (`PooledLeakRegisteredChecked_nontrivial`): at that instance the checked count is strictly
-below `PooledLeakRegistered`'s, the checked input being a free input outside the registered ones
+Its nontrivial lemma (`PooledLeakRegisteredChecked_nontrivial`): at that instance the bound's right side is `0`, below
+`1`, the phase's own error being `0` (`twoL` makes no SHA-512 call, `twoL_εregX` and `twoL_bopsX`), and the checked
+count is strictly below `PooledLeakRegistered`'s, the checked input being a free input outside the registered ones
 (`pooledCount_checked_lt`).
 -/
 
@@ -145,16 +150,92 @@ example (h : Guarantees.PooledLeakRegisteredChecked) :
       (fun _ _ _ s hs _ => hcert s hs) 1).1 () (Set.mem_univ _))
   exact ⟨fun i => ⟨hω.1 i, (hev ω i).2⟩, hω.2⟩
 
-/-- **At the honest instance the checked count is strictly below the unchecked one**: with no input registered and
-the gate `1` checked, the factor `PooledLeakRegisteredChecked`'s count takes for the phase's inputs is strictly below
-the one `PooledLeakRegistered`'s count takes at the same registration, since the gate `1` is a free input outside the
-registered ones (`pooledCount_checked_lt`). It compares the two bounds at one instance; it says nothing of how many
-secrets the instance's record singles out. -/
+/-! ## The instance's error is `0`: `twoL` makes no SHA-512 call -/
+
+/-- A session's witness makes no SHA-512 call of its own, at any compiled verifier: the proof system's extractor's waits
+are reruns (`noHash_ext`), served through the session's view. -/
+theorem noHash_sessWit {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+    (L : Compiled Coin A) (x : Msg) (u : ℕ) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : A.EC (L.sh x u)) :
+    Claims.Sampling.NoHash (L.sessWit x u r v c) := by
+  unfold Compiled.sessWit
+  split
+  · exact .ret _
+  · split
+    · exact Claims.Recursion.noHash_serve (fun _ => Claims.Recursion.noHash_viewing _ _)
+        (Claims.SamplingGeneric.noHash_ext _ _ _ _)
+    · exact .ret _
+
+/-- `twoL`'s extractions make no SHA-512 call of their own: each session's witness makes none (`noHash_sessWit`), and
+`trueCm` checks an opening with no call. -/
+theorem twoL_ownLog_runExt (H : Msg → Msg) (x : Msg) (s : AuditStatement) (r : Fin ((twoL Bool).V.k x) → Bool)
+    (v : Seen) (c : (twoL Bool).SlotEC x) (run' : (Fin ((twoL Bool).V.k x) → Bool) → Transcript) :
+    ownLog H run' ((twoL Bool).runExt x s r v c) = [] := by
+  refine List.eq_nil_of_length_eq_zero ?_
+  unfold Compiled.runExt
+  rw [Claims.Sampling.ownLog_flatMapRP]
+  refine List.sum_eq_zero fun n hn => ?_
+  obtain ⟨iu, -, rfl⟩ := List.mem_map.1 hn
+  dsimp only
+  split
+  · unfold Compiled.sessExt
+    rw [Claims.Sampling.ownLog_bind, List.length_append,
+      Claims.Sampling.ownLog_of_noHash H run' (noHash_sessWit _ _ _ _ _ _), List.length_nil, zero_add]
+    split
+    · rfl
+    · rw [Claims.Sampling.ownLog_flatMapRP]
+      refine List.sum_eq_zero fun n' hn' => ?_
+      obtain ⟨u', -, rfl⟩ := List.mem_map.1 hn'
+      rw [Claims.Sampling.ownLog_checkRevealed_length]
+      refine List.sum_eq_zero fun m hm => ?_
+      obtain ⟨p, -, rfl⟩ := List.mem_map.1 hm
+      rfl
+  · rfl
+
+/-- At `twoL` the collision finder between two runs' extractions finds nothing. -/
+theorem twoL_bconfX (H : Msg → Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
+    (Compiled.BconfX H (twoL Bool) Ω P x).Pr H = 0 := by
+  simp only [Compiled.BconfX]
+  rcases (twoL Bool).parse x with _ | s
+  · exact Claims.Witness.SamplingGeneric.finder_pr_none H _ fun _ => rfl
+  · exact Claims.Witness.SamplingGeneric.finder_pr_none H _ fun q => by simp [twoL_ownLog_runExt, findColl]
+
+/-- At `twoL` the collision finder against the registered openings `certOps` finds nothing: the extractions make no
+call, and `trueCm` checks the openings with none. -/
+theorem twoL_bopsX (H : Msg → Msg) (x : Msg) : (BopsX H (twoL Bool) (fun _ => certOps) Unit silentP x).Pr H = 0 := by
+  simp only [BopsX]
+  rcases (twoL Bool).parse x with _ | s
+  · exact Claims.Witness.SamplingGeneric.finder_pr_none H _ fun _ => rfl
+  · refine Claims.Witness.SamplingGeneric.finder_pr_none H _ fun q => ?_
+    have hc : certifierLog H (twoL Bool).commit s.roots certOps = [] := rfl
+    simp [twoL_ownLog_runExt, hc, findColl]
+
+/-- `twoL`'s committed form's error at the trace read at the statement is `0` at the prover that sends nothing: its
+proof blocks' bounds `κb` and `γb` are `0`, and `B_conf,X` finds nothing (`twoL_bconfX`). -/
+theorem twoL_εregX (H : Msg → Msg) (x : Msg) : (twoL Bool).εregX H x silentP = 0 := by
+  have hκ : (twoL Bool).κs x = 0 := Claims.Witness.SamplingGeneric.maxBelow_zero _
+  have hγ : (twoL Bool).γs x = 0 := by
+    unfold Compiled.γs
+    rw [show (fun u => (twoL Bool).γb x u / (twoA Bool).rounds ((twoL Bool).sh x u)) = fun _ => (0 : ℝ) from
+      funext fun _ => zero_div _]
+    exact Claims.Witness.SamplingGeneric.maxBelow_zero _
+  unfold Compiled.εregX
+  rw [hκ, hγ, twoL_bconfX]
+  simp
+
+/-- **`PooledLeakRegisteredChecked`'s bound is not vacuous at the honest instance**: there, at `q = 1`, `Fmax = 1` and
+`εchk = 0`, its right side is `0`, below `1`, the phase's own error being `0` (`twoL_εregX`, `twoL_bopsX`); and the factor
+its count takes for the phase's inputs, with no input registered and the gate `1` checked, is strictly below the one
+`PooledLeakRegistered`'s count takes at the same registration, the gate `1` being a free input outside the registered
+ones (`pooledCount_checked_lt`). Toy code, one phase: it compares the two bounds at one instance and says nothing of a
+deployed check or of how many secrets a deployed record singles out. -/
 theorem PooledLeakRegisteredChecked_nontrivial :
+    (1 - 1 : ℝ) ^ 1 + ∑ i, e₂ i + ∑ _ : Fin 1, (0 : ℝ) < 1 ∧
     ∏ i : Fin 1, (2 ^ (freeInputs ((fun _ => twoStmt : Fin 1 → AuditStatement) i).prog twoLay 1 \ (∅ ∪ {1})).card *
         1 ^ 1) <
-      ∏ i : Fin 1, (2 ^ (freeInputs ((fun _ => twoStmt : Fin 1 → AuditStatement) i).prog twoLay 1 \ ∅).card * 1 ^ 1) :=
-  pooledCount_checked_lt (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => {1}) Nat.one_pos (fun _ => twoStmt) 0
-    (Finset.mem_singleton_self 1) one_mem_freeInputs (Finset.notMem_empty 1)
+      ∏ i : Fin 1, (2 ^ (freeInputs ((fun _ => twoStmt : Fin 1 → AuditStatement) i).prog twoLay 1 \ ∅).card * 1 ^ 1) := by
+  refine ⟨?_, pooledCount_checked_lt (fun _ => twoLay) (fun _ => 1) (fun _ => ∅) (fun _ => {1}) Nat.one_pos
+    (fun _ => twoStmt) 0 (Finset.mem_singleton_self 1) one_mem_freeInputs (Finset.notMem_empty 1)⟩
+  simp only [twoL_εregX, twoL_bopsX]
+  norm_num
 
 end NetTiming.Witness
