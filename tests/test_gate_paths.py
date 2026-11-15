@@ -36,6 +36,8 @@ EXEMPT = {
     ("tools/research/src/research/queue.py", "tools/verity/lean/headers.py"):
         "the Lean header reader the codemod reads with, which lands with it: `on_modules` reads a tree's roots with it; the "
         "tooling drops this entry",
+    ("tools/check/post_train.py", "tools/verity/check/check.py"):
+        "the check's path in the store's records of shards from before the move, by which post_train still finds them",
 }
 #: the gate tooling whose module-level path constants are checked: what `check`, `research merge`, the queue and the audit read
 TOOLING = ("tools/check/", "tools/verity/lean/", "tools/research/src/research/", "tools/verity/circuit_check/src/")
