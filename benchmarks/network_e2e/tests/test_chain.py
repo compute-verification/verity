@@ -1,9 +1,8 @@
 """The chain's stages (`chain.py`) on fakes: the advice read in each of its forms (I1 v0's JSON and bytes, and a prove-path
-stand-in's from before v0, upgraded with each kept output released in its step's bucket); its bits per execution phase, v0's
-summing to I1's total and the residual's giving back every step from the config alone, and with the certified I/O the
-whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the given
-advice, with a forged arm that passes only when Lean refused its unit; and the endpoint's own advice, bound to the
-runs by its Commit windows."""
+stand-in's from before v0, upgraded with each kept output released in its step's bucket); a prove path's output adopted,
+held to the given advice, with a forged arm that passes only when Lean refused its unit; and beside the endpoint's own
+advice (`verity-vllm advice --bind`, whose own tests are the adapter's `test_advice_bind.py`), the `--serve-run` arms held
+to its Commit windows."""
 
 from __future__ import annotations
 
@@ -21,12 +20,14 @@ HERE = Path(__file__).resolve().parents[1]
 
 
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "network_traces"))
 import chain  # noqa: E402
+import chain_record as CR  # noqa: E402
+from verity.circuits.codec import canonical_json  # noqa: E402
+from verity.commitments import advice as AC  # noqa: E402
 
 I1 = chain.I1
 T = 4
-CONFIG = {"block_size": 16, "num_gpu_blocks": 1000, "max_num_batched_tokens": 64, "max_model_len": 128,
-          "eos_token_id": 9, "stop_token_ids": []}
 
 
 def _advice():
@@ -35,12 +36,6 @@ def _advice():
     return I1.Advice((I1.RequestAdvice("q0", 4, 2, "length"), I1.RequestAdvice("q1", 3, 1, "eos")),
                      (I1.StepAdvice((I1.Row(0, "prefill", 0, 4), I1.Row(1, "prefill", 0, 3))),
                       I1.StepAdvice((I1.Row(0, "decode", 4, 1),))), (1, 1, T + 2))
-
-
-def _io(users=("q0", "q1")) -> list[dict]:
-    """The certified I/O of `_advice`'s requests as a varied run's check writes it (``io.json``), in ingress order."""
-    return [{"user": users[0], "prompt": [1, 2, 3, 4], "max_tokens": 2, "output": [5, 6]},
-            {"user": users[1], "prompt": [1, 2, 3], "max_tokens": 4, "output": [9]}]
 
 
 def _standin() -> dict:
@@ -71,30 +66,6 @@ def test_the_advice_is_read_as_v0_json_as_its_bytes_and_as_an_upgraded_standin(t
     (tmp_path / "c.json").write_text(json.dumps(chunked))
     with pytest.raises(I1.MalformedAdvice, match="release buckets"):
         chain.advice(tmp_path / "c.json")
-
-
-def test_the_bits_per_window_are_v0s_and_the_residuals_and_the_certified_io_binds_and_rebuilds_the_advice():
-    adv = _advice()
-    unbound = chain.bits(adv, T, 3, CONFIG, None)
-    assert unbound["bound"] is None and unbound["public_fields"] is None and unbound["rebuilt"] is None
-    assert "the certified tokens" in unbound["why"] and unbound["windows"][0]["derived_bits"] is None
-    b = chain.bits(adv, T, 3, CONFIG, _io())
-    rows = {x["window"]: x for x in b["windows"]}
-    assert sorted(rows) == [0, 1, 2] and sum(x["v0_bits"] for x in rows.values()) == I1.total_bits(adv) == b["v0_total"]
-    assert {w: x["v0_bits"] for w, x in rows.items() if x["v0_bits"]} == I1.bits_by_window(adv, T)
-    assert b["bound"] is True and b["rebuilt"] is True and b["public_fields"] is True and b["why"] is None
-    assert 0 < rows[0]["derived_bits"] < rows[0]["v0_bits"] and rows[0]["derived_shaped_bits"] <= rows[0]["derived_bits"]
-    assert rows[0]["forced_bits"] <= rows[0]["derived_bits"] and rows[2]["v0_bits"] == 0
-    swapped = chain.bits(adv, T, 3, CONFIG, _io()[::-1])
-    assert swapped["bound"] is True and swapped["rebuilt"] is True
-    other = chain.bits(adv, T, 3, CONFIG, _io(("q0", "q9")))
-    assert other["bound"] is False and other["rebuilt"] is None and "aren't the 2 certified ones" in other["bound_why"]
-    wrong = _io()
-    wrong[0]["output"] = [5, 6, 7]
-    assert chain.bits(adv, T, 3, CONFIG, wrong)["rebuilt"] is False
-    none = chain.bits(adv, T, 1, None, None)
-    assert none["windows"][0]["derived_bits"] is None and "--serving-config" in none["why"]
-    assert [x["in_run"] for x in none["windows"]] == [True, False]
 
 
 def _arm(d: Path, name: str, advice: dict, *, ok=True, forged=False, negatives=None) -> None:
@@ -154,6 +125,22 @@ def test_the_prove_paths_time_is_per_sampled_block_and_beside_the_endpoints_advi
 EP = HERE / "tests" / "data" / "endpoint"
 
 
+def _first_steps(recs: list[dict]) -> dict[int, float]:
+    """Each Commit window's first step's clock: the step with the least index from its open to its close."""
+    clock = {r["step"]: r["t"] for r in recs if r["kind"] == "step" and "t" in r}
+    edge = {(int(r["window"]), r["event"]): int(r["before_step"]) for r in recs if r["kind"] == "window"}
+    lo = {w: s for (w, e), s in edge.items() if e == "open"}
+    return {w: clock[min(x)] for w, s in lo.items()
+            if (x := [t for t in clock if t >= s and ((w, "close") not in edge or t < edge[(w, "close")])])}
+
+
+def _served(ep: Path, dep: dict, io: list[dict]) -> tuple[dict, dict]:
+    """The endpoint's own advice at ``ep`` bound to the run (`verity-vllm advice --bind`, as chain_record's endpoint step
+    runs it): its ``advice`` and ``bits``."""
+    got = CR.served_advice(ep, ep / "advice", dep, io, 60, [128001])
+    return got["advice"], got["bits"]
+
+
 def _endpoint(tmp_path: Path) -> Path:
     shutil.copytree(EP, tmp_path / "ep")
     return tmp_path / "ep"
@@ -172,9 +159,9 @@ def _apart(d: Path, w: int, adv=None) -> str:
     n, k = reg["row_bits"] // 8, len(bytes.fromhex(opening["salts"][0]))
     rows = [data[i:i + n].ljust(n, b"\0") for i in range(0, len(data), n)]
     salts = [(hashlib.sha512(b"apart %d %d" % (w, i)).digest() * 4)[:k] for i in range(len(rows))]
-    binding = hashlib.sha512(chain.canonical_json({"scheme": reg["scheme"],
+    binding = hashlib.sha512(canonical_json({"scheme": reg["scheme"],
                                                    "compiler": reg["binding"]["compiler"]})).digest()
-    root = chain.AC.commit(rows, reg["row_bits"], binding, salts).root.hex()
+    root = AC.commit(rows, reg["row_bits"], binding, salts).root.hex()
     reg["binding"]["advice"]["root"] = root
     (d / "private").mkdir(parents=True)
     (d / "registration.json").write_text(json.dumps(reg))
@@ -213,10 +200,9 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
     ep = _endpoint(tmp_path)
     io = json.loads((ep / "io.json").read_text())["requests"]
     recs = chain._jsonl(ep / "advice_trace.jsonl")
-    first, closed = chain._first_steps(recs), chain.closes(recs)
+    first, closed = _first_steps(recs), chain.closes(recs)
     assert (closed[0], closed[1]) == (1792835186.298694, 1792835187.042822) and sorted(closed) == [0, 1, 2]
-    info, b = chain.served_advice(ep, ep / "advice", {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0},
-                                  io, 60, [128001])
+    info, b = _served(ep, {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0}, io)
     row = {x["window"]: x for x in b["commit_windows"]}
     commits = {int(x["window"]): x for x in chain._jsonl(ep / "windows.jsonl")}
     assert sorted(row) == [1, 2]
@@ -313,9 +299,8 @@ def test_at_serve_time_is_before_its_sample_and_no_later_than_the_next_windows_c
     ep = _endpoint(tmp_path)
     io = json.loads((ep / "io.json").read_text())["requests"]
     recs = chain._jsonl(ep / "advice_trace.jsonl")
-    first, closed = chain._first_steps(recs), chain.closes(recs)
-    info, b = chain.served_advice(ep, ep / "advice", {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0},
-                                  io, 60, [128001])
+    first, closed = _first_steps(recs), chain.closes(recs)
+    info, b = _served(ep, {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0}, io)
     bits = {x["window"]: x["v0_bits"] for x in b["commit_windows"]}
 
     def registered(name: str, w: int, at: float, *receipts: bool | None) -> tuple[bool | None, str]:
@@ -363,9 +348,8 @@ def test_the_serving_runs_record_times_the_registration_and_its_end_bounds_the_l
     ep = _endpoint(tmp_path)
     io = json.loads((ep / "io.json").read_text())["requests"]
     recs = chain._jsonl(ep / "advice_trace.jsonl")
-    first, closed = chain._first_steps(recs), chain.closes(recs)
-    info, b = chain.served_advice(ep, ep / "advice", {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0},
-                                  io, 60, [128001])
+    first, closed = _first_steps(recs), chain.closes(recs)
+    info, b = _served(ep, {"origin_unix": first[0] + 1.2, "windows": 2, "window_s": 6.0}, io)
     bits = {x["window"]: x["v0_bits"] for x in b["commit_windows"]}
     root = {w: json.loads((ep / f"advice/w{w}/registration.json").read_text())["binding"]["advice"]["root"]
             for w in (1, 2)}
@@ -417,129 +401,15 @@ def test_the_serving_runs_record_times_the_registration_and_its_end_bounds_the_l
     assert ok is False and "s after its session ended, with no window after it" in label
 
 
-def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_and_rebuilt(tmp_path):
-    """The own-advice endpoint's first three Commit windows (its served run's records, trimmed: its scheduler
-    trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
-    mid-serve) and the certified I/O of their nine requests: bound and rebuilt, each window opening its registered root;
-    not bound when a window falls outside the run's execution phases, holds a request the run didn't certify, opens another
-    root or names another Commit, or has no advice; not rebuilt when a certified output breaks the stop rule."""
-    io = json.loads((EP / "io.json").read_text())["requests"]
-    first = chain._first_steps(chain._jsonl(EP / "advice_trace.jsonl"))
-    dep = {"origin_unix": first[0] - 0.05, "windows": 2, "window_s": 6.0}
-    info, b = chain.served_advice(EP, EP / "advice", dep, io, 60, [128001])
-    assert b["bound"] is True and b["rebuilt"] is True and b["public_fields"] is True and b["why"] is None, b["bound_why"]
-    regs = [json.loads((EP / f"advice/w{w}/registration.json").read_text()) for w in range(3)]
-    assert [x["window"] for x in b["commit_windows"]] == [0, 1, 2] and all(x["opened"] for x in b["commit_windows"])
-    assert [x["commit"] for x in b["commit_windows"]] == [r["commit"] for r in regs]
-    assert info["requests"] == len(io) == 9 and info["served"] == b["served"] == "r20261024-094558-6d6a"
-    assert info["bits"] == b["v0_total"] == sum(r["binding"]["advice"]["bits"] for r in regs)
-    assert sum(x["v0_bits"] for x in b["windows"]) == b["v0_total"] and [x["in_run"] for x in b["windows"]] == [True, True]
-    assert all(0 < x["derived_bits"] < x["v0_bits"] for x in b["commit_windows"])
-    assert b["config"] | {"num_gpu_blocks": 0} == {
-        "block_size": 16, "num_gpu_blocks": 0, "max_num_batched_tokens": 2048, "max_model_len": 512,
-        "eos_token_id": 128001, "stop_token_ids": [], "scheduler": "async", "long_prefill_token_threshold": 0,
-        "max_num_seqs": 8, "enable_prefix_caching": False, "row_order": "batch"}
-    late = chain.served_advice(EP, EP / "advice", dep | {"origin_unix": first[0] + 1.2}, io, 60, [128001])[1]
-    assert late["bound"] is False and [x["window"] for x in late["commit_windows"]] == [1, 2]
-    assert "1 certified requests are in none of the run's Commit windows" in late["bound_why"]
-    other = chain.served_advice(EP, EP / "advice", dep, io[1:], 60, [128001])[1]
-    assert other["bound"] is False and other["rebuilt"] is False
-    assert "Commit window 0 holds 1 requests that aren't the run's certified ones" in other["bound_why"]
-    broken = [dict(r) for r in io]
-    broken[1]["output"] = [128001, *broken[1]["output"][1:]]
-    eos = chain.served_advice(EP, EP / "advice", dep, broken, 60, [128001])[1]
-    assert eos["bound"] is True and eos["rebuilt"] is False and "break the stop rule" in eos["why"]
-    ep = _endpoint(tmp_path)
-    opening = json.loads((ep / "advice/w1/private/opening.json").read_text())
-    opening["salts"][0] = "00" * (len(opening["salts"][0]) // 2)
-    (ep / "advice/w1/private/opening.json").write_text(json.dumps(opening))
-    lines = (ep / "windows.jsonl").read_text().splitlines()
-    (ep / "windows.jsonl").write_text("\n".join(lines[:2] + [lines[2].replace(regs[2]["commit"]["run_root"], "0" * 64)]))
-    bad = chain.served_advice(ep, ep / "advice", dep, io, 60, [128001])[1]
-    assert bad["bound"] is False and [x["opened"] for x in bad["commit_windows"]] == [True, False, True]
-    assert "Commit window 1's opening doesn't open its registered root" in bad["bound_why"]
-    assert "Commit window 2's registration names another Commit" in bad["bound_why"]
-    index = json.loads((ep / "advice/windows.json").read_text())
-    del index["windows"]["0"]
-    (ep / "advice/windows.json").write_text(json.dumps(index | {"refused": {"0": "a request it holds only part of"}}))
-    gone = chain.served_advice(ep, ep / "advice", dep, io, 60, [128001])[1]
-    assert "Commit window 0 has no advice (a request it holds only part of)" in gone["bound_why"]
-    assert gone["commit_windows"][0] == {"window": 0, "refused": "a request it holds only part of"}
-
-
 CARRY = HERE / "tests" / "data" / "endpoint_carry"
 
 
-def _reregister(d: Path, data: bytes) -> None:
-    """Commit window ``d``'s registration and opening (a `verity-vllm advice` window directory) remade for ``data``
-    under salts of its own, as a prover would register a window advice of its choosing."""
-    reg = json.loads((d / "registration.json").read_text())
-    opening = json.loads((d / "private" / "opening.json").read_text())
-    n, k = reg["row_bits"] // 8, len(bytes.fromhex(opening["salts"][0]))
-    rows = [data[i:i + n].ljust(n, b"\0") for i in range(0, len(data), n)]
-    salts = [(hashlib.sha512(b"lied %d" % i).digest() * 4)[:k] for i in range(len(rows))]
-    binding = hashlib.sha512(chain.canonical_json({"scheme": reg["scheme"],
-                                                   "compiler": reg["binding"]["compiler"]})).digest()
-    reg["binding"]["advice"]["root"] = chain.AC.commit(rows, reg["row_bits"], binding, salts).root.hex()
-    (d / "registration.json").write_text(json.dumps(reg))
-    (d / "private" / "opening.json").write_text(json.dumps(opening | {"advice": data.hex(),
-                                                                      "salts": [s.hex() for s in salts]}))
-
-
-def test_commit_windows_that_carry_a_request_across_their_close_bind_as_one_advice_that_charges_the_carry_once(
-        tmp_path):
-    """The gate endpoint's Commit windows 113 to 116, trimmed: 114 ends three
-    requests with outputs still to keep and 115 carries them in (window advice v1). Bound and rebuilt from the certified
-    I/O of their nine requests, 114 and 115 joined into one advice (`window_chain.join`), which holds each carried
-    request's record and state once where 115's string repeats them; the windows that carry nothing are charged their
-    own registered bits. Refused: 115 opening with a state 114 didn't leave, registered under its own salts so that it
-    opens, 115 without 114 (a carry from a window that isn't the run's) and the run ending at 114 (a window left owing
-    its carry)."""
+def test_a_chain_of_commit_windows_is_one_row_of_the_report(tmp_path):
+    """The gate endpoint's Commit windows 113 to 116, 114 and 115 joined across a carry: the report names the chain on
+    its first window's row and gives each window's requests admitted and carried in."""
     io = json.loads((CARRY / "io.json").read_text())["requests"]
-    first = chain._first_steps(chain._jsonl(CARRY / "advice_trace.jsonl"))
-    dep = {"origin_unix": first[113] - 0.05, "windows": 2, "window_s": 6.0}
-    info, b = chain.served_advice(CARRY, CARRY / "advice", dep, io, 60, [128001])
-    assert b["bound"] is True and b["rebuilt"] is True and b["public_fields"] is True, b["bound_why"] or b["why"]
-    rows = {x["window"]: x for x in b["commit_windows"]}
-    assert sorted(rows) == [113, 114, 115, 116] and all(x["opened"] for x in rows.values())
-    assert b["chains"] == [[114, 115]] and rows[114]["chain"] == rows[115]["chain"] == [114, 115]
-    assert [rows[w]["carried"] for w in sorted(rows)] == [0, 0, 3, 0] and info["requests"] == len(io) == 9
-    regs = {w: json.loads((CARRY / f"advice/w{w}/registration.json").read_text()) for w in rows}
-    assert all(rows[w]["committed_bits"] == regs[w]["binding"]["advice"]["bits"] for w in rows)
-    assert rows[113]["v0_bits"] == rows[113]["committed_bits"] and rows[116]["v0_bits"] == rows[116]["committed_bits"]
-    carried = [chain.WA.from_json(json.loads((CARRY / f"advice/w{w}/private/advice.json").read_text()))
-               for w in (114, 115)]
-    committed = rows[114]["committed_bits"] + rows[115]["committed_bits"]
-    assert rows[115]["v0_bits"] == 0 and 0 < rows[114]["v0_bits"] < committed
-    lag = rows[115]["bucket"] - rows[114]["bucket"]
-    joined = chain.WC.join(list(zip((114, 115), carried)), lambda k, rid, i, bucket: bucket + lag * k, chain.WA)
-    assert rows[114]["v0_bits"] == chain.I1.total_bits(joined) and len(joined.requests) == 3 + 4
-    assert b["v0_total"] == info["bits"] == sum(x["v0_bits"] for x in b["windows"]) \
-        == sum(x["v0_bits"] for x in rows.values())
-    assert all(0 < x["derived_bits"] < x["v0_bits"] for w, x in rows.items() if w != 115)
+    first = _first_steps(chain._jsonl(CARRY / "advice_trace.jsonl"))
+    info, b = _served(CARRY, {"origin_unix": first[113] - 0.05, "windows": 2, "window_s": 6.0}, io)
+    assert b["bound"] is True and b["chains"] == [[114, 115]]
     md = "\n".join(chain.markdown({"advice": info, "bits": b}))
     assert "(windows 114–115)" in md and "| requests admitted | carried in |" in md
-
-    ep = tmp_path / "ep"
-    shutil.copytree(CARRY, ep)
-    a = carried[1]
-    lied = chain.WA.Advice(a.requests, a.steps, a.release,
-                           (dataclasses.replace(a.carried[0], C=a.carried[0].C + 1), *a.carried[1:]))
-    (ep / "advice/w115/private/advice.json").write_text(json.dumps(chain.WA.to_json(lied)))
-    _reregister(ep / "advice/w115", chain.WA.encode(lied))
-    bad = chain.served_advice(ep, ep / "advice", dep, io, 60, [128001])[1]
-    assert bad["bound"] is False and all(x["opened"] for x in bad["commit_windows"])
-    assert "Commit window 115 doesn't open where window 114 closed" in bad["bound_why"]
-    assert {x["window"]: x["bound"] for x in bad["commit_windows"]} == {113: True, 114: False, 115: False, 116: True}
-    index = json.loads((CARRY / "advice/windows.json").read_text())
-    del index["windows"]["114"]
-    (ep / "advice/windows.json").write_text(json.dumps(index))
-    shutil.copytree(CARRY / "advice/w115", ep / "advice/w115", dirs_exist_ok=True)
-    alone = chain.served_advice(ep, ep / "advice", dep, io, 60, [128001])[1]
-    assert alone["bound"] is False
-    assert "Commit window 115 carries 3 requests in from window 114, which isn't among the windows" \
-        in alone["bound_why"]
-    short = chain.served_advice(CARRY, CARRY / "advice", dep | {"window_s": 1.2}, io, 60, [128001])[1]
-    assert [x["window"] for x in short["commit_windows"]] == [113, 114] and short["bound"] is False
-    assert "Commit window 114 ends request" in short["bound_why"]
-    assert "with outputs still to keep, and window 115 isn't among the windows" in short["bound_why"]

@@ -1,6 +1,6 @@
 """The network chain's steps after N2 and the proofs, over varied traffic: the advice (I1 v0,
-`verity.protocols.resource_accounting.network.verifier.advice`), its bits per execution phase (v0's `bits_by_window` beside the derived rules'
-residual, `encodings/derived.py`) and the prove path's audit of a committed run's step units compiled from that advice
+`verity.protocols.resource_accounting.network.verifier.advice`), its bits per execution phase (`verity-vllm advice --bind`,
+`verity_vllm.pipeline.advice_bind`) and the prove path's audit of a committed run's step units compiled from that advice
 (`benchmarks/prove_path`). Each stage's result says what it stood on; `stubs` lists what is still a stand-in.
 
 * **The advice** (`advice`, a file): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
@@ -8,20 +8,10 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
   bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
   a certified request (its ``user``), once.
-* **Bits per execution phase** (`bits`), T the honest run's egress window in buckets: v0's (I1's
-  `bits_by_window`) and, given the registered serving config (`derived.Config`'s fields, or a step
-  trace's ``config``) and the certified I/O the advice is bound to, whose tokens the residual reads (canonical sources,
-  derived hits), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged by
-  I1's rule (`derived.charge`), with the forced fields' share. `derived.reconstruct` must give back every step of the
-  advice and every output length from the residual, the config and the tokens, and `derived.rebuild` the whole advice
-  (the tie's derivation, in the clear on the rehearsal's published witness).
-* **The endpoint's own advice** (`served_advice`, a served run's records): `verity-vllm advice` over a `verity-vllm
-  serve-openai` endpoint's records (`ENDPOINT`), one window advice (`verity_vllm.pipeline.window_advice`) a closed
-  Commit window, each registered (its hiding root, under the window's Commit) with its opening beside it. The honest
-  run's windows are bound to it (each window opened to its registered root, every certified request admitted in
-  exactly one window, a window that carries requests in joined to the window before it, `window_chain.join`) and each
-  chain of windows rebuilt from its certified I/O under the config read off the endpoint's records
-  (`endpoint_config`), its bits placed in the run's execution phases.
+* **The endpoint's own advice and its bits per execution phase** (`advice_bind.served_advice`, a served run's
+  records, through `benchmarks/network_traces/chain_record.py`'s `served_advice`): `verity-vllm advice` over a
+  `verity-vllm serve-openai` endpoint's records, bound to the honest run's certified I/O and rebuilt from it, its bits
+  (v0's and the derived rules' residual's) placed in the run's execution phases.
 * **The prove path** (`prove_path`, a directory or a gzipped tar): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
   coins and every negative was refused; a forged arm when the forged unit it sampled was stopped (`prove_path.forged_row`:
@@ -40,31 +30,15 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-import math
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-from verity.protocols.resource_accounting.network.prover import window_chain as WC  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import advice as I1  # noqa: E402
-from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.commitments import advice as AC  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 
-
-def _derived():
-    spec = importlib.util.spec_from_file_location("enc_derived", HERE / "encodings" / "derived.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-D = _derived()
 ADVICE = "advice"  # the varied plan's N2 profile: its egress counts, from the advice, no N2 unit holds
 
 
@@ -177,7 +151,7 @@ def held_to(w: int, root: str | None, given: str | None, adv_dir: Path | None, c
     window ``w`` (`verity-vllm advice` over the endpoint's records, ``adv_dir/w<w>``): the registration it was committed
     under (``given``, a `verity-vllm advice` directory's ``registration.json`` and ``private/opening.json``, else the
     report's own) has that root and names the window's Commit (``commit``, the endpoint's ``windows.jsonl``), and its
-    opening opens the root to the report's advice (`opens`). Its v0 bit count is never enough. When it was registered
+    opening opens the root to the report's advice (`window_advice.opens`). Its v0 bit count is never enough. When it was registered
     (``at``) is, ahead of the registration's file time (``file_at``; it has no time field), what the serving run's own
     record attests (``record``, `serve_record`: its advice loop's stamp of that root, to the second, so no later than a
     second past it), read against the endpoint's trace (`closes`): its lag after its own window's close (``closed``) is
@@ -200,7 +174,7 @@ def held_to(w: int, root: str | None, given: str | None, adv_dir: Path | None, c
         out["registration"], m = str(src), (src / "registration.json").stat().st_mtime
         out["the_registered_root"] = root is not None and root == reg["binding"]["advice"]["root"]
         out["names_the_commit"] = commit is not None and reg.get("commit") == commit
-        out["opens"] = opens(reg, json.loads((src / "private" / "opening.json").read_text()),
+        out["opens"] = WA.opens(reg, json.loads((src / "private" / "opening.json").read_text()),
                              WA.from_json(json.loads((report / "private" / "advice.json").read_text())))
     except (OSError, ValueError, KeyError, TypeError) as err:
         out["tied_why"] = f"no registration of Commit window {w}'s advice to hold it to at {src} ({err!r})"
@@ -237,7 +211,7 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
                   closed: dict[int, float] | None = None) -> dict:
     """A ``--serve-run`` arm's Commit (its summary's ``serve``: the window it proves, its run id and the root sealed
     while serving) held to the endpoint's records: the endpoint's own when its ``windows.jsonl`` (``commits``) names that
-    window with that run id and root, and one of the honest run's when `served_advice` (``bits``) has it among the run's
+    window with that run id and root, and one of the honest run's when `advice_bind.served_advice` (``bits``) has it among the run's
     Commit windows. Its committed advice is held by content to the report's advice of that window (`held_to`, the
     report's advice directory ``adv_dir``, each window's close ``closed``), whether registered by the report's own run
     or apart. ``registered`` is, by window, who registered its advice (``by``, ``ref``), the registration's directory
@@ -283,7 +257,7 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
     runs: the prove path is ``bound`` to them only when that file is these runs' advice (``advice_bound``, `bits`'
     ``bound``) and the Commit it proves is theirs, which nothing here checks (no Commit record of these runs is an
     input), so it is never bound and its ``ok`` stays out of the report's. Beside the endpoint's own advice
-    (`served_advice`'s ``bits``, its records ``ep``) an arm of the fixed workload proves its own Commit, not this run's;
+    (`advice_bind.served_advice`'s ``bits``, its records ``ep``) an arm of the fixed workload proves its own Commit, not this run's;
     an arm of ``prove_path.py audit --serve-run`` names the served run's Commit window it proves (`served_commit`, named
     ``w<k> <arm>``), and the prove path is bound to these runs when every arm's is the endpoint's and sealed while
     serving, every arm's committed advice is held by content to the report's advice of its window (`held_to`: ``tied``,

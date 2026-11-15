@@ -17,11 +17,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The chain imports `window_chain` from network_traces; its derived bits are `encodings/derived.py`'s (the encodings
-# suite's module, loaded by path, over the vLLM integration's advice code). The endpoint's Commit windows are the vLLM
-# integration's window advice (`window_advice`), which the chain reads.
-inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived.py",
-          "adapters/vllm/verity_vllm/pipeline/advice_code",
-          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/definitions",
-          "adapters/vllm/verity_vllm/pipeline/window_advice.py",
+# The tests bind the endpoint's own advice through chain_record (network_traces), which runs `verity-vllm advice --bind`, so the
+# vLLM integration whole; the chain reads its window advice (`window_advice`). tests/test_stop_rule_definition.py reads
+# `encodings/derived.py`, the encodings suite's module.
+inputs = ["benchmarks/network_traces", "adapters/vllm/verity_vllm", "benchmarks/network_e2e/encodings/derived.py",
           "verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/network/__init__.py", "verity/protocols/resource_accounting/network/verifier/__init__.py"]
