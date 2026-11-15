@@ -31,7 +31,7 @@ witnesses at the toy circuit (`Slowdown.Capability.Toy`, with the instances of `
   without that premise the bound says something false.
 
 The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
-reference circuit (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
+reference training algorithm (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
 in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `ExecutionPhasesHold`
 for the slowdown, and PoUW's soundness (`PouwSound`) for the remote slowdown, whose witnesses take its declared
 computation at the min-cut toy (`Slowdown.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E). The cover theorem's join

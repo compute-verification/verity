@@ -30,7 +30,7 @@ namespace Slowdown
 
 open Verity Finset
 
-/-- **Counted multiplications and a thread partition** of the reference circuit `C`. -/
+/-- **Counted multiplications and a thread partition** of the reference training algorithm `C`. -/
 structure Threading (C : RegisteredCircuit) where
   /-- The number of threads. -/
   m : ℕ
