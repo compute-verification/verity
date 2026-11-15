@@ -1,5 +1,5 @@
 """P2, **experimental**: the squaring-based POUS scheme, P2 v4 (one hash, SHA-512), whose reference is
-`benchmarks/pous/p2_v1/reference.py` and whose outline is `../README.md` ("P2").  Every block is independent, and its
+`verity/protocols/accounting/pous/verifier/p2_v1/reference.py` and whose outline is `../README.md` ("P2").  Every block is independent, and its
 decode is two big-integer squarings.  Two codecs differ only in how a block's keys are expanded:
 
 - `p2-16448/v4`: counter-mode SHA-512 with the spec's v4 framing, the expander its setup assumption P2-EXP-IO names.
@@ -27,9 +27,9 @@ keys       fresh per block j of segment s, sampled after W through the salt, and
 
 `frame` is `verity.commitments.randomness.frame`, and the prime id is `p2-p{w}-c{c0}`.  After the prefix's midstate, each
 64-byte chunk is one compression (the base's last 16 bytes, P and the counter are 21 bytes).  Given the same prefix,
-v4's keys are the spec's byte for byte (`verifier/tests/fixtures/p2-v4-keys.json`, from `benchmarks/pous/p2_v1/vectors.json`).
+v4's keys are the spec's byte for byte (`verifier/tests/fixtures/p2-v4-keys.json`, from `verity/protocols/accounting/pous/verifier/p2_v1/vectors.json`).
 The prefix differs from the spec's in one place: where the spec frames the model commitment and its 32-byte setup salt,
-v4 frames the protocol's 24-byte salt, which `setup.draw_salt` derives from the commitment to W.  So the salt still
+v4 frames the protocol's 24-byte salt, which `setup.sample_salt` derives from the commitment to W.  So the salt still
 binds the model, but the bytes are not the spec's vectors'; that goes with the rest of the spec's setup framing (its
 leaves and challenge derivation), not with the expander.
 
@@ -94,7 +94,7 @@ PROTOCOL_ID = "p2/v4"
 SEED_DOMAIN = b"verity/pous/p2/seed/v1"
 
 P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "random-oracle", "perfect-isolation",
-             "cr/sha-512", "live-verifier", "designated-verifier", "trusted-host")
+             "cr/sha-512", "live-verifier", "designated-verifier", "trusted-device")
 """What P2's certificate rests on:
 - abstract M1 (the proof's model);
 - the SMS-to-M1 instantiation (not accepted);
@@ -105,7 +105,7 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
   held plus the help it received, and nothing attests the developer's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
 - a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
-  that the developer doesn't control and nothing attests (core's `trusted-host`)."""
+  that the developer doesn't control and nothing attests (core's `trusted-device`)."""
 
 WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
@@ -361,7 +361,7 @@ def sha512_keys(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, i
 
 def sha512_keys_indexed(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int, int]:
     """`sha512_keys` and which word of `stream(base, "t")` `t` is (the spec's `t_rejection_index`).  It reads only `w` and
-    `p`, so the spec's own params (`benchmarks/pous/p2_v1/reference.py`'s `Params`) take it as well."""
+    `p`, so the spec's own params (`verity/protocols/accounting/pous/verifier/p2_v1/reference.py`'s `Params`) take it as well."""
     nb, base = params.w // 8, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
     k = int.from_bytes(stream(base, b"K", nb), "big")
     words = (int.from_bytes(stream(base, b"t", (i + 1) * nb)[i * nb:], "big") for i in itertools.count())
@@ -533,8 +533,10 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
     """`Pous.SecurityProofs.ObligationWide320` for a v4 store at the registered width and prime of any block count in
     `CERT_WIDE_BLOCKS`, in any number of segments: a window of `CERT_K_WIDE320` reads at the store's snapshot, the state
     at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, read at `N` = the store's
-    blocks, under `WIDE_CLAIMS`. `delta` is `2^-20 − 2^-128`, so that `delta + 2^eps_log2` is the statement's `2^-20`.
-    The run protocol doesn't take it (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
+    blocks, under `WIDE_CLAIMS`, at uniform indices.  `delta` is that `2^-20`, the theorem's whole bound.  `2^eps_log2`
+    is `2^-127`, the advantage of `prf/sha-512` for the memory challenger's SHA-512 indices, assumed at that figure:
+    `Hash.Assumptions.Sha512Prf` takes the advantage as a parameter, which no model fixes, and the theorem doesn't read
+    it.  The run protocol doesn't take it (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
     lo, hi = CERT_WIDE_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None

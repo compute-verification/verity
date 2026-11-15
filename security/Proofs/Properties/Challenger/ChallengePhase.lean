@@ -4,6 +4,7 @@ public import Proofs.Properties.Challenger.Break
 public import Proofs.Properties.Challenger.Commitment
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
 public import Proofs.Properties.Pouw.LiveSalt.Coin
+public import Proofs.Flock.Be64
 import all Init.Data.String.Defs
 
 /-!
@@ -24,7 +25,7 @@ commitment, the roots and the session id `challengePhaseOf` returns are those of
 closed it, read from that run's own release log, which is the session's log, or the finder outputs a break
 (`challengePhaseOf_bound` without the log).
 
-`challengePhaseOf`'s, `challengePhaseNamed`'s and `drawCoins`' facts are Hoare triples proved by `mvcgen` (`sessionOf_ok`,
+`challengePhaseOf`'s, `challengePhaseNamed`'s and `sampleCoins`' facts are Hoare triples proved by `mvcgen` (`sessionOf_ok`,
 `challengePhaseNamed_ok`, `drawCoins_ok`), read back at an `.ok` result by `of_triple`.
 -/
 
@@ -37,12 +38,12 @@ namespace Properties.Challenger.ChallengePhase
 open Lean (Json)
 open Std.Do
 open Spot Spot.Challenger
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes hash_size be64_size be64_size_inj)
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes hash_size be64_size be64_size_inj)
 open Properties.Pouw.LiveSalt.Coin (enc enc_length enc_split enc_inj taggedBytes tagged_ok taggedBytes_inj)
 open Properties.Pouw.LiveSalt.Ledger (of_triple of_triple_opt throw_spec ok_spec bind_ok except_spec none_spec
   failure_spec toOption_spec ledgerTag_spec nat_spec some_pure_spec recordOfJson_spec mapM_spec)
 
-local instance lawfulBEqByteArraySession : LawfulBEq ByteArray where
+local instance lawfulBEqByteArrayChallengePhase : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
@@ -384,12 +385,12 @@ theorem challengerStream_ok_spec (c : LiveCommitment) (segment : Json) (after : 
     ⦃⌜True⌝⦄ challengerStream c segment after roots
       ⦃⇓? a => ⌜challengerStream c segment after roots = .ok a⌝⦄ := ok_spec _
 
--- `mvcgen` splits `drawCoins` into one goal per check it makes of the record's form, the window and the family
+-- `mvcgen` splits `sampleCoins` into one goal per check it makes of the record's form, the window and the family
 set_option maxHeartbeats 1000000 in
-/-- What `drawCoins` read when it accepts: the session the ledger opens on the window, and the segment's coins, read
+/-- What `sampleCoins` read when it accepts: the session the ledger opens on the window, and the segment's coins, read
 against its commitment and the roots its log shows received for the family. -/
 theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
-    (h : drawCoins key w label after coins = .ok ξ) :
+    (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key (getD coins "pins")
         (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       challengerStream c (getD coins "segment") after
@@ -399,7 +400,7 @@ theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray
       challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ) ?_ h
   clear h
-  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, trustedChallengePhaseOf_ok_spec, challengerStream_ok_spec]
+  mvcgen [sampleCoins, -Spec.throw_Except, throw_spec, trustedChallengePhaseOf_ok_spec, challengerStream_ok_spec]
   all_goals first
     | exact ⟨_, _, by assumption, by assumption⟩
     | (intro h; exact ⟨_, _, by assumption, h⟩)
@@ -753,10 +754,10 @@ theorem challengePhaseOf_bound {c : LiveCommitment} {roots : Roots} {sid : Strin
   · exact .inl ⟨s, hs, hc, hid, he, hr⟩
   · exact .inr b
 
-/-- **A sample `drawCoins` accepts reads its coins against a run the device closed**, or the finder outputs a break: the
+/-- **A sample `sampleCoins` accepts reads its coins against a run the device closed**, or the finder outputs a break: the
 commitment and the roots its segment's coins are read against are a run's of the device under the key, a run its client
 closed, the roots the ones that run's own release log shows. -/
-theorem drawCoins_challengePhase {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
+theorem sampleCoins_challengePhase {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ ∧
       ((∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.ended = none ∧ releasedRootsOf c s.log = .ok roots) ∨

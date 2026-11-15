@@ -2,10 +2,11 @@
 held and sessions the verifier accepts. A window of two members on a challenger's own release log, each session closed
 after its evidence; the verifier's verdict and its check of a member's files' form are handed in (`verdict`, `form`),
 and the read of the auditor's ledger (`challenger.trusted_session_of`, which its own tests hold) is taken as passed.
-The run holds every member's files before any session, a member with no statement as one with a session, and refuses a
-member whose public file is not its slice of the registration; it credits each accepted session its member's units,
-refuses proved units other than the evidence's and a verdict naming another program, and accepts nothing: what a run of
-sessions that all accepted maps to is the form's refusal."""
+The run refuses a statement of a member the sample holds no unit of, then holds every member's files before any
+session, a member with no statement as one with a session, and refuses a member whose public file is not its slice of
+the docket; it credits each accepted session its member's units, refuses proved units other than the evidence's
+and a verdict naming another program, and is no verdict: a run of sessions that all accepted is what v1's check at the
+coins then reads."""
 
 from __future__ import annotations
 
@@ -51,16 +52,21 @@ def header(member: str, **changes) -> dict:
 class Window:
     """The two members' files under `at`, the sessions of the members of `sessions` on one challenger's release log,
     each tree's link, one round and its closing round before the next tree's first, and the per-member parameters and
-    evidence over them. `headers` are the members' public files' headers (`header`'s by default)."""
+    evidence over them. `headers` are the members' public files' headers (`header`'s by default), and `lookups` the
+    pinned tables a member's circuit looks up (none by default)."""
 
-    def __init__(self, at, headers: dict | None = None, sessions: tuple[str, ...] = (A, B)) -> None:
+    def __init__(self, at, headers: dict | None = None, sessions: tuple[str, ...] = (A, B),
+                 lookups: dict | None = None) -> None:
         self.at, self.files = at, []
         challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("sample", 1)], entropy("members-run"))
         log = [json.dumps({"event": "commitment", "root": challenger.commitment.root.hex()})]
         statements, members = [], {}
         for k, name in enumerate((A, B)):
             public = json.dumps((headers or {}).get(name) or header(name)).encode() + b"\nthe rows"
-            members[name] = {"circuit": self.put(b"flock-circuit/v1 u\nMETA {\"vus_per_block\": 4}\n" + name.encode()),
+            looked = {"lookups": {t: {} for t in lookups[name]}} if name in (lookups or {}) else {}
+            meta = {"vus_per_block": 4} | looked
+            members[name] = {"circuit": self.put(b"flock-circuit/v1 u\nMETA " + json.dumps(meta).encode() + b"\n"
+                                                 + name.encode()),
                              "public": self.put(public), "registered": None, "units": UNITS[name], "vus_per_block": 4}
             if name not in sessions:
                 continue
@@ -100,11 +106,12 @@ class Window:
         return d
 
     def run(self, verdict=None, record: dict = RECORD, evidence: dict | None = None, params: dict | None = None,
-            program=PROGRAM, form=None):
+            program=PROGRAM, form=None, tables: dict | None = None):
+        """`members_run` on the window's files and, under their pinned SHA-512s whatever their bytes, the `tables`."""
         return M.members_run(self.params if params is None else params, record,
-                             self.evidence if evidence is None else evidence, M.blobs_of(self.files), program=program,
-                             verify=lambda key, message, signature: False, verdict=verdict or accepting,
-                             form=form or formed)
+                             self.evidence if evidence is None else evidence, M.blobs_of(self.files) | (tables or {}),
+                             program=program, verify=lambda key, message, signature: False,
+                             verdict=verdict or accepting, form=form or formed)
 
 
 def accepting(st: M.Statement) -> dict:
@@ -124,10 +131,10 @@ def ledger(monkeypatch):
     monkeypatch.setattr(C, "trusted_session_of", lambda *a: None)
 
 
-def test_a_run_of_accepted_sessions_credits_each_members_units_and_maps_to_the_forms_refusal(tmp_path):
+def test_a_run_of_accepted_sessions_credits_each_members_units_and_names_no_refusal(tmp_path):
     """Each session is verified on its member's own files, with the program and partition every member reads, and
-    credited the units of its member's public file its record drew; the run accepts nothing, and what the audit above
-    it answers is the form's refusal."""
+    credited the units of its member's public file its record drew; the run is no verdict, and it names no refusal
+    for the audit above it."""
     w = Window(tmp_path)
     seen = []
 
@@ -138,7 +145,7 @@ def test_a_run_of_accepted_sessions_credits_each_members_units_and_maps_to_the_f
     assert refused is None and run.all and run.proved == (1, 2, 4)
     assert [(f.session, f.accepted, f.units, f.program) for f in run.findings] == [
         ("s0", True, (1,), PARTITION["program"]), ("s1", True, (2, 4), PARTITION["program"])]
-    assert M.run_reason(run, refused) == M.ALL_PASSED
+    assert run.all and M.run_reason(run, refused) is None
     ms = w.params["proofs"]["members"]
     assert [PF.file_sha512(st.circuit) for st in seen] == [ms[A]["circuit"], ms[B]["circuit"]]
     assert [PF.file_sha512(st.public) for st in seen] == [ms[A]["public"], ms[B]["public"]]
@@ -155,6 +162,17 @@ def test_proved_units_other_than_the_evidences_and_a_verdict_of_another_program_
     got = w.run(lambda st: {"accepted": True, "why": ""})
     assert got == (None, f"member {A}: session s0's verdict names program none, not the partition object's "
                          f"\"{PARTITION['program']}\"")
+
+
+def test_a_statement_of_a_member_the_sample_missed_is_refused_before_any_session(tmp_path):
+    """A session proves the units of the sample that are its member's, so a statement of a member the sample holds no
+    unit of is a session that proves none: the run refuses it by the member's name before it reads a member's file or
+    verifies a session, the first such statement in the statements' order."""
+    w = Window(tmp_path)
+    missed = "the sample holds none of its units, and a member the sample missed has no statement"
+    assert w.run(never, evidence=w.evidence | {"proved_units": [0, 1]}) == (None, f"member {B}: {missed}")
+    assert w.run(never, evidence=w.evidence | {"proved_units": [3]}) == (None, f"member {A}: {missed}")
+    assert w.run(never, evidence=w.evidence | {"proved_units": []}) == (None, f"member {A}: {missed}")
 
 
 def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the_others_units(tmp_path):
@@ -174,14 +192,13 @@ def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the
      "public file: not the registration's: roots"),
     ({"frame_v3": {"domain_ids": {"out": "cc" * 64}, "roots": {"out": "11" * 64}}},
      "public file: not the registration's: domains"),
-    ({"frame_v3": {"domain_ids": {"out": "aa" * 64}, "roots": {"out": "11" * 64, "x": "11" * 64}}},
-     "public file: not the registration's: roots"),
+    ({"frame_v3": {"domain_ids": {"out": "aa" * 64}, "roots": {"out": "11" * 64, "x": "11" * 64}}}, M.unwired_why("x")),
     ({"instances": 5}, "public file: not the registration's: population"),
     ({"instances": 3, "scheme": 5}, "public file: not the registration's: scheme, population"),
 ])
 def test_a_member_is_refused_where_its_public_file_is_not_its_slice_with_or_without_a_session(tmp_path, change, why):
     """The first member's public file names other units than the member's, in another order or none, or another scheme,
-    root, domain or count than the member's roots of the registration, ports bare: the run refuses the member with the
+    root, domain or count than the member's roots of the docket, ports bare: the run refuses the member with the
     reason before any session is verified, and as it does where the member has no statement."""
     for k, sessions in enumerate(((A, B), (B,))):
         (tmp_path / str(k)).mkdir()
@@ -213,6 +230,39 @@ def test_every_members_files_are_held_in_the_members_order_before_any_session(tm
         assert w.run(never, form=refusing) == (None, f"member {A}: refused: x")
         w.files = [f for f in w.files if PF.file_sha512(f) != ms[A]["circuit"]]
         assert w.run(never) == (None, f"member {A}: circuit: no blob has the SHA-512 {ms[A]['circuit']}")
+
+
+def test_a_member_is_held_to_its_own_circuits_tables_among_the_blobs(tmp_path):
+    """A window whose first member's circuit looks up ``rcp`` and whose second looks up no table, on blobs holding
+    ``rcp`` and ``ex2`` under their pinned SHA-512s: both members' files pass, each member's form check and session are
+    handed its own tables alone (``rcp`` for the first, none for the second), and the run credits both sessions.
+    Without ``rcp`` among the blobs the first member is refused for it before any session, whatever other table they
+    hold. The tables a statement is handed are refused where they are not, by name, its circuit's lookups: one it does
+    not look up as one it lacks."""
+    w = Window(tmp_path, lookups={A: ["rcp"]})
+    rcp, ex2 = tmp_path / "rcp.u32", tmp_path / "ex2.u32"
+    held = {PF.MUFU_SHA512["rcp"]: rcp, PF.MUFU_SHA512["ex2"]: ex2}
+    formed_on, verified_on = [], []
+
+    def form(circuit, public, tables):
+        formed_on.append(tables)
+
+    def verdict(st: M.Statement) -> dict:
+        verified_on.append(st.tables)
+        return accepting(st)
+    run, refused = w.run(verdict, form=form, tables=held)
+    assert refused is None and run.all and run.proved == (1, 2, 4)
+    assert formed_on == verified_on == [(("rcp", rcp),), ()]
+    for tables in ({}, {PF.MUFU_SHA512["ex2"]: ex2}):
+        assert w.run(never, tables=tables) == (
+            None, f"member {A}: {PF.NO_TABLES}: the circuit looks up rcp, the blobs hold none")
+    assert PF.own_tables(["rcp"], held) == ["rcp"] and PF.own_tables([], held) == []
+    assert PF.own_tables(["sqrt", "rcp", "ex2"], held) == ["rcp", "ex2"]
+    assert PF.tables_match_why(["rcp"], ["rcp"]) is None and PF.tables_match_why([], []) is None
+    assert PF.tables_match_why(["rcp"], []) == f"{PF.NO_TABLES}: the circuit looks up none, the blobs hold rcp"
+    assert PF.tables_match_why(["rcp"], ["rcp", "ex2"]) == (
+        f"{PF.NO_TABLES}: the circuit looks up rcp, ex2, the blobs hold rcp")
+    assert PF.tables_why([], held) == f"{PF.NO_TABLES}: the circuit looks up none, the blobs hold rcp, ex2"
 
 
 def test_a_members_files_are_refused_by_the_first_of_leans_checks_that_applies(tmp_path):
@@ -273,18 +323,73 @@ def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_
     assert w.run(record={"scheme": SCHEME, "roots": roots}) == (None, "the record names no population")
 
 
+def test_a_members_slice_outside_the_run_is_the_runs_own():
+    """`slices`, which an audit outside the run reads a member's slice by: each member's count of units, its roots of
+    the docket with its name taken off, and the scheme, at which its honest header holds; a root the record names
+    under a member that its header does not is refused there (a port wired to another member's tree, named under its
+    reader, is in the reader's slice and so must be in its header); and where the run refuses the record, so does it,
+    with the run's reason."""
+    got = M.slices(UNITS, RECORD)
+    assert got == {m: {"population": n, "scheme": SCHEME,
+                       "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": "out", "root": ROOTS[m][0]}]}
+                   for m, n in ((A, 2), (B, 3))}
+    strata = P.strata(PROGRAM, QUERY)
+    assert all(M.population_why(UNITS[m], strata, header(m), got[m]) is None for m in (A, B))
+    wired = RECORD | {"roots": [*RECORD["roots"], {**RECORD["roots"][0], "port": f"{B}/x"}]}
+    both = M.slices(UNITS, wired)
+    assert [r["port"] for r in both[B]["roots"]] == ["out", "x"] and both[A] == got[A]
+    assert M.population_why(UNITS[B], strata, header(B), both[B]) == "public file: not the registration's: roots, domains"
+    named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "x": ROOTS[A][1]},
+                                "roots": {"out": ROOTS[B][0], "x": ROOTS[A][0]}})
+    assert M.population_why(UNITS[B], strata, named, both[B]) is None
+    for record, why in ((RECORD | {"roots": [*RECORD["roots"], {"port": M.TABLE_PORT, "root": "00" * 64}]}, M.ROW_TABLES),
+                        (RECORD | {"population": 6}, M.MEMBERS_LAID),
+                        (RECORD | {"roots": {}}, "roots: the registration's roots are not a list")):
+        with pytest.raises(ValueError) as e:
+            M.slices(UNITS, record)
+        assert str(e.value) == why
+
+
+def test_a_wired_port_with_no_tree_under_its_member_is_held_at_its_writers_root():
+    """`B`'s port ``x``, wired from `A`'s ``out`` (every unit of `B` reads unit 0 of `A`'s template), has no tree under
+    `B`: its slice holds `A`'s ``out`` root under ``x`` (`wired_roots`, Lean's `OneStageZk.wiredRoots`), at which `B`'s
+    honest header, naming ``x`` at its writer's root and domain, holds; a header naming another root there is refused;
+    and where the wiring names no writer of ``x`` (no wire, a writer template with no range, or no wiring), the header
+    is refused by name (`unwired_why`, Lean's `UNWIRED_WHY`)."""
+    wire = {"reader": "b", "port": "x", "writer": "a", "out": "out", "at": 0, "radix": [3], "base": 0, "step": [0]}
+    wiring = {"templates": {}, "cuts": {}, "wires": [wire]}
+    ranges = [["a", 0, 2], ["b", 2, 3]]
+    strata = P.strata(PROGRAM, QUERY)
+
+    def named(at: str) -> dict:
+        return header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "x": ROOTS[at][1]},
+                                   "roots": {"out": ROOTS[B][0], "x": ROOTS[at][0]}})
+    got = M.slices(UNITS, RECORD, wiring, ranges)
+    assert got[B]["roots"][1] == {"domain": ROOTS[A][1], "leaves": 4, "port": "x", "root": ROOTS[A][0]}
+    assert got[A] == M.slices(UNITS, RECORD)[A]
+    assert M.population_why(UNITS[B], strata, named(A), got[B]) is None
+    assert M.population_why(UNITS[B], strata, named(B), got[B]) == "public file: not the registration's: roots, domains"
+    for w in ({**wiring, "wires": []}, {**wiring, "wires": [{**wire, "writer": "z"}]}, None):
+        assert M.population_why(UNITS[B], strata, named(A), M.slices(UNITS, RECORD, w, ranges)[B]) == M.unwired_why("x")
+
+
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
-    """Parameters or evidence the per-member parsers refuse, a program other than the parameters', and a registered
-    file whose port is no registered port's."""
+    """Parameters or evidence the per-member parsers refuse (among them ``proved_units`` that are no list of natural
+    numbers, which the run compares with the members' units), a program other than the parameters', a registered
+    file whose port is no registered port's, and parameters naming the members' wiring."""
     w = Window(tmp_path)
     ms = w.params["proofs"]["members"]
     for params, evidence in ((w.params | {"proofs": {"circuit": "", "public": "", "registered": None}}, None),
                              (w.params | {"proofs": {"members": {A: ms[A] | {"units": [[2, 1]]}, B: ms[B]}}}, None),
                              (None, w.evidence | {"proofs": {"sessions": []}}),
-                             (None, {k: v for k, v in w.evidence.items() if k != "sessions"})):
+                             (None, {k: v for k, v in w.evidence.items() if k != "sessions"}),
+                             (None, w.evidence | {"proved_units": [1, "2", 4]}),
+                             (None, w.evidence | {"proved_units": [True, 2, 4]})):
         with pytest.raises(M.Outside, match="per-member form"):
             w.run(params=params, evidence=evidence)
     with pytest.raises(M.Outside, match="partition object"):
         w.run(program=P.population_program(PAIR, 5))
     with pytest.raises(M.Outside, match="registered port"):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
+    with pytest.raises(M.Outside, match="wiring"):
+        w.run(params=w.params | {"proofs": {"members": ms, "wiring": {"templates": {}, "cuts": {}, "wires": []}}})

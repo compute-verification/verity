@@ -1,6 +1,6 @@
 """A deferred Commit served on CPU, for the serving rows' tests and the one-stage audit's end-to-end run (`benchmarks/one_stage/a5.py`):
 a Program with RoPE_v1 rows (D=64) executed honestly by the sampled replay's world (`tests.check.test_sampled_replay`), its members
-committed by the production CPU committer and sealed into a replay bundle with its registered weights, beside the Commit's record
+committed by the serving CPU committer and sealed into a replay bundle with its registered weights, beside the Commit's record
 (``runs.jsonl``, ``verdict.json``, the binding map) and the row dir of its Program of record.
 
     python -m tests.pipeline.served_rope OUT [--served]        (from adapters/vllm)
@@ -25,20 +25,20 @@ from verity_vllm.pipeline import replay_bundle as RB
 
 D = 64
 ROPE = f"RoPEHead_v1{{D={D}}}"
-LAW = "subset:1"
+DESIGN = "subset:1"
 HEADS = 2 * 4 * (3 + 1)       # 2 requests x 4 tokens (2 prefill + 2 decode) x (3 query + 1 key heads)
 
 
-def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None = None) -> dict:
+def commit(root: Path, *, seed: int = 17, silu: str | None = None, inter: int | None = None) -> dict:
     """The deferred Commit's output dir, its row dir and the verifier's partition file under ``root``, and the world that served it.
-    ``seed`` samples its weights; ``silu`` names its act rows' Definition (``SiluMul_v2``: GLM-5.3's) and ``I`` their width, in place
-    of the toy's ``SiluMul_v1{I=T.I}``."""
+    ``seed`` samples its weights; ``silu`` names its act rows' Definition (``SiluMul_v2``: GLM-5.3's) and ``inter`` their width, in place
+    of the toy's ``SiluMul_v1{I=T.INTER}``."""
     import tests.check.test_sampled_replay as T
     from tests.check.opened import commit_members
     from verity_vllm.commit import store_dump as SD
 
-    dh, i0 = T.DH, T.I
-    T.DH, T.I = D, i0 if I is None else int(I)
+    dh, i0 = T.DH, T.INTER
+    T.DH, T.INTER = D, i0 if inter is None else int(inter)
     try:
         rng = np.random.default_rng(seed)
         inst, woff = T._program(rope=True)
@@ -46,8 +46,8 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
             if r["spec"].startswith("SiluMul_v1{"):
                 r["spec"] = silu + r["spec"][len("SiluMul_v1"):]
         w = T._bf16(rng, max(hi for _lo, hi in woff.values()), 0.5)
-        for f in ("model.model.layers.0.input_layernorm.weight", "model.model.norm.weight"):
-            w[woff[f][0]:woff[f][1]] = 0x3F80
+        for norm in ("model.model.layers.0.input_layernorm.weight", "model.model.norm.weight"):
+            w[woff[norm][0]:woff[norm][1]] = 0x3F80
         lo, hi = woff["model.model.layers.0.self_attn.rotary_emb.cos_sin_cache"]
         w[lo:hi] = (np.asarray(rng.uniform(-1, 1, hi - lo), dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
         prompts = {"r0": [1, 2], "r1": [5, 3]}
@@ -55,7 +55,7 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
         bmap, _ = world.bmap_and_reader()
         com, rc = commit_members(dict(sorted(world.store.items())))
     finally:
-        T.DH, T.I = dh, i0
+        T.DH, T.INTER = dh, i0
 
     out, row_dir = root / "commit", root / "row"
     (row_dir / "build_request").mkdir(parents=True)
@@ -90,7 +90,7 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
     (out / "runs.jsonl").write_text(json.dumps(row) + "\n")
     (out / "verdict.json").write_text(json.dumps({"replay_deferred": {"bundles": [{"pair": 1, "manifest_sha256": m["sha256"]}]}}))
     pf = root / "partition.json"
-    pf.write_text(json.dumps({"templates": [ROPE], "law": LAW}))
+    pf.write_text(json.dumps({"templates": [ROPE], "law": DESIGN}))
     return {"out": out, "row_dir": row_dir, "partition": pf, "world": world, "run_root": rc.run_root.hex(), "inst": inst}
 
 

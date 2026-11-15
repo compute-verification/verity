@@ -64,7 +64,8 @@ notes repo refuses; the token itself is never in a URL, an argument or a message
 broker's, asked for with its Cursor identity whatever the variable held, so a cloud VM needs no secret and one it still
 injects is not used.  Where the broker gives none (no Cursor identity: a laptop, the control pod), the token is the variable as it
 was set, and with neither nothing changes.  A Cursor agent whose mint gives none (Cursor's identity service answers a burst of
-token requests with HTTP 429 for a few seconds: asked again once, MINT_WAIT_S later) sends nothing (`NoToken`): its own
+token requests with HTTP 429 for a few seconds: asked again once, MINT_WAIT_S later) sends nothing (`NoToken`), whatever the
+variable holds (`unminted`: a VM started before its injected token was removed still holds it, expired): its own
 credentials are cursor[bot]'s, which the notes repository refuses.  When GitHub refuses the variable's token (401 or 403),
 `sync`, `pull` and the clone say so in one line and go on with the broker's where it gives one (`refused_given`); when it
 refuses the broker's, once more with one minted afresh MINT_WAIT_S later.  A failure names the part that failed: the mint, the
@@ -197,6 +198,7 @@ NO_IDENTITY = "no Cursor identity here"
 _BROKER_REFUSED: list[tuple[float, str]] = []       # (when, why) the broker last gave no token; empty once it gives one
 _SET_ASIDE: list[str] = []                          # non-empty once the broker's token replaced one the variable was given
 _MINTED_AGAIN: list[bool] = []                      # [True] once `_authed` retried a refused broker token with a fresh one
+_MINTED_HERE: list[bool] = []                       # [True] once this process minted a token, not only inherited the broker's
 
 
 def has_identity() -> bool:
@@ -252,14 +254,14 @@ def notes_token(now: float | None = None, fresh: bool = False) -> str | None:
     its source and expiry, so git's credential helper and child processes read it, and mints again REFRESH_S before it expires.
     An HTTP 429, from Cursor's identity service or the broker, is asked again once after MINT_WAIT_S (`sleep`).
     Where the broker gives none (`broker_why`: no Cursor identity, as on a laptop or the control pod; a refusal; an outage),
-    RESEARCH_NOTES_TOKEN as it was set, else None; a broker that gave none is asked again only after BROKER_RETRY_S.  `fresh`
-    mints now, whatever is held or was refused."""
+    `unminted`; a broker that gave none is asked again only after BROKER_RETRY_S.  `fresh` mints now, whatever is held or was
+    refused."""
     now = clock() if now is None else now
     tok, minted, expires = _held()
     if not fresh and tok and minted and expires > now + REFRESH_S:
         return tok
     if not fresh and _BROKER_REFUSED and now < _BROKER_REFUSED[-1][0] + BROKER_RETRY_S:
-        return tok
+        return unminted(tok, minted, expires, now)
     for again in (False, True):
         try:
             new, expires = _mint()
@@ -269,12 +271,22 @@ def notes_token(now: float | None = None, fresh: bool = False) -> str | None:
                 sleep(MINT_WAIT_S)
                 continue
             _BROKER_REFUSED[:] = [(now, _mint_why(e))]
-            return tok
+            return unminted(tok, minted, expires, now)
     if tok and not minted:
         _SET_ASIDE.append(TOKEN_ENV)
     _BROKER_REFUSED.clear()
+    _MINTED_HERE[:] = [True]
     os.environ.update({TOKEN_ENV: new, SOURCE_ENV: "broker", EXPIRES_ENV: f"{expires:.0f}"})
     return new
+
+
+def unminted(tok: str | None, minted: bool, expires: float, now: float) -> str | None:
+    """The token `notes_token` gives when the broker gives none: on a Cursor agent (`has_identity`) the broker's while it has
+    not expired, else None, never RESEARCH_NOTES_TOKEN as the VM injected it (a VM started before that secret was removed still
+    holds it, expired, and GitHub's refusal of it would hide why the mint failed); elsewhere the variable as it was set."""
+    if not has_identity():
+        return tok
+    return tok if minted and expires > now else None
 
 
 def broker_why() -> str | None:
@@ -291,8 +303,9 @@ def token_source() -> tuple[str | None, str]:
         return "broker", "the GitHub broker's token, by this agent's Cursor identity" + (
             f"; {TOKEN_ENV} is set here too and is not used: a Cursor agent no longer needs it" if _SET_ASIDE else "")
     why = broker_why() or "the broker was not asked"
+    unused = f"{TOKEN_ENV} is set but not used: a Cursor agent sends only the broker's" if _held()[0] else f"{TOKEN_ENV} is not set"
     return ("env", f"{TOKEN_ENV}, since the GitHub broker gave no token ({why})") if tok else \
-        (None, f"git's own: there is no notes token ({why}, and {TOKEN_ENV} is not set)")
+        (None, f"git's own: there is no notes token ({why}, and {unused})")
 
 
 #: what git says when GitHub answers a credential with 401 or 403
@@ -408,7 +421,8 @@ def refused(stderr: str) -> bool:
 
 def token_hint(root: Path, remote: str = "origin", stderr: str = "") -> str:
     """For the end of a fetch or push failure of a github.com `remote` (git's `stderr`), which part failed: the helper (GitHub
-    refused the broker's token as the credential helper passed it, and the fresh one `_authed` minted), or, with no notes token
+    refused the broker's token as the credential helper passed it, and the fresh one `_authed` minted), the mint (GitHub refused
+    a broker's token this process only inherited, and no mint here replaced it), or, with no notes token
     and no Cursor identity, the machine's own credentials (`rewrite`: the insteadOf rule that supplied them).  '' otherwise: a
     refused RESEARCH_NOTES_TOKEN is said by `refused_given`, and a failed mint by `NoToken`'s text."""
     url = (_out(root, "config", "--get", f"remote.{remote}.url") or "").strip()
@@ -417,6 +431,10 @@ def token_hint(root: Path, remote: str = "origin", stderr: str = "") -> str:
     if notes_token():
         if not (_held()[1] and any(k in stderr for k in TOKEN_REFUSED)):
             return ""
+        if not _MINTED_HERE:
+            return (f" -> {MINT_FAILED} ({broker_why()}): GitHub refused the broker's token this process was given ({SOURCE_ENV}="
+                    "broker in its environment, minted elsewhere), and nothing minted one to replace it; sync again in a minute, and "
+                    "`research doctor` checks the mint")
         return (" -> helper: the mint worked, and GitHub refused the broker's token as the credential helper passed it"
                 + (f", and a fresh one minted {MINT_WAIT_S:g} s later too" if _MINTED_AGAIN else "")
                 + ": the agents' GitHub App may have lost research-notes from its repository access (`research doctor`)")

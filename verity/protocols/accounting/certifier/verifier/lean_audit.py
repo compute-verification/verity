@@ -24,10 +24,9 @@ a window or a grid field outside its integer width, a frame of other than B byte
 `VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
 after a request starts its own executable at its first; `SERVER`'s is closed at exit. The same process answers
-`link-window` (`Server.call`), N2's verdict of record on one link-window's proof (`service.LinkWindows.verify`),
-`certificates`, the client's check of one window's served certificates (`certificate_refusals`, with
-`audit.certificate_refusals` beside it as the reference), and `clocks`, the syncs the certifier signed for a link read
-through its clock certificates' openings (`signed_clocks`, with `certificate.SignedClocks` beside it as the reference).
+`link-window` (`Server.call`), N2's verdict of record on one execution phase's proof (`service.TransferBlocks.verify`),
+and `certificates`, the client's check of one window's served certificates (`certificate_refusals`, with
+`audit.certificate_refusals` beside it as the reference).
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
@@ -43,15 +42,14 @@ import subprocess
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import audit
 from verity.protocols.accounting.certifier.verifier.audit import Published, Verdict
-from verity.protocols.accounting.certifier.verifier.certificate import (STATUS_CODES, Certificate, CertifiedClock, CertifiedRecord,
-                                                        Direction, LmsKey, PublicKey, SignedClocks)
+from verity.protocols.accounting.certifier.verifier.certificate import (STATUS_CODES, Certificate, CertifiedRecord,
+                                                        Direction, LmsKey, PublicKey)
 from verity.protocols.accounting.certifier.verifier.commitment import CommittedRecord
 from verity.protocols.accounting.certifier.verifier.grid import GridParams, BlockGrid, Status
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet
@@ -275,7 +273,7 @@ class Audit:
         except Exception as e:
             raise RuntimeError(f"the reference audit raised where the Lean check answered: {e!r}") from e
         if [(v.link, v.window) for v in ref] != [(v.link, v.window) for v in lean]:
-            raise RuntimeError(f"the reference audit gave link-windows {[(v.link, v.window) for v in ref]}, "
+            raise RuntimeError(f"the reference audit gave execution phases {[(v.link, v.window) for v in ref]}, "
                                f"the Lean check {[(v.link, v.window) for v in lean]}")
         vs = [l if l == r else Verdict(l.link, l.window, DISAGREEMENT) for l, r in zip(lean, ref)]
         self.lean.extend(lean)
@@ -364,40 +362,3 @@ def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int,
     if lean != ref:
         return [DISAGREEMENT] * len(certificates), [DISAGREEMENT] * len(clocks)
     return lean
-
-
-def _opening_json(o: CertifiedClock) -> dict:
-    if type(o) is not CertifiedClock or type(o.certificate) is not Certificate or type(o.sync) is not ClockSync:
-        raise ValueError(f"outside the Lean audit's domain: a clock opening of a {type(o).__name__}, not a "
-                         "certificate.CertifiedClock of a Certificate and a ClockSync")
-    c = _certificate_json(o.certificate)
-    return {"certificate": c | {"direction": o.certificate.direction.value}, "salt": o.salt.hex(),
-            "sync": _sync_json(o.sync)}
-
-
-def signed_clocks(key: PublicKey, session: bytes, link: str, openings: Sequence[CertifiedClock],
-                  server: Server | None = None) -> tuple[tuple[ClockSync, ...], list[str | None]]:
-    """`certificate.SignedClocks(key, session, openings).syncs(link)`, the syncs the certifier signed for `link`'s
-    windows read through their openings, the Lean's (`NetworkCheck.Period.signedSyncs`, `network-records verdicts`'
-    ``clocks``), with each opening's refusal (`NetworkCheck.Period.openingRefusals`, None where it holds) and
-    `certificate.SignedClocks` run beside it as the reference. Where the two differ on the syncs, on any opening's
-    refusal code (`SignedClocks.codes`), or on which link-windows have two or more signed syncs (`SignedClocks.split`),
-    no window has a sync and every opening is refused as `disagreement`. A key other than an `LmsKey`, an opening that
-    isn't a `CertifiedClock` or anything else the Lean refuses to read raises `ValueError`; a reference that raises
-    where the Lean answers raises `RuntimeError`."""
-    if not isinstance(key, LmsKey):
-        raise ValueError(f"outside the Lean audit's domain: clock openings under a {type(key).__name__}, not an LmsKey")
-    p = key.params
-    case = {"key": key.public.hex(), "link": link, "lms": {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy},
-            "openings": [_opening_json(o) for o in openings], "session": bytes(session).hex()}
-    out = (server or SERVER).call("clocks", case)
-    syncs = tuple(ClockSync(d, Fraction(n, m)) for d, n, m in out["syncs"])
-    try:
-        ref = SignedClocks(key, session, tuple(openings))
-        agree = (syncs == ref.syncs(link) and tuple(out["refused"]) == tuple(ref.codes)
-                 and sorted((x, w) for x, w in out["split"]) == sorted(ref.split))
-    except Exception as e:
-        raise RuntimeError(f"the reference raised where the Lean check answered: {e!r}") from e
-    if not agree:
-        return (), [DISAGREEMENT] * len(openings)
-    return syncs, out["refused"]

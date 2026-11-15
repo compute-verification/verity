@@ -1,5 +1,5 @@
 """`Flock.RecSparse`, the Lean verifier's own `rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` unit: at the staged shapes its
-`flock-ir-unit/v2` text (`flock-rec-sparse net`) is `rec_sparse.lowering`'s (`ir_lower.netlist`) byte for byte, and
+`flock-ir-unit/v2` text (`flock-rec-sparse net`) is `rec_sparse.lowering`'s (`ir_lower.circuit_description`) byte for byte, and
 `RecSparse.check` accepts the composed circuit file and refuses it with a row, the name or the shape changed."""
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def test_the_verifiers_net_is_the_lowerings_byte_for_byte(shape):
     _needs_lean()
     sh = RS.Shape(*shape)
     low = RS.lowering(sh)
-    want = IL.netlist(low.layout, low.name)
+    want = IL.circuit_description(low.layout, low.name)
     p = subprocess.run([str(BIN), "net", RS.unit_name(sh)], capture_output=True, check=False)
     assert p.returncode == 0, p.stderr.decode()
     assert hashlib.sha256(p.stdout).hexdigest() == hashlib.sha256(want.encode()).hexdigest(), _first_diff(p.stdout.decode(), want)

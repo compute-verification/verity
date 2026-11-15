@@ -23,7 +23,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   command; `AGENT_GUARD_LOCAL_OK=1` in the command opts in.
 
   ~~~text
-  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # --quick: no slow tests
+  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/check/suites.py'  # --quick: no slow tests
   research status RUN  # check back on a run
   ~~~
 
@@ -76,7 +76,7 @@ fast-forwards `main` to one with no new failure:
 - A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate beside them (under `--gate
   check`, every step in shards), judged on the merge gate, where an unexpired allowance of policy.toml at its base
   covers a failure. On a pass `main` moves to it. Under `--gate verdict` a plain candidate (no move, nothing in
-  drive.toml's `lowrisk_excludes` or `verdict_excludes`) lands on land verdicts and the quick tier; `main`'s
+  drive.toml's `verdict_excludes`, nor its `lowrisk_excludes` outside `verdict_plain`) lands on land verdicts and the quick tier; `main`'s
   whole check follows; its red reverts the culprit or, with none, sends plain ones to the whole check. A failure its base shares
   blames no PR: @ci and the owners of what fails are rung once. Otherwise the PRs whose change touches what failed are its suspects
   (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks' logs,

@@ -6,7 +6,7 @@ at 0 and window t's boundary message at `(t + 1)·T`; each reaches the prover `d
 back to back, `pass_ns + gap_ns` apart: the gap is the root's reduction, the next seed and its broadcast to every GPU,
 which the next pass waits on.  The pass in flight when a boundary message arrives is its window's last, and each root
 reaches the verifier `up_ns` plus a jitter after its pass and its reduction end.  Each jitter is in [0, `jitter_ns`], a
-fixed pseudorandom pattern.  The tests replay the schedule against `audit.AuditRun` (`tests/test_remote_bandwidth.py`).
+fixed pseudorandom pattern.  The tests replay the schedule against `audit.AuditRun` (`tests/test_poub.py`).
 
 `deadline` is the least allowance A that never makes the honest prover late: the boundary message's trip down, the pass
 in flight, its root's reduction and its trip up, each trip at its longest.
@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -39,7 +40,7 @@ from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subs
 
 from . import audit, codec
 from .codec import BLOCK_BYTES
-from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES, SKETCH_ROWS
+from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES, SKETCH_ROWS, sign_key_bits
 
 MS = 1_000_000
 US = 1_000
@@ -55,25 +56,13 @@ GPU_SHA512_PER_S = 7.0e9
 """One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms."""
 SHA512_PER_S = GPUS * GPU_SHA512_PER_S
 """The node's SHA-512 compressions a second, its GPUs'.  The host's cores' rate is not measured and not in it."""
-SKETCH_OUTSIDE = 2 ** 20
-"""F, the outside-compute factor: the SHA-512 compressions a prover makes over a session are at most F times the node's
-own over its span, Q = F·C (`sketch_failure`'s `outside`).  Grinding a sketch-sha512 key reads no block, so it can run
-on any hardware the prover reaches, not only the node's GPUs: 2^20 nodes' SHA-512, about 8.4M RTX PRO 6000s, past any
-one operator's fleet.  What it costs the memory line, at 16 rows and a session of 2,118 one-pass windows over
-97,517,568 blocks in 226.9 s, 48 openings a window: `ledger.delta_parts` returns δs = 2^-31.59 at F = 2^20 and 2^-51.59
-at F = 1, beside the windows' profile δ 2^-40.00, the sample's rejection 2^-47.37, AuditRO's slack 2^-55.95 (2^-67 a
-pass, `audit.SLACK_LOG2`), the coin commitment's hiding 2^-179.95 (for all but a 2^-64 fraction of keys) and the
-receipts' binding 2^-164.86 (2^-184.86 at F = 1).  Their sum, `ledger.memory`'s `Line.delta`, is 2^-31.59 at F = 2^20,
-where δs is its largest part, and 2^-39.99 at F = 1, where the profile δ is, so F = 2^20 costs that line 8.40 bits.
-64 rows bring δs there to 2^-129.94 at F = 2^20 (`sketch_failure` at `rows=64`), at the pass cost `PROTOCOL.md` §4
-states under "The rows".  `tests/test_sketch_reading.py` holds each of these numbers to the function named beside it.
-F = 2^20 is provisional, under the sketch's random-oracle assumption."""
 GPU_READ_BYTES_PER_S = 1.539e12
 """One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
 in an honest session's prover, rounded down.  The word codec's 1.488e12 is a slower kernel's."""
-GPU_SPEC_BYTES_PER_S = 1.597e12
-"""The RTX PRO 6000 Server Edition's datasheet memory bandwidth, 1,597 GB/s (NVIDIA's product page and datasheet, as
-the census's `rtx-pro-6000-server` entries cite them), which no measured kernel reaches."""
+GPU_SPEC_BYTES_PER_S = 1.597568e12
+"""The RTX PRO 6000 Server Edition's specified memory bandwidth, the card's `memory.bandwidth`: the bus's own rate, 512
+bits at two transfers a clock of the 12,481 MHz memory clock, 1,597.568 GB/s (the product page's 1,597 GB/s rounds
+it), which no measured kernel reaches."""
 HOST_READ_BYTES_PER_S = 606.8e9
 """The host DRAM's measured read rate: 8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any
 reader mix measured; DRAM caps the sum, not the root complex."""
@@ -85,8 +74,8 @@ measured rate.  A store in HBM alone reads at `GPUS · GPU_READ_BYTES_PER_S` and
 SPEC_BYTES_PER_S = GPUS * GPU_SPEC_BYTES_PER_S + HOST_SPEC_BYTES_PER_S
 """R specified, the headline: every tier at its datasheet rate."""
 GPU_WRITE_BYTES_PER_S = GPU_SPEC_BYTES_PER_S
-"""One RTX PRO 6000's write ceiling, the fastest a fill can write labels into its memory: the datasheet's 1,597 GB/s,
-the bus's own rate (512 bits at the 12,481 MHz memory clock it ran at), 4.4% above every write measured on it.  Labels
+"""One RTX PRO 6000's write ceiling, the fastest a fill can write labels into its memory: the bus's own rate,
+1,597.568 GB/s (`GPU_SPEC_BYTES_PER_S`), 4.5% above every write measured on it.  Labels
 derived on the device were written at 1,528.98 GB/s by TMA bulk stores and 1,526.48 by 16-byte evict-first stores, a
 constant at 1,521.88 by the driver's memset, and labels streamed in over its PCIe 5.0 x16 at 56.39 GB/s by the copy
 engines and 51.40 by zero copy (`benchmarks/bandwidth/write.cu`).  A ceiling must bound every prover, and a measured
@@ -114,7 +103,7 @@ threads' architectural state with AMX tiles (about 11 KiB each), the physical re
 fill buffers; and the memory controllers', UPI's and PCIe's queues."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches."""
-LINK_WINDOW_BYTES = 6_291_456
+LINK_BURST_BYTES = 6_291_456
 """One link burst, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
 receive buffer at most, `net.ipv4.tcp_rmem`'s max on the measured node (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
 holds less)."""
@@ -131,6 +120,96 @@ host)."""
 SQUARINGS_PER_S = {width: GPUS * rate for width, rate in GPU_SQUARINGS_PER_S.items()}
 """C_sq, the node's stated squaring ceiling per width, the sum over its devices: each GPU at s times the reference and
 the host at s·h times the 8 GPUs' reference, above its IFMA bound h."""
+GPU_HBM_BYTES = 96 * 2 ** 30
+"""One RTX PRO 6000's memory, 96 GiB (the card's `store.dram`)."""
+DISK_BYTES_PER_S = 4.311e9
+"""The node's disks' measured read rate, the host card's `disk.read`: each disk's highest second under reads made to
+exhaust it, summed.  It is β of the premise `Accounting.Remote.Held.Assumptions.Disks`, not a ceiling: the disks'
+ceiling, the server's PCIe lanes, would charge more than any store.  How much of a paced line's ingress charge is its
+disks (`session.verifier.ingress_bursts`)."""
+
+
+@dataclass(frozen=True, slots=True)
+class Figures:
+    """A node's device figures, the parameters a session's ledger reads, which its caller hands in: how many GPUs, one
+    GPU's and the host's read rates (measured and specified) and on-chip storage, one GPU's memory, SHA-512 rate and
+    squaring ceiling per width, the disks' measured read rate and one link burst.  Each unprefixed property is the node's, the
+    sum over its devices; a write ceiling is its tier's specified rate (`GPU_WRITE_BYTES_PER_S`'s reason)."""
+    gpus: int
+    gpu_read_bytes_per_s: float
+    gpu_spec_bytes_per_s: float
+    gpu_chip_bytes: int
+    gpu_hbm_bytes: int
+    gpu_sha512_per_s: float
+    gpu_squarings_per_s: dict[str, float]
+    host_read_bytes_per_s: float
+    host_spec_bytes_per_s: float
+    host_chip_bytes: int
+    disk_bytes_per_s: float
+    link_burst_bytes: int
+
+    @property
+    def read_bytes_per_s(self) -> float:
+        return self.gpus * self.gpu_read_bytes_per_s + self.host_read_bytes_per_s
+
+    @property
+    def spec_bytes_per_s(self) -> float:
+        return self.gpus * self.gpu_spec_bytes_per_s + self.host_spec_bytes_per_s
+
+    @property
+    def gpu_write_bytes_per_s(self) -> float:
+        return self.gpu_spec_bytes_per_s
+
+    @property
+    def host_write_bytes_per_s(self) -> float:
+        return self.host_spec_bytes_per_s
+
+    @property
+    def chip_bytes(self) -> int:
+        return self.gpus * self.gpu_chip_bytes + self.host_chip_bytes
+
+    @property
+    def hbm_bytes(self) -> int:
+        return self.gpus * self.gpu_hbm_bytes
+
+    @property
+    def sha512_per_s(self) -> float:
+        return self.gpus * self.gpu_sha512_per_s
+
+    @property
+    def squarings_per_s(self) -> dict[str, float]:
+        return {width: self.gpus * rate for width, rate in self.gpu_squarings_per_s.items()}
+
+    @classmethod
+    def of_sheets(cls, node: Mapping, gpu: Mapping, host: Mapping, *, gpu_chip_bytes: int = GPU_CHIP_BYTES,
+                  gpu_sha512_per_s: float = GPU_SHA512_PER_S, gpu_squarings_per_s: Mapping[str, float] | None = None,
+                  link_burst_bytes: int = LINK_BURST_BYTES) -> Figures:
+        """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
+        and `load_card`): the node's `device.count`; its GPU card's `memory.read`, `memory.bandwidth` and
+        `store.dram`; its host card's `memory.read`, `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no
+        sheet states are handed in, each defaulting to this module's: one GPU's on-chip storage, SHA-512 rate and
+        squaring ceiling, and one link burst."""
+        for part, card in (("device", gpu), ("host", host)):
+            if node[part]["sku"] != card["sku"]:
+                raise ValueError(f"the node's {part} is {node[part]['sku']!r} and the card handed in is "
+                                 f"{card['sku']!r}: hand in the {part} card the node names")
+
+        def value(sheet: Mapping, section: str, key: str) -> int | float:
+            return sheet[section][key]["value"]
+
+        squarings = GPU_SQUARINGS_PER_S if gpu_squarings_per_s is None else gpu_squarings_per_s
+        return cls(int(value(node, "device", "count")), float(value(gpu, "memory", "read")),
+                   float(value(gpu, "memory", "bandwidth")), gpu_chip_bytes, int(value(gpu, "store", "dram")),
+                   gpu_sha512_per_s, dict(squarings), float(value(host, "memory", "read")),
+                   float(value(host, "memory", "bandwidth")), int(value(host, "store", "chip")),
+                   float(value(host, "disk", "read")), link_burst_bytes)
+
+
+RTX_PRO_6000_NODE = Figures(GPUS, GPU_READ_BYTES_PER_S, GPU_SPEC_BYTES_PER_S, GPU_CHIP_BYTES, GPU_HBM_BYTES,
+                            GPU_SHA512_PER_S, GPU_SQUARINGS_PER_S, HOST_READ_BYTES_PER_S, HOST_SPEC_BYTES_PER_S,
+                            HOST_CHIP_BYTES, DISK_BYTES_PER_S, LINK_BURST_BYTES)
+"""The measured node's figures, the constants above: 8 RTX PRO 6000s on a host of two Xeon 6776P sockets.  Each one a
+sheet states is the sheet's value (`Figures.of_sheets` on `rtx-pro-6000-server-x8`)."""
 
 
 def deadline(pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0) -> int:
@@ -268,25 +347,28 @@ def sketch_reading(rows: int = SKETCH_ROWS) -> tuple[int, Fraction]:
     return min(((r, sketch_rate(rows, r)) for r in range(1, min(rows, SECTOR_BYTES) + 1)), key=lambda x: x[1])
 
 
-def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None,
-                   blocks: int = 0, outside: int = SKETCH_OUTSIDE) -> Fraction:
+def sketch_failure(passes: int, rows: int = SKETCH_ROWS, r: int | None = None, blocks: int = 0,
+                   queries: int = 2 ** audit.QUERIES_LOG2) -> Fraction:
     """A session's chance that some sketch-sha512 receipt is right without its block's sectors, read at rank r (r* by
-    default), over a session of `passes` passes of `blocks` blocks, against a prover of `Q = outside · compressions`
-    SHA-512 compressions: `compressions` the node's own over the span (C), and `outside` the outside-compute factor F
-    (`SKETCH_OUTSIDE`).  Every key the prover sees is a seed it computed or one of the session's, so it sees at most
-    `Q + passes`, ground or not, and every guess is a compression:
-    `Q · 2^-8r + (Q + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512) + (Q + P)² · 2^-257`, the third
-    term a key's 512-bit receipt of a block right without its hash, and the last the keys' distance from uniform
-    (`SketchHashRandom`'s ε): two of the `Q + P` seeds whose 256-bit sign keys collide share their signs.  At 16 rows
-    and r = 12 it is the δ at which `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`."""
-    if type(outside) is not int or outside < 1:
-        raise ValueError("the outside-compute factor F is a positive integer")
+    default), over a session of `passes` passes of `blocks` blocks, against a prover of Q = `queries` SHA-512
+    compressions, the prover's budget (`audit.QUERIES_LOG2`) by default.  Grinding a key reads no block, so the budget
+    counts compressions on any hardware the prover reaches, not the node's alone.  Every key the prover sees is a seed
+    it computed or one of the session's, so it sees at most `Q + passes`, ground or not, and every guess is a
+    compression:
+    `Q · 2^-8r + (Q + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512) + (Q + P)² · 2^-(b + 1)`, the
+    third term a key's 512-bit receipt of a block right without its hash, and the last the keys' distance from uniform
+    (`SketchHashRandom`'s ε): two of the `Q + P` seeds whose b-bit sign keys collide share their signs, b =
+    `receipts.sign_key_bits(rows)`, 256 at 16 rows and 512 at 64.  At 64 rows and r = 27 it is the δ at which
+    `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`; at 16 rows and r = 12 it is
+    `SketchBoundRun`'s at those parameters."""
+    if type(queries) is not int or queries < 1:
+        raise ValueError("the prover's budget Q is a positive integer of SHA-512 compressions")
     if r is None:
         r = sketch_reading(rows)[0]
-    q = outside * compressions
+    q = queries
     return (q * Fraction(1, 2 ** (8 * r))
             + (q + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** (8 * DIGEST_BYTES)))
-            + Fraction((q + passes) ** 2, 2 ** 257))
+            + Fraction((q + passes) ** 2, 2 ** (sign_key_bits(rows) + 1)))
 
 
 def grind_compressions(leaves: int) -> int:
@@ -314,22 +396,26 @@ def wrong_bound(units: int, samples: int, delta: float) -> int:
     return math.ceil(-units * math.expm1(math.log(delta) / samples))
 
 
-def spanning(gpu_bytes: int) -> int:
-    """The store that spans every tier of the node in proportion to its read rate, `gpu_bytes` in each GPU's HBM: host
-    DRAM holds what it reads in the time the HBM reads theirs, so a pass of the whole store reads at R."""
-    return GPUS * gpu_bytes + math.floor(gpu_bytes * HOST_READ_BYTES_PER_S / GPU_READ_BYTES_PER_S)
+def spanning(gpu_bytes: int, figures: Figures) -> int:
+    """The store that spans every tier of the node of `figures` in proportion to its read rate, `gpu_bytes` in each
+    GPU's HBM: host DRAM holds what it reads in the time the HBM reads theirs, so a pass of the whole store reads at R."""
+    return figures.gpus * gpu_bytes + math.floor(
+        gpu_bytes * figures.host_read_bytes_per_s / figures.gpu_read_bytes_per_s)
 
 
-def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = audit.DELTA,
-           gap_ns: int = 50 * US, jitter_ns: int = 50 * US, read_bytes_per_s: float = READ_BYTES_PER_S,
-           capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.GammaTerms:
-    """The ledger of the honest prover's session over a store of `store_bytes` on one node of `capacity_bytes_per_s`
-    (R measured; `SPEC_BYTES_PER_S`, the headline): a pass is the store's read at `read_bytes_per_s`, `samples`
-    openings a window at `delta` bound its wrong receipts (`wrong_bound`), the node's chips hold `CHIP_BYTES`, and
-    μ_rebuild is the default codec at `SQUARINGS_PER_S`.  A store that spans every tier (`spanning`) reads at R; one in
-    HBM alone reads at `GPUS · GPU_READ_BYTES_PER_S`, and μ_timing charges the idle host DRAM.  μ_chip is about
-    `CHIP_BYTES/store_bytes`, and a window's μ_timing about `(RTT + 2p)/T`, the pass in flight at its challenge and the
-    one its boundary cuts short: a larger store trades the one for the other."""
+def stated(store_bytes: int, window_ns: int, windows: int, *, figures: Figures, rtt_ns: int, samples: int,
+           delta: float = audit.DELTA, gap_ns: int = 50 * US, jitter_ns: int = 50 * US,
+           read_bytes_per_s: float | None = None, capacity_bytes_per_s: float | None = None) -> audit.GammaTerms:
+    """The ledger of the honest prover's session over a store of `store_bytes` on the node of `figures`, at
+    `capacity_bytes_per_s` (by default R measured; `figures.spec_bytes_per_s`, the headline): a pass is the store's
+    read at `read_bytes_per_s` (by default R measured), `samples` openings a window at `delta` bound its wrong receipts
+    (`wrong_bound`), the node's chips hold `figures.chip_bytes`, and μ_rebuild is the default codec at
+    `figures.squarings_per_s`.  A store that spans every tier (`spanning`) reads at R; one in HBM alone reads at its
+    GPUs' measured rate, and μ_timing charges the idle host DRAM.  μ_chip is about `chip_bytes/store_bytes`, and a
+    window's μ_timing about `(RTT + 2p)/T`, the pass in flight at its challenge and the one its boundary cuts short: a
+    larger store trades the one for the other."""
+    read_bytes_per_s = figures.read_bytes_per_s if read_bytes_per_s is None else read_bytes_per_s
+    capacity_bytes_per_s = figures.read_bytes_per_s if capacity_bytes_per_s is None else capacity_bytes_per_s
     blocks = store_bytes // BLOCK_BYTES
     pass_ns = math.ceil(blocks * BLOCK_BYTES / read_bytes_per_s * S)
     st = honest(window_ns, windows, pass_ns, gap_ns=gap_ns, down_ns=rtt_ns // 2, up_ns=rtt_ns - rtt_ns // 2,
@@ -339,22 +425,23 @@ def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, sampl
         audit.WindowRecord(t, (blocks,) * n, b, d, d, IntegrityProfile(
             ("receipt",), (blocks * n,), {"receipt": Subset(samples)}, delta, drawn={"receipt": samples}))
         for t, (n, b, d) in enumerate(zip(st.passes, starts, st.deadlines))))
-    return audit.ledger(record, capacity_bytes_per_s=capacity_bytes_per_s, chip_bytes=CHIP_BYTES,
-                        rebuild=audit.Rebuild(codec.DEFAULT, SQUARINGS_PER_S["p1024"]),
+    return audit.ledger(record, capacity_bytes_per_s=capacity_bytes_per_s, chip_bytes=figures.chip_bytes,
+                        rebuild=audit.Rebuild(codec.DEFAULT, figures.squarings_per_s["p1024"]),
                         wrong=lambda pr: wrong_bound(pr.sizes[0], pr.drawn["receipt"], pr.delta))
 
 
-def store_floor(gap_ns: int = 0, target: float = 0.01) -> float:
-    """The store on one node, in bytes, spanning every tier, below which no T brings `stated`'s worst γ_t under
-    `target`.  As T grows, a window's μ_sample and its ends vanish, and γ_t tends to
+def store_floor(gap_ns: int = 0, target: float = 0.01, *, figures: Figures) -> float:
+    """The store on the node of `figures`, in bytes, spanning every tier, below which no T brings `stated`'s worst γ_t
+    under `target`.  As T grows, a window's μ_sample and its ends vanish, and γ_t tends to
     `(g + S_chip/R + λ·p + μ_rebuild·(p + g))/(p + g)` with p the store's read at R: the chain's steady state, μ_chip,
     λ (`audit.named_bits` of the store's blocks, a
     block's share of them depending on the store's size, solved for by iteration) and μ_rebuild.  At `gap_ns` = 0 it
     is μ_chip, λ and μ_rebuild alone."""
-    rebuild = audit.Rebuild(codec.DEFAULT, SQUARINGS_PER_S["p1024"]).fraction(READ_BYTES_PER_S)
+    r, chip = figures.read_bytes_per_s, figures.chip_bytes
+    rebuild = audit.Rebuild(codec.DEFAULT, figures.squarings_per_s["p1024"]).fraction(r)
     lam, g, blocks = audit.QUERIES_LOG2 / (8 * BLOCK_BYTES), gap_ns / S, 0
     while True:
-        store = READ_BYTES_PER_S * (g * (1 - target + rebuild) + CHIP_BYTES / READ_BYTES_PER_S) / (target - lam - rebuild)
+        store = r * (g * (1 - target + rebuild) + chip / r) / (target - lam - rebuild)
         if store // BLOCK_BYTES == blocks:
             return store
         blocks = int(store // BLOCK_BYTES)
@@ -367,12 +454,13 @@ def _named_bits(k: int, queries_log2: int, binomial: bool) -> int:
     return audit.named_bits(k, queries_log2) if binomial else k * queries_log2
 
 
-def _sizing(gap: int) -> None:
-    gpu_store, hbm = 94 * 10 ** 9, GPUS * 96 * 10 ** 9
-    store = spanning(gpu_store)
+def _sizing(gap: int, fig: Figures) -> None:
+    rm, chip = fig.read_bytes_per_s, fig.chip_bytes
+    gpu_store, hbm = 94 * 10 ** 9, fig.gpus * 96 * 10 ** 9
+    store = spanning(gpu_store, fig)
     node = store // BLOCK_BYTES
-    p, g_s = store / READ_BYTES_PER_S, gap / S
-    cap = READ_BYTES_PER_S * (p + g_s)
+    p, g_s = store / rm, gap / S
+    cap = rm * (p + g_s)
     print(f"# λ under 0.05%: the node's store over every tier, 94 GB of each GPU's HBM and host DRAM's share "
           f"({store / 1e9:.0f} GB, {p * 1e3:.1f} ms passes), in the steady state at g = {gap // US} µs.  A receipt of m "
           f"blocks: its bits for C(q, k) at q = 2^{audit.QUERIES_LOG2} bounded by q^k, or by q^k/k! as ledger charges "
@@ -396,26 +484,26 @@ def _sizing(gap: int) -> None:
     k = store // BLOCK_BYTES
     q_log2 = 0.0005 * 8 * cap / k + math.lgamma(k + 1) / math.log(2) / k
     print(f"at 4 KiB, under 0.05% by q^k/k! needs q ≤ 2^{q_log2:.2f} queries to a pass's oracle: "
-          f"{2 ** q_log2 / GPU_SHA512_PER_S:.0f} s of one GPU's SHA-512, {2 ** q_log2 / SHA512_PER_S:.0f} s of the "
+          f"{2 ** q_log2 / fig.gpu_sha512_per_s:.0f} s of one GPU's SHA-512, {2 ** q_log2 / fig.sha512_per_s:.0f} s of the "
           "node's")
     print()
-    hbm_rate = GPUS * GPU_READ_BYTES_PER_S
-    print(f"# μ_chip under 0.05%: S_chip/(R·(p + g)) by the store a pass reads at R, {CHIP_BYTES / 0.0005 / 1e9:.0f} "
-          f"GB at 0.05%, {CHIP_BYTES / 0.0005 / hbm:.1f} times the node's {hbm // 10 ** 9} GB of HBM.  Host DRAM, at its "
-          f"{HOST_READ_BYTES_PER_S / 1e9:.1f} GB/s, holding more than its share lengthens a pass past the HBM's read only "
+    hbm_rate = fig.gpus * fig.gpu_read_bytes_per_s
+    print(f"# μ_chip under 0.05%: S_chip/(R·(p + g)) by the store a pass reads at R, {chip / 0.0005 / 1e9:.0f} "
+          f"GB at 0.05%, {chip / 0.0005 / hbm:.1f} times the node's {hbm // 10 ** 9} GB of HBM.  Host DRAM, at its "
+          f"{fig.host_read_bytes_per_s / 1e9:.1f} GB/s, holding more than its share lengthens a pass past the HBM's read only "
           "by leaving the HBM idle.  A flush of t_F a pass that leaves nothing of the store on chip adds t_F to the gap")
     print("| GB a GPU | store GB | pass ms | μ_chip |")
     print("| --- | --- | --- | --- |")
     for gb in (30, 62, 94, 263, 526):
-        s_gb = spanning(gb * 10 ** 9)
-        print(f"| {gb} | {s_gb / 1e9:.0f} | {s_gb / READ_BYTES_PER_S * 1e3:.1f} | "
-              f"{CHIP_BYTES / (READ_BYTES_PER_S * (s_gb / READ_BYTES_PER_S + g_s)):.4%} |")
-    print(f"| pass ms, {GPUS * gpu_store // 10 ** 9} GB of HBM and the rest host DRAM | store GB | μ_chip | idle |")
+        s_gb = spanning(gb * 10 ** 9, fig)
+        print(f"| {gb} | {s_gb / 1e9:.0f} | {s_gb / rm * 1e3:.1f} | "
+              f"{chip / (rm * (s_gb / rm + g_s)):.4%} |")
+    print(f"| pass ms, {fig.gpus * gpu_store // 10 ** 9} GB of HBM and the rest host DRAM | store GB | μ_chip | idle |")
     print("| --- | --- | --- | --- |")
     for pass_s in (p, 0.1, 0.2, 1.0):
-        reads = min(GPUS * gpu_store, hbm_rate * pass_s) + HOST_READ_BYTES_PER_S * pass_s
-        print(f"| {pass_s * 1e3:.1f} | {reads / 1e9:.1f} | {CHIP_BYTES / (READ_BYTES_PER_S * pass_s):.3%} "
-              f"| {1 - reads / (READ_BYTES_PER_S * pass_s):.2%} |")
+        reads = min(fig.gpus * gpu_store, hbm_rate * pass_s) + fig.host_read_bytes_per_s * pass_s
+        print(f"| {pass_s * 1e3:.1f} | {reads / 1e9:.1f} | {chip / (rm * pass_s):.3%} "
+              f"| {1 - reads / (rm * pass_s):.2%} |")
     print("| t_F µs | steady state | added |")
     print("| --- | --- | --- |")
     steady = g_s / (p + g_s)
@@ -430,7 +518,7 @@ def _sizing(gap: int) -> None:
     print("| --- | --- | --- | --- | --- | --- | --- |")
     flush = (g_s + 26e-6) / (p + g_s + 26e-6) - steady
     for rtt in (1, 20):
-        h = stated(store, audit.WINDOW_NS, 600 * S // audit.WINDOW_NS, rtt_ns=_ns(rtt), samples=audit.SAMPLES)
+        h = stated(store, audit.WINDOW_NS, 600 * S // audit.WINDOW_NS, figures=fig, rtt_ns=_ns(rtt), samples=audit.SAMPLES)
         for name, gamma, terms in (("horizon", h.gamma_horizon, h), ("worst γ_t", h.worst.gamma, h.worst)):
             rest = gamma - terms.counting
             lam = {(m, b): terms.counting * (_named_bits(store // (m * BLOCK_BYTES), audit.QUERIES_LOG2, b)
@@ -448,7 +536,7 @@ def _pct(x: float) -> str:
     return f"{x:.2%}" if x < 1 else "vacuous"
 
 
-def _grid() -> None:
+def _grid(fig: Figures) -> None:
     from . import ledger  # here, not above: ledger imports this module
 
     gap, jitter = 50 * US, _ns(0.05)
@@ -474,15 +562,16 @@ def _grid() -> None:
     t_s, s = audit.WINDOW_NS // S, audit.SAMPLES
     quarter = samples_for(0.0025, audit.DELTA)
     openings = {1: samples_for(0.01, audit.DELTA), 20: quarter, t_s: s, 90: quarter}
-    print(f"# openings at the stated T = {t_s} s, δ = 2^-40 (it reads {ledger.DELTA_FORM}): s = {s} from the window's "
+    d = round(-math.log2(audit.DELTA))
+    print(f"# openings at the stated T = {t_s} s, δ = 2^-{d} (it reads {ledger.DELTA_FORM}): s = {s} from the window's "
           f"coin ({s / t_s:.0f} a second, "
-          f"ε_s = ln(2^40)/s = {math.log(2.0 ** 40) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
+          f"ε_s = ln(2^{d})/s = {math.log(2.0 ** d) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
           f"1 s option's 1% is {openings[1]}.  A Fiat–Shamir draw from the window's last root, ground over Q "
-          "transcripts, needs s(δ/Q) = ⌈s·(40 + log2 Q)/40⌉")
+          f"transcripts, needs s(δ/Q) = ⌈s·({d} + log2 Q)/{d}⌉")
     print("| Q | s | × the coin's |")
     print("| --- | --- | --- |")
-    for q in (0, 20, 40, 64):
-        sq = -(-s * (40 + q) // 40)
+    for q in (0, 20, 40, audit.QUERIES_LOG2):
+        sq = -(-s * (d + q) // d)
         print(f"| 2^{q} | {sq} | {sq / s:.2f} |")
     print()
     print("# openings: bytes a window and Gb/s per node, at each window's openings: "
@@ -494,13 +583,13 @@ def _grid() -> None:
               + ", ".join(f"T = {w} s: {openings[w] * b / 1e6:.0f} MB a window, {openings[w] * b * 8 / w / 1e9:.3f} Gb/s"
                           for w in (1, 20, t_s)))
     print()
-    hbm_rate = GPUS * GPU_READ_BYTES_PER_S
+    hbm_rate = fig.gpus * fig.gpu_read_bytes_per_s
     print(f"# the stated claim (§1, §10), T = {t_s} s by default, 20 s and 1 s the options: the worst window's whole γ_t "
           "over its own span at R measured and at spec, and over a 10 min horizon of W windows the pooled μ_sample and "
-          f"the whole γ, on one node of {GPUS} RTX PRO 6000s and their host (R = {READ_BYTES_PER_S / 1e12:.4f} TB/s "
-          f"measured, {SPEC_BYTES_PER_S / 1e12:.4f} at spec, S_chip = {CHIP_BYTES:,} B), the default codec at the node's "
-          f"stated ceiling, δ = 2^-40 (it reads {ledger.DELTA_FORM}), g = 50 µs, J = 0.05 ms.  Over every tier, the "
-          "store is GB a GPU of each GPU's HBM "
+          f"the whole γ, on one node of {fig.gpus} RTX PRO 6000s and their host (R = {fig.read_bytes_per_s / 1e12:.4f} TB/s "
+          f"measured, {fig.spec_bytes_per_s / 1e12:.4f} at spec, S_chip = {fig.chip_bytes:,} B), the default codec at the node's "
+          f"stated ceiling, δ = 2^{math.log2(audit.DELTA):.0f} (it reads {ledger.DELTA_FORM}), g = 50 µs, "
+          "J = 0.05 ms.  Over every tier, the store is GB a GPU of each GPU's HBM "
           "and host DRAM's share (`spanning`), and a pass its read at R; in HBM, the same GB a GPU and nothing on host "
           f"DRAM, a pass its read at the GPUs' {hbm_rate / 1e12:.3f} TB/s")
     print("| T s | openings | GB a GPU | tiers | store GB | pass ms | RTT ms | μ_timing | μ_sample | μ_chip | λ "
@@ -508,24 +597,24 @@ def _grid() -> None:
     print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for w_s in (t_s, 20, 1, 90):
         for gb, tiers in ((30, "every"), (62, "every"), (94, "every"), (94, "HBM")):
-            store, rate = (spanning(gb * 10 ** 9), READ_BYTES_PER_S) if tiers == "every" else (
-                GPUS * gb * 10 ** 9, hbm_rate)
+            store, rate = (spanning(gb * 10 ** 9, fig), fig.read_bytes_per_s) if tiers == "every" else (
+                fig.gpus * gb * 10 ** 9, hbm_rate)
             for rtt in (1, 20):
-                kw = dict(rtt_ns=_ns(rtt), samples=openings[w_s], read_bytes_per_s=rate)
+                kw = dict(figures=fig, rtt_ns=_ns(rtt), samples=openings[w_s], read_bytes_per_s=rate)
                 g = stated(store, w_s * S, 600 // w_s, **kw)
-                spec = stated(store, w_s * S, 600 // w_s, capacity_bytes_per_s=SPEC_BYTES_PER_S, **kw).worst
+                spec = stated(store, w_s * S, 600 // w_s, capacity_bytes_per_s=fig.spec_bytes_per_s, **kw).worst
                 x = g.worst
                 print(f"| {w_s} | {openings[w_s]} | {gb} | {tiers} | {store / 1e9:.0f} | {store / rate * 1e3:.1f} "
                       f"| {rtt} | {x.timing:.3%} | {x.sample:.3%} | {x.chip:.3%} | {x.counting:.3%} | {x.rebuild:.3%} "
                       f"| {x.gamma:.3%} | {spec.gamma:.3%} | {600 // w_s} | {g.horizon:.4%} | {g.gamma_horizon:.3%} |")
     print()
-    share = GPUS + HOST_READ_BYTES_PER_S / GPU_READ_BYTES_PER_S
-    print(f"# the store floor (store_floor): below {store_floor() / 1e9:.1f} GB over every tier "
-          f"({store_floor() / share / 1e9:.1f} GB a GPU) μ_chip, λ and μ_rebuild alone exceed 1% at any T; with the "
-          f"chain's steady state at g = {gap // US} µs, no T meets 1% below {store_floor(gap) / 1e9:.1f} GB "
-          f"({store_floor(gap) / share / 1e9:.1f} GB a GPU)")
+    share = fig.gpus + fig.host_read_bytes_per_s / fig.gpu_read_bytes_per_s
+    print(f"# the store floor (store_floor): below {store_floor(figures=fig) / 1e9:.1f} GB over every tier "
+          f"({store_floor(figures=fig) / share / 1e9:.1f} GB a GPU) μ_chip, λ and μ_rebuild alone exceed 1% at any T; with the "
+          f"chain's steady state at g = {gap // US} µs, no T meets 1% below {store_floor(gap, figures=fig) / 1e9:.1f} GB "
+          f"({store_floor(gap, figures=fig) / share / 1e9:.1f} GB a GPU)")
     print()
-    _sizing(gap)
+    _sizing(gap, fig)
     print()
     print("# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
           "deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
@@ -560,38 +649,36 @@ def _grid() -> None:
             mark = " (r*)" if r == star else ""
             print(f"| {k} | {r}{mark} | {log2(sign_rank_at_most(k, r)):.2f} | {log2(sketch_rate(k, r)):.2f} |")
     print()
-    fl = SKETCH_OUTSIDE.bit_length() - 1
     for k, (star, rate) in readings.items():
-        q40, q64 = -40 - log2(rate), -64 - log2(rate)
-        print(f"{k} rows: r* = {star}, 2^{log2(rate):.2f} a compression; a session's failure stays below 2^-40 up to "
-              f"Q = 2^{q40:.2f} compressions, the node's C = 2^{q40 - fl:.2f} at F = 2^{fl} "
-              f"({2 ** (q40 - fl) / SHA512_PER_S:.3g} s of {GPUS} GPUs at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s each), "
-              f"and below 2^-64 up to Q = 2^{q64:.2f}, C = 2^{q64 - fl:.2f}")
+        q100 = -100 - log2(rate)
+        print(f"{k} rows: r* = {star}, 2^{log2(rate):.2f} a compression; a session's failure is "
+              f"2^{log2(sketch_failure(0, k)):.2f} at the prover's budget Q = 2^{audit.QUERIES_LOG2} "
+              f"(`audit.QUERIES_LOG2`), and its guesses stay below 2^-100 up to Q = 2^{q100:.2f} compressions "
+              f"({2 ** q100 / fig.sha512_per_s:.3g} s of {fig.gpus} GPUs at {fig.gpu_sha512_per_s / 1e9:.1f}·10^9/s each)")
     print()
     print("# a grinding try reads no block: compressions to make a key straight (at least 5 with the constant "
-          f"midstates kept), at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s on one GPU; seeing a sector's 16 × 32 signs is 16 "
+          f"midstates kept), at {fig.gpu_sha512_per_s / 1e9:.1f}·10^9/s on one GPU; seeing a sector's 16 × 32 signs is 16 "
           "more")
-    print(f"| pass | leaves | compressions | ns a try | tries a second, {GPUS} GPUs, log2 |")
+    print(f"| pass | leaves | compressions | ns a try | tries a second, {fig.gpus} GPUs, log2 |")
     print("| --- | --- | --- | --- | --- |")
     for name, blocks in (("one leaf", PER_LEAF), ("8 GiB", 2 ** 21), ("94 GB", 94 * 10 ** 9 // BLOCK_BYTES)):
         n = math.ceil(blocks / PER_LEAF)
         c = grind_compressions(n)
-        print(f"| {name} | {n} | {c} | {c / GPU_SHA512_PER_S * 1e9:.2f} | {math.log2(SHA512_PER_S / c):.2f} |")
+        print(f"| {name} | {n} | {c} | {c / fig.gpu_sha512_per_s * 1e9:.2f} | {math.log2(fig.sha512_per_s / c):.2f} |")
     print()
-    f = f"F = 2^{SKETCH_OUTSIDE.bit_length() - 1}"
-    print(f"| a session of {GPUS} GPUs, every compression a guess or a key, 50 passes a second | C, log2 | failure at "
-          f"r*, 16 rows, F = 1 | {f} | 64 rows, {f} |")
-    print("| --- | --- | --- | --- | --- |")
+    print(f"| a session at 50 passes a second, its prover's {fig.gpus} GPUs' compressions over it beside the budget "
+          f"Q = 2^{audit.QUERIES_LOG2} | the GPUs' C, log2 | failure at r*, 16 rows | 64 rows |")
+    print("| --- | --- | --- | --- |")
     for name, secs in (("1 s", 1), ("10 min", 600), ("1 hour", 3600), ("1 day", 86400), ("30 days", 30 * 86400)):
-        c, p = round(SHA512_PER_S * secs), secs * 50
-        print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p, outside=1)):.2f} | "
-              f"2^{log2(sketch_failure(c, p)):.2f} | 2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
+        p = secs * 50
+        print(f"| {name} | {math.log2(fig.sha512_per_s * secs):.2f} | 2^{log2(sketch_failure(p)):.2f} | "
+              f"2^{log2(sketch_failure(p, rows=64)):.2f} |")
 
 
-__all__ = ["CHIP_BYTES", "GPUS", "GPU_CHIP_BYTES", "GPU_READ_BYTES_PER_S", "GPU_SHA512_PER_S", "GPU_SPEC_BYTES_PER_S",
-           "GPU_SQUARINGS_PER_S", "GPU_WRITE_BYTES_PER_S", "HOST_CHIP_BYTES", "HOST_READ_BYTES_PER_S",
-           "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "LINK_WINDOW_BYTES", "READ_BYTES_PER_S",
-           "SPEC_BYTES_PER_S", "SQUARINGS_PER_S", "log2"]
+__all__ = ["CHIP_BYTES", "DISK_BYTES_PER_S", "GPUS", "GPU_CHIP_BYTES", "GPU_HBM_BYTES", "GPU_READ_BYTES_PER_S",
+           "GPU_SHA512_PER_S", "GPU_SPEC_BYTES_PER_S", "GPU_SQUARINGS_PER_S", "GPU_WRITE_BYTES_PER_S", "HOST_CHIP_BYTES",
+           "HOST_READ_BYTES_PER_S", "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "LINK_BURST_BYTES",
+           "READ_BYTES_PER_S", "RTX_PRO_6000_NODE", "SPEC_BYTES_PER_S", "SQUARINGS_PER_S", "Figures", "log2"]
 
 if __name__ == "__main__":
-    _grid()
+    _grid(RTX_PRO_6000_NODE)

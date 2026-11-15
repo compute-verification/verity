@@ -96,8 +96,8 @@ as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``: 
 plan of the candidate's tree, which splits pytest by suite), judged on every step `main` waits for,
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  With `verdict`,
 the land verdicts gate: as `check`, but a plain candidate (`Loop._plain`: each member has a land verdict of its own at its
-head, is no move, changes no Lean input and meets nothing drive.toml's `lowrisk_excludes` or `verdict_excludes` at `main`
-names) lands on those verdicts and the quick tier on its own merge (`vqueue_slim.start_quick`).  `main`'s whole check follows each such landing
+head, is no move, changes no Lean input and meets nothing drive.toml at `main` names in `lowrisk_excludes` but not in
+`verdict_plain`, or in `verdict_excludes`) lands on those verdicts and the quick tier on its own merge (`vqueue_slim.start_quick`).  `main`'s whole check follows each such landing
 (`Loop._below`), and a red of it (`Loop._main_red`) reverts the one PR landed since `main`'s last passed check whose change
 meets what the failure read (`World.revert`), holding the ready PRs that meet it too until `main`'s check passes again; with
 no such PR it reverts none, and every candidate takes the whole check until `main`'s passes.  Every other candidate takes the
@@ -268,7 +268,7 @@ WIDE = Path("/data/vqueue/live/wide")
 #: `vqueue_slim.HEAVY_PART` on `--heavy-on`'s machines alone (`Loop._heavy_on`); `*`, every candidate, none of them wide
 HEAVY = Path("/data/vqueue/live/heavy")
 #: the pinned PRs, one number a line (`#` comments and blank lines allowed): while a pinned Lean PR waits, a Lean batch holds
-#: pinned Lean PRs only, under no `LEAN` cap: a pin orders a Lean batch or cuts it, and at `--lean 0` only a pinned Lean PR
+#: pinned Lean PRs only, under no `LEAN` limit: a pin orders a Lean batch or cuts it, and at `--lean 0` only a pinned Lean PR
 #: opens one; it puts no batch ahead of a PR changing a Lean input, which goes first (`vqueue._next`)
 PINS = Path("/data/drive/pins")
 #: how far back the decision log is read
@@ -3001,9 +3001,10 @@ class Loop:
     def _plain(self, ready: list[Ready], main: str) -> dict[int, str]:
         """The plain PRs of ``ready``, by number at their heads: each with a land verdict of its own at its head
         (`World.reviewed`), no Lean change, no Lean input of the tree changed and no move, and its change meeting nothing
-        drive.toml at ``main`` names in `lowrisk_excludes` or in `verdict_excludes` (`DriveFlags.plain_excludes`, read as
-        `queue.lowrisk` reads the low-risk lane's list: what that lane keeps off, and what this gate adds to it; with either
-        list empty, none is plain)."""
+        drive.toml at ``main`` names in `lowrisk_excludes` but not in `verdict_plain`, or in `verdict_excludes`
+        (`DriveFlags.plain_excludes`, read as `queue.lowrisk` reads the low-risk lane's list: what that lane keeps off but
+        for what only a reader needs to see, and what this gate adds to it; with `lowrisk_excludes` or `verdict_excludes`
+        empty, none is plain)."""
         excludes = flags_at(self.world.repo, main).plain_excludes
         return {x.number: x.head for x in ready if x.number in self.world.reviewed and not (x.lean or x.lean_input or x.move)
                 and lowrisk(x.files, excludes)}
@@ -4408,7 +4409,7 @@ def main(argv: list[str]) -> int:
                                                            f"alone): one opens whenever none is staged and no PR "
                                                            f"changing a Lean input with no Lean change waits, of the first "
                                                            f"in rank, whether or not another PR waits; 0: only pinned ones "
-                                                           f"open one, which take no cap (--pins-file) (default {LEAN})")
+                                                           f"open one, which take no limit (--pins-file) (default {LEAN})")
     ap.add_argument("--wide-file", type=Path, default=WIDE,
                     help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
                          f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "
@@ -4416,7 +4417,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--pins-file", type=Path, default=PINS,
                     help=f"the pinned PRs, one number a line, `#` comments and blank lines allowed, read each tick as "
                          f"--priority-file is: while a pinned Lean change waits, a Lean candidate holds pinned Lean changes "
-                         f"only, under no --lean cap, so a pin orders a Lean candidate or cuts it, and with --lean 0 it is the "
+                         f"only, under no --lean limit, so a pin orders a Lean candidate or cuts it, and with --lean 0 it is the "
                          f"only way into one; it puts none ahead of a PR changing a Lean input, which goes first; none while "
                          f"the file is missing or empty (default {PINS})")
     ap.add_argument("--heavy-file", type=Path, default=HEAVY,
@@ -4449,7 +4450,8 @@ def main(argv: list[str]) -> int:
                          f"once both end, a drop's after it (at most {KEPT_MAX} so at once, the oldest cancelled past them), "
                          f"and deciding nothing; `{VERDICT_GATE}`, `{CHECK_GATE}` but for a plain candidate, each member with a "
                          "land verdict of its own at its head, no move, and no change to a Lean input or a path of drive.toml's "
-                         "`lowrisk_excludes` or `verdict_excludes` (with either empty, none is plain), which lands on those "
+                         "`lowrisk_excludes` (but its entries `verdict_plain` lists) or `verdict_excludes` (with either "
+                         "of those two empty, none is plain), which lands on those "
                          "verdicts and the quick tier on its own merge (a `research "
                          "run` on --on's machines), `main`'s whole check following each such landing; a red of it reverts "
                          "the one PR landed since `main`'s last passed check whose change meets what the failure read "

@@ -22,7 +22,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Game
 
 /-!
-# Soundness at `fast100`'s numbers, over everything flock-verify accepts without `--zk`
+# Soundness at `fast100`'s numbers, over everything verity-verify-proof accepts without `--zk`
 
 `flock_verify_sound`'s claims without `--zk`, `SoundExec` (public outputs), `SoundExecH` (hidden) and `SoundExecHR`
 (hidden, `--registered F`), bound the knowledge term by `StrictCR.ksAvgStrict`, whose per-table term is the table's `tableError`. `flock_verify_sound_205` states them
@@ -32,10 +32,10 @@ acceptance gives it.
 * `tableError_le_205_wide`: `tableError` of a `fast100` schedule is at most `2^-205` at every shape in
   `Stmt.InRangeWide`, `Stmt.InRange` with two regions more (`tableError_le_of_le_33`'s kernel check at 1026 regions).
 * `ksAvgStrict_le_205`: with every plan table's shape in that range, `ksAvgStrict` is at most `ksAvgStrict205`.
-* `planAt_inRangeWide`, `planAtH_inRangeWide`: every table of the one-table plans is in that range. A sample flock-verify
+* `planAt_inRangeWide`, `planAtH_inRangeWide`: every table of the one-table plans is in that range. A sample verity-verify-proof
   sets up has its statement's range, which `Stmt.setupH` and `Stmt.setupHidden` check (`checkInRange`:
   `setupH_inRange`, `Hidden.Spec.inRange`). A refused sample's table is a reference setup's statement with `contra`'s two
-  regions added (`DrawSetup.refused`), which is why the range is two regions wider.
+  regions added (`SampleSetup.refused`), which is why the range is two regions wider.
 * `SoundExec205`, `SoundExecH205`, `SoundExecHR205`: `SoundExec`, `SoundExecH` and `SoundExecHR` at `ksAvgStrict205`,
   which they give by monotonicity (`SoundExec.to205`, `SoundExecH.to205`, `SoundExecHR.to205`). `SoundExecH205` and
   `SoundExecHR205` are split as `SoundExecH` is, by whether the circuit's wires feed its unit or outputs
@@ -158,7 +158,7 @@ noncomputable def ksStrict205 (ts : List (TabSpec mPts)) (j : Fin ts.length) (k 
 
 /-- **The knowledge term at `fast100`'s numbers**: `ksAvgStrict` at `ksStrict205`. -/
 noncomputable def ksAvgStrict205 {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
-    (L : Audit.Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
+    (L : Audit.SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (plan (L.draw ω) R).length,
     ENNReal.ofReal (ksStrict205 (plan (L.draw ω) R) j k qF qS / (1 - rateB (plan (L.draw ω) R) j k))
 
@@ -176,7 +176,7 @@ theorem ksStrict_le_205 (ts : List (TabSpec mPts)) (j : Fin ts.length) (hT : ((t
 /-- **The knowledge term's closed form at `fast100`'s numbers**: with every table of the plan in `Stmt.InRangeWide`,
 `ksAvgStrict` is at most `ksAvgStrict205`. -/
 theorem ksAvgStrict_le_205 {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
-    (hR : ∀ S R (j : Fin (plan S R).length), (((plan S R).get j).S.shape mPts).InRangeWide) (L : Audit.Law n)
+    (hR : ∀ S R (j : Fin (plan S R).length), (((plan S R).get j).S.shape mPts).InRangeWide) (L : Audit.SamplingDesign n)
     (k : ℕ) (qF qS : ℝ) (R : Reg) : ksAvgStrict plan L k qF qS R ≤ ksAvgStrict205 plan L k qF qS R := by
   refine avg_mono fun ω => iSup_mono fun j => ?_
   rcases le_or_gt (1 - rateB (plan (L.draw ω) R) j k) 0 with h0 | h0
@@ -196,7 +196,7 @@ variable {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
 
 /-- **A table at a sample setup's statement is in the wide range** when its regions number at most two more than the
 statement's: `Stmt.setupH` checks the statement's range (`setupH_inRange`). -/
-theorem DrawSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : DrawSetup I mPts S d)
+theorem SampleSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : SampleSetup I mPts S d)
     (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) (hlen : regs.length ≤ x.st.regions.size + 2) :
     ((x.specAt ht regs hregs).S.shape mPts).InRangeWide := by
@@ -208,7 +208,7 @@ theorem DrawSetup.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : D
 
 /-- **Every table of the one-table plan is in the wide range**: the sample's table has its statement's regions, and a
 refused sample's table the reference setup's and `contra`'s two. -/
-theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
+theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀))
     {Reg : Type} (S : Finset (Fin n)) (R : Reg) (j : Fin (planAt (Reg := Reg) ht dj x₀ S R).length) :
     (((planAt (Reg := Reg) ht dj x₀ S R).get j).S.shape mPts).InRangeWide := by
   rcases j with ⟨_ | i, hi⟩
@@ -216,8 +216,8 @@ theorem planAt_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (F
     rcases tableAt_cases ht dj x₀ S with ⟨x, e⟩ | e <;> rw [e]
     · exact x.specAt_inRangeWide ht (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
         (by rw [FlockVBridge.Family.length_regionsOf]; omega)
-    · exact x₀.specAt_inRangeWide ht (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
-        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
+    · exact x₀.specAt_inRangeWide ht (regionsOf x₀.st ++ SampleSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
+        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [SampleSetup.contra])
   · have h1 : (planAt (Reg := Reg) ht dj x₀ S R).length = 1 := rfl
     omega
 
@@ -227,13 +227,13 @@ namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Model Refine Audit
 open FlockSoundness.Discharge.Exec (Inputs)
-open FlockSoundness.Discharge.Integrate (DrawSetup)
+open FlockSoundness.Discharge.Integrate (SampleSetup)
 
 variable {n mPts : ℕ} {I : Inputs}
 
 /-- **A table at a hidden-output sample setup's statement is in the wide range** when its regions number at most two more
 than the statement's: `Stmt.setupHidden` checks the statement's range (`Hidden.Spec.inRange`). -/
-theorem DrawSetupH.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : DrawSetupH I mPts S d)
+theorem SampleSetupH.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : SampleSetupH I mPts S d)
     (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) (hlen : regs.length ≤ x.st.regions.size + 2) :
     ((x.specAt regs hregs).S.shape mPts).InRangeWide := by
@@ -245,7 +245,7 @@ theorem DrawSetupH.specAt_inRangeWide {S : Finset (Fin n)} {d : Lean.Json} (x : 
 
 /-- **Every table of the hidden-output one-table plan is in the wide range** (`planAt_inRangeWide`'s twin). -/
 theorem planAtH_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type} (S : Finset (Fin n)) (R : Reg)
+    (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type} (S : Finset (Fin n)) (R : Reg)
     (j : Fin (planAtH (Reg := Reg) dj x₀ S R).length) :
     (((planAtH (Reg := Reg) dj x₀ S R).get j).S.shape mPts).InRangeWide := by
   rcases j with ⟨_ | i, hi⟩
@@ -253,8 +253,8 @@ theorem planAtH_inRangeWide (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (
     rcases tableAtH_cases dj x₀ S with ⟨x, e⟩ | e <;> rw [e]
     · exact x.specAt_inRangeWide (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
         (by rw [FlockVBridge.Family.length_regionsOf]; omega)
-    · exact x₀.specAt_inRangeWide (regionsOf x₀.st ++ DrawSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
-        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [DrawSetup.contra])
+    · exact x₀.specAt_inRangeWide (regionsOf x₀.st ++ SampleSetup.contra x₀.st.c.kLog (x₀.st.m - x₀.st.c.kLog))
+        x₀.refused_wf (by rw [List.length_append, FlockVBridge.Family.length_regionsOf]; simp [SampleSetup.contra])
   · have h1 : (planAtH (Reg := Reg) dj x₀ S R).length = 1 := rfl
     omega
 
@@ -273,17 +273,17 @@ set_option linter.unusedVariables false in
 def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
+    {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀))
     {Reg : Type}
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
-    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
+    (hlaw : liveSamplingDesign I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ hs : Scope I, ∀ S R j, rateB (Integrate.planAt (Reg := Reg) hs.typed dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExec I dj wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExec I dj wr (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, Assumptions.LinkCRAt ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512
       (Integrate.planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
         (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh)))
@@ -294,7 +294,7 @@ def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
         (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : Scope I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 leaf512
-      (Integrate.planAt hs.typed dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+      (Integrate.planAt hs.typed dj x₀ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
           (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ))) j
@@ -303,7 +303,7 @@ def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
           (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAccepts false I o.2.2 ∧ ∀ hs : Scope I,
-        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
+        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (Integrate.planAt hs.typed dj x₀)
               (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
@@ -317,38 +317,38 @@ def SoundExec205 (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
                 (fun _ _ b _ => capOfRoot b) N
                 (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
-      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
-      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K +
-        StrictCR.ksAvgStrict205 (Integrate.planAt hs.typed dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      ⨅ σs : Fin n → Fin m, ⨅ _ : SamplingDesign.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (SamplingDesign.stratum σs s).card,
+      ⨆ hs : Scope I, ((SamplingDesign.stratified σs (fun s => (St s).k) hks).miss K +
+        StrictCR.ksAvgStrict205 (Integrate.planAt hs.typed dj x₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
             (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (Integrate.planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀)
+          (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (Integrate.planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀)
           ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
             (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh))) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
 /-- **`SoundExec205` at A3 per test**: `SoundExec205` with the verifier's bytes passing the stratified sample's escape test
-(`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
+(`SamplingDesign.missProbTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
+    {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀))
     {Reg : Type}
     {m : ℕ} (St : Fin m → Flock.Draw.Stratum) {Kd pop : ℕ}
-    (hlaw : liveLaw I = some (.stratified Kd (Array.ofFn St), pop))
+    (hlaw : liveSamplingDesign I = some (.stratified Kd (Array.ofFn St), pop))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
-      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.stratified Kd (Array.ofFn St)) pop B) η)
+      Assumptions.UniformRandomBytesTest Lb src (SamplingDesign.missProbTest (.stratified Kd (Array.ofFn St)) pop B) η)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ hs : Scope I, ∀ S R j, rateB (Integrate.planAt (Reg := Reg) hs.typed dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExec I dj wr (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExec I dj wr (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, Assumptions.LinkCRAt ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512
       (Integrate.planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
         (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh)))
@@ -359,7 +359,7 @@ def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop 
         (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : Scope I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 leaf512
-      (Integrate.planAt hs.typed dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+      (Integrate.planAt hs.typed dj x₀ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
           (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ))) j
@@ -368,7 +368,7 @@ def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop 
           (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAccepts false I o.2.2 ∧ ∀ hs : Scope I,
-        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
+        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 leaf512 (Integrate.planAt hs.typed dj x₀)
               (Integrate.tabAt hs.typed dj x₀) ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
@@ -382,16 +382,16 @@ def SoundExec205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop 
                 (fun _ _ b _ => capOfRoot b) N
                 (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
-      ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card,
-      ⨆ hs : Scope I, ((Law.stratified σs (fun s => (St s).k) hks).miss K + η +
-        StrictCR.ksAvgStrict205 (Integrate.planAt hs.typed dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      ⨅ σs : Fin n → Fin m, ⨅ _ : SamplingDesign.ExecStrata σs (fun s => (St s).k) St,
+      ⨅ hks : ∀ s, (St s).k ≤ (SamplingDesign.stratum σs s).card,
+      ⨆ hs : Scope I, ((SamplingDesign.stratified σs (fun s => (St s).k) hks).miss K + η +
+        StrictCR.ksAvgStrict205 (Integrate.planAt hs.typed dj x₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt hs.typed dj x₀) I wr (opnAt (tablesAt hs.typed dj x₀) I dj) dg
             (decAt (tablesAt hs.typed dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_exec hs.typed (hs.parse hh) (hs.outNet hh) dj x₀ _ wr wOP wLIG op_carries lig_carries (hs.tagsOk hh) hCust.1 hCust.2) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (Integrate.planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀)
+          (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (Integrate.planAt hs.typed dj x₀) (Integrate.tabAt hs.typed dj x₀)
           ((rsAt hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh) (Reg := Reg)).binding
             (rsAt_computes hs.built hs.typed (hs.parse hh) dj x₀ (hs.load hh) hs.tables (hs.scope hh))) k Rw M ρ t')
 
@@ -422,17 +422,17 @@ def SoundExecHU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExecH I dj wr (Law.execOS (n := n) src D.law D.pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExecH I dj wr (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, Assumptions.LinkCRAt ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
         (rsAtH_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables))
@@ -443,7 +443,7 @@ def SoundExecHU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : Scope I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))) j
@@ -452,7 +452,7 @@ def SoundExecHU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAccepts false I o.2.2 ∧ ∀ hs : Scope I,
-        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
+        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
@@ -464,37 +464,37 @@ def SoundExecHU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : Scope I, (D.idealMiss K +
-        StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict205 (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtH hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
             (rsAtH_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables)) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
 /-- **`SoundExecHU205` at A3 per test**: `SoundExecHU205` with the verifier's bytes passing the design's escape test
-(`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
+(`SamplingDesign.missProbTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExecHU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) :
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
-      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest D.law D.pop B) η)
+      Assumptions.UniformRandomBytesTest Lb src (SamplingDesign.missProbTest D.samplingDesign D.pop B) η)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExecH I dj wr (Law.execOS (n := n) src D.law D.pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExecH I dj wr (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, Assumptions.LinkCRAt ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
         (rsAtH_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables))
@@ -505,7 +505,7 @@ def SoundExecHU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : Scope I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))) j
@@ -514,7 +514,7 @@ def SoundExecHU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAccepts false I o.2.2 ∧ ∀ hs : Scope I,
-        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
+        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtH hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
@@ -526,14 +526,14 @@ def SoundExecHU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : Scope I, (D.idealMiss K + η +
-        StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict205 (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtH hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables (Reg := Reg)).binding
             (rsAtH_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) hs.tables)) k Rw M ρ t')
 
@@ -551,17 +551,17 @@ def SoundExecHG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExecH I dj wr (Law.execOS (n := n) src D.law D.pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExecH I dj wr (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, Assumptions.LinkCRAt ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀)
       ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
@@ -573,7 +573,7 @@ def SoundExecHG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : Scope I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))) j
@@ -582,7 +582,7 @@ def SoundExecHG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAccepts false I o.2.2 ∧ ∀ hs : Scope I,
-        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).wrong
+        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).incorrect
           (Xpub {instOneG (c := circS I) (n := n)} {instZeroG (c := circS I) (n := n)}
             (XplurL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀)
@@ -595,37 +595,37 @@ def SoundExecHG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedS
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : Scope I, (D.idealMiss K +
-        StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict205 (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) +
         ((instProg (circS I) n).partition (outsOfI (circS I) n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
             (rsAtG_computes hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built)) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
 /-- **`SoundExecHG205` at A3 per test**: `SoundExecHG205` with the verifier's bytes passing the design's escape test
-(`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
+(`SamplingDesign.missProbTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExecHG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) :
     Prop :=
   ∀ {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
-      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest D.law D.pop B) η)
+      Assumptions.UniformRandomBytesTest Lb src (SamplingDesign.missProbTest D.samplingDesign D.pop B) η)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExecH I dj wr (Law.execOS (n := n) src D.law D.pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExecH I dj wr (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : Scope I, Assumptions.LinkCRAt ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀)
       ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
@@ -637,7 +637,7 @@ def SoundExecHG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : Scope I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))) j
@@ -646,7 +646,7 @@ def SoundExecHG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAccepts false I o.2.2 ∧ ∀ hs : Scope I,
-        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).wrong
+        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).incorrect
           (Xpub {instOneG (c := circS I) (n := n)} {instZeroG (c := circS I) (n := n)}
             (XplurL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀)
@@ -659,14 +659,14 @@ def SoundExecHG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : 
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : Scope I, (D.idealMiss K + η +
-        StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict205 (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) +
         ((instProg (circS I) n).partition (outsOfI (circS I) n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
             (rsAtG_computes hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built)) k Rw M ρ t')
 
@@ -699,17 +699,17 @@ def SoundExecHRU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExecH I dj wr (Law.execOS (n := n) src D.law D.pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExecH I dj wr (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : ScopeR I, Assumptions.LinkCRAt ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtHS hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) (Reg := Reg)).binding
         (rsAtHS_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh)))
@@ -720,7 +720,7 @@ def SoundExecHRU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : ScopeR I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))) j
@@ -729,7 +729,7 @@ def SoundExecHRU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAcceptsR false I own o.2.2 ∧ ∀ hs : ScopeR I,
-        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
+        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtHS hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) (Reg := Reg)).binding
@@ -741,14 +741,14 @@ def SoundExecHRU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : ScopeR I, (D.idealMiss K +
-        StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict205 (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtHS hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) (Reg := Reg)).binding
             (rsAtHS_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh))) k Rw M ρ t') ∧
     ∀ hs : ScopeR I, ∀ o : Reg × Finset (Fin n) × Exec.Transcript, FlockVerifyAcceptsR false I own o.2.2 →
@@ -760,24 +760,24 @@ def SoundExecHRU205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
 
 set_option linter.unusedVariables false in
 /-- **`SoundExecHRU205` at A3 per test**: `SoundExecHRU205` with the verifier's bytes passing the design's escape test
-(`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
+(`SamplingDesign.missProbTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExecHRU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) :
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
-      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest D.law D.pop B) η)
+      Assumptions.UniformRandomBytesTest Lb src (SamplingDesign.missProbTest D.samplingDesign D.pop B) η)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExecH I dj wr (Law.execOS (n := n) src D.law D.pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExecH I dj wr (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : ScopeR I, Assumptions.LinkCRAt ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtHS hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) (Reg := Reg)).binding
         (rsAtHS_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh)))
@@ -788,7 +788,7 @@ def SoundExecHRU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : ScopeR I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))) j
@@ -797,7 +797,7 @@ def SoundExecHRU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAcceptsR false I own o.2.2 ∧ ∀ hs : ScopeR I,
-        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).wrong
+        K ≤ (((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtHS hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) (Reg := Reg)).binding
@@ -809,14 +809,14 @@ def SoundExecHRU205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : ScopeR I, (D.idealMiss K + η +
-        StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict205 (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtHS hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) (Reg := Reg)).binding
             (rsAtHS_computes hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh))) k Rw M ρ t') ∧
     ∀ hs : ScopeR I, ∀ o : Reg × Finset (Fin n) × Exec.Transcript, FlockVerifyAcceptsR false I own o.2.2 →
@@ -841,17 +841,17 @@ def SoundExecHRG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExecH I dj wr (Law.execOS (n := n) src D.law D.pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExecH I dj wr (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : ScopeR I, Assumptions.LinkCRAt ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀)
       ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
@@ -863,7 +863,7 @@ def SoundExecHRG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : ScopeR I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))) j
@@ -872,7 +872,7 @@ def SoundExecHRG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAcceptsR false I own o.2.2 ∧ ∀ hs : ScopeR I,
-        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).wrong
+        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).incorrect
           (Xpub {instOneG (c := circS I) (n := n)} {instZeroG (c := circS I) (n := n)}
             (XplurL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀)
@@ -885,14 +885,14 @@ def SoundExecHRG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : ScopeR I, (D.idealMiss K +
-        StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict205 (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) +
         ((instProg (circS I) n).partition (outsOfI (circS I) n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
             (rsAtG_computes hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built)) k Rw M ρ t') ∧
     ∀ hs : ScopeR I, ∀ o : Reg × Finset (Fin n) × Exec.Transcript, FlockVerifyAcceptsR false I own o.2.2 →
@@ -905,24 +905,24 @@ def SoundExecHRG205 (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Proved
 
 set_option linter.unusedVariables false in
 /-- **`SoundExecHRG205` at A3 per test**: `SoundExecHRG205` with the verifier's bytes passing the design's escape test
-(`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
+(`SamplingDesign.missProbTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExecHRG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) :
     Prop :=
   ∀ (own : Array Flock.Registered.Port) {n : ℕ}
     {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
     {Reg : Type}
-    (D : DrawDesign n)
+    (D : SampleDesign n)
     (hD : LiveDesign I D)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (hA3 : ∀ B : Finset (Fin n),
-      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest D.law D.pop B) η)
+      Assumptions.UniformRandomBytesTest Lb src (SamplingDesign.missProbTest D.samplingDesign D.pop B) η)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
-    (hCust : Assumptions.RecordCustodyExecH I dj wr (Law.execOS (n := n) src D.law D.pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
+    (hCust : Assumptions.RecordCustodyExecH I dj wr (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : ScopeR I, Assumptions.LinkCRAt ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀)
       ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
@@ -934,7 +934,7 @@ def SoundExecHRG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
         (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
         (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ hs : ScopeR I, ∀ ω j, Assumptions.TableCRAt execArith H512 enc512 (leafOfId I.tags.merkleLeaf)
-      (planAtH dj x₀ ((Law.execOS (n := n) src D.law D.pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src D.samplingDesign D.pop).draw ω)
         (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))) j
@@ -943,7 +943,7 @@ def SoundExecHRG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ) ω)) qF qS),
     prob (fun o => FlockVerifyAcceptsR false I own o.2.2 ∧ ∀ hs : ScopeR I,
-        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).wrong
+        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).incorrect
           (Xpub {instOneG (c := circS I) (n := n)} {instZeroG (c := circS I) (n := n)}
             (XplurL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀)
@@ -956,14 +956,14 @@ def SoundExecHRG205PerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf :
                 (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => [])
                 (fun _ _ b _ => capOfRoot b) N (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : ScopeR I, (D.idealMiss K + η +
-        StrictCR.ksAvgStrict205 (planAtH dj x₀) (Law.execOS (n := n) src D.law D.pop) k qF qS
+        StrictCR.ksAvgStrict205 (planAtH dj x₀) (SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) k qF qS
           (reg (simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
             (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
             (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hCust.1 hCust.2) τ)) +
         ((instProg (circS I) n).partition (outsOfI (circS I) n)).linkBoundE
-          (L := Law.execOS (n := n) src D.law D.pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src D.samplingDesign D.pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtG hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built (Reg := Reg)).binding
             (rsAtG_computes hs.typed (hs.parseH hh) (hs.scopeGen hh hf) dj x₀ (hs.loadH hh) hs.built)) k Rw M ρ t') ∧
     ∀ hs : ScopeR I, ∀ o : Reg × Finset (Fin n) × Exec.Transcript, FlockVerifyAcceptsR false I own o.2.2 →
@@ -1015,9 +1015,9 @@ def FlockVerifySound205PerTest : Prop :=
     ∀ (own : Array Flock.Registered.Port) (t : Exec.Transcript), FlockVerifyAcceptsR false I own t →
       I.tags.hiddenOutputs = true ∨ FlockVerifyAccepts false I t
 
-/-- **Soundness at `fast100`'s numbers, over everything flock-verify accepts without `--zk`.** At every statement `I`:
-the live session's probability that `flock-verify verify` accepts without `--zk` (`FlockVerifyAccepts false I`) while
-at least `K` of the statement's proof blocks are wrong is at most `flock_verify_sound`'s bound with each table's term
+/-- **Soundness at `fast100`'s numbers, over everything verity-verify-proof accepts without `--zk`.** At every statement `I`:
+the live session's probability that `verity-verify-proof verify` accepts without `--zk` (`FlockVerifyAccepts false I`) while
+at least `K` of the statement's proof blocks are incorrect is at most `flock_verify_sound`'s bound with each table's term
 `2^-205`: `SoundExec205` at public outputs, `SoundExecH205` at hidden, and with `--registered F` at hidden outputs
 `SoundExecHR205` (the registered reads checked). No hypothesis on the statement's range: the
 verifier checks it (`checkInRange`, in `Stmt.setupH` and `Stmt.setupHidden`), so every plan table is in range

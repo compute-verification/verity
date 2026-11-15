@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 `PlainSimW` at `--zk`. `ZkXferWJ` asks, for each prover `P`, for events tied to collisions and, at each tape and
 table, one mixture of live strategies with the first bound, the fork bounds and the self-clash bound. With the events
 an accepting run or fork with its collision (`zkForkEv`, `zkEv₁`) and the mixture the strategies of a live prover
-`P'` with a finite tape and coins `Φ` of `V true` at the tape and the live coins, of uniform law, whose strategies send
+`P'` with a finite tape and coins `Φ` of `V true` at the tape and the live coins, of uniform distribution, whose strategies send
 `P`'s roots (`zkRoot`), two of those bounds come from deterministic facts about `P'` (`ZkSimWJ`):
 
 * the first, from `P'` simulating `P`'s accepting runs at `Φ` (`ZkSimRun`), by `zk_first_of_sim`, with no premise on
@@ -153,7 +153,7 @@ open Classical in
 /-- **A simulator of each masked prover at the witness-lane verdict**: at a masked statement in scope that sets up at
 a sample, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
 of the session at Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
-coins, of uniform law, whose strategies send `P`'s roots (`zkRoot`), that simulates `P`'s accepting runs at `Φ`
+coins, of uniform distribution, whose strategies send `P`'s roots (`zkRoot`), that simulates `P`'s accepting runs at `Φ`
 (`ZkSimRun`), and at each table `j` and table of full-width columns, whose live self-clashes give `P`'s accepting runs
 with a collision there (`ZkClashRun`) and whose strategies' fork bounds after `Commit` at the deployed decoders right
 at `OkOffWJ` are no more than an accepting fork's with a collision (`zkForkEv`) and the slack of the fork at its round
@@ -163,7 +163,7 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
@@ -247,7 +247,7 @@ open Classical in
 /-- **A simulator of each masked prover at the witness-lane verdict**: at a masked statement in scope that sets up at
 a sample, for each prover `P`, injective fork rounds for every table's events and, at each tape `ω`, a live prover `P'`
 of the session at Flock ZK's padded tables with a finite tape `τ` and coins `Φ` of `V true` at the tape and the live
-coins, of uniform law, whose strategies send `P`'s roots (`zkRoot`), that simulates `P`'s accepting runs at `Φ`
+coins, of uniform distribution, whose strategies send `P`'s roots (`zkRoot`), that simulates `P`'s accepting runs at `Φ`
 (`ZkSimRun`), and at each table `j` and table of full-width columns, whose live self-clashes give `P`'s accepting runs
 with a collision there (`ZkClashRun`) and whose strategies' fork bounds after `Commit` at the deployed decoders right
 at `OkOffWJ` are no more than an accepting fork's with a collision (`zkForkEv`) and the slack of the fork at its round
@@ -257,7 +257,7 @@ def ZkSimWJ (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),

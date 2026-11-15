@@ -24,6 +24,11 @@ path = "../../../../../interface"
 name = "pouw_window"
 path = "../window"
 
+# `pouw-check-difftest`'s `passes-distinct` answers with Pearl+'s own `PouwCheck.PearlPlus.passesDistinct`
+[[require]]
+name = "pouw_pearlplus"
+path = "../pearlplus"
+
 # `PouwCheck.Credit` embeds the model pin (`include_str`), which Lake tracks only as this target
 [[input_file]]
 name = "models"

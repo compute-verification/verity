@@ -142,7 +142,7 @@ def test_a_relabel_leaves_the_template_derivation_as_it_was(tmp_path):
 def test_a_dead_free_template_relabels_each_rank_to_its_dead_free_derive():
     """`--dead-free` (a TP rank's request in the registered compiler's form): rank 1 written from rank 0's derivation is rank 1's own
     dead-free derive, without the reduces of the rows no logit reads, which the derive of record keeps."""
-    from verity_vllm.program.prune import dead_units
+    from verity_torch.prune import dead_units
     sess: list = []
     T.derive_rank(2, 0, session=sess, last=True, dead_free=True)
     rep = relabel.rank_report(sess[0], 1, shards=relabel.shard_map(T.embedding_shards(2, 0), T.embedding_shards(2, 1)))

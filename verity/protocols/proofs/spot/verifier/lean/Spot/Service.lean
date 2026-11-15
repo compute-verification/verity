@@ -1,4 +1,9 @@
-/-
+module
+
+public import Spot.PyJson
+public import Spot.Json
+
+/-!
 The proof system's own checks (`service.py`), each with Python's codes, order and details:
 
 * `checkPublic`: the public-items rule (`service.check_public`) on a one-stage registration record: each observable item
@@ -12,10 +17,6 @@ The proof system's own checks (`service.py`), each with Python's codes, order an
   the first failure only: `pending` (no verdict of record, or one that hasn't run), `sessions` (verdicts of record about
   other sessions than the delivered ones) and `public` (the check's public outputs not reported alike).
 -/
-module
-
-public import Spot.PyJson
-public import Spot.Json
 
 @[expose] public section
 

@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
-# The salted table's verdict at flock-verify's acceptance (the verdict part of `Decodes`)
+# The salted table's verdict at verity-verify-proof's acceptance (the verdict part of `Decodes`)
 
 `Decodes` asks two things of an accepted live outcome: each rep's game runs on the tape decoded from its stream and
 proof file, and the salted table's verdict `tableOutL`, at the cap `capOf` reads off `root_B` and the openings and salts
@@ -18,7 +18,7 @@ runs that `verify_refines_hm96` gives, which take the proof's messages and the s
 * `opnOf`: the openings and salts the two proof files decode to (`opensOf`, `saltsOf`); `opnOf_pair`.
 * `table_verdict_hm96`: when both reps of table `i` verify with one cap under `hm96-sha512/v1`, their runs end in pends
   on which `tableOutL` at `capOfRoot root_B[i]` and `opnOf` accepts.
-* `accepts_verdict_hm96`: the same at flock-verify's acceptance, for every table of the session, under tags whose leaf
+* `accepts_verdict_hm96`: the same at verity-verify-proof's acceptance, for every table of the session, under tags whose leaf
   scheme is `hm96-sha512/v1`.
 
 What remains of `Decodes` at an accepted outcome is that those runs are runs on the decoded tapes (`repTape`).
@@ -153,7 +153,7 @@ theorem table_verdict_leaf (spec : SessionSpec) (st : Setup) (S : Model.Statemen
   · rw [leafOfId_plain]
     exact table_verdict_plain spec st S hm hmS hkS hfold hms extra sess hext hwf sch hf i b₀ b₁ c h0 h1
 
-/-- **flock-verify's acceptance makes each table's salted verdict accept** (§5, §9–§14, S16). When `Accepts I t` under
+/-- **verity-verify-proof's acceptance makes each table's salted verdict accept** (§5, §9–§14, S16). When `Accepts I t` under
 tags whose leaf scheme is `hm96-sha512/v1`, the record decodes against the session's spec, and for every table `j`, at
 its `fast100` schedule and at the statement `stmtOf sts[j]` read off its layout and the record's link points, each
 rep's compiled game, played with its proof file's messages and its stream's coins, ends in a pend, and the salted

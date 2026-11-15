@@ -58,7 +58,7 @@ def test_pick_on_inner_plus_outer():
 def test_the_menu_with_and_without_the_outer_input():
     b = _bucket([P.Unit("a", "t", 60, 3, 3)], 3)
     b["by_B"] = {B: M.inner(100, 50, b, B, {}, COEF, **TINY) for B in (1, 16)}
-    pl = [{"workload": "w", "N": 100, "cap": 2.0 ** 29, "buckets": [b]}]
+    pl = [{"workload": "w", "N": 100, "limit": 2.0 ** 29, "buckets": [b]}]
     alone = M.menu(pl, 50)
     e = alone["models"][0]["entries"][0]
     assert "inner hours alone" in alone["chosen_on"] and e["slots"] == 16 and e["outer_h_public"] is None
@@ -96,7 +96,7 @@ def test_a_smaller_entry_is_costed_as_its_own_units_in_the_shape_session():
     at its own units' cost, through the plan's ``at_rho``."""
     coef, kw = dict(COEF, prove_s=(0.0, 1e-6, 0.0, 0.0)), dict(TINY, slot=None)
     rho = {"a": 1.0, "b": 1 / 4}
-    pl = [{"workload": "w", "N": 100, "cap": 2.0 ** 29, "buckets": []}]
+    pl = [{"workload": "w", "N": 100, "limit": 2.0 ** 29, "buckets": []}]
     for label in ("a", "b"):
         b = _bucket([P.Unit(label, "t", 60, 2.0 ** 21, 2.0 ** 21)], 2.0 ** 21)
         b["by_B"] = {16: M.inner(100, 50, b, 16, rho, coef, **kw)}
@@ -167,7 +167,7 @@ def test_a_shape_takes_its_largest_region_count_and_v_star_checks_the_reps_algeb
 def test_a_shape_takes_its_largest_positions_from_the_rows_instances():
     """Each entry's positions are its row's ``instances_max`` at the chosen B; two entries of one shape (B = 1, Z = 3) at 5
     and 2 positions both take 5, and a menu without the rows carries none."""
-    pl = [{"workload": "w", "N": 100, "cap": 2.0 ** 29, "buckets": []}]
+    pl = [{"workload": "w", "N": 100, "limit": 2.0 ** 29, "buckets": []}]
     for label in ("a", "b"):
         b = _bucket([P.Unit(label, "t", 60, 3, 3)], 3)
         b["by_B"] = {1: M.inner(100, 50, b, 1, {}, COEF, **TINY)}

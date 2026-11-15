@@ -1,4 +1,4 @@
-"""The network certifier's connection rows (`connection_rows`): a link-window's lengths and fails tables are the
+"""The network certifier's connection rows (`connection_rows`): an execution phase's lengths and fails tables are the
 schedule's size whatever the load and read back as the releases the certifier handed, each row opens its table's root
 at its position and nowhere else, one head lists both tables and is signed once, the registration reads back under the
 network certifier's key and session and the schedule and refuses any field, table, key, session or certificate but its
@@ -15,11 +15,11 @@ import signers
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import connection_rows as C
-from verity.protocols.accounting.certifier.verifier import warden_rows as W
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as W
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsKey
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import LEN, PLAIN, traffic
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import records, run
-from verity.protocols.accounting.certifier.verifier.warden import Released
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import records, run
+from verity.protocols.accounting.certifier.verifier.network_certifier import Released
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 T, K = LEN.window // LEN.every, LEN.stride_releases
@@ -31,8 +31,8 @@ def handed():
     """The releases of the lengths tests' traffic, by window: two requests in one slot stride and one later, then two
     the server failed."""
     reqs, arrivals, answers = traffic()
-    warden, _, _ = run(answers, arrivals, params=LEN, windows=3)
-    return reqs, warden, dict(warden.lengths)
+    network_certifier, _, _ = run(answers, arrivals, params=LEN, windows=3)
+    return reqs, network_certifier, dict(network_certifier.lengths)
 
 
 def _attest(tmp_path, strides, window=0, session=signers.SESSION, seed=b"certifier"):
@@ -139,9 +139,9 @@ def test_every_row_opens_its_tables_signed_root_at_its_position_and_nowhere_else
 
 
 def test_one_head_lists_the_tables_and_is_signed_once(handed, tmp_path):
-    """The head is the link-window, the schedule's digest and each table's name, rows, row bytes, domain and root, in
+    """The head is the execution phase, the schedule's digest and each table's name, rows, row bytes, domain and root, in
     the schedule's order, and its one certificate takes one leaf of the signer. A head of other tables, another order,
-    another root or another link-window has another digest, and a head lists no table twice."""
+    another root or another execution phase has another digest, and a head lists no table twice."""
     _, _, by_window = handed
     issuer, rows, cert = _attest(tmp_path, by_window[0])
     head = rows.head
@@ -162,7 +162,7 @@ def test_one_head_lists_the_tables_and_is_signed_once(handed, tmp_path):
     for bad in ((), (lengths, lengths)):
         with pytest.raises(ValueError, match="each of its tables once"):
             C.Head(LINK, 0, LEN.digest, bad)
-    # no other certificate of the link-window signs it: a wire record's and a cells' head's sign other digests
+    # no other certificate of the execution phase signs it: a wire record's and a cells' head's sign other digests
     plain, _, _ = run([], {}, params=LEN, windows=1)
     record = records(plain)[1][0]
     wire = issuer.certify(record, Direction.EGRESS, LEN.grid, LEN.digest)
@@ -195,11 +195,11 @@ def test_salts_are_fresh_never_shared_and_the_witness_is_theirs(handed):
 
 
 def test_the_registration_reads_back_and_refuses_anything_but_its_own(handed, tmp_path):
-    """The verifier's read takes the link-window it expects and the schedule's parameters; any other field, an extra
-    key, a table more, fewer or out of order, a root the certificate doesn't sign, another key, session or link-window,
-    a schedule without lengths rows, or the wire record's or the cells' certificate of the same link-window, is
+    """The verifier's read takes the execution phase it expects and the schedule's parameters; any other field, an extra
+    key, a table more, fewer or out of order, a root the certificate doesn't sign, another key, session or execution phase,
+    a schedule without lengths rows, or the wire record's or the cells' certificate of the same execution phase, is
     refused."""
-    _, warden, by_window = handed
+    _, network_certifier, by_window = handed
     issuer, rows, cert = _attest(tmp_path / "a", by_window[1], window=1)
     doc = json.loads(json.dumps(C.registration(rows.head, cert, LEN)))
     key = issuer.signer.public_key()
@@ -245,7 +245,7 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(handed, tm
         C.check_registration(doc, key, signers.SESSION, LEN, LINK, 2)
     with pytest.raises(ValueError, match="no connection rows"):
         C.check_registration(doc, key, signers.SESSION, PLAIN, LINK, 1)
-    record = records(warden)[1][1]
+    record = records(network_certifier)[1][1]
     wire = issuer.certify(record, Direction.EGRESS, LEN.grid, LEN.digest).certificate
     _, cells_cert = W.attest(issuer, record, LEN, Direction.EGRESS)
     for foreign in (wire, cells_cert):

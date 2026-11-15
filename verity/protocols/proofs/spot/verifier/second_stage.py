@@ -1,7 +1,10 @@
 """Round 2's statement check, as the verifier's `Spot.SecondStage` defines it, which the difftest's
 `second_statements` holds this to: a two-stage run's second-stage sessions held, each by its statement, to the interior
-registration and to the second sample's cells. `service.Stream` adds it to the interior registration's audit record as
-`checks.statements` (`attach`). The parts and their cells, a statement, its codes and the form's switch are the Lean's
+docket and to the second sample's cells. Its verdict of record is the Lean's (`SecondStage.checkAny`, inside
+`Run.run`), which no interface here reaches on its own: `check` and `complete` raise (`verifier.not_written`), and
+`check_twin` and `complete_twin` are their Python twins, the difftest's references. `service.Stream` adds the twin's
+check to the interior docket's audit record as `checks.statements` (`attach`), the Python side `Run.run` is held
+to, and the outcome is `Run.run`'s. The parts and their cells, a statement, its codes and the form's switch are the Lean's
 (its module docstring).
 
 A statement is one second-stage session's: ``{"template", "header", "draw", "registered"}``, the template its circuit is
@@ -9,7 +12,7 @@ an instance of (its stratum's name under the check's query), its public file's h
 ``unit_draw``, and the registered reads it was verified against (``--registered``), None for none. Round 2 takes it only
 where an accepted verdict of record names its header, its registered reads and its sample (``second-verified``,
 `verified_of`): ``public_header_sha512`` and ``registered_sha512``, the SHA-512 of the header's and the
-``--registered`` file's canonical JSON, and ``unit_draw``, which `flock-verify verify` writes of the session it checked;
+``--registered`` file's canonical JSON, and ``unit_draw``, which `verity-verify-proof verify` writes of the session it checked;
 and only where every one that does checked its session as one table (``session_tables``, ``second-tables``): a session
 split across Flock tables is refused, as one split across statements is (``second-template``).
 
@@ -19,17 +22,19 @@ difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never suppli
 another template reads that writer's output port for the field, one value the interior commits once, so
 ``second-read`` holds a wired port to its writer's port at its writer unit's row and `at_run` binds it by that port
 (`_held_port`). No wire reads an output the replay block returns, a writer's port a link names: the boundary commits
-that output, and the interior's port of it is another tree, which nothing holds to the first. And each wire's writer's
-part is before its reader's (``second-wires``, `_wires_ok`).
+that output, and the interior's port of it is another tree, which nothing holds to the first. No link names a wire's
+reader's port either: a session reads a port a link names at the link's entry (`_read_ok`), so a wire naming it too
+would hold nothing of what is read. And each wire's writer's part is before its reader's (``second-wires``,
+`_wires_ok`).
 A template may have several callers in the body, a batch's members among them, its units theirs in
 body order; each port a link or a wire names reads, unit by unit, the row its caller names (`replay_rows`,
 `SecondStage.replayRows`), summarized once per Definition as runs (`Run`) and never unrolled. A port a link names reads
-the boundary port the link names or, where the interior registration registers a value of the link's name (a value its
+the boundary port the link names or, where the interior docket registers a value of the link's name (a value its
 verifier supplies, say), that value, at its unit's row of its cell's sampled block (`_read_ok`). Each name is one
-registration's: an interior registration that registers a value of a name the boundary registration's record has, a
+docket's: an interior docket that registers a value of a name the boundary docket's record has, a
 port or a registered value, is refused (``second-interior-names``, `names_ok`), so the interior's value of a name never
 stands in for one round 1 committed. What a replay block returns is committed before the first stage's sample: an
-interior registration that registers a value of a name the block's return has in the boundary registration's record,
+interior docket that registers a value of a name the block's return has in the boundary docket's record,
 one of its output ports ``o<j>`` (`replay_returns`), is refused (``second-return``, `returns_ok`), so a port a link
 names for the return is read only at the port round 1's record has for it.
 
@@ -57,25 +62,25 @@ statement against them), the two the same with each port's run fields blanked (`
 to the run: every port's ``root``, ``domain`` and ``leaves`` (`READ_RUN_FIELDS`), and the rows (``reads``,
 ``reads_from``: `READ_ROW_FIELDS`) of a port a link names or one reading a port of the interior record (its own, or at
 a port a wire names its writer's), whose rows the run places (`_run_places_rows`). So the ports a session reads
-registered, the value each reads, and the rows at which it reads a value a registration registers are fixed before the
-run: ``second-read`` alone lets a port no link or wire names read any value either registration registers, at any rows.
+registered, the value each reads, and the rows at which it reads a value a docket registers are fixed before the
+run: ``second-read`` alone lets a port no link or wire names read any value either docket registers, at any rows.
 
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
 statement is read. With it, ``second-interior-names`` fails where the interior record registers a value of a name the
-boundary registration's record has (`names_ok`), ``second-return`` where it registers one of a name the replay
-block's return has there (`returns_ok`), and ``second-schedule`` where the boundary registration's record
+boundary docket's record has (`names_ok`), ``second-return`` where it registers one of a name the replay
+block's return has there (`returns_ok`), and ``second-schedule`` where the boundary docket's record
 commits a schedule (``window.schedule``) that is no schedule of its replay blocks (`schedule.failure`); a record that
 commits none passes.
 
 Every input of a replay block that the prover gives is a port of round 1's record (a link), another template's output
 in the block (a wire), a value the verifier holds without the prover, or the opened row of a read against a root round
-1 committed: the interior registration, made after the first stage's sample, registers nothing else
+1 committed: the interior docket, made after the first stage's sample, registers nothing else
 (``second-inputs``, `inputs_failure`). A value it registers passes where the verifier pinned it, holds it to an earlier
 record, or fills it from its own bytes (`Own.fixed`, `Own.supplied`). Any other is the prover's, and passes only as a
 read's row, salt or path, where the verifier fills the read's root and domain with the root and the domain id round 1's
 record registers for one table (`_one_table`, by their bytes: `Own.supplied` holds what the verifier computed for a
-table in place of its name, as the interior registration's check read it), the read's key is a port of round 1's
+table in place of its name, as the interior docket's check read it), the read's key is a port of round 1's
 record or a value the verifier holds, and the read's verdict port reads a value the verifier fills with 1
 (`_opened_row`): the row is then the table's at that key, short of a SHA-512
 collision. A key the block computes, a wire, is refused, with a reason of its own (`KEY_WHY`): no statement covers it.
@@ -88,7 +93,8 @@ table has another leaf count than the read's rows, is refused here. The code is 
 branch of `check`, so a run that has it still reaches its other stops.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
-(``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
+(``two-stage-form``), and the Python flipped alone disagrees with the run of record. `complete_twin` is what a two-stage
+outcome may say of itself: nothing while `FORM` is off or its replay block is a stand-in for the request Definition."""
 
 from __future__ import annotations
 
@@ -103,13 +109,14 @@ from verity.circuits.refs import Affine, Concat, Explicit
 from verity.circuits.types import Array, RecordType, Tuple
 from verity.commitments.window import window_binding
 
+from .one_stage import verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from .schedule import failure as schedule_failure
 
 #: `SecondStage.FORM`, off. Three things withhold a two-stage run's accept: SPOT[Flock]'s two-stage guarantee takes as
 #: a premise that each gate's value has one address fixed before the run, which nothing proves from round 2's check;
 #: no theorem says a run the verifier accepts is one the verifier that guarantee is stated about accepts; and the
-#: composite's sampled component has no two-stage form, nor a leg for one, under the one soundness theorem. It turns
+#: composite's sampled component has no two-stage form, nor a subprotocol for one, under the one soundness theorem. It turns
 #: on only once the two-stage form is under that theorem: SPOT[Flock]'s own two-stage theorem does not turn it on.
 FORM = False
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
@@ -124,8 +131,8 @@ LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other
              "one field, alike at every caller, or a link's rows don't place its part's units")
 WIRES_WHY = ("the replay block's Definition reads a node other than as a template's parameter that is one field of one "
              "instance of another template, alike at every caller, or a wire names a template of no part, or its rows "
-             "don't place its part's units or its writer's, or it reads an output the replay block returns, or its "
-             "writer's part is not before its reader's")
+             "don't place its part's units or its writer's, or it reads an output the replay block returns, or a link "
+             "names the port that reads it, or its writer's part is not before its reader's")
 INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
 NAMES_WHY = ("the interior registration registers a value of a name the boundary registration's record has, a port or a "
              "registered value")
@@ -134,13 +141,29 @@ RETURN_WHY = ("the interior registration registers a value of a name the replay 
 INPUTS_WHY = ("the interior registration registers a value that is neither one the verifier holds without the prover (one "
               "it pinned, one it holds to an earlier record, or one it fills from its own bytes) nor the opened row of a "
               "read the auditor's params record, whose root and domain it fills from one table of the read's rows that "
-              "round 1's record registers, whose key is a port of round 1's record or a value it holds, and whose "
-              "verdict it holds to 1")
+              "round 1's record registers or its params pin, whose key is a port of round 1's record or a value it "
+              "holds, and whose verdict it holds to 1")
 KEY_WHY = ("the interior registration registers the opened row of a read at a key the block computes (the read's key is "
            "wired to another template's output): no statement covers it")
+#: `SecondStage.WIRED_KEY`, off: whether round 2 takes a read whose key a wire fills (`_opened_row`, `_key_failure`).
+#: Off, it refuses each one with `KEY_WHY`. A constant of the code: `Own.wired_key` defaults to it, and nothing the
+#: service reads sets the field. Only development plays set it on, never an accept of record. It turns on only once
+#: the statement that a sampled reader unit's key is its writer unit's committed output row is proved.
+WIRED_KEY = False
+KEY_WIRES_WHY = "a read's key is wired, but not by exactly one wire"
+KEY_LINKED_WHY = "a read's key is both wired and linked: it is its writer's row or a value the verifier holds, never both"
+KEY_WIDTH_WHY = "a read's key is wired to a writer's output row of other u16 words than the key's row"
+KEY_ORDER_WHY = "a read's key is wired to a writer whose part is not before the reader's in the interior window"
+KEY_BOUNDS_WHY = ("a read's key is wired, and its rows give a unit a writer row outside its writer's units a replay "
+                  "block")
 #: A read's ports (`gates.embedding.EmbeddingRead`, `Flock.ReadNet.readTmpl`): its key, the table's root and domain
 #: id, the opened row with its salt and its path, and its verdict (`SecondStage.OPENING_KEY` and the names after it).
 OPENING_KEY, OPENING_TABLE, OPENING_ROW, OPENING_VERDICT = "tok", ("root", "domain"), ("row", "salt", "path"), "o1"
+#: A read's ports a key reads at: its key, its row's ports and its verdict (`SecondStage.KEYED_PORTS`).
+KEYED_PORTS = (OPENING_KEY, *OPENING_ROW, OPENING_VERDICT)
+KEY_ROWS_WHY = ("a read whose key is wired lists table_rows at a port of its opening: the rows it reads are a function "
+                "of a committed value, never public positions, so it lists none")
+TABLE_ROWS_WHY = "a registered read lists table_rows, which round 2 does not read yet: a read lists every row"
 OPENING_ROOT, OPENING_DOMAIN = OPENING_TABLE
 #: The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes, among
 #: them the root and the domain id it computed for a table, which `Own.supplied` holds in place of the table's name
@@ -148,9 +171,9 @@ OPENING_ROOT, OPENING_DOMAIN = OPENING_TABLE
 #: the prover's after the sample, and a ``position`` or a ``window`` source the interior record's population or window.
 #: A ``history`` source left unresolved is none of the verifier's bytes.
 OWN_SOURCES = ("bytes",)
-#: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1
-#: (`SecondStage.VERDICT_ONE`).
-VERDICT_ONE = (("bytes", "00000001"),)
+#: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1 as one 16-bit half, one leaf
+#: of the verdict's one word (`registered.half_leaves`; `SecondStage.VERDICT_ONE_LEAF`).
+VERDICT_ONE_LEAF = (("bytes", "0001"),)
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
 MAX_LEAVES = 2 ** 64
@@ -159,11 +182,22 @@ MAX_LEAVES = 2 ** 64
 #: verifier ``units.blocks``, the indices cut into blocks of ``vus_per_block`` (its header's ``units`` must be
 #: `Flock.HmRow.unitsEntry` of its indices), ``second-roots`` the next two, and ``second-read`` ``registered``, each
 #: read's root, domain and rows, with ``second-values`` the value each port reads, and the rows at which it reads a
-#: value a registration registers, through the ``--registered`` file the session's verifier holds it to
+#: value a docket registers, through the ``--registered`` file the session's verifier holds it to
 #: (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header only in the indices and their
 #: blocks.
 RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"),
               ("registered",))
+
+
+def complete_twin(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
+    """Whether a two-stage outcome is complete, in the sense one-stage's accept publishes (`one_stage.audit.COMPLETE`:
+    every verdict ran). It is only when all three hold. The two-stage form is allowed (`form`: `FORM` in a run of
+    record, on only once the soundness proof covers the form). The replay block is the registered request Definition
+    (`request_definition`): a sample of a stand-in audits the stand-in, never the request. Each stage's audit record
+    (`records`, at least one, none missing) accepted and is itself complete. So it is false of every two-stage outcome
+    while `FORM` is off, and of every one whose replay block is a stand-in, whatever its audit records say."""
+    return (form is True and request_definition is True and len(records) > 0
+            and all(r is not None and r.get("accepted") is True and r.get("complete") is True for r in records))
 
 
 @dataclass(frozen=True)
@@ -308,19 +342,52 @@ def rows_of(j: Any) -> tuple[Rows, ...] | None:
 
 
 @dataclass(frozen=True)
+class Width:
+    """`SecondStage.Width`: the u16 words of the rows a wire joins: template `template`'s session port `port` reads rows
+    of `reads` words, and its writer's output port writes rows of `writes` (`replay_widths`)."""
+
+    template: str
+    port: str
+    reads: int
+    writes: int
+
+    def to_json(self) -> dict[str, Any]:
+        return {"port": self.port, "reads": self.reads, "template": self.template, "writes": self.writes}
+
+
+def widths_of(j: Any) -> tuple[Width, ...] | None:
+    """`SecondStage.widthsOf?`: widths from their JSON, a list of objects of exactly ``template``, ``port``, ``reads``
+    and ``writes``, two strings and two natural numbers; None for anything else."""
+    if not isinstance(j, list):
+        return None
+    out = []
+    for w in j:
+        if not (isinstance(w, dict) and sorted(w) == ["port", "reads", "template", "writes"]):
+            return None
+        if not (isinstance(w["template"], str) and isinstance(w["port"], str) and _nat(w["reads"])
+                and _nat(w["writes"])):
+            return None
+        out.append(Width(w["template"], w["port"], w["reads"], w["writes"]))
+    return tuple(out)
+
+
+@dataclass(frozen=True)
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
-    registrations' records, the second sample's units, the design's links (`replay_links`, None when the replay block's
+    dockets' records, the second sample's units, the design's links (`replay_links`, None when the replay block's
     Definition makes none), the ``{value: root}`` the verifiers report the sessions read
     (`audit.session_registered`), what they name of each session they accepted (`verified_of`), the reference header
     of each template's statement, ``(template, header)``, and the registered reads it reads,
     ``(template, registered)``, None for none (`ref_reads`), as the auditor's params give them
     (`service.template_circuits`), the design's wires (`replay_wires`, None when the Definition makes none), the
     rows of the ports they and the links name (`replay_rows`), the names the replay block's return has in the boundary
-    registration's record (`replay_returns`), and, of the values the interior registration registers, the verifier's
+    docket's record (`replay_returns`), and, of the values the interior docket registers, the verifier's
     own copies of those it holds without the prover: each one it fills itself, with its rows of sources
-    (`supplied_of`), and the names of those it pinned or holds to an earlier record (``fixed``); and the templates the
-    auditor's params record as reads, each with its table's rows, ``(template, V)`` (`service.template_reads`)."""
+    (`supplied_of`), and the names of those it pinned or holds to an earlier record (``fixed``); the templates the
+    auditor's params record as reads, each with its table's rows, ``(template, V)`` (`service.template_reads`); the
+    registered tables the auditor's params pin before any coin, ``(parameter, entry)`` each, the entry the tables'
+    docket names (``tables``); the words of the rows each wire joins (`replay_widths`); and the wired key's
+    switch, by default `WIRED_KEY`, which the service never sets otherwise."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -338,6 +405,9 @@ class Own:
     supplied: tuple[tuple[str, tuple[tuple[tuple[str, str], ...], ...]], ...] = ()
     fixed: tuple[str, ...] = ()
     reads: tuple[tuple[str, int], ...] = ()
+    tables: tuple[tuple[str, Any], ...] = ()
+    widths: tuple[Width, ...] = ()
+    wired_key: bool = WIRED_KEY
 
 
 def supplied_of(supplied: Any) -> tuple[tuple[str, tuple[tuple[tuple[str, str], ...], ...]], ...]:
@@ -717,7 +787,7 @@ def links_of(defs: Mapping[str, Any], key: str) -> tuple[Link, ...] | None:
 
 def replay_links(program: Any, key: str, rec: Any) -> tuple[Link, ...] | None:
     """`SecondStage.replayLinks`: the links of the replay block `program` defines under descriptor id `key` (`links_of`
-    over the definitions its descriptor records, `codec.definitions`), each value the boundary registration's port for
+    over the definitions its descriptor records, `codec.definitions`), each value the boundary docket's port for
     it, as record `rec` names its ports."""
     links, named = links_of(definitions(program), key), _by_template(rec)
     return None if links is None else tuple(Link(x.template, x.port, _port_of(named, key, x.value)) for x in links)
@@ -725,7 +795,7 @@ def replay_links(program: Any, key: str, rec: Any) -> tuple[Link, ...] | None:
 
 def replay_returns(program: Any, key: str, rec: Any) -> tuple[str, ...]:
     """`SecondStage.replayReturns`: the names the return of the replay block `program` defines under descriptor id `key`
-    has in the boundary registration, as record `rec` names its ports: its output ports ``o<j>``, one per field of what
+    has in the boundary docket, as record `rec` names its ports: its output ports ``o<j>``, one per field of what
     it returns (`_outputs`), among them the value of each link its return makes (`_return_links`). Empty for a `key`
     it doesn't define."""
     fn, named = definitions(program).get(key), _by_template(rec)
@@ -831,6 +901,24 @@ def replay_rows(program: Any, key: str) -> tuple[Rows, ...]:
     return tuple(Rows(x.template, x.port, per, rs) for x, per, rs in runs)
 
 
+def replay_widths(program: Any, key: str) -> tuple[Width, ...]:
+    """`SecondStage.replayWidths`: the design's widths: for each wire of the replay block `program` defines under
+    descriptor id `key` (`replay_wires`), the u16 words of a row its reader's port reads, its parameter's, and of one
+    its writer writes, the writer's output field the wire names (`_words`). A wire whose templates or field the
+    program doesn't define gives none."""
+    defs, out = definitions(program), []
+    for w in wires_of(defs, key) or ():
+        t, tw = defs.get(w.template), defs.get(w.writer)
+        if t is None or tw is None:
+            continue
+        ty = next((ty for p, ty in t.signature()[0] if p == w.port), None)
+        fs = _fields(tw.signature()[1])
+        g = next((g for f, g in enumerate(fs) if f"o{f}" == w.wport), None)
+        if ty is not None and g is not None:
+            out.append(Width(w.template, w.port, _words(ty), _words(g)))
+    return tuple(out)
+
+
 def _rows_of(own: Own, t: str, port: str) -> Rows | None:
     """`SecondStage.rowsOf`: the rows of template `t`'s session port `port` (`Own.rows`)."""
     return next((r for r in own.rows if r.template == t and r.port == port), None)
@@ -852,12 +940,13 @@ def _links_ok(ps: Sequence[Part], own: Own) -> bool:
 
 def _wires_ok(ps: Sequence[Part], own: Own) -> bool:
     """`SecondStage.wiresOk`: the wires are derived, each between templates the parts are of, its reader's units placed
-    by its rows (`_placed`), whose rows a block are its writer's units a block, whose writer's port no link names, and
-    whose writer's part is before its reader's (`_pos_of`)."""
+    by its rows (`_placed`), whose rows a block are its writer's units a block, whose writer's port and whose own port
+    no link names, and whose writer's part is before its reader's (`_pos_of`)."""
     def writer_ok(w: Wire) -> bool:
         r = _rows_of(own, w.template, w.port)
         return (r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
-                and _link_of(own, w.writer, w.wport) is None and _pos_of(ps, w.writer) < _pos_of(ps, w.template))
+                and _link_of(own, w.writer, w.wport) is None and _link_of(own, w.template, w.port) is None
+                and _pos_of(ps, w.writer) < _pos_of(ps, w.template))
     return own.wires is not None and all(any(p.template == w.template and _placed(own, p, w.port) for p in ps)
                                          and writer_ok(w) for w in own.wires)
 
@@ -869,6 +958,30 @@ def _wire_of(own: Own, t: str, port: str) -> Wire | None:
 def _writer_of(own: Own, w: Wire) -> Part | None:
     """`SecondStage.writerOf`: wire `w`'s writer's part."""
     return next((p for p in own.parts or () if p.template == w.writer), None)
+
+
+def _key_failure(own: Own, t: str) -> str | None:
+    """`SecondStage.keyFailure`: why template `t`'s wired key is not whole, None when it is: exactly one wire names its
+    key port (`OPENING_KEY`, else `KEY_WIRES_WHY`), no link does (`KEY_LINKED_WHY`), the writer's output field the wire
+    names is a row of the key row's u16 words (`Own.widths`, `KEY_WIDTH_WHY`), the writer's part is before the
+    reader's in the interior window (`_pos_of`, `KEY_ORDER_WHY`), and the key's rows give each unit a writer row among
+    the writer's units a replay block (`KEY_BOUNDS_WHY`). That a sampled proof block's key is that row's committed value is
+    ``second-read``'s (`_read_ok`)."""
+    ws = [w for w in own.wires or () if w.template == t and w.port == OPENING_KEY]
+    if len(ws) != 1:
+        return KEY_WIRES_WHY
+    w, ps = ws[0], own.parts or ()
+    if _link_of(own, t, OPENING_KEY) is not None:
+        return KEY_LINKED_WHY
+    width = next((x for x in own.widths if x.template == t and x.port == OPENING_KEY), None)
+    if width is None or width.reads != width.writes:
+        return KEY_WIDTH_WHY
+    if not _pos_of(ps, w.writer) < _pos_of(ps, t):
+        return KEY_ORDER_WHY
+    p, r = _writer_of(own, w), _rows_of(own, t, OPENING_KEY)
+    if p is None or r is None or not all(x.row + max(x.count - 1, 0) * x.step < p.n for x in r.runs):
+        return KEY_BOUNDS_WHY
+    return None
 
 
 def _held_port(own: Own, named: bool, t: str, p: str) -> str:
@@ -907,9 +1020,9 @@ INTERIOR_ROOT = "verity-vllm/interior-run/v1"
 
 
 def interior_root(boundary: str, sample: Sequence[int]) -> str:
-    """`SecondStage.interiorRoot`: the interior window's open root for the boundary registration of digest `boundary`
+    """`SecondStage.interiorRoot`: the interior window's open root for the boundary docket of digest `boundary`
     and the replay sample `sample`, in order. The verifier computes it, so a second stage sampled on a session of its
-    own is sampled on the one window its boundary registration and replay sample name."""
+    own is sampled on the one window its boundary docket and replay sample name."""
     message = canonical_json({"boundary": boundary, "replay_sample": [int(u) for u in sample]})
     return hashlib.sha512(INTERIOR_ROOT.encode() + b"\x00" + message).hexdigest()
 
@@ -984,6 +1097,73 @@ def own_draw(q: int, p: Part, drawn: Sequence[int]) -> dict[str, Any]:
     return {"law": "subset", "population": q * p.n, "k": len(units), "units": units}
 
 
+def sampled_slots(q: int, p: Part, us: Sequence[int]) -> list[int]:
+    """`SecondStage.sampledSlots`: part `p`'s slots among the second sample's units `us`, in its order."""
+    return [u for u in us if p.holds(q, u)]
+
+
+def _sampled_ok(q: int, p: Part, us: Sequence[int], h: Any) -> bool:
+    """`SecondStage.sampledOk`: the header's ``units.indices`` are part `p`'s slots the second stage samples and no
+    other, at least one, and its ``instances`` their count: the header of a statement of only its part's sampled proof
+    blocks."""
+    slots, indices, m = sampled_slots(q, p, us), _get(_get(h, "units"), "indices"), _get(h, "instances")
+    return (isinstance(indices, list) and _nat(m) and 0 < m == len(slots) and len(indices) == len(slots)
+            and all(_nat(x) and x == u for x, u in zip(indices, slots)))
+
+
+def sampled_only(q: int, p: Part, us: Sequence[int], h: Any) -> bool:
+    """`SecondStage.sampledOnly`: header `h` is of only part `p`'s sampled proof blocks (`_sampled_ok`), and not of
+    every slot of the part (`_population_ok`): where the second stage samples every slot the two are one header, held
+    as the part's whole."""
+    return _sampled_ok(q, p, us, h) and not _population_ok(q, p, h)
+
+
+def _rows_read(e: Any, slots: Sequence[int]) -> int:
+    """`SecondStage.rowsRead`: the rows registered-reads entry `e` gives slots `slots`, each once."""
+    f, rs = _get(e, "reads_from"), _get(e, "reads")
+    f = f if _nat(f) else 0
+    if not isinstance(rs, list):
+        return 0
+    return len({rs[u - f] for u in slots if f <= u < f + len(rs) and _nat(rs[u - f])})
+
+
+def at_sampled(r: Any, slots: Sequence[int], reads: Sequence[tuple[str, Any]]) -> Any:
+    """`SecondStage.atSampled`: reference header `r`, placed in the run, at the slots a statement of only its part's
+    sampled proof blocks holds: its ``range`` those ``len(slots)`` instances', its ``units.classes`` its first
+    ``len(slots)``, and each port of its ``shared_rows`` the rows the statement's registered reads `reads` give those
+    slots (`_rows_read`), a port they don't read left as it is; a field the reference lacks stays absent."""
+    k = len(slots)
+    if isinstance(r, dict) and "range" in r:
+        r = _put_at([0, k], r, ("range",))
+    classes = _get(_get(r, "units"), "classes")
+    if isinstance(classes, list):
+        r = _put_at(classes[:k], r, ("units", "classes"))
+    shared = _get(r, "shared_rows")
+    if isinstance(shared, dict):
+        by: dict[str, Any] = {}
+        for port, e in reads:
+            by.setdefault(port, e)
+        r = _put_at({port: _rows_read(by[port], slots) if port in by else n for port, n in shared.items()}, r,
+                    ("shared_rows",))
+    return r
+
+
+def _sampled_header_ok(own: Own, named: bool, k: int, t: str, h: Any, slots: Sequence[int],
+                       reads: Sequence[tuple[str, Any]]) -> bool:
+    """`SecondStage.sampledHeaderOk`: `_header_ok` for a statement of only its part's sampled proof blocks `slots`,
+    reading `reads` registered: its header is its template's reference header placed in the run (`at_run`) and at those
+    slots (`at_sampled`), but for the run's fields."""
+    ref = next(((r,) for x, r in own.refs if x == t), None)
+    placed = None if ref is None else at_run(own, named, k, t, ref[0])
+    return placed is not None and _jeq(blank_run(h), blank_run(at_sampled(placed, slots, reads)))
+
+
+def whole_sample(m: int) -> dict[str, Any]:
+    """`SecondStage.wholeSample`: the sample of every unit of a population of `m`, as ``unit_draw`` writes a subset of
+    it: the session's sample of a statement of only its part's sampled proof blocks."""
+    return {"law": "subset", "population": m, "k": m, "units": list(range(m))}
+
+
 def _registered_entry(rec: Any, v: str) -> Any:
     es = _get(rec, "registered")
     return next((e for e in (es if isinstance(es, list) else ()) if _get(e, "value") == v
@@ -1050,11 +1230,11 @@ def _wired_row(p: Part, r: Rows, u: int) -> int | None:
 def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     """`SecondStage.readOk`: template ``p.template``'s session port `port` may read registered-reads entry `e`: a port a
     link names, only the boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its
-    cell's replay block's (`_linked_row`), or, where the interior registration registers a value of the link's name,
-    one the boundary registration's record has no port or value of (`names_ok`), only that value, of its rows' `per` a
+    cell's replay block's (`_linked_row`), or, where the interior docket registers a value of the link's name,
+    one the boundary docket's record has no port or value of (`names_ok`), only that value, of its rows' `per` a
     sampled block, each slot only its unit's row of its cell's (`_wired_row`); a port a wire names, only its writer's output port of the interior record, of
     the writer's units a block, each slot only its unit's writer unit's row in its cell's replay block (`_wired_row`);
-    any other, its own port of the interior record, each slot only its own first row, or a value either registration
+    any other, its own port of the interior record, each slot only its own first row, or a value either docket
     registers, never a boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them."""
     v, q = _get(e, "value"), len(own.sample)
     if not isinstance(v, str):
@@ -1139,7 +1319,7 @@ def _run_places_rows(own: Own, t: str, port: str, e: Any) -> bool:
     places, which ``second-read`` holds to the run (`_placed_ok`, `_rows_ok`): a port a link names, each slot at its
     unit's row of its cell's replay block's, or one reading a port of the interior record, its own port each slot at its
     own rows or, at a port a wire names, its writer's at its writer unit's row (`_read_ok`'s first three cases). Any
-    other port reads a value a registration registers, which ``second-read`` holds only to the value's root, domain and
+    other port reads a value a docket registers, which ``second-read`` holds only to the value's root, domain and
     leaves (`_same_at`), so ``second-values`` holds its rows to the reference statement's, the same rows in every run.
     A workload whose rows there depend on the sampled block (a positional table) would need a rule of its own."""
     v = _get(e, "value")
@@ -1164,7 +1344,7 @@ def blank_reads(own: Own, t: str, r: Any) -> Any:
 def _values_ok(own: Own, s: Stmt) -> bool:
     """`SecondStage.valuesOk`: statement `s`'s registered reads are its template's reference statement's
     (`Own.ref_reads`) but for the run's fields, the two the same with those blanked (`blank_reads`), so None only where
-    the reference's is, and each value a registration registers read at the reference's rows; False for a template the
+    the reference's is, and each value a docket registers read at the reference's rows; False for a template the
     params give no reference reads."""
     ref = next(((r,) for t, r in own.ref_reads if t == s.template), None)
     return ref is not None and _jeq(blank_reads(own, s.template, s.registered), blank_reads(own, s.template, ref[0]))
@@ -1178,6 +1358,26 @@ def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
               ("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
+              ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
+               and _linked_read(own, p.template, reads) and _wired_read(own, p.template, reads)),
+              ("second-refs", _refs_ok(s)),
+              ("second-values", _values_ok(own, s)))
+    return [code for code, ok in checks if not ok]
+
+
+def _sampled_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
+    """`SecondStage.sampledCodes`: `_stmt_codes` for a statement of only its part `p`'s sampled proof blocks
+    (`sampled_only`): its population is the part's slots the second stage samples (`_sampled_ok`), its header its
+    template's reference's placed at them (`_sampled_header_ok`), and its session's sample every unit of it
+    (`whole_sample`); every other check is `_stmt_codes`'s."""
+    q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
+    slots = sampled_slots(q, p, own.drawn)
+    checks = (("second-verified", _verified_ok(own, s)),
+              ("second-tables", _tables_ok(own, s)),
+              ("second-header", _sampled_header_ok(own, named, k, s.template, s.header, slots, reads)),
+              ("second-population", _sampled_ok(q, p, own.drawn, s.header)),
+              ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
+              ("second-sample", _jeq(s.draw, whole_sample(len(slots)))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
                and _linked_read(own, p.template, reads) and _wired_read(own, p.template, reads)),
               ("second-refs", _refs_ok(s)),
@@ -1204,7 +1404,7 @@ def statement_reads(ss: Sequence[Any]) -> dict[str, Any]:
 
 def interior_reads(own: Own, ss: Sequence[Any]) -> list[dict[str, str]]:
     """`SecondStage.interiorReads`: the reads of statements `ss` that `_read_ok` takes at a value only the interior
-    registration registers: at a port a link names, of the link's value where the interior registers it (never the
+    docket registers: at a port a link names, of the link's value where the interior registers it (never the
     boundary port then); or at a port no link or wire names, of a value that is no port of either record and that the
     boundary doesn't register. Each is ``{"template", "port", "value"}``, in statement and port order. These reads rest
     on the interior's own values (a history table the interior registers, or a value its verifier supplies, say), and
@@ -1254,9 +1454,9 @@ def interior_order_ok(own: Own) -> bool:
 
 
 def names_ok(own: Own) -> bool:
-    """`SecondStage.namesOk`: no value the interior registration registers (its ``registered`` entries' values) is of a
-    name the boundary registration's record has, a port (`_by_port`) or a registered value (`_registered_entry`), so
-    each name a session reads is one registration's."""
+    """`SecondStage.namesOk`: no value the interior docket registers (its ``registered`` entries' values) is of a
+    name the boundary docket's record has, a port (`_by_port`) or a registered value (`_registered_entry`), so
+    each name a session reads is one docket's."""
     ports, es = _by_port(own.boundary), _get(own.interior, "registered")
     return not any(isinstance(v := _get(e, "value"), str)
                    and (v in ports or _registered_entry(own.boundary, v) is not None)
@@ -1264,10 +1464,10 @@ def names_ok(own: Own) -> bool:
 
 
 def returns_ok(own: Own) -> bool:
-    """`SecondStage.returnsOk`: no value the interior registration registers (its ``registered`` entries' values) is of
-    a name the replay block's return has in the boundary registration's record (`Own.returns`, `replay_returns`), so a
+    """`SecondStage.returnsOk`: no value the interior docket registers (its ``registered`` entries' values) is of
+    a name the replay block's return has in the boundary docket's record (`Own.returns`, `replay_returns`), so a
     port a link names for the return reads no value of the interior's (`_read_ok`): only the port the boundary
-    registration's record has of that name, committed before the first stage's sample."""
+    docket's record has of that name, committed before the first stage's sample."""
     es = _get(own.interior, "registered")
     return not any(isinstance(v := _get(e, "value"), str) and v in own.returns
                    for e in (es if isinstance(es, list) else ()))
@@ -1293,20 +1493,22 @@ def _read_size(own: Own, t: str) -> int | None:
 
 def _one_table(own: Own, mine: Mapping[str, Any], t: str, root: str, domain: str) -> bool:
     """`SecondStage.oneTable`: values `root` and `domain`, which template `t`'s root and domain ports read, are one
-    table's of round 1's record at every unit, a table of as many leaves as the read has rows. `t` is a read of V rows
-    (`_read_size`). Each value has at least one row and as many as the other; row ``i`` of each is one ``bytes`` source
-    (`_bytes_of`), and some port of round 1's record (`_by_port`) registers row ``i`` of `root` as its root under row
-    ``i`` of `domain` as its domain id, at V leaves; and the two ports' rows place each unit alike (``own.rows``: one
-    ``per`` and the same runs). So a unit reads the root and the domain id of one table of V leaves that round 1's
-    record registers."""
+    table's at every unit, of round 1's record or of the tables the auditor's params pin (``own.tables``), a table of as
+    many leaves as the read has rows. `t` is a read of V rows (`_read_size`). Each value has at least one row and as
+    many as the other; row ``i`` of each is one ``bytes`` source (`_bytes_of`), and some port of round 1's record
+    (`_by_port`) or some pinned table's entry names row ``i`` of `root` as its root and row ``i`` of `domain` as its
+    domain id, at V leaves; and the two ports' rows place each unit alike (``own.rows``: one ``per`` and the same runs).
+    So a unit reads the root and the domain id of one table of V leaves that round 1's record registers or the auditor
+    pinned before any coin."""
     a, b = ([_bytes_of(r) for r in mine[v]] for v in (root, domain))
-    ports, size = list(_by_port(own.boundary).values()), _read_size(own, t)
+    size = _read_size(own, t)
+    tables = [*_by_port(own.boundary).values(), *(e for _, e in own.tables)]
     at = [None if (r := _rows_of(own, t, p)) is None else (r.per, r.runs) for p in OPENING_TABLE]
     return (size is not None and bool(a) and len(a) == len(b)
             and all(r is not None and d is not None
                     and any(type(_get(e, "root")) is str and type(_get(e, "domain")) is str
                             and _get(e, "root") == r and _get(e, "domain") == d
-                            and _nat(n := _get(e, "leaves")) and n == size for e in ports)
+                            and _nat(n := _get(e, "leaves")) and n == size for e in tables)
                     for r, d in zip(a, b))
             and at[0] is not None and at[0] == at[1])
 
@@ -1315,11 +1517,14 @@ def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link
     """`SecondStage.openedRow`: link `x` names the opened row of a read against a root round 1 committed. Its template
     is a read (`_read_size`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
     (`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which are one table's
-    of round 1's record at every unit, of the read's rows (`_one_table`); its key (`OPENING_KEY`) is no wire, and is
-    linked at values the interior registration doesn't register (`registered`: a port of round 1's record then, by
-    ``second-links``) or the verifier holds (``own.fixed``, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its
-    template's reference statement's reads (`Own.ref_reads`, the template's first), a value the verifier fills, of at
-    least one row, each row `VERDICT_ONE`. A key the block computes, a wire, is refused: no statement covers it
+    of round 1's record or of the tables its params pin at every unit, of the read's rows (`_one_table`); its key
+    (`OPENING_KEY`) is either no wire,
+    and linked at values the interior docket doesn't register (`registered`: a port of round 1's record then, by
+    ``second-links``) or the verifier holds (``own.fixed``, `mine`), or, where the wired key's switch is on
+    (`Own.wired_key`), one wire, whole (`_key_failure`), the key at each sampled proof block its writer unit's committed output
+    row (``second-read``'s `_read_ok`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference
+    statement's reads (`Own.ref_reads`, the template's first), a value the verifier fills, of at least one row, each row
+    `VERDICT_ONE_LEAF`. With the switch off, a key the block computes, a wire, is refused: no statement covers it
     (`_inputs_why`)."""
     t = x.template
     at = lambda p: [y.value for y in own.links or () if y.template == t and y.port == p]  # noqa: E731
@@ -1330,8 +1535,9 @@ def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link
     return (_read_size(own, t) is not None and x.port in OPENING_ROW
             and all(at(p) and all(v in mine for v in at(p)) for p in OPENING_TABLE)
             and all(_one_table(own, mine, t, r, d) for r in roots for d in domains)
-            and _wire_of(own, t, OPENING_KEY) is None and bool(at(OPENING_KEY)) and all(map(held, at(OPENING_KEY)))
-            and isinstance(verdict, str) and bool(mine.get(verdict)) and all(r == VERDICT_ONE for r in mine[verdict]))
+            and ((bool(at(OPENING_KEY)) and all(map(held, at(OPENING_KEY)))) if _wire_of(own, t, OPENING_KEY) is None
+                 else own.wired_key and _key_failure(own, t) is None)
+            and isinstance(verdict, str) and bool(mine.get(verdict)) and all(r == VERDICT_ONE_LEAF for r in mine[verdict]))
 
 
 def _read_unlinked(own: Own, v: str) -> bool:
@@ -1344,16 +1550,16 @@ def _read_unlinked(own: Own, v: str) -> bool:
 
 
 def inputs_failure(own: Own) -> str | None:
-    """`SecondStage.inputsFailure`: the first value the interior registration registers (its ``registered`` entries'
+    """`SecondStage.inputsFailure`: the first value the interior docket registers (its ``registered`` entries'
     values, in the record's order) that a replay block's input may not read, None for none. A value passes where the
     verifier holds it without the prover: one it pinned or holds to an earlier record (``own.fixed``), or one it fills
     from its own bytes (`_own_values`). Any other passes only as the opened row of a read against a root round 1
     committed: at least one link names it, each link that does is such a row's (`_opened_row`), and no template's
     reference statement reads it at a port no link names it at (`_read_unlinked`), so nothing reads the row but its
     opening. So every input of a replay block the prover gives after the first stage's sample is a row a read opens
-    under the root of a table round 1's record registers, at a key round 1's record or the verifier fixes, and the
+    under the root of a table round 1's record registers or the auditor's params pin, at a key round 1's record or the verifier fixes, and the
     prover's choice of it is SHA-512's collision: the links at round 1's ports, the wires and the values the verifier
-    holds are the block's other inputs, none the interior registration's to choose."""
+    holds are the block's other inputs, none the interior docket's to choose."""
     es = _get(own.interior, "registered")
     names = [v for e in (es if isinstance(es, list) else ()) if isinstance(v := _get(e, "value"), str)]
     registered, mine = set(names), _own_values(own)
@@ -1367,18 +1573,21 @@ def inputs_failure(own: Own) -> str | None:
 
 
 def _inputs_why(own: Own, v: str) -> str:
-    """`SecondStage.inputsWhy`: why value `v` is refused (`inputs_failure`): `KEY_WHY` where a link names it as the
-    opened row of a read whose key is wired, a key the block computes, else `INPUTS_WHY`."""
-    wired = any(x.value == v and _read_size(own, x.template) is not None and x.port in OPENING_ROW
-                and _wire_of(own, x.template, OPENING_KEY) is not None for x in own.links or ())
-    return KEY_WHY if wired else INPUTS_WHY
+    """`SecondStage.inputsWhy`: why value `v` is refused (`inputs_failure`): where a link names it as the opened row of
+    a read whose key is wired, a key the block computes, `KEY_WHY` with the wired key's switch off (`Own.wired_key`),
+    and with it on why the key is not whole (`_key_failure`); else `INPUTS_WHY`."""
+    x = next((x for x in own.links or () if x.value == v and _read_size(own, x.template) is not None
+              and x.port in OPENING_ROW and _wire_of(own, x.template, OPENING_KEY) is not None), None)
+    if x is None:
+        return INPUTS_WHY
+    return (_key_failure(own, x.template) or INPUTS_WHY) if own.wired_key else KEY_WHY
 
 
 def _interior_failures(own: Own) -> list[tuple[str, Any]]:
     """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`, then
     ``second-interior-names`` unless `names_ok`, then ``second-return`` unless `returns_ok`, then ``second-schedule``
-    where the schedule the boundary registration's record commits is not one of its replay blocks
-    (`schedule_failure`), then ``second-inputs`` where the interior registration registers a value a replay block's
+    where the schedule the boundary docket's record commits is not one of its replay blocks
+    (`schedule_failure`), then ``second-inputs`` where the interior docket registers a value a replay block's
     input may not read (`inputs_failure`), naming the first and why (`_inputs_why`)."""
     why, value = schedule_failure(own.boundary), inputs_failure(own)
     return (([] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)])
@@ -1407,18 +1616,45 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
         if p is None or s.template in _templates(ss[:i]):
             found.append(("second-template", detail))
         else:
-            found += [(c, detail) for c in _stmt_codes(own, named, _pos_of(ps, s.template), p, s)]
+            codes = _sampled_codes if sampled_only(len(own.sample), p, own.drawn, s.header) else _stmt_codes
+            found += [(c, detail) for c in codes(own, named, _pos_of(ps, s.template), p, s)]
     found += _order_failures(ps, ss)
     covered = _templates(ss)
     found += [("second-cover", {"template": p.template}) for p in ps if p.template not in covered]
     if not _same_dict(own.reported or {}, statement_reads(ss)):
         found.append(("second-reported", REPORTED_WHY))
+    found += table_rows_failures(own, ss)
     return found if found or allow else [("two-stage-form", FORM_WHY)]
 
 
-def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
+def table_rows_why(own: Own, t: str, port: str, e: Any) -> str | None:
+    """`SecondStage.tableRowsWhy`: why template `t`'s registered read at `port`, entry `e`, is refused for the
+    ``table_rows`` it lists; None where it lists none. A read whose key is wired lists none at a port of its opening
+    (`KEYED_PORTS`): `KEY_ROWS_WHY`. Round 2 reads no ``table_rows`` yet, so every other one listed is refused too
+    (`TABLE_ROWS_WHY`), until the change that reads them."""
+    if _get(e, "table_rows") is None:
+        return None
+    return KEY_ROWS_WHY if port in KEYED_PORTS and _wire_of(own, t, OPENING_KEY) is not None else TABLE_ROWS_WHY
+
+
+def table_rows_failures(own: Own, ss: Sequence[Any]) -> list[tuple[str, Any]]:
+    """`SecondStage.tableRowsFailures`: ``second-table-rows`` for each registered read of statements `ss` that lists
+    ``table_rows`` (`table_rows_why`), naming the statement, its template, the port and why, ports in key order."""
+    out = []
+    for i, j in enumerate(ss):
+        s = _stmt(j)
+        for port, e in sorted(_entries(_get(s.registered, "ports")), key=lambda x: x[0]) if s is not None else ():
+            why = table_rows_why(own, s.template, port, e)
+            if why is not None:
+                out.append(("second-table-rows", {"statement": i, "template": s.template, "port": port, "why": why}))
+    return out
+
+
+def check_twin(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     """Round 2's statement check of `statements`, the two-stage form allowed when `allow` (`FORM` in a run): each code
-    once, with the detail it first failed with (`SecondStage.check`), the interior record's order first."""
+    once, with the detail it first failed with, the interior record's order first (`SecondStage.checkAny`:
+    `SecondStage.check` where every statement is of every slot of its part, and a statement of only its part's sampled
+    proof blocks held to `_sampled_codes`)."""
     if own.parts is None:
         found = [*_interior_failures(own), ("second-cells", CELLS_WHY)]
     elif not (_links_ok(own.parts, own) and _wires_ok(own.parts, own)):
@@ -1434,8 +1670,20 @@ def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     return c.verdict()
 
 
+def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
+    """Round 2's verdict of record on `statements`: the Lean `SecondStage.checkAny`'s, which only `Run.run` reaches, so
+    this raises (`verifier.not_written`); `check_twin` is its Python twin."""
+    return V.not_written("check", "Spot.SecondStage.checkAny")
+
+
+def complete(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
+    """Whether a two-stage outcome is complete, of record: no Lean says it yet, so this raises
+    (`verifier.not_written`); `complete_twin` is its Python twin."""
+    return V.not_written("complete", "Spot.SecondStage.complete")
+
+
 def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]] = ()) -> dict[str, Any]:
-    """The interior registration's audit record `rec` with round 2's check `v` as ``checks.statements``, and the reads
+    """The interior docket's audit record `rec` with round 2's check `v` as ``checks.statements``, and the reads
     `reads` that rest on the interior's own values (`interior_reads`) as ``interior_reads`` where there are any. It
     fails where `v` does, as a failed check of its own fails it: not accepted, and no profile, integrity profile or
     incorrect proof blocks."""
@@ -1444,10 +1692,11 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "Checked", "Link", "Own", "Part", "Rows", "Run",
-           "Wire",
-           "at_run", "attach", "blank_reads", "blank_run", "check", "inputs_failure", "interior_order_ok",
+__all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "WIRED_KEY", "Checked", "Link", "Own", "Part",
+           "Rows", "Run", "Width", "Wire",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "check_twin", "complete", "complete_twin", "inputs_failure", "interior_order_ok",
            "interior_reads", "interior_root", "link_runs", "links_of",
-           "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_wires",
-           "returns_ok", "row_at", "rows_of",
-           "set_name", "statement_reads", "supplied_of", "verified_of", "wire_runs", "wires_of"]
+           "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_widths",
+           "replay_wires", "returns_ok", "row_at", "rows_of",
+           "set_name", "statement_reads", "supplied_of", "table_rows_failures", "table_rows_why", "verified_of",
+           "widths_of", "wire_runs", "wires_of"]

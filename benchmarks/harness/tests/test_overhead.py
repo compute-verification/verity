@@ -243,7 +243,6 @@ def scheme(tmp_path, monkeypatch):
     sch = O.Scheme("pearl-plus", O.SCHEMES["pearl-plus"].family, "overhead_arm:PearlPlus", str(arm_dir),
                    "overhead_eps_standin:epsilon")
     monkeypatch.setitem(O.SCHEMES, "pearl-plus", sch)
-    monkeypatch.setattr(sys, "path", list(sys.path))
     return sch
 
 

@@ -11,7 +11,7 @@ keeps its mtime, since only this machine has that write.  Report age, which repo
 ("new since last seen") and the anchor of a binding's `final` all read it.  A lane branch's last commit is origin's `lane/*` tip
 (`--fetch`, and every watch pass, fetch them first); the local worktree signal (uncommitted edits, `dirty`) is not read, since the
 push rule and the 20-minute checkpoint replace it.  `relaunch` bases the successor on origin's tip when the dead lane's worktree is
-not on this machine.  The stale reaper's run-custody leg fails closed here: the local run directories it reads only exist where the
+not on this machine.  The stale reaper's run-custody check fails closed here: the local run directories it reads only exist where the
 launcher ran; `watch --custody-r2` (step f) takes run custody from the store's remote and the pod guard instead, and the service
 definition sets it.
 

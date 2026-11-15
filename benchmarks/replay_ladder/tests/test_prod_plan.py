@@ -1,4 +1,4 @@
-"""The production-like plan (prod_plan.build) on a character tokenizer, and how the ladder serves a plan whose requests carry
+"""The serving-like plan (prod_plan.build) on a character tokenizer, and how the ladder serves a plan whose requests carry
 their own sampling."""
 from __future__ import annotations
 

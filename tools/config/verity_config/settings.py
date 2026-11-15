@@ -86,7 +86,7 @@ SHARED = Registry(__file__, (), *(Setting(*a) for a in (
     ("PYTHONPATH", paths, (), WHERE, "Python's import roots (research's runner sets them from the workspace)"),
     ("OMP_NUM_THREADS", int, None, WHERE, "the threads of a CPU reference's BLAS: how fast it runs, not what it computes"),
     ("FILL_JOB", str, None, WHERE, "the fill job a process runs as (research's fill runner sets it): it names a run's outputs"),
-    ("DITHER_NUMA_RECORD", json.loads, None, WHERE, "the NUMA binding benchmarks/hash/dither/numabind.py started the process "
+    ("DITHER_NUMA_RECORD", json.loads, None, WHERE, "the NUMA binding benchmarks/kernels/numabind/numabind.py started the process "
                                                     "under, as JSON (it sets it): where the process ran, which a run records"),
 )), shared=False)
 

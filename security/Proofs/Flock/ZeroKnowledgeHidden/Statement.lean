@@ -64,18 +64,18 @@ Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` 
 that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512.
 
 Its hypotheses are an untyped statement and `EndToEndHidden`'s reference setup `y₀`: table 0's, at `mPts` link points,
-at some sample `d₀`, which every sample flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). Every
+at some sample `d₀`, which every sample verity-verify-proof accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). Every
 table's statement avoids the mask slot, since `verify --zk` refuses one that meets it
-(`FailClosed.DrawSetupZHJ.avoidsMask`). -/
+(`FailClosed.SampleSetupZHJ.avoidsMask`). -/
 def ZeroKnowledgeHidden : Prop :=
   ∀ (n : ℕ) (Reg : Type) (P : LigProver)
     -- the session's statement, the record's sample file, and the reference setup
     (I : Inputs) (_ht : I.tags.typed = false)
     (mPts : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     -- a sample at which `verify --zk` sets every table up, and a registration
     (S : Finset (Fin n)) (R : Reg)
-    (ys : ∀ j : Fin (nTab I), DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
+    (ys : ∀ j : Fin (nTab I), SampleSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)),
     ZkViewAtJ (fun j => coinedOf P ((planZHJ (Reg := Reg) dj y₀ S R).get
       (Fin.cast (planZHJ_length dj y₀ S R).symm j)) (ys j).x.st)
       (ENNReal.ofReal (CROnly.hidingGap FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash))
