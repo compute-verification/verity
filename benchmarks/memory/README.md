@@ -18,7 +18,9 @@ One Linux machine with one NVIDIA GPU of compute capability 9.0 (H100, H200) or 
 `~/.elan/bin`) and about 20 GB of disk. vLLM serves Llama 3.2 1B (in int8) on the GPU while a memory audit runs
 against it, and the audit's verifier and the random challenges it sends (its coins) run as processes beside it. The
 command prints the share of the GPU's memory read rate that the session leaves uncertified, with its error, as text
-and as one line of JSON, and exits 0; a session the verifier refuses prints no number and exits 1. **Because the
+and as one line of JSON, and exits 0; a session the verifier refuses prints no number and exits 1. Until PoUB's Lean
+verifier gives its answer for the share's terms (`gamma_answer` in `verifier/session/verifier.py`), an accepted
+session's share is undecided, and every way in prints "no number: … undecided" and exits 1. **Because the
 verifier and its coins run on the machine being measured, this is a measurement to improve on, not an audit:** the
 second line of the text and the JSON's `local` say so. Lower is better: 0 would mean the whole of the GPU's memory
 read rate over the session was certified as spent reading the audited store. The target is 0.14 at an error of at most
