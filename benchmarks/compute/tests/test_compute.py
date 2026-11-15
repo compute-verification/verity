@@ -518,8 +518,11 @@ def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capac
     result = json.loads((out / "result.json").read_text())
     assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
     got = {m["name"]: m for m in result["measurements"]}
-    assert list(got) == [C.METRIC, "verified", "capacity", "free", "error"]
+    assert list(got) == [C.METRIC, C.CREDITABLE, C.OF_CREDITABLE, "verified", "capacity", "free", "error"]
     assert C.METRIC == "compute-accounting/verified-compute-share"
+    # the number is the product of the two shares the text prints beside it
+    assert (got[C.CREDITABLE]["value"], got[C.OF_CREDITABLE]["value"]) == (MACS["linears"] / TOTAL, CREDITED / MACS["linears"])
+    assert got[C.CREDITABLE]["unit"] == got[C.OF_CREDITABLE]["unit"] == C.SHARE
     assert (got[C.METRIC]["value"], got[C.METRIC]["unit"], got[C.METRIC]["target"], got[C.METRIC]["verdict"]) == (
         SHARE, C.UNIT, 0.97, "below target")
     assert (got["verified"]["value"], got["verified"]["unit"]) == (CREDITED, "MAC")
@@ -555,8 +558,8 @@ def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_time
     assert C.capacity(h200_site(2), Fraction(600)) == {"tensor": tensor, "sm": sm}
     assert C.capacity(h200_site(1), Fraction(1, 10 ** 9)) == {"tensor": 989_430, "sm": 1_070_531}
     got = {m["name"]: m for m in C.amounts(doc, h200_site(2), Fraction(600))}
-    assert list(got) == [C.METRIC, "verified", "capacity at clock.tensor", "free at clock.tensor", "capacity at clock.sm",
-                         "free at clock.sm", "error"]
+    assert list(got) == [C.METRIC, C.CREDITABLE, C.OF_CREDITABLE, "verified", "capacity at clock.tensor",
+                         "free at clock.tensor", "capacity at clock.sm", "free at clock.sm", "error"]
     assert [got[n]["value"] for n in got if n.startswith(("capacity", "free"))] == [
         tensor, tensor - CREDITED, sm, sm - CREDITED]
     assert not any("why" in m for m in got.values())
@@ -1114,3 +1117,18 @@ def test_a_withdrawn_development_piece_is_read_as_absent_and_a_withdrawn_require
     store.withdraw(f"art:{RUN}", f"private values were published (only {C.LEAN_CHECK}, {C.DEVELOPMENT})")
     assert bench(store, "--from", RUN) == 2
     assert "was withdrawn" in capsys.readouterr().err
+
+
+def test_every_metric_row_reads_the_run_of_record_its_header_names():
+    """`metrics.toml` names the served run its rows read once, in its ``RUN OF RECORD`` line: every row's ``--from`` is
+    that run, so moving the rows to another run is one edit that this holds complete, and every metric `run.py` writes
+    has a row."""
+    import re
+    import tomllib
+    text = (HERE.parent / "metrics.toml").read_text()
+    named = re.search(r"^# RUN OF RECORD: (r\d{8}-\d{6}-[0-9a-f]{4}),", text, re.M)
+    assert named, "metrics.toml's header names no run of record"
+    rows = tomllib.loads(text)["metric"]
+    assert {m["id"]: re.search(r"--from (\S+)", m["command"]).group(1) for m in rows} == dict.fromkeys(
+        (m["id"] for m in rows), named.group(1))
+    assert {C.METRIC, C.CREDITABLE, C.OF_CREDITABLE} <= {m["id"] for m in rows}

@@ -111,7 +111,9 @@ there the evidence store is read with the run's `--store-read` key.
 Through the harness kit's writer (`verity_bench.kit`) it also writes the run directory's `result.json` under `research run`,
 and `$OUT/result.json` outside one where `OUT` is set, with the
 fields every resource's benchmark reports (`amounts`), each stamped with this run and its commit and computed from the
-recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
+recorded run: the metric (the printed number, its unit and target), the two shares it is the product of (`CREDITABLE`,
+`OF_CREDITABLE`: the model's MACs Pearl+ can credit at the load, and the share of those credited, each printed too),
+the verified MACs (the credit), the capacity and
 the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). The metric is
 named by its id in `metrics.toml` beside this file (`METRIC`), where the console reads it; the rest are every
 resource's names: `verified`, `capacity`, `free` and `error`. A reading is a clock of a
@@ -137,14 +139,19 @@ from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_bench.kit_report import RUN_ID
 
-__all__ = ["ABSENT", "ANSWER", "DELTA_S", "DEVELOPMENT", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
+__all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DEVELOPMENT", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
            "RECORDS", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
            "amounts", "capacity", "coins", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
+#: the unit of the two shares the number is the product of (`CREDITABLE`, `OF_CREDITABLE`)
+SHARE = "share of multiply-adds"
 #: the number's id in metrics.toml beside this file, the name result.json records it under
 METRIC = "compute-accounting/verified-compute-share"
+#: the metrics of the two shares the number is the product of: the model's MACs Pearl+ can credit at the load (its
+#: linears, and its LM head where the passes hold the head's calls), and the share of those its verifier credits
+CREDITABLE, OF_CREDITABLE = "compute-accounting/creditable-share", "compute-accounting/credited-of-creditable"
 #: the share the number is driven to
 TARGET = Fraction(97, 100)
 #: the load the number is of, which a record's policy must register (`fixed_load`)
@@ -628,7 +635,8 @@ def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
 
 def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None) -> list[dict]:
     """The result a document `doc` gives in the fields every resource's benchmark reports, as the kit writer's
-    measurements: the metric (`METRIC`, the printed number in its unit, beside its target), the verified amount
+    measurements: the metric (`METRIC`, the printed number in its unit, beside its target), the two shares it is the
+    product of (`CREDITABLE`, `OF_CREDITABLE`, the printed line's "Pearl+ credits ..."), the verified amount
     (`verified`, the credited MACs), at each data-sheet reading the capacity (`capacity at clock.tensor`, ..., from the
     registered hardware `site` over the run's span `span_s`) and the free amount (`free at ...`, capacity less verified),
     and the probability the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name).
@@ -636,8 +644,12 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
     the recorded run."""
     inputs = [doc["run"]] if doc["run"] else []
     verified = doc["credited_macs"]
+    head = doc.get("lm_head")
+    can = head["creditable_macs"] if head else doc["macs"]["linears"]
     out = [{"name": METRIC, "value": doc["value"], "unit": doc["unit"], "target": doc["target"],
             "verdict": "at or above target" if doc["met"] else "below target", "inputs": inputs},
+           {"name": CREDITABLE, "value": can / doc["model_macs"], "unit": SHARE, "inputs": inputs},
+           {"name": OF_CREDITABLE, "value": verified / can, "unit": SHARE, "inputs": inputs},
            {"name": "verified", "value": verified, "unit": "MAC", "inputs": inputs}]
     if site is None or span_s is None:
         why = "absent: " + "; and ".join(w for w, x in ((NO_SITE, site), (NO_SPAN, span_s)) if x is None)
