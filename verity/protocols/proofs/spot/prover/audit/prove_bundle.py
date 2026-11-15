@@ -75,7 +75,7 @@ def hold(doc: dict, payload: bytes, wdir: Path) -> tuple[dict[str, bool], dict]:
     """The bundle held to the window (module docstring): ``({check: ok}, the bundle check's findings)``."""
     rec = json.loads((wdir / "registration.json").read_text())
     win = json.loads((wdir / "window.json").read_text())
-    bad = RB.check(doc, payload, registration=rec)
+    bad = RB.check(doc, payload, docket=rec)
     ok = {"bundle_check": not bad, "run": doc["window"]["run"] == win["run"],
           "registration": doc["window"]["registration"] == win["registration_digest"],
           "partition": doc["window"]["partition"] == win["partition_digest"]}
