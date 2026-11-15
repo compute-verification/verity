@@ -159,7 +159,7 @@ def adapter(name, module):
     mod = importlib.import_module(f"lints.{path.stem}")
     if hasattr(mod, "sizes"):                            # P10: a count is a size in lines, which may grow by its slack
         now = mod.sizes()
-        return Counter(dict.fromkeys(now, 1)), +Counter({k: int(now.get(k, 0) <= cap + mod.slack(cap)) for k, cap in have.items()})
+        return Counter(dict.fromkeys(now, 1)), +Counter({k: int(now.get(k, 0) <= size + mod.slack(size)) for k, size in have.items()})
     got = mod.violations() if hasattr(mod, "violations") else mod.scan()
     if len(got) == 2 and isinstance(got[1], dict):       # P13: the violations, and each one's other copies
         got = got[0]
