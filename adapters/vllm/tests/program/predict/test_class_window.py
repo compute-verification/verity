@@ -67,8 +67,8 @@ def _templates(circuit: IF.Circuit, base: str) -> list[str]:
 def _selects(circuit: IF.Circuit) -> tuple[str, str, str]:
     """The first select's, the later selects' and the check's templates."""
     (first,) = _templates(circuit, "GreedyCombineFirst_v1")
-    (live,) = _templates(circuit, "GreedyCombine_v3")
-    (check,) = _templates(circuit, "GreedyStopCheck_v2")
+    (live,) = _templates(circuit, "GreedyCombineLive_v1")
+    (check,) = _templates(circuit, "GreedyStopCheckClass_v1")
     return first, live, check
 
 
@@ -83,12 +83,13 @@ def _into(circuit: IF.Circuit, reader: str, port: str) -> list[tuple[int, str, i
 
 
 def test_two_requests_of_a_class_run_one_program_and_one_window(program, rank0):
-    """Two requests of different prompts, lengths, stops and finishes have the class (32, 4) (`Span.shape`), and the
-    class's Program built for each is one digest, as is its window: nothing of either request is in either."""
-    a = Span("a", tuple(range(1, 33)), {"max_tokens": 3}, (5, 6, 7), "length")
-    b = Span("b", tuple(range(40, 70)), {"max_tokens": 9, "ignore_eos": True}, (9, 8, 1, 4), "stop")
-    assert a.shape == b.shape == (P, O)
-    other = CW.class_request(registered(1), *b.shape)
+    """Two requests of P prompt ids each, with different prompts, ``max_tokens``, ``ignore_eos``, stops and finishes, have
+    the class (P, O): their prompt's length and the served ids' class (`Span.shape`'s second). The class's Program built
+    for each is one digest, as is its window: nothing of either request is in either."""
+    a = Span("a", tuple(range(1, P + 1)), {"max_tokens": 3}, (5, 6, 7), "length")
+    b = Span("b", tuple(range(40, 40 + P)), {"max_tokens": 9, "ignore_eos": True}, (9, 8, 1, 4), "stop")
+    assert a.prompt != b.prompt and (len(a.prompt), a.shape[1]) == (len(b.prompt), b.shape[1]) == (P, O)
+    other = CW.class_request(registered(1), len(b.prompt), b.shape[1])
     assert other.digest == program.digest and len(program.digest) == 128
     assert _digest(CW.rank_window(0, other.program.fn, FAMILIES).circuit) == _digest(rank0.circuit)
 
