@@ -55,7 +55,8 @@
 # nor a file that holds a row registration whole, its wiring's digest with it: the registrations a verifier takes
 # (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
 # found of the traffic (which execution phases were certified or refused, and how many problems: warden_chain's
-# WITNESS_KEYS), nor which execution phases n2's members' signer refused (n2_zk.py --witness). Those are witness,
+# WITNESS_KEYS), nor what n2's public summary leaves out (n2_zk.py --witness: its timings, values in the clear and
+# which execution phases its members' signer refused, and its log of them, n2.log). Those are witness,
 # kept on the chain's private side, $Q/witness/STEP (0700, outside the run dir and the hold), where the period's case
 # reads the answers (certifier_piece.py), and never released.
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
@@ -196,7 +197,7 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 n2() {
   export WARDEN BIN LEAN N2OUT=$W/n2
   local cmd=${CR_N2_CMD:-"$PY benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run $WARDEN \
-    --bin $BIN --lean $LEAN --out $N2OUT --witness $Q/witness/n2/issuer-refused.json ${CR_N2_GPU:+--gpu} \
+    --bin $BIN --lean $LEAN --out $N2OUT --witness $Q/witness/n2/summary.json ${CR_N2_GPU:+--gpu} \
     ${CR_N2_DRAW:+--draw $CR_N2_DRAW}"}
   log "chain: n2: $cmd"
   bash -c "$cmd" > "$OUT/n2.log" 2>&1

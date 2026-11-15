@@ -12,7 +12,7 @@ from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
 from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
-CHECKS = Path(__file__).resolve().parents[6] / "security" / "Proofs" / "Accounting" / "TS" / "J10RChecks.lean"
+CHECKS = Path(__file__).resolve().parents[6] / "security" / "Proofs" / "Pouw" / "TS" / "J10RChecks.lean"
 SALT = bytes(range(64))
 RA = bytes((7 * i + 3) % 256 for i in range(64))
 RB = bytes((5 * i + 1) % 256 for i in range(64))
