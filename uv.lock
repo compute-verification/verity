@@ -193,7 +193,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "cluster" }]
+requires-dist = [{ name = "cluster", editable = "infra/cluster" }]
 
 [[package]]
 name = "colorama"
@@ -1810,7 +1810,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "research" }]
+requires-dist = [{ name = "research", editable = "tools/research" }]
 
 [[package]]
 name = "rpds-py"
@@ -2406,7 +2406,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-bench" }]
+requires-dist = [{ name = "verity-bench", editable = "benchmarks/harness" }]
 
 [[package]]
 name = "verity-certifier-timing"
@@ -2464,7 +2464,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-circuit-check" }]
+requires-dist = [{ name = "verity-circuit-check", editable = "tools/verity/circuit_check" }]
 
 [[package]]
 name = "verity-cli"
@@ -2486,7 +2486,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-cli" }]
+requires-dist = [{ name = "verity-cli", editable = "tools/verity/cli" }]
 
 [[package]]
 name = "verity-commitments-benchmarks"
@@ -2531,7 +2531,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-config" }]
+requires-dist = [{ name = "verity-config", editable = "tools/config" }]
 
 [[package]]
 name = "verity-core-composition"
@@ -2542,7 +2542,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-difftest", editable = "tools/difftest" }]
+requires-dist = [{ name = "verity-difftest" }]
 
 [[package]]
 name = "verity-core-evaluate"
@@ -2573,8 +2573,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hypothesis", specifier = ">=6.100" },
-    { name = "verity-difftest", editable = "tools/difftest" },
-    { name = "verity-flock", editable = "verity/protocols/proofs/flock/prover" },
+    { name = "verity-difftest" },
+    { name = "verity-flock" },
 ]
 
 [[package]]
@@ -2597,7 +2597,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-difftest" }]
+requires-dist = [{ name = "verity-difftest", editable = "tools/difftest" }]
 
 [[package]]
 name = "verity-exact-kit"
@@ -2678,7 +2678,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-graph" }]
+requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
 
 [[package]]
 name = "verity-landq"
@@ -2694,7 +2694,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-landq" }]
+requires-dist = [{ name = "verity-landq", editable = "tools/verity/landq" }]
 
 [[package]]
 name = "verity-lean-audit"
@@ -2731,7 +2731,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-machine-model" }]
+requires-dist = [{ name = "verity-machine-model", editable = "benchmarks/machine_model" }]
 
 [[package]]
 name = "verity-native-peak"
@@ -2807,7 +2807,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-numerical" }]
+requires-dist = [{ name = "verity-numerical", editable = "benchmarks/numerical" }]
 
 [[package]]
 name = "verity-ops"
@@ -2829,7 +2829,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-ops" }]
+requires-dist = [{ name = "verity-ops", editable = "infra/ops" }]
 
 [[package]]
 name = "verity-pouw-benchmarks"
@@ -2907,7 +2907,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-proof-throughput" }]
+requires-dist = [{ name = "verity-proof-throughput", editable = "benchmarks/proof_throughput" }]
 
 [[package]]
 name = "verity-slack-events"
@@ -2997,7 +2997,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-torch", extras = ["torch"] }]
+requires-dist = [{ name = "verity-torch", extras = ["torch"], editable = "adapters/torch" }]
 
 [[package]]
 name = "verity-vllm"
@@ -3039,7 +3039,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-vllm", extras = ["research", "torch"] }]
+requires-dist = [{ name = "verity-vllm", extras = ["research", "torch"], editable = "adapters/vllm" }]
 
 [[package]]
 name = "z3-solver"
