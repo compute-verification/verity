@@ -26,7 +26,7 @@ from verity_vllm.commit import capture_map as CM
 
 ROOT = (Path(__file__).parents[5] / "adapters" / "vllm")
 MAP = ROOT / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
-CONFIG_PATH = ROOT / "tests" / "check" / "fixtures" / "glm_moe_dsa" / "config.json"
+CONFIG_PATH = ROOT.parents[1] / "tests" / "adapters" / "vllm" / "tests" / "check" / "fixtures" / "glm_moe_dsa" / "config.json"
 CMAP = CM.load(MAP)
 CONFIG = json.loads(CONFIG_PATH.read_text())
 TP = CMAP["target"]["tensor_parallel_size"]

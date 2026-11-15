@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import m1_families as M  # noqa: E402
 
 ROW_A, ROW_B, WHOLE = "RowA_v1{N=4}", "RowB_v1{N=2}", "Whole_v1{K=8}"

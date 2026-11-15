@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-TOOL = Path(__file__).resolve().parent.parent / "resolve_renames.py"
+TOOL = Path(__file__).resolve().parents[3] / "tools" / "move" / "resolve_renames.py"
 ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
        "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 MAP = '[words]\ndrawn = "sampled"\n'

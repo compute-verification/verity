@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "word_codec"))
 
 import wide as W  # noqa: E402
 
@@ -29,7 +29,7 @@ def hexlimbs(v: int, f: W.Field) -> str:
 def build(bits: int, kmax: int, out: Path) -> Path:
     exe = out / f"wide-host-{bits}"
     cmd = ["g++", "-O2", "-std=c++17", "-x", "c++", "-DWW_HOST", f"-DWW_BITS={bits}", f"-DWW_KMAX={kmax}",
-           str(HERE.parent / "wide.cu"), "-o", str(exe)]
+           str(HERE.parents[2] / "benchmarks" / "word_codec" / "wide.cu"), "-o", str(exe)]
     subprocess.run(cmd, check=True)
     return exe
 

@@ -11,7 +11,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def _long_rows():
-    spec = importlib.util.spec_from_file_location("spot_long_rows", HERE.parent / "long_rows.py")
+    spec = importlib.util.spec_from_file_location("spot_long_rows", HERE.parents[2] / "benchmarks" / "spot_proved" / "long_rows.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

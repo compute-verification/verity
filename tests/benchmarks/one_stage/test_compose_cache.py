@@ -29,7 +29,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import class_statement as CS
 
 HERE = (Path(__file__).resolve().parent)
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import a5  # noqa: E402
 import compose_circuit as CC  # noqa: E402
 

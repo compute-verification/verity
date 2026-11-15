@@ -22,7 +22,7 @@ from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import EPOCH_SALT_DOMAIN
 from verity.protocols.proofs.spot.device import challenger as Ch
 
-PKG = (Path(__file__).resolve().parents[6] / "verity" / "protocols" / "accounting" / "pouw" / "verifier") / "lean/check/tests"
+PKG = Path(__file__).resolve().parent / "lean" / "check"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases"):
     if _name not in sys.modules:
         _spec = importlib.util.spec_from_file_location(_name, PKG / f"{_name}.py")

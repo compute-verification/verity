@@ -23,7 +23,7 @@ from types import SimpleNamespace
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import server_rate as SR  # noqa: E402  (a script beside the suite, importable only once its dir is on the path)
 
 FILED0 = 1_800_000_000  # the first session's filing time, UTC seconds

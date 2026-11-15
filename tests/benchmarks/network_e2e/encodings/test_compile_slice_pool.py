@@ -22,7 +22,7 @@ def _load(name, path):
     return mod
 
 
-CSP = _load("enc_compile_slice_pool", HERE.parent / "compile_slice_pool.py")
+CSP = _load("enc_compile_slice_pool", HERE.parents[3] / "benchmarks" / "network_e2e" / "encodings" / "compile_slice_pool.py")
 
 V4_PREFIX = {"calls": 239, "frees": 14, "hits": 26, "lookups": 27, "memos": 13, "slots": 3106, "units": 157}
 V4_ASYNC_CRUSH = {"calls": 2781, "frees": 106, "hits": 324, "lookups": 1390, "memos": 1161, "slots": 39771, "units": 1507}

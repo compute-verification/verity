@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "word_codec"))
 
 import codec as C  # noqa: E402
 import wide as W  # noqa: E402
@@ -141,7 +141,7 @@ def test_layout(bits):
 
 
 def test_kernel_constants_match():
-    src = (HERE.parent / "wide.cu").read_text()
+    src = (HERE.parents[2] / "benchmarks" / "word_codec" / "wide.cu").read_text()
     for bits, f in W.FIELDS.items():
         m = re.search(rf"struct Fd<{bits}> {{\s*static constexpr int N = (\d+), M = (\d+), PB = (\d+);\s*"
                       rf"static constexpr uint32_t C = (\d+);", src)
