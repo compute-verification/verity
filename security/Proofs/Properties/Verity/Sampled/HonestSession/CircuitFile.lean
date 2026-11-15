@@ -53,5 +53,11 @@ structure CircuitFileFacts : Prop where
   unit_unitLog : cH.unit.unitLog ≤ 32
   /-- `cH`'s unit reads only port bits among its inputs. -/
   unit_portReads : FlockSoundness.Discharge.Layout.portReadsB cH.unit = true
+  /-- `cH`'s units-per-vu is `1`. -/
+  cH_upv : cH.upv = 1
+  /-- `cH`'s one pinned dummy-row digest is `dummyBc`. -/
+  cH_dummyDigests : cH.dummyDigests = #[dummyBc]
+  /-- `cH`'s one dummy output word is `0`. -/
+  cH_dummyOutputs : cH.dummyOutputs = #[0]
 
 end Verity.Sampled.Instance.HonestSession
