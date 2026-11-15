@@ -516,7 +516,7 @@ CHECKED = {
                       "holds its fields to what was fixed before the coin, publicHeld its scheme, roots, domains, "
                       "population and units.indices to the registration, a member's statement's units.indices to "
                       "exactly the units θ names for it (proofs.members), and "
-                      "flock-verify its circuit_sha512 to the "
+                      "verity-verify-proof its circuit_sha512 to the "
                       "circuit file θ names, its classes to that circuit's class and its shared_rows to the roots "
                       "publicHeld holds. It holds where no "
                       "composite of the "
