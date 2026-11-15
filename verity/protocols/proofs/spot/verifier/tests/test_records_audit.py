@@ -1,5 +1,5 @@
 """The audit from a window's records alone (`records_audit`), without proving, on a window written through the interface
-(`verity.commitments.windows.interface`) under core's docket:
+(`verity.commitments.periods.interface`) under core's docket:
 
 * the verifier's window is the circuit record's, each template a Definition a catalog registers, and the record must be the one
   the docket binds; a window with row tables is refused until its records carry their segment roots;
@@ -49,7 +49,7 @@ from verity.circuits.codec import canonical_json, descriptor_id, encode_program,
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
 from verity.circuits.ops import gemm as G
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
