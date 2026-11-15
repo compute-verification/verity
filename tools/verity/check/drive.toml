@@ -105,8 +105,11 @@ verdict_excludes = ["verity/protocols/compose/device/", "verity/protocols/accoun
 # off the low-risk lane so that a reader sees it before it lands, which its land verdict is, and none needs the whole check
 # first. Each is written character for character as in `lowrisk_excludes`, and the parse refuses any other, one in
 # `verdict_excludes` and a duplicate. Together they free no file under a `verifier/` or `device/` directory, of a trusted
-# place or the soundness path (tests/import_order.toml), no Lean, lock or Lake file, and nothing under tools/research/,
-# tools/verity/check/ or tools/verity/lean/ (tests/test_lowrisk_excludes.py). The quick tier runs the root's suite on every
+# place or the soundness path (tests/import_order.toml), no Lean, lock or Lake file, nothing under tools/research/,
+# tools/move/, tools/verity/check/ or tools/verity/lean/, and none of the code an auditor's host runs outside a `device/`
+# directory (tests/test_lowrisk_excludes.py): benchmarks/one_stage/, benchmarks/network_traces/ and
+# benchmarks/remote_session/auditor_line.py stay on the whole check with the devices, and tools/move/, which the loop runs
+# and certifies moves against, with tools/research/. The quick tier runs the root's suite on every
 # change, a changed test module's slow tests too; `main`'s whole check after the landing runs every suite with its slow tests,
 # the Lean steps, circuit-check and Flock's Rust build, and a red there reverts the PR it names
 verdict_plain = [
@@ -119,23 +122,11 @@ verdict_plain = [
     # a package's grouping file, outside the directories the gate reads whole; tests/test_boundaries.py, in the quick tier,
     # holds one in no place to the standard library, and the quick tier runs every suite whose inputs hold it
     "__init__.py",
-    # what the verifier's auditor host runs (`served_verdicts.sh compose`): the quick tier runs its suite, prove_path's and,
-    # for served_verdicts.py, the live verifier device's suite, which reads it
-    "benchmarks/one_stage/",
-    # what the challenger's auditor host runs (the certifier's rehearsals): the quick tier runs its suite, network_e2e's,
-    # network_sim's and, for load_relay.py, the live challenger device's suite, which reads it
-    "benchmarks/network_traces/",
     # the guard every agent's VM runs from origin/main: the quick tier runs its suite and the root's hook tests
     "tools/agent-guard/",
-    # the memory line of record (auditor.sh): the quick tier runs remote_session's suite and the live verifier device's,
-    # which reads it
-    "benchmarks/remote_session/auditor_line.py",
     # what runs with the control pod's credentials, which nothing in verity/ reads: the quick tier runs the root's suite and,
     # for ops/, verity-ops' and research's
     "infra/",
-    # the move codemods: a move's PR stays never plain, move_check.py that certifies one is in tools/verity/check/, and the
-    # quick tier runs tools/move's suite and, for restack.py, research's
-    "tools/move/",
 ]
 # count a ready mark or land verdict only when its `label_auth` label authenticates it as its author's, a Cursor identity token
 # minted by the agent holding that handle in the registry or by a worker it delegated to (`research queue delegate`); ejections
