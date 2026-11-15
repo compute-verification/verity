@@ -26,7 +26,7 @@ ROOT = HERE.parents[2]
 
 
 def load_serve():
-    """`serve.py` as a module of its own name: the auditor host's challenger, which this suite's other tests run,
+    """`serve.py` as a module of its own name: the auditor device's challenger, which this suite's other tests run,
     imports its own `serve` by that name."""
     spec = importlib.util.spec_from_file_location("remote_session_serve", HERE.parent / "serve.py")
     module = importlib.util.module_from_spec(spec)
