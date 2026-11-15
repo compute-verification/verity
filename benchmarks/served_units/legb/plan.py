@@ -19,10 +19,11 @@ Run from this directory: `python3 plan.py` writes wave2.units ... waveN.units an
   CAP GB of circuits (node A's 600 GB of /dev/shm, less a margin). Lines are largest first, with window.py's estimates:
   peak RSS x 1.15 + 2 GB, disk x 1.05 + 1 GB, staging seconds x 1.2, device GiB min(135, max(4, GB)). cpu.units is
   largest first, in the same columns.
-- A wave's printed hours, each a guess from wave 1: staging, the longest statement's or STAGE_SLOTS at a time, whichever
-  is longer; the cards, CARD_S_PER_MAND seconds a million ANDs a statement (WARM=1 RUNS=4, its build included) over three
-  cards; the Lean check, LEAN_S_PER_GB seconds a GB of circuit a session, serial, every KEPT session of a statement
-  whose one check takes under LEAN_ALL_S seconds and the last alone of the rest (stage_prove.sh's step 4).
+- A wave's printed hours, each a guess from wave 1: on node A, SETUP_H (the sync and the builds), staging (the longest
+  statement's or STAGE_SLOTS at a time, whichever is longer) and the cards (CARD_S_PER_MAND seconds a million ANDs a
+  statement, WARM=1 RUNS=4, its build included, over three cards); then on CPU nodes, lean_shard.sh's restaging and
+  its Lean check, LEAN_S_PER_GB seconds a GB of circuit a session (wave 1's N=60), every KEPT session of a statement
+  whose one check takes under LEAN_ALL_S seconds and the last alone of the rest, serial in one shard.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ sys.path.insert(0, str(HERE.parent))
 import window  # noqa: E402
 
 CAP = 540
-CARDS, STAGE_SLOTS, CARD_S_PER_MAND, LEAN_S_PER_GB, LEAN_ALL_S, KEPT = 3, 12, 7.0, 15.6, 120, 5
+CARDS, STAGE_SLOTS, CARD_S_PER_MAND, LEAN_S_PER_GB, LEAN_ALL_S, KEPT, SETUP_H = 3, 12, 7.0, 13.7, 120, 5, 0.3
 HEAD_NNZ_A_PER_AND = 6_091_870_711 / 34_336_169
 SINGLES = {"AllReduceMnnvl_v1": (246, 43, 2.1), "SiluMul_v2": (248, 44, 1.2), "Fp8GroupQuantUe8m0_v1": (158, 25, 1.05),
            "MoeRouterSigmoidBiasSlots_v2": (528, 94, 2.0), "RMSNormCudaVector8_v1": (248, 44, 1.2)}
@@ -117,9 +118,11 @@ def main() -> int:
                      max(CARD_S_PER_MAND * r["ands"] / 1e6 for r in w)) / 3600
         write(HERE / f"wave{i}.units", f"# leg B, wave {i} of {len(plan) + 1}, node A's cards: {len(w)} types, about {gb:.0f} GB "
               "of circuits, every one predicted under the GPU prover's bound; largest first", w)
-        print(f"wave {i}: {len(w)} types, {gb:.0f} GB, {sum(r['ands'] for r in w) / 1e6:.0f}M ANDs; staging {stage_h:.1f} h "
-              f"(longest {max(r['s'] for r in w) / 60:.0f} min), cards {card_h:.1f} h, Lean {sum(map(lean_s, w)) / 3600:.1f} h "
-              f"({sum(LEAN_S_PER_GB * r['gb'] < LEAN_ALL_S for r in w)} with every session); {dict(fam)}")
+        print(f"wave {i}: {len(w)} types, {gb:.0f} GB, {sum(r['ands'] for r in w) / 1e6:.0f}M ANDs; node A "
+              f"{SETUP_H + stage_h + card_h:.1f} h (staging {stage_h:.1f}, longest {max(r['s'] for r in w) / 60:.0f} min; "
+              f"cards {card_h:.1f}); CPU nodes' Lean check {sum(map(lean_s, w)) / 3600:.1f} h in one shard, after "
+              f"{stage_h:.1f} h restaging ({sum(LEAN_S_PER_GB * r['gb'] < LEAN_ALL_S for r in w)} with every session); "
+              f"{dict(fam)}")
     write(HERE / "cpu.units", f"# leg B, the CPU nodes': {len(cpu)} types predicted past the GPU prover's bound, about "
           f"{sum(r['gb'] for r in cpu):.0f} GB of circuits; largest first", cpu)
     print(f"cpu.units: {len(cpu)} types, {sum(r['gb'] for r in cpu):.0f} GB, {sum(r['ands'] for r in cpu) / 1e6:.0f}M ANDs, "
