@@ -21,6 +21,7 @@ from verity_config import ConfigError
 from verity_bench import jobs, kit, served_table, settings
 from verity_bench import prove_records as R
 from verity_bench import steady as S
+from verity_bench import steady_cards as C
 from verity_bench import steady_node as N
 from verity_bench import steady_plan as P
 from verity_bench import steady_spec as SP
@@ -1138,7 +1139,7 @@ class Node:
     answers. `row`: fields of the row the script writes; `texts`: the run's files as `test_steady.made` takes them;
     `answers`: an answer replaced (None: the command fails); `stamp`: fields of the host stamp replaced; `circuit`,
     `said` (its pin.txt) and `units`: what the stager stages; `point_id`: the point the run is of; `card_node`: the NUMA
-    node the timed step reads of the leased card (`steady_node.card_numa_node`, which `numa` and its own test read)."""
+    node the timed step reads of the leased card (`steady_cards.card_numa_node`, which `numa` and its own test read)."""
 
     def __init__(self, tmp_path: Path, monkeypatch, *, row: dict | None = None, answers: dict | None = None,
                  circuit: str = CIRCUIT, said: str = PIN, units: int = 1, cpus: int = 10, lease_exit: int | None = None,
@@ -1162,9 +1163,9 @@ class Node:
         self.monkeypatch = monkeypatch
         #: what the node lists of its NUMA nodes and its PCI devices (`numa`): nothing, unless a test says
         self.sys = tmp_path / "sys"
-        monkeypatch.setattr(N, "NODES", self.sys / "node")
-        monkeypatch.setattr(N, "DEVICES", self.sys / "pci")
-        monkeypatch.setattr(N, "card_numa_node", lambda device, ask: card_node)
+        monkeypatch.setattr(C, "NODES", self.sys / "node")
+        monkeypatch.setattr(C, "DEVICES", self.sys / "pci")
+        monkeypatch.setattr(C, "card_numa_node", lambda device, ask: card_node)
         self.row, self.files = made(OWN | {SP.VERSIONS: DROP} | (row or {}), **texts)
         self.answers = ANSWERS | (answers or {})
         self.circuit, self.said, self.units, self.cpus, self.lease_exit = circuit, said, units, cpus, lease_exit
@@ -1315,7 +1316,7 @@ def numa(node: Node, cards: str | None = CARDS, **changes: str | None) -> None:
     """What the node says of its NUMA nodes and its cards: `NUMA`, with files replaced or left out (None), their
     names' `/`, `:` and `.` written `_`."""
 
-    node.answers = node.answers | {" ".join(N.CARDS): cards}
+    node.answers = node.answers | {" ".join(C.CARDS): cards}
     by_key = {re.sub(r"[/:.]", "_", path): path for path in NUMA}
     for path, text in (NUMA | {by_key[key]: text for key, text in changes.items()}).items():
         if text is not None:
@@ -1807,12 +1808,12 @@ def test_a_timed_step_that_raises_or_is_stopped_still_writes_its_record_and_the_
 def test_the_leased_cards_numa_node_is_the_kernels_word_on_its_pci_address(tmp_path, monkeypatch):
     node = Node(tmp_path, monkeypatch)
     monkeypatch.undo()
-    monkeypatch.setattr(N, "DEVICES", node.sys / "pci")
+    monkeypatch.setattr(C, "DEVICES", node.sys / "pci")
     numa(node, pci_0000_65_00_0_numa_node="-1\n", pci_0000_b1_00_0_numa_node=None)
-    assert [N.card_numa_node(card, node.ask) for card in ("0", "1", "2", "3", "7", "GPU-3")] == [0, None, None, 1, None,
+    assert [C.card_numa_node(card, node.ask) for card in ("0", "1", "2", "3", "7", "GPU-3")] == [0, None, None, 1, None,
                                                                                                 None]
-    node.answers = node.answers | {" ".join(N.CARDS): None}
-    assert N.card_numa_node("3", node.ask) is None
+    node.answers = node.answers | {" ".join(C.CARDS): None}
+    assert C.card_numa_node("3", node.ask) is None
 
 
 @pytest.fixture

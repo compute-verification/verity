@@ -56,7 +56,8 @@ from typing import Any
 
 from verity_config import sha256
 
-from verity_bench import jobs, kit, settings, steady, steady_spec
+from verity_bench import jobs, kit, settings, steady, steady_cards, steady_spec
+from verity_bench.steady_cards import Asker, Refused
 from verity_bench.vllm.presets import GPUS
 
 KIND = "verity-steady-point/v1"
@@ -76,10 +77,6 @@ STAGED = ("stage.json", "circuit.txt", "pin.txt")
 FETCH = ("-m", "research", "data", "fetch")
 #: where a node keeps files in its memory: no statement fetched from the store goes there
 MEMORY = Path("/dev/shm")
-#: where a node lists each NUMA node's CPUs (`nodeN/cpulist`) and each PCI device's NUMA node (`ADDRESS/numa_node`), and
-#: the query that gives each card's index, as gpu-lease counts them, with its PCI address
-NODES, DEVICES = Path("/sys/devices/system/node"), Path("/sys/bus/pci/devices")
-CARDS = ("nvidia-smi", "--query-gpu=index,pci.bus_id", "--format=csv,noheader")
 #: the bytes kept of each of the server's logs, from its end
 KEPT_LOG_BYTES = 200_000
 #: one verifier's session as it files it (`keep_session`): the two repetitions' proofs, the session's record (the
@@ -92,14 +89,8 @@ RATE = "benchmarks/flock-steady.statements-per-s"
 
 #: a command's exit code, its output to a log file
 Runner = Callable[[Sequence[str], Path], int]
-#: a command's exit code and what it printed
-Asker = Callable[[Sequence[str]], tuple[int, str]]
 #: where a number is measured, as the kit stamps it (`kit.host_stamp`)
 Stamper = Callable[[], Mapping[str, Any]]
-
-
-class Refused(ValueError):
-    """The point can't be timed as its spec says; nothing was timed."""
 
 
 def _run(argv: Sequence[str], log: Path) -> int:
@@ -243,71 +234,6 @@ def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner,
             "stage": {key: record.get(key) for key in ("definition", "word", "k_log", "vus_per_block", "circuit_bytes")}}
 
 
-def cards_near(cpus: Sequence[int], ask: Asker) -> dict[str, Any]:
-    """The cards on the NUMA node of the run's CPUs (`cards`, by index), which the point's lease is asked of: a slot of
-    the node gives a run its CPUs and no card, and a card across the machine from its provers' CPUs is another
-    measurement. `cards` is None, with `why`, where the node doesn't say: the run's CPUs aren't on one NUMA node it
-    lists (of a timed row, the check `one_numa_node` says so), or no card says it is on that node (a machine with one
-    node, or a VM, says none). The lease then takes any card."""
-
-    mine, held = set(cpus), []
-    for listed in sorted(NODES.glob("node[0-9]*/cpulist")):
-        spans = [span.split("-") for span in listed.read_text().strip().split(",") if span]
-        if any(mine & set(range(int(span[0]), int(span[-1]) + 1)) for span in spans):
-            held.append(int(listed.parent.name[4:]))
-    if len(held) != 1:
-        return {"numa_nodes": sorted(held), "cards": None, "why": f"the node lists {len(held)} NUMA nodes for the run's CPUs"}
-    where = card_nodes(ask)
-    if isinstance(where, str):
-        return {"numa_nodes": held, "cards": None, "why": where}
-    if not (cards := sorted(index for index, node in where.items() if node == held[0])):
-        return {"numa_nodes": held, "cards": None, "why": f"none of the node's {len(where)} cards says it is on NUMA node "
-                                                          f"{held[0]}"}
-    return {"numa_nodes": held, "cards": cards}
-
-
-def card_nodes(ask: Asker) -> dict[int, int] | str:
-    """The NUMA node the kernel says each card is on (-1 where it says none, as a VM does), by the card's index as
-    gpu-lease counts them; or why the cards can't be listed."""
-
-    rc, text = ask(list(CARDS))
-    if rc:
-        return f"`{' '.join(CARDS)}` exited {rc}"
-    where: dict[int, int] = {}
-    for line in text.splitlines():
-        index, _, address = (part.strip() for part in line.partition(","))
-        # nvidia-smi writes the address with eight digits of domain and in capitals, the kernel with four and without
-        said = DEVICES / address[-12:].lower() / "numa_node"
-        node = said.read_text().strip() if index.isdigit() and said.is_file() else ""
-        if re.fullmatch(r"-?\d+", node):
-            where[int(index)] = int(node)
-    return where
-
-
-def card_numa_node(device: str, ask: Asker) -> int | None:
-    """The NUMA node of the lease's card (`device`, its index), which the row's check `one_numa_node` holds to its CPUs'
-    node; None where the node doesn't say."""
-
-    where = card_nodes(ask)
-    node = None if isinstance(where, str) or not device.isdigit() else where.get(int(device))
-    return node if node is not None and node >= 0 else None
-
-
-def booked(card: int, near: Mapping[str, Any]) -> int:
-    """The card the point was launched on (`--card`, a booked card's index), which its lease is then asked of alone, once
-    it is one of the cards on the NUMA node of the run's CPUs (`cards_near`): refused, before any statement is staged or
-    fetched, where it isn't or the node doesn't say."""
-
-    if near["cards"] is None:
-        raise Refused(f"the point was launched on card {card}, and the node doesn't say which cards are on the NUMA node "
-                      f"of the run's CPUs ({near['why']}), so card {card} can't be held to them")
-    if card not in near["cards"]:
-        raise Refused(f"the point was launched on card {card}, which isn't on NUMA node {near['numa_nodes'][0]} of the "
-                      f"run's CPUs (its cards are {', '.join(map(str, near['cards']))}): launch it with the cores of "
-                      f"card {card}'s slot")
-    return card
-
-
 def lease_argv(spec: steady_spec.SteadySpec, inside: Sequence[str], on: Sequence[int] | None = None,
                cores: str | None = None) -> list[str]:
     """The timed step under the kit's lease (`kit.lease`) of one card for the spec's bound, with what a point's lease
@@ -375,33 +301,6 @@ def toolkit(spec: steady_spec.SteadySpec, ask: Asker) -> str:
                       "row at another toolkit is another point. Set the spec's `cuda_toolkit` to the node's, which times "
                       "its rows again there")
     return read
-
-
-def snapshot(path: Path, run_id: str, ask: Asker, now: Callable[[], float]) -> None:
-    """What else is on the node now, as `steady.card_file` says a run keeps it: each card another run's lease holds and
-    each compute process on a card, or a line saying which of the two the node gave no answer on (a `gpu-lease status`
-    that names no card is no answer: it doesn't say that no other lease holds the row's)."""
-
-    lines = [f"epoch {int(now())}"]
-    rc, text = ask(["gpu-lease", "status"])
-    if rc != 0:
-        lines.append(f"gpu-lease status gave no answer (exit {rc})")
-    elif not any(re.match(r"\d+ (free|held|unreadable)\b", line) for line in text.splitlines()):
-        lines.append("gpu-lease status gave no answer (no card's line in its output)")
-    for line in text.splitlines() if rc == 0 else ():
-        if re.match(r"\d+ held\b", line) and f" run={run_id} " not in f"{line} ":
-            lines.append("lease " + line.split(" cmd=")[0][:200])
-    cards_rc, cards = ask(["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader"])
-    apps_rc, apps = ask(["nvidia-smi", "--query-compute-apps=gpu_uuid,pid,used_memory", "--format=csv,noheader"])
-    if cards_rc != 0 or apps_rc != 0 or not cards.strip():
-        lines.append("nvidia-smi gave no answer")
-    else:
-        index = {uuid.strip(): number.strip() for number, _, uuid in (line.partition(",") for line in cards.splitlines())}
-        for line in apps.splitlines():
-            fields = [field.strip().replace(" ", "") for field in line.split(",")]
-            if len(fields) == 3 and fields[0]:
-                lines.append(f"app GPU {index.get(fields[0], '?')} pid {fields[1]} {fields[2]}")
-    path.write_text("\n".join(lines) + "\n")
 
 
 def keep(scratch_rate: Path, out_rate: Path, item: steady_spec.SteadyPoint, read: Mapping[str, str],
@@ -507,7 +406,7 @@ def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: 
         host = leased_card(stamp())
         read = {"driver": host["driver"], "cuda_toolkit": toolkit_on_node(ask)}
         record |= {"device": device, "host": dict(host), steady_spec.VERSIONS: read,
-                   steady.CARD_NUMA: card_numa_node(device, ask)}
+                   steady.CARD_NUMA: steady_cards.card_numa_node(device, ask)}
         if GPUS[spec.card].nvidia_smi_name not in host["card"]:
             raise Refused(f"the lease's card is a {host['card']}, not the `card` of spec {spec.id!r} ({spec.card}: "
                           f"{GPUS[spec.card].nvidia_smi_name})")
@@ -517,12 +416,12 @@ def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: 
                           "`driver` and `cuda_toolkit` to the node's, which times its rows again there")
         row = {"provers": item.provers}
         (out / "rate").mkdir(parents=True, exist_ok=True)
-        snapshot(run_dir / steady.card_file(row, "start"), settings.RESEARCH_RUN_ID, ask, now)
+        steady_cards.snapshot(run_dir / steady.card_file(row, "start"), settings.RESEARCH_RUN_ID, ask, now)
         rc = run([sys.executable, steady_spec.TIMER, "--bin", prover()["path"], "--staged", str(scratch / "z"),
                   "--types", item.row.name, "--provers", str(item.provers), "--out", str(scratch / "rate"),
                   "--device", device, "--sessions", str(item.sessions), "--warm", str(item.row.warm),
                   "--ahead", str(spec.ahead)], out / "rate" / "server-rate.log")
-        snapshot(run_dir / steady.card_file(row, "end"), settings.RESEARCH_RUN_ID, ask, now)
+        steady_cards.snapshot(run_dir / steady.card_file(row, "end"), settings.RESEARCH_RUN_ID, ask, now)
         record |= {"exit": rc, "rows": keep(scratch / "rate", out / "rate", item, read, record[steady.CARD_NUMA])}
         step = f"{item.row.name}-k{item.provers}"
         record["kept_session"] = keep_session(scratch / "rate" / step, out / "rate" / step, item.row.pin)
@@ -614,9 +513,9 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
         record["cuda_toolkit"] = toolkit(spec, ask)
         own = own_cores(spec, cpus())
         record["cores"] = {"count": spec.cores, "list": _spans(own)}
-        record["lease_on"] = cards_near(own, ask)
+        record["lease_on"] = steady_cards.cards_near(own, ask)
         if a.card is not None:
-            record["lease_on"]["cards"] = [booked(a.card, record["lease_on"])]
+            record["lease_on"]["cards"] = [steady_cards.booked(a.card, record["lease_on"])]
         scratch = Path(tempfile.mkdtemp(prefix="verity-bench-steady-", dir=settings.VERITY_BENCH_STEADY_SCRATCH))
         lease = lease_argv(spec, [sys.executable, "-m", "verity_bench.steady_node", "--spec", a.spec, "--point", a.point,
                                   "--identity", a.identity, "--inside", str(scratch)], record["lease_on"]["cards"],
