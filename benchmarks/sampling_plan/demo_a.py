@@ -43,7 +43,7 @@ committed at the GPU row committer's 225 GB/s, and a sampled request replayed at
 GPU time (a stand-in). A lane unit's 32 x 32 outputs span 32 requests, so each lane subcircuit is its own replay grain,
 a sampled proof block replayed at 32 requests' share (`TILE_REQUESTS`), unshared with the other subcircuits' replays.
 
-    uv run python verity/protocols/proofs/spot/prover/cost/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
+    uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
 """
 from __future__ import annotations
 
