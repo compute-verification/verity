@@ -11,16 +11,16 @@ The period's one sample covers a window's population of all its members' proof b
 the member's part of it (`Member.part`), and the window's projection hands each member's session that part
 (`seqP`). What the leg reads of the one sample and of the coin map over the members' sessions:
 
-* **The members' parts** (`Member.mem_part`, `Window.Partitions`, `Window.sum_part_card`): a member's part of a
+* **The members' parts** (`Member.mem_part`, `ExecutionPhase.Partitions`, `ExecutionPhase.sum_part_card`): a member's part of a
   sample is its proof blocks the sample holds, and where the members' places partition the population the parts'
   sizes add up to the sample's.
-* **The registered layout** (`Window.Laid`, `Window.Laid.partitions`): the members in unit order, member `k`'s proof
+* **The registered layout** (`ExecutionPhase.Laid`, `ExecutionPhase.Laid.partitions`): the members in unit order, member `k`'s proof
   block `v` at the population's place `base k + v`, its base the sum of the counts of the members before it
   (`JointAuditV5.Laid`), both fixed by the registration before the sample. A sampled proof block `u` is then the proof block
   of the one member with `base ≤ u < base + n` (`JointAuditV5.Laid.mem_iff`, `Laid.member_unique`), so the members'
   places partition the population.
-* **The marginals** (`Window.avg_design`, `Window.sampleMiss_extend`, `Window.joint_extend`, `Window.eps_extend`,
-  `Window.sessionDelta_extend`): member `k`'s sampling design in Flock's window is its part of the window's one
+* **The marginals** (`ExecutionPhase.avg_design`, `ExecutionPhase.sampleMiss_extend`, `ExecutionPhase.joint_extend`, `ExecutionPhase.eps_extend`,
+  `ExecutionPhase.sessionDelta_extend`): member `k`'s sampling design in Flock's window is its part of the window's one
   sample, a mean of a reading of the part over the sample's coins; the members' knowledge and binding terms read only
   that, so the window's error is the same at the window widened by the coins a projection reads.
 * **The coin map's premise within a term** (`stopErrK`, `roundsErrK`, `sessionErrK`, `seqErr`, `executionPhaseErr`,
@@ -84,7 +84,7 @@ theorem Member.mem_part {nJ : ℕ} (m : Member nJ) (S : Finset (Fin nJ)) (u : Fi
 
 /-- **The members' places partition the window's population**: each member's proof blocks sit at distinct places,
 no two members share a place, and every place is some member's. -/
-structure Window.Partitions (W : Window) : Prop where
+structure ExecutionPhase.Partitions (W : ExecutionPhase) : Prop where
   inj : ∀ m ∈ W.ms, Function.Injective m.emb
   disjoint : W.ms.Pairwise fun m m' => ∀ u u', m.emb u ≠ m'.emb u'
   cover : ∀ v : Fin W.nJ, ∃ m ∈ W.ms, ∃ u, m.emb u = v
@@ -135,7 +135,7 @@ theorem sum_part_card_filter {nJ : ℕ} (S : Finset (Fin nJ)) : ∀ l : List (Me
 
 /-- **The members' parts of a sample have its size between them**, where the members' places partition the
 population. -/
-theorem Window.sum_part_card (W : Window) (h : W.Partitions) (S : Finset (Fin W.nJ)) :
+theorem ExecutionPhase.sum_part_card (W : ExecutionPhase) (h : W.Partitions) (S : Finset (Fin W.nJ)) :
     (W.ms.map fun m => (m.part S).card).sum = S.card := by
   classical
   rw [sum_part_card_filter S W.ms h.inj h.disjoint]
@@ -148,10 +148,10 @@ population, and member `k`'s proof block `v` sits at the population's place `bas
 counts of the members before it. The counts, the bases and the places are the registration's, fixed before the
 sample; a sampled proof block `u` is the proof block of the member with `base ≤ u < base + n`
 (`JointAuditV5.Laid.mem_iff`). -/
-def Window.Laid (W : Window) : Prop := (W.joint 0).Laid
+def ExecutionPhase.Laid (W : ExecutionPhase) : Prop := (W.joint 0).Laid
 
 /-- **Members laid out in unit order partition the window's population.** -/
-theorem Window.Laid.partitions {W : Window} (h : W.Laid) : W.Partitions where
+theorem ExecutionPhase.Laid.partitions {W : ExecutionPhase} (h : W.Laid) : W.Partitions where
   inj m hm := Flock.Guarantees.JointAuditV5.Laid.inj_of_mem h (m.toV5 0) (List.mem_map_of_mem hm)
   disjoint := List.pairwise_map.1 (Flock.Guarantees.JointAuditV5.Laid.pairwise h)
   cover v := by
@@ -160,7 +160,7 @@ theorem Window.Laid.partitions {W : Window} (h : W.Laid) : W.Partitions where
     exact ⟨m, hm, u, hu⟩
 
 /-- **The members' parts of a sample have its size between them**, where the members are laid out in unit order. -/
-theorem Window.Laid.sum_part_card {W : Window} (h : W.Laid) (S : Finset (Fin W.nJ)) :
+theorem ExecutionPhase.Laid.sum_part_card {W : ExecutionPhase} (h : W.Laid) (S : Finset (Fin W.nJ)) :
     (W.ms.map fun m => (m.part S).card).sum = S.card :=
   W.sum_part_card h.partitions S
 
@@ -168,35 +168,35 @@ theorem Window.Laid.sum_part_card {W : Window} (h : W.Laid) (S : Finset (Fin W.n
 
 /-- **Member `k`'s sampling design is its part of the window's one sample**: a mean of a reading of the member's
 sample over its design's coins is the mean, over the window's sample's coins, of the reading at the member's part. -/
-theorem Window.avg_design (W : Window) (t : ℕ) (k : Fin (W.joint t).ms.length)
+theorem ExecutionPhase.avg_design (W : ExecutionPhase) (t : ℕ) (k : Fin (W.joint t).ms.length)
     (G : Finset (Fin ((W.joint t).ms.get k).n) → ℝ≥0∞) :
     avg (fun ω : ((W.joint t).design k).Ω => G (((W.joint t).design k).draw ω)) =
       avg fun ω : W.L.Ω => G (((W.joint t).ms.get k).part (W.L.draw ω)) :=
   rfl
 
 /-- The sample's term doesn't read the widening. -/
-theorem Window.sampleMiss_extend (W : Window) (S : Widening) : (W.extend S).sampleMiss = W.sampleMiss :=
+theorem ExecutionPhase.sampleMiss_extend (W : ExecutionPhase) (S : Widening) : (W.extend S).sampleMiss = W.sampleMiss :=
   rfl
 
 /-- **Flock's window at the widened window is Flock's window, widened** (`JointAuditV5.extend`). -/
-theorem Window.joint_extend (W : Window) (S : Widening) (t : ℕ) : (W.extend S).joint t = (W.joint t).extend S :=
+theorem ExecutionPhase.joint_extend (W : ExecutionPhase) (S : Widening) (t : ℕ) : (W.extend S).joint t = (W.joint t).extend S :=
   rfl
 
 /-- The sample at widened coins is the sample at the device's coins. By `dsimp`, not `rfl`: elaborating the two
 samples as definitionally equal reduces their `match` and evaluates `sampleUnits`. -/
-theorem Window.sample_extend (W : Window) (S : Widening) (ω : (W.extend S).L.Ω) :
+theorem ExecutionPhase.sample_extend (W : ExecutionPhase) (S : Widening) (ω : (W.extend S).L.Ω) :
     (W.extend S).L.draw ω = W.L.draw ω.1 := by
-  dsimp only [Window.L, Flock.Bridge.execSel, Window.extend]
+  dsimp only [ExecutionPhase.L, Flock.Bridge.execSel, ExecutionPhase.extend]
 
 /-- **The members' terms read only their parts of the one sample**: the members' knowledge and binding terms summed
 are the same at the window widened by the coins `S`. -/
-theorem Window.eps_extend (W : Window) (S : Widening) (t : ℕ) : ((W.extend S).joint t).eps = (W.joint t).eps :=
+theorem ExecutionPhase.eps_extend (W : ExecutionPhase) (S : Widening) (t : ℕ) : ((W.extend S).joint t).eps = (W.joint t).eps :=
   (congrArg Flock.Guarantees.JointAuditV5.eps (W.joint_extend S t)).trans ((W.joint t).eps_extend S)
 
 /-- **The window's error doesn't read the widening** (`Live.sessionDelta_extend`). -/
-theorem Window.sessionDelta_extend (W : Window) (S : Widening) (t : ℕ) :
+theorem ExecutionPhase.sessionDelta_extend (W : ExecutionPhase) (S : Widening) (t : ℕ) :
     (W.extend S).sessionDelta t = W.sessionDelta t := by
-  unfold Window.sessionDelta
+  unfold ExecutionPhase.sessionDelta
   rw [W.sampleMiss_extend S, W.eps_extend S t, W.rootsErr_extend S]
 
 /-! ## The coin map's premise within a term, over the members' sessions -/
@@ -600,28 +600,28 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
 /-- **The window's coin map's premise within `ε`, off the held-off events** (`CouplesWithin`). -/
-def ExecutionPhaseCouplesWithin (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+def ExecutionPhaseCouplesWithin (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold)
     (B : ExecutionPhaseRoundHold) (ε : ℝ≥0∞) : Prop :=
   ∀ Q : CoinTape (V.game θ F c) σ → Prop, ENNReal.ofReal (Claims.Pr Q) ≤
     executionPhaseOff V θ F c W t rd σ D M BL B Q + ε
 
 /-- **The window's coin map's premise at a term within the hiding term.** -/
-theorem executionPhaseCouples_of_within {W : Window} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
+theorem executionPhaseCouples_of_within {W : ExecutionPhase} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
     {D : ExecutionPhaseDecoders V θ F c W σ} {M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds} {BL : ExecutionPhaseLinkHold}
     {B : ExecutionPhaseRoundHold} {ε : ℝ≥0∞} (h : ExecutionPhaseCouplesWithin V θ F c W t rd σ D M BL B ε)
     (hε : ε ≤ W.hidingTerm) : ExecutionPhaseCouples V θ F c W t rd σ D M BL B := fun Q =>
   (h Q).trans (add_le_add le_rfl hε)
 
 /-- **The window's coin map's start is within `ε₀` of the uniform tape** (`StartWithin`). -/
-def ExecutionPhaseStartWithin (W : Window) (σ : Strategy (V.game θ F c))
+def ExecutionPhaseStartWithin (W : ExecutionPhase) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (ε₀ : ℝ≥0∞) : Prop :=
   ∀ H : CoinTape (V.game θ F c) σ → ℝ≥0∞, (∀ x, H x ≤ 1) →
     avg H ≤ avg (fun ω : (W.extend M.widening).L.Ω => H (M.start ω)) + ε₀
 
 /-- **The window's projection's first stop** on the widened coins `ω`: where the first member's `Commit`'s roots are
 decoded. -/
-noncomputable def executionPhaseFirstStop (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+noncomputable def executionPhaseFirstStop (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (ω : (W.extend M.widening).L.Ω) :
     Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) :=
   (Pos.root (roundCuts V θ F c rd) (M.start ω)).toStop
@@ -629,7 +629,7 @@ noncomputable def executionPhaseFirstStop (W : Window) (rd : Reading W.rounds) (
 /-- **The window's coin map's start leaves the tape from the first stop fresh** (`FirstStopFresh`): over the widened
 coins, any reading of the sample and the projection's first stop has the mean of its average over the tapes from the
 stop. -/
-def ExecutionPhaseFirstStopFresh (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+def ExecutionPhaseFirstStopFresh (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) : Prop :=
   ∀ G : Finset (Fin W.nJ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞,
     avg (fun ω : (W.extend M.widening).L.Ω =>
@@ -639,7 +639,7 @@ def ExecutionPhaseFirstStopFresh (W : Window) (rd : Reading W.rounds) (σ : Stra
 
 /-- **The stops' term over the window**: over the widened coins, every member's session's error along the walk from
 the play's start, in the members' order (`seqErr`). -/
-noncomputable def executionPhaseErr (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+noncomputable def executionPhaseErr (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     (γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞)
     (γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞) : ℝ≥0∞ :=
@@ -653,7 +653,7 @@ off the held-off events is within the start's term and the stops' of the uniform
 member's coin map writes its link points in within `γL` of the tape's own and each round's coins within `γ`, the start
 leaves the tape from the first stop fresh, and the start is within `ε₀` of the uniform tape. The stops' term carries,
 beside each member's `γL` and `γ`, the probability of its held-off events at each stop. -/
-theorem executionPhaseCouples_of_close (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem executionPhaseCouples_of_close (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     {γ : ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → (j : ℕ) → SubmitJ j → ℝ≥0∞}
     {γL : ℕ → (mPts : ℕ) → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℝ≥0∞} {ε₀ : ℝ≥0∞}
@@ -702,20 +702,20 @@ theorem executionPhaseOpenMap_linkClose {g : Game Exchange} {σ : Strategy g} {�
 writes the sample's coins `κ` into the fresh frames of the sample's family (`sampleStart`), once for the window, and
 at each member's stops it writes the live coins into the stop's opening in `σ`'s play, whose log ends in the close
 after `σ`'s request (`executionPhaseOpenMap`). -/
-noncomputable def executionPhaseSampleMap (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+noncomputable def executionPhaseSampleMap (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool) :
     ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds :=
   executionPhaseOpenMap e (finish (V.signer θ) θ F c σ.1) (CoinTape (V.game θ F c) σ)
     (sampleStart V θ F c rd σ label after κ)
 
 /-- The window's projection's first stop is the walk from the start's tape to the first stop. -/
-theorem executionPhaseFirstStop_eq (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem executionPhaseFirstStop_eq (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (ω : (W.extend M.widening).L.Ω) :
     executionPhaseFirstStop V θ F c W rd σ M ω = Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd) (M.start ω) id :=
   rfl
 
 /-- The sample-coupled start is the fill of the widening's tape with the coins `κ` at the device's coins. -/
-theorem executionPhaseSampleMap_start_eq (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem executionPhaseSampleMap_start_eq (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool)
     (ω : (W.extend (executionPhaseSampleMap e V θ F c W rd σ label after κ).widening).L.Ω) :
     (executionPhaseSampleMap e V θ F c W rd σ label after κ).start ω =
@@ -723,7 +723,7 @@ theorem executionPhaseSampleMap_start_eq (W : Window) (rd : Reading W.rounds) (�
   rfl
 
 /-- The sample-coupled map's first stop is the walk to it from the filled tape. -/
-theorem executionPhaseFirstStop_sampleMap (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem executionPhaseFirstStop_sampleMap (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool)
     (ω : (W.extend (executionPhaseSampleMap e V θ F c W rd σ label after κ).widening).L.Ω) :
     executionPhaseFirstStop V θ F c W rd σ (executionPhaseSampleMap e V θ F c W rd σ label after κ) ω =
@@ -735,7 +735,7 @@ theorem executionPhaseFirstStop_sampleMap (W : Window) (rd : Reading W.rounds) (
 
 /-- **The sample-coupled start leaves the tape from the first stop fresh** (`sampleMap_fresh`): it writes nothing
 from the first stop on, and the window's one sample reads only the device's coins (`avg_prod_walk_fill`). -/
-theorem executionPhaseSampleMap_fresh (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (label : String)
+theorem executionPhaseSampleMap_fresh (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool) :
     ExecutionPhaseFirstStopFresh V θ F c W rd σ (executionPhaseSampleMap e V θ F c W rd σ label after κ) := fun G => by
   have h₁ := congrArg avg
@@ -751,7 +751,7 @@ theorem executionPhaseSampleMap_fresh (W : Window) (rd : Reading W.rounds) (σ :
     (roundCuts V θ F c rd) m κ
 
 /-- **The sample-coupled start is the uniform tape** wherever the sample's coins are uniform (`sampleMap_start`). -/
-theorem executionPhaseSampleMap_start (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (label : String)
+theorem executionPhaseSampleMap_start (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {m : ℕ} (κ : W.Ω → Fin m → Fin 512 → Bool)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
     ExecutionPhaseStartWithin V θ F c W σ (executionPhaseSampleMap e V θ F c W rd σ label after κ) 0 := fun H _ => by
@@ -763,7 +763,7 @@ theorem executionPhaseSampleMap_start (W : Window) (rd : Reading W.rounds) (σ :
 
 /-- **The window's bytes the sample reads, as fresh frames' coins, are uniform** (`avg_byteCoins`, A3 at the
 window's bytes), the premise `executionPhaseSampleMap_start` takes of the sample's coins. -/
-theorem Window.avg_byteCoins (W : Window) {m : ℕ} (hL : W.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
+theorem ExecutionPhase.avg_byteCoins (W : ExecutionPhase) {m : ℕ} (hL : W.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
     avg (fun ω : W.Ω => H (byteCoins W.src hL ω)) = avg H :=
   _root_.Verity.Sampled.avg_byteCoins W.hA3 hL H
 
@@ -774,7 +774,7 @@ and strategy, `executionPhaseSampleMap` at the family `label θ F c σ` answerin
 noncomputable def executionPhaseSampleMaps (rd : ExecutionPhaseReadings)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
     (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
-    (κ : (W : Window) → W.Ω → Fin m → Fin 512 → Bool) (W : Window) (θ : ByteArray) (F : Array ByteArray)
+    (κ : (W : ExecutionPhase) → W.Ω → Fin m → Fin 512 → Bool) (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds :=
   executionPhaseSampleMap e V θ F c W (rd W θ F c) σ (label θ F c σ) (after θ F c σ) (κ W)
 
@@ -787,11 +787,11 @@ events `BL` and `B`, with the coin map's premise discharged by `executionPhaseCo
 strategy, wherever the start's term and the stops' (each member's `γL` and `BL`'s probability at its first stop, `γ`
 and `B`'s at each later one) sum to at most the hiding term. -/
 theorem executionPhaseCouplingTarget_of_close (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+    (D : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseDecoders V θ F c W σ)
-    (M : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+    (M : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
-    (W : Window) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
+    (W : ExecutionPhase) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
     (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (BL : (c : ByteArray) → Strategy (V.game θ F c) → ExecutionPhaseLinkHold)
     (B : (c : ByteArray) → Strategy (V.game θ F c) → ExecutionPhaseRoundHold)

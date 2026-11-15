@@ -53,6 +53,7 @@ from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import manifest as PPM
@@ -122,9 +123,9 @@ class Run:
 def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
-    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: ROOTS)
-    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPD.weight_roots)
-    monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, salt_key=None: ROOTS)
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
+    monkeypatch.setattr(PPDR, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
     monkeypatch.setattr(PHW, "EPOCHS", {})
@@ -246,8 +247,8 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
         keys.append(salt_key)
         return ROOTS
 
-    monkeypatch.setattr(PPD, "weight_roots", weight_roots)
-    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPD.weight_roots)
+    monkeypatch.setattr(PPDR, "weight_roots", weight_roots)
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
     w, model, cs, hosts = weights_root(ROOTS), _model(), [], []
     for k in range(2):
         (tmp_path / str(k)).mkdir()

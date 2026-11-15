@@ -259,8 +259,8 @@ end Flock.Guarantees
 namespace Verity.Sampled
 
 /-- **The claim at a window** at every budget of SHA-512 calls: the units the window's trace doesn't bind are the
-incorrect proof blocks of Flock's window (`Window.joint`), the set the window's bound and the claim's transfer
+incorrect proof blocks of Flock's window (`ExecutionPhase.joint`), the set the window's bound and the claim's transfer
 (`ExecutionPhaseInstance.ClaimTransfers`) read. -/
-def Window.UnboundIncorrect (W : Window) : Prop := ∀ (t : ℕ) [Nonempty (W.joint t).EndΩ], (W.joint t).UnboundIncorrect
+def ExecutionPhase.UnboundIncorrect (W : ExecutionPhase) : Prop := ∀ (t : ℕ) [Nonempty (W.joint t).EndΩ], (W.joint t).UnboundIncorrect
 
 end Verity.Sampled

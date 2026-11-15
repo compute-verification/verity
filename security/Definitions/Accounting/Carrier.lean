@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.RateAuditSketchDeployed
-public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Poub.RateAuditSketchDeployed
+public import Definitions.Poub.RateAuditDeployed
 public import Definitions.Accounting.Gates.Codec
 public import Definitions.Accounting.Requirement
 import Mathlib.Basic.ENNReal.Real

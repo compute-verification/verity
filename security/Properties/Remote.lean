@@ -18,7 +18,7 @@ one-stage v2's audit, the recursive audit's form refused (`VStar.Recursive.Sampl
 commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both
 forms) are the run's registration record, and the composite rejects unless both decode to one digest
 (`Core.Composition.strays` over `Core.Remote.tied`);
-the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
+the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.executionPhases`) rejects unless every Commit
 record its windows name (`Core.Remote.executionPhaseRecords`) has that digest too. The policy's check
 (`InferenceOnlyCheck.Protocol.check`) refuses a record whose `program` is not the
 registered circuit's SHA-512 (`names`), then runs

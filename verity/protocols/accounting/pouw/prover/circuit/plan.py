@@ -17,7 +17,7 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
   derives from it. K is an **execution phase's** budget: a call samples its share K_c = ⌈K·W_c/W_window⌉, capped at its
   units, and its y cells at the floor ⌈K_y·n_c/N⌉ of the execution phase's N, K_y = K (`window_laws`).
 
-**The tile checks' layout** (`tile_layout`, `pc4` and `pc8`) is beside it: a sampled tile's closure is its rows' units
+**The tile checks' layout** (`tile_layout`, `pc8` and the tile checks built as it is) is beside it: a sampled tile's closure is its rows' units
 in the call (`RowA`, or `rowk`'s pieces; TM rows, or `pc8`'s short last tile row's r), and its TN rows' units in the
 weight's Program (``b_rows``), each once per plan (`Plan.proved_b`); its W_ref is the caller's (the tile's cells' share of the scheme's).  It opens
 nothing: its rows are Flock-committed ports.
@@ -34,6 +34,7 @@ the unsound work at δ (Lean `audit_closure`, `accountable_compute`).
 """
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import ROUND_CEILING, Decimal, localcontext
@@ -51,7 +52,7 @@ from .ncp2 import D, Shape, rfc6962
 from .partition import ProofBlock, units
 
 if TYPE_CHECKING:
-    from . import pc4, pc8
+    from . import pc8
 
 DRAW_DOMAIN = domains.POUW_CLOSURE_SAMPLING
 
@@ -274,8 +275,9 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
     return Layout(shape, us, template_strata(us, Layout(shape, us, (), {}).tile_work()), closure, y_strip)
 
 
-def tile_layout(shape: pc4.Shape | pc8.Shape, w_ref: int) -> Layout:
-    """A tile check's layout (`pc4.Shape` or `pc8.Shape`), from the shape alone: the call's units and strata, each
+def tile_layout(shape: pc8.Shape, w_ref: int) -> Layout:
+    """A tile check's layout (`pc8.Shape`, or the `Shape` of a tile check built as `pc8` is, whose module's ``units``,
+    ``call`` and ``weight`` it reads), from the shape alone: the call's units and strata, each
     tile's closure (itself, then its rows of A's units: TM, or a short last tile row's r; and under pc8's inert-work
     bound, on whole tiles only, its strip, its TM·TN word units row by row, its TM rows' digest and tally units and its
     tally, so every word of the inert-work bound is proved with its tile, never sampled) and its TN rows of B's units in
@@ -283,9 +285,7 @@ def tile_layout(shape: pc4.Shape | pc8.Shape, w_ref: int) -> Layout:
     ``row_k`` its head, forms and tail (`rowk`).  A short tile is its own template's stratum at its rows' share of that,
     w_ref·r/TM, which must be whole; a call with whole and short tiles is then two tile strata, which the work sampling
     design refuses (`check_work_strata`)."""
-    from . import pc4, pc8
-
-    mod = pc8 if isinstance(shape, pc8.Shape) else pc4
+    mod = sys.modules[type(shape).__module__]
     us, ws = mod.units(mod.call(shape)), mod.units(mod.weight(shape))
     tm, tn = shape.tile
     row_a: dict[int, list[int]] = {}

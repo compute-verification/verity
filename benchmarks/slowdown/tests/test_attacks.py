@@ -49,7 +49,7 @@ def test_the_shard_search_is_nci_search(case):
     gamma = case[-1]
     work = attacks.search(*case)
     try:
-        expected = nci.search(*case)["rho"]
+        expected = nci.search(*case)["slowdown"]
     except ValueError:
         assert work == 0
         return
@@ -60,7 +60,7 @@ def test_the_shard_allowance_is_the_counted_share_of_its_reference_work():
     case = (8e10, True, 2.07e11, 2 * 28672, 20, 0, 2e7, 6.4e16)
     a = ATTACKS["shard"].allowance(KIMI)(DECLARED)
     assert math.isclose(a, 0.602 / 2 * attacks.search(*case))
-    assert math.isclose(0.602 * 6.4e16 / (2 * a), _nci_search().search(*case)["rho"], rel_tol=1e-12)
+    assert math.isclose(0.602 * 6.4e16 / (2 * a), _nci_search().search(*case)["slowdown"], rel_tol=1e-12)
 
 
 def test_a_shared_state_ceiling_only_removes_slices():

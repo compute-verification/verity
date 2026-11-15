@@ -11,10 +11,19 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity.protocols.accounting.pouw.prover.serving import tensors as TS
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
 
 torch = pytest.importorskip("torch")
+
+
+@pytest.fixture(autouse=True)
+def _torch_tensors(monkeypatch):
+    """The writer reads the tensors here through the PyTorch adapter's `tensors.Tensors`, as a served window's does."""
+    from verity.protocols.accounting.pouw.prover.serving.tensors_device import TENSORS
+
+    monkeypatch.setattr(TS, "_tensors", lambda: TENSORS)
 
 
 def _today(path, a, s_a, records):

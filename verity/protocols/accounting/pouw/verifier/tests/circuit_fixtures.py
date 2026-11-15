@@ -65,7 +65,7 @@ def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int
     row's port, a public input region, advice (`pc8.PORTS`) or a public output (`cap.PORTS`), every advice port is a
     parameter and every public output an output.  Each committed row's port bits are exactly its schema's words
     (`leaves.ROW_WORDS`, at depth k, or ``ks[schema]`` for a segment's row), so no bit of a committed row is outside the
-    unit's ports (an ok row's word too, `pc4.ok_word`): a port a unit reads ``reads[name]`` rows of counted for one row,
+    unit's ports (an ok row's word too, `tile_units.ok_word`): a port a unit reads ``reads[name]`` rows of counted for one row,
     and an output port zero-padded to whole u16 words, as Flock commits it (`class_statement.unit_lowering`).  Each
     region is a parameter, in the unit's parameter order, whose every leaf has its anchor's width (``derivations``), and
     its leaves unpacked fill whole 128-bit words."""
