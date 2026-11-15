@@ -1175,7 +1175,7 @@ def test_the_word_in_prose_or_in_a_new_name_in_a_listed_file_still_counts() -> N
         (1, "firewall"), (1, "firewall"), (1, "firewall"), (1, "FIREWALL"),
         (2, "firewall"), (2, "firewall"), (2, "firewall"), (2, "FIREWALL"), (2, "firewall")]
     harness = ('# the coin source, coin_source_v2, c["coin_sources"]; the sampled proofs, "sampled-proofs", sampled-proofs:\n')
-    assert retired(harness, HARNESS + "tests/test_bench.py") == [
+    assert retired(harness, "tests/" + HARNESS + "test_bench.py") == [
         (1, "coin source"), (1, "coin_source"), (1, "coin_sources"), (1, "sampled proofs"), (1, "sampled-proofs"),
         (1, "sampled-proofs")]
 
@@ -1188,8 +1188,8 @@ def test_a_held_key_in_a_listed_file_is_not_a_site() -> None:
               "  cost is read from `flock-zk-server`'s (`flock-firewall`'s in a recorded run) CPU seconds\n")
     assert retired(readme, RECURSION + "README.md") == []
     stop = '(d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\\n")\n'
-    assert retired(stop + 'assert "FIREWALL-REFUSED" in outer["note"]\n', RECURSION + "tests/test_recursion_e2e.py") == []
-    assert retired(ARM_KEYS, HARNESS + "tests/test_bench.py") == []
+    assert retired(stop + 'assert "FIREWALL-REFUSED" in outer["note"]\n', "tests/" + RECURSION + "test_recursion_e2e.py") == []
+    assert retired(ARM_KEYS, "tests/" + HARNESS + "test_bench.py") == []
     coins = ('check.coins = ({"source": c["coin_source"]} if c.get("coin_source", "in-process") != "in-process"\n'
              "               else {}  # the firewall's coins\n")
     assert retired(coins, HARNESS + "verity_bench/vllm/runner.py") == [(2, "firewall")]
