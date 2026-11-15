@@ -1,3 +1,0 @@
-[2026-11-15T02:25Z] f5df04c82ba7
-DEVICEKEYS2, 6:25PM PST, step 3 landed on cursor/na-architecture-b51f at b6a295e56eae (map 3 + move 943b04da4ee + 3c05da589fc): verity/protocols/accounting/certifier/device/tests/{test_network_certifier_serve.py,verdict_records.py} -> verity/protocols/accounting/certifier/prover/tests/{same}; modules ...certifier.device.tests.X -> ...certifier.prover.tests.X. Repointed: benchmarks/network_traces/tests/test_stop_verdicts.py:30, device/tests/test_connection_rows_run.py (its three stop-verdict tests and answer() moved into prover/tests/test_network_certifier_serve.py). No runner file moved; relay_runs.py stays on the device.
-
