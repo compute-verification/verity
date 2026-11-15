@@ -1,4 +1,4 @@
-"""The memory challenger's key as a deployment starts it on the auditor's host, for PoUS's rounds
+"""The memory challenger's key as a deployment starts it on the auditor's device, for PoUS's rounds
 (`challenger_party.start`) and for the wipe (`wipe_challenger.start`): loaded from the party's state directory
 (`device_key`), and refused unless the configuration pins it for the protocol it signs for. A start makes no key: one
 made there could never be the pinned one, so a state directory without a key is refused (``key``). The pin is checked
@@ -75,7 +75,7 @@ def signer(state: Path | None, key_sha512: str) -> mc.LmsSigner:
         public = bytes.fromhex(json.loads((state / KEY_STATE).read_text())["public"])
     except (OSError, ValueError, KeyError, TypeError) as e:
         raise Refused("key", f"{state} holds no memory challenger key ({type(e).__name__}): it is made once on the "
-                             "auditor's host (`device_key`) and its SHA-512 pinned ([[pin]])") from None
+                             "auditor's device (`device_key`) and its SHA-512 pinned ([[pin]])") from None
     if not (state / "seed").is_file():
         raise Refused("key", f"{state} holds a leaf state but no key seed")
     _pinned(state, public, key_sha512)

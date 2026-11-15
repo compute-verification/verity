@@ -44,7 +44,8 @@
     "InferenceOnlyCheck.DefinitionDigest",
     "NetworkCheck.ScanOk",
     "NetworkCheck.Period.ConnectionRows",
-    "NetworkCheck.Period.Start"
+    "NetworkCheck.Period.Start",
+    "NetworkCheck.Period.Decode"
    ],
    "except": [],
    "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the inference-only check's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), no Mathlib and nothing of Security; and the scan's ok-bit constants (a schedule's members and the roots of their ok rows), which a registration is held to; the period's check is code: v4's certificate decoder, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security; the period's check is code: v4's certificate decoder, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), no Mathlib and nothing of Security"
@@ -63,6 +64,23 @@
    "imports": ["NetworkCheck.Check"],
    "except": [],
    "why": "the period's decoders are code: v4's certificate and its encodings, no Mathlib, nothing of Security and nothing of the inference-only policy's check"
+  },
+  "NetworkCheck.Period.Decode": {
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.Clocks",
+    "CoreProtocol.Profile",
+    "Flock.Program",
+    "Flock.Public",
+    "Flock.WindowRecord",
+    "InferenceOnlyCheck.Desc",
+    "InferenceOnlyCheck.DefinitionDigest",
+    "NetworkCheck.ScanOk",
+    "NetworkCheck.Period.ConnectionRows",
+    "NetworkCheck.Period.Start"
+   ],
+   "except": [],
+   "why": "the period check's structures and their decoding are code: what the period's check reads, the same imports as its layer's but the check itself, no Mathlib and nothing of Security"
   },
   "NetworkCheck.ScanOk": {
    "imports": ["Flock.RegKnown", "Identity.Domains", "Identity.Tagged"],

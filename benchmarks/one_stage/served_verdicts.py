@@ -795,7 +795,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     what it said if not, and the record's SHA-512), the prover's give-up (`give_up`), its shares at the tensor clock, the
     unretained serve's wall and declared share there, and the prover's replay's CPU seconds, cores, the cores it takes to
     keep pace, the card's seconds, its node and the passes it finished (each None without one, or why it has none), the
-    execution phase as the challenger saw it (its start, end and seconds on the auditor host's clock, `execution_phase`,
+    execution phase as the challenger saw it (its start, end and seconds on the auditor device's clock, `execution_phase`,
     with the serve's own wall beside it under ``prover``, the served node's clock), what Pearl+'s Python check and Lean
     check each cost where they ran (`pearlplus_checks`) and the class with its requests and rounds (`pearlplus_class`)."""
     if doc.get("piece") == "pearlplus":
@@ -819,7 +819,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                 "replay": None if rp is None else rp.get("error") or {
                     k: rp.get(k) for k in ("s", "cpus", "cores_to_keep_pace", "device_s", "node", "finished", "of")},
                 "execution_phase": None if phase is None else {
-                    "clock": "the auditor host's", **{k: phase.get(k) for k in ("start_utc", "end_utc", "seconds", "why")},
+                    "clock": "the auditor device's", **{k: phase.get(k) for k in ("start_utc", "end_utc", "seconds", "why")},
                     "prover": phase.get("prover")},
                 "checks": doc.get("checks"), "class": doc.get("class")}
     check, credit = doc.get("check") or {}, doc.get("credit") or {}
@@ -1484,16 +1484,16 @@ def pearlplus_why_tied(reserved: Mapping[str, Any] | None) -> str:
 
 
 #: whose clock `execution_phase` reads, and where
-PHASE_CLOCK = ("the auditor host's, to the second, in its signed ledger's entries as the gate answered them "
+PHASE_CLOCK = ("the auditor device's, to the second, in its signed ledger's entries as the gate answered them "
                "(ledger.jsonl beside this document); none of these times is the served node's")
 #: whose clock the serve's own wall is on, which a piece holds beside `execution_phase`'s times
 PROVER_CLOCK = ("the served node's, the prover's: the serve's own wall for its timed call (generate_s), which no auditor "
-                "host measured")
+                "device measured")
 #: `served_passes.py lean`'s check document beside the piece's Lean verdict
 PEARLPLUS_LEAN_CHECK = "pearlplus-lean-check.json"
 #: where Pearl+'s two checks ran, which a piece says beside what each cost
 CHECKS_WHERE = ("on the served node, at the serve, over the passes it retained: the node each cost names is the served "
-                "node, not the node the audit runs on, and no auditor host runs either check again, since their case is "
+                "node, not the node the audit runs on, and no auditor device runs either check again, since their case is "
                 "witness")
 #: what a tied piece's ``class`` says its two derived counts are
 CLASS_LOAD = ("the class's fixed load, which Pearl+'s check holds the passes to (verify --class): a request a slot "
