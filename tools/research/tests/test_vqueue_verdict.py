@@ -189,7 +189,7 @@ def test_under_gate_verdict_no_file_of_the_tree_the_low_risk_lane_keeps_off_is_p
     own: none whose file `lowrisk_excludes` keeps off the low-risk lane is plain, except a file only entries of
     `verdict_plain` keep off, nor any changing non-test Python under a `verifier/` or `device/` directory, so a Python
     verifier that drifts from its Lean takes the whole check before it lands.  A verifier, a device, the code an auditor's
-    host runs, the research tool's CLI, the move tool, the Lean check and the check are not plain; a doc, a benchmark,
+    device runs, the research tool's CLI, the move tool, the Lean check and the check are not plain; a doc, a benchmark,
     infra/ and the agent guard are."""
     files = _git(ROOT, "ls-files").splitlines()
     _main_to(env, {DRIVE_FLAGS: _tree_drive()})

@@ -86,6 +86,8 @@ parts = 7
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
 # network_e2e's endpoint advice: `verity-vllm advice`'s output, which advice_charge's tests read.
 # `benchmarks/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
+# `benchmarks/slowdown/data/reference.toml`: the world fleet `leak_bounds.world_links` counts; the GLM-5.3 workload card
+# (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): the weights `leak_bounds` reads as it loads (`WEIGHTS`).
 # `security/lean-audit.json` and `security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
 # and the discharges of its premises, each at the statement whose hypotheses and antecedents it names (`RESTS_ON`,
 # `DISCHARGES`), which the locks record by digest and no other way.
@@ -109,7 +111,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/census/deployments.json",
-          "benchmarks/census/adversary.json",
+          "benchmarks/census/adversary.json", "benchmarks/slowdown/data/reference.toml",
+          "benchmarks/spot_figures/cards/workload.glm-5.3.json",
           "security/lean-audit.json", "security/Properties/lean-audit.json",
           "benchmarks/network_e2e/tests/data/endpoint/advice",
           "benchmarks/numerical/python/verity_numerical/__init__.py",

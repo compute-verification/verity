@@ -236,7 +236,7 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_but_verdict_plain_and_add
 ], ids=lambda x: x or "-")
 def test_each_verdict_plain_entry_frees_its_files_for_the_gate_and_the_rest_stay_on_the_whole_check(path, entry):
     """Over this tree's drive.toml and files: a file kept off the low-risk lane only by an entry of `verdict_plain` (``entry``)
-    is plain where the land verdicts gate, and still off the low-risk lane; the code an auditor's host runs, the move tool,
+    is plain where the land verdicts gate, and still off the low-risk lane; the code an auditor's device runs, the move tool,
     the circuit language, the research tool, the check, a verifier's `__init__.py` and a Lean package's `pyproject.toml`,
     which entries the gate reads keep off, are not plain."""
     root = Path(__file__).resolve().parents[3]

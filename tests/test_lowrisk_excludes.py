@@ -23,7 +23,7 @@ from research.queue import DRIVE_FLAGS, DriveFlags, lowrisk
 ROOT = Path(__file__).resolve().parents[1]
 #: what `verdict_plain` may never make plain, beside every file under a `TRUSTED_DIRS` directory and every file of a trusted
 #: place of tests/import_order.toml or of a place one reaches (the soundness path): Lean, its locks and Lake files, the
-#: research tool and the move tool it certifies moves against, the check, the Lean check, and the code an auditor's host runs
+#: research tool and the move tool it certifies moves against, the check, the Lean check, and the code an auditor's device runs
 #: outside a `device/` directory
 NEVER_PLAIN = re.compile(r"(.*/)?(.*\.lean|lean-audit\.json|unread-caps\.json|lakefile\..*|lean-toolchain|lake-manifest\.json"
                          r"|TRUSTED\.sha256)|tools/research/.*|tools/move/.*|tools/verity/check/.*|tools/check/.*"
@@ -97,7 +97,7 @@ def never_plain(files: Iterable[str], paths: dict[str, bool]) -> list[str]:
 def test_every_verdict_plain_entry_frees_no_file_the_whole_check_must_see_and_matches_a_tracked_path():
     """An entry of `verdict_plain` names a tracked path, and together they make plain no file under a `verifier/` or
     `device/` directory, of the soundness path, of Lean, a lock or a Lake file, of the research tool, the move tool, the
-    check or the Lean check, or of the code an auditor's host runs: such a file keeps the whole check before it lands,
+    check or the Lean check, or of the code an auditor's device runs: such a file keeps the whole check before it lands,
     whatever its land verdicts."""
     flags = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS)
     assert flags.verdict_plain and not (bad := dead_entries(tracked(), flags.verdict_plain)), (
