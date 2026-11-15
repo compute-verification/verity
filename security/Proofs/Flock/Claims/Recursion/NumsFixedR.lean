@@ -344,7 +344,7 @@ theorem rounds_one (zk : Bool) (spec : Flock.SessionSpec) (t : Flock.Stmt) :
 /-- **A one-table statement's numbers** are its table's. -/
 theorem numsOf_one {xO : Msg} {i : RecIns} {spec : Flock.SessionSpec} {t : Flock.Stmt}
     (h : setupO xO = some (i, spec, #[t])) :
-    numsOf xO = ⟨FlockDeploy.tableErr true spec t, (2 : ℚ) ^ (Claims.Flock.zkLevel0 t.m).d,
+    numsOf xO = ⟨FlockDeploy.tableErr true spec t, (2 : ℚ) ^ (Claims.Flock.zkLevel0 t.wideLeaf t.m).d,
       FlockDeploy.tableWeight true t, 2 + (0 + 2 * FlockDeploy.repRounds true spec t), Claims.Flock.Numbers.waits,
       Claims.Flock.Numbers.cap, 0, 0⟩ := by
   have ht : tablesO xO = [(spec, t)] := by simp [tablesO, h]
