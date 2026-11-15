@@ -1,17 +1,17 @@
-"""The network certifier's link and key, read from the registered hardware: the Python mirror of
+"""The network attester's link and key, read from the registered hardware: the Python mirror of
 `NetworkCheck.Registered` (`lean/NetworkCheck/Registered.lean`), which defines it.
 
 `registered(site, head, link, key)` reads a link's name and a certifier's key off the site of an accepted registration
-log's view: the link joins a network certifier and a host, and the key is the one that certifier registered. It returns
+log's view: the link joins a network attester and a host, and the key is the one that certifier registered. It returns
 what the registration states of them (`Registered`): the link's id, its host end, the certifier's id and registered
 key, the link's capacity β in bits a second each way, and the head of the log the site was read at, which it carries
 and doesn't read. `Refused`, with the Lean's message, for a link that is no link of the site, a link that doesn't join a
-network certifier and a host (the certifier's other half, to the outside; a host's bare uplink; a link between two
+network attester and a host (the certifier's other half, to the outside; a host's bare uplink; a link between two
 hosts; a memory challenger's link), a certifier whose registered key is not lower-case hex, a key that is not the
-certifier's registered key, and a network certifier's link that states no capacity, with or without a reason no
+certifier's registered key, and a network attester's link that states no capacity, with or without a reason no
 certifier splits it: there is no line rate to read for it.
 
-The registered key of a network certifier is the string the checks' `key` parameter is: its LMS public key, I ‖ T[1],
+The registered key of a network attester is the string the checks' `key` parameter is: its LMS public key, I ‖ T[1],
 in lower-case hex. `key_refusal` is the one function that reads it.
 
 `site_of` reads the site as the view writes it, a plain mapping `{"links", "locs", "sheets"}` with each location and
@@ -51,7 +51,7 @@ class Malformed(Refused):
 
 @dataclass(frozen=True, slots=True)
 class Registered:
-    """What the registered hardware states of a network certifier's link."""
+    """What the registered hardware states of a network attester's link."""
 
     head: str
     link: str
@@ -165,7 +165,7 @@ def _joins_certifier_and_host(site: Mapping[str, Any], k: Mapping[str, Any]) -> 
 
 
 def certifier_links(site: Mapping[str, Any]) -> list[str]:
-    """The network certifiers' links of the site, by id, in its order: those that join a network certifier and a host."""
+    """The network attesters' links of the site, by id, in its order: those that join a network attester and a host."""
     return [k["id"] for k in site["links"] if _joins_certifier_and_host(site, k)]
 
 
@@ -186,7 +186,7 @@ def lower_hex(s: str) -> bool:
 
 
 def key_refusal(certifier: Mapping[str, Any], key: str) -> str | None:
-    """Why `key` is not the key of the network certifier, or None when it is: the certifier's registered key is its LMS
+    """Why `key` is not the key of the network attester, or None when it is: the certifier's registered key is its LMS
     public key in lower-case hex, and `key` is that string. The one reading of a certifier's registered key."""
     c, registered_key = certifier["id"], certifier["key"]
     if not lower_hex(registered_key):
@@ -198,9 +198,9 @@ def key_refusal(certifier: Mapping[str, Any], key: str) -> str | None:
 
 
 def registered(site: Mapping[str, Any], head: str, link: str, key: str) -> Registered:
-    """The network certifier's link and key, as registered: `link` names a link of `site` (a `site_of`) that joins a
-    network certifier and a host, and `key` is that certifier's registered key. `head`, the head of the log the site
-    was read at, is carried unread. `Refused` otherwise, naming the network certifiers' links of the site or the
+    """The network attester's link and key, as registered: `link` names a link of `site` (a `site_of`) that joins a
+    network attester and a host, and `key` is that certifier's registered key. `head`, the head of the log the site
+    was read at, is carried unread. `Refused` otherwise, naming the network attesters' links of the site or the
     certifier's registered key, and last for a link that states no capacity."""
     k = next((x for x in site["links"] if x["id"] == link), None)
     if k is None:

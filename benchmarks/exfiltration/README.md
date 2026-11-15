@@ -38,7 +38,7 @@ verity bench exfiltration --help          every parameter and its default
     them (no table's row priced their proving, or they priced under half of it, with the share each source prices),
     else the share the table's rows price, else "at the planner's assumed prices" for rows that record no table's
     row. Read with `--row "(i) honest"`, the figure itself carries the label.
-- **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
+- **The network attester's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
   the fail cells and the jitter, for the scan as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
   stop block and once one has. The design's two rows are also charged the count: how many of a link's releases
@@ -46,7 +46,7 @@ verity bench exfiltration --help          every parameter and its default
   and refuses another schema.
   - **Its figures of record are at two release schedules**, D_j = 2, the jitter bound of that document's term of
     record. A figure at D_j = 1, and every figure of a row whose release times are taken once (`timing`,
-    `all three`), is what a network certifier with a set-time card would be charged. That card is simulated: none
+    `all three`), is what a network attester with a set-time card would be charged. That card is simulated: none
     is deployed, and it is an input of the document, `set_time_card`, the one input marked `simulated`. Each such
     figure is printed only under the label the document gives it, "with a simulated set-time card", in a line, a
     column or a row's name that carries the label. The command reads the label from the document, at its top and
@@ -56,8 +56,8 @@ verity bench exfiltration --help          every parameter and its default
     so the headline gives that command's own term of record beside this one's.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output bits
-at δ). The first three terms are the network certifier's part and the last term's second branch is the compute
-audit's, so the command also prints their sum under the network certifier's rows: the scan as charged today,
+at δ). The first three terms are the network attester's part and the last term's second branch is the compute
+audit's, so the command also prints their sum under the network attester's rows: the scan as charged today,
 the scan with all three changes, and the design, before its stop block and with it. Where a row charges the entries
 and they are fewer than the compute audit's part, they stand in its place. The command prices no advice, and says
 so among its inputs.
@@ -70,7 +70,7 @@ the response's ids. The sums that do are those under the rows the reader's answe
 execution phase (`all three`, `design`), never those of a row because its schedules read 0. With no execution phase
 held, those sums hold the count as the row `design, no stop block` does, no sum takes it at 0, and the command calls
 each by a name that says its stop class is charged its whole schedule. Until a served audit has sampled a stop
-block the server chooses the count, and the network certifier's row `design, no stop block` charges it, as its
+block the server chooses the count, and the network attester's row `design, no stop block` charges it, as its
 schedules. The command reads the output count from that row and prints it, marked assumed, in every monitoring
 period, beside the sums that take it at 0 where there are any.
 
@@ -83,7 +83,7 @@ the runs that replace it (`superseded_by`). It lists those runs once, and both r
 
 The command hands the list to the stop verdicts' reader, `verity/protocols/resource_accounting/network/prover/stop_verdicts.py`
 (`of_runs(store, runs, superseded)`), every run that carries the record, with those another run replaces. It hands
-the reader's answer to the network certifier's calculator, which charges the stop class of its rows by it and by
+the reader's answer to the network attester's calculator, which charges the stop class of its rows by it and by
 nothing else. What the reader reads in a run's files, and what holds an execution phase, are its own
 (`benchmarks/certifier_term/README.md`, "The stop class's verdicts"); the command reads none of those files itself.
 The document carries the answer (`certifier.stop`): the rows it charges, the execution phases held, whether the stop
@@ -91,7 +91,7 @@ class is charged below on every execution phase, the reader's own lines, the ver
 handed with the superseded ones. The print gives the reader's lines as they are, under a line that names the runs.
 
 With no run carrying the record the reader is not asked, and the calculator's rows are as with no record read: each
-connection charged its whole schedule, `design` equal to `design, no stop block`, and the network certifier's
+connection charged its whole schedule, `design` equal to `design, no stop block`, and the network attester's
 figure in the headline the `scan` row's.
 
 ### The output count's mark
@@ -259,13 +259,13 @@ Every figure carries the error summed over everything it covers. A figure whose 
 "no bound at this period", with that error and no amount: a union bound of 1 or more bounds nothing.
 
 - **The compute audit's part** fails with at most its rows' δ over the monitoring period (`delta_seen`).
-- **The network certifier's part** fails with at most ε, which its document gives each row (`eps`): the δ of each
+- **The network attester's part** fails with at most ε, which its document gives each row (`eps`): the δ of each
   execution phase's scan, summed over every link of the scope and every execution phase of the monitoring period. A
   scope's monitoring period has one ε, whichever row charges it, and the command refuses a document whose rows of
   one carry two. So a link's week can carry an amount where the world's year carries none, from the same scans.
 - **The two together** fail with at most the sum of both parts' errors.
 
-The scans' δ is an input of the network certifier's calculator, and this command gives it one. By default it is the δ
+The scans' δ is an input of the network attester's calculator, and this command gives it one. By default it is the δ
 at which the row printed that sums the most execution phases, the world's year, carries an error of 2^-20: 2^-20
 divided by that row's execution phases, which the calculator's own document counts. Every row printed then carries
 that error or less. `verity bench certifier_term`'s result of record takes its δ the same way
@@ -276,13 +276,13 @@ document states among its inputs, never a copy the command keeps.
 
 ## The requests
 
-Both parts count the same requests: the sampling plan's, which the network certifier's calculator counts by default
+Both parts count the same requests: the sampling plan's, which the network attester's calculator counts by default
 and reads from the planner in the tree. The command holds no count of its own, so its inputs list that calculator's
 request count and what its request is, as the calculator marks them. The requests one of the planner's rows is
 priced over are its `replay_sample / q`, the sampled replays over the probability a request is sampled; the row's `requests`
 field is the planner's default scope's count, another request's, and is not read. The command refuses if the two
 parts don't cover the same GPU-seconds, if the rows of record are priced over other requests than the network
-certifier's part counts, or if the two aren't shares of the same weights.
+attester's part counts, or if the two aren't shares of the same weights.
 
 ## The records it reads
 
@@ -339,19 +339,19 @@ plan of the case, is left out and listed under "Refused".
 - **The figure**: over the world's year, the compute audit's part in GB with its copies of the weights, its bits a
   request and the requests it is priced over, how its proving time is priced by the row's plan and what prices it by
   source, row `(i) honest` under its label, what its rows say of their pricing, then the network
-  certifier's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
-  network certifier's label for what rests on the simulated card, then the output count, then how the stop class of
-  the network certifier's rows is charged, with the runs handed to the stop verdicts' reader and the reader's own
-  lines. The network certifier's
+  attester's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
+  network attester's label for what rests on the simulated card, then the output count, then how the stop class of
+  the network attester's rows is charged, with the runs handed to the stop verdicts' reader and the reader's own
+  lines. The network attester's
   figures end with their ε over the world's year and the δ of the scans it sums, and the sums with their error.
-  Where the ε is 1 or more the network certifier's part is "no bound at this period", with the ε, in place of every
+  Where the ε is 1 or more the network attester's part is "no bound at this period", with the ε, in place of every
   amount of it, the output count among them; where the two parts' errors sum to 1 or more, so are the two together.
-  One line gives the errors: the compute audit's δ over the monitoring period, the network certifier's ε with the
+  One line gives the errors: the compute audit's δ over the monitoring period, the network attester's ε with the
   scans' δ and the execution phases it sums, and their sum. One more line gives the compute audit's part with the
   network check's own proving taken off the audit budget (`--network-check-share`, assumed: no run measures it and
   the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
-  (derived from other figures), `simulated` (what a stand-in does in its place: the network certifier's set-time
+  (derived from other figures), `simulated` (what a stand-in does in its place: the network attester's set-time
   card, the one such input), `assumed`, `missing` (a field a served run's record lacks, with its gap), `measured, at
   most` or `modeled, at most` (an upper bound: a served run's proving read from its sessions' seconds), or `run, not
   proved` (the stop class's verdicts, a run's, checked by a verifier no Lean proof covers yet). The compute audit's
@@ -362,7 +362,7 @@ plan of the case, is left out and listed under "Refused".
   planner's factor. Its share is marked `measured` only where the row's plan records what prices its proving and
   none of it is at the planner's assumed default; else it is `modeled`, the input's source says so in words, and
   the share of the plan's proving at that default is an input of its own, marked `assumed`. The network
-  certifier's are its calculator's own marks. The fleet, the request counted, a request of the plan and the weights
+  attester's are its calculator's own marks. The fleet, the request counted, a request of the plan and the weights
   are read by both. The advice is listed at 0 with what it leaves out, and so is the output count where a sum takes
   it at 0, with the sums and the execution phases they take it at 0 on; where no sum does, the inputs list no output
   count.
@@ -370,19 +370,19 @@ plan of the case, is left out and listed under "Refused".
   row's λ, the requests its rows are priced over, and each part of the total there. A β outside the pinned budgets is
   marked extrapolated. Under it, for each scope whose plan is read, its proving time by how its block families are
   priced, with the plan and its budget.
-- **The network certifier's part over the world's year**: a legend line a row, with its standing and, where the
+- **The network attester's part over the world's year**: a legend line a row, with its standing and, where the
   calculator gives the row one, its mark beside it (the `scan` row's accept, `run, not proved`); a row's mark the
   command has no name for is refused. Then each of its rows' schedules, cells, term at D_j = 2 with
   its multiple of the weights, term at D_j = 1 in a column whose header carries the label, and the entries, then the
   δ of its scans and its ε. A row whose release times are taken once carries the label in its name. A row whose ε is
   1 or more has "no bound at this period" in place of each amount.
 - **Each monitoring period over all compute**: a week, a month and a year of the reference datacenter and of the
-  world, with the compute audit's part as a pooled total and in bits a request, the network certifier's term of
+  world, with the compute audit's part as a pooled total and in bits a request, the network attester's term of
   record under the scan and the design before its stop block and with it, the two together, and the output
   count. Each part's amounts are followed by its error over that scope and monitoring period: the compute audit's
-  δ, the scans' δ and the network certifier's ε, and the error of the two together. A figure whose error is 1 or more
+  δ, the scans' δ and the network attester's ε, and the error of the two together. A figure whose error is 1 or more
   is "no bound at this period".
-- **Each monitoring period over all compute, under the label**: the same scopes, with the network certifier's term
+- **Each monitoring period over all compute, under the label**: the same scopes, with the network attester's term
   and the two together under `all three`, and under each other row at D_j = 1. Every amount's column carries the
   label in its header, and no amount of the table is of record. Each line ends with its errors, the table above's.
 - **SPOT's resampling holes in the code that ran**, over the compute audit's runs of record, or with `--served-run`
@@ -403,7 +403,7 @@ run (`RESEARCH_RUN_DIR` set) the command writes them into the run's `result.json
 share over each monitoring period of the document it has a value over (a week, a month and a year of a datacenter's
 and of the world's compute), with its `period` and `over` (`year` and `world` for the world's year), in GB a world
 year at 10% of compute and so on for each period. A period it has no value over (one no run of record holds, or where
-the network certifier's ε is 1 or more) is left out, but the world's year, the figure each metric's title names, which
+the network attester's ε is 1 or more) is left out, but the world's year, the figure each metric's title names, which
 is always written and written last, so a reader that keys a result's measurements by name alone, the last of a name
 winning, reads it:
 
@@ -411,12 +411,12 @@ winning, reads it:
   the compute audit's part, λ times the bound where row `(ii) honest`'s total is 10% of compute), and that part over
   each other period.
 - `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over each period.
-- `benchmarks/exfiltration-network-certifier-gb`: the network certifier's part of record, the `scan` row at D_j = 2;
+- `benchmarks/exfiltration-network-certifier-gb`: the network attester's part of record, the `scan` row at D_j = 2;
   over the world's year with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
 
 Each measurement's first input opens
-with its mark (`modeled`, and the network certifier's with the mark its calculator gives the `scan` row beside it), its
-second is its error over its period (the compute audit's δ, or the network certifier's ε at its scans' δ), and the
+with its mark (`modeled`, and the network attester's with the mark its calculator gives the `scan` row beside it), its
+second is its error over its period (the compute audit's δ, or the network attester's ε at its scans' δ), and the
 rest are the runs of record it read. The document is kept as
 `out/exfiltration.json`, the run's measurement file and its validation's evidence, and the fingerprint holds what
 ran. The print is the same in a run as outside one.

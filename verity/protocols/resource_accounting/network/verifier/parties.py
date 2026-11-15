@@ -1,4 +1,4 @@
-"""The network certifier's manifest on the deployment layer (`verity.runtime`): its parties and the two
+"""The network attester's manifest on the deployment layer (`verity.runtime`): its parties and the two
 channels that carry what the device hands another party, which a deployment configuration's table declares from
 here. It is the manifest alone: the device's party and the `ProtocolDef` are `../attester/device_party.py`'s.
 
@@ -13,14 +13,14 @@ network-certifier -> verifier   out-record {link, window}, the output value's re
                                 groups {}, a grouped run's requests and execution phases its body (structure)
 ~~~
 
-- **The network certifier** (`NETWORK_CERTIFIER`) is the auditor's device on a server's link, one a link. Its machine
+- **The network attester** (`NETWORK_CERTIFIER`) is the auditor's device on a server's link, one a link. Its machine
   gives it a clock (its grids release each bucket at a time fixed on its own clock), its own randomness (the
   capability `coins`: every salt it hides a record or a row under) and a signing key (`certificate.Signer`, whose
   one-time leaves sign each closed execution phase). Its pacer, its issuer and its link for the challenges
   (`../attester/coin_link.py`) are processes of the one device, not parties.
 - **The workers** (`WORKERS`, the developer's) and **the verifier** (`VERIFIER`, the auditor's) are SPOT's parties,
   each declared here as SPOT declares it (`spot.verifier.parties.MANIFEST`).
-- The challenger stays SPOT's party. It runs on the network certifier's device, the auditor's, which a
+- The challenger stays SPOT's party. It runs on the network attester's device, the auditor's, which a
   configuration's table states (`config.Component.colocated`): a manifest names only its own parties.
 
 The two messages are the two parts of the output value the certifier relayed (`out_commit.CertifiedOut`), for the egress

@@ -2,7 +2,7 @@
 Python reference (`reference.py`: the trial's composition rule, in which any rejection rejects the whole, over the harness's framing of the
 core interface and the subprotocols' own Python). Hypothesis samples each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
-`pouw_period_cases`, the network certifier's period `build`, the inference-only policy's `sampled`, which is
+`pouw_period_cases`, the network attester's period `build`, the inference-only policy's `sampled`, which is
 never undecided, SPOT's audits under the form ``one-stage``, `form_case`: one-stage v2's over `sessionless_draws`
 (an audit whose sample at its challenger's coins is one proof block, which names no session) with one of `V2_BREAKS` or the form's
 breaks, and one-stage v1's `changed_audits`, which the form refuses by name, the wipe's signed wipes,

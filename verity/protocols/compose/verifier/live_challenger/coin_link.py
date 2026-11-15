@@ -1,4 +1,4 @@
-"""The network certifier's coin link for one window's session, on the challenger's host
+"""The network attester's coin link for one window's session, on the challenger's host
 (`verity.protocols.resource_accounting.network.attester.coin_link`): the one path the session's coins take to its peer, counted and re-clocked
 on the link's grids.
 
@@ -14,7 +14,7 @@ connects to LISTEN. It prints `listening 127.0.0.1:LISTEN` and relays each conne
 until SIGTERM, the tunnel's end or `--minutes`; then it runs to the end of its execution phase and writes `coin-link.json` to
 `--out` (`CoinLink.summary`, with PORT, LISTEN, the peer and how the tunnel ended), which the window's `end` entry seals.
 The defaults are D7's parameters (`CoinLinkParams`). The link's origin is read on the clock its ticks read, the network
-certifier's (`pacer.raw_clock`); on a host that gives no such clock the link refuses to start.
+attester's (`pacer.raw_clock`); on a host that gives no such clock the link refuses to start.
 
 The tunnel goes straight to the peer: `ProxyJump` and `ProxyCommand` are `none`, and a `--peers` line that names a jump
 or a proxy is refused, so the coins leave this host encrypted to the peer's own sshd and are read on no other host

@@ -1,7 +1,7 @@
-"""capture-flows: a packet capture summed by flow and direction, and held against the network certifier's record of the
+"""capture-flows: a packet capture summed by flow and direction, and held against the network attester's record of the
 same run.
 
-A run through the network certifier (`network_certifier_serve.py serve`) leaves the certifier's own count of what it sent the
+A run through the network attester (`network_certifier_serve.py serve`) leaves the certifier's own count of what it sent the
 server and what the server sent it. A capture taken beside the run, by a machine that is neither the server nor the
 certifier, counts the same bytes a second time. This reads the capture, sums it, says for the flows between the
 server and the certifier whether the two counts agree in each direction, and lists every other flow that has an
@@ -433,7 +433,7 @@ def read_flows(paths: list[Path], servers: list[tuple[bytes, int | None]],
 
 
 def record_counts(run: Path) -> dict:
-    """What the network certifier's record of the run in `run` (`network_certifier_serve.py serve`'s directory) says each of its
+    """What the network attester's record of the run in `run` (`network_certifier_serve.py serve`'s directory) says each of its
     connections to the server carried (the module docstring's "Which bytes are compared"): each admitted connection's
     `release` (its place in the release order, None if it was never released), `to_server` and `from_server`, whether
     they are `exact`, and `why` not (then the first is a ceiling and the second a floor); the watermark stream's where

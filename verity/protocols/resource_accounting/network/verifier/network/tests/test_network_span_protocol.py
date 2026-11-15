@@ -105,7 +105,7 @@ def test_each_rejection_has_its_own_reason(server):
     """Lean and the mirror each reject a span for the reason its change is aimed at: a mark on another link name, an
     ingress one, one under another key or in another session, one its salt and message do not open; marks out of
     order; an execution phase missing, in the span or in its tail, shown twice or outside, a second execution phase
-    of tail under the edge schedule among them; an execution phase with no certificates, as the network certifier
+    of tail under the edge schedule among them; an execution phase with no certificates, as the network attester
     leaves one it faulted or refused a connection in; an egress or a fails certificate on another link name, at
     another execution phase, an ingress one or one that does not verify; and an egress cells' head that names another
     schedule, or is another execution phase's, link's, session's or key's. Neither reason holds a number: none names
@@ -129,10 +129,10 @@ def test_each_rejection_has_its_own_reason(server):
 @lean
 def test_the_registered_hardware_refuses_the_parameters(server):
     """Lean and the mirror refuse the parameters on every form of each change to the registered hardware: a link that
-    is none of the site's, or that joins something else than a network certifier and a host; a certifier that
+    is none of the site's, or that joins something else than a network attester and a host; a certifier that
     registers another key, or one that is not lower-case hex; a site without a head and a head without a site; a site
     that is not one a registration log's view writes. A refusal by the registered hardware names what is public
-    there, in the same words on both sides: the link, the site's network certifiers' links, the certifier and its
+    there, in the same words on both sides: the link, the site's network attesters' links, the certifier and its
     registered key. With the site, an honest span's answer is the one without it."""
     for m, forms in SITE_FORMS.items():
         for n in range(forms):

@@ -1,6 +1,6 @@
 # mempool: vLLM's page pool as a reference machine
 
-`CacheStep_v3`, the network certifier's cache step, checks a window's calls to vLLM's page pool as memory-checked RAM.
+`CacheStep_v3`, the network attester's cache step, checks a window's calls to vLLM's page pool as memory-checked RAM.
 This directory holds a prototype of the reference that step is held to, and what the step costs:
 
 - `pool_ram.py`: the page pool as a machine over word-addressed memories, every read and write one access under offline

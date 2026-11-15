@@ -1,7 +1,7 @@
 """`verity-vllm serve-openai` under ``--admit tick`` with a Commit, when the watermark names a release lost: what the
 Commit, the scheduler's trace and each window's advice hold of its request, and that the run still encodes under the
 certified tick. The stand-in server of `test_serve_advice` (its HTTP side, engine loop and Commit as `main` runs them),
-the gate over its advice trace as `main` puts it, serves one run whose watermark the test sends as the network certifier
+the gate over its advice trace as `main` puts it, serves one run whose watermark the test sends as the network attester
 writes it (`release.watermark_chunk`): a release's request is in the engine when its bucket's line names it lost, and
 another's comes after the line that names it. The first is answered and aborted with a Commit record of an abort after 0
 ids in no window, which passes; the scheduler never sees it, so the trace, every window's advice and the certified record
@@ -157,7 +157,7 @@ def test_a_run_with_a_lost_release_commits_it_as_an_abort_after_0_and_encodes_un
         compile_steps(REG, WA.encode(a), {x.id: bodies[x.id] for x in a.requests})
 
     # a certified record holds a request by its output ids, so it can't hold the dropped one. The record of the rest, as
-    # the test stands in for the network certifier's (each request at its release bucket, counted from the first, and
+    # the test stands in for the network attester's (each request at its release bucket, counted from the first, and
     # its outputs released the bucket after): the tick's replay of it is the steps the engine ran, to the gate's own T
     with pytest.raises(V1.AdviceCodeError, match="request na-lost: a prompt, an output and max_tokens of at least one"):
         V1.Request("na-lost", tuple(q["prompt_ids"]), LOST["max_tokens"], tuple(q["streamed_ids"]), 0, ())

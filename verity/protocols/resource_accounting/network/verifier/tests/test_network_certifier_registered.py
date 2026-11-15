@@ -1,4 +1,4 @@
-"""The network certifier's link and key read from the registered hardware (`registered.py`): the accepting case, each
+"""The network attester's link and key read from the registered hardware (`registered.py`): the accepting case, each
 refusal by its message, a site that is no site, and the Python held to the Lean (`NetworkCheck.Registered`) on the same
 vectors: the cases below and seeded sites around them, each answered by `tests/lean/RegisteredVectors.lean` in the
 certifier check's Lake package and by the Python, which agree on the registered link, on each refusal's message and on
@@ -39,7 +39,7 @@ def link(i: str, a: str, b: str, beta: int | None, unmediated: str | None = None
 
 
 def view_site() -> dict:
-    """A site as a registration log's view writes it: a host behind a network certifier, which splits its uplink, and
+    """A site as a registration log's view writes it: a host behind a network attester, which splits its uplink, and
     a memory challenger; beside them a second host behind a second certifier, a link between the two hosts, the second
     host's bare uplink, which states no capacity and says why no certifier splits it, and an auditor's device with a
     link to the first host. Each field a location may state is stated on one of them."""

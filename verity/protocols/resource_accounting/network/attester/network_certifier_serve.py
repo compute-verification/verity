@@ -1,34 +1,34 @@
-"""network-certifier-serve: the active network certifier (`verity.protocols.resource_accounting.network.verifier.network_certifier`) on one host, a relay in front of any TCP
+"""network-certifier-serve: the active network attester (`verity.protocols.resource_accounting.network.verifier.network_certifier`) on one host, a relay in front of any TCP
 server, and the offline check of what it published.
 
-**Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
+**Topology.** Each client connection reaches the network attester's listener. The network attester opens one
 connection to the server (`--upstream HOST:PORT`) for it and forwards each direction's bytes unchanged in content, on
 its schedule, in B-byte cells; the client speaks cells through the thin, workload-blind shim (`network_certifier.cells` sending,
 `network_certifier.Shim` reading):
 
-    client ──cells──▶ network certifier ──bytes──▶ server ──bytes──▶ network certifier ──cells──▶ client
+    client ──cells──▶ network attester ──bytes──▶ server ──bytes──▶ network attester ──cells──▶ client
 
 **The egress form** (`--egress`, `network_certifier`'s "The egress form"). `serve` releases the id form, the egress record's, by
 default: only `io_tie`'s id-form cells leave, and a server's other bytes fail their connection (format). `rehearse`
 names its traffic's: `id` with `--ids`, whose answers are id-form responses, else `bytes`, a relay of vLLM's stock
 framing and the fake's text whose parameters no period check takes. Beside that gate nothing here is the network
-certifier's but bytes. Tonight's clients send HTTP/1.1 requests for vLLM's streamed
-`/v1/completions` with `Connection: close`, so the server's end of stream ends egress (the network certifier never
+attester's but bytes. Tonight's clients send HTTP/1.1 requests for vLLM's streamed
+`/v1/completions` with `Connection: close`, so the server's end of stream ends egress (the network attester never
 half-closes toward a server). The server gets each request whole at its release, with its place in the network
-certifier's release order, its release bucket and the network certifier's run id (`release`), which `deployment.json`
-names (`run_id`). With `--watermark` the network certifier also sends the server the watermark stream (`release`'s
+attester's release order, its release bucket and the network attester's run id (`release`), which `deployment.json`
+names (`run_id`). With `--watermark` the network attester also sends the server the watermark stream (`release`'s
 `POST /verity/watermark`, one line `t n` a tick, naming the releases its server connections lost) on a connection of
 its own, which it never reads; `warden.json` keeps its last line, the lost releases and why it stopped, if it did
 (`watermark`).
 
 **What it can't enforce here.**
-- Run directly, the network certifier runs on the server's host (`trusted-device` stands for the auditor's device). The
+- Run directly, the network attester runs on the server's host (`trusted-device` stands for the auditor's device). The
   gate's `warden-rehearse` (`verity/protocols/compose/verifier/live_challenger/auditor.py`) runs it on the auditor's device instead, the server
   reached through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other
   route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the network
-  certifier's own clock, its host's raw clock (`origin_raw`).
+  attester's own clock, its host's raw clock (`origin_raw`).
 - The keys are LMS at H = `ck.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
   is H = 20 (the auditor gate's default, `verity/protocols/compose/verifier/live_challenger/auditor.py`).
 
@@ -67,7 +67,7 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--max-tokens-cap N]
 
 - `keys` makes the key directory: the LMS key, its leaf state and, with a key made there, its device state
-  (`make_key`; `certificate.DeviceState`): the key's life so far, in milliseconds on the network certifier's clock,
+  (`make_key`; `certificate.DeviceState`): the key's life so far, in milliseconds on the network attester's clock,
   and the sessions started under it.
 - `serve` runs on the host's raw clock and no other (the device's "The clock"), and refuses to start where the host
   has none. It holds the key's device state from before its first tick until its publisher has closed, so a second
@@ -76,20 +76,20 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   moves the life on by the run's whole span, `--windows` execution phases of T ticks, before the base is signed: a run
   that ends early has used its whole span. The publisher signs the start's certificate at that base and ordinal
   (`certificate.CertifiedStart`) before the origin is set.
-  `serve` then writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters
+  `serve` then writes `deployment.json` (the network attester's public key, the session, the schedule's parameters
   and their digest, the start's certificate, the origin) and beside it `endpoints.json` (the listener and the
-  endpoint, which a client reads and nothing publishes). The origin is there on the network certifier's clock
+  endpoint, which a client reads and nothing publishes). The origin is there on the network attester's clock
   (`origin_raw`) and as wall time: `origin_unix` is one reading of the host's wall time at the origin, and wall
-  time minus it is not the network certifier's bucket, since the host steers its wall time and not the raw clock.
-  `serve` runs the network certifier for `--windows` windows, each bucket released by its
-  pacer `--paced-ms` after its boundary (`network_certifier`'s "The pacer"; 0: written on the network certifier's loop), and writes
+  time minus it is not the network attester's bucket, since the host steers its wall time and not the raw clock.
+  `serve` runs the network attester for `--windows` windows, each bucket released by its
+  pacer `--paced-ms` after its boundary (`network_certifier`'s "The pacer"; 0: written on the network attester's loop), and writes
   `warden.json` (each connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their
   windows, each bucket's pacer report, `paced`, and how far the host's wall time parted from the network
-  certifier's clock between the origin's setting and the last tick, `clocks`). Each window's records go to
+  attester's clock between the origin's setting and the last tick, `clocks`). Each window's records go to
   `requests.records`, `responses.records` and `fails.records` (each failed connection's reason, witness), and each
   is certified
-  (`certificate.Issuer`, with the network certifier's parameters digest) into `certified.jsonl`, except a window in
-  which the network certifier refused a connection, whose records and rows it certifies and signs none of (`network_certifier`'s
+  (`certificate.Issuer`, with the network attester's parameters digest) into `certified.jsonl`, except a window in
+  which the network attester refused a connection, whose records and rows it certifies and signs none of (`network_certifier`'s
   "Admission"). Each window of the wire's two records is also committed as rows, a row a bucket, with its wiring
   (`network_certifier_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows and row bytes),
   `cells.salts` the rows' salts and the wiring's (witness, the prover's, who holds the records the rows and the
@@ -98,8 +98,8 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   less the registration's wiring and the cost, which are private, and by a list of its own, so a key added to the
   line fails the gate until the list rules it. All of that is done by a spawned process (`PublisherProcess`), which
   alone holds the key and
-  gets each tick's rows as the network certifier releases them: a window's commit can take seconds of CPU, and in the
-  network certifier's own process, even on another thread, it holds the ticker's GIL and puts ticks past their slack.
+  gets each tick's rows as the network attester releases them: a window's commit can take seconds of CPU, and in the
+  network attester's own process, even on another thread, it holds the ticker's GIL and puts ticks past their slack.
   Before the origin `serve` runs on the C allocator (it re-executes itself with `PYTHONMALLOC=malloc`) and makes its
   process ready for the run's growth (`prepare_process`: its descriptor table, its heap, its pages locked where
   permitted), and from it to the end a process of its own (`stall_probe`, unless `--no-stall-probe`) samples every
@@ -107,10 +107,10 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   function it slept in; `warden.json` keeps what was prepared (`process`) and each thread's episodes and page faults
   (`stalls`).
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
-  to the network certifier's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and
+  to the network attester's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and
   arrival, the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them. Its descriptor
   table holds every connection before it sends (`reserve_fds`): its process has numpy's threads too, and a table grown
-  mid-run put cells that left the network certifier on time a bucket late (168 ms, every connection open as the client
+  mid-run put cells that left the network attester on time a bucket late (168 ms, every connection open as the client
   passed 256).
 - `check` (`check`): the session's start is certified under the deployment's key and session for its schedule
   (`check_start`), every window of the three records has a certificate that verifies and whose head is the
@@ -118,7 +118,7 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   their salts (`check_cells`), the audit (`network_certifier.audit`) accepts the records, and every connection's client got
   exactly its egress record's cells, each in its bucket, its request is the ingress record's and its response the
   egress record's; `check.json`. With `--key-sha512 HEX --session HEX`, which the auditor hands it, the SHA-512 of
-  the network certifier's public key and its session, a deployment record that names another key or session is a
+  the network attester's public key and its session, a deployment record that names another key or session is a
   problem, the first of the problems `check.json` lists. With `--registrations FILE` besides, a check that found no
   problem writes there what it was checked under and then each registration of connection rows it held, one a
   line (`connection_rows_run`'s "The registrations' file"); `--registrations` without the two is refused.
@@ -170,25 +170,25 @@ client does, and writes no `traffic.json`, `client.log` or `client.json`.
 **The connection rows** (`connection_rows_run`). `serve` and `rehearse` take `--lengths 1|2 [--content P,O[,ROWS] ...]`,
 the schedule's lengths rows and its content rows' classes (`P,O,ROWS` under `--lengths 1`, `P,O` under `--lengths 2`,
 where a class's tables hold a row a release filed in it), and with `--lengths 2`, `--content` and `--max-tokens-cap`
-`--request-words`, a fourth table a class of what the network certifier reads of each released request (its
+`--request-words`, a fourth table a class of what the network attester reads of each released request (its
 `max_tokens` and count of prompt ids), which `rehearse` passes to its `serve`; without them a
-run is what it was. With them the network certifier hands each execution phase's releases once the next one's records
+run is what it was. With them the network attester hands each execution phase's releases once the next one's records
 are published, and the publisher process lays that execution phase's tables, commits them and signs their one head:
 `rows.jsonl` (the registration and the cost, the run's private side as `cells.jsonl` is) and `rows.salts` (witness),
 and with `--content` `filed.jsonl` (witness: the releases filed in each class, for the prover's serve). `check` holds
 every execution phase that has connection rows to a registration that verifies and whose head is the tables laid from
 the records. Under `--lengths 2` every execution phase of the run ends, its last at the run's last close: in its
-head, or in the network certifier's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each
-to the one that is due. The network certifier then admits nothing in the run's last `NetworkCertifierParams.span` buckets, so
+head, or in the network attester's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each
+to the one that is due. The network attester then admits nothing in the run's last `NetworkCertifierParams.span` buckets, so
 `rehearse` runs long enough for its last request to be admitted before them (`closing_windows`). An arrival in them
 is turned away (`network_certifier`'s "The lengths rows"): no refusal, so no window's records are withheld for it. Its client
 reads the one `REFUSED` cell a refused one does, `warden.json` counts it on its own (`turned_away`, `counts`), and
 `check`'s summary has that count beside the clients' refused outcomes, which hold it. With `--head-offset N
 --head-wait W` beside `--lengths` (`network_certifier`'s "The head's tick") the publisher process writes no line: it hands each
-one back, and the network certifier's tick appends it to `rows.jsonl` at the tick the schedule gives it, N buckets
+one back, and the network attester's tick appends it to `rows.jsonl` at the tick the schedule gives it, N buckets
 after the close that handed its execution phase or up to W ticks later. A line not back by then is never written, and
 the tick writes its note that the line missed. The run ticks on past its last window until its last line has left or
-missed. A line holds no tick: the tick it left at is the network certifier's own note, in `warden.json` alone
+missed. A line holds no tick: the tick it left at is the network attester's own note, in `warden.json` alone
 (`heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which is
 not built. `check` counts the execution phases whose line missed, which have no head.
 """
@@ -253,9 +253,9 @@ HERE = Path(__file__).resolve().parent
 #: in a key directory, beside the key and its leaf state: the key's device state (`certificate.DeviceState`)
 DEVICE = "device.json"
 #: the heap `prepare_process` grows and touches before the origin, a lane's and at least: heavy's opening burst through
-#: the network certifier (1000 connections at 300 a second, 1 KiB cells) grew its heap by about 35 KB a connection
+#: the network attester (1000 connections at 300 a second, 1 KiB cells) grew its heap by about 35 KB a connection
 RESERVE_PER_LANE, RESERVE_MIN = 256 << 10, 64 << 20
-#: the descriptors the network certifier holds beside its connections' (its listener, loop, pipes and the probe's)
+#: the descriptors the network attester holds beside its connections' (its listener, loop, pipes and the probe's)
 FD_MARGIN = 256
 #: in the environment of a `serve` that re-executed itself on the C allocator, so that it does so once
 C_ALLOCATOR = "WARDEN_SERVE_C_ALLOCATOR"
@@ -335,7 +335,7 @@ def group_windows(params: NetworkCertifierParams, tokens: int) -> int:
     """The execution phases a group of at most `lanes` id requests takes when it arrives half a bucket into a window's
     first bucket (`prompt_traffic`'s ``window_per_group``), each answered by at most `tokens` id events and the trailer:
     admitted by the bucket after its arrival's (and one more for the client's lag), its last egress cell in bucket
-    s + D + ⌊tokens/r⌋ (the network certifier's schedule), so a group's cells are all in its own windows."""
+    s + D + ⌊tokens/r⌋ (the network attester's schedule), so a group's cells are all in its own windows."""
     return -(-(params.delay + tokens // params.slots + 3) // params.window)
 
 
@@ -406,7 +406,7 @@ def fake_ids(body: dict) -> list[int]:
 
 def id_response(ids: list[int], payload: int) -> bytes:
     """An id-form response as the scan's egress reads it: one `io_tie.id_event` of P = `payload` bytes an id, each one
-    `DATA` cell, then `io_tie.TRAILER`, which the network certifier's `END` holds."""
+    `DATA` cell, then `io_tie.TRAILER`, which the network attester's `END` holds."""
     return b"".join(IT.id_event(x, payload) for x in ids) + IT.TRAILER
 
 
@@ -500,7 +500,7 @@ async def fake_endpoint(reader: asyncio.StreamReader, writer, *, sleep=asyncio.s
     model, `fake`, so that a rehearsal that names no model (the gate's `warden-rehearse`) runs against it too. With
     `id_payload` P it answers every request `first_s` after with its `fake_ids` as one id-form response
     (`id_response`), whole, and no HTTP head: the bytes the scan's egress reads. The watermark stream
-    (`--watermark`) it reads to its end and answers nothing, since the network certifier reads nothing back."""
+    (`--watermark`) it reads to its end and answers nothing, since the network attester reads nothing back."""
     try:
         head = await reader.readuntil(b"\r\n\r\n")
         if head.startswith(b"POST " + WATERMARK_PATH + b" "):
@@ -545,7 +545,7 @@ async def fake_endpoint(reader: asyncio.StreamReader, writer, *, sleep=asyncio.s
 
 
 async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int = 4, clock=time.monotonic) -> dict:
-    """Each request of `traffic` straight to the server, `in_flight` at a time, no network certifier: per request the
+    """Each request of `traffic` straight to the server, `in_flight` at a time, no network attester: per request the
     seconds to its first byte and to the server's close, its bytes, and the bytes a second between them (what r·P a
     bucket and D must stay under and cover)."""
     host, gate = "%s:%d" % upstream, asyncio.Semaphore(in_flight)
@@ -572,10 +572,10 @@ async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int =
             "statuses": sorted({str(r["status"]) for r in rows})}
 
 
-# The network certifier's run.
+# The network attester's run.
 
 class Publisher:
-    """The network certifier's `publish`, inline: each record packed to its file (`requests.records`,
+    """The network attester's `publish`, inline: each record packed to its file (`requests.records`,
     `responses.records`, `fails.records`), and certified by `issuer` under its link name and direction (`CERTIFIED`)
     with the schedule's parameters digest, one line of `certified.jsonl` each, or the execution phase under `refused`;
     the wire's two also committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's
@@ -589,7 +589,7 @@ class Publisher:
         self.keep(record, grid)
 
     def withhold(self, record: BlockGrid, grid: GridParams) -> None:
-        """The network certifier's `withhold`: a record of a window in which it refused a connection, kept and committed as
+        """The network attester's `withhold`: a record of a window in which it refused a connection, kept and committed as
         `keep` does but neither certified nor signed, its execution phase under `refused` with ``"withheld": true``."""
         self.keep(record, grid, withheld=True)
 
@@ -650,7 +650,7 @@ def grid_digest(grid) -> bytes:
 
 
 def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
-    """The load's heads (`heads`, the relay's ``load-heads.json``) signed by the network certifier's `issuer` in its
+    """The load's heads (`heads`, the relay's ``load-heads.json``) signed by the network attester's `issuer` in its
     session, before it serves: ``load.json`` in `out` (`load_relay.load_doc`), the load's registrations the block record
     pins, under the key and session that then certify the run's windows. Raises `load_relay.Refused` when the signer
     refuses."""
@@ -661,7 +661,7 @@ def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
 
 
 def make_key(directory: Path, height: int = ck.HEIGHT) -> lms.PrivateKey:
-    """The network certifier's key directory, made or loaded (`certifier_key.load_key`), and with a key made here
+    """The network attester's key directory, made or loaded (`certifier_key.load_key`), and with a key made here
     its device state (`DEVICE`, `certificate.DeviceState`): created once, with the key, at none of its life used. A
     key that was already there keeps its device state as it is, and one without it is given none: nothing says how
     much of its life it has used, so `serve` refuses to start under it."""
@@ -674,7 +674,7 @@ def make_key(directory: Path, height: int = ck.HEIGHT) -> lms.PrivateKey:
 
 def registered_key(key: Path) -> LmsKey:
     """The registered key of the key directory `key`, read from its ``public.json``. A directory without one holds
-    no key the network certifier starts under (`StartRefused`)."""
+    no key the network attester starts under (`StartRefused`)."""
     try:
         return RF.read_public(json.loads((key / "public.json").read_text()))
     except (OSError, ValueError, KeyError, TypeError) as e:
@@ -684,7 +684,7 @@ def registered_key(key: Path) -> LmsKey:
 def certify_start(issuer: Issuer, base_ms: int, ordinal: int, params: NetworkCertifierParams) -> CertifiedStart:
     """The start's certificate of `issuer`'s session (`Issuer.certify_start`, under `LINK`): the session starts at
     `base_ms` of its key's life, is the key's session number `ordinal`, and runs under `params`'s schedule. A signer
-    that refuses raises `SignerRefused`, and the network certifier does not start."""
+    that refuses raises `SignerRefused`, and the network attester does not start."""
     start = issuer.certify_start(LINK, base_ms, ordinal, params.digest)
     if start is None:
         raise SignerRefused(f"the signer refused the start of session {issuer.session.hex()}")
@@ -699,7 +699,7 @@ def start_json(start: CertifiedStart) -> dict:
 
 def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: NetworkCertifierParams, commit,
                     load_heads: Path | None, base_ms: int, ordinal: int, lines=None) -> None:
-    """`PublisherProcess`'s process: the network certifier's key and its leaf state are this process's alone. It signs
+    """`PublisherProcess`'s process: the network attester's key and its leaf state are this process's alone. It signs
     the load's heads first when there are any (`sign_load`), then the start's certificate of its session at `base_ms`
     and `ordinal` (`certify_start`), sends that and the public key, rebuilds each record from its released rows, keeps
     it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and at the end sends the
@@ -746,13 +746,13 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
 
 
 class PublisherProcess:
-    """`serve`'s `publish` and `release`: `Publisher` in one spawned process, which alone holds the network certifier's
-    key. `release` hands it each grid's row as the network certifier ticks (its frames as one bytes object), and
+    """`serve`'s `publish` and `release`: `Publisher` in one spawned process, which alone holds the network attester's
+    key. `release` hands it each grid's row as the network attester ticks (its frames as one bytes object), and
     `__call__` the record's close with its grid's SHA-512 (`grid_digest`), hashed a row at a time as each is released
     and held to the record's grid at its close: the ticker only queues them, and the queue's own thread pickles each
     tick's few kilobytes, never a whole window. The process rebuilds each record from its rows, refuses one whose grid
     isn't the marker's, and keeps, certifies and commits it, so neither a commit nor a signature takes the ticker's GIL.
-    `key` is the network certifier's public key; `close` waits for every record and gives the issuer's refusals; `usage`
+    `key` is the network attester's public key; `close` waits for every record and gives the issuer's refusals; `usage`
     is then the process's own. A process that exits early, killed or failed, raises at the next close or at `close`.
     `commit` stands in for `Cells.of` (a test's). With `load_heads` the process signs the load's heads before anything
     else (`sign_load`), so construction returns once ``load.json`` is written. It then signs the start's certificate
@@ -825,7 +825,7 @@ class PublisherProcess:
         self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest(), withheld)))
 
     def withhold(self, record: BlockGrid, grid: GridParams) -> None:
-        """The network certifier's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
+        """The network attester's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
         self(record, grid, withheld=True)
 
     def close(self) -> list:
@@ -842,7 +842,7 @@ class PublisherProcess:
     def heads(self, back, ended=None) -> None:
         """In a schedule with a head offset: from now `back(execution phase, line)` takes each line of connection
         rows the process sends back, on a thread of this object's that only waits on them, until the process says
-        it sends no more or is gone, when the thread calls `ended()` if given. `serve` has the network certifier's
+        it sends no more or is gone, when the thread calls `ended()` if given. `serve` has the network attester's
         loop hand each line to `NetworkCertifier.head_back`. A process that is gone without that word raises on the thread,
         as it does at `close`."""
         if self.lines is None or self._reader is not None:
@@ -860,7 +860,7 @@ class PublisherProcess:
         self._reader.start()
 
     def lengths(self, window: int, strides) -> None:
-        """The network certifier's `lengths`: an execution phase's hand, queued a slot stride an item
+        """The network attester's `lengths`: an execution phase's hand, queued a slot stride an item
         (`runner_parts.hand`); the process lays its tables, commits them and signs their head
         (`runner_parts.Keeper`), or, for one that ends without releases (`strides` None), signs the word
         that it has no head."""
@@ -871,12 +871,12 @@ class PublisherProcess:
 def deployment_record(params: NetworkCertifierParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
                       slack: float, run_id: bytes | None = None, start: dict | None = None,
                       origin_raw: float | None = None) -> dict:
-    """`deployment.json`, the auditor's record of a run: the network certifier's public key and session, the schedule's
+    """`deployment.json`, the auditor's record of a run: the network attester's public key and session, the schedule's
     parameters and their digest, the start's certificate (`start_json`: where the session starts on its key's life),
     the origin, and the run id its server's requests carry. Its addresses are `endpoints_record`'s. The origin is
-    given twice: `origin_raw` is its reading on the network certifier's clock, which a process on its host reads the
+    given twice: `origin_raw` is its reading on the network attester's clock, which a process on its host reads the
     grid by. `origin_unix` is one reading of the host's wall time, taken when the origin was set: wall time minus it
-    is not the network certifier's bucket, since the two clocks part at the rate the host steers its wall time
+    is not the network attester's bucket, since the two clocks part at the rate the host steers its wall time
     (`clocks_parted`)."""
     return {"key": RF.public_json(key), "session": session.hex(), "link": LINK,
             "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000, "start": start,
@@ -885,7 +885,7 @@ def deployment_record(params: NetworkCertifierParams, key: LmsKey, session: byte
 
 
 def endpoints_record(listen: tuple[str, int], upstream: tuple[str, int]) -> dict:
-    """`ENDPOINTS`: where the network certifier listened and the endpoint it relays to, which a client reads."""
+    """`ENDPOINTS`: where the network attester listened and the endpoint it relays to, which a client reads."""
     return {"listen": list(listen), "upstream": list(upstream)}
 
 
@@ -895,7 +895,7 @@ def read_endpoints(deployment: Path) -> dict:
 
 
 def clocks_parted(start: tuple[float, float], end: tuple[float, float]) -> dict:
-    """How far the host's wall time parted from the network certifier's clock between two readings of both (each a
+    """How far the host's wall time parted from the network attester's clock between two readings of both (each a
     pair: the clock's, then the wall's): the seconds each counted, and the wall's gain on the clock in milliseconds
     and in milliseconds an hour of the clock. It is what one run saw, a step of the wall time included, and no bound
     on either clock."""
@@ -938,7 +938,7 @@ def reserve_fds(n: int) -> int:
 
 
 def prepare_process(params: NetworkCertifierParams) -> dict:
-    """The network certifier's process made ready before its origin, so that no tick waits in the kernel (state D) on
+    """The network attester's process made ready before its origin, so that no tick waits in the kernel (state D) on
     what the run's growth would otherwise ask of it then:
     - descriptors: its table holds every connection's two and every queued one's (`reserve_fds`): the opening burst of
       the trace corpus's heavy trace grew it past 256, 512 and 1024 descriptors, and the ticker waited a grace period at
@@ -987,29 +987,29 @@ async def serve(params: NetworkCertifierParams, out: Path, *, upstream: tuple[st
                 announce=cli._announce, probe: bool = False, process: dict | None = None,
                 load_heads: Path | None = None, paced_ms: float = cli.PACED_MS, watermark: bool = False,
                 clock=raw_clock, sleep=None, wall=time.time, sock: socket.socket | None = None) -> dict:
-    """One run of the network certifier on its host's raw clock (the module docstring's `serve`), on the listening
+    """One run of the network attester on its host's raw clock (the module docstring's `serve`), on the listening
     socket `sock` when given (its caller's, bound at `listen`: "A session") and else one it binds at `listen`, its
     records published by a `PublisherProcess` that holds the key in `key` and first signs the load's heads
     `load_heads` when given, its threads sampled by `stall_probe` when `probe`, each bucket released by its pacer
-    `paced_ms` after its boundary (`NetworkCertifier(paced=…)`, which a network certifier on the host's clock must have), and the watermark
+    `paced_ms` after its boundary (`NetworkCertifier(paced=…)`, which a network attester on the host's clock must have), and the watermark
     stream sent to `upstream` when `watermark` (`NetworkCertifier(watermark=…)`). Returns what `warden.json` holds, with
     `process`, what `prepare_process` did.
     The loop's errors are kept, not logged: the ticker writes no file, but in a schedule with a head offset, where
     the tick a line of connection rows leaves at appends it to `rows.jsonl` (`runner_parts.Lines`): the
     publisher's process hands each line back, and nothing off the tick publishes one. `warden.json` then has
     `heads`, each execution phase with the tick its line left at, or null for one that was never written. With
-    `paced_ms` 0 there is no pacer, which the network certifier refuses on a clock of its host's: only a run on a
+    `paced_ms` 0 there is no pacer, which the network attester refuses on a clock of its host's: only a run on a
     caller's own clock has none.
 
     It starts in this order, and a step that refuses starts nothing after it. The clock is read: a host without the
-    raw clock runs no network certifier (`pacer.ClockRefused`). The key's device state (`DEVICE` in `key`) is opened
+    raw clock runs no network attester (`pacer.ClockRefused`). The key's device state (`DEVICE` in `key`) is opened
     and held until the publisher has closed, so no other run under the key ticks or signs meanwhile, and gives the
     session its base: the key's life, moved on by the run's whole span on disk before the base is used
     (`certificate.StartRefused` for a state that is held, missing or another key's, and for a session already
     started). The publisher signs the start's certificate at that base. Only then is the origin set, a reading of
     the clock, with the host's wall time read beside it; both are read again when the last tick is done, and
     the run's log says how far they parted (`clocks`, `clocks_parted`). `clock`, `sleep` and `wall` are the network
-    certifier's clock, its wait and the host's wall time, for a caller that drives a run itself."""
+    attester's clock, its wait and the host's wall time, for a caller that drives a run itself."""
     out.mkdir(parents=True, exist_ok=True)
     clock()
     registered = registered_key(key)
@@ -1101,7 +1101,7 @@ async def client(deployment: dict, endpoints: dict, traffic: list[dict], out: Pa
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
     shim, to the listener `endpoints` names; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is
     sent as its network-certifier-form id request (`id_form.id_request`, offset 0) and its response read as id-form. It
-    runs on the network certifier's host and reads that host's raw clock, the one the origin is a reading of
+    runs on the network attester's host and reads that host's raw clock, the one the origin is a reading of
     (`origin_raw`), so that a cell's arrival is laid against the grid on the grid's own clock however long the run."""
     params = NetworkCertifierParams(**deployment["params"])
     origin, listen = deployment["origin_raw"], tuple(endpoints["listen"])

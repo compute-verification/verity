@@ -1,28 +1,28 @@
-"""The network certifier's content rows: three rows of a connection it released, which hold what the connection
+"""The network attester's content rows: three rows of a connection it released, which hold what the connection
 carried where its slots of the lengths and fails tables (`connection_rows`) hold how much, and the tables a
 schedule's classes lay them in. A schedule has them only where its parameters say so (`NetworkCertifierParams.content`, in a
 schedule with lengths rows): a schedule without them has the tables, the head and the digest it had. A schedule
-with request words (`NetworkCertifierParams.request_words`) has a fourth row of each, the words the network certifier reads
+with request words (`NetworkCertifierParams.request_words`) has a fourth row of each, the words the network attester reads
 from its request, and a schedule without them has the tables, the head and the digest it had. The tables are listed
 in the connection rows' one head, after `lengths` and `fails`, and signed with them, once (`connection_rows`' "The
 signed head"): nothing here commits or signs.
 
 **The three rows** of one released connection, every field little-endian:
 
-- `request`: u32 bytes ‖ the request's bytes as the network certifier cut them, then zero bytes to the row's size.
-- `response`: u32 m ‖ O u32 ids. m is the `DATA` cells the network certifier released on the connection before its
+- `request`: u32 bytes ‖ the request's bytes as the network attester cut them, then zero bytes to the row's size.
+- `response`: u32 m ‖ O u32 ids. m is the `DATA` cells the network attester released on the connection before its
   `END` or its `FAIL`, one id each (`io_tie.parse_cell`), word p is cell p's id for p below m, and words m to O − 1
   are 0. The count is in the row because an id may be 0: the ids alone don't say where they end.
 - `end`: u16 class ‖ u16 at, in a fails slot's layout (`connection_rows.SLOT`): (0, n) where the connection ended in
   its `END` after n `DATA` cells and (1, n) where it ended in a `FAIL` after n. `at` is the `DATA` cells the network
-  certifier released, on an `END` too, where the fails table's own slot counts them before a `FAIL` alone.
+  attester released, on an `END` too, where the fails table's own slot counts them before a `FAIL` alone.
 
 **The words row** of a released connection, in a schedule with request words (`NetworkCertifierParams.request_words`, which
 a schedule has only with content rows under the lengths rows' form 2 and a response cap):
 
 - `words`: u32 `max_tokens` ‖ u32 the count of the prompt's ids, 8 bytes (`WORDS_ROW`).
 
-**A request's words** (`request_words`) are the network certifier's own reading of the request's bytes as it cut
+**A request's words** (`request_words`) are the network attester's own reading of the request's bytes as it cut
 them, and of nothing a server or a prover says. This is the one statement of the rule:
 
 - The request is cut in cells as the device cuts it (`network_certifier.cells`) and each cell is read as the device reads it
@@ -82,7 +82,7 @@ most ids a response of it releases (`most_released`): the longest request the sc
 class of that P holds, and with more ids than it holds the release would be filed in none.
 
 **The tables** (`tables`) of an execution phase are made from its releases in release order, each with its request's
-bytes and its ids as the network certifier cut and released them (`network_certifier.Released`), and from each release's class,
+bytes and its ids as the network attester cut and released them (`network_certifier.Released`), and from each release's class,
 which is an argument. Row r of each of class i's tables is the r-th of the execution phase's releases filed in
 class i. A release filed in no class is unfiled: it has no content row, and its slots of the lengths and fails tables are
 the ones it had. A release filed in a class that doesn't hold it, its request longer than `request_room` or its ids
@@ -98,27 +98,27 @@ more than O, is refused, never cut short.
   releases, so releases with one past it are no execution phase's of the schedule, and none of them is laid.
 - In a schedule with request words a class's words table holds, at row r, the words of the request of its request
   table's row r. A release filed in a class whose request `request_words` doesn't read is refused, naming the
-  release: it is no release of the network certifier's under the schedule. Neither is one whose `max_tokens` is 0
+  release: it is no release of the network attester's under the schedule. Neither is one whose `max_tokens` is 0
   or past the schedule's `max_tokens_cap` or whose ids are more than its `max_tokens`, which is refused the same
   way. These are `tables`' own checks of what the device already holds: in every table laid, a words row's
   `max_tokens` is from 1 to the schedule's and at least its response row's count, and its count of prompt ids is
   at most its class's P.
 
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
-release as the network certifier cut it and nothing a server says. It is called in one place, in `connection_rows`,
+release as the network attester cut it and nothing a server says. It is called in one place, in `connection_rows`,
 which lays the tables by it (`connection_rows.tables`) and lists each class's releases by it
-(`connection_rows.filed`, through `filed` here); `tables` lays whatever class it is given. The network certifier
+(`connection_rows.filed`, through `filed` here); `tables` lays whatever class it is given. The network attester
 releases no request longer than the schedule's largest class holds (the schedule's `request_bound`: ingress
 refuses it), so none it releases is unfiled for its request's length; and a class of the largest P holds the most
 ids a response releases ("The classes"), so none is unfiled for its ids. Every release of a schedule's own network
-certifier fits a class.
+attester fits a class.
 
 Under form 2 the rule files in no class a release that ended in a `FAIL` before any `DATA` cell, whatever class
-holds it. The network certifier released no id of it, so its response row would hold none, and its slots of the
+holds it. The network attester released no id of it, so its response row would hold none, and its slots of the
 lengths and fails tables say how it ended. So no table of form 2 has an end row (1, 0), a class's count is of its
 releases that ended in their `END` or released an id, and such a `FAIL` is the one release of a schedule's own
-network certifier that has no content row. The rule reads the release's end as the network certifier cut it, which
-no server can compute: which releases a class holds is the network certifier's to say. Under form 1 the rule reads
+network attester that has no content row. The rule reads the release's end as the network attester cut it, which
+no server can compute: which releases a class holds is the network attester's to say. Under form 1 the rule reads
 no end, and such a release has its rows.
 
 **A schedule that can be tied** (`can_be_tied`; `untied` says what keeps one from it). A class is tied where a
@@ -296,8 +296,8 @@ def end_of(row: bytes) -> tuple[bool, int]:
 
 def request_words(request: bytes, B: int) -> tuple[int, int]:
     """A released request's words (the module docstring's "A request's words"), read from its bytes as the network
-    certifier cut them in B-byte cells: its `max_tokens` and the count of its prompt's ids. ValueError for bytes
-    the network certifier releases as no request: ones whose cells don't read as a canonical id request's."""
+    attester cut them in B-byte cells: its `max_tokens` and the count of its prompt's ids. ValueError for bytes
+    the network attester releases as no request: ones whose cells don't read as a canonical id request's."""
     if not isinstance(request, (bytes, bytearray)) or not request:
         raise ValueError("a released request has a byte")
     lay = io_request.layout(B)
@@ -495,7 +495,7 @@ def ids_of(packed: bytes) -> tuple[int, ...]:
 
 
 def file(params: NetworkCertifierParams, release: Released) -> int | None:
-    """The class the network certifier files a release in (the module docstring's "The filing"): the first of the
+    """The class the network attester files a release in (the module docstring's "The filing"): the first of the
     schedule's that holds its request's bytes and its ids, or None where none does, and, where a class's tables
     hold its held rows and no other (`counted`), for a release that ended in a `FAIL` before any `DATA` cell."""
     if counted(params) and release.failed and not release.outputs:

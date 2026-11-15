@@ -1,6 +1,6 @@
 """certifier_piece: the front sends one group of the window circuit's class through the gate's scan rehearsal and keeps
 the gate's fetch, witness and all, 0700 under the serve dir's private/certifier, publishing only the bundle less witness/
-and its outcome. The piece, on a serve dir whose window was the network certifier's synthetic run's certified requests
+and its outcome. The piece, on a serve dir whose window was the network attester's synthetic run's certified requests
 (the run `test_network_certifier_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when `network-rows` accepted the run's records, the chain accepted and the window's
 requests are certified in the transfer blocks of the scan's execution phase: the period mirror's certifier/v0
@@ -11,8 +11,8 @@ report and the block record's certifier entry, which `block_record.check` holds 
 the three files `network-period` read, as `composite.py` reads a piece's case: witness, kept 0600 in the serve dir's
 private/pieces/certifier with no answer beside it, and at no time under the pieces' directory, which gets
 certificates.json, the five certificates of the case's evidence, each with its own fields alone and each the network
-certifier's signature under the run's public key. The chain's endpoint report, with each Commit window's counts, and
-the scan's answers stay in the kept run. A window request the network certifier didn't certify, and network certifier
+attester's signature under the run's public key. The chain's endpoint report, with each Commit window's counts, and
+the scan's answers stay in the kept run. A window request the network attester didn't certify, and network attester
 records that `network-rows` refuses, are rejected before any chain runs (`network-rows` itself accepts the synthetic
 run's records and refuses them with cells re-cut, re-clocked or reordered, a certificate of another key, a record
 changed under its head and a schedule with a `max_tokens_cap`); a chain that refused, requests outside those
@@ -24,7 +24,7 @@ and moves out any file DIR doesn't declare, a period file among them; the certif
 a step that ends without its files released keeps no case. The front's
 warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
 asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
-tree's gate with the tick in its request and the minutes counted at it, and the network certifier runs the scan's schedule there;
+tree's gate with the tick in its request and the minutes counted at it, and the network attester runs the scan's schedule there;
 a tick the gate refuses (past its range, or on a request that isn't the scan rehearsal) refuses the front before the
 gate is asked."""
 from __future__ import annotations
@@ -71,7 +71,7 @@ from verity_e2e_demo import block_record as BR  # noqa: E402
 PERIOD_CASE = ROOT / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network" / "tests" / "period_case.py"
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 K = 3
-#: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network certifier's
+#: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network attester's
 #: D·τ
 PASSED = {"run": RUN, "rc": 0, "ended": "ended", "verdict": {"accepted": True}}
 LATE = {"run": RUN, "rc": 1, "ended": "exited", "verdict": {"accepted": False, "failed": ["fail"]}}
@@ -94,7 +94,7 @@ def period():
 
 @pytest.fixture(scope="module")
 def network_certifier(tmp_path_factory):
-    """The synthetic network certifier run, its fetch (``late``: the same run, its rehearsal failed late), the
+    """The synthetic network attester run, its fetch (``late``: the same run, its rehearsal failed late), the
     execution phase holding the most whole certified requests, its two row registrations (ingress, egress) and the
     run's deployment."""
     d = tmp_path_factory.mktemp("network_certifier")
@@ -135,7 +135,7 @@ def _named(d: Path, *names: str) -> list[Path]:
 
 def _serve_dir(d: Path, network_certifier: dict, records: list[dict] | None = None, kept: bool = True,
                fetch: str = "fetch") -> Path:
-    """A serve dir whose window K served ``records`` (the network certifier's, by default those of its execution phase)
+    """A serve dir whose window K served ``records`` (the network attester's, by default those of its execution phase)
     and whose gate fetch (``network_certifier[fetch]``) the front kept."""
     records = network_certifier["records"] if records is None else records
     d.mkdir(parents=True)
@@ -319,7 +319,7 @@ def test_a_window_request_the_network_certifier_didnt_certify_is_rejected_before
 
 
 def test_records_the_rows_audit_refuses_are_the_pieces_reject_before_any_chain(tmp_path, network_certifier, capsys, monkeypatch):
-    """``network-rows`` refusing the network certifier's records (a stand-in's reject here) is the piece's reject,
+    """``network-rows`` refusing the network attester's records (a stand-in's reject here) is the piece's reject,
     its reason's numbers as N, before any chain runs, and the composite rejects with it."""
     rows = _stub_rows(tmp_path, {"protocol": CP.ROWS, "verdict": "reject", "reason": "egress bucket 27 isn't the "
                                  "schedule's"})
@@ -513,7 +513,7 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, netw
 
 def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, network_certifier, capsys,
                                                                                           monkeypatch):
-    """Each request late past the network certifier's D·τ: the gate's check fails the rehearsal, and the served answers, longer
+    """Each request late past the network attester's D·τ: the gate's check fails the rehearsal, and the served answers, longer
     than what the certifier passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
     rejecting a served answer, so the piece refuses before any chain and the certifier is missing, as for a busy gate;
     the same window on a rehearsal the check passed is a reject."""
@@ -683,7 +683,7 @@ def _reorder(grid) -> None:
 def test_network_rows_accepts_the_network_certifiers_records_and_refuses_cells_cut_clocked_or_ordered_otherwise(
         tmp_path, rows_exe):
     """The compiled Lean audit (``network-rows``: `NetworkCheck.RowsAudit` over `NetworkCertifier.Rows.audit`) on the
-    records the network certifier's own publisher writes and signs, under the record of its deployment: the synthetic
+    records the network attester's own publisher writes and signs, under the record of its deployment: the synthetic
     run's accepted; the same run with a cell of window 0's egress re-cut, connection 1's cells re-clocked or a
     bucket's connections reordered, signed by its key, refused by name, and `rows_check`'s `Rejected` for the piece;
     the run re-signed under another key refused at the record, and, its deployment.json rewritten to the record's, by

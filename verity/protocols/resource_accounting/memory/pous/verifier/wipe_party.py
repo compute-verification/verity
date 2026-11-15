@@ -16,7 +16,7 @@ publishes and the certificate is computed at: a request that names `k` is refuse
 prover that leaves before the session ends leaves it unsigned. The side reports `{"commitment", "ended",
 "host", "public_key", "reads", "signed", "window"}`, `signed` null when unsigned, and `window` the session's `t0` (the
 prover connected) and `t1` (the session signed, or ended unsigned) on the challenger host's real-time clock: the
-interval a network certifier counts the session's egress over.
+interval a network attester counts the session's egress over.
 
 `command(device, extra)` is the argv that starts the challenger's side (`python -m
 verity.protocols.resource_accounting.memory.pous.attester.wipe_challenger`, `MODULE`) on this machine; the prover's end of the session,
@@ -103,7 +103,7 @@ def command(device: str | Path, extra: Sequence[str] = ()) -> tuple[str, ...]:
 def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
          counted_by: str | None = None) -> dict[str, Any]:
     """A link leaving the developer's node, as `Accounting.Placed.Links` declares one: its `ends` (the node, and `to` past
-    its boundary), what carries it (`via`), its capacity in Mb/s when known, and the network certifier that counts what
+    its boundary), what carries it (`via`), its capacity in Mb/s when known, and the network attester that counts what
     leaves on it (`counted_by`), `None` when none does, so its egress is outside the session's count."""
     return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}
 

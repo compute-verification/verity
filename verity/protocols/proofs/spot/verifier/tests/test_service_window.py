@@ -49,7 +49,7 @@ def _program(counts=COUNTS, window=WINDOW, values=()):
 
 
 def _gathered(counts=COUNTS) -> Program:
-    """The window in another form than its templates' mixed population, as the network certifier's scan's generator form
+    """The window in another form than its templates' mixed population, as the network attester's scan's generator form
     is: PAIR's instances read their bytes from one input they share, instance j rows j and j + 1 of ``t``."""
     n0, n1 = counts[P.template_id(PAIR)], counts[P.template_id(TRIPLE)]
 
@@ -152,7 +152,7 @@ def test_a_registration_of_another_window_is_refused():
 
 
 def test_a_window_in_another_form_runs_on_the_challengers_own_copy_of_it():
-    """A window registered in another form than its templates' mixed population (`_gathered`, as the network certifier's
+    """A window registered in another form than its templates' mixed population (`_gathered`, as the network attester's
     scan registers its generator form) runs to an accepted outcome by the Lean run on a stream given the challenger's
     own copy of that form (`Stream(program=)`), whose digest names it; a stream without it builds the mixed population and
     refuses the docket (`R2-program`, `R2-partition`), and the stream with it refuses a docket of the mixed

@@ -147,7 +147,7 @@ def test_the_tunnel_goes_straight_to_the_peer_and_its_end_stops_the_link(tmp_pat
 
 def test_the_links_origin_is_read_on_the_clock_its_ticks_read_and_a_host_without_it_starts_no_link(tmp_path, monkeypatch,
                                                                                                    capsys):
-    """The runner reads the link's origin on the network certifier's clock and gives the link no other, so bucket 0's
+    """The runner reads the link's origin on the network attester's clock and gives the link no other, so bucket 0's
     time and every tick's are one clock's readings: a link asked for no bucket is made with the origin that clock read
     and keeps its own default. On a host that gives no such clock the runner refuses before it reads the session's
     record, and nothing listens."""

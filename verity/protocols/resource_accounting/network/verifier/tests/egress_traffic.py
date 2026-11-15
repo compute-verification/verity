@@ -1,4 +1,4 @@
-"""A fake upstream's egress served through the network certifier, and the slot state each egress bucket reads: the
+"""A fake upstream's egress served through the network attester, and the slot state each egress bucket reads: the
 egress tests' traffic (`test_network_certifier_egress.py`) and `verity/protocols/resource_accounting/network/prover/egress_zk.py`'s. It imports no
 test framework, so a node's bare venv runs it."""
 
@@ -21,9 +21,9 @@ IB = (V - 1).bit_length()
 
 @dataclass(frozen=True)
 class Served:
-    """A link served through the network certifier's own egress (`network_certifier.NetworkCertifier._egress`): its schedule, the egress
+    """A link served through the network attester's own egress (`network_certifier.NetworkCertifier._egress`): its schedule, the egress
     records its grid closed (one an execution phase), each connection's request (ordinal q = k + 1, its admission
-    bucket, its n outputs) and response ids, and the network certifier's `fails` frames."""
+    bucket, its n outputs) and response ids, and the network attester's `fails` frames."""
 
     params: W.NetworkCertifierParams
     records: tuple[BlockGrid, ...]
@@ -34,7 +34,7 @@ class Served:
 
 def serve(params: W.NetworkCertifierParams, arrivals: Sequence[int], responses: Sequence[Sequence[int]], windows: int) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids, each one id
-    event of P bytes, then `TRAILER`, all there by their deadlines), and the network certifier serves the link for
+    event of P bytes, then `TRAILER`, all there by their deadlines), and the network attester serves the link for
     `windows` execution phases: admitted at the first bucket with a free lane in arrival order."""
     P = params.payload
     fails: list[bytes] = []
@@ -101,5 +101,5 @@ def states(served: Served, NR: int, K: int) -> list[EG.State]:
 
 
 def rows(served: Served) -> list[bytes]:
-    """The network certifier's registered egress rows of the link, bucket by bucket (`network_certifier_rows.window_rows`)."""
+    """The network attester's registered egress rows of the link, bucket by bucket (`network_certifier_rows.window_rows`)."""
     return [x for record in served.records for x in WR.window_rows(record, served.params)]

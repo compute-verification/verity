@@ -5,7 +5,7 @@ tagged SHA-512 most of them key.
 
 A constant's name is in today's words. Its bytes are what committed formats, pinned vectors and recorded runs carry, so
 they keep the words of their version: a PoUW period's tags say "window", its sampling's say "draw", the network
-certifier's oldest say "warden". Bytes never change in place: a format in today's words is a new version, a new entry
+attester's oldest say "warden". Bytes never change in place: a format in today's words is a new version, a new entry
 beside the old one, which stays while anything reads it. An entry carries no terminator; a site that hashes a tag
 NUL-terminated appends the NUL.
 
@@ -184,10 +184,10 @@ VLLM_PEARL_C_RUN_V1 = "verity-vllm/pouw-pearl-c-run/v1"
 VLLM_PEARL_C_RUN = "verity-vllm/pouw-pearl-c-run/v2"
 VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 
-# The network certifier's mark certificate (`verity.protocols.resource_accounting.network.verifier.certificate`)
+# The network attester's mark certificate (`verity.protocols.resource_accounting.network.verifier.certificate`)
 CERTIFIER_MARK = "verity-network-certifier/mark/v1"
 
-# The network certifier's count over a span between two marks (`verity.protocols.resource_accounting.network.verifier.span`)
+# The network attester's count over a span between two marks (`verity.protocols.resource_accounting.network.verifier.span`)
 CERTIFIER_SPAN = "verity-network-certifier/span/v0"
 CERTIFIER_SPAN_PROTOCOL = "verity/certifier/span/v0"
 
@@ -350,7 +350,7 @@ POUB_PERIOD = "verity/remote-bandwidth/window/v1"
 REMOTE_SESSION_PAYLOAD_SALTS = "verity/remote-session/payload-salts/v0"
 STORE_SALT = "verity/store/salt/v1"
 
-# Not yet read from here: the network certifier and network accounting
+# Not yet read from here: the network attester and network accounting
 CERTIFIER_ADVISED_ADVICE = "verity-network-certifier/advised-advice/v2"
 CERTIFIER_CERTIFICATES = "verity-network-certifier/certificates/v3"
 CERTIFIER_CLOCK = "verity-network-certifier/clock/v1"

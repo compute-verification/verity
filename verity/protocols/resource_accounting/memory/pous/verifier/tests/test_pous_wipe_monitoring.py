@@ -5,7 +5,7 @@ meeting its bound except with T·eps; a period's row carries that sum and, where
 bound at this period" and neither statement; every number that is short by a wipe's PRF advantage says so beside it, in the
 same closing words, and no number moved for it; the cadence is a parameter; an uncounted wipe stays vacuous, since every
 egress record is refused, a covered one over the session's own real-time window too; a run's own answer stays vacuous
-at the count its evidence gives, which no network certifier signs, so the pooled tables are of an answer certified by
+at the count its evidence gives, which no network attester signs, so the pooled tables are of an answer certified by
 hand (`counted`); a rejected wipe pools nothing; the periods are the reporting grid's `MONITORING_PERIODS`."""
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ def written():
 
 @pytest.fixture(scope="module")
 def counted(written):
-    """`written` as the check that composes the wipe with the network certifier is to publish it at a certifier's
+    """`written` as the check that composes the wipe with the network attester is to publish it at a certifier's
     count of 2 MiB: `certify` at that count, set by hand, since `verity/wipe/v0` certifies no wipe."""
     return written | {"public": W.certify(HBM, 2), "profile": written["profile"] | {"gaps": []}}
 

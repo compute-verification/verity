@@ -28,7 +28,7 @@ output length past its max_tokens' width. No input of the charge is free witness
 is ``adv``'s count. What holds ``cert`` to the certified record is a stand-in: the honest cert row, opened by its b‖c
 under the certifier's salt (`compile_slice_zk`), until max_tokens is read from the certified body. The circuit bounds
 max_tokens only from above, so until then a lower max_tokens the output still fits passes at a lower charge. H = O = 0: the
-slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no hits and no order
+slice's class runs inside the pool bound with the network attester's ingress, so its windows send no hits and no order
 entries (`protocol/charge-chain.md`, "The slice"), and a window that sends either is CompileSlice_v1's stand-in, the
 still-sent fields, as before.
 

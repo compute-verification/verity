@@ -1,5 +1,5 @@
 """Figure 6 of the SPOT post, the certified tick's trade-off: (a) a timeline of continuous admission against tick
-admission, with the network certifier stamping each arrival's release bucket as its own layer; (b) latency and
+admission, with the network attester stamping each arrival's release bucket as its own layer; (b) latency and
 throughput against the tick period, beside the no-tick point at each load; (c) the scheduler advice's term in the
 exfiltration bound, with and without the tick, over the headline and secondary scopes, against the model's FP4 weights.
 

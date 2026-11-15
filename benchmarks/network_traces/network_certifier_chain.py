@@ -1,26 +1,26 @@
-"""network-certifier-chain: the network chain's reads of an active network certifier's run (`network_certifier_serve.py`'s directory, or the
+"""network-certifier-chain: the network chain's reads of an active network attester's run (`network_certifier_serve.py`'s directory, or the
 gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
 rehearsal's. A certifier rehearsal's run (whose records came through the older certifier's proxy in front of the
-endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network certifier
+endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network attester
 path none of its records enters the chain. The older certifier's code is gone but kept records of its runs are not, so
 the refusal stays with the form that reads them.
 
-* `deployment`: ``deployment.json``, a network certifier's (its link, its schedule and their digest, its key and
+* `deployment`: ``deployment.json``, a network attester's (its link, its schedule and their digest, its key and
   session), never a certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
   (`CERTIFIER_FILES`).
 * `deployment_of`: the run's deployment held to the auditor's record of it (`RECORD`, ``CERTIFIER_KEY``'s form: the
   gate's own ``out/deployment.json`` of the run as the auditor read it off the gate, its SHA-512, key and session):
   every ``deployment.json`` the run holds must be the record's, whose deployment the checks then read, so the network
-  certifier's key and session are the auditor's, never a file the prover's node holds; a copy beside the one the
+  attester's key and session are the auditor's, never a file the prover's node holds; a copy beside the one the
   record was read off (`recorded`) adds only the auditor's device's keys (`relay_check.DEVICE_KEYS`). `own_record`
-  is the record a job that ran the network certifier itself holds (a local rehearsal's, the job its own auditor).
-* `link`: N2's link on the run (`service.TransferBlocks` with its `service.NetworkCertifierProfile`): the network certifier's link
+  is the record a job that ran the network attester itself holds (a local rehearsal's, the job its own auditor).
+* `link`: N2's link on the run (`service.TransferBlocks` with its `service.NetworkCertifierProfile`): the network attester's link
   name, its one grid both ends', its key and session, its windows and parameters digest, and no sync (the network
-  certifier runs no shaper clock and signs none, so no clock certificate enters N2 here).
+  attester runs no shaper clock and signs none, so no clock certificate enters N2 here).
 * `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
   first window missing one.
-* `certificates`: the network certifier's own offline check (`relay_check.check`: every execution phase of the three
-  records certified under the network certifier's key and session with its head the record's, its rows' registration,
+* `certificates`: the network attester's own offline check (`relay_check.check`: every execution phase of the three
+  records certified under the network attester's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
   `auditor.network_certifier_outcome`, which writes it only of a run its check accepted) exactly the certified lines'
   certificates, in order: a witness line that says the signer refused its execution phase has no public line, so a
@@ -67,15 +67,15 @@ PROXY = ("a certifier rehearsal's run (its records through the older certifier's
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
-#: a network certifier link declares no sync, so its Σ_sync is never read (`service.TransferBlocks`'s ``network_certifier``); one
+#: a network attester link declares no sync, so its Σ_sync is never read (`service.TransferBlocks`'s ``network_certifier``); one
 #: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
-#: the auditor's record of a network certifier run, ``CERTIFIER_KEY``'s form: ``deployment``, the gate's own
+#: the auditor's record of a network attester run, ``CERTIFIER_KEY``'s form: ``deployment``, the gate's own
 #: ``out/deployment.json`` of the run as the auditor read it off the gate, ``deployment_sha512`` its bytes' SHA-512 (hex),
 #: and ``key`` and ``session``, the deployment's; the fields the gate's run also gives it (``host``, ``run``, ``pinned``,
 #: ``peer``, ``request``, ``end``) the reader of its ``status`` checks, and no check here reads them
 RECORD = "certifier-key/v1"
-#: the counts of `network_certifier_serve.check`'s summary `certificates` writes: the gate's own list of what a network certifier
+#: the counts of `network_certifier_serve.check`'s summary `certificates` writes: the gate's own list of what a network attester
 #: run's end publishes (`auditor.NETWORK_CERTIFIER_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
 #: (`auditor.CELL_ROWS`). The summary's other keys count the traffic (the requests and how each ended, the cells, their
 #: bits and their lateness, the execution phases the signer refused) or are made from the witness (a connection's
@@ -87,15 +87,15 @@ CELL_ROWS = ("registered", "of")
 #: check's verdict holds (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`)
 ACCEPTED_COUNTS, ACCEPTED_CELL_ROWS = ("certified_windows", "certificates"), ("registered",)
 #: what `checked` keeps on the chain's private side and never publishes: which execution phases the signer refused,
-#: how many it certified, each one's certified, and how many problems the network certifier's own check found, each of
+#: how many it certified, each one's certified, and how many problems the network attester's own check found, each of
 #: which follows what the node sent and when
 WITNESS_KEYS = ("issuer_refused", "certified_windows", "rows", "problems")
-#: why `checked` refuses a run the network certifier's own check refuses, its one word of it
+#: why `checked` refuses a run the network attester's own check refuses, its one word of it
 REFUSES = "the network certifier's own check refuses the run, which network_certifier_serve.py check says on the witness"
 
 
 def found(run: Path, name: str, required: bool = True) -> Path | None:
-    """A network certifier run's file: in its directory, its ``witness/`` or its ``out/`` (the gate's layout)."""
+    """A network attester run's file: in its directory, its ``witness/`` or its ``out/`` (the gate's layout)."""
     for d in (run, run / "witness", run / "out"):
         if (d / name).is_file():
             return d / name
@@ -110,7 +110,7 @@ def witness(run: Path) -> Path:
 
 
 def deployment(run: Path) -> tuple[dict, W.NetworkCertifierParams]:
-    """The run's ``deployment.json`` and the network certifier's schedule, refused by name where the run is a certifier
+    """The run's ``deployment.json`` and the network attester's schedule, refused by name where the run is a certifier
     rehearsal's (`PROXY`) or its digest isn't its parameters'."""
     for d in (run, run / "witness", run / "out", run / "out" / "honest", run / "honest"):
         if hit := next((d / f for f in CERTIFIER_FILES if (d / f).is_file()), None):
@@ -164,7 +164,7 @@ def recorded(run: Path) -> Path:
 
 
 def own_record(run: Path) -> dict:
-    """The record (`RECORD`) a job that ran the network certifier itself holds of the run: its ``deployment.json``
+    """The record (`RECORD`) a job that ran the network attester itself holds of the run: its ``deployment.json``
     (`recorded`), the job being its own auditor (a local rehearsal's, never a fetch the prover's node kept)."""
     data = recorded(run).read_bytes()
     dep = json.loads(data)
@@ -173,7 +173,7 @@ def own_record(run: Path) -> dict:
 
 
 def link(run: Path) -> tuple[SVC.TransferBlocks, dict, W.NetworkCertifierParams]:
-    """N2's link on the run (the module docstring's `link`), its deployment and the network certifier's schedule."""
+    """N2's link on the run (the module docstring's `link`), its deployment and the network attester's schedule."""
     dep, params = deployment(run)
     lw = SVC.TransferBlocks(dep["link"], params.grid, UNREAD_SYNCS, RF.read_public(dep["key"]), dep["run_id"],
                          bytes.fromhex(dep["session"]), ingress=params.grid, proof_deadline=RC.PROOF_DEADLINE_S,
@@ -195,7 +195,7 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
 
 
 def verdict(check: dict) -> dict:
-    """What `certificates` writes of the network certifier's own check, the gate's end's verdict
+    """What `certificates` writes of the network attester's own check, the gate's end's verdict
     (`auditor.network_certifier_outcome`): whether it accepted, and `COUNTS` of its summary, its `failed` in the check's fixed
     words (`network_certifier_serve.FAILED`, the gate's `FAILED`). A check that didn't accept gives none of `ACCEPTED_COUNTS`:
     how many execution phases the signer refused is the traffic's. The problems, their number and their words, are
@@ -222,7 +222,7 @@ def checked(run: Path, deployed: bool = False) -> tuple[dict, dict]:
     """The certificates' check on the run (the module docstring's `certificates`): what it publishes, and what it
     keeps on the chain's private side (`WITNESS_KEYS`). A run is certified when each of an execution phase's three
     records is, complete, for every execution phase. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`. A
-    run the network certifier's own check refuses is refused by that word alone: its problems, and how many there are,
+    run the network attester's own check refuses is refused by that word alone: its problems, and how many there are,
     are the private side's, and ``network_certifier_serve.py check`` on the witness says them."""
     dep, _ = deployment(run)
     wit = witness(run)

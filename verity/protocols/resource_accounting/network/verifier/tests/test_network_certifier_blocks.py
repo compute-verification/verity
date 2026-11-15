@@ -1,7 +1,7 @@
 """The host's check (`blocks`) on a TINY class circuit, from the window interface's records: S = 2 slots, each a scan state
 row of NP + 1 = 16 words, and O = 2 output steps. `AmpereBF16TcDot16_v3`'s unit j·O + k reads slot j's row of the scan's
 state (its ``a``, the circuit's external input), the loaded weights' row k (``b``) and the loaded bias (``acc``);
-`F32ToBf16Rn_v2`'s unit u is wired to its output, and its ``o0`` is the circuit's external output. The network certifier
+`F32ToBf16Rn_v2`'s unit u is wired to its output, and its ``o0`` is the circuit's external output. The network attester
 on the host's uplink commits and signs each load (`transfer_rows`), and the verifier pins the loads from its certificates
 alone (`blocks.pins`) and the scan's state beside them: with both, held to the roots the registrations record, the
 circuit's free inputs are 0. A record names no server and no transfer."""
@@ -52,7 +52,7 @@ def layouts(c: IF.Circuit) -> dict:
 
 
 def values(seed: int = 7) -> dict[str, list[list[int]]]:
-    """Each load's rows as the network certifier saw them cross."""
+    """Each load's rows as the network attester saw them cross."""
     rng = random.Random(seed)
     word = lambda n, w: [[rng.randrange(1 << 16) for _ in range(w)] for _ in range(n)]  # noqa: E731
     return {"w": word(O, 16), "bias": word(1, 2)}
@@ -64,7 +64,7 @@ def roots(regs: list[dict]) -> dict[str, str]:
 
 
 class Certifier:
-    """The network certifier on the host's uplink: its key, signer and session."""
+    """The network attester on the host's uplink: its key, signer and session."""
 
     def __init__(self, tmp_path, link: str = UPLINK):
         (tmp_path / "c").mkdir()

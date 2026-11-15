@@ -51,7 +51,7 @@ machine that reaches the store, with no GPU and no node.
 * **A row's note**, which the planner's driver writes on a row from the row's own data (that no table's row priced
   its proving, or what its scale reaches over the unscaled row of its case), is printed beside the figure where the
   figure carries no label, from the row at the pinned budget nearest the one it is read at.
-* **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
+* **The network attester's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
   `inputs`, `document`, whose document is `TERM_SCHEMA`): the schedules, the fail cells and the jitter of each of its
   rows, at the same scopes, for a class of at most `RESPONSE_IDS` ids a response. Its figure of record is the term
   at the calculator's jitter bound of record (`OF_RECORD`, two release schedules). A figure at its other jitter
@@ -64,22 +64,22 @@ machine that reaches the store, with no GPU and no node.
   what it is over, and says so where the rows hold no bound.
 * **Every figure carries the error summed over everything it covers**, and a figure whose error is 1 or more is
   printed as `NO_BOUND`, with that error and no amount. The compute audit's part fails with at most its rows' δ over
-  the monitoring period. The network certifier's fails with at most the ε of its row (`eps`): its scans' δ summed over
+  the monitoring period. The network attester's fails with at most the ε of its row (`eps`): its scans' δ summed over
   every link of the scope and every execution phase of the monitoring period, one ε a scope and monitoring period.
   The two together fail with at most the sum of both. The scans' δ is an input of the calculator, and the command
   gives it one: `--scan-delta`, or by default the δ at which the row printed that sums the most execution phases, the
-  world's year, carries `PERIOD_ERROR`, so that every row printed carries that or less. The network certifier's
+  world's year, carries `PERIOD_ERROR`, so that every row printed carries that or less. The network attester's
   result of record takes its δ so (`benchmarks/certifier_term/README.md`). No term depends on the scans' δ; only the
   errors move with it. The δ the command prints is the one the document states among its inputs (`scan_delta`).
 
-Both count the same requests: the sampling plan's, which the network certifier's calculator counts by default (its
+Both count the same requests: the sampling plan's, which the network attester's calculator counts by default (its
 `request_count`, read from the break-even planner in the tree). The command holds no count of its own. The two parts
 must cover the same GPU-seconds, the same requests (the count the rows of record are priced over) and the same
 weights, or the command refuses.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output
-bits at δ). The first three are the network certifier's part, the last term's second branch is the compute audit's
-part, and the command sums them per scope and monitoring period under each of the network certifier's rows of
+bits at δ). The first three are the network attester's part, the last term's second branch is the compute audit's
+part, and the command sums them per scope and monitoring period under each of the network attester's rows of
 `TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice.
 
 * **How the stop class is charged** is the answer of the stop verdicts' reader
@@ -93,7 +93,7 @@ part, and the command sums them per scope and monitoring period under each of th
   and the print says how the stop class is charged and why. A row whose stop class the answer charges its whole
   schedule on some execution phase is called by `WHOLE`, not by `TOGETHER`: nothing holds its lengths there.
 * **The output count.** Until a served audit has sampled a stop block the server chooses a response's output count,
-  which the network certifier's row `OUTPUT_COUNT` charges as its schedules. The sums that take it at 0 are those
+  which the network attester's row `OUTPUT_COUNT` charges as its schedules. The sums that take it at 0 are those
   under the rows the answer names (`at_zero_in`: the rows of the document's `stop`, where the answer holds an
   execution phase; never the rows whose schedules read 0), on the execution phases it holds. The command prints
   the output count beside those sums and lists its 0 among the inputs, marked assumed. Where the answer holds no
@@ -115,7 +115,7 @@ A run of record that is superseded, or holds no rows of the case, is left out an
 
 Under a research run, a runner that names metric ids for the figures (`benchmarks/exfiltration/run.py`'s `METRICS`)
 has `record` write them through the harness kit (`measurements`): the headline figure, the compute audit's part and
-the network certifier's, each over every monitoring period of the document it has a value over at the share (the
+the network attester's, each over every monitoring period of the document it has a value over at the share (the
 world's year always, and last, the dashboard's headline), each with its `period` and the compute it is `over`, its mark
 at the head of its first input and its error over that period in the next, the document as `DOCUMENT` and what ran in
 the fingerprint. What it prints is the same in a run as outside one.
@@ -138,20 +138,20 @@ from verity_bench import jobs, kit, settings, spot_status
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
 SCHEMA = "exfiltration/v3"
-#: the network certifier's document the command reads: its `value` the term of record, its rows' `term` by jitter
+#: the network attester's document the command reads: its `value` the term of record, its rows' `term` by jitter
 #: bound and their ε (`eps`), its inputs, and the label of what rests on a set-time card, at its top and on each row
 #: that carries it
 TERM_SCHEMA = "certifier-term/v2"
-#: the network certifier's scopes the command prints
+#: the network attester's scopes the command prints
 SCOPES = ("datacenter", "world")
-#: the error a monitoring period's figure is to carry at most. Given no δ for the network certifier's scans, the
+#: the error a monitoring period's figure is to carry at most. Given no δ for the network attester's scans, the
 #: command takes the one at which the row it prints that sums the most execution phases carries this
 PERIOD_ERROR = Fraction(1, 2 ** 20)
 #: what a figure is printed as where its error, summed over everything it covers, is 1 or more: it carries no amount
 NO_BOUND = "no bound at this period"
-#: a network certifier's row's amounts, which a row with no bound doesn't carry
+#: a network attester's row's amounts, which a row with no bound doesn't carry
 AMOUNTS = ("schedules", "cells", "jitter", "term", "entries")
-#: a sum's two figures, the network certifier's term and the two parts together, each with the key of its error in
+#: a sum's two figures, the network attester's term and the two parts together, each with the key of its error in
 #: its scope's monitoring period
 ERRORS = {"certifier_GB": "eps", "GB": "error"}
 MODEL = "GLM-5.3"
@@ -196,12 +196,12 @@ WORLD, ROW, STEP = "ours", "(ii) honest", "+ the verifier as measured"
 #: the row the planner prices mostly at its own prices, and the label of its figures where its rows record no table's row
 ASSUMED_ROW = "(i) honest"
 ASSUMED_LABEL = "at the planner's assumed prices"
-#: the most ids a response holds in the network certifier's class the figure is read at: its class that holds the
+#: the most ids a response holds in the network attester's class the figure is read at: its class that holds the
 #: longest output the plan of record serves (assumed, as every class is: no run has certified one)
 RESPONSE_IDS = 1024
 #: a row's parts of total compute; `wait` is a part of `serve`
 PARTS = ("serve", "wait", "prove", "replay", "pool", "edge", "compile")
-#: the network certifier's rows the two parts are summed under, and what each is called beside the compute audit's
+#: the network attester's rows the two parts are summed under, and what each is called beside the compute audit's
 TOGETHER = {"scan": "as the scan's check charges it today",
             "all three": "with the lengths held by a stop block, the timing taken once and the entries charged through "
                          "the compute audit",
@@ -213,11 +213,11 @@ TOGETHER = {"scan": "as the scan's check charges it today",
 WHOLE = {"all three": "with the timing taken once and the entries charged through the compute audit, its stop class "
                       "charged its whole schedule",
          "design": "by the design no run has behind it, its stop class charged its whole schedule"}
-#: the network certifier's prover's module that reads the stop class's verdict records of the runs of `VERDICTS`:
+#: the network attester's prover's module that reads the stop class's verdict records of the runs of `VERDICTS`:
 #: its `of_runs` answers how the calculator's rows read from verdict records are charged (`_reader`)
 READER = "stop_verdicts"
 READER_MODULE = f"verity.protocols.resource_accounting.network.prover.{READER}"
-#: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
+#: the network attester's row whose schedules are what a response's output count is charged while the server chooses
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
 GB = 8e9
@@ -314,7 +314,7 @@ LEAN_BOUND = "CompiledTwo.eventTwoX_le_cls_at_budget"
 #: printed where no Lean theorem gives a number at a design's sizes
 NOT_PROVED = "not proved at these sizes"
 #: the figures a runner records under a research run (`record`), each over every monitoring period at the share: the
-#: one the command calls the headline, the compute audit's part and the network certifier's
+#: one the command calls the headline, the compute audit's part and the network attester's
 FIGURES = ("headline", "compute_audit", "network_certifier")
 #: the document a run's result keeps beside its measurements, relative to the run's directory
 DOCUMENT = "out/exfiltration.json"
@@ -813,12 +813,12 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
                           f"; Python verifier for {_listed([PIECES[p] for p in unproved])})"}
 
 
-# ---- the network certifier's part, and the requests both parts count over --------------------------------------------
+# ---- the network attester's part, and the requests both parts count over --------------------------------------------
 
 
 def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
               stop: Any = None) -> dict:
-    """The network certifier's term at the datacenter's and the world's load (`leak_bounds.document`) for a class of
+    """The network attester's term at the datacenter's and the world's load (`leak_bounds.document`) for a class of
     at most ``response_ids`` ids a response, over the requests its calculator counts by default, the sampling plan's,
     with each execution phase's scan at ``scan_delta``. With None the δ is the one at which the row of the document
     that sums the most execution phases carries `PERIOD_ERROR`: that error over the row's execution phases, which the
@@ -1003,7 +1003,7 @@ def _timed_alone(priced: Mapping, share: float) -> tuple[str, str]:
 
 def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
             network_check: float, row: str, served: Mapping, stop: Mapping | None = None) -> list[dict]:
-    """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
+    """Every input with its mark and source: the compute audit's from its rows of record, the network attester's
     as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
     ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0, on the
     execution phases the reader's answer holds (``term``'s `stop`); where it names none, no sum leaves the output
@@ -1136,23 +1136,23 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
           served: Mapping[str, Any] | None = None, store: Any = None, root: Path | None = None,
           local_only: bool = False) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
-    part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year
+    part at ``share`` of total compute for each scope of record, the network attester's rows at the world's year
     for a class of at most ``response_ids`` ids a response with each execution phase's scan at ``scan_delta`` (None:
     the δ `certifier` takes from `PERIOD_ERROR`), and the two side by side for each scope and monitoring period,
     summed under each of `TOGETHER`. It refuses rows of record priced over other requests than the network
-    certifier's part counts.
+    attester's part counts.
 
     Every figure carries the error summed over everything it covers, and one whose error is 1 or more carries no
-    amount (`NO_BOUND`). A scope's monitoring period holds the network certifier's ε (`eps`), the one its rows over
+    amount (`NO_BOUND`). A scope's monitoring period holds the network attester's ε (`eps`), the one its rows over
     that scope and period carry, their scans' δ summed over every link's execution phases; the compute audit's δ
     over the period (its `compute_audit`'s `delta`); and the sum of the two (`error`), what the two together fail
-    with at most, None for a scope no run of record holds. Where `eps` is 1 or more the network certifier's figures
+    with at most, None for a scope no run of record holds. Where `eps` is 1 or more the network attester's figures
     of that scope and period, the output count among them, are None, and where `error` is, the sums are. A row of the
-    network certifier's own over the world's year whose ε is 1 or more is held without its `AMOUNTS`.
+    network attester's own over the world's year whose ε is 1 or more is held without its `AMOUNTS`.
 
-    A sum is at the network certifier's jitter bound of record. Its `label` is its row's own (None on most): where
+    A sum is at the network attester's jitter bound of record. Its `label` is its row's own (None on most): where
     set, every figure of the row is printed under it. Its `with_set_time_card` is the same sum at the other jitter
-    bound, with the label the network certifier's document gives a figure there. A scope's `output_count` is what a
+    bound, with the label the network attester's document gives a figure there. A scope's `output_count` is what a
     response's output count is charged while the server chooses it, the schedules of the row `OUTPUT_COUNT`, with
     the rows whose sums take it at 0 (`at_zero_in`). Those are named from the stop verdicts' reader's answer and
     never from a schedule that reads 0: the rows of `TOGETHER` among the term document's `stop`'s `rows`, where the
@@ -1510,9 +1510,9 @@ def _share(cs: Mapping) -> tuple[list[str], list[str]]:
 
 def render(doc: Mapping[str, Any]) -> str:
     """``doc`` (`build`) as text: the figure and what it is, the inputs with their marks, each part, and the two side
-    by side for every scope and monitoring period. The network certifier's figures of record come first; a figure
+    by side for every scope and monitoring period. The network attester's figures of record come first; a figure
     that is under a label is printed in a line, a row or a column that carries that label, as the document gives
-    it. Every line of the network certifier's and of the two together carries its errors and the δ of the scans they
+    it. Every line of the network attester's and of the two together carries its errors and the δ of the scans they
     sum, and a figure whose error is 1 or more is printed as `NO_BOUND`, with no amount."""
 
     share, net, w, cert = doc["share"], doc["network_check"], doc["weights"], doc["certifier"]
@@ -1727,10 +1727,10 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     `FIGURES` its value names, over that period at the document's share, in GB. The other periods come in the
     document's order and the world's year last, so a reader that keys a result's measurements by name alone, the last
     of a name winning, reads the world's year. Each has its `mark`, which also heads its first input, then its error
-    over its period (the compute audit's δ; the network certifier's ε at its scans' δ; the headline's, the compute
-    audit's part, its δ), then the runs of record it read. The network certifier's part is modeled, with the mark its
+    over its period (the compute audit's δ; the network attester's ε at its scans' δ; the headline's, the compute
+    audit's part, its δ), then the runs of record it read. The network attester's part is modeled, with the mark its
     calculator gives the `scan` row where it gives one. A figure with no value over a period (a period no run of record
-    holds, or the network certifier's where its ε is 1 or more) is left out, but over the world's year, where it has
+    holds, or the network attester's where its ε is 1 or more) is left out, but over the world's year, where it has
     no value and says why: `NO_BOUND` with that ε."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):

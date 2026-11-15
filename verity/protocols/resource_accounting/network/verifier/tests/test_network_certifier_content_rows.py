@@ -1,4 +1,4 @@
-"""The network certifier's content rows (`content_rows`): each of a connection's three rows is its class's size and
+"""The network attester's content rows (`content_rows`): each of a connection's three rows is its class's size and
 whole 16-bit words, a decoder gives back what its encoder was given, and bytes that are not a row of the form are
 refused by the field that says so. A request row's room is the canonical id request's length at its class's prompt
 ids, the end row has a fails slot's layout, and a response row's ids are bounded by the widest public size class.
@@ -164,7 +164,7 @@ def test_an_end_row_is_how_the_connection_ended_and_its_cells():
 
 @pytest.mark.parametrize("B", (387, 512, 4096))
 def test_a_requests_words_are_its_max_tokens_and_its_prompts_count_read_cell_by_cell(B):
-    """The rule reads a canonical id request in the network certifier's cells whatever its other fields: its
+    """The rule reads a canonical id request in the network attester's cells whatever its other fields: its
     `max_tokens` at its place in the first cell and the count of its prompt's ids over its cells, from a prompt of
     one id to one of many cells. The form has no key for `ignore_eos`, so the rule reads none. Bytes that are not
     such a request are refused, naming the first cell that doesn't read as the device reads it: a request cut short

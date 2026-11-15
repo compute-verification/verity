@@ -23,7 +23,7 @@ seam's `Drained`), the wait for ``e`` after it (``wait_s``, over ``waits`` polls
 the cut set in preemption order: each request's id, release number, prompt length P, outputs n and ``e``, its computed
 tokens and blocks before the cut, and ``a_O``, the outputs it emitted in the window (n less the ``e`` it carried in). A
 request cut with n > e (the hold timed out) is listed in ``over``; its continuation carries n outputs, which the network
-certifier has not released. A request whose sampling reads its own outputs (frequency or presence penalties,
+attester has not released. A request whose sampling reads its own outputs (frequency or presence penalties,
 ``min_tokens``, logits processors) is listed in ``reads_outputs``: vLLM's own preemption keeps its outputs as outputs,
 so it serves as uncut, but a Definition that reads the continuation as a prompt of P + e tokens doesn't compute the
 tokens it samples.
@@ -33,7 +33,7 @@ step; one that falls while the engine is idle is taken at its next step) or ``ev
 steps), ``hold_s`` (30 by default), ``log`` (a directory) and ``feed`` (a file). **Learning e.** With ``feed``, `SentFeed`,
 the OpenAI server's ASGI ``--middleware`` (inside `tick_plugin.TickFeed`), appends each streamed completion's count of
 output token ids as its bytes leave the server, keyed by its X-Request-Id, and the engine core reads them every step
-(`Sent`): e is what the server has sent, an upper bound on what the network certifier in front of it has released, which
+(`Sent`): e is what the server has sent, an upper bound on what the network attester in front of it has released, which
 takes its place once the certifier posts its released counts in the same records. Without ``feed``, e is the count the
 engine emitted, so the hold is the drain alone. Refused at the engine core's first step: a scheduling policy other than
 FCFS, a KV connector, and more than one data-parallel engine.

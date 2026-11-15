@@ -1,6 +1,6 @@
-"""deviations: a server that deviates behind the network certifier's relay, six classes, each tried, read back and scored.
+"""deviations: a server that deviates behind the network attester's relay, six classes, each tried, read back and scored.
 
-A process between the network certifier (`network_certifier_serve`'s relay, its id egress form) and the server's id front plays
+A process between the network attester (`network_certifier_serve`'s relay, its id egress form) and the server's id front plays
 the cheating server. It plants a random string and tries one way to send it out, a class a try:
 
 - ``honest``: nothing changes; the control, tried first: when it is refused no deviation is tried.
@@ -48,20 +48,20 @@ bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothi
 **What a try keeps** (`keep`). ``--out`` gets a file a class, ``CLASS.json``: the schedule, the certifier's run id,
 the check's verdict in its words and its counts; of each connection its request's name, its release number, its cells'
 kinds, the ids it was sent, whether and why it failed, the bits planted on it and whether the front's response to
-it was whole; the egress record's cells, each as (bucket, slot, kind, stream, id); what the network certifier logged
+it was whole; the egress record's cells, each as (bucket, slot, kind, stream, id); what the network attester logged
 of its watermark (`watermark_log`); and the size and SHA-256 of every file of the try's run directory. The table is
 made from these files alone. The run directory itself (the relay's records and their salts, the traffic, the logs) is
 under ``--scratch``, by default a temporary directory removed when the command ends. No key is in either: `rehearse`
 keeps its own in a directory it removes.
 
 **A lost release or a watermark's error stops the tries** (`watermark_stop`). Under ``--watermark`` (a flag of the
-rehearsal's, after ``--``) the network certifier names on its watermark each release that its server connection lost
+rehearsal's, after ``--``) the network attester names on its watermark each release that its server connection lost
 (`release.watermark_chunk`), and its own log of the run keeps them, and the error that stopped the stream, if one did
 (the log's `watermark`, `watermark_log`). A try that lost a release did not reach its server whole, and a server whose
 gate does not read lost names stops ordering there. The log has an error only where the stream did not open, backed
 up, or was closing before a line or its terminating chunk was written: its server did not get the watermark whole, and
 a stream that ended clean has none. After each try the log is read, whether or not the try wrote a check: when it
-names a lost release or an error, or when the network certifier ran with the watermark and wrote no log, no later
+names a lost release or an error, or when the network attester ran with the watermark and wrote no log, no later
 class is tried, the command says which try it stopped at, why, and which classes it left, and exits `WATERMARK_EXIT`.
 
     python deviations.py try (--stand-in | --front-env NAME) --out DIR [--class all|CLASS] [--ids FILE] [--seed S]
@@ -71,7 +71,7 @@ class is tried, the command says which try it stopped at, why, and which classes
         [--hold-ms 500] [--seed S]
     python deviations.py table --out DIR [--ids FILE] [--stand-in]
 
-- `try` runs each class as one try, with a network certifier process of its own: the deviating process (`relay`) in
+- `try` runs each class as one try, with a network attester process of its own: the deviating process (`relay`) in
   front of the front, then `network_certifier_serve.py rehearse --ids` through it (its key, its traffic, `serve`, `client` and
   `check`; the flags after ``--`` are its own, the schedule's among them), then what it keeps and the row. It prints
   the table, a class a row: what is changed, the check that refuses it, the refusal's own words, the bits planted,
@@ -87,7 +87,7 @@ class is tried, the command says which try it stopped at, why, and which classes
   server's record names a request by its `user`, so one record over every try, and over what the server served before
   them, holds each of a try's requests once, and ``--ids`` reads the right row.
 - The front's address is the value of the environment variable ``--front-env`` names, ``HOST:PORT``. It has no
-  default, only `relay` reads it, and nothing a try writes holds it: the network certifier's upstream is the
+  default, only `relay` reads it, and nothing a try writes holds it: the network attester's upstream is the
   deviating process on the loopback. ``--stand-in`` starts `network_certifier_serve.py fake --id-payload` as the front instead.
 - `relay` is the deviating process alone. It relays an id request (``POST /v1/completions``) to the front and deviates
   its response as the class says, as the front's bytes arrive; every other connection it relays byte for byte. Once it
@@ -161,7 +161,7 @@ READ_BYTES, HEAD_BYTES = 1 << 16, 1 << 16
 #: the deviating process's log in a try's directory, and the environment variable `try --stand-in` names the stand-in
 #: front by, in the deviating process's environment alone
 PLANTED, STAND_IN_ENV = "planted.jsonl", "DEVIATIONS_STAND_IN_FRONT"
-#: how long the deviating process keeps a connection it withholds, should the network certifier never close it
+#: how long the deviating process keeps a connection it withholds, should the network attester never close it
 LINGER_S = 600.0
 NOT_RUN = "not-run"
 #: why the tries stop at a refused control, and the exit of a command whose tries stopped at a try's watermark
@@ -266,7 +266,7 @@ def front_of(name: str, environ: Mapping[str, str] = os.environ) -> tuple[str, i
 async def deviate(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, *, front: tuple[str, int], cls: str,
                   payload: int, bit: Callable[[], int], hold_s: float, log: Callable[[dict], None],
                   linger_s: float = LINGER_S) -> None:
-    """One connection of the network certifier's, relayed to `front` (the module docstring's `relay`). What it logs of
+    """One connection of the network attester's, relayed to `front` (the module docstring's `relay`). What it logs of
     a front it can't reach names the error's kind alone."""
     loop = asyncio.get_running_loop()
     head = b""
@@ -310,7 +310,7 @@ async def deviate(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, *,
     closed = asyncio.create_task(up())
     answered = asyncio.create_task(down())
     try:
-        # the network certifier never half-closes toward a server: its end of stream is the connection's end. Only a
+        # the network attester never half-closes toward a server: its end of stream is the connection's end. Only a
         # withheld connection is bounded: the watermark's lasts the run
         if dev is not None and dev.withhold:
             for task in (await asyncio.wait({closed}, timeout=linger_s))[0]:
@@ -357,7 +357,7 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
     (`held`; else none). An egress cell is [bucket, slot, kind, stream, id] where `io_tie.parse_cell` reads it, else
     [bucket, slot, its bytes in hex without their zero fill]; stream 0's padding isn't listed. Under `stand_in` a
     connection also has the stand-in endpoint's own ids of its request (`network_certifier_serve.fake_ids`). `watermark` is
-    what the network certifier logged of its watermark (`watermark_log`)."""
+    what the network attester logged of its watermark (`watermark_log`)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = NetworkCertifierParams(**dep["params"])
     B, blank = params.cell_bytes, IT.pad_cell(params.cell_bytes)
@@ -408,7 +408,7 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
 
 
 def watermark_log(run: Path) -> dict | None:
-    """What a try's network certifier logged of its watermark, by its own log in the run directory `run` (the
+    """What a try's network attester logged of its watermark, by its own log in the run directory `run` (the
     `watermark` of `RELAY_LOG`, which the relay's `serve` writes at the run's end): the last line's (t, n), the
     releases its lines named lost, and the kind of error that stopped the stream, if one did (the error's first
     word: its text can hold an address). Each is empty where the run sent no watermark; None where it wrote no log."""
@@ -437,8 +437,8 @@ def stop_words(cls: str, lost: Sequence[int], error: str | None) -> str | None:
 
 def watermark_stop(cls: str, run: Path, watermark: bool) -> str | None:
     """Why the tries stop after class `cls`'s try in the run directory `run` (the module docstring's "A lost release
-    or a watermark's error stops the tries"), None when they go on: its network certifier's log names a lost release
-    or an error, or, under `watermark`, the network certifier ran (it wrote its `deployment.json`) and left no log, so
+    or a watermark's error stops the tries"), None when they go on: its network attester's log names a lost release
+    or an error, or, under `watermark`, the network attester ran (it wrote its `deployment.json`) and left no log, so
     what its watermark named isn't known."""
     mark = watermark_log(run)
     if mark is None and watermark and (run / "deployment.json").exists():

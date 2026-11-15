@@ -4,7 +4,7 @@
 at `TOY_N`, the leaves and messages to sign at) and this module's results on each (`Params`, `public_key` of `keygen`'s
 or `key`'s key, each `sign_at`'s signature and `verify`'s verdict on it). `check` runs the Lean half in its Lean audit
 (`runs` in that package's `lean-audit.json`): `Lms/SignDifftestMain.lean` computes every result with `Lms.Sign` and fails
-on any byte that differs. It is the only check of the Lean signer, which the network certifier device's issuer signs
+on any byte that differs. It is the only check of the Lean signer, which the network attester device's issuer signs
 with; the audit runs it interpreted, about a minute of the audit's time. The audit checks the data against the record's
 SHA-256, and its pass is cached on the Lean package's files alone, so the test here is what says the data is still what
 `lms.py` computes: a change to the scheme changes the data, fails this test, and `check.py --update` records the new data,

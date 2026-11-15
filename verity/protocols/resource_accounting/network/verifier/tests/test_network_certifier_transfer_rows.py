@@ -1,4 +1,4 @@
-"""The network certifier's transfer rows (`transfer_rows`): a value committed as a registered value under the
+"""The network attester's transfer rows (`transfer_rows`): a value committed as a registered value under the
 certifier's salts, its head signed for one link in one execution phase, and the verifier's read of its registration and
 of a unit's rows."""
 

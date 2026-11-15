@@ -52,7 +52,7 @@ The prover holds the salt challenge to the commitment it was sent with `Begin` a
 proved. Either side refuses by name a frame out of phase (``out-of-phase``), a phase out of range (``schema``) and a
 peer that leaves before it sent what the party waits on (``closed``).
 
-A certified phase's salt is the network certifier's (`salt.revealed`), a layer of its own that these parties don't hold;
+A certified phase's salt is the network attester's (`salt.revealed`), a layer of its own that these parties don't hold;
 a live phase's round challenges (`window.live_challenger`) aren't in them yet either.
 """
 

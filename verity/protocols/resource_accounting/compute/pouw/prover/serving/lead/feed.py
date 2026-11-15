@@ -1,4 +1,4 @@
-"""The lead's coin feed: the coins the network certifier samples for one call of the lead (layout
+"""The lead's coin feed: the coins the network attester samples for one call of the lead (layout
 ``blc4a_t64_e7_s1_rot_fold``) once it holds the call's root(A_j), packed as the served kernel reads them, and the
 in-process certifier that stands in for the certifier's coin link (`CoinLink`).
 

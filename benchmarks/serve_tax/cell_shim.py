@@ -1,7 +1,7 @@
-"""vLLM's benchmark client's shim to the network certifier (`serve_tax`'s ``tick-certifier`` arm).
+"""vLLM's benchmark client's shim to the network attester (`serve_tax`'s ``tick-certifier`` arm).
 
 vLLM's client (``vllm bench serve``) speaks HTTP: a streamed ``POST /v1/completions`` whose prompt is text or token ids.
-The network certifier (the module this one imports `cells` from) speaks fixed-size cells, one request a connection, and
+The network attester (the module this one imports `cells` from) speaks fixed-size cells, one request a connection, and
 in its id egress form takes a canonical token-id request (`id_form.id_request`) and answers one id event a ``DATA``
 cell (`io_tie.id_event`), then an ``END`` that holds `io_tie.TRAILER`. `HttpShim` listens between them on the client's
 side of the certifier, the client's thin shim (that module's `cells` and `Shim`) with an HTTP face:
@@ -137,7 +137,7 @@ def _error(status: int, why: str) -> bytes:
 
 
 class HttpShim:
-    """The listener (the module docstring). ``connect`` opens a connection to the network certifier, ``encode`` is the
+    """The listener (the module docstring). ``connect`` opens a connection to the network attester, ``encode`` is the
     served model's tokenizer on a text, ``log`` takes each connection's record, and ``clock`` reads the time the
     records' arrivals are in, ``origin`` the certifier's on that clock."""
 

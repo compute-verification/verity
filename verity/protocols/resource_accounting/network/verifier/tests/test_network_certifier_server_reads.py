@@ -1,11 +1,11 @@
-"""Where the active network certifier reads the server's bytes: only on a connection it opened when it admitted that
+"""Where the active network attester reads the server's bytes: only on a connection it opened when it admitted that
 client's connection. `connect`, which opens a server connection, is called once for each connection the network
-certifier admits, after the tick that admits it and never before, and never for a connection it does not admit: one it
+attester admits, after the tick that admits it and never before, and never for a connection it does not admit: one it
 refuses at its arrival, the queue full, or one still queued when the run ends. With the watermark on it holds one more
 connection to the server, the watermark stream, opened at the run's start with no admission, which it writes and never
 reads.
 
-That the watermark stream changes no record and no client's cell is held beside the network certifier's other tests,
+That the watermark stream changes no record and no client's cell is held beside the network attester's other tests,
 by `test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server`."""
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ from verity.protocols.resource_accounting.network.verifier.tests.test_network_ce
 
 
 class Admissions(Server):
-    """`Server` that keeps, for each `connect`, the ticks the network certifier had run and the bucket it had admitted
-    the call's connection at, None for one not admitted (queued, or not arrived). The network certifier connects in
+    """`Server` that keeps, for each `connect`, the ticks the network attester had run and the bucket it had admitted
+    the call's connection at, None for one not admitted (queued, or not arrived). The network attester connects in
     admission order, which is ordinal order, so call k is for the connection of ordinal k + 1. `client` is `drive`'s
-    `client`: through it the server knows its network certifier before the first client connects."""
+    `client`: through it the server knows its network attester before the first client connects."""
 
     def __init__(self, answers: list[list], **kw) -> None:
         super().__init__(answers, **kw)
@@ -43,9 +43,9 @@ class Admissions(Server):
 
 
 class Unread:
-    """The reader half of a stream the network certifier must not read: any use of it, a `StreamReader`'s `read`,
+    """The reader half of a stream the network attester must not read: any use of it, a `StreamReader`'s `read`,
     `readline`, `readexactly`, `readuntil`, `at_eof` or any other attribute, and iteration, is kept in `touched` and
-    raises. A test reads `touched`: what a task of the network certifier raises fails no test by itself."""
+    raises. A test reads `touched`: what a task of the network attester raises fails no test by itself."""
 
     def __init__(self) -> None:
         self.touched: list[str] = []
@@ -63,7 +63,7 @@ class Unread:
 
 class Streamed(Ordered):
     """`Ordered` whose watermark stream's reader half is an `Unread`, `unread`. `opened_after` holds, for each time the
-    network certifier opened the stream, how many grid rows it had released by then (`row`, its `release`)."""
+    network attester opened the stream, how many grid rows it had released by then (`row`, its `release`)."""
 
     def __init__(self, answers: list[list], **kw) -> None:
         super().__init__(answers, **kw)
@@ -121,7 +121,7 @@ def test_a_connection_still_queued_when_the_run_ends_gets_no_connect_and_no_byte
     """Two connections admitted at bucket 15 hold the two lanes through bucket 23, the run's last, each with a response
     of eleven cells, so two more that arrive before bucket 16 wait in the queue through every later tick and are cut
     there, never admitted, when the run ends. `connect` is called for the first two and for no other: the two queued
-    are written no cell, and the network certifier has read nothing of the server for them."""
+    are written no cell, and the network attester has read nothing of the server for them."""
     response = b"z" * (10 * P + 1)
     server = Admissions([[(0, response), (0, EOF)] for _ in range(4)])
     certifier, clients, _ = run(server, {15: [cells(request(5, k), B) for k in range(2)],
@@ -140,7 +140,7 @@ def test_a_connection_still_queued_when_the_run_ends_gets_no_connect_and_no_byte
 
 
 def test_the_watermark_stream_is_opened_at_the_runs_start_with_no_admission_and_no_connect():
-    """A run with the watermark on and no client at all: the network certifier opens the watermark stream once, before
+    """A run with the watermark on and no client at all: the network attester opens the watermark stream once, before
     its first tick releases a row, and writes it its head, a line a tick and its end. It admits no connection, and
     `connect` is never called."""
     run_id = bytes(range(32))
@@ -158,7 +158,7 @@ def test_the_watermark_stream_is_opened_at_the_runs_start_with_no_admission_and_
 
 def test_the_watermark_stream_is_written_and_never_read():
     """Five requests released over a run with the watermark on (`tick_traffic`'s, each server connection opening at
-    once): the network certifier writes the stream its head, a line a tick and its end, and uses the stream's reader
+    once): the network attester writes the stream its head, a line a tick and its end, and uses the stream's reader
     half in no way, where a `StreamReader`'s every method and iteration is kept (`Unread`). Each response a client
     gets was read on the connection `connect` opened for it, one a client."""
     answers, arrivals, _ = tick_traffic()
