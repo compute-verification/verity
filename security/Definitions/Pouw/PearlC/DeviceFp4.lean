@@ -33,7 +33,7 @@ same fields and no promotion (`G = 0`):
   covers every salt-dead element at the pinned scales (`CodeProofs.saltDead4_screened`), and `Fp4Dev.RowRules4`, D-NF
   with the cap, is kept as `RhoDFp4`'s premise.
 * **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines
-  SHA-512 gives from `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (`NoiseSha512Fp4.seedB` and `drawB`, op for op
+  SHA-512 gives from `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (`NoiseSha512Fp4.seedB` and `sampleB`, op for op
   `pearl_c4.seed_b` and `line`), at an injective encoding of the salt. The verifier forms `B̃` itself on every sampled
   tile and rejects when the checked values differ. It is a condition of the domain, and the registered scheme's noise
   (`pearl-c-nvfp4-v0`, h0; `sha512Fp4Sem`) meets it.
@@ -721,7 +721,7 @@ variable {Q R S : Type}
 /-- **D-SK: `B̃` is keyed by this job's salt through SHA-512** (theory §1, "D-SK"; `pearl_c4.seed_b`), a domain rule
 of TT_OUT-FP4. `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (`NoiseSha512Fp4.seedB`), with the salt from this job's
 epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines SHA-512 gives from
-`seed_B` (`NoiseSha512Fp4.drawB`, `pearl_c4.line`).
+`seed_B` (`NoiseSha512Fp4.sampleB`, `pearl_c4.line`).
 - `salt s` is the salt's bytes, an injective encoding: distinct salts are distinct SHA-512 messages. Nothing here
   assumes SHA-512 itself injective.
 - `rootB w` is the root of weight `w`'s commitment, fixed with the weights before the salt. So `B̃` is a function of the
@@ -736,7 +736,7 @@ def Fp4Sem.SaltKeyedB (sem : Fp4Sem Q R S) : Prop :=
   ∃ (salt : S → List ℕ) (rootB : ℕ → List ℕ), Function.Injective salt ∧
     ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes),
       ((sem.lines H s U u act).EB, (sem.lines H s U u act).FB) =
-        NoiseSha512Fp4.drawB (U.layout.shape u) (NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u)))
+        NoiseSha512Fp4.sampleB (U.layout.shape u) (NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u)))
 
 /-- **Pearl-C4's semantics with SHA-512's noise**, the registered scheme's noise (`pearl-c-nvfp4-v0`, h0) at the right
 `rootA`: `base` with its lines replaced by `NoiseSha512Fp4`'s at the salt's bytes `salt s`, the root
@@ -755,7 +755,7 @@ def sha512Fp4Sem (base : Fp4Sem Q R S) (salt : S → List ℕ) (rootA : List ℕ
       let sB := NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u))
       let sA := NoiseSha512Fp4.seedA (salt s) (rootA (salt s) u act) (rootB (U.layout.fixedId u)) u
       ⟨(NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).1, (NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).2,
-        (NoiseSha512Fp4.drawB (U.layout.shape u) sB).1, (NoiseSha512Fp4.drawB (U.layout.shape u) sB).2⟩ }
+        (NoiseSha512Fp4.sampleB (U.layout.shape u) sB).1, (NoiseSha512Fp4.sampleB (U.layout.shape u) sB).2⟩ }
 
 /-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word a widened BF16 word (its low
 16 bits zero) and finite, every row passing `RowAdmit4`. -/

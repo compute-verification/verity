@@ -10,12 +10,12 @@
     "serve-openai": "adapters/vllm/tools/served_run/serve.sh",
     "served-match": "adapters/vllm/verity_vllm/ops/served_build.sh",
     "served-pin": "benchmarks/served_commit/served_arm.sh",
-    "serving-rows": "verity/protocols/proofs/spot/prover/audit/window_audit.sh",
+    "serving-rows": "benchmarks/one_stage/a5.sh",
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
     "tp-register-tables": "benchmarks/one_stage/expert_tables_tp.sh",
     "workload": "benchmarks/stacked_share/job.sh",
     "ids-front": "benchmarks/network_e2e/traces/ids.sh",
-    "weights-tie": "verity/protocols/proofs/spot/prover/audit/prove_path.sh"
+    "weights-tie": "benchmarks/prove_path/run.sh"
   },
   "entries": [
     {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "fp8-checkpoint"},
