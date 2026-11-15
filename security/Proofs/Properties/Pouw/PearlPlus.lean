@@ -9,7 +9,7 @@ public import Proofs.Properties.Pouw.PearlPlus.Tie
 # Proofs of Pearl+'s run-verdict properties (`Properties.Pouw.PearlPlus`)
 
 One module per group of properties: `OpeningBinds` in `Proofs.Properties.Pouw.PearlPlus.Open`, and `PlanMeans`,
-`AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheCap`, `YIsTheUnscale` and
+`AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans`, `TileKeepsTheInertBound`, `YIsTheUnscale` and
 `WorkIsTheCredit` in `Proofs.Properties.Pouw.PearlPlus.Verdict`, on Lean core; the run sample's `DrawIsOnItsStreams` and
 `CoinBytesGiveUniformTickets` (`Properties.Pouw.PearlPlusSample`) in `Proofs.Properties.Pouw.PearlPlus.Sample`, on Mathlib
 as their statements are; the value tie's `UntiedCellsAtMost` (`Properties.Pouw.PearlPlusTie`) in

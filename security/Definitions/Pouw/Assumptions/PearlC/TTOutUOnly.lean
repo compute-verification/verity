@@ -31,7 +31,7 @@ variable {Q R S : Type}
 weight passing the rules, and every useful word on its `m × n` entries has the reference FP32 value. Its ticket words
 are not read. -/
 def CorrectU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) (c : Commit) : Prop :=
-  P.actOK (U.layout.shape u) c.act ∧ P.capOK H s U u c.act ∧
+  P.actOK (U.layout.shape u) c.act ∧ P.inertBoundOK H s U u c.act ∧
     (∀ j < (U.layout.shape u).n, P.fixedOK (U.layout.shape u) (U.fixed (U.layout.fixedId u)) j) ∧
     ∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n, wordQ (c.useful i j) = P.useful H s U u c.act i j
 
