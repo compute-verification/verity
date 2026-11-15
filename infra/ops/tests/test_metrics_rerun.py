@@ -136,6 +136,65 @@ def test_rows_sharing_a_command_are_one_launch_and_a_fresh_number_or_a_loops_is_
     assert not any("top/fresh" in ln or "infra/loop-number" in ln for ln in pod.lines)
 
 
+def test_a_number_whose_script_is_under_infra_but_not_a_control_loop_is_rerun(tmp_path):
+    """Only the control pod's loops send their own numbers: the dashboard's count, measured by infra/dashboard/run.py, is
+    launched like any other stale number."""
+    dashboard = row("console/top-goals-running",
+                    "research run --on auto --project verity --source . --cwd source -- uv run python infra/dashboard/run.py",
+                    every="1d")
+    loop = row("infra/loop-number", "sh infra/control/store_index.sh", every="5m")
+    cfg = setup(tmp_path, {"infra/dashboard": [dashboard], "infra/control": [loop]})
+    pod = Pod(ages={"console/top-goals-running": 2 * DAY_MS, "infra/loop-number": DAY_MS})
+    state, _ = run(cfg, pod)
+    assert pod.launched == [["research", "run", "--on", "vy-nebius-cpu-12", "--pool", "research", "--project", "verity",
+                             "--source", ".", "--cwd", "source", "--", "uv", "run", "python", "infra/dashboard/run.py"]]
+    assert [e["metrics"] for e in state["launches"]] == [["console/top-goals-running"]]
+    assert not any("infra/loop-number" in ln for ln in pod.lines)
+
+
+RECURSION = "uv run python benchmarks/recursion_e2e/record.py run"
+PARKED_LINE = ("skip benchmarks/recursion-run-seconds: benchmarks/recursion-run-seconds has no reading; but its goal is parked "
+               "(top/parked): a parked number is rerun only by hand")
+
+
+def parked_and_not(tmp_path):
+    """Two rows alike but for their goal, each with no reading and its every long past."""
+    parked = {**row("benchmarks/recursion-run-seconds", RECURSION, every="30d"), "goal": "top/parked"}
+    other = {**row("benchmarks/recursion-other-seconds", RECURSION, every="30d"), "goal": "benchmarks/proof-system-performance"}
+    cfg = setup(tmp_path, {"benchmarks/recursion_e2e": [parked], "benchmarks/recursion_other": [other]})
+    return cfg, Pod(ages={"benchmarks/recursion-run-seconds": None, "benchmarks/recursion-other-seconds": None})
+
+
+def test_a_parked_number_is_never_launched_and_the_pass_says_why(tmp_path):
+    """A row whose goal is top/parked is parked work, which is rerun only by hand; an identical row under another goal is
+    launched."""
+    cfg, pod = parked_and_not(tmp_path)
+    state, _ = run(cfg, pod)
+    assert [e["metrics"] for e in state["launches"]] == [["benchmarks/recursion-other-seconds"]]
+    assert pod.launched[0][-5:] == ["uv", "run", "python", "benchmarks/recursion_e2e/record.py", "run"]
+    assert pod.lines.count(PARKED_LINE) == 1
+
+
+def test_a_dry_run_judges_a_parked_number_the_same(tmp_path):
+    cfg, pod = parked_and_not(tmp_path)
+    state, _ = run(cfg, pod, dry_run=True)
+    assert pod.launched == [] and state["launches"] == []
+    assert PARKED_LINE in pod.lines
+    assert any(ln.startswith("would launch benchmarks/recursion-other-seconds on vy-nebius-cpu-12: ") for ln in pod.lines)
+    assert not any(ln.startswith("would launch benchmarks/recursion-run-seconds") for ln in pod.lines)
+
+
+def test_a_command_one_parked_row_shares_with_another_is_not_launched(tmp_path):
+    """One launch measures every row of its command, so a parked row keeps the command from the loop, and the line names it."""
+    parked = {**row("benchmarks/a", RECURSION, every="30d"), "goal": "top/parked"}
+    cfg = setup(tmp_path, {"benchmarks/recursion_e2e": [parked, row("benchmarks/b", RECURSION, every="30d")]})
+    pod = Pod(ages={"benchmarks/a": None, "benchmarks/b": None})
+    run(cfg, pod)
+    assert pod.launched == []
+    assert ("skip benchmarks/a, benchmarks/b: benchmarks/a has no reading; benchmarks/b has no reading; but benchmarks/a's goal "
+            "is parked (top/parked): a parked number is rerun only by hand") in pod.lines
+
+
 def test_at_most_max_launches_a_pass_and_the_rest_are_said(tmp_path):
     files = {f"benchmarks/b{n}": [row(f"benchmarks/n{n}", f"research run --on auto -- bash benchmarks/b{n}/run.sh")] for n in range(3)}
     cfg = setup(tmp_path, files, max=2)

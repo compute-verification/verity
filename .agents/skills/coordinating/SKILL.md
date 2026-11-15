@@ -117,7 +117,8 @@ using-slack skill).
   Workers line names it and its `bc-` id.
 - **Its brief starts with the issue's URL and done-condition.** It tells the worker to comment each run id, verdict line
   and PR on the issue with `research msg linear comment ISSUE 'TEXT' --worker NAME`. On another lane's issue it
-  signs as its own lane with `--worker LANE/NAME`.
+  signs as its own lane with `--worker LANE/NAME`. A worker's comment rings no one: one that starts with @names posts,
+  names each handle it didn't ring and exits 1, and the worker returns its text to its lead to ring.
 - **No issue, no worker.** A worker running for no issue is stopped, or gets an issue.
 - **It ends its turn done or blocked, never on a plan.** The brief says so. A worker whose last words are "I'll do X"
   has stopped, so resume it with X. An idle worker reads no inbox message: resume it with the message instead.

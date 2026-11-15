@@ -11,6 +11,8 @@ root, and refuses a dirty worktree; a second run changes nothing.
 | `layout_maps.py` | Writes the layout as one map, `layout_one_map.toml` (or, by `--form moves`, as one map a move in the order they run, `layout_NN_NAME_map.toml`), from `layout_maps.json` (each moved component's new directory and files) and the files HEAD tracks; it fails on a tracked file with no destination, so it is the one rerun when `main` moves (`--form`, `--ref`, `--targets`, `--created`). |
 | `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` and sorting again a sorted JSON object whose keys it renames (`--map MAP`, `--dry-run`, `--moves`). |
 | `restack.py` | Carries an open branch across every move `main` has and it lacks, by rerunning each move's script on it, then merging the moved `main` (`BRANCH`, `--push-to`). |
+| `resolve_renames.py` | In a merge of `main` into a branch, resolves each conflict that is only a move's rename against the branch's edit, at the new path or name, and prints the rest (`DIR OTHER`, `--head`, `--extra-map`). |
+| `stale_names.py` | Lists a merged branch's own lines and added files that still spell what a move renamed, with what its map would write (`RESULT`, `--onto`, `--head`, `--map`, `--own`, `--write`). |
 | `flock_base.py` | What follows the modules of Flock's Lean package that moved to the base packages it requires by path: `private` names the module in each `open private … from Flock.M`, `moves` prints the map `check.py --update --moved` takes, and `rewrite` makes every import of an old name, and every lock's `layers` entry for one, name the base module and deletes the re-exports (`--dry-run`). It goes with the re-exports. |
 
 A layout map (`layout.py --map`) maps old paths to new ones; a word map (`rename.py --map`) maps old words to new ones:
@@ -183,5 +185,22 @@ refusal gives the command that carries the branch against the move's own commit,
 
 Its owner then merges today's `main` into that result, a merge inside the new layout, and checks that the merge's tree
 holds the branch's own files at the new paths.
+
+## Carrying a branch by a merge
+
+The other way across reruns no script: merge `main` into the branch, then resolve and check what the moves leave. From
+the branch's clean checkout:
+
+    git merge-base --is-ancestor HEAD origin/main   # exit 0: main holds the branch; close its PR, naming main's commit
+    git merge origin/main
+    python3 tools/move/resolve_renames.py . origin/main   # where the merge stopped; exit 1: what it prints is the owner's
+    git commit --no-edit                                  # once no conflict is left
+    python3 tools/move/stale_names.py HEAD                # the branch's own lines and added files still in old names
+
+`resolve_renames.py` resolves a conflict only where it is a move's rename against the branch's edit, and prints the first
+line of each other hunk. It never merges a lock (`lean-audit.json`): take `main`'s and regenerate it with `check.py
+--update`. In research's `moves.json` keep both sides' entries, `main`'s first. `stale_names.py` lists each line the merge
+left clean and wrong, with what the move's map would have written: rename each that means the renamed name. Neither sees
+a rename a commit made by hand, with no map: build the branch.
 
     uv run tools/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")
