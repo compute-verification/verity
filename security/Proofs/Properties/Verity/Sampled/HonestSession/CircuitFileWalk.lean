@@ -323,26 +323,35 @@ theorem qsort_le1 {α : Type} (as : Array α) (lt : α → α → Bool) (h : as.
 abbrev shaB (A B : Sparse) : Net := built "sha512x3" 256001 ⟨0, 64, HmNets.SHA_IN⟩ ⟨1984, 16, HmNets.SHA_OUT⟩ 64 A B
 abbrev hmB (A B : Sparse) : Net := built "hm96" 246785 ⟨0, 32, HmNets.HM_IN⟩ ⟨1920, 8, HmNets.HM_OUT⟩ 32 A B
 
-fwd_def cG parse_cG (ls lh : HmNets.Laid) (bP bT bS H C : ByteArray) (A B A' B' : Sparse) (s1 : String)
-    (hH : Sha512.hash (bytesG ls lh dummyBc bP bT bS) = H)
-    (hC : HmRow.classOf (bytesG ls lh dummyBc bP bT bS) ("flock-circuit " ++ unitName)
-      (FirewallJson.norm (metaJG dummyBc bP bT bS)) = .ok C)
-    (hP : bP.size = 64) (hS : bS.size = 64)
+/-- `HmRow.parse` reads the dummy row's digests with `Array.mapM`, whose loop the walk does not step. -/
+theorem mapM_one {α β ε : Type} (f : α → Except ε β) (a : Array α) (h : a.size = 1) :
+    a.mapM f = (f (a[0]'(by rw [h]; exact Nat.one_pos)) >>= fun y => pure #[y]) := by
+  obtain ⟨l⟩ := a
+  match l, h with
+  | [x], _ =>
+    show Array.mapM f #[x] = (f x >>= fun y => pure #[y])
+    simp [Array.mapM_eq_mapM_toList]
+
+fwd_def cG parse_cG (ls lh : HmNets.Laid) (bD bP bT bS H C : ByteArray) (A B A' B' : Sparse) (s1 : String)
+    (hH : Sha512.hash (bytesG ls lh bD bP bT bS) = H)
+    (hC : HmRow.classOf (bytesG ls lh bD bP bT bS) ("flock-circuit " ++ unitName)
+      (FirewallJson.norm (metaJG bD bP bT bS)) = .ok C)
+    (hD : bD.size = 128) (hP : bP.size = 64) (hS : bS.size = 64)
     (hls : VStar.netLines ls = 256002) (hlh : VStar.netLines lh = 246786)
     (hps : Net.parse (netLs "sha512x3" ls).toArray = .ok (shaB A B))
     (hph : Net.parse (netLs "hm96" lh).toArray = .ok (hmB A' B'))
-    (hc1 : canon (lsJG dummyBc bP bT bS) = .ok s1) (hc2 : canon pinJZ = .ok s1)
+    (hc1 : canon (lsJG bD bP bT bS) = .ok s1) (hc2 : canon pinJZ = .ok s1)
     (hck : ∀ c : Flock.Circuit, (c.nets.getD c.shaNet default).2 = shaB A B → (c.nets.getD c.hmNet default).2 = hmB A' B' →
       HmNets.check c = .ok ()) :
-    HmOut.parse tZ (bytesG ls lh dummyBc bP bT bS) [] by
-  [hH, hC, hutfG ls lh dummyBc bP bT bS, hsplitG ls lh dummyBc bP bT bS, lines_if _, getD_toArray, getElem!_toArray,
-    lines1G ls lh dummyBc bP bT bS, trim_metaG dummyBc bP bT bS, starts_metaG dummyBc bP bT bS, drop_metaG dummyBc bP bT bS,
-    parse_metaG dummyBc bP bT bS, trim_of, size_linesG ls lh dummyBc bP bT bS hls hlh, line_unitG ls lh dummyBc bP bT bS hls hlh,
-    line_shaG ls lh dummyBc bP bT bS hls hlh, line_hmG ls lh dummyBc bP bT bS hls hlh, tokens3, getD3, toNat?_toString,
-    ext_unitG ls lh dummyBc bP bT bS hls hlh, ext_shaG ls lh dummyBc bP bT bS hls hlh, ext_hmG ls lh dummyBc bP bT bS hls hlh,
+    HmOut.parse tZ (bytesG ls lh bD bP bT bS) [] by
+  [hH, hC, hutfG ls lh bD bP bT bS, hsplitG ls lh bD bP bT bS, lines_if _, getD_toArray, getElem!_toArray,
+    lines1G ls lh bD bP bT bS, trim_metaG bD bP bT bS, starts_metaG bD bP bT bS, drop_metaG bD bP bT bS,
+    parse_metaG bD bP bT bS, trim_of, size_linesG ls lh bD bP bT bS hls hlh, line_unitG ls lh bD bP bT bS hls hlh,
+    line_shaG ls lh bD bP bT bS hls hlh, line_hmG ls lh bD bP bT bS hls hlh, tokens3, getD3, toNat?_toString,
+    ext_unitG ls lh bD bP bT bS hls hlh, ext_shaG ls lh bD bP bT bS hls hlh, ext_hmG ls lh bD bP bT bS hls hlh,
     parse_unitH, hps, hph, forIn_yield, forIn_done, hc1, hc2, bne_self, hck, unit_eq, open_noneH, res_noneH,
-    sparse_noneH, opening_noneH, lk_prog dummyBc bP bT bS, lk_part dummyBc bP bT bS, optD, sha_hex hS, sha_hex hP,
-    qsort_le1]
+    sparse_noneH, opening_noneH, lk_prog bD bP bT bS, lk_part bD bP bT bS, optD, sha_hex hS, sha_hex hP,
+    qsort_le1, Flock.Hex.unhex_hexOf, hD, mapM_one]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.classOf]
   shallow [metaTextG]

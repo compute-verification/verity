@@ -5,6 +5,7 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.CircuitFileWalk
 public import Proofs.Flock.SessionLoop.Concrete.Stmt
 public import Proofs.Properties.Flock.Nets
 public import Proofs.Flock.Claims.CanonEq
+public import Proofs.Flock.Soundness.SparseRows
 import Flock.HmRow
 import Flock.Canon
 import all Init.Data.Array.QSort.Basic
@@ -28,9 +29,10 @@ import all Init.Data.String.Basic
 the fixed nets are `Properties.Flock.Nets.fixedNetsBuild`'s, the leaf scheme's canonical text is the pinned one's, and the
 class hash is `classSha` (`classOf_eq`): the parser's reading of META prints, past its binding keys, as `metaPairs`'
 binding-free members do (`canonUtf8_jsonEquiv`, `normS_jsonEquiv`), and the bytes it hashes after META are the file's
-remaining lines (`extract_tail`). `HmOut.parse` then checks the rows (`HmOut.checkRows`), and `circuitFileFacts_of`
-reads the fields off the parsed circuit, all but two: the dummy row's digest, which `cG` holds as `unhex (hexOf dummyBc)`
-unrolled byte by byte, and the unit net's reads, which `portReadsB` takes through its sparse rows.
+remaining lines (`extract_tail`). `HmOut.parse` then checks the rows (`HmOut.checkRows`), and `circuitFileFacts` reads the
+fields off the parsed circuit; the unit net's reads come from its rows (`Net.ofRows_ok`, `SparseRows.ofRows_row`), of
+which only rows 128 to 143 hold an entry below the input words, each a port bit. The reads a consumer takes past the
+fields are stated as equations on `cR` (`cR_nets` and the others), so that no consumer unfolds `cR`.
 -/
 
 @[expose] public section
@@ -335,17 +337,22 @@ end
 /-- **The circuit `HmOut.parse` reads the circuit file to**: `cG` at the file's digests, the verifier's fixed nets'
 matrices and the pinned leaf scheme's canonical text. -/
 noncomputable def cR : Flock.Circuit :=
-  cG (HmNets.shaLaid ()) (HmNets.hmLaid ()) partitionDigestB templateDigest programSha circuitSha classSha
+  cG (HmNets.shaLaid ()) (HmNets.hmLaid ()) dummyBc partitionDigestB templateDigest programSha circuitSha classSha
     (sparseOf (HmNets.shaLaid ()).ra) (sparseOf (HmNets.shaLaid ()).rb) (sparseOf (HmNets.hmLaid ()).ra)
     (sparseOf (HmNets.hmLaid ()).rb) s1Z
+
+theorem dummyBc_size : dummyBc.size = 128 := by
+  have hs : yPort.segs.isSome = false := rfl
+  unfold dummyBc HmOut.rowBcZeroSalt
+  simp only [hs, Bool.false_eq_true, if_false, ↓reduceIte, ByteArray.size_append, Hex.size_hash]
 
 /-- **`HmOut.parse` reads the circuit file to `cR`.** -/
 theorem parse_eq : HmOut.parse tagsZ circuitFile [] = .ok cR := by
   have hp := FlockDeploy.fixedNets_parse fixedNetsBuild
   rw [tagsZ_eq, circuitFile_eqG]
-  exact parse_cG (HmNets.shaLaid ()) (HmNets.hmLaid ()) partitionDigestB templateDigest programSha circuitSha
+  exact parse_cG (HmNets.shaLaid ()) (HmNets.hmLaid ()) dummyBc partitionDigestB templateDigest programSha circuitSha
     classSha (sparseOf (HmNets.shaLaid ()).ra) (sparseOf (HmNets.shaLaid ()).rb) (sparseOf (HmNets.hmLaid ()).ra)
-    (sparseOf (HmNets.hmLaid ()).rb) s1Z rfl classOf_eq (Hex.size_hash _) (Hex.size_hash _)
+    (sparseOf (HmNets.hmLaid ()).rb) s1Z rfl classOf_eq dummyBc_size (Hex.size_hash _) (Hex.size_hash _)
     (FlockDeploy.sha_lines fixedNetsBuild) (FlockDeploy.hm_lines fixedNetsBuild) hp.1.2 hp.2.2
     (hc1Z dummyBc partitionDigestB templateDigest programSha) hc2Z
     (fun c h1 h2 => FlockDeploy.Concrete.check_of hp.1.1 hp.2.1 c h1 h2)
@@ -376,22 +383,110 @@ theorem cH_kLog : cH.kLog = 22 := by rw [cH_eq]; kernel_rfl'
 theorem cH_metaJ : cH.metaJ = FirewallJson.norm metaJ := by rw [cH_eq]; kernel_rfl'
 theorem cH_upv : cH.upv = 1 := by rw [cH_eq]; kernel_rfl'
 
+theorem cR_dummyDigests : cR.dummyDigests = #[dummyBc] := rfl
+theorem cH_dummyDigests : cH.dummyDigests = #[dummyBc] := by rw [cH_eq]; exact cR_dummyDigests
 theorem cH_dummyOutputs : cH.dummyOutputs = #[0] := by rw [cH_eq]; kernel_rfl'
 theorem cR_unit : cR.unit = UNH := by kernel_rfl'
 
 theorem unit_inGroups : cH.unit.inGroups.size = 1 := by rw [cH_eq, cR_unit]; rfl
 theorem unit_outNet : cH.outNet = cH.unitNet := by rw [cH_eq]; kernel_rfl'
 theorem unit_unitLog : cH.unit.unitLog ≤ 32 := by rw [cH_eq, cR_unit]; decide
-/-- `cH`'s unit reads only port bits when the unit net does. -/
-theorem unit_portReads_of (h : FlockSoundness.Discharge.Layout.portReadsB UNH = true) :
-    FlockSoundness.Discharge.Layout.portReadsB cH.unit = true := by
-  rw [cH_eq, cR_unit]
-  exact h
 
-/-- **`CircuitFileFacts` from the dummy row's digest and the unit net's reads**: every other field is proved above. -/
-theorem circuitFileFacts_of (hd : cH.dummyDigests = #[dummyBc])
-    (hp : FlockSoundness.Discharge.Layout.portReadsB UNH = true) : CircuitFileFacts :=
+/-! ## The unit net reads only port bits -/
+
+theorem portBits16 : ∀ y < 16, y ∈ FlockSoundness.portBits #[{ col := 0, words := 1, bits := #[16] }] := by
+  decide
+
+theorem raRow (i : Nat) (h : i < 257) :
+    FlockDeploy.Concrete.unitLaid.ra.getD i #[] = FlockDeploy.Concrete.unitRow true i := by
+  simp [FlockDeploy.Concrete.unitLaid, Array.getD, h]
+
+theorem rbRow (i : Nat) (h : i < 257) :
+    FlockDeploy.Concrete.unitLaid.rb.getD i #[] = FlockDeploy.Concrete.unitRow false i := by
+  simp [FlockDeploy.Concrete.unitLaid, Array.getD, h]
+
+theorem rowT (i : Nat) (hi : i < 16) : FlockDeploy.Concrete.unitRow true (128 + i) = #[i] := by
+  unfold FlockDeploy.Concrete.unitRow
+  rw [if_neg (by omega), if_pos (by simp only [Bool.and_eq_true, decide_eq_true_eq]; omega), if_pos rfl]
+  rw [Nat.add_sub_cancel_left]
+
+theorem rowF (i : Nat) (hi : i < 16) : FlockDeploy.Concrete.unitRow false (128 + i) = #[256] := by
+  unfold FlockDeploy.Concrete.unitRow
+  rw [if_neg (by omega), if_pos (by simp only [Bool.and_eq_true, decide_eq_true_eq]; omega)]
+  rfl
+
+theorem rowE (b : Bool) (i : Nat) (h1 : 16 ≤ i) (h2 : i < 128) : FlockDeploy.Concrete.unitRow b (128 + i) = #[] := by
+  unfold FlockDeploy.Concrete.unitRow
+  rw [if_neg (by omega), if_neg (by simp only [Bool.and_eq_true, decide_eq_true_eq]; omega),
+    if_neg (by simp only [beq_iff_eq]; omega)]
+
+theorem unitRows_portReads : ((List.range (256 - min (1 * Flock.WORD) 256)).all fun i =>
+      ((FlockDeploy.Concrete.unitLaid.ra.getD (min (1 * Flock.WORD) 256 + i) #[]).toList ++
+            (FlockDeploy.Concrete.unitLaid.rb.getD (min (1 * Flock.WORD) 256 + i) #[]).toList).all
+        fun x => decide (x < min (1 * Flock.WORD) 256 → x ∈ FlockSoundness.portBits #[{ col := 0, words := 1, bits := #[16] }])) =
+    true := by
+  have hW : min (1 * Flock.WORD) 256 = 128 := by decide
+  simp only [hW, List.all_eq_true, List.mem_range, decide_eq_true_eq]
+  intro i hi x hx hx128
+  rw [raRow _ (by omega), rbRow _ (by omega)] at hx
+  by_cases h : i < 16
+  · rw [rowT i h, rowF i h] at hx
+    simp only [List.mem_append, List.toList_toArray, List.mem_singleton] at hx
+    apply portBits16
+    omega
+  · rw [rowE true i (by omega) hi, rowE false i (by omega) hi] at hx
+    simp at hx
+
+theorem portReads_UNH : FlockSoundness.Discharge.Layout.portReadsB UNH = true := by
+  have hn := Net.ofRows_ok unit_netOfH
+  have hw : 2 ^ UNH.unitLog ≤ 2 ^ 32 := by show 2 ^ 9 ≤ 2 ^ 32; decide
+  have ha := FlockSoundness.SparseRows.ofRows_row hn.2.1 hw
+  have hb := FlockSoundness.SparseRows.ofRows_row hn.2.2.1 hw
+  unfold FlockSoundness.Discharge.Layout.portReadsB
+  simp only [ha, hb]
+  have e1 : UNH.constPos = 256 := rfl
+  have e2 : UNH.inWords = 1 := rfl
+  have e3 : UNH.inGroups = #[⟨0, 1, #[16]⟩] := rfl
+  simp only [e1, e2, e3]
+  exact unitRows_portReads
+
+theorem unit_portReads : FlockSoundness.Discharge.Layout.portReadsB cH.unit = true := by
+  rw [cH_eq, cR_unit]
+  exact portReads_UNH
+
+/-- **The circuit file's facts.** -/
+theorem circuitFileFacts : CircuitFileFacts :=
   ⟨maskLog_eq, parse_ok, parseCommit_ok, hmIn_parse, cH_sha, cH_classSha, cH_ports, cH_outRowPorts, cH_g, cH_kLog,
-    cH_metaJ, cH_upv, hd, cH_dummyOutputs, unit_inGroups, unit_outNet, unit_unitLog, unit_portReads_of hp⟩
+    cH_metaJ, cH_upv, cH_dummyDigests, cH_dummyOutputs, unit_inGroups, unit_outNet, unit_unitLog, unit_portReads⟩
+
+/-! ## Reads of `cR` past the fields
+
+Each by the kernel on `cR`'s own terms: the nets stay `sparseOf` of the verifier's laid nets, never evaluated. -/
+
+theorem cR_nets : cR.nets = #[("unit", UNH),
+    ("sha512x3", shaB (sparseOf (HmNets.shaLaid ()).ra) (sparseOf (HmNets.shaLaid ()).rb)),
+    ("hm96", hmB (sparseOf (HmNets.hmLaid ()).ra) (sparseOf (HmNets.hmLaid ()).rb))] := by kernel_rfl'
+theorem cR_unitNet : cR.unitNet = 0 := by kernel_rfl'
+theorem cR_shaNet : cR.shaNet = 1 := by kernel_rfl'
+theorem cR_hmNet : cR.hmNet = 2 := by kernel_rfl'
+theorem cR_outNet : cR.outNet = 0 := by kernel_rfl'
+theorem cR_leafScheme : cR.leafScheme = "hm96-sha512/v1" := by kernel_rfl'
+theorem cR_outNetPorts : cR.outNetPorts = #[] := by kernel_rfl'
+theorem cR_outNetSlots : cR.outNetSlots = none := by kernel_rfl'
+theorem cR_leafCuts : cR.leafCuts = #[] := by kernel_rfl'
+theorem cR_typed : cR.typed = none := by kernel_rfl'
+theorem cR_cls : cR.cls = none := by kernel_rfl'
+theorem cR_tmpl : cR.tmpl = none := by kernel_rfl'
+theorem cR_key : cR.key = ByteArray.empty := by kernel_rfl'
+theorem cR_outPorts : cR.outPorts = #[("y", 1)] := by kernel_rfl'
+theorem cR_leavesIn : cR.leavesIn = #[#[-1]] := by kernel_rfl'
+theorem cR_leavesOut : cR.leavesOut = #[#[0]] := by kernel_rfl'
+theorem cR_perVu : cR.perVu = #[1, 1, 1] := by kernel_rfl'
+theorem cR_wires : cR.wires = #[⟨(2, 0, 0), (1, 0, 0)⟩] := by kernel_rfl'
+theorem cR_ranges_size : cR.ranges.size = 4 := by kernel_rfl'
+/-- The ranges' kinds, slots, positions and counts in META's order (hm96, sha512x3, the unit, the mask); their `packed`
+flags are not stated: the kernel does not reduce META's lookup of the absent key. -/
+theorem cR_ranges : cR.ranges.toList.map (fun r => (r.kind, r.slotLog, r.pos0, r.count)) =
+    [(.net 2, 18, 0, 1), (.net 1, 18, 1, 1), (.net 0, 9, 1024, 1), (.mask, 14, 64, 1)] := by kernel_rfl'
 
 end Verity.Sampled.Instance.HonestSession.CircuitFileProof
