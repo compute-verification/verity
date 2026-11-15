@@ -71,7 +71,12 @@ EXCLUDE = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "adapters/vllm/tools/migrate/superseded_quarantine.py",
            "**/migrate/test_superseded_quarantine.py", "**/*.lean", "**/lakefile.toml", "tests/tree.toml", "**/*.cu",
            "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c", "benchmarks/pouw/pearl_c_sm90/**"]
-INCLUDE = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
+#: the mover's own pyproject is the suite's, which the suites map rewrites, though `tools/move/**` is never rewritten
+INCLUDE = ["**/fixtures/README.md", "**/fixtures/**/README.md", "tools/move/pyproject.toml"]
+#: {art: id: path} of every replicated fixture, whose bytes its id pins
+ARTIFACTS = "artifacts.json"
+#: `from __future__ import ...`, which must open a module
+FUTURE = re.compile(r"^from __future__ import [^\n]*\n", re.M)
 #: the tables a suite's pyproject holds for pytest and the check, which `split` moves
 SUITE_TABLES = ("tool.pytest", "tool.verity.tests")
 
@@ -299,8 +304,15 @@ def split(t: Tree, d: str) -> dict[str, str]:
 
 def _merge_conftests(outer: str, inner: str) -> str:
     """One conftest from the one beside a distribution's pyproject and the one in its `tests/`: the outer first, as pytest
-    loaded it first. A file with none inside is the outer one."""
-    return outer if not inner.strip() else outer.rstrip("\n") + "\n\n\n# The conftest of the suite's tests/ before its tables moved there.\n" + inner
+    loaded it first. A file with none inside is the outer one. The inner one's `from __future__` imports join the outer's,
+    which open the module."""
+    if not inner.strip():
+        return outer
+    futures = [f for f in FUTURE.findall(inner) if f not in outer]
+    if futures:
+        at = max((m.end() for m in FUTURE.finditer(outer)), default=0)
+        outer = outer[:at] + "".join(futures) + outer[at:]
+    return outer.rstrip("\n") + "\n\n\n# The conftest of the suite's tests/ before its tables moved there.\n" + FUTURE.sub("", inner)
 
 
 def run_split(t: Tree, names: list[str]) -> list[str]:
@@ -345,6 +357,14 @@ def _toml_list(items: list[str], indent: int = 4) -> str:
     return "[\n" + "".join(f"{' ' * indent}{json.dumps(i)},\n" for i in items) + "]"
 
 
+def _registered(t: Tree) -> list[str]:
+    """The tracked replicated fixtures (`artifacts.json`): rewritten, a fixture no longer hashes to its id."""
+    if not (t.root / ARTIFACTS).is_file():
+        return []
+    paths = json.loads((t.root / ARTIFACTS).read_text()).values()
+    return sorted(p for p in paths if isinstance(p, str) and p in t.tracked)
+
+
 def files_map(t: Tree) -> str:
     dirs = t.test_dirs()
     rows = {f"{d}/": t.destination(d) for d in dirs}
@@ -357,7 +377,9 @@ def files_map(t: Tree) -> str:
            "".join(f"{json.dumps(o)} = {json.dumps(n)}\n" for o, n in rows.items()),
            "\n[retired]\n# the paths this map empties\npaths = " + _toml_list(list(rows)) + "\n\n",
            "[rewrite]\n# Never rewritten: records of what was, files whose bytes a digest pins, and every Lean input.\n",
-           "exclude = " + _toml_list(EXCLUDE) + "\n", "include = " + _toml_list(INCLUDE) + "\n"]
+           "exclude = " + _toml_list(EXCLUDE + _registered(t)) + "\n", "include = " + _toml_list(INCLUDE) + "\n",
+           "# a test's relative paths name a toy's files; its anchors are `tests_root.py anchors`\n",
+           "keep_relative = " + _toml_list([f"{d}/*.py" for d in dirs]) + "\n"]
     for d in dirs:
         if f"{d}/pyproject.toml" in t.tracked and _pythonpath(t, d):
             out.append(f"\n[pyproject.{json.dumps(t.destination(d) + 'pyproject.toml')}]\npythonpath_from = {json.dumps(d)}\n")
@@ -419,7 +441,8 @@ def suites_map(t: Tree) -> str:
         "# Written by `tools/move/tests_root.py maps`.\n\n",
         f"[roots]\nold = {inline}\nnew = {inline}\n\n\n[paths]\n",
         "".join(f"{json.dumps(o)} = {json.dumps(n)}\n" for o, n in rows.items()), "\n",
-        "[rewrite]\n# as tests_root_map.toml's\n", "exclude = " + _toml_list(EXCLUDE) + "\n", "include = " + _toml_list(INCLUDE) + "\n\n",
+        "[rewrite]\n# as tests_root_map.toml's\n", "exclude = " + _toml_list(EXCLUDE + _registered(t)) + "\n",
+        "include = " + _toml_list(INCLUDE) + "\n\n",
         "\n".join(tables)])
 
 
@@ -429,7 +452,7 @@ def suites_map(t: Tree) -> str:
 ANCHOR = r"(?:pathlib\.)?Path\(__file__\)(?:\.resolve\(\)|\.absolute\(\))?(?P<up>(?:\.parent\b)+|\.parents\[\d+\](?:\.parent\b)*)"
 #: literal joins after an anchor
 JOINS = r"(?P<joins>(?:\s*/\s*(?:\"[^\"\n]*\"|'[^'\n]*'))*)"
-NAMED = re.compile(r"^(?P<name>[A-Z_][A-Z0-9_]*)\s*=\s*" + ANCHOR + r"\s*$", re.M)
+NAMED = re.compile(r"^(?P<name>[A-Z_][A-Z0-9_]*)\s*=\s*(?P<open>\(?)" + ANCHOR + JOINS + r"(?P<close>\)?)\s*$", re.M)
 
 
 def _levels(up: str) -> int:
@@ -465,15 +488,24 @@ def _strings(text: str) -> list[tuple[int, int]]:
     return out
 
 
+def _names(text: str) -> dict[str, tuple[int, list[str]]]:
+    """Each module constant bound to an anchor: {name: (the levels above the file it starts from, its literal joins)}."""
+    return {m.group("name"): (_levels(m.group("up")), _segments(m.group("joins"))) for m in NAMED.finditer(text)
+            if bool(m.group("open")) == bool(m.group("close"))}
+
+
 def _anchors(text: str) -> list[tuple[int, int, str | None, int, list[str]]]:
     """Each anchor of a file outside its string literals: (start, end, the name it starts from or None for
-    `Path(__file__)`, the levels above the file it names, its literal joins, those after a parenthesis around it too). A
-    name is a module constant bound to an anchor; `NAME.parent...` counts from its level."""
-    names = {m.group("name"): _levels(m.group("up")) for m in NAMED.finditer(text)}
+    `Path(__file__)`, the levels above its start it names, its literal joins, those after a parenthesis around it too). A
+    name is a module constant bound to an anchor; `NAME.parent... / "x"` counts from the directory it names, and a use
+    of the name joined to nothing is one too, but where it is bound."""
+    names = _names(text)
     found = [(m, None, _levels(m.group("up"))) for m in re.finditer(ANCHOR + JOINS, text)]
     if names:
-        named = r"\b(?P<name>" + "|".join(map(re.escape, names)) + r")(?P<up>(?:\.parent\b)+|\.parents\[\d+\](?:\.parent\b)*)" + JOINS
-        found += [(m, m.group("name"), names[m.group("name")] + _levels(m.group("up"))) for m in re.finditer(named, text)]
+        named = (r"\b(?P<name>" + "|".join(map(re.escape, names)) + r")\b(?!\s*=[^=])(?P<up>\.parents\[\d+\](?:\.parent\b)*|(?:\.parent\b)*)"
+                 + JOINS)
+        found += [(m, m.group("name"), _levels(m.group("up"))) for m in re.finditer(named, text)
+                  if text[m.end():m.end() + 1] != "(" and not text[:m.start()].rstrip().endswith(".")]
     strings = _strings(text)
     out = []
     for m, name, levels in found:
@@ -512,17 +544,31 @@ def _expression(name: str | None, levels: int, segs: list[str], style: str) -> s
     return head + "".join(f' / "{x}"' for x in segs)
 
 
+def _start(path: str, name: str | None, names: dict[str, tuple[int, list[str]]]) -> str:
+    """The directory an anchor of file `path` counts from: the file's, or the one `name` is bound to."""
+    if name is None:
+        return posixpath.dirname(path)
+    levels, segs = names[name]
+    return posixpath.normpath(posixpath.join(_ancestor(path, levels), *segs))
+
+
+def _target(path: str, name: str | None, names: dict[str, tuple[int, list[str]]], levels: int, segs: list[str]) -> str:
+    """What an anchor of file `path` names: `levels` above the file (its directory is 1), or above `name`'s directory."""
+    return posixpath.normpath(posixpath.join(_ancestor(_start(path, name, names), levels - (name is None)), *segs))
+
+
 def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
-    """Each anchor of a moved Python file that no longer names what it named at `base`, the commit before the moves (the
-    mover recomputes the anchors it reads as joins; a name bound to one, `NAME.parent`, it can't). With `write`, each is
-    rewritten to name it again. {file: [what changed]}."""
+    """Each anchor of a Python file, moved or not, that no longer names what it named at `base`, the commit before the moves
+    (the mover recomputes the anchors it reads as joins; a name bound to one, `NAME.parent` or `NAME / "x"`, and an anchor
+    of a file that stays naming a test that moved, it can't). With `write`, each is rewritten to name it again.
+    {file: [what changed]}."""
     rows = _rows(t.root)
     out = {}
     for old in git("ls-tree", "-r", "--name-only", base, root=t.root).split("\n"):
         new = _mapped(old, rows)
-        if new == old or not new.endswith(".py") or not (t.root / new).is_file():
+        if not new.endswith(".py") or not (t.root / new).is_file() or "__file__" not in (after := (t.root / new).read_text()):
             continue
-        before, after = git("show", f"{base}:{old}", root=t.root), (t.root / new).read_text()
+        before = git("show", f"{base}:{old}", root=t.root)
         if before.count("\n") != after.count("\n"):
             out[new] = [f"{new}: its lines differ from {old}'s, so its anchors are not checked"]
             continue
@@ -531,17 +577,19 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
         for k, text in ((0, before), (1, after)):
             for x in _anchors(text):
                 pairs[line_of(text, x[0])][k].append(x)
-        names_new = {m.group("name"): _levels(m.group("up")) for m in NAMED.finditer(after)}
+        names_old, names_new = _names(before), _names(after)
         edits = []
         for line, (ax, ay) in sorted(pairs.items()):
             if len(ax) != len(ay):
                 continue
             for (_, _, n0, l0, g0), (s1, e1, n1, l1, g1) in zip(ax, ay):
-                want = _mapped(posixpath.normpath(posixpath.join(_ancestor(old, l0), *g0)), rows)
-                have = posixpath.normpath(posixpath.join(_ancestor(new, l1), *g1))
+                if n0 != n1:
+                    continue
+                want = _mapped(_target(old, n0, names_old, l0, g0), rows)
+                have = _target(new, n1, names_new, l1, g1)
                 if want == have:
                     continue
-                start = _ancestor(new, names_new[n1]) if n1 else posixpath.dirname(new)
+                start = _start(new, n1, names_new)
                 common = posixpath.commonpath([start, want]) if start and want and not want.startswith("..") else ""
                 up = (start.count("/") + 1 if start else 0) - (common.count("/") + 1 if common else 0)
                 rel = posixpath.relpath(want or ".", common or ".")

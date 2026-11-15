@@ -25,6 +25,8 @@ TREE = {
     "verity/__init__.py": "",
     "verity/a/__init__.py": "",
     "verity/a/mod.py": "X = 1\n",
+    "verity/a/reader.py": "from pathlib import Path\n\nHELPER = Path(__file__).resolve().parent / \"tests/helper.py\"\n",
+    "verity/a/tests/helper.py": "H = 1\n",
     "verity/a/pyproject.toml": '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["."]\n\n[tool.verity.tests]\n'
                                'untraced = ["tests/test_a.py"]\n',
     "verity/a/tests/test_a.py": "from pathlib import Path\n\nfrom verity.a import mod\n\nCODE = Path(__file__).parent / \"../..\" / \"a\" / \"mod.py\"\n\n\n"
@@ -34,16 +36,17 @@ TREE = {
                                     'build-backend = "hatchling.build"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
                                     'pythonpath = ["."]\n\n[tool.verity.tests]\nuntraced = ["tests/test_d.py"]\n'
                                     '# what its dependents read\nexports = ["adapters/dist/dist"]\n',
-    "adapters/dist/conftest.py": "OUTER = 1\n",
+    "adapters/dist/conftest.py": "from __future__ import annotations\n\nOUTER = 1\n",
     "adapters/dist/dist/__init__.py": "",
     "adapters/dist/tests/__init__.py": "",
-    "adapters/dist/tests/conftest.py": "INNER = 1\n",
+    "adapters/dist/tests/conftest.py": "from __future__ import annotations\n\nINNER = 1\n",
     "adapters/dist/tests/helpers.py": "H = 1\n",
     "adapters/dist/tests/test_d.py": "from pathlib import Path\n\nfrom tests.helpers import H\n\nHERE = Path(__file__).resolve().parent\n"
                                      "CODE = HERE.parent / \"dist\" / \"__init__.py\"\n\n\ndef test_d():\n    assert H and CODE.is_file()\n",
     "tools/plain/pyproject.toml": '[project]\nname = "plain"\nversion = "0"\n\n[tool.uv]\npackage = false\n\n'
                                   '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["../../verity/a"]\n',
-    "tools/plain/tests/test_p.py": "def test_p():\n    pass\n",
+    "tools/plain/tests/test_p.py": "from pathlib import Path\n\nA = Path(__file__).resolve().parents[3] / \"verity\" / \"a\"\n"
+                                   "HELPER = A / \"tests\" / \"helper.py\"\n\n\ndef test_p():\n    assert HELPER.is_file()\n",
     "tools/research/src/research/store/moves.json": '{"moves": []}\n',
 }
 
@@ -97,15 +100,16 @@ def test_split_moves_a_distributions_suite_to_a_virtual_member_in_its_tests_once
     assert uv["sources"] == {"verity": {"workspace": True}, "dist": {"workspace": True}}
     assert not (r / "adapters/dist/conftest.py").exists()
     conftest = (r / "adapters/dist/tests/conftest.py").read_text()
-    assert conftest.index("OUTER") < conftest.index("INNER")
+    assert conftest.index("OUTER") < conftest.index("INNER") and conftest.count("from __future__") == 1
+    assert conftest.startswith("from __future__ import annotations\n")
     assert TR.run_split(TR.Tree(r), []) == []
 
 
 def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproject_beside_them(tmp_path):
     """After `split`, `maps`, its move, `suites-map`, its move and `anchors`: every test is under `tests/`, each suite's
     pyproject beside its tests collects them from its own directory and puts the same directories on its path, a suite
-    whose own directory held more than its tests reads it still, and a test's relative reference to its code, through
-    `Path(__file__)` or a name bound to it, still reaches it."""
+    whose own directory held more than its tests reads it still, and a reference through `Path(__file__)` or a name bound
+    to it still reaches what it did: a test's to its code, a test's to another's tests, and code's to its tests."""
     r = repo(tmp_path)
     TR.run_split(TR.Tree(r), [])
     git(r, "commit", "-q", "-m", "split")
@@ -124,7 +128,7 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     files = tomllib.loads((r / TR.FILES_MAP).read_text())
     assert files["paths"] == {"adapters/dist/tests/": "tests/adapters/dist/tests/", "tools/plain/tests/": "tests/tools/plain/",
                               "verity/a/tests/": "tests/verity/a/"}
-    assert files.get("split") == {"verity/a/tests/test_a.py: verity": {"to": "verity", "why": TR.SPLIT_WHY}}
+    assert "split" not in files and files["rewrite"]["keep_relative"] == [f"{d}*.py" for d in files["paths"]]
     move(TR.FILES_MAP)
     assert TR.main(["suites-map"], root=r) == 0
     suites = tomllib.loads((r / TR.SUITES_MAP).read_text())
@@ -135,7 +139,6 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     move(TR.SUITES_MAP)
     left = [f for f in git(r, "ls-files").split() if "/tests/" in f and not f.startswith(("tests/", "tools/move/"))]
     assert left == []
-    assert '"../../../verity"' in (r / "tests/verity/a/test_a.py").read_text()
     a = tomllib.loads((r / "tests/verity/a/pyproject.toml").read_text())
     assert a["tool"]["pytest"]["ini_options"] == {"testpaths": ["."], "pythonpath": ["../../../verity/a"]}
     assert a["tool"]["verity"]["tests"] == {"untraced": ["test_a.py"], "inputs": ["verity/a"]}
@@ -148,4 +151,8 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert TR.main(["anchors", base, "--write"], root=r) == 0
     assert 'CODE = HERE.parents[3] / "adapters" / "dist" / "dist" / "__init__.py"' in (
         r / "tests/adapters/dist/tests/test_d.py").read_text()
+    assert 'CODE = Path(__file__).parents[3] / "verity" / "a" / "mod.py"' in (r / "tests/verity/a/test_a.py").read_text()
+    assert 'HELPER = Path(__file__).resolve().parents[2] / "tests" / "verity" / "a" / "helper.py"' in (
+        r / "verity/a/reader.py").read_text()
+    assert 'HELPER = A.parents[1] / "tests" / "verity" / "a" / "helper.py"' in (r / "tests/tools/plain/test_p.py").read_text()
     assert TR.anchors(TR.Tree(r), base, write=False) == {}
