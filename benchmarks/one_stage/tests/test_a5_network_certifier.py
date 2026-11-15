@@ -1,10 +1,10 @@
-"""a5_warden's window on a warden run driven tick by tick (`test_warden_serve._run`), before anything is lowered or proved
-(`a5_warden.main` does, through `a5.audit`, on a node): each transfer-gate chunk's registered port's rows, the warden's
-bucket rows committed under its salts, open the warden's signed root at the rows the verifier's own reads name, each
-unit's read (q, k) the Program's units' (`warden_rows.Units`, from public structure alone) placed by the wiring the warden
+"""a5_network_certifier's window on a network certifier run driven tick by tick (`test_network_certifier_serve._run`), before anything is lowered or proved
+(`a5_network_certifier.main` does, through `a5.audit`, on a node): each transfer-gate chunk's registered port's rows, the network certifier's
+bucket rows committed under its salts, open the network certifier's signed root at the rows the verifier's own reads name, each
+unit's read (q, k) the Program's units' (`network_certifier_rows.Units`, from public structure alone) placed by the wiring the network certifier
 signed on connection q's own cell, and the header names the units' value and the same rows; the docket passes the
 verifier's check with every transfer-gate unit proved (work 0, floor all of them); the window's provenance is the
-verifier's read of the warden's dockets; the prover's own root under the warden's certificate, provenance naming
+verifier's read of the network certifier's dockets; the prover's own root under the network certifier's certificate, provenance naming
 another root, a foreign, a duplicate, a padding-slot and a past-the-cells read, and a statement made for another units'
 wiring (a pad in a data cell's place, its rows under the Program's value, two units swapped) are refused by name; and the
 altered window's unit 0 doesn't open."""
@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 from verity.commitments.periods import rows as SR
@@ -27,7 +27,7 @@ from verity.commitments.periods import rows as SR
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces" / "tests"))
-import a5_warden as AW  # noqa: E402
+import a5_network_certifier as AW  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from verity.protocols.accounting.certifier.device.tests import relay_runs as tws  # noqa: E402
 
@@ -36,7 +36,7 @@ N, REST = 8, 4
 
 @pytest.fixture(scope="module")
 def run(tmp_path_factory):
-    tmp = tmp_path_factory.mktemp("a5-warden")
+    tmp = tmp_path_factory.mktemp("a5-network-certifier")
     out, key = tmp / "run", tmp / "key"
     out.mkdir()
     requests = [tws.ws.http_request({"prompt": "x" * n}, "h:1") for n in (300, 10)]
@@ -55,7 +55,7 @@ def bcs(c, m, port: str) -> list[bytes]:
     return [b[i * AW.CS.BC_BYTES:(i + 1) * AW.CS.BC_BYTES] for i in range(m.n)]
 
 
-def test_each_chunk_opens_one_connections_cells_under_the_wardens_root(run):
+def test_each_chunk_opens_one_connections_cells_under_the_network_certifiers_root(run):
     tmp, at = run
     assert {x.head.value for x in at.values()} == {"warden/ingress/0", "warden/egress/0"}
     assert len({x.connection for x in at.values()}) == 1 and all(len(x.reads) == N for x in at.values())
@@ -110,11 +110,11 @@ def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused_by_n
     x = at[RC.INGRESS]
     foreign = neg["foreign-read-under-a-crossed-wiring (port)"]
     assert foreign["cell_of"] == foreign["opens"][0] != foreign["read"][0]
-    assert "isn't the one the warden signed" in foreign["why"]
+    assert "isn't the one the network certifier signed" in foreign["why"]
     assert "is read twice" in neg["duplicate-read (port)"]["why"]
     assert "holds no slot" in neg["padding-slot-read-of-a-connection-holding-no-slot (port)"]["why"]
     padded = neg["padding-slot-read-under-a-padded-wiring (port)"]
-    assert padded["empty"] and "isn't the one the warden signed" in padded["why"]
+    assert padded["empty"] and "isn't the one the network certifier signed" in padded["why"]
     assert f"connection {x.connection} has" in neg["read-past-the-connections-cells (port)"]["why"]
     e, pads = at[RC.EGRESS], at[RC.EGRESS].params.delay * at[RC.EGRESS].params.slots
     pad = neg["statement-made-for-a-pad-in-a-data-cells-place (registered reads)"]
@@ -134,7 +134,7 @@ def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused_by_n
 
 def test_the_crossed_and_padded_wirings_would_open_a_foreign_cell_and_an_empty_slot(run):
     """What the two forged wirings would have the verifier read, had `port` placed them: connection q2's read on q1's
-    cell, and a connection the warden never served on B zero bytes."""
+    cell, and a connection the network certifier never served on B zero bytes."""
     _tmp, at = run
     x = at[RC.INGRESS]
     B, w = x.params.cell_bytes, x.opening.wiring
@@ -147,7 +147,7 @@ def test_the_crossed_and_padded_wirings_would_open_a_foreign_cell_and_an_empty_s
     assert pad.place(x.params, [(g, k)]) == [(tp, jp)] and x.opening.rows[tp][jp * B:(jp + 1) * B] == bytes(B)
 
 
-def test_the_altered_cell_is_committed_under_the_wardens_salt_and_doesnt_open(run):
+def test_the_altered_cell_is_committed_under_the_network_certifiers_salt_and_doesnt_open(run):
     tmp, at = run
     mine, c, _rec, win = committed(tmp, at, "altered", altered=True)
     m, x = AW.chunks(mine)[RC.INGRESS], at[RC.INGRESS]
@@ -163,7 +163,7 @@ def test_the_altered_cell_is_committed_under_the_wardens_salt_and_doesnt_open(ru
 
 @pytest.mark.parametrize("made", sorted(AW.MADE_FOR))
 def test_a_statement_made_for_another_units_wiring_is_refused_by_the_registered_reads(run, made):
-    """``--made-for``'s window: c1's header made for another units' wiring, its rows the warden's under the warden's salts
+    """``--made-for``'s window: c1's header made for another units' wiring, its rows the network certifier's under the network certifier's salts
     (they open the signed root at the positions the header names), its provenance the Program's, so the docket's
     checks pass and only the verifier's port of the Program's units refuses it, by `MADE_FOR`'s reason; c0 stays honest."""
     tmp, at = run

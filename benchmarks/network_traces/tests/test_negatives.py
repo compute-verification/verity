@@ -6,7 +6,7 @@ importable, a stand-in of their fields until then): each changes exactly what it
 valid under v0's schedule rules (`_check`; the real classes refuse invalid advice on construction). The Commit's runs on
 a stand-in of I3 as drafted. The I/O tie's (`io_tie`, when importable) run on a fake upstream's cells and
 Commit port of the advice, under the map the verifier computes from it; `frame` also runs on the network certifier's own
-committed cells (`warden_rows`, when importable), by the verifier's registered read."""
+committed cells (`network_certifier_rows`, when importable), by the verifier's registered read."""
 
 from __future__ import annotations
 
@@ -388,7 +388,7 @@ def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_ti
     """The prompt split at the link's 4096-byte cells: prompts of 339 and 16 tokens served (two request cells,
     then one; 338 is one cell at the relay's cut), advised as 16 and 339. The cells' total is honest's and
     the first request's end a cell earlier, so no count of the link's frames refuses it; IoTieRequest's reference on the
-    warden's ingress does."""
+    network certifier's ingress does."""
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
     a = V.Advice((V.RequestAdvice("u0", 339, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),
@@ -499,16 +499,16 @@ def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_r
     assert NG.wrong_token(commit, row=0, vocab=13)["steps"][0][NG.SAMPLED] == [0, 22]
 
 
-def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root():
+def test_a_changed_byte_of_a_network_certifiers_committed_cell_doesnt_read_under_its_root():
     """On the relay's bucket rows: connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
-    WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
+    WR = pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
     from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
     from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, BlockGrid
-    from verity.protocols.accounting.certifier.verifier.warden import WardenParams, cell
+    from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams, cell
 
-    params = WardenParams(cell_bytes=64, slots=2, lanes=2, window=2)
+    params = NetworkCertifierParams(cell_bytes=64, slots=2, lanes=2, window=2)
     B, S = params.cell_bytes, params.grid.allocation
     grid = ((cell(DATA, 1, b"abc", B), cell(PAD, 1, b"", B)) + (None,) * (S - 2), (None,) * S)
     salts = [bytes([k + 1]) * WR.SALT_BYTES for k in range(params.window)]
@@ -522,24 +522,24 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
     assert not NG.cell_reads(WR, cells, 1, row)
 
 
-def test_frame_on_a_warden_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
-    """`warden_frame` on a warden-serve run driven tick by tick (`relay_runs._run`): its egress registration
+def test_frame_on_a_network_certifier_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
+    """`network_certifier_frame` on a network-certifier-serve run driven tick by tick (`relay_runs._run`): its egress registration
     (v2) is read under the network certifier's key and the schedule, its bucket rows and signed wiring are committed
     under the run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest
     and not with a payload byte changed; a run that kept no salts is not applicable."""
-    pytest.importorskip(NG.WARDEN_ROWS_MODULE)
+    pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
     sys.path.insert(0, str(HERE / "tests"))
     from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
 
     run, key = tmp_path / "run", tmp_path / "key"
     run.mkdir()
     tws._run(run, key, [tws.ws.http_request({"prompt": "x" * 10}, "h:1")], [tws._response([" word"] * 8)])
-    got = NG.warden_frame(run)
+    got = NG.network_certifier_frame(run)
     p = tws.PARAMS
     assert got["ok"] and got["honest_reads"] and not got["tampered_reads"]
     assert got["rows"] == p.window and got["row_bytes"] == p.grid.allocation * p.cell_bytes
     assert got["cell_bytes"] == p.cell_bytes and 0 <= got["slot"] < p.grid.allocation
-    assert NG.warden_frame(run, at=-1)["ok"]
+    assert NG.network_certifier_frame(run, at=-1)["ok"]
     (run / "cells.salts").unlink()
     with pytest.raises(NG.NotApplicable, match="cells.salts"):
-        NG.warden_frame(run)
+        NG.network_certifier_frame(run)

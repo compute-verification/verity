@@ -16,7 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity.protocols.accounting.certifier.prover import n2_zk as n2
-from benchmarks.network_traces.tests.test_warden_chain import gate_run
+from benchmarks.network_traces.tests.test_network_certifier_chain import gate_run
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()

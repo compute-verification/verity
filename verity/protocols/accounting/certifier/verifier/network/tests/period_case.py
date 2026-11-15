@@ -12,8 +12,8 @@ session's signed start (`certifier.certificate`'s `CertifiedStart.refusal`, unde
 `_start_check`: an entry whose start is not where its session's signed base puts it after its key's first listed entry
 is refused by name, `NOT_SIGNED`, and one whose shown start its session did not certify, `UNCERTIFIED`), one-stage's
 `registration.digest` (a registration record is ASCII-only, where its canonical JSON is Lean's), the schedule
-(`warden.WardenParams`), the verifier's read of each row registration
-(`warden_rows.check_registration`) and the scan's ok bits' constants, computed once a period and compared an execution
+(`network_certifier.NetworkCertifierParams`), the verifier's read of each row registration
+(`network_certifier_rows.check_registration`) and the scan's ok bits' constants, computed once a period and compared an execution
 phase (`scan_ok.constants` and `held`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. The period is in the rows form, the one form the
@@ -45,7 +45,7 @@ a shown start that is not its session's
 certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
 shows a start too few or too many, or none (`start-count`). The execution phases of one link from the execution phase
 `first`, each execution phase's ingress and egress rows committed and registered under a small sampled schedule
-(`warden_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network certifier session;
+(`network_certifier_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network certifier session;
 `capped`: a schedule with a response cap, and
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
 (`past-slots`: none of them and neither registration, as the network certifier leaves a window in which it refused a
@@ -122,12 +122,12 @@ from pathlib import Path
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.protocols.accounting.certifier.verifier import content_rows, io_request, scan_ok
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import (Certificate, CertifiedStart, Direction, LmsKey,
                                                                         start_digest, start_link)
 from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES, MAX_TOKENS_AT
-from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import INTEGER_FIELDS, OPTIONAL_FIELDS, NetworkCertifierParams
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
@@ -282,7 +282,7 @@ class Params:
     program: str
     windows: int
     #: the schedule and the scan's terms, read off its Program
-    schedule: WardenParams
+    schedule: NetworkCertifierParams
     scan: Scan
     #: the class circuit, its window circuit's Program's SHA-512
     circuit: str | None = None
@@ -354,19 +354,19 @@ def _of(v, kind, ctx: str):
     return v
 
 
-def rows_wf(s: WardenParams, windows: int) -> bool:
+def rows_wf(s: NetworkCertifierParams, windows: int) -> bool:
     """`rowsWf`: a cell's B bytes are under 2^32, so its payload's length is a u32, and the period's
     `lanes · windows · window` connections, the k-th at ordinal k + 1, have distinct u32 ordinals."""
     return s.cell_bytes < U32 and s.lanes * windows * s.window < U32
 
 
-def rows_wf_refusal(s: WardenParams, windows: int) -> str:
+def rows_wf_refusal(s: NetworkCertifierParams, windows: int) -> str:
     return (f"rows format: a frame's ordinal and payload length are u32s, so the lanes · windows · window = "
             f"{s.lanes * windows * s.window} connections and a cell's {s.cell_bytes} bytes must each be under 2^32, or "
             "two frames could encode alike (rowsWf)")
 
 
-def connection_rows(s: WardenParams) -> bool:
+def connection_rows(s: NetworkCertifierParams) -> bool:
     """`Schedule.connectionRows`: whether the schedule registers connection rows, its lengths rows, which a schedule
     with content rows has too, as one with request words has content rows. Each is asked, as the Lean asks it."""
     return s.lengths is not None or s.content is not None or s.request_words is not None
@@ -378,10 +378,10 @@ def _classes(j) -> tuple[tuple[int, ...], ...]:
                  for c in _of(j, list, "schedule.content"))
 
 
-def _schedule(j) -> WardenParams:
-    """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
+def _schedule(j) -> NetworkCertifierParams:
+    """`scheduleOf`: `NetworkCertifierParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
     u32s, in the id egress form, and each optional field the schedule sets (`OPTIONAL_SCHEDULE_KEYS`), as
-    `WardenParams` holds it. `request_words` is the JSON `true` or it is refused: `WardenParams` reads `None` as
+    `NetworkCertifierParams` holds it. `request_words` is the JSON `true` or it is refused: `NetworkCertifierParams` reads `None` as
     unset, and `scheduleOf` refuses a key that is there and not `true`."""
     keys = sorted(SCHEDULE_KEYS + [k for k in OPTIONAL_SCHEDULE_KEYS if isinstance(j, dict) and k in j])
     _exactly(j, keys, "schedule")
@@ -390,7 +390,7 @@ def _schedule(j) -> WardenParams:
     values = {k: _classes(j[k]) if k == "content" else j[k] if k == "request_words" else _nat(j[k], "schedule")
               for k in keys}
     try:
-        s = WardenParams(**values)
+        s = NetworkCertifierParams(**values)
     except ValueError as e:
         raise D.Reject(f"schedule: {e}") from None
     if not (s.cell_bytes < U32 and s.lanes * s.slots < U32 and s.window < U32):
@@ -657,7 +657,7 @@ def _audit(a, ctx: str) -> Audit:
     return Audit(free, steps, program_sha512(j), sum(units), entries)
 
 
-def _scan(j, program: str, s: WardenParams) -> Scan:
+def _scan(j, program: str, s: NetworkCertifierParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
     form of the schedule's execution phase in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`): the start unit, T
     ingress buckets and T egress buckets. An egress template with a row among its parameters (the checker form) is
@@ -1042,7 +1042,7 @@ def _answered(what: str, reg: dict, a: dict) -> tuple[dict, object]:
 
 
 def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
-    """`rowsCheck`: the verifier's own read of the registration (`warden_rows.check_registration`) under the entry the
+    """`rowsCheck`: the verifier's own read of the registration (`network_certifier_rows.check_registration`) under the entry the
     period's execution phase `w` picks: its key, its session, which the registration's domain binds, and that session's
     number for the execution phase, `w` less the entry's start, which its value, window, layout, domain and head name. A
     signer that is another listed key, outside its stretch, or that the parameters don't list is refused by name."""
@@ -1269,12 +1269,12 @@ def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
         for a, r in zip(p.audits, audits))
 
 
-def lane_tied(s: WardenParams, t) -> bool:
+def lane_tied(s: NetworkCertifierParams, t) -> bool:
     """`laneTied`: an entry under `TIED_KEY` that names a lane's Programs' rows (`prog_params`)."""
     return isinstance(t, str) and t in prog_params(s.lanes)
 
 
-def tied_input_wired(s: WardenParams, a: dict) -> bool:
+def tied_input_wired(s: NetworkCertifierParams, a: dict) -> bool:
     """`tiedInputWired`: the answer's public outputs have no `TIED_KEY`, or under it a list whose every entry is a
     lane's name (`lane_tied`), in any order, a lane's more than once or not at all."""
     pub = a["public"]
@@ -1283,7 +1283,7 @@ def tied_input_wired(s: WardenParams, a: dict) -> bool:
     return isinstance(pub[TIED_KEY], list) and all(lane_tied(s, t) for t in pub[TIED_KEY])
 
 
-def tied_unheld(s: WardenParams, a: dict) -> str:
+def tied_unheld(s: NetworkCertifierParams, a: dict) -> str:
     """`tiedUnheld`: what an answer `tied_input_wired` refuses holds under `TIED_KEY`, as Lean's refusal words it: the
     first entry that is no lane's name, or the key's value where it is no list, beside the lanes' names."""
     pub = a["public"]
@@ -1735,7 +1735,7 @@ SAME_SHAPE = ("bucket_ms", "delay", "egress_cells", "ingress_buckets", "ingress_
 SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
-def schedule_json(s: WardenParams) -> dict:
+def schedule_json(s: NetworkCertifierParams) -> dict:
     """The schedule as the parameters hold it: its integer fields, and each optional field it sets."""
     optional = {k: getattr(s, k) for k in OPTIONAL_SCHEDULE_KEYS if getattr(s, k) is not None}
     if s.content is not None:
@@ -1750,13 +1750,13 @@ CAPPED_CELL = HEADER.size + MAX_TOKENS_AT + ID_DIGITS
 LENGTHS_CELL = HEADER.size + io_request.layout(1 << 12).start + ID_FIELD_BYTES
 
 
-def _small_schedule(r: random.Random, small: bool, capped: bool = False, T: int | None = None) -> WardenParams:
+def _small_schedule(r: random.Random, small: bool, capped: bool = False, T: int | None = None) -> NetworkCertifierParams:
     """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T 2 or 3 (2 if
     `small`: the least a scan has, `scan_ok.constants`) or the `T` asked for, and a timestep `every` that divides T;
     `capped`: with a response cap, B just past the least cell that holds an id request's `max_tokens`
     (`CAPPED_CELL`)."""
     T = r.randint(2, 2 if small else 3) if T is None else T
-    s = WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
+    s = NetworkCertifierParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
                      delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
                      ingress_cells=r.randint(1, 8), ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16),
                      every=r.choice([d for d in range(1, T + 1) if T % d == 0]))
@@ -2506,7 +2506,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         s = e.session if s is None else s
         return dataclasses.replace(c, signature=lms.sign_at(k, n % 2 ** k.params.H, c.message(s)).encode())
 
-    def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes | None = None,
+    def registrations(w: int, s: NetworkCertifierParams | None = None, on: str = link, ses: bytes | None = None,
                       e: Stretch | None = None, num: int | None = None) -> list[dict]:
         """Link `on`'s ingress and egress rows for the period's execution phase `w`, each committed under schedule `s`
         (the period's) by the entry `e`, or the one whose turn it is: in its session, or `ses`, at that session's number
@@ -2993,7 +2993,7 @@ def _words_schedule(s: dict) -> dict:
 def connection_rows_params(p: dict) -> list[dict]:
     """Rows-form parameters whose schedule has connection rows, each one change to `p`'s uncapped schedule
     (`_lengths_schedule`): lengths rows of each form, content rows of the form's classes with them, and request
-    words with form 2's (`_words_schedule`). Each is a schedule `scheduleOf` reads, as `WardenParams` builds it, and
+    words with form 2's (`_words_schedule`). Each is a schedule `scheduleOf` reads, as `NetworkCertifierParams` builds it, and
     one the check refuses by name (`CONNECTION_ROWS`)."""
     s = _lengths_schedule(p["schedule"])
     return [p | {"schedule": s | rows} for rows in (
@@ -3013,7 +3013,7 @@ def bad_lengths(p: dict) -> list[dict]:
     s = _lengths_schedule(p["schedule"])
     words = _words_schedule(s)
     one, two = s | {"lengths": 1}, s | {"lengths": 2}
-    slots = s["window"] // s["every"] * WardenParams(**one).stride_releases
+    slots = s["window"] // s["every"] * NetworkCertifierParams(**one).stride_releases
     past = 1 << (s["ingress_cells"] * (s["cell_bytes"] - HEADER.size)).bit_length()
     schedules = [s | {"lengths": form} for form in (0, 3, True, "1", [1])] + [
         one | {"ingress_buckets": 2}, one | {"egress_cells": s["slots"] * s["window"] + 1},

@@ -134,7 +134,7 @@ from typing import Any, NamedTuple
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.prover import stop_verdicts as SV
 from verity.protocols.accounting.certifier.verifier import class_charge as CC
-from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier import network_certifier as W
 from verity import protocol
 from verity.protocols.accounting.certifier.verifier.scan_answer import JITTER_BOUND
 
@@ -142,7 +142,7 @@ from verity.protocols.accounting.certifier.verifier.scan_answer import JITTER_BO
 PERIODS: dict[str, int] = dict(protocol.MONITORING_PERIODS)
 DELTAS: tuple[Fraction, ...] = protocol.DELTAS
 #: a bucket's seconds when a link names none: the network certifier's default τ
-TAU = Fraction(W.WardenParams().bucket_ms, 1000)
+TAU = Fraction(W.NetworkCertifierParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default
 SCAN_DELTA = Fraction(1, 2 ** 20)
 #: the error a row at a scope's load is to carry at most over its monitoring period: where a caller gives no δ, each

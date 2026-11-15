@@ -228,7 +228,7 @@ SIDES: dict[str, bool] = {
     "verity.device": False,
     "verity.party": False,
     "verity.protocol": False,
-    "verity.protocols.accounting.certifier.device.lean": False,
+    "verity.protocols.accounting.certifier.device.program.lean": False,
     "verity.protocols.accounting.pous.device": False,
     "verity.protocols.accounting.pous.device.challenger_session": True,
     "verity.protocols.accounting.pous.device.memory_challenger": True,

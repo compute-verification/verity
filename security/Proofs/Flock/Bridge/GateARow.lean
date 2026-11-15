@@ -1,6 +1,6 @@
 module
 
-public import Properties.Verity.Committed
+public import Properties.Verity.GateARow
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.BitsKeyProg
 

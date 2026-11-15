@@ -6,11 +6,12 @@
 #   claim lists that cite it (PoUS's `P2_CLAIMS` in Python and in the grader's Lean, the scheme fixtures), the key
 #   `placement["trusted-host"]` under which a run's profile says whether its premise held, the trusted base's line for it
 #   (`Claims.trustedBase`, whose record in `security/lean-audit.json` changes with it), and each `trusted-host` in
-#   backticks; its display name "Trusted host"; and a test's name that spells it (`trusted_host`);
+#   backticks; and a test's name that spells it (`trusted_host`). Its display name "Trusted host" stood only in the
+#   claims registry, which is deleted, so no row renames it;
 # - "auditor host" and "auditor's host" in string literals (refusals, report lines and the tests that match them, the
 #   `Auditor host:` stub of `benchmarks/network_e2e/chain.py`), in backticks and in data files' comments.
 # A run recorded before this move keeps `trusted-host` as its placement key: `benchmarks/one_stage/served_verdicts.py`
-# names the premise for runs recorded after it.
+# reads the premise under either key ([keep]).
 
 [words]
 "auditor's hosts" = "auditor's devices"
@@ -22,18 +23,17 @@
 "trusted-host" = "trusted-device"
 "trusted_host" = "trusted_device"
 
-# the assumption's display name in the claims registry
-[[words_in]]
-files = ["**/claims/__init__.py"]
-[words_in.words]
-"Trusted host" = "Trusted device"
-
 # "trusted host" where it names the auditor's device, the role `trusted-host` states (each file by a glob that still
 # matches it after a directory move)
 [[words_in]]
 files = ["**/test_provider_names.py", "**/certifier/verifier/protocol/coin-link.md", "**/pouw/verifier/README.md"]
 [words_in.words]
 "trusted host" = "trusted device"
+
+[keep]
+# The placement key of a record made before this move, where `benchmarks/one_stage/served_verdicts.py` reads it beside
+# the new key and its test writes both: a rerun leaves the old key standing there.
+strings = ['or place.get("trusted-host")', '["trusted-device", "trusted-host"]']
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
