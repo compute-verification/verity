@@ -96,7 +96,7 @@ def _w(params: Geometry, seed: int) -> bytes:
 def _lifecycle(sch: protocol.Scheme, seed: int = 1):
     w = _w(sch.params, seed)
     com = protocol.commit(sch, w)
-    salt = protocol.draw_salt(b"verifier secret", com)
+    salt = protocol.sample_salt(b"verifier secret", com)
     return w, com, salt, protocol.encode(sch, w, salt)
 
 

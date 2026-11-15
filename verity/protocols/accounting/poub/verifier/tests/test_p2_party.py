@@ -207,7 +207,7 @@ def verifier(store, held: bool = False) -> tuple[p2_parties.Verifier, list]:
     return v, v.start({}, Identity(p2_parties.VERIFIER, capabilities=capabilities))
 
 
-def test_the_verifier_claims_its_session_id_before_it_draws_its_coins(store) -> None:
+def test_the_verifier_claims_its_session_id_before_it_flips_its_coins(store) -> None:
     _, first = verifier(store)
     assert first == [Send("coins", Message("CoinsDraw", {"n": p2_parties.COIN_BYTES}))]
     _, refused = verifier(store, held=True)

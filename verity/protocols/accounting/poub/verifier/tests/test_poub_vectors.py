@@ -322,7 +322,7 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
 
 @pytest.mark.slow
 @pytest.mark.parametrize("kind, bind, rows", [rv.DEFAULT, *rv.VARIANTS])
-def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kind, bind, rows) -> None:
+def test_the_provers_passes_and_the_sessions_samples_reproduce_the_pinned_ones(kind, bind, rows) -> None:
     """The generator computes receipts and samples on its own; the audit's `Prover` and `AuditRun` must agree with it, at
     the default codec, under each receipt kind, of the block alone and binding z, and at 64 rows.  Slow for the same
     store as `test_vectors_are_reproduced`, which encodes it once for all of them."""

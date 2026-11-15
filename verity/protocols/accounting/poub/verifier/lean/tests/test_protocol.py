@@ -163,14 +163,14 @@ def test_a_recorded_scenario_agrees(server, name) -> None:
     assert json.loads(text)["verdict"] == want, (name, text)
 
 
-def test_drawn_honest_sessions_agree(server) -> None:
+def test_sampled_honest_sessions_agree(server) -> None:
     stats = D.run(D.ProtocolPort(EXE, protocol, shaped().map(case_of), package=M.PACKAGE, need_rejects=False),
                   examples=25, server=server)
     assert stats.counts.get("accept", 0) == 25, stats
 
 
 @pytest.mark.slow
-def test_drawn_edits_agree(server) -> None:
+def test_sampled_edits_agree(server) -> None:
     base = st.sampled_from(BASES).map(lambda name: M.recorded(name)[0])
     framed = st.builds(lambda c, m: m(c), base.map(case_of), st.sampled_from(FRAMING))
     stats = D.run(D.ProtocolPort(EXE, protocol, st.one_of(edited(base).map(case_of), framed), package=M.PACKAGE),

@@ -50,7 +50,7 @@ layout = TensorLayout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # te
 params, prims = layout.params, band.reference(layout.params)
 w = layout.pack({"w1": b1, "w2": b2})
 commitment = setup.commit(params, w)                                   # server, before any salt exists
-salt = setup.draw_salt(verifier_secret, commitment)                    # verifier
+salt = setup.sample_salt(verifier_secret, commitment)                    # verifier
 C = [params.codec.encode_segment(params, prims, salt, s, g)             # server: C*, per segment
      for s, g in enumerate(codec.split(params, w))]
 vk = setup.verifier_setup(params, prims, commitment, salt, encoded=C)   # verifier: decodes C*, checks the commitment
@@ -71,7 +71,7 @@ from verity.protocols.accounting.pous.verifier import protocol, schemes
 
 scheme = schemes.get("band-chain/d12/v1", segments=layout.params.segments)   # or schemes.Band(layout.params)
 commitment = protocol.commit(scheme, w)
-salt = protocol.draw_salt(verifier_secret, commitment)
+salt = protocol.sample_salt(verifier_secret, commitment)
 C = protocol.encode(scheme, w, salt)                                           # server
 vk = protocol.verifier_key(scheme, commitment, salt, w=w)                      # PRIVATE: the verifier encodes
 # vk = protocol.verifier_key(scheme, commitment, salt, mode=protocol.PUBLIC, encoded=C)   # the same guarantee
@@ -268,7 +268,7 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   (`envelope`, `setup_messages`, `open_message`, `challenge_message`, `response_message`, `record`, `final_message`,
   `parse_envelope`, `verify_audit`, `parse_final`).
 - **The registered scheme and the wire.** `p2-16448/v4` runs the generic protocol's setup, so four things differ from
-  `reference.py` and the wire: its setup salt (24 bytes from `setup.draw_salt`, not 32 from `verity/pous/p2-setup/v4`
+  `reference.py` and the wire: its setup salt (24 bytes from `setup.sample_salt`, not 32 from `verity/pous/p2-setup/v4`
   over the commitment), its key prefix (it frames that salt), its leaf (`0x00 ‖ tag_s ‖ u16le(v) ‖ R`, not
   `0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ R`) and its challenges (`verity/pous/audit-challenge/v1`, not
   `verity/pous/p2-audit-challenge/v4`). `PousCheck.Keys` and `Merkle` hold both forms.
