@@ -41,9 +41,10 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Callable, Iterable, NamedTuple
 
@@ -78,11 +79,11 @@ class Lease(NamedTuple):
 
 
 def hour(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:00Z")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:00Z")
 
 
 def hour_t(h: str) -> float:
-    return datetime.strptime(h, "%Y-%m-%dT%H:00Z").replace(tzinfo=timezone.utc).timestamp()
+    return datetime.strptime(h, "%Y-%m-%dT%H:00Z").replace(tzinfo=UTC).timestamp()
 
 
 def _unmeasured(r: tuple) -> float:
@@ -188,7 +189,8 @@ def record(lines: Iterable[dict], path: str | Path, keys: tuple[str, ...], now: 
         for ln in tail:
             try:
                 d = json.loads(ln)
-            except ValueError:
+            except ValueError as e:
+                print(f"cluster usage: a line of {path} skipped, not JSON ({e})", file=sys.stderr)
                 continue
             have.add(tuple(d.get(k) for k in keys))
     new = [ln for ln in lines if since <= hour_t(ln["hour"]) and hour_t(ln["hour"]) + 3600 + SETTLE_S <= now
@@ -240,12 +242,15 @@ def wasters(rows: Iterable[dict], top: int) -> list[dict]:
 
 
 def parse(text: str) -> list[dict]:
-    """A record's rows (`ROW`), skipping any other line: a partial first line from `tail -c`, or a torn last one."""
-    out = []
-    for ln in text.splitlines():
+    """A record's rows (`ROW`), skipping any other line: a partial first line from `tail -c`, or a torn last one, quietly;
+    a line between them that isn't JSON is said on stderr."""
+    out, lines = [], text.splitlines()
+    for i, ln in enumerate(lines):
         try:
             d = json.loads(ln)
-        except ValueError:
+        except ValueError as e:
+            if 0 < i < len(lines) - 1:
+                print(f"cluster usage: line {i + 1} of the record skipped, not JSON ({e})", file=sys.stderr)
             continue
         if isinstance(d, dict) and d.get("schema") == ROW:
             out.append(d)

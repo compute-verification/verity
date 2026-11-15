@@ -62,11 +62,19 @@ def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
     """`model.layers.0.self_attn.rotary_emb.cos_sin_cache` (bf16 [MAX_POS, D]) as uint16 words -> DIR/cos_sin_cache.npy.  The
     table is a derived weight computed on the GPU (vLLM `_compute_cos_sin_cache`, CUDA cosf/sinf); the one-stage audit reads the
     `cos_sin` field from this file (`benchmarks/one_stage/a11.py`)."""
+    import io
+
     import numpy as np
     import torch
 
+    from verity_vllm import messages as M
     # the one by-name recognition of the two analytic-table buffers
     from verity_vllm.acquire.plan import analytic_table_of_buffer
+
+    def npy(words: np.ndarray) -> bytes:
+        buf = io.BytesIO()
+        np.save(buf, words)
+        return buf.getvalue()
 
     buf = None
     for name, b in engine.model.named_buffers():
@@ -84,13 +92,13 @@ def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
             return None
         words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
         path = out / f"cos_sin_cache.{dtype}.npy"
-        np.save(path, words)
+        M.write(path, "RegisteredWeights", npy(words))
         (out / "cos_sin_cache.json").write_text(json.dumps({"dtype": dtype, "shape": list(buf.shape), "file": path.name,
                                                              "words": "uint16 (raw IEEE binary16 words)", "buffer": name}, indent=1) + "\n")
         return path
     words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
     path = out / "cos_sin_cache.npy"
-    np.save(path, words)
+    M.write(path, "RegisteredWeights", npy(words))
     (out / "cos_sin_cache.json").write_text(json.dumps({"dtype": dtype, "shape": list(buf.shape), "file": path.name,
                                                          "words": "uint16 (raw bfloat16 words)", "buffer": name}, indent=1) + "\n")
     return path

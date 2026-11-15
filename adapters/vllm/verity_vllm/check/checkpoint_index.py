@@ -90,15 +90,24 @@ def renamed(name: str, rules: dict[str, tuple]) -> str | None:
 
 
 def manifest_entry(manifest: str | None, ckpt_dir: str, model: str | None, revision: str | None) -> dict[str, Any] | None:
-    """The checkpoints.json entry of `ckpt_dir` (it and its siblings, `config.checkpoint_entries`): the one whose local_path is the dir, else the one of `model` at `revision`."""
+    """The checkpoints.json entry of `ckpt_dir` (it and its siblings, `config.checkpoint_entries`): the one whose local_path is the dir,
+    or the same snapshot in another HF cache (`models--ORG--NAME/snapshots/REV`, which names the repo and the revision), else the one of
+    `model` at `revision`."""
     if not (manifest and os.path.exists(manifest)):
         return None
+    snapshot = _snapshot(ckpt_dir)
     for c in checkpoint_entries(manifest):
         lp = str(c.get("local_path") or "")
-        if (lp and os.path.realpath(lp) == os.path.realpath(ckpt_dir)) or \
+        if (lp and (os.path.realpath(lp) == os.path.realpath(ckpt_dir) or (snapshot is not None and _snapshot(lp) == snapshot))) or \
                 (model and c.get("repo") == model and (not revision or str(c.get("revision", "")).startswith(revision[:10]))):
             return c
     return None
+
+
+def _snapshot(path: str) -> tuple[str, ...] | None:
+    """The `models--ORG--NAME`, `snapshots`, `REV` end of a path in an HF cache, else None."""
+    parts = os.path.normpath(path).split(os.sep)[-3:]
+    return tuple(parts) if len(parts) == 3 and parts[0].startswith("models--") and parts[1] == "snapshots" else None
 
 
 def shard_pin(ckpt_dir: str, *, checkpoints_manifest: str | None, model: str | None, revision: str | None, workers: int | None = None,

@@ -313,7 +313,7 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
     def check(name: str, f: Callable[[], list[str]]) -> None:
         try:
             lines.extend(f())
-        except Exception as e:  # one check down must not hide the others
+        except Exception as e:  # noqa: BLE001 (one check down must not hide the others)
             lines.append(f"- {failed(name, e)}")
 
     check("VM", lambda: _vm(src.vm()))
@@ -326,7 +326,7 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
             lines.append(f"- inbox: no tools/agent-guard/inbox.py in {WORKSPACE}")
         else:
             pending = {d["agent"]: d for d in got}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 (an unread inbox must not hide the rest of the digest)
         lines.append(f"- {failed('inbox', e)}")
 
     def inbox(agent: str) -> tuple[str, bool]:
@@ -345,7 +345,7 @@ def _health(lane: str, src: Sources, roster: list[tuple[str, str, str]], rows: l
         try:
             age = src.branch_age(branch)
             b = f"{branch} {age}" if age else f"no branch {branch} on origin"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 (one unread branch must not hide the other workers)
             b = failed(f"branch {branch}", e)
         text, stale = inbox(agent)
         lines.append(f"- {'WARNING ' if stale else ''}worker {label} {agent}: {b}; {text}")
@@ -398,7 +398,7 @@ def digest(lane: str, s: dict, src: Sources, roster: list[tuple[str, str, str]] 
     def guard(name: str, f: Callable[[], object], default: object = None) -> object:
         try:
             return f()
-        except Exception as e:  # one source down must not hide the others
+        except Exception as e:  # noqa: BLE001 (one source down must not hide the others)
             errors.append(f"{name}: {e}")
             return default
 
