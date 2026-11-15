@@ -122,7 +122,6 @@ public import Proofs.Compose.Additive
 public import Proofs.Slowdown.Coverage
 public import Proofs.Slowdown.ServingBlocks
 public import Proofs.Slowdown.ServingBlocks.Witnesses
-public import Proofs.Accounting.Registration.Sound
 public import Proofs.Accounting.Defs.Actual.Source
 public import Proofs.Accounting.Defs.Localization
 public import Definitions.Pous.P2.Cost
