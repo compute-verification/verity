@@ -469,7 +469,8 @@ theorem HeldSampled_honest :
       18446744073709551615 < 18446744073709551616 ∧ Identity (w2Sample 0) ∧
       SquaringCeiling (w2Sample 0) 191.5 98016 (743590 : ℕ) ∧ Disks (w2Sample 0) (4.32e9 / 4096 / 1e9) (1054688 : ℕ) ∧
       ChipCeiling (w2Sample 0) 743590 ∧ Routed (w2Sample 0) ∧ Causal (w2Sample 0) 0 (2 * 85000000) ∧
-      SketchBound (w2Sample 0) 0 ∧ Live w2Session ∧ Refused w2Session zeroStream (fun _ _ _ => 0) (w2Sample 0) w2Receipts ∧
+      SketchBound (w2Sample 0) 0 ∧ Live w2Session ∧
+      Refused w2Session zeroStream (fun _ _ _ => 0) (w2Sample 0) w2Receipts ∧
       Counted w2Session (w2Sample 0) := by
   obtain ⟨hI, hsq, hd, hS, hr, hc, hk, hL, hR, hC⟩ :=
     heldSampled_honest (k := fun _ => 33273) (N := 130023424) (D := 85000000) (t₁ := 0) (Br := 743590)

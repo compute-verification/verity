@@ -172,7 +172,8 @@ the event and the trace (`Verified`) and `sum` for the record the line and its p
 def LineHeldBy (ver : Node → Record → Prop) (sum : Node → Record → Option Poub.Session.Summary) : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
     (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ) (com : SampleCoins node.samples κ X → Cm)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+    (com : SampleCoins node.samples κ X → Cm)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
     let r := played recs com
     let F := recordCommitted node recs correct
@@ -196,7 +197,8 @@ def LineHeldAtSubprotocolBy (acc : Node → Record → ByteArray → ByteArray �
     (ver : Node → Record → Prop) (sum : Node → Record → Option Poub.Session.Summary) : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
     (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ) (com : SampleCoins node.samples κ X → Cm)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+    (com : SampleCoins node.samples κ X → Cm)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
     (a b e : SampleCoins node.samples κ X → ByteArray),
     let r := played recs com
@@ -238,7 +240,8 @@ def QBytesAtSubprotocolBy
     (ver : Node → Record → Prop) (sum : Node → Record → Option Poub.Session.Summary) : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
     (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ) (com : SampleCoins node.samples κ X → Cm)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+    (com : SampleCoins node.samples κ X → Cm)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X)
     (a b e : SampleCoins node.samples κ X → ByteArray),
     let r := played recs com
