@@ -484,13 +484,11 @@ def test_spot_s_older_name_only_falls():
 
 #: Where "rho" and ρ only ever named the slowdown (GLOSSARY.md, Older names), so no file there says either.
 SLOWDOWN_HOME = ("benchmarks/slowdown/", "benchmarks/circuit_properties/", "benchmarks/inference_only/",
-                 "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
+                 "benchmarks/training_slowdown/", "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
 #: the word alone or as one part of a name (`rho_worst`, `RHO_MODEL`, `Overhead.rho`, `rhos`), and the symbol
 _RHO = re.compile(r"(?<![A-Za-z])(?:rho|Rho|RHO)s?(?![A-Za-z])|ρ")
 #: What stays under SLOWDOWN_HOME, each spelling with its reason; an entry that matches nothing fails too.
 SLOWDOWN_KEPT: dict[str, str] = {
-    'search(*case)["rho"]': "the board's key (`nci.bracket.search`'s), which the calculator's test reads: renamed with its schema",
-    'the board\'s `"rho"`': "the calculator's README, naming that key",
     'out["rho"]': "the key of the circuit properties' output, renamed with its schema",
     "`ln(1/δ) / ρ(1)` blocks": "SPOT's risk ρ(m), the integrity profile's",
     "`ρ(1) = -ln(1 - q)`": "SPOT's risk ρ(m), the integrity profile's",
@@ -544,7 +542,7 @@ def test_the_slowdown_scan_reads_each_form():
     # spelled from today's, so that the map that moved the directory, run again, leaves this file as it is
     old = home.removesuffix("slowdown/") + "rho/"
     toy = {home + "a.py": ('"""rho is ρ = m c / |C|; `Overhead.rho`."""\nrho_worst, RHO_MODEL, rhos = 1, 2, []\n'
-                           'x = search(*case)["rho"]  # a rhombus, a throw\n'),
+                           'x = out["rho"]  # a rhombus, a throw\n'),
            "b.py": f"rho = coins()  # ρ, Flock's; see {old}README.md\n",
            "c.py": f"# {old.rstrip('/')}_notes is another path\n",
            "tools/move/old_map.toml": f'"{old}" = "{home}"\n',
@@ -552,7 +550,7 @@ def test_the_slowdown_scan_reads_each_form():
     found, used = slowdown_offenders(list(toy), read=toy.get)
     assert found == [("b.py", 1, old.rstrip("/")), (home + "a.py", 1, "rho"), (home + "a.py", 1, "ρ"),
                      (home + "a.py", 1, "rho"), (home + "a.py", 2, "rho"), (home + "a.py", 2, "RHO"), (home + "a.py", 2, "rhos")]
-    assert used == {'search(*case)["rho"]'}
+    assert used == {'out["rho"]'}
 
 
 def test_the_spot_scan_reads_each_form():

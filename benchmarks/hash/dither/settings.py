@@ -8,9 +8,8 @@ are h1u.cu's nvcc macros (``-DH1U_JRC=1``), not variables; ``HB_KC_FLAGS`` and i
 A build's path (``DITHER_H1C``, ``HB_H1U``, ...) is ``where``: sbench.sh builds each from this tree's sources
 at the run's commit (RESEARCH_SOURCE_SHA), or checks a sent build's sources against it, so the commit is the value.
 
-The standalone files read their variables themselves: H1V3's reference runs under another tree's PYTHONPATH (h1v3_ref.py),
-and live_audit.py reruns itself under main's. `REGISTRY.standalone_problems` holds each of their reads to its declaration
-here.
+The standalone file reads its variables itself: H1V3's reference runs under another tree's PYTHONPATH (h1v3_ref.py).
+`REGISTRY.standalone_problems` holds each of its reads to its declaration here.
 """
 from __future__ import annotations
 
@@ -19,7 +18,7 @@ import json
 from verity_config.settings import DEBUG, VALUE, WHERE, Registry, csv, not_zero, one
 from verity_config.settings import Setting as S
 
-STANDALONE = ("h1v3_ref.py", "live_audit.py")
+STANDALONE = ("h1v3_ref.py",)
 BUILD = "a build's path in the run's scratch (sbench.sh's, from this tree's sources at the run's commit)"
 TREE = "reference's source tree, run under its own PYTHONPATH; the result records its commit"
 SHELL = "sbench.sh's, read only by the shell"

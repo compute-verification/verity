@@ -144,6 +144,12 @@ LEASE_CORES = LEASE + "# gpu-lease N [--wait] [--on LIST] [--cores CPUS] [--max-
 """A lease program whose text names ``--cores``; `LEASE` names none, as a lease program older than the option."""
 
 NVCC = r"""#!/bin/bash
+if [ "$1" = --version ]; then  # a toolkit's own: the release its directory names (cuda-12.9), a bare `cuda` 12.9
+  v=$(basename "$(dirname "$(dirname "$0")")"); v=${v#cuda}; v=${v#-}; v=${v:-12.9}
+  [[ $v == *.* ]] || v+=.0
+  echo "Cuda compilation tools, release $v, V$v.0"
+  exit 0
+fi
 echo "nvcc $*" >> "$STUB_DIR/calls"
 while [ $# -gt 0 ]; do
   [ "$1" = -o ] && : > "$2"
@@ -195,6 +201,8 @@ class Node:
         self.out = tmp / "run" / "out"
         for d in (self.stub, tmp / "scratch", tmp / "home", *(tmp / "cuda" / t for t in toolkits)):
             d.mkdir(parents=True)
+        for t in toolkits:
+            program(tmp / "cuda" / t / "bin" / "nvcc", NVCC)
         (self.stub / "verifier.py").write_text(VERIFIER)
         (self.stub / "prover.py").write_text(PROVER)
         self.venv(venv)
@@ -386,6 +394,16 @@ def test_one_line_of_tiny_ends_0_with_its_verifier_started_and_its_session_accep
     assert lease.startswith(f"lease {node.lease} 1 --wait --max-min 30 -- taskset -c ")
     assert f"the lease program {node.lease} names no --cores: cores " in p.stdout      # and is told none
     assert gone(v["pid"]) and v["pid"] == v["pgid"] and node.scratch() == []
+
+
+def test_a_paced_line_hands_the_verifier_its_pace_in_place_of_the_windows_and_one_word_a_session(node, tmp_path):
+    p = node.both("tiny", PACED="1:1000:2773:7", PACE_PASS_MS="0")
+    assert p.returncode == 0, said(p)
+    argv = " ".join(node.verifier()["argv"])
+    assert "--paced 1:1000:2773:7 --pace-pass-ms 0 --jitter-ms 5000" in argv and "--windows" not in argv
+    other = Node(tmp_path / "other")
+    refused(other, other.both("tiny", PACED="1:1000:2773:7 1:1000:2773:7"),
+            "refused: PACED=1:1000:2773:7 1:1000:2773:7 paces 2 session(s), and PLAN=serve has 1")
 
 
 def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
@@ -589,16 +607,20 @@ def test_the_vllm_venv_is_the_first_there(tmp_path):
 
 @pytest.mark.parametrize("toolkits, torch, home", [
     (("cuda-12.9", "cuda-13.0", "cuda"), "12.9", "cuda-12.9"),     # the toolkit of the CUDA the prover's torch is built for
-    (("cuda-13.0", "cuda"), "12.9", "cuda-13.0"),
+    (("cuda-12", "cuda-13.0", "cuda"), "12.9", "cuda-12"),         # else one of its major version
     (("cuda-12.9", "cuda"), None, "cuda"),                         # a venv with no torch to ask
     (("cuda-12.9",), "13.0", None),
+    (("cuda-13.0", "cuda-13"), "12.9", 13),                        # only another major version's: torch's JIT won't see
 ])
 def test_cuda_home_is_a_toolkit_the_node_has(tmp_path, toolkits, torch, home):
     node = Node(tmp_path, toolkits=toolkits)
     p = node.both("row", STUB_TORCH_CUDA=torch)
     if home is None:
-        return refused(node, p, f"refused: no CUDA toolkit: CUDA_HOME is not set, and none of {tmp_path}/cuda/cuda-13.0 "
-                                f"{tmp_path}/cuda/cuda is a directory")
+        return refused(node, p, f"refused: no CUDA toolkit: CUDA_HOME is not set, and none of {tmp_path}/cuda/cuda-13 "
+                                f"{tmp_path}/cuda/cuda-13.0 {tmp_path}/cuda/cuda is a directory")
+    if home == 13:
+        return refused(node, p, f"refused: the vLLM venv's torch is built for CUDA 12, and {tmp_path}/cuda/cuda-13.0's "
+                                "nvcc is CUDA 13: install a CUDA 12 toolkit and state CUDA_HOME")
     assert p.returncode == 0, said(p)
     build, commit = node.provers()
     assert build["env"]["CUDA_HOME"] == commit["env"]["CUDA_HOME"] == f"{tmp_path}/cuda/{home}"
