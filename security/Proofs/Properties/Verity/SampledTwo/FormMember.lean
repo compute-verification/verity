@@ -182,7 +182,8 @@ theorem population_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o
   obtain ⟨-, -, hrun, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain ⟨held, ts, L, roots, -, -, -, -, -, hrm⟩ := membersRun_ran hrun
   obtain ⟨a, ha, -, -, -, hpop⟩ := Spot.OneStageZk.runMembers_files hrm m hm
-  obtain ⟨circuitB, pubB, rd, -, -, -, hp, -, -, rfl⟩ := MemberChecks.statement_ok ha
+  obtain ⟨circuitB, pubB, rd, tables, -, -, hp, -, -, hst⟩ := MemberChecks.statement_ok ha
+  subst hst
   have hpop' : m.population (m.slice c₂.record roots) pubB = .ok () := hpop
   exact ⟨pubB, _, hp, hpop'⟩
 
