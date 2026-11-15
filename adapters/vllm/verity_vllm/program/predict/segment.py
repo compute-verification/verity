@@ -48,12 +48,15 @@ def launch_of(i: int, LP: int, T: int, C: int, rows: Sequence[tuple[int, int, An
     return tuple(chunks), tuple(tuple((r.n, r.start) for r in steps[s].rows) for s, _, _ in rows[:k + decodes])
 
 
-def seqlen_q_of(LP: int, T: int, C: int, rows: Sequence[tuple[int, int, Any]], steps: Any) -> tuple[int, ...]:
-    """A batch-invariant request's launch context where FA3's tile reads it: per step of its Program (its prefill, then each decode),
-    the most query rows any one sequence of the advice step it ran in has, the launch's max_seqlen_q (the Build's `--launch-context
-    [n0, n1, …]`, `launch_context.request_launch_context`). () where every step's is its own rows (its Program is the one built
-    alone), and where its Program's steps aren't one launch each: a prefill the engine ran in several launches, a recompute, or
-    rows that stop short of its Program."""
+def seqlen_q_of(tp: Any, LP: int, T: int, C: int, rows: Sequence[tuple[int, int, Any]], steps: Any) -> tuple[int, ...]:
+    """A batch-invariant request's launch context where FA3's tile reads it (target profile `tp`: FA3, not the accepted kinds): per
+    step of its Program (its prefill, then each decode), the most query rows any one sequence of the advice step it ran in has, the
+    launch's max_seqlen_q (the Build's `--launch-context [n0, n1, …]`, `launch_context.request_launch_context`). () on any other
+    target, where every step's is its own rows (its Program is the one built alone), and where its Program's steps aren't one
+    launch each: a prefill the engine ran in several launches, a recompute, or rows that stop short of its Program."""
+    from verity_vllm.program.frontend import targets as TG
+    if tp.effective_flash_attn_version() != 3 or TG.uses_accepted_kinds(tp):
+        return ()
     try:
         chunks, launch = launch_of(-1, LP, T, C, rows, steps)
     except Unexpressible:

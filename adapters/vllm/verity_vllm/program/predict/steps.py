@@ -133,7 +133,6 @@ from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.frontend import stop_rule as SR
-from verity_vllm.program.frontend import targets as TG
 from verity_vllm.records.schema_ids import COMPILED_STEPS_SCHEMA
 from verity_torch.prune import dead_units
 from verity_vllm.definitions.registry import io_shell as IO
@@ -575,10 +574,8 @@ def _replan(registered: Registered, solo: WA.Advice, bodies: Mapping[str, Any], 
 
 def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: bytes | None, recompute_hits: bool = False) -> Plan:
     phi0 = registered.phi
-    tp = phi0.target_profile()
-    if not (bi := tp.batch_invariant):
+    if not (bi := phi0.target_profile().batch_invariant):
         launch_class(phi0)
-    fa3_tile = bi and tp.effective_flash_attn_version() == 3 and not TG.uses_accepted_kinds(tp)
     if not isinstance(ingress, Mapping):
         raise Unexpressible(f"the ingress is each request's certified body by its id, not a {type(ingress).__name__}")
     if not adv.requests:
@@ -675,7 +672,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                     entries = tuple(m for _, _, _, m in pre) + chunks
                     chunks = tuple(n for _, _, n, _ in pre) + chunks
                     entries = entries if entries != chunks else ()
-                seqlen_q = seqlen_q_of(LP, T, C, rows[i], adv.steps) if fa3_tile and carry is None and not hit else ()
+                seqlen_q = seqlen_q_of(phi0.target_profile(), LP, T, C, rows[i], adv.steps) if bi and carry is None and not hit else ()
                 edge = edge_groups(decoder(phi0, 1, 0), q) if i in left and launch is not None else ()
                 policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, salt=salt,
                                          carried=carry is not None)
