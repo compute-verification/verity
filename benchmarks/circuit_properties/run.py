@@ -101,18 +101,21 @@ def main() -> int:
     return 0
 
 
-#: the metric's id (`metrics.toml` beside this file) and its unit
+#: the metric's id (`metrics.toml` beside this file), whose row gives the unit it is written in
 METRIC = "training/smallest-product-subcircuit"
-UNIT = "Boolean gates in the smallest counted product's subcircuit"
 
 
 def write_metric(out: str, rows: list[dict]) -> None:
     """s_×, the least over the circuits of `rows` (the Boolean GEMM and each configuration's layer), written into the
-    run's result under `METRIC`: measured, an exact count on the circuits it builds. Written only for a run of every
-    configuration."""
+    run's result under `METRIC` in its row's unit: measured, an exact count on the circuits it builds. Written only for
+    a run of every configuration."""
+    import tomllib
+
     from verity_bench import kit
 
-    kit.writer(out).measurement(METRIC, min(r["s_x"] for r in rows), UNIT, mark="measured")
+    rows_of = tomllib.loads(Path(__file__).with_name("metrics.toml").read_text())["metric"]
+    unit = next(m["unit"] for m in rows_of if m["id"] == METRIC)
+    kit.writer(out).measurement(METRIC, min(r["s_x"] for r in rows), unit, mark="measured")
 
 
 if __name__ == "__main__":

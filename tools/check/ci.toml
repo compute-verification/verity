@@ -126,8 +126,8 @@ group = 6
 # ones); the Rust build and the circuits beside the rest of lean-suites. Whole beside the audit, pytest ran its parallel
 # suites one at a time and its one-process suites nine at a time, the first shard's longest test step. The second shard's
 # pytest takes no cores from a build (`check.groups`), and its ask (`check.SHARD_ASKS_GIB`'s pytest beside lean-suites)
-# gives the Flock suite's workers memory they lack beside lean-build alone. verity/definitions goes there: beside the audit
-# and vLLM's first part it would match the 5-pod plan's first shard's smaller ask.
+# gives the Flock suite's workers memory they lack beside lean-build alone. adapters/vllm/verity_vllm/definitions goes there:
+# beside the audit and vLLM's first part it would match the 5-pod plan's first shard's smaller ask.
 [[plan]]
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest:*", "lean-suites:verity-vllm:1/3",
@@ -137,7 +137,7 @@ shards = [
      "lean-suites:benchmarks/one_stage:2/7"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "pytest:research",
-     "pytest:verity/definitions", "pytest:verity/circuits/ops", "pytest:verity-graph",
+     "pytest:adapters/vllm/verity_vllm/definitions", "pytest:verity/circuits/ops", "pytest:verity-graph",
      "pytest:benchmarks/training_slowdown", "pytest:repository", "pytest:verity/protocols/accounting/pous/verifier"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*"],

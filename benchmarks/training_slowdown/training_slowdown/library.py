@@ -247,24 +247,23 @@ def main(argv=None) -> int:
     return 0
 
 
-#: the metric's id (`benchmarks/training_slowdown/metrics.toml`) and its unit
+#: the metric's id (`benchmarks/training_slowdown/metrics.toml`), whose row gives the unit it is written in
 METRIC = "training/library-least-slowdown"
-UNIT = ("the least slowdown of any library entry's traced step at the entry's own policy (calculator.slowdown), at "
-        "least 1, over the entries that have one: an entry has none, and is left out, where its E keeps less than its "
-        "trained weights or where the entry point gives its step none, its row saying why (the capture refused the "
-        "step, the step breaks a premise the rows' rates take, the trace isn't classified at the policy's k, or the k "
-        "is past the last one (H) states a β at)")
 
 
 def write_metric(out: Path, rows: list[dict]) -> None:
-    """The least slowdown over the rows that have one, written into the run's result under `METRIC`: partial where a
-    row has none, since the least is then over part of the library. Written only for a run of every entry at the
-    registered starts."""
+    """The least slowdown over the rows that have one, written into the run's result under `METRIC` in its row's unit:
+    partial where a row has none, since the least is then over part of the library. Written only for a run of every
+    entry at the registered starts."""
+    import tomllib
+
     from verity_bench import kit
 
+    rows_of = tomllib.loads((Path(__file__).parents[1] / "metrics.toml").read_text())["metric"]
+    unit = next(m["unit"] for m in rows_of if m["id"] == METRIC)
     priced = [r for r in rows if r["slowdown"] is not None]
     least = min((r["slowdown"] for r in priced), default=None)
-    kit.writer(out).measurement(METRIC, least, UNIT, mark="measured" if len(priced) == len(rows) else "partial",
+    kit.writer(out).measurement(METRIC, least, unit, mark="measured" if len(priced) == len(rows) else "partial",
                                 why=None if priced else "no entry has a slowdown")
 
 

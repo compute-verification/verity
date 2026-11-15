@@ -33,14 +33,14 @@ Each thread bound of `Properties.InferenceOnly.Desc.Verdict`, from `DescAgrees` 
 
 namespace InferenceOnlyCheck.Properties.SecurityProofs
 
-/-- **A verdict of compliance of the description-sized check throttles every threaded reference circuit the declaration
+/-- **A verdict of compliance of the description-sized check throttles every threaded reference training algorithm the declaration
 contains, if its weights are incompressible and its θ registered** (`WeightsIncompressible`,
 `ThetaRegistered`). -/
 theorem DescThrottles : Properties.DescThrottles :=
   descThrottles_of DescAgrees Throttles
 
 /-- **A verdict of compliance of the description-sized check puts counted multiplications off the books in dark
-gates**, for every threaded reference circuit the declaration contains partly, if its weights are incompressible and its
+gates**, for every threaded reference training algorithm the declaration contains partly, if its weights are incompressible and its
 θ registered (`WeightsIncompressible`, `ThetaRegistered`). -/
 theorem DescThrottlesDark : Properties.DescThrottlesDark :=
   descThrottlesDark_of DescAgrees ThrottlesDark

@@ -19,7 +19,7 @@ open Verity
 
 /-- **θ is registered** ([THETA-REGISTERED]). The protocol's θ rule: every entry of a declaration's `θ` holds
 registered information, the public data the registration log registers at the start of the deployment, and the
-reference circuit `c` takes as its own `θ`, `c.θ`, exactly the inputs it reads of that kind. An output of an earlier
+reference training algorithm `c` takes as its own `θ`, `c.θ`, exactly the inputs it reads of that kind. An output of an earlier
 run, certified or not, is never in `θ`: registration happens at the start of a deployment and essentially never
 changes. One registration log is one deployment, and `θ` is what the log's first entry registers: the first run's `θ`
 cites its own entry, which opens the log, every later run's cites that same entry, and registering new public data

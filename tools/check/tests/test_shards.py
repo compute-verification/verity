@@ -48,7 +48,7 @@ BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1])
 WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], "lean-suites:*")
 #: pytest's suites the 3-pod plan runs beside lean-build; the rest (`pytest:*`) go beside the security analysis's audit
 PYTEST_BESIDE_BUILD = tuple(f"pytest:{s}" for s in (
-    "research", "verity/definitions", "verity/circuits/ops", "verity-graph",
+    "research", "adapters/vllm/verity_vllm/definitions", "verity/circuits/ops", "verity-graph",
     "benchmarks/training_slowdown", "repository", "verity/protocols/accounting/pous/verifier"))
 
 
@@ -160,21 +160,24 @@ def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
         assert [p for p in rust if p in ONE_STAGE] == [p for p in ONE_STAGE if p != ONE_STAGE[1]]
 
 
-def test_the_one_stage_benchmarks_two_longest_tests_run_on_two_shards():
-    """benchmarks/one_stage ran in one process for most of the Rust build's shard, its two longest tests most of that.  Of its
-    seven parts by test id they hash to parts 2 and 4, and every plan runs part 2 beside the security analysis's audit and the
-    rest with the Rust build, so neither shard runs both; a rename that moves either fails here, and the plans are placed
-    again."""
-    GUARD = _module("verity_suite_guard_for_shards", ROOT / "tools" / "verity" / "check" / "guard" / "verity_suite_guard.py")
-    longest = ("tests/test_served_cases.py::test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets",
-               "tests/test_two_stage_driver.py::test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name")
-    for nodeid in longest:
+def test_the_one_stage_audits_two_longest_tests_run_on_two_shards():
+    """The one-stage audit's two longest tests, served_cases' inference-only case on the 4,32,4 class (benchmarks/one_stage)
+    and the two-stage driver's round 2 (verity-vllm), are most of their suites' time.  By test id they hash to
+    benchmarks/one_stage's part 2 of seven and verity-vllm's part 3 of three, and every plan runs the first beside the
+    security analysis's audit and the second with the Rust build, so no shard runs both; a rename that moves either fails
+    here, and the plans are placed again."""
+    GUARD = _module("verity_suite_guard_for_shards", ROOT / "tools" / "check" / "guard" / "verity_suite_guard.py")
+    longest = (("benchmarks/one_stage", 7, ONE_STAGE[1],
+                "tests/test_served_cases.py::test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets"),
+               ("adapters/vllm", 3, VLLM[2], "tests/pipeline/test_two_stage_driver.py::"
+                "test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name"))
+    for suite, m, part, nodeid in longest:
         path, _, name = nodeid.partition("::")
-        assert f"def {name}(" in (ROOT / "benchmarks" / "one_stage" / path).read_text(), nodeid
-    assert [GUARD.id_part(n, 7) for n in longest] == [2, 4]
+        assert f"def {name}(" in (ROOT / suite / path).read_text(), nodeid
+        assert part.endswith(f":{GUARD.id_part(nodeid, m)}/{m}"), (nodeid, part)
     for n in sorted(D.plans()):
         shards = [CHECK.shard(f"{k}/{n}", False)["parts"] for k in range(1, n + 1)]
-        assert len({k for k, s in enumerate(shards) for p in (ONE_STAGE[1], ONE_STAGE[3]) if p in s}) == 2, n
+        assert len({k for k, s in enumerate(shards) for _, _, p, _ in longest if p in s}) == 2, n
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))

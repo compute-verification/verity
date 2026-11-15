@@ -5,7 +5,7 @@ public import Definitions.Slowdown.Threads
 /-!
 # The inference-only policy over windows: the fit bound's vocabulary
 
-The fit bound divides the reference circuit `c` into windows, a partition of its computed gates (`Verity.Partition`): in
+The fit bound divides the reference training algorithm `c` into windows, a partition of its computed gates (`Verity.Partition`): in
 the accounting model, one server's time from a wipe through whole wipe periods. When no window can hold a model that
 reaches the target loss, each thread's work spans several windows, and every window that works on a thread other than
 the one that starts it reads some of that thread's state. Over a `Threading` of `c`, a partition `P` into `k` windows
