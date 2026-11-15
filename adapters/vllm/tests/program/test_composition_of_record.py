@@ -28,8 +28,8 @@ from verity_vllm.definitions.registry import hopper as H
 from verity_vllm.definitions.registry import prims as P
 
 from tests.program.crosscheck import _standalone
-from tests.program.test_composition import REPO
 
+REPO = Path(__file__).resolve().parents[2]
 FIX = REPO / "fixtures"
 W11 = FIX / "W11-40f0cebeb670-20260907T1800Z"
 W11R = FIX / "W11R-40f0cebeb670-20260907T1802Z"
