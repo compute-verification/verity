@@ -1,0 +1,21 @@
+{
+  "rule": "P9 (dependency direction, one patch owner)",
+  "entries": [
+    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "check.match.attribution <-> check.match.batch_decomp <-> check.match.chronology <-> check.match.declaration <-> check.match.decomp_profile <-> check.match.engine_steps <-> check.match.global_match <-> check.match.global_match_fast <-> check.match.match_run <-> check.match.per_request"},
+    {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "acquire <-> commit"},
+    {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "check <-> pipeline"},
+    {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "commit <-> pipeline"},
+    {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "correspondence <-> query"},
+    {"file": "verity_vllm/check/weights_of_record.py", "kind": "layer", "symbol": "<module>", "detail": "check.weights_of_record -> pipeline.experiment"},
+    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_collect -> acquire.committer_api"},
+    {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_hidden -> acquire.sources.hidden_source"},
+    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.committer_api"},
+    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> pipeline.spans"},
+    {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "definitions.registry.sampling <-> definitions.registry.topp_split"},
+    {"file": "verity_vllm/commit/committer/staging_bounds.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.staging_bounds -> acquire.sources.hidden_source"},
+    {"file": "verity_vllm/commit/committer/identity_check.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.identity_check -> acquire.fa2_plane_classes"},
+    {"file": "verity_vllm/commit/committer/identity_check.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.identity_check -> acquire.sources.moe_source"},
+    {"file": "verity_vllm/compiler/compile_slice.py", "kind": "runtime-patch", "symbol": "<module>", "detail": "<object>.build", "count": 2},
+    {"file": "verity_vllm/compiler/compile_slice.py", "kind": "runtime-patch", "symbol": "<module>", "detail": "<object>.refuse"}
+  ]
+}

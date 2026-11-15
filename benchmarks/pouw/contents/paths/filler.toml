@@ -1,0 +1,4 @@
+order = 230
+path = "`filler/`"
+runs_on = "RTX PRO 6000"
+what = "The DRAM-free filler beside the decode step, its arms and its locked scorer, one suite (below)"

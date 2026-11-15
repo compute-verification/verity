@@ -1,0 +1,172 @@
+"""Pearl-C's Python accounting is the Lean's on every pinned FP8 price twin (`harness/price_twins.json`) and on the H100's
+rev1 pins, as exact rationals: the gap, the credit, and the debit cap the verifier's tile rule admits (`clear_work.tile_inert_bound`).
+The verifier must admit no more than the rule its guarantee is proved for, rev1's (`DeviceRev1.lean`: `creditDevRev1`,
+`tileInertWorkRev1`, `wrefDevRev1K`), so a credit or cap that drifts from it fails here, as the first promotion add of every
+word did before rev1.  A pinned twin of a statement this file doesn't price (a hot start's, Pearl-C4's) fails too, until it
+has a Python counterpart here."""
+
+from __future__ import annotations
+
+import sys
+from dataclasses import replace
+from fractions import Fraction
+from math import ceil
+from pathlib import Path
+
+import pytest
+
+from verity.device import load_card, number
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+
+sys.path.insert(0, str(Path(__file__).parents[3] / "benchmarks" / "pouw" / "harness"))
+sys.path.insert(0, str(Path(__file__).parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
+import clear_work as CW
+
+import price_twins as P
+
+GAMMA0 = Fraction(1, 400)            # TT_OUT's target gap g₀, at every cap (`gapFromTTOut`)
+ONE = 0x3F800000                     # α = β = 1 and x = 0: a forming with no salt-dead element
+DEVICES = {"pearl-c-sm120/v1": SM120, "pearl-c-sm120/v2": SM120_UNPROMOTED}
+#: the twins' price records by FP32 add price, each with the cast its W_ref already holds: Lean's `Prices.sm120`
+#: ⟨8, 2, ⟨40, 1⟩⟩ at 8, and `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ (`PearlC/Records.lean`: the in-loop add, and the
+#: A-only forming's 1.047 rounded up to 2) at 8.953, so that `wrefDevRev1K`'s c is the honest cast less it
+#: (`DeviceSm120KernelGap.lean`)
+PRICES = {Fraction(8): (SM120.prices, Fraction(8)),
+          Fraction(1047, 125): (replace(SM120.prices, fadd=Fraction(1047, 125), forming_a_only=2), Fraction(8953, 1000))}
+TWINS = [t for t in P.load() if t["status"] == "pinned"]
+CUBES = [t for t in TWINS if t["shape"] is not None]
+#: each layout twin's linears, as `Definitions/Pouw/PearlC/Device.lean` lists them (`llama31_8bLinears`)
+LAYOUTS = {"llama31_8b": ((6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336))}
+H100_PINS = {f"Pouw.SecurityProofs.PearlC.{kind}H100Rev1_{n}": n
+             for kind in ("Gap", "Sampled") for n in (8192, 16384)}
+
+
+def scheme_of(twin: dict) -> C.PearlC:
+    """The twin's device record as a scheme: v1's G = 4 or v2's no promotion, at the twin's prices and cap."""
+    d = DEVICES[twin["statement"]]
+    return C.PearlC(forming="v1", device=replace(d, cap=Fraction(twin["cap"]), prices=PRICES[Fraction(twin["fadd"])][0]), hashing="h0")
+
+
+def cast_offset(twin: dict) -> Fraction:
+    """`wrefDevRev1K`'s c: the priced cast beyond the record's own, per activation element."""
+    return P.CAST_VALUES[twin["path"]] - PRICES[Fraction(twin["fadd"])][1]
+
+
+def gamma(s: C.PearlC, n: int, c: Fraction, reading: str, kind: str) -> Fraction:
+    """The gap at n³ from the scheme's W_ref and credit, as the Lean states it per reading: the unit's or a tile's least credit
+    over `wrefDevRev1K d c`.  A tile's credit is (1 − ρ)·credit·share whatever the cap reads, so a chain-cap tile's gap is
+    the forming-credited one; the chain cap's unit (v2's `DeviceChainInertBound`) reads the debit against ρ·`chainCreditDev`."""
+    sh = Shape(n, n, n)
+    w, credit, rho = s.wref(sh) + c * n * n, Fraction(s.credit_of(sh)), s.cap
+    if reading == "forming-credited" or (reading == "chain-cap" and kind == "tile"):
+        least = (1 - rho) * credit
+    elif reading == "chain-only":
+        least = credit - s.prices.forming_credited * n * n - rho * credit
+    elif reading == "chain-cap":
+        least = credit - rho * s._chain_units(n, n, n)
+    else:
+        raise AssertionError(f"no Python reading {reading!r}")
+    return 1 - (1 - GAMMA0) * least / w
+
+
+def lean_credit(g: Fraction, n: int, rho: Fraction, qa: Fraction, c: Fraction) -> Fraction:
+    """The Lean's credit at n³ solved from its forming-credited gap: g = 1 − (1 − g₀)(1 − ρ)·C/(C + (qa + c)·n²)."""
+    r = (1 - g) / ((1 - GAMMA0) * (1 - rho))
+    return r * (qa + c) * n * n / (1 - r)
+
+
+def test_every_pinned_twin_is_priced_here():
+    assert len(TWINS) >= 20 and {t["statement"] for t in TWINS} <= set(DEVICES)
+    assert {(t["reading"], t["kind"]) for t in TWINS} <= {(r, k) for r in ("forming-credited", "chain-only", "chain-cap")
+                                                          for k in ("unit", "tile")}
+
+
+@pytest.mark.parametrize("twin", CUBES, ids=[t["pin"].removeprefix("Pouw.PearlC.") for t in CUBES])
+def test_gamma_is_the_pinned_twins(twin):
+    s, n = scheme_of(twin), twin["shape"]
+    assert gamma(s, n, cast_offset(twin), twin["reading"], twin["kind"]) == Fraction(twin["gamma"])
+
+
+@pytest.mark.parametrize("twin", [t for t in CUBES if t["reading"] == "forming-credited"],
+                         ids=lambda t: t["pin"].removeprefix("Pouw.PearlC."))
+def test_credit_and_inert_bound_are_the_pinned_twins(twin):
+    """The Lean's credit, solved from the pinned gap alone, is `credit_of`; the unit's cap ρ·credit is its cells' and a
+    tile's cap is ρ·credit·tileShare, `tile_inert_bound`'s on v1 (v2 has no debit rule, so its tile cap is the cells' credit)."""
+    s, n, c = scheme_of(twin), twin["shape"], cast_offset(twin)
+    sh, rho = Shape(n, n, n), s.cap
+    credit = lean_credit(Fraction(twin["gamma"]), n, rho, Fraction(s.prices.forming_a_only), c)
+    assert s.wref(sh) - s.credit_of(sh) == s.prices.forming_a_only * n * n and s.credit_of(sh) == credit
+    record = W.UnitRecord(Matmul(0, sh, 0), n, n)
+    assert rho * CW.cell_credit(s, record) * n * n == rho * credit
+    rows, cols = 2, 3
+    share = Fraction(rows * cols, n * n)
+    if s.device.g:
+        debit, cap = CW.tile_inert_bound(s, record, [[0] * n] * rows, [[0] * n] * cols, [(ONE, [0] * n, ONE)] * rows,
+                                 [(ONE, [0] * n, ONE)] * cols)
+        assert cap == rho * credit * share
+        assert debit >= s.prices.fadd * rows * cols * (n // s.device.window - 1)
+    else:
+        assert rho * CW.cell_credit(s, record) * rows * cols == rho * credit * share
+
+
+@pytest.mark.parametrize("twin", [t for t in TWINS if t["shape"] is None], ids=lambda t: t["pin"].split(".")[-1])
+def test_gamma_is_the_pinned_linear_and_layout_twins(twin):
+    """A twin of one linear (n, k) states one gap at every batch m, and a layout's is the max over its linears: the unit's
+    least credit (1 − ρ)·credit over `wrefDevRev1K d c` at m × n × k."""
+    s, c = scheme_of(twin), cast_offset(twin)
+    linears = LAYOUTS[twin["layout"]] if twin.get("layout") else ((twin["n"], twin["k"]),)
+    assert twin["reading"] == "forming-credited"
+    for m in (1, 32, 8192):
+        gammas = []
+        for n, k in linears:
+            sh = Shape(m, k, n)
+            gammas.append(1 - (1 - GAMMA0) * (1 - s.cap) * Fraction(s.credit_of(sh)) / (s.wref(sh) + c * m * k))
+        assert max(gammas) == Fraction(twin["gamma"])
+
+
+@pytest.mark.parametrize("pin,n", H100_PINS.items(), ids=list(H100_PINS))
+def test_h100_gamma_is_rev1s_pin(pin, n):
+    """`pearl-c-h100-v1`'s gap at the cap is `DeviceRev1Gap.lean`'s, read off the repository's lemma at the H100 record
+    (`REPO_LEMMAS`)."""
+    pins, defs = P.lemmas(P.REPO_AUDIT.parent)
+    sig, lifted = P._statement(pin, pins[pin], defs)
+    lit = P._GAMMA_LITERAL.search(sig) or P._GAMMA_SOURCE.search(sig)
+    assert lifted and lit, sig
+    s = get("pearl-c-h100-v1")
+    assert gamma(s, n, Fraction(0), "forming-credited", "unit") == Fraction(int(lit[1]), int(lit[2]))
+    assert s.credit_of(Shape(n, n, n)) == lean_credit(Fraction(int(lit[1]), int(lit[2])), n, s.cap,
+                                                      Fraction(s.prices.forming_a_only), Fraction(0))
+
+
+def test_the_zero_word_counts_every_later_promotion_as_inert_work():
+    """`tile_inert_bound`'s inert work holds `tileInertWorkRev1`'s later +0 promotions, a zero word's k/(32·G) − 1, and its forming
+    elements: every atom of a zero word is flagged, so each of the row's k elements is inert, its |cols|/n share."""
+    s, k = scheme_of(next(t for t in TWINS if t["statement"] == "pearl-c-sm120/v1")), 1024
+    record = W.UnitRecord(Matmul(0, Shape(16, k, 16), 0), 16, k)
+    atoms, zeros = D.chain_inert_work([[0] * k], [[0] * k], s.device)
+    assert zeros == k // s.device.window - 1
+    zero_row = [(ONE, [0] * k, ONE)]
+    assert atoms == k // 32 and D.tile_inert_work([[0] * k], [[0] * k], zero_row, zero_row, s.device) == (atoms, zeros, k, 0)
+    assert CW.tile_inert_bound(s, record, [[0] * k], [[0] * k], zero_row, zero_row)[0] == D.inert_work_units(
+        atoms, Fraction(k, 16), s.prices, s.device, zeros=zeros)
+
+
+def test_the_served_prices_are_the_card_files():
+    """`clear_work.SM120_LOOP_CAST_8P72`'s prices, the served statements' `Prices.sm120Loop`, are PoUW's coarse rule
+    (`W1Prices.toPrices`) at the RTX PRO 6000's card file, in E4M3 MACs: the FP32 add in the timed loop (`price.fp32_loop`),
+    the BF16 MAC (`weight.bf16`), the credited forming, the k32 noise atom's 32 MACs and half a two-code cast at an ALU
+    lane's share of the tensor rate, and the forming that reads the activations alone, one FFMA on every 8th element,
+    both rounded up. A card whose numbers move fails here until the served record moves with it."""
+    card = load_card("rtx-pro-6000-server")
+    unit = number(card["weight"]["e4m3"])
+    add = number(card["price"]["fp32_loop"]) / unit
+    cast = number(card["rate"]["tensor"]) / number(card["rate"]["alu"]) / unit
+    pr = CW.SM120_LOOP_CAST_8P72.prices
+    assert (pr.fadd, pr.bf16_mac, pr.forming_credited, pr.forming_a_only) == (
+        add, number(card["weight"]["bf16"]) / unit, ceil(32 + cast / 2), ceil(add / 8))
+    assert PRICES[add][0] == pr

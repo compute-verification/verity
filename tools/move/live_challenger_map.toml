@@ -1,0 +1,59 @@
+# The challenger service's move: what `tools/move/layout.py --map tools/move/live_challenger_map.toml` moves and
+# rewrites.
+#
+# `verity/composite/device/live_challenger/` is the proof system's challenger as it runs on the auditor's host: the
+# service over `verity.protocols.spot.device.remote`, its gate, its coin link to the network certifier and its suite.
+# It composes SPOT's challenger with the audits (it links the certifier's coins and reads PoUW's credit), so it goes
+# where the layout composes protocols, above all of them: `verity/protocols/compose/device/live_challenger/`. It was
+# the one thing under `verity/composite/`, a directory the layout does not have.
+#
+# - The directory moves whole and laid out as it was, with the two empty `__init__.py` above the service, which mark
+#   `verity.protocols.compose` and its `device` as packages: `verity/composite/` becomes `verity/protocols/compose/`.
+#   Where `compose/` already holds the composition's Lake package, no file of the two meets.
+# - Its modules follow it ([modules]): `verity.composite.device.live_challenger` becomes
+#   `verity.protocols.compose.device.live_challenger`. The files run by path, so no import statement names either.
+# - The auditor's host runs the service from its pinned tree, `/opt/vy-challenger/current/`, and the units and the gate
+#   installed there name the file from it: the map lists that directory as standing for the root ([rewrite]
+#   root_prefixes), so each of those paths follows the move.
+# - No directory is split, so the map has no [split] table and reads the same on any base.
+# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It runs after
+# `artifacts_map.toml`, on the commit that map makes.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/composite/" = "verity/protocols/compose/"
+
+[retired]
+# the directory this map empties: `layout.py` refuses a tracked file under one that has no row, and its row is a
+# directory's, so a file only a branch has under it is carried
+paths = ["verity/composite/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), files whose bytes a digest pins, and every Lean input: Lean sources, lakefiles, Lake manifests and locks.
+# None of them names what this map moves, and a map that changes no Lean input leaves every Lean package's audit key as
+# it was.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "adapters/vllm/tools/migrate/superseded_quarantine.py",
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "**/lakefile.toml",
+           "**/lake-manifest.json", "**/lean-audit.json"]
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md",
+           "adapters/vllm/manifests/definitions.json", "adapters/vllm/manifests/README.md"]
+# the auditor's host's pinned tree, which the installed units and the gate name the service's file from
+root_prefixes = ["/opt/vy-challenger/current/"]
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`): the directory as a dotted path, which its packages' modules follow
+"verity.composite" = "verity.protocols.compose"

@@ -1,0 +1,10 @@
+[Unit]
+Description=vy-oom-order every 15 s
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=15s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

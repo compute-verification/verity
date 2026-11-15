@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "CacheStep_v1{N=8,U=16,TW=17,RW=10,L=64}": {
+   "and": 18591
+  },
+  "CacheStep_v1{N=8,U=4,TW=8,RW=4,L=32}": {
+   "and": 5701
+  }
+ }
+}

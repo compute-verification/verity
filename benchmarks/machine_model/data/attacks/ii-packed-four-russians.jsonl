@@ -1,0 +1,445 @@
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU", "program": {"LDS32": 0.00087890625, "ALU": 0.00087890625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD", "program": {"LDS32": 0.00087890625, "IMAD": 0.00087890625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + HFMA2", "program": {"LDS32": 0.0017578125, "HFMA2": 0.0017578125}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + FFMA", "program": {"LDS32": 0.003515625, "FFMA": 0.003515625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + RED32", "program": {"LDS32": 0.003515625, "RED32": 0.003515625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU", "program": {"LDS128": 0.0002197265625, "ALU": 0.00087890625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD", "program": {"LDS128": 0.0002197265625, "IMAD": 0.00087890625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + HFMA2", "program": {"LDS128": 0.000439453125, "HFMA2": 0.0017578125}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + FFMA", "program": {"LDS128": 0.00087890625, "FFMA": 0.003515625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + RED32", "program": {"LDS128": 0.00087890625, "RED32": 0.003515625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU", "program": {"LDG32": 0.00087890625, "ALU": 0.00087890625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD", "program": {"LDG32": 0.00087890625, "IMAD": 0.00087890625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + HFMA2", "program": {"LDG32": 0.0017578125, "HFMA2": 0.0017578125}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + FFMA", "program": {"LDG32": 0.003515625, "FFMA": 0.003515625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + RED32", "program": {"LDG32": 0.003515625, "RED32": 0.003515625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU", "program": {"LDG128": 0.0002197265625, "ALU": 0.00087890625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD", "program": {"LDG128": 0.0002197265625, "IMAD": 0.00087890625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + HFMA2", "program": {"LDG128": 0.000439453125, "HFMA2": 0.0017578125}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + FFMA", "program": {"LDG128": 0.00087890625, "FFMA": 0.003515625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + RED32", "program": {"LDG128": 0.00087890625, "RED32": 0.003515625}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "TMA gather + TMA reduce-add", "program": {"TMA512": 0.00087890625, "TMAred512": 0.00087890625}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU", "program": {"LDS32": 0.0017578125, "ALU": 0.0017578125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD", "program": {"LDS32": 0.0017578125, "IMAD": 0.0017578125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + HFMA2", "program": {"LDS32": 0.003515625, "HFMA2": 0.003515625}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + FFMA", "program": {"LDS32": 0.00703125, "FFMA": 0.00703125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + RED32", "program": {"LDS32": 0.00703125, "RED32": 0.00703125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU", "program": {"LDS128": 0.000439453125, "ALU": 0.0017578125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD", "program": {"LDS128": 0.000439453125, "IMAD": 0.0017578125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + HFMA2", "program": {"LDS128": 0.00087890625, "HFMA2": 0.003515625}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + FFMA", "program": {"LDS128": 0.0017578125, "FFMA": 0.00703125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + RED32", "program": {"LDS128": 0.0017578125, "RED32": 0.00703125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU", "program": {"LDG32": 0.0017578125, "ALU": 0.0017578125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD", "program": {"LDG32": 0.0017578125, "IMAD": 0.0017578125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + HFMA2", "program": {"LDG32": 0.003515625, "HFMA2": 0.003515625}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + FFMA", "program": {"LDG32": 0.00703125, "FFMA": 0.00703125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + RED32", "program": {"LDG32": 0.00703125, "RED32": 0.00703125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU", "program": {"LDG128": 0.000439453125, "ALU": 0.0017578125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD", "program": {"LDG128": 0.000439453125, "IMAD": 0.0017578125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + HFMA2", "program": {"LDG128": 0.00087890625, "HFMA2": 0.003515625}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + FFMA", "program": {"LDG128": 0.0017578125, "FFMA": 0.00703125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + RED32", "program": {"LDG128": 0.0017578125, "RED32": 0.00703125}}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "TMA gather + TMA reduce-add", "program": {"TMA512": 0.0017578125, "TMAred512": 0.0017578125}}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU", "program": {"LDS128": 0.0007568200429280599, "ALU": 0.0030272801717122397}}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU", "program": {"LDS32": 0.0030272801717122397, "ALU": 0.0030272801717122397}}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS128 + ALU", "program": {"LDS128": 0.0002197265625, "ALU": 0.00087890625}}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS32 + ALU", "program": {"LDS32": 0.00087890625, "ALU": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU", "program": {"LDS32": 0.00087890625, "ALU": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD", "program": {"LDS32": 0.00087890625, "IMAD": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + HFMA2", "program": {"LDS32": 0.0017578125, "HFMA2": 0.0017578125}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + FFMA", "program": {"LDS32": 0.003515625, "FFMA": 0.003515625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + RED32", "program": {"LDS32": 0.003515625, "RED32": 0.003515625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU", "program": {"LDS128": 0.0002197265625, "ALU": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD", "program": {"LDS128": 0.0002197265625, "IMAD": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + HFMA2", "program": {"LDS128": 0.000439453125, "HFMA2": 0.0017578125}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + FFMA", "program": {"LDS128": 0.00087890625, "FFMA": 0.003515625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + RED32", "program": {"LDS128": 0.00087890625, "RED32": 0.003515625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU", "program": {"LDG32": 0.00087890625, "ALU": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD", "program": {"LDG32": 0.00087890625, "IMAD": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + HFMA2", "program": {"LDG32": 0.0017578125, "HFMA2": 0.0017578125}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + FFMA", "program": {"LDG32": 0.003515625, "FFMA": 0.003515625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + RED32", "program": {"LDG32": 0.003515625, "RED32": 0.003515625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU", "program": {"LDG128": 0.0002197265625, "ALU": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD", "program": {"LDG128": 0.0002197265625, "IMAD": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + HFMA2", "program": {"LDG128": 0.000439453125, "HFMA2": 0.0017578125}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + FFMA", "program": {"LDG128": 0.00087890625, "FFMA": 0.003515625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + RED32", "program": {"LDG128": 0.00087890625, "RED32": 0.003515625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, TMA gather + TMA reduce-add", "program": {"TMA512": 0.00087890625, "TMAred512": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDS128 + ALU", "program": {"LDS128": 0.0002197265625, "ALU": 0.00087890625}}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDG128 + ALU", "program": {"LDG128": 0.0002197265625, "ALU": 0.00087890625}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU", "program": {"LDS32": 0.0027669270833333335, "ALU": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD", "program": {"LDS32": 0.0027669270833333335, "IMAD": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + HFMA2", "program": {"LDS32": 0.005533854166666667, "HFMA2": 0.005533854166666667}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + FFMA", "program": {"LDS32": 0.011067708333333334, "FFMA": 0.011067708333333334}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + RED32", "program": {"LDS32": 0.011067708333333334, "RED32": 0.011067708333333334}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU", "program": {"LDS128": 0.0006917317708333334, "ALU": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD", "program": {"LDS128": 0.0006917317708333334, "IMAD": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + HFMA2", "program": {"LDS128": 0.0013834635416666667, "HFMA2": 0.005533854166666667}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + FFMA", "program": {"LDS128": 0.0027669270833333335, "FFMA": 0.011067708333333334}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + RED32", "program": {"LDS128": 0.0027669270833333335, "RED32": 0.011067708333333334}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU", "program": {"LDG32": 0.0027669270833333335, "ALU": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD", "program": {"LDG32": 0.0027669270833333335, "IMAD": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + HFMA2", "program": {"LDG32": 0.005533854166666667, "HFMA2": 0.005533854166666667}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + FFMA", "program": {"LDG32": 0.011067708333333334, "FFMA": 0.011067708333333334}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + RED32", "program": {"LDG32": 0.011067708333333334, "RED32": 0.011067708333333334}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU", "program": {"LDG128": 0.0006917317708333334, "ALU": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD", "program": {"LDG128": 0.0006917317708333334, "IMAD": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + HFMA2", "program": {"LDG128": 0.0013834635416666667, "HFMA2": 0.005533854166666667}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + FFMA", "program": {"LDG128": 0.0027669270833333335, "FFMA": 0.011067708333333334}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + RED32", "program": {"LDG128": 0.0027669270833333335, "RED32": 0.011067708333333334}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, TMA gather + TMA reduce-add", "program": {"TMA512": 0.0027669270833333335, "TMAred512": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDS128 + ALU", "program": {"LDS128": 0.0006917317708333334, "ALU": 0.0027669270833333335}}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDG128 + ALU", "program": {"LDG128": 0.0006917317708333334, "ALU": 0.0027669270833333335}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU", "program": {"LDS32": 0.0017578125, "ALU": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD", "program": {"LDS32": 0.0017578125, "IMAD": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + HFMA2", "program": {"LDS32": 0.0017578125, "HFMA2": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + FFMA", "program": {"LDS32": 0.003515625, "FFMA": 0.003515625}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + RED32", "program": {"LDS32": 0.003515625, "RED32": 0.003515625}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU", "program": {"LDS128": 0.000439453125, "ALU": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD", "program": {"LDS128": 0.000439453125, "IMAD": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + HFMA2", "program": {"LDS128": 0.000439453125, "HFMA2": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + FFMA", "program": {"LDS128": 0.00087890625, "FFMA": 0.003515625}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + RED32", "program": {"LDS128": 0.00087890625, "RED32": 0.003515625}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU", "program": {"LDG32": 0.0017578125, "ALU": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD", "program": {"LDG32": 0.0017578125, "IMAD": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + HFMA2", "program": {"LDG32": 0.0017578125, "HFMA2": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + FFMA", "program": {"LDG32": 0.003515625, "FFMA": 0.003515625}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + RED32", "program": {"LDG32": 0.003515625, "RED32": 0.003515625}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU", "program": {"LDG128": 0.000439453125, "ALU": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD", "program": {"LDG128": 0.000439453125, "IMAD": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + HFMA2", "program": {"LDG128": 0.000439453125, "HFMA2": 0.0017578125}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + FFMA", "program": {"LDG128": 0.00087890625, "FFMA": 0.003515625}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + RED32", "program": {"LDG128": 0.00087890625, "RED32": 0.003515625}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, TMA gather + TMA reduce-add", "program": {"TMA512": 0.00087890625, "TMAred512": 0.00087890625}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDS128 + ALU", "program": {"LDS128": 0.00037783668154761906, "ALU": 0.0015113467261904762}}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDG128 + ALU", "program": {"LDG128": 0.00037783668154761906, "ALU": 0.0015113467261904762}}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, integer work on UNI", "program": {"LDS32": 0.00087890625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, integer work on UNI", "program": {"LDS32": 0.00087890625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, integer work on UNI", "program": {"LDS128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, integer work on UNI", "program": {"LDG32": 0.00087890625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, integer work on UNI", "program": {"LDG32": 0.00087890625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, integer work on UNI", "program": {"LDG128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, integer work on UNI", "program": {"LDG128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, integer work on UNI", "program": {"LDS32": 0.0017578125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, integer work on UNI", "program": {"LDS32": 0.0017578125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.000439453125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, integer work on UNI", "program": {"LDS128": 0.000439453125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, integer work on UNI", "program": {"LDG32": 0.0017578125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, integer work on UNI", "program": {"LDG32": 0.0017578125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, integer work on UNI", "program": {"LDG128": 0.000439453125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, integer work on UNI", "program": {"LDG128": 0.000439453125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.0007568200429280599, "UNI": 0.09687296549479167}, "since": "VF2"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, integer work on UNI", "program": {"LDS32": 0.0030272801717122397, "UNI": 0.09687296549479167}, "since": "VF2"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS32 + ALU, integer work on UNI", "program": {"LDS32": 0.00087890625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, integer work on UNI", "program": {"LDS32": 0.00087890625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, integer work on UNI", "program": {"LDS32": 0.00087890625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, integer work on UNI", "program": {"LDS128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, integer work on UNI", "program": {"LDG32": 0.00087890625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, integer work on UNI", "program": {"LDG32": 0.00087890625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, integer work on UNI", "program": {"LDG128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, integer work on UNI", "program": {"LDG128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDG128 + ALU, integer work on UNI", "program": {"LDG128": 0.0002197265625, "UNI": 0.028125}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, integer work on UNI", "program": {"LDS32": 0.0027669270833333335, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, integer work on UNI", "program": {"LDS32": 0.0027669270833333335, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.0006917317708333334, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, integer work on UNI", "program": {"LDS128": 0.0006917317708333334, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, integer work on UNI", "program": {"LDG32": 0.0027669270833333335, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, integer work on UNI", "program": {"LDG32": 0.0027669270833333335, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, integer work on UNI", "program": {"LDG128": 0.0006917317708333334, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, integer work on UNI", "program": {"LDG128": 0.0006917317708333334, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.0006917317708333334, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDG128 + ALU, integer work on UNI", "program": {"LDG128": 0.0006917317708333334, "UNI": 0.08854166666666667}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, integer work on UNI", "program": {"LDS32": 0.0017578125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, integer work on UNI", "program": {"LDS32": 0.0017578125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.000439453125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, integer work on UNI", "program": {"LDS128": 0.000439453125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, integer work on UNI", "program": {"LDG32": 0.0017578125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, integer work on UNI", "program": {"LDG32": 0.0017578125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, integer work on UNI", "program": {"LDG128": 0.000439453125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, integer work on UNI", "program": {"LDG128": 0.000439453125, "UNI": 0.05625}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDS128 + ALU, integer work on UNI", "program": {"LDS128": 0.00037783668154761906, "UNI": 0.04836309523809524}, "since": "VF2"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDG128 + ALU, integer work on UNI", "program": {"LDG128": 0.00037783668154761906, "UNI": 0.04836309523809524}, "since": "VF2"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on ALU64", "program": {"LDS32": 0.00087890625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on UNI64", "program": {"LDS32": 0.00087890625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, IMAD on IMADW", "program": {"LDS32": 0.00087890625, "IMADW": 0.000439453125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, IMAD on UNI64", "program": {"LDS32": 0.00087890625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.0002197265625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, IMAD on IMADW", "program": {"LDS128": 0.0002197265625, "IMADW": 0.000439453125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, IMAD on UNI64", "program": {"LDS128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, ALU on ALU64", "program": {"LDG32": 0.00087890625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, ALU on UNI64", "program": {"LDG32": 0.00087890625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, IMAD on IMADW", "program": {"LDG32": 0.00087890625, "IMADW": 0.000439453125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, IMAD on UNI64", "program": {"LDG32": 0.00087890625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, ALU on ALU64", "program": {"LDG128": 0.0002197265625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, ALU on UNI64", "program": {"LDG128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, IMAD on IMADW", "program": {"LDG128": 0.0002197265625, "IMADW": 0.000439453125}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, IMAD on UNI64", "program": {"LDG128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on ALU64", "program": {"LDS32": 0.0017578125, "ALU64": 0.00087890625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on UNI64", "program": {"LDS32": 0.0017578125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, IMAD on IMADW", "program": {"LDS32": 0.0017578125, "IMADW": 0.00087890625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, IMAD on UNI64", "program": {"LDS32": 0.0017578125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.000439453125, "ALU64": 0.00087890625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.000439453125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, IMAD on IMADW", "program": {"LDS128": 0.000439453125, "IMADW": 0.00087890625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, IMAD on UNI64", "program": {"LDS128": 0.000439453125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, ALU on ALU64", "program": {"LDG32": 0.0017578125, "ALU64": 0.00087890625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, ALU on UNI64", "program": {"LDG32": 0.0017578125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, IMAD on IMADW", "program": {"LDG32": 0.0017578125, "IMADW": 0.00087890625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, IMAD on UNI64", "program": {"LDG32": 0.0017578125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, ALU on ALU64", "program": {"LDG128": 0.000439453125, "ALU64": 0.00087890625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, ALU on UNI64", "program": {"LDG128": 0.000439453125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, IMAD on IMADW", "program": {"LDG128": 0.000439453125, "IMADW": 0.00087890625}, "since": "VF3c"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, IMAD on UNI64", "program": {"LDG128": 0.000439453125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.0007568200429280599, "ALU64": 0.0015136400858561199}, "since": "VF3c"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.0007568200429280599, "UNI64": 0.048436482747395836}, "since": "VF3c"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on ALU64", "program": {"LDS32": 0.0030272801717122397, "ALU64": 0.0015136400858561199}, "since": "VF3c"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on UNI64", "program": {"LDS32": 0.0030272801717122397, "UNI64": 0.048436482747395836}, "since": "VF3c"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.0002197265625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS32 + ALU, ALU on ALU64", "program": {"LDS32": 0.00087890625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS32 + ALU, ALU on UNI64", "program": {"LDS32": 0.00087890625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on ALU64", "program": {"LDS32": 0.00087890625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on UNI64", "program": {"LDS32": 0.00087890625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on IMADW", "program": {"LDS32": 0.00087890625, "IMADW": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on UNI64", "program": {"LDS32": 0.00087890625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.0002197265625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on IMADW", "program": {"LDS128": 0.0002197265625, "IMADW": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on UNI64", "program": {"LDS128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on ALU64", "program": {"LDG32": 0.00087890625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on UNI64", "program": {"LDG32": 0.00087890625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on IMADW", "program": {"LDG32": 0.00087890625, "IMADW": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on UNI64", "program": {"LDG32": 0.00087890625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on ALU64", "program": {"LDG128": 0.0002197265625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on UNI64", "program": {"LDG128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on IMADW", "program": {"LDG128": 0.0002197265625, "IMADW": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on UNI64", "program": {"LDG128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.0002197265625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDG128 + ALU, ALU on ALU64", "program": {"LDG128": 0.0002197265625, "ALU64": 0.000439453125}, "since": "VF3c"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDG128 + ALU, ALU on UNI64", "program": {"LDG128": 0.0002197265625, "UNI64": 0.0140625}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on ALU64", "program": {"LDS32": 0.0027669270833333335, "ALU64": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on UNI64", "program": {"LDS32": 0.0027669270833333335, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on IMADW", "program": {"LDS32": 0.0027669270833333335, "IMADW": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on UNI64", "program": {"LDS32": 0.0027669270833333335, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.0006917317708333334, "ALU64": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.0006917317708333334, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on IMADW", "program": {"LDS128": 0.0006917317708333334, "IMADW": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on UNI64", "program": {"LDS128": 0.0006917317708333334, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on ALU64", "program": {"LDG32": 0.0027669270833333335, "ALU64": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on UNI64", "program": {"LDG32": 0.0027669270833333335, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on IMADW", "program": {"LDG32": 0.0027669270833333335, "IMADW": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on UNI64", "program": {"LDG32": 0.0027669270833333335, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on ALU64", "program": {"LDG128": 0.0006917317708333334, "ALU64": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on UNI64", "program": {"LDG128": 0.0006917317708333334, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on IMADW", "program": {"LDG128": 0.0006917317708333334, "IMADW": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on UNI64", "program": {"LDG128": 0.0006917317708333334, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.0006917317708333334, "ALU64": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.0006917317708333334, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDG128 + ALU, ALU on ALU64", "program": {"LDG128": 0.0006917317708333334, "ALU64": 0.0013834635416666667}, "since": "VF3c"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDG128 + ALU, ALU on UNI64", "program": {"LDG128": 0.0006917317708333334, "UNI64": 0.044270833333333336}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on ALU64", "program": {"LDS32": 0.0017578125, "ALU64": 0.00087890625}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on UNI64", "program": {"LDS32": 0.0017578125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on IMADW", "program": {"LDS32": 0.0017578125, "IMADW": 0.00087890625}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on UNI64", "program": {"LDS32": 0.0017578125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.000439453125, "ALU64": 0.00087890625}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.000439453125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on IMADW", "program": {"LDS128": 0.000439453125, "IMADW": 0.00087890625}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on UNI64", "program": {"LDS128": 0.000439453125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on ALU64", "program": {"LDG32": 0.0017578125, "ALU64": 0.00087890625}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on UNI64", "program": {"LDG32": 0.0017578125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on IMADW", "program": {"LDG32": 0.0017578125, "IMADW": 0.00087890625}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on UNI64", "program": {"LDG32": 0.0017578125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on ALU64", "program": {"LDG128": 0.000439453125, "ALU64": 0.00087890625}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on UNI64", "program": {"LDG128": 0.000439453125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on IMADW", "program": {"LDG128": 0.000439453125, "IMADW": 0.00087890625}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on UNI64", "program": {"LDG128": 0.000439453125, "UNI64": 0.028125}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDS128 + ALU, ALU on ALU64", "program": {"LDS128": 0.00037783668154761906, "ALU64": 0.0007556733630952381}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDS128 + ALU, ALU on UNI64", "program": {"LDS128": 0.00037783668154761906, "UNI64": 0.02418154761904762}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDG128 + ALU, ALU on ALU64", "program": {"LDG128": 0.00037783668154761906, "ALU64": 0.0007556733630952381}, "since": "VF3c"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDG128 + ALU, ALU on UNI64", "program": {"LDG128": 0.00037783668154761906, "UNI64": 0.02418154761904762}, "since": "VF3c"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + RED32, RED32 as REDV", "program": {"LDS32": 0.003515625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + RED32, RED32 as RED64", "program": {"LDS32": 0.003515625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + RED32, RED32 as REDV", "program": {"LDS128": 0.00087890625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + RED32, RED32 as RED64", "program": {"LDS128": 0.00087890625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + RED32, RED32 as REDV", "program": {"LDG32": 0.003515625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + RED32, RED32 as RED64", "program": {"LDG32": 0.003515625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + RED32, RED32 as REDV", "program": {"LDG128": 0.00087890625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + RED32, RED32 as RED64", "program": {"LDG128": 0.00087890625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + RED32, RED32 as REDV", "program": {"LDS32": 0.00703125, "REDV": 0.0017578125}, "since": "VF3d"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + RED32, RED32 as RED64", "program": {"LDS32": 0.00703125, "RED64": 0.003515625}, "since": "VF3d"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + RED32, RED32 as REDV", "program": {"LDS128": 0.0017578125, "REDV": 0.0017578125}, "since": "VF3d"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + RED32, RED32 as RED64", "program": {"LDS128": 0.0017578125, "RED64": 0.003515625}, "since": "VF3d"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + RED32, RED32 as REDV", "program": {"LDG32": 0.00703125, "REDV": 0.0017578125}, "since": "VF3d"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + RED32, RED32 as RED64", "program": {"LDG32": 0.00703125, "RED64": 0.003515625}, "since": "VF3d"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + RED32, RED32 as REDV", "program": {"LDG128": 0.0017578125, "REDV": 0.0017578125}, "since": "VF3d"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + RED32, RED32 as RED64", "program": {"LDG128": 0.0017578125, "RED64": 0.003515625}, "since": "VF3d"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + RED32, RED32 as REDV", "program": {"LDS32": 0.003515625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + RED32, RED32 as RED64", "program": {"LDS32": 0.003515625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + RED32, RED32 as REDV", "program": {"LDS128": 0.00087890625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + RED32, RED32 as RED64", "program": {"LDS128": 0.00087890625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + RED32, RED32 as REDV", "program": {"LDG32": 0.003515625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + RED32, RED32 as RED64", "program": {"LDG32": 0.003515625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + RED32, RED32 as REDV", "program": {"LDG128": 0.00087890625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + RED32, RED32 as RED64", "program": {"LDG128": 0.00087890625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + RED32, RED32 as REDV", "program": {"LDS32": 0.011067708333333334, "REDV": 0.0027669270833333335}, "since": "VF3d"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + RED32, RED32 as RED64", "program": {"LDS32": 0.011067708333333334, "RED64": 0.005533854166666667}, "since": "VF3d"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + RED32, RED32 as REDV", "program": {"LDS128": 0.0027669270833333335, "REDV": 0.0027669270833333335}, "since": "VF3d"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + RED32, RED32 as RED64", "program": {"LDS128": 0.0027669270833333335, "RED64": 0.005533854166666667}, "since": "VF3d"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + RED32, RED32 as REDV", "program": {"LDG32": 0.011067708333333334, "REDV": 0.0027669270833333335}, "since": "VF3d"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + RED32, RED32 as RED64", "program": {"LDG32": 0.011067708333333334, "RED64": 0.005533854166666667}, "since": "VF3d"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + RED32, RED32 as REDV", "program": {"LDG128": 0.0027669270833333335, "REDV": 0.0027669270833333335}, "since": "VF3d"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + RED32, RED32 as RED64", "program": {"LDG128": 0.0027669270833333335, "RED64": 0.005533854166666667}, "since": "VF3d"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + RED32, RED32 as REDV", "program": {"LDS32": 0.003515625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + RED32, RED32 as RED64", "program": {"LDS32": 0.003515625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + RED32, RED32 as REDV", "program": {"LDS128": 0.00087890625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + RED32, RED32 as RED64", "program": {"LDS128": 0.00087890625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + RED32, RED32 as REDV", "program": {"LDG32": 0.003515625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + RED32, RED32 as RED64", "program": {"LDG32": 0.003515625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + RED32, RED32 as REDV", "program": {"LDG128": 0.00087890625, "REDV": 0.00087890625}, "since": "VF3d"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + RED32, RED32 as RED64", "program": {"LDG128": 0.00087890625, "RED64": 0.0017578125}, "since": "VF3d"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on W2", "program": {"LDS32": 0.00087890625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, IMAD on W2", "program": {"LDS32": 0.00087890625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + FFMA, FFMA on W2", "program": {"LDS32": 0.003515625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, IMAD on W2", "program": {"LDS128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + FFMA, FFMA on W2", "program": {"LDS128": 0.00087890625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, ALU on W2", "program": {"LDG32": 0.00087890625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, IMAD on W2", "program": {"LDG32": 0.00087890625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + FFMA, FFMA on W2", "program": {"LDG32": 0.003515625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, ALU on W2", "program": {"LDG128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, IMAD on W2", "program": {"LDG128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + FFMA, FFMA on W2", "program": {"LDG128": 0.00087890625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on W2", "program": {"LDS32": 0.0017578125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, IMAD on W2", "program": {"LDS32": 0.0017578125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + FFMA, FFMA on W2", "program": {"LDS32": 0.00703125, "W2": 0.003515625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.000439453125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, IMAD on W2", "program": {"LDS128": 0.000439453125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + FFMA, FFMA on W2", "program": {"LDS128": 0.0017578125, "W2": 0.003515625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, ALU on W2", "program": {"LDG32": 0.0017578125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, IMAD on W2", "program": {"LDG32": 0.0017578125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + FFMA, FFMA on W2", "program": {"LDG32": 0.00703125, "W2": 0.003515625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, ALU on W2", "program": {"LDG128": 0.000439453125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, IMAD on W2", "program": {"LDG128": 0.000439453125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + FFMA, FFMA on W2", "program": {"LDG128": 0.0017578125, "W2": 0.003515625}, "since": "VF3e"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.0007568200429280599, "W2": 0.0015136400858561199}, "since": "VF3e"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on W2", "program": {"LDS32": 0.0030272801717122397, "W2": 0.0015136400858561199}, "since": "VF3e"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS32 + ALU, ALU on W2", "program": {"LDS32": 0.00087890625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on W2", "program": {"LDS32": 0.00087890625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on W2", "program": {"LDS32": 0.00087890625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + FFMA, FFMA on W2", "program": {"LDS32": 0.003515625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on W2", "program": {"LDS128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + FFMA, FFMA on W2", "program": {"LDS128": 0.00087890625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on W2", "program": {"LDG32": 0.00087890625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on W2", "program": {"LDG32": 0.00087890625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + FFMA, FFMA on W2", "program": {"LDG32": 0.003515625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on W2", "program": {"LDG128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on W2", "program": {"LDG128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + FFMA, FFMA on W2", "program": {"LDG128": 0.00087890625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDG128 + ALU, ALU on W2", "program": {"LDG128": 0.0002197265625, "W2": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on W2", "program": {"LDS32": 0.0027669270833333335, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on W2", "program": {"LDS32": 0.0027669270833333335, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + FFMA, FFMA on W2", "program": {"LDS32": 0.011067708333333334, "W2": 0.005533854166666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.0006917317708333334, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on W2", "program": {"LDS128": 0.0006917317708333334, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + FFMA, FFMA on W2", "program": {"LDS128": 0.0027669270833333335, "W2": 0.005533854166666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on W2", "program": {"LDG32": 0.0027669270833333335, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on W2", "program": {"LDG32": 0.0027669270833333335, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + FFMA, FFMA on W2", "program": {"LDG32": 0.011067708333333334, "W2": 0.005533854166666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on W2", "program": {"LDG128": 0.0006917317708333334, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on W2", "program": {"LDG128": 0.0006917317708333334, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + FFMA, FFMA on W2", "program": {"LDG128": 0.0027669270833333335, "W2": 0.005533854166666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.0006917317708333334, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDG128 + ALU, ALU on W2", "program": {"LDG128": 0.0006917317708333334, "W2": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on W2", "program": {"LDS32": 0.0017578125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on W2", "program": {"LDS32": 0.0017578125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + FFMA, FFMA on W2", "program": {"LDS32": 0.003515625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.000439453125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on W2", "program": {"LDS128": 0.000439453125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + FFMA, FFMA on W2", "program": {"LDS128": 0.00087890625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on W2", "program": {"LDG32": 0.0017578125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on W2", "program": {"LDG32": 0.0017578125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + FFMA, FFMA on W2", "program": {"LDG32": 0.003515625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on W2", "program": {"LDG128": 0.000439453125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on W2", "program": {"LDG128": 0.000439453125, "W2": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + FFMA, FFMA on W2", "program": {"LDG128": 0.00087890625, "W2": 0.0017578125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDS128 + ALU, ALU on W2", "program": {"LDS128": 0.00037783668154761906, "W2": 0.0007556733630952381}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDG128 + ALU, ALU on W2", "program": {"LDG128": 0.00037783668154761906, "W2": 0.0007556733630952381}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on DMUL", "program": {"LDS32": 0.00087890625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, IMAD on DMUL", "program": {"LDS32": 0.00087890625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS32 + FFMA, FFMA on DMUL", "program": {"LDS32": 0.003515625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, IMAD on DMUL", "program": {"LDS128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDS128 + FFMA, FFMA on DMUL", "program": {"LDS128": 0.00087890625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, ALU on DMUL", "program": {"LDG32": 0.00087890625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, IMAD on DMUL", "program": {"LDG32": 0.00087890625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG32 + FFMA, FFMA on DMUL", "program": {"LDG32": 0.003515625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, ALU on DMUL", "program": {"LDG128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, IMAD on DMUL", "program": {"LDG128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "{±1}", "family": "(ii) packed Four Russians", "name": "LDG128 + FFMA, FFMA on DMUL", "program": {"LDG128": 0.00087890625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on DMUL", "program": {"LDS32": 0.0017578125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + IMAD, IMAD on DMUL", "program": {"LDS32": 0.0017578125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS32 + FFMA, FFMA on DMUL", "program": {"LDS32": 0.00703125, "DMUL": 0.003515625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.000439453125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + IMAD, IMAD on DMUL", "program": {"LDS128": 0.000439453125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDS128 + FFMA, FFMA on DMUL", "program": {"LDS128": 0.0017578125, "DMUL": 0.003515625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + ALU, ALU on DMUL", "program": {"LDG32": 0.0017578125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + IMAD, IMAD on DMUL", "program": {"LDG32": 0.0017578125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG32 + FFMA, FFMA on DMUL", "program": {"LDG32": 0.00703125, "DMUL": 0.003515625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + ALU, ALU on DMUL", "program": {"LDG128": 0.000439453125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + IMAD, IMAD on DMUL", "program": {"LDG128": 0.000439453125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "{±1,±3}", "family": "(ii) packed Four Russians", "name": "LDG128 + FFMA, FFMA on DMUL", "program": {"LDG128": 0.0017578125, "DMUL": 0.003515625}, "since": "VF3e"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.0007568200429280599, "DMUL": 0.0015136400858561199}, "since": "VF3e"}
+{"design": "u5", "family": "(ii) packed Four Russians", "name": "LDS32 + ALU, ALU on DMUL", "program": {"LDS32": 0.0030272801717122397, "DMUL": 0.0015136400858561199}, "since": "VF3e"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "peeled wide U", "family": "(ii) packed Four Russians", "name": "F-indexed tables of U sums, LDS32 + ALU, ALU on DMUL", "program": {"LDS32": 0.00087890625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on DMUL", "program": {"LDS32": 0.00087890625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on DMUL", "program": {"LDS32": 0.00087890625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + FFMA, FFMA on DMUL", "program": {"LDS32": 0.003515625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on DMUL", "program": {"LDS128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + FFMA, FFMA on DMUL", "program": {"LDS128": 0.00087890625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on DMUL", "program": {"LDG32": 0.00087890625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on DMUL", "program": {"LDG32": 0.00087890625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + FFMA, FFMA on DMUL", "program": {"LDG32": 0.003515625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on DMUL", "program": {"LDG128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on DMUL", "program": {"LDG128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + FFMA, FFMA on DMUL", "program": {"LDG128": 0.00087890625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 10), LDG128 + ALU, ALU on DMUL", "program": {"LDG128": 0.0002197265625, "DMUL": 0.000439453125}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on DMUL", "program": {"LDS32": 0.0027669270833333335, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on DMUL", "program": {"LDS32": 0.0027669270833333335, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + FFMA, FFMA on DMUL", "program": {"LDS32": 0.011067708333333334, "DMUL": 0.005533854166666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.0006917317708333334, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on DMUL", "program": {"LDS128": 0.0006917317708333334, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + FFMA, FFMA on DMUL", "program": {"LDS128": 0.0027669270833333335, "DMUL": 0.005533854166666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on DMUL", "program": {"LDG32": 0.0027669270833333335, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on DMUL", "program": {"LDG32": 0.0027669270833333335, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + FFMA, FFMA on DMUL", "program": {"LDG32": 0.011067708333333334, "DMUL": 0.005533854166666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on DMUL", "program": {"LDG128": 0.0006917317708333334, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on DMUL", "program": {"LDG128": 0.0006917317708333334, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + FFMA, FFMA on DMUL", "program": {"LDG128": 0.0027669270833333335, "DMUL": 0.005533854166666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.0006917317708333334, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±8, F{±1,±2,±4,±5}", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 3), LDG128 + ALU, ALU on DMUL", "program": {"LDG128": 0.0006917317708333334, "DMUL": 0.0013834635416666667}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + ALU, ALU on DMUL", "program": {"LDS32": 0.0017578125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + IMAD, IMAD on DMUL", "program": {"LDS32": 0.0017578125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS32 + FFMA, FFMA on DMUL", "program": {"LDS32": 0.003515625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.000439453125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + IMAD, IMAD on DMUL", "program": {"LDS128": 0.000439453125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDS128 + FFMA, FFMA on DMUL", "program": {"LDS128": 0.00087890625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + ALU, ALU on DMUL", "program": {"LDG32": 0.0017578125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + IMAD, IMAD on DMUL", "program": {"LDG32": 0.0017578125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG32 + FFMA, FFMA on DMUL", "program": {"LDG32": 0.003515625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + ALU, ALU on DMUL", "program": {"LDG128": 0.000439453125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + IMAD, IMAD on DMUL", "program": {"LDG128": 0.000439453125, "DMUL": 0.00087890625}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, LDG128 + FFMA, FFMA on DMUL", "program": {"LDG128": 0.00087890625, "DMUL": 0.0017578125}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDS128 + ALU, ALU on DMUL", "program": {"LDS128": 0.00037783668154761906, "DMUL": 0.0007556733630952381}, "since": "VF3e"}
+{"design": "U±64, F±1", "family": "(ii) packed Four Russians", "name": "F-indexed, any field width (b = 7), LDG128 + ALU, ALU on DMUL", "program": {"LDG128": 0.00037783668154761906, "DMUL": 0.0007556733630952381}, "since": "VF3e"}

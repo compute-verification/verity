@@ -1,0 +1,952 @@
+{
+ "canonical": "{\"family\":{\"digest\":\"cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307\",\"id\":\"veritor.tc-ampere-bf16@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[{\"id\":\"a/0\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":0,\"position\":0,\"root\":\"acts\"},{\"id\":\"a/1\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":1,\"position\":1,\"root\":\"acts\"},{\"id\":\"a/10\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":10,\"position\":10,\"root\":\"acts\"},{\"id\":\"a/11\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":11,\"position\":11,\"root\":\"acts\"},{\"id\":\"a/12\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":12,\"position\":12,\"root\":\"acts\"},{\"id\":\"a/13\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":13,\"position\":13,\"root\":\"acts\"},{\"id\":\"a/14\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":14,\"position\":14,\"root\":\"acts\"},{\"id\":\"a/15\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":15,\"position\":15,\"root\":\"acts\"},{\"id\":\"a/16\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":16,\"position\":16,\"root\":\"acts\"},{\"id\":\"a/17\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":17,\"position\":17,\"root\":\"acts\"},{\"id\":\"a/18\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":18,\"position\":18,\"root\":\"acts\"},{\"id\":\"a/19\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":19,\"position\":19,\"root\":\"acts\"},{\"id\":\"a/2\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":2,\"position\":2,\"root\":\"acts\"},{\"id\":\"a/20\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":20,\"position\":20,\"root\":\"acts\"},{\"id\":\"a/21\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":21,\"position\":21,\"root\":\"acts\"},{\"id\":\"a/22\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":22,\"position\":22,\"root\":\"acts\"},{\"id\":\"a/23\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":23,\"position\":23,\"root\":\"acts\"},{\"id\":\"a/24\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":24,\"position\":24,\"root\":\"acts\"},{\"id\":\"a/25\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":25,\"position\":25,\"root\":\"acts\"},{\"id\":\"a/26\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":26,\"position\":26,\"root\":\"acts\"},{\"id\":\"a/27\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":27,\"position\":27,\"root\":\"acts\"},{\"id\":\"a/28\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":28,\"position\":28,\"root\":\"acts\"},{\"id\":\"a/29\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":29,\"position\":29,\"root\":\"acts\"},{\"id\":\"a/3\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":3,\"position\":3,\"root\":\"acts\"},{\"id\":\"a/30\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":30,\"position\":30,\"root\":\"acts\"},{\"id\":\"a/31\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":31,\"position\":31,\"root\":\"acts\"},{\"id\":\"a/32\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":32,\"position\":32,\"root\":\"acts\"},{\"id\":\"a/4\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":4,\"position\":4,\"root\":\"acts\"},{\"id\":\"a/5\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":5,\"position\":5,\"root\":\"acts\"},{\"id\":\"a/6\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":6,\"position\":6,\"root\":\"acts\"},{\"id\":\"a/7\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":7,\"position\":7,\"root\":\"acts\"},{\"id\":\"a/8\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":8,\"position\":8,\"root\":\"acts\"},{\"id\":\"a/9\",\"layout\":{\"named\":[\"bf16\",{\"value\":16}]},\"leaf\":9,\"position\":9,\"root\":\"acts\"},{\"id\":\"acc\",\"layout\":{\"named\":[\"fp32\",{\"value\":32}]},\"leaf\":0,\"position\":0,\"root\":\"ru0\"}],\"obligations\":[{\"binding\":{\"compiled\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"replay_unit\":0,\"session\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"unit\":0},\"boundary\":{\"in\":[\"a/0\",\"a/1\",\"a/2\",\"a/3\",\"a/4\",\"a/5\",\"a/6\",\"a/7\",\"a/8\",\"a/9\",\"a/10\",\"a/11\",\"a/12\",\"a/13\",\"a/14\",\"a/15\",\"a/16\",\"a/17\",\"a/18\",\"a/19\",\"a/20\",\"a/21\",\"a/22\",\"a/23\",\"a/24\",\"a/25\",\"a/26\",\"a/27\",\"a/28\",\"a/29\",\"a/30\",\"a/31\",\"a/32\"],\"out\":[\"acc\"]},\"roots\":[\"acts\",\"ru0\"],\"subcircuit\":\"8af5488b4f0b69abae96062d28c754c7b98a6f71642efd99e2f5adb8d7183acb\"}],\"references\":[{\"leaf\":\"a/0\",\"offset\":[],\"ref\":\"a/0\"},{\"leaf\":\"a/1\",\"offset\":[],\"ref\":\"a/1\"},{\"leaf\":\"a/10\",\"offset\":[],\"ref\":\"a/10\"},{\"leaf\":\"a/11\",\"offset\":[],\"ref\":\"a/11\"},{\"leaf\":\"a/12\",\"offset\":[],\"ref\":\"a/12\"},{\"leaf\":\"a/13\",\"offset\":[],\"ref\":\"a/13\"},{\"leaf\":\"a/14\",\"offset\":[],\"ref\":\"a/14\"},{\"leaf\":\"a/15\",\"offset\":[],\"ref\":\"a/15\"},{\"leaf\":\"a/16\",\"offset\":[],\"ref\":\"a/16\"},{\"leaf\":\"a/17\",\"offset\":[],\"ref\":\"a/17\"},{\"leaf\":\"a/18\",\"offset\":[],\"ref\":\"a/18\"},{\"leaf\":\"a/19\",\"offset\":[],\"ref\":\"a/19\"},{\"leaf\":\"a/2\",\"offset\":[],\"ref\":\"a/2\"},{\"leaf\":\"a/20\",\"offset\":[],\"ref\":\"a/20\"},{\"leaf\":\"a/21\",\"offset\":[],\"ref\":\"a/21\"},{\"leaf\":\"a/22\",\"offset\":[],\"ref\":\"a/22\"},{\"leaf\":\"a/23\",\"offset\":[],\"ref\":\"a/23\"},{\"leaf\":\"a/24\",\"offset\":[],\"ref\":\"a/24\"},{\"leaf\":\"a/25\",\"offset\":[],\"ref\":\"a/25\"},{\"leaf\":\"a/26\",\"offset\":[],\"ref\":\"a/26\"},{\"leaf\":\"a/27\",\"offset\":[],\"ref\":\"a/27\"},{\"leaf\":\"a/28\",\"offset\":[],\"ref\":\"a/28\"},{\"leaf\":\"a/29\",\"offset\":[],\"ref\":\"a/29\"},{\"leaf\":\"a/3\",\"offset\":[],\"ref\":\"a/3\"},{\"leaf\":\"a/30\",\"offset\":[],\"ref\":\"a/30\"},{\"leaf\":\"a/31\",\"offset\":[],\"ref\":\"a/31\"},{\"leaf\":\"a/32\",\"offset\":[],\"ref\":\"a/32\"},{\"leaf\":\"a/4\",\"offset\":[],\"ref\":\"a/4\"},{\"leaf\":\"a/5\",\"offset\":[],\"ref\":\"a/5\"},{\"leaf\":\"a/6\",\"offset\":[],\"ref\":\"a/6\"},{\"leaf\":\"a/7\",\"offset\":[],\"ref\":\"a/7\"},{\"leaf\":\"a/8\",\"offset\":[],\"ref\":\"a/8\"},{\"leaf\":\"a/9\",\"offset\":[],\"ref\":\"a/9\"},{\"leaf\":\"acc\",\"offset\":[],\"ref\":\"acc\"}],\"roots\":[{\"count\":33,\"domain\":\"a41ca7cbe28a3d0622fdd6d751df9df6a6bb86266149b7ad3ed151589647e005\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"acts\",\"owner\":-1,\"root\":\"b4dca583326304db9a7413a78f8af8f5a606baad292708a9ee4e2fb78fac1777\"},{\"count\":1,\"domain\":\"53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0\",\"framing\":\"veritor/protocol/merkle/frame/v3\",\"id\":\"ru0\",\"owner\":0,\"root\":\"58c890e3d2e769201eb24699215e6a5c8ed7accc6658820c4992ba765956719f\"}],\"subcircuits\":[{\"definition\":{\"name\":\"tc/acc-as-bf16\"},\"digest\":\"8af5488b4f0b69abae96062d28c754c7b98a6f71642efd99e2f5adb8d7183acb\",\"gates\":[{\"args\":[[\"in\",0],[\"in\",1],[\"in\",2],[\"in\",3],[\"in\",4],[\"in\",5],[\"in\",6],[\"in\",7],[\"in\",8],[\"in\",9],[\"in\",10],[\"in\",11],[\"in\",12],[\"in\",13],[\"in\",14],[\"in\",15],[\"in\",16],[\"in\",17],[\"in\",18],[\"in\",19],[\"in\",20],[\"in\",21],[\"in\",22],[\"in\",23],[\"in\",24],[\"in\",25],[\"in\",26],[\"in\",27],[\"in\",28],[\"in\",29],[\"in\",30],[\"in\",31],[\"in\",32]],\"op\":\"tc_dot16\"}],\"in\":[16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16],\"out\":[0]}],\"types\":{\"bf16\":{\"named\":[\"bf16\",{\"value\":16}]},\"fp32\":{\"named\":[\"fp32\",{\"value\":32}]}}}",
+ "code": "E_WIDTH_MISMATCH",
+ "description": "tc_dot16's first argument is the 32-bit FP32 accumulator; feeding it a 16-bit incoming value is a width mismatch.",
+ "detail": "subcircuit 8af5488b4f0b gate 0 argument 0 is 16 bits, tc_dot16 takes 32",
+ "digest": "f0fd93506cd2d980d056ca8dbf46136dfc1447dcd4019c8fa91ae8913dd8de8d",
+ "name": "reject/tc-accumulator-width",
+ "object": {
+  "family": {
+   "digest": "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307",
+   "id": "veritor.tc-ampere-bf16@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [
+   {
+    "id": "a/0",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "acts"
+   },
+   {
+    "id": "a/1",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 1,
+    "position": 1,
+    "root": "acts"
+   },
+   {
+    "id": "a/10",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 10,
+    "position": 10,
+    "root": "acts"
+   },
+   {
+    "id": "a/11",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 11,
+    "position": 11,
+    "root": "acts"
+   },
+   {
+    "id": "a/12",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 12,
+    "position": 12,
+    "root": "acts"
+   },
+   {
+    "id": "a/13",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 13,
+    "position": 13,
+    "root": "acts"
+   },
+   {
+    "id": "a/14",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 14,
+    "position": 14,
+    "root": "acts"
+   },
+   {
+    "id": "a/15",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 15,
+    "position": 15,
+    "root": "acts"
+   },
+   {
+    "id": "a/16",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 16,
+    "position": 16,
+    "root": "acts"
+   },
+   {
+    "id": "a/17",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 17,
+    "position": 17,
+    "root": "acts"
+   },
+   {
+    "id": "a/18",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 18,
+    "position": 18,
+    "root": "acts"
+   },
+   {
+    "id": "a/19",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 19,
+    "position": 19,
+    "root": "acts"
+   },
+   {
+    "id": "a/2",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 2,
+    "position": 2,
+    "root": "acts"
+   },
+   {
+    "id": "a/20",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 20,
+    "position": 20,
+    "root": "acts"
+   },
+   {
+    "id": "a/21",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 21,
+    "position": 21,
+    "root": "acts"
+   },
+   {
+    "id": "a/22",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 22,
+    "position": 22,
+    "root": "acts"
+   },
+   {
+    "id": "a/23",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 23,
+    "position": 23,
+    "root": "acts"
+   },
+   {
+    "id": "a/24",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 24,
+    "position": 24,
+    "root": "acts"
+   },
+   {
+    "id": "a/25",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 25,
+    "position": 25,
+    "root": "acts"
+   },
+   {
+    "id": "a/26",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 26,
+    "position": 26,
+    "root": "acts"
+   },
+   {
+    "id": "a/27",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 27,
+    "position": 27,
+    "root": "acts"
+   },
+   {
+    "id": "a/28",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 28,
+    "position": 28,
+    "root": "acts"
+   },
+   {
+    "id": "a/29",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 29,
+    "position": 29,
+    "root": "acts"
+   },
+   {
+    "id": "a/3",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 3,
+    "position": 3,
+    "root": "acts"
+   },
+   {
+    "id": "a/30",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 30,
+    "position": 30,
+    "root": "acts"
+   },
+   {
+    "id": "a/31",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 31,
+    "position": 31,
+    "root": "acts"
+   },
+   {
+    "id": "a/32",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 32,
+    "position": 32,
+    "root": "acts"
+   },
+   {
+    "id": "a/4",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 4,
+    "position": 4,
+    "root": "acts"
+   },
+   {
+    "id": "a/5",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 5,
+    "position": 5,
+    "root": "acts"
+   },
+   {
+    "id": "a/6",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 6,
+    "position": 6,
+    "root": "acts"
+   },
+   {
+    "id": "a/7",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 7,
+    "position": 7,
+    "root": "acts"
+   },
+   {
+    "id": "a/8",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 8,
+    "position": 8,
+    "root": "acts"
+   },
+   {
+    "id": "a/9",
+    "layout": {
+     "named": [
+      "bf16",
+      {
+       "value": 16
+      }
+     ]
+    },
+    "leaf": 9,
+    "position": 9,
+    "root": "acts"
+   },
+   {
+    "id": "acc",
+    "layout": {
+     "named": [
+      "fp32",
+      {
+       "value": 32
+      }
+     ]
+    },
+    "leaf": 0,
+    "position": 0,
+    "root": "ru0"
+   }
+  ],
+  "obligations": [
+   {
+    "binding": {
+     "compiled": "2222222222222222222222222222222222222222222222222222222222222222",
+     "replay_unit": 0,
+     "session": "1111111111111111111111111111111111111111111111111111111111111111",
+     "unit": 0
+    },
+    "boundary": {
+     "in": [
+      "a/0",
+      "a/1",
+      "a/2",
+      "a/3",
+      "a/4",
+      "a/5",
+      "a/6",
+      "a/7",
+      "a/8",
+      "a/9",
+      "a/10",
+      "a/11",
+      "a/12",
+      "a/13",
+      "a/14",
+      "a/15",
+      "a/16",
+      "a/17",
+      "a/18",
+      "a/19",
+      "a/20",
+      "a/21",
+      "a/22",
+      "a/23",
+      "a/24",
+      "a/25",
+      "a/26",
+      "a/27",
+      "a/28",
+      "a/29",
+      "a/30",
+      "a/31",
+      "a/32"
+     ],
+     "out": [
+      "acc"
+     ]
+    },
+    "roots": [
+     "acts",
+     "ru0"
+    ],
+    "subcircuit": "8af5488b4f0b69abae96062d28c754c7b98a6f71642efd99e2f5adb8d7183acb"
+   }
+  ],
+  "references": [
+   {
+    "leaf": "a/0",
+    "offset": [],
+    "ref": "a/0"
+   },
+   {
+    "leaf": "a/1",
+    "offset": [],
+    "ref": "a/1"
+   },
+   {
+    "leaf": "a/10",
+    "offset": [],
+    "ref": "a/10"
+   },
+   {
+    "leaf": "a/11",
+    "offset": [],
+    "ref": "a/11"
+   },
+   {
+    "leaf": "a/12",
+    "offset": [],
+    "ref": "a/12"
+   },
+   {
+    "leaf": "a/13",
+    "offset": [],
+    "ref": "a/13"
+   },
+   {
+    "leaf": "a/14",
+    "offset": [],
+    "ref": "a/14"
+   },
+   {
+    "leaf": "a/15",
+    "offset": [],
+    "ref": "a/15"
+   },
+   {
+    "leaf": "a/16",
+    "offset": [],
+    "ref": "a/16"
+   },
+   {
+    "leaf": "a/17",
+    "offset": [],
+    "ref": "a/17"
+   },
+   {
+    "leaf": "a/18",
+    "offset": [],
+    "ref": "a/18"
+   },
+   {
+    "leaf": "a/19",
+    "offset": [],
+    "ref": "a/19"
+   },
+   {
+    "leaf": "a/2",
+    "offset": [],
+    "ref": "a/2"
+   },
+   {
+    "leaf": "a/20",
+    "offset": [],
+    "ref": "a/20"
+   },
+   {
+    "leaf": "a/21",
+    "offset": [],
+    "ref": "a/21"
+   },
+   {
+    "leaf": "a/22",
+    "offset": [],
+    "ref": "a/22"
+   },
+   {
+    "leaf": "a/23",
+    "offset": [],
+    "ref": "a/23"
+   },
+   {
+    "leaf": "a/24",
+    "offset": [],
+    "ref": "a/24"
+   },
+   {
+    "leaf": "a/25",
+    "offset": [],
+    "ref": "a/25"
+   },
+   {
+    "leaf": "a/26",
+    "offset": [],
+    "ref": "a/26"
+   },
+   {
+    "leaf": "a/27",
+    "offset": [],
+    "ref": "a/27"
+   },
+   {
+    "leaf": "a/28",
+    "offset": [],
+    "ref": "a/28"
+   },
+   {
+    "leaf": "a/29",
+    "offset": [],
+    "ref": "a/29"
+   },
+   {
+    "leaf": "a/3",
+    "offset": [],
+    "ref": "a/3"
+   },
+   {
+    "leaf": "a/30",
+    "offset": [],
+    "ref": "a/30"
+   },
+   {
+    "leaf": "a/31",
+    "offset": [],
+    "ref": "a/31"
+   },
+   {
+    "leaf": "a/32",
+    "offset": [],
+    "ref": "a/32"
+   },
+   {
+    "leaf": "a/4",
+    "offset": [],
+    "ref": "a/4"
+   },
+   {
+    "leaf": "a/5",
+    "offset": [],
+    "ref": "a/5"
+   },
+   {
+    "leaf": "a/6",
+    "offset": [],
+    "ref": "a/6"
+   },
+   {
+    "leaf": "a/7",
+    "offset": [],
+    "ref": "a/7"
+   },
+   {
+    "leaf": "a/8",
+    "offset": [],
+    "ref": "a/8"
+   },
+   {
+    "leaf": "a/9",
+    "offset": [],
+    "ref": "a/9"
+   },
+   {
+    "leaf": "acc",
+    "offset": [],
+    "ref": "acc"
+   }
+  ],
+  "roots": [
+   {
+    "count": 33,
+    "domain": "a41ca7cbe28a3d0622fdd6d751df9df6a6bb86266149b7ad3ed151589647e005",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "acts",
+    "owner": -1,
+    "root": "b4dca583326304db9a7413a78f8af8f5a606baad292708a9ee4e2fb78fac1777"
+   },
+   {
+    "count": 1,
+    "domain": "53c92504d7d6d1d6de092cd9c69de42b32fc3cdc9675b537efc98fbd8d6498e0",
+    "framing": "veritor/protocol/merkle/frame/v3",
+    "id": "ru0",
+    "owner": 0,
+    "root": "58c890e3d2e769201eb24699215e6a5c8ed7accc6658820c4992ba765956719f"
+   }
+  ],
+  "subcircuits": [
+   {
+    "definition": {
+     "name": "tc/acc-as-bf16"
+    },
+    "digest": "8af5488b4f0b69abae96062d28c754c7b98a6f71642efd99e2f5adb8d7183acb",
+    "gates": [
+     {
+      "args": [
+       [
+        "in",
+        0
+       ],
+       [
+        "in",
+        1
+       ],
+       [
+        "in",
+        2
+       ],
+       [
+        "in",
+        3
+       ],
+       [
+        "in",
+        4
+       ],
+       [
+        "in",
+        5
+       ],
+       [
+        "in",
+        6
+       ],
+       [
+        "in",
+        7
+       ],
+       [
+        "in",
+        8
+       ],
+       [
+        "in",
+        9
+       ],
+       [
+        "in",
+        10
+       ],
+       [
+        "in",
+        11
+       ],
+       [
+        "in",
+        12
+       ],
+       [
+        "in",
+        13
+       ],
+       [
+        "in",
+        14
+       ],
+       [
+        "in",
+        15
+       ],
+       [
+        "in",
+        16
+       ],
+       [
+        "in",
+        17
+       ],
+       [
+        "in",
+        18
+       ],
+       [
+        "in",
+        19
+       ],
+       [
+        "in",
+        20
+       ],
+       [
+        "in",
+        21
+       ],
+       [
+        "in",
+        22
+       ],
+       [
+        "in",
+        23
+       ],
+       [
+        "in",
+        24
+       ],
+       [
+        "in",
+        25
+       ],
+       [
+        "in",
+        26
+       ],
+       [
+        "in",
+        27
+       ],
+       [
+        "in",
+        28
+       ],
+       [
+        "in",
+        29
+       ],
+       [
+        "in",
+        30
+       ],
+       [
+        "in",
+        31
+       ],
+       [
+        "in",
+        32
+       ]
+      ],
+      "op": "tc_dot16"
+     }
+    ],
+    "in": [
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16,
+     16
+    ],
+    "out": [
+     0
+    ]
+   }
+  ],
+  "types": {
+   "bf16": {
+    "named": [
+     "bf16",
+     {
+      "value": 16
+     }
+    ]
+   },
+   "fp32": {
+    "named": [
+     "fp32",
+     {
+      "value": 32
+     }
+    ]
+   }
+  }
+ },
+ "subcircuits_well_formed": [
+  false
+ ],
+ "tags": [
+  "stage-1",
+  "rejection",
+  "width",
+  "tc"
+ ],
+ "verdict": "reject"
+}

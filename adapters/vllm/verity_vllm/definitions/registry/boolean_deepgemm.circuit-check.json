@@ -1,0 +1,20 @@
+{
+ "definitions": {
+  "F32LtFtz_v2": {
+   "and": 136,
+   "type": "ab30549066df8e8500904c2893e8b2d6daa692003537b4dd4477e1daf6afa4e43cc8c1ef74f4815d2654a5ad99d50341df470420cb6231a193bedace44adc9b0"
+  },
+  "Fp8GroupQuantUe8m0Group_v2{G=32}": {
+   "and": 50603,
+   "type": "f442a52f3b0a92efe7627cbd36975316c27014e86431cd41dfafdd74c0228809f304c1d33d831441a09f5e9489f29fc683aef8b21bff62f4f964f7dec5c2d429"
+  },
+  "Fp8GroupScaleUe8m0_v2{G=32}": {
+   "and": 6113,
+   "type": "f21fd41f5559f640c7e19177379708e4eb1f6feaaf49269f454159cbe648e18f274782799306b70f48070f6d02cfe5ef85e300b3a0fa87012810cdb6eec4f57e"
+  },
+  "Fp8Ue8m0Ceil_v2": {
+   "and": 153,
+   "type": "156ef2de1095d40f78041a8d882717c01adff79ef3091996a27812d4518f0a8d48567d89e35b2687241f41a48a1a871b2deff1dd09779f3467aa32b0deebf186"
+  }
+ }
+}

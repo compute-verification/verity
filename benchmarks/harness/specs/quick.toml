@@ -1,0 +1,8 @@
+schema = "verity-bench/vllm-sweep/v0"
+id = "quick"
+batches = [8, 32]
+prompt_tokens = [512]
+traffic = ["mixed"]
+
+[output_tokens]
+mixed = 64

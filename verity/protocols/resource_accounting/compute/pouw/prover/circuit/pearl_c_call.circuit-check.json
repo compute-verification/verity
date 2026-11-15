@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "PearlCCell_v2{K=128,R=8,DOT=HopperE4m3QgmmaDot32_v2,G=4,STEP=HopperBF16WgmmaDot16_v2}": {
+   "and": 35449,
+   "type": "787a72a77ccfe19befb6d32a58c4123b917e6529d5416b53beb72f8816f3a8908808fcbe6f74a78f7fa6b0bee845c9234102c889dea3418209607c64ab3b5a73"
+  }
+ }
+}

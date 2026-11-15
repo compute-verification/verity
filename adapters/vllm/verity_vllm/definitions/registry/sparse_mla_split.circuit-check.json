@@ -1,0 +1,16 @@
+{
+ "pieces": {
+  "F32GtZeroFtz_v1": {
+   "and": 35,
+   "type": "f21eca8898744c94b2589e8bf5407056e613dcd9ac1d2cbc1ab01e0bfaa135fa525f1c9e8ea0e987abd02abf8a1f88a249dffef05012ca8fef3b560f5db311a4"
+  },
+  "F32NeZeroFtz_v1": {
+   "and": 34,
+   "type": "0b63ca9c4355d6460d7ad507438f1c28709c20cd4cbb0f93b5a235383d7e8c70abd8b85b6d860b9147fe344f7614f4f63bad5e7477337513500d568a3f5cc001"
+  },
+  "MufuLg2Ftz_v1": {
+   "and": 1171,
+   "type": "7b9840c9790f64d71bdbf6de6c91d8d9e008cb58294f5ceb59453b6b84926446fe79fbecd60c2d4853fcc020883fd1798e57ece4b6d86902fe6d0cdaf38bbd6c"
+  }
+ }
+}

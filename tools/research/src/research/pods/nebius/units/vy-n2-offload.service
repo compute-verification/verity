@@ -1,0 +1,25 @@
+[Unit]
+Description=node 1's Builds that Kueue holds for quota, moved to node 2 (n2_build.sh offload --loop)
+After=network-online.target k3s.service
+Wants=network-online.target
+RequiresMountsFor=/workspace
+StartLimitIntervalSec=1h
+StartLimitBurst=10
+
+[Service]
+User=research
+Group=research
+WorkingDirectory=/workspace/jobs
+EnvironmentFile=/etc/environment
+EnvironmentFile=/etc/vy/env/research.env
+EnvironmentFile=/etc/vy/env/%N.env
+# Each line stamped, as offload.log's lines always were; systemd reads $$ as $ and %% as %
+ExecStart=/bin/bash -c 'set -o pipefail; /bin/bash /workspace/verity-guest/bin/n2_build.sh offload --loop 2>&1 | while IFS= read -r l; do echo "$$(date -u +%%FT%%TZ) $$l"; done >> /workspace/verity-guest/offload.log'
+Restart=on-failure
+RestartSec=15
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target

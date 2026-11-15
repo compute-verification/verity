@@ -1,0 +1,4 @@
+order = 10
+path = "`harness/`"
+runs_on = "RTX PRO 6000"
+what = "One harness for every PoUW prover arm and plain GEMM baseline: each gated at the exact shape and flags it is timed at, then timed the same way (its own README)"

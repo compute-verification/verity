@@ -1,0 +1,163 @@
+diff --git a/crates/flock-core/src/verifier.rs b/crates/flock-core/src/verifier.rs
+index c1c6d04..90e853e 100644
+--- a/crates/flock-core/src/verifier.rs
++++ b/crates/flock-core/src/verifier.rs
+@@ -70,6 +70,8 @@ pub enum FlockVerifyError {
+     ClassMismatch,
+     /// The wiring (copy-constraint) argument rejected.
+     Wiring(WiringError),
++    /// verity's glue sumcheck between tables rejected.
++    Glue,
+     /// The circuit and the union instance are not the same statement: a
+     /// different registry, or gate counts that are not the union's declared
+     /// counts. A rejection, not a panic — both come from the caller.
+@@ -285,6 +287,41 @@ pub fn verify_ligerito_union<Ch: Challenger>(
+     Ok(claims.boolean.expect("asserted boolean-only above"))
+ }
+ 
++/// [`verify_ligerito_union`] with verity's glue between the tables (flock-glue),
++/// the mirror of `flock_prover::prover::prove_fast_ligerito_union_glued`: after
++/// the class PIOPs, `glue` replays the glue sumcheck on the challenger and
++/// returns the claims the merged opening must also open.
++pub fn verify_ligerito_union_glued<Ch: Challenger>(
++    union: &UnionInstance<'_>,
++    circuits: &[&dyn LincheckCircuit],
++    commitment: &Commitment,
++    proof: &R1csProofMergedLigerito,
++    pcs_params: &PcsParams,
++    glue: &mut dyn FnMut(&Commitment, &mut Ch) -> Result<Vec<LinkClaim>, String>,
++    challenger: &mut Ch,
++) -> Result<R1csClaim, FlockVerifyError> {
++    assert!(!union.has_element(), "this entry is boolean-only");
++    let boolean = BooleanPiopProof { zerocheck: proof.zerocheck.clone(), lincheck: proof.lincheck.clone() };
++    let (claims, packed_direct_points, matrix, _el, _sigma) = verify_union_piops(
++        union,
++        UnionVerifyBinding::Mixed,
++        circuits,
++        commitment,
++        Some(BooleanPiopRef::Rs(&boolean)),
++        None,
++        None,
++        false,
++        pcs_params,
++        challenger,
++    )?;
++    if let Some(a) = matrix {
++        a.check(union, circuits).map_err(FlockVerifyError::Lincheck)?;
++    }
++    let glued = glue(commitment, challenger).map_err(|_| FlockVerifyError::Glue)?;
++    let claims = verify_merged_opening(union, commitment, &claims, &packed_direct_points, &proof.pcs_open, pcs_params, challenger, None, &glued)?;
++    Ok(claims.boolean.expect("asserted boolean-only above"))
++}
++
+ /// [`verify_ligerito_union`] with the **AG-skip** boolean zerocheck — the
+ /// mirror of `flock_prover::prover::prove_fast_ligerito_union_ag`. Same
+ /// statement binding, lincheck, and merged opening; only the zerocheck's
+diff --git a/crates/flock-prover/src/prover.rs b/crates/flock-prover/src/prover.rs
+index f53418c..4439ed4 100644
+--- a/crates/flock-prover/src/prover.rs
++++ b/crates/flock-prover/src/prover.rs
+@@ -630,6 +630,7 @@ pub fn prove_fast_ligerito_union_circuit_linked<Ch: Challenger>(
+         slots,
+         element_slots,
+         Some(link),
++        None,
+         challenger,
+     );
+     let UnionProveOutput {
+@@ -915,7 +916,7 @@ fn prove_union_with_binding_zerocheck<Ch: Challenger>(
+     challenger: &mut Ch,
+ ) -> (UnionProveOutput, Commitment) {
+     prove_union_with_binding_zerocheck_link(
+-        union, binding, bool_zc, pcs_params, slots, element_slots, None, challenger,
++        union, binding, bool_zc, pcs_params, slots, element_slots, None, None, challenger,
+     )
+ }
+ 
+@@ -924,6 +925,47 @@ fn prove_union_with_binding_zerocheck<Ch: Challenger>(
+ /// proof's merged opening (verity flock-link).
+ pub type LinkHook<'a> = &'a mut dyn FnMut(&Commitment) -> Vec<LinkClaim>;
+ 
++/// Called once per proof after the class PIOPs and before the merged opening,
++/// with the padded witness and the challenger (verity flock-glue: the glue
++/// sumcheck between tables): returns claims opened in the same opening, their
++/// values already observed.
++pub type GlueHook<'a, Ch> = &'a mut dyn FnMut(&Commitment, &[F128], &mut Ch) -> Vec<LinkClaim>;
++
++/// [`prove_fast_ligerito_union`] with verity's glue between the tables
++/// ([`GlueHook`]). Verify with
++/// [`flock_core::verifier::verify_ligerito_union_glued`].
++pub fn prove_fast_ligerito_union_glued<Ch: Challenger>(
++    union: &UnionInstance<'_>,
++    pcs_params: &PcsParams,
++    slots: Vec<UnionSlotProverInput<'_>>,
++    glue: GlueHook<'_, Ch>,
++    challenger: &mut Ch,
++) -> (R1csProofMergedLigerito, Commitment, R1csClaim) {
++    assert!(!union.has_element(), "this entry is boolean-only");
++    let (out, commitment) = prove_union_with_binding_zerocheck_link(
++        union,
++        UnionProveBinding::Mixed,
++        BooleanZcKind::Rs,
++        pcs_params,
++        slots,
++        Vec::new(),
++        None,
++        Some(glue),
++        challenger,
++    );
++    let (piop, claim) = out.boolean.expect("asserted boolean-only above");
++    let piop = piop.expect_rs();
++    (
++        R1csProofMergedLigerito {
++            zerocheck: piop.zerocheck,
++            lincheck: piop.lincheck,
++            pcs_open: out.pcs_open,
++        },
++        commitment,
++        claim,
++    )
++}
++
+ #[allow(clippy::too_many_arguments)]
+ fn prove_union_with_binding_zerocheck_link<Ch: Challenger>(
+     union: &UnionInstance<'_>,
+@@ -933,6 +975,7 @@ fn prove_union_with_binding_zerocheck_link<Ch: Challenger>(
+     slots: Vec<UnionSlotProverInput<'_>>,
+     element_slots: Vec<UnionElementSlotInput<'_>>,
+     link: Option<LinkHook<'_>>,
++    glue: Option<GlueHook<'_, Ch>>,
+     challenger: &mut Ch,
+ ) -> (UnionProveOutput, Commitment) {
+     // The commitment is to the DENSE stack q (M4): PcsParams.m is the dense
+@@ -1006,7 +1049,8 @@ fn prove_union_with_binding_zerocheck_link<Ch: Challenger>(
+     let padding_unread = !union.has_element()
+         && !union.compaction_is_identity()
+         && union.m_total() - union.n_log() >= LOG_PACKING
+-        && link.is_none();
++        && link.is_none()
++        && glue.is_none();
+     let (z_packed, a_packed_f128, b_packed_f128, stripes, buf_mode) =
+         build_union_witness(union, sources, padding_unread);
+     // Where the witness buffers return: the dirty scratch pool for the pooled
+@@ -1095,7 +1139,7 @@ fn prove_union_with_binding_zerocheck_link<Ch: Challenger>(
+             union.bind_statement_circuit(challenger, &commitment, &ci.circuit.digest(), ci.public)
+         }
+     }
+-    let link_claims: Vec<LinkClaim> = match link {
++    let mut link_claims: Vec<LinkClaim> = match link {
+         Some(f) => f(&commitment),
+         None => Vec::new(),
+     };
+@@ -1504,6 +1548,11 @@ fn prove_union_with_binding_zerocheck_link<Ch: Challenger>(
+             t_h + t_z + t_e + t_w
+         );
+     }
++    if let Some(g) = glue {
++        let glued = g(&commitment, &z_packed, challenger);
++        assert!(glued.iter().all(|l| l.point.len() == union.m_total()), "a glue claim point has M coordinates");
++        link_claims.extend(glued);
++    }
+     let t = Instant::now();
+     let mut x_fulls: Vec<Vec<F128>> = z_claims
+         .iter()

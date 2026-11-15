@@ -1,0 +1,47 @@
+{
+ "types": {
+  "ar-multimem": {
+   "c": 256,
+   "full": 256,
+   "k_log": 27
+  },
+  "rmsnorm-v8": {
+   "c": 256,
+   "full": 256,
+   "k_log": 27
+  }
+ },
+ "gpu_s_by_type": {
+  "rmsnorm-v8": {
+   "n": 37,
+   "mean": 7.7723,
+   "max": 14.708
+  },
+  "ar-multimem": {
+   "n": 33,
+   "mean": 6.1928,
+   "max": 7.329
+  }
+ },
+ "verify_s": {
+  "ar-multimem": {
+   "n": 35,
+   "mean": 7.464,
+   "max": 8.0164
+  },
+  "rmsnorm-v8": {
+   "n": 38,
+   "mean": 7.6313,
+   "max": 8.111
+  }
+ },
+ "timed_out": true,
+ "rc": [
+  -15
+ ],
+ "accepted": false,
+ "flat": true,
+ "host_limit": {
+  "stopped_at_s": null
+ }
+}
