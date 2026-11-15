@@ -56,7 +56,8 @@ Either way it reads the verifier's side of the record, and nothing the developer
 - `out/inference-only-policy.json`, the registered policy: the class and the model's name. Where it also counts its
   class's MACs a slot, that count must be this command's;
 - `out/record/verdicts.json`, the run's composed record: PoUW's row. A row that isn't an accept (a development run's
-  reads `missing`) is printed beside the number, never left out: the credit is then the Pearl+ piece's alone;
+  reads `missing`) is printed beside the number, never left out: PoUW then credits nothing of the run, and the number
+  is the Pearl+ verifier's answer alone. Under the answer's verdict a line says what the credit rests on (`RESTS_ON`);
 - `out/pieces/pouw/verify.json`, the Pearl+ verifier's document, where the record holds it: its per-call split, which
   says whether the passes hold the LM head's calls, and which `--per-call` prints;
 - `out/pieces/pouw/development.json`, the Pearl+ piece's document (`served_verdicts.py pearlplus`), where the record
@@ -87,7 +88,8 @@ credit), by cause and by matmul call, from the Pearl+ verifier's split of its ac
 by `served_passes.py uncredited`, for a record whose verify document holds none). Each call's real MACs are the MACs its credited cells
 hold at |K| and the cells the band rule leaves out (excluded A rows, excluded B rows' column blocks, voluntary rows'
 bands and blocks, and the side channels' k − |K|); its credited cells' MACs are the deduction's terms (ε's, that of
-sampled tiles over the inert-work bound, and the inert-work share ι's) and its credit, as exact fractions. The causes
+sampled tiles over the inert-work bound, and ι's, the inert work: ρ = 1/400 of what ε's deduction leaves) and its
+credit, as exact fractions. The causes
 over the model are those, the LM head and attention (which Pearl+ doesn't credit), the linears outside the passes, and
 the floor of the credit; they sum to the give-up exactly. The split is the answer's or it is refused (exit 2): its
 commitment and its passes' records roots are the answer's, each call's terms sum as above, and its calls' credited
@@ -145,7 +147,7 @@ from verity_bench.kit_report import RUN_ID
 
 __all__ = ["ABSENT", "ANSWER", "CREDITABLE", "OF_CREDITABLE", "RAN", "SHARE", "DELTA_S", "DEVELOPMENT", "JOB", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "OPTIONAL",
            "POLICY",
-           "RECORDS", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
+           "RECORDS", "RESTS_ON", "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
            "amounts", "capacity", "coins", "from_dir", "from_run", "main", "model_macs", "uncredited_words"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
@@ -194,15 +196,21 @@ CAUSES = {"lm_head": "LM head, which Pearl+ doesn't credit", "lm_head_outside": 
           "outside": "linears outside the passes", "excluded_a": "excluded A rows",
           "excluded_b": "excluded B rows' column blocks", "voluntary": "voluntary rows' bands and blocks",
           "kept_width": "side channels (k beyond |K|)", "epsilon_macs": "ε's deduction",
-          "over_bound_macs": "sampled tiles over the inert-work bound", "rho_macs": "ι, the inert-work share",
+          "over_bound_macs": "sampled tiles over the inert-work bound", "rho_macs": "ι, inert work: 1/400 of what ε leaves",
           "floor": "the credit's floor", "grid": "the give-up padded up to the window grid"}
 #: a call's terms the split states, beside its MACs
 ROWS = ("excluded_a", "excluded_b", "voluntary", "kept_width")
 TERMS = ("epsilon_macs", "over_bound_macs", "rho_macs", "credited_macs")
 ABSENT = ("absent: a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
-          "developer's node")
+          "developer's machine")
 #: what the answer's ε and δ leave out, printed beside them
-SAMPLING_ALONE = "sampling's alone: the assumption's gap and δ, and binding, are not in them"
+SAMPLING_ALONE = ("sampling's alone: they bound what checking a random sample of tiles can miss, not a failure of the "
+                  "conjecture or the hash the credit rests on")
+#: who drew the answer's sample (`profile.source_from`), as printed
+SOURCE = {"node": "the serving machine", "challenger": "a challenger"}
+#: what the credit rests on, printed under the answer's verdict
+RESTS_ON = ("  the credit rests on Pearl's conjecture TT_OUT rev1, which this repository's red-team rates refuted: that "
+            "a credited MAC was computed is an open premise, not a proved guarantee")
 #: the data sheet's readings of a device's peak, each a clock of its card file (`clock.tensor`, `clock.sm`)
 READINGS = ("tensor", "sm")
 #: the operand format of the MACs Pearl+ credits
@@ -210,7 +218,7 @@ FORMAT = "e4m3"
 NO_SITE = "the run's record holds no registration of its hardware: no site entry naming its devices and their sheets"
 NO_SPAN = ABSENT.removeprefix("absent: ")
 DELTA_S = ("probability that a sample that accepts misses more than the share ε_s of the credited MACs: the answer's δ_s, "
-           "sampling's alone (the assumption's gap and δ, and binding, are not in it)")
+           "sampling's alone (not a failure of the conjecture or the hash the credit rests on)")
 #: how the store ends the reason of a withdrawal of only the files under some prefixes of a record
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
 
@@ -400,7 +408,8 @@ def ran_with(doc: dict) -> tuple[str, dict] | None:
     c = doc["coins"]
     detail = ", ".join(f"{said} {v}" if v is not None else f"{unsaid} not stated" for said, unsaid, v in (
         ("draws", "draws", c["draws"]), ("delta", "delta", c["delta"]), ("scheme", "scheme", doc["scheme"]),
-        ("sample from", "sample source", c["sample"]), ("salt coins from", "salt coins", c["salt"]),
+        ("sample from", "sample source", SOURCE.get(c["sample"], c["sample"])),
+        ("salt coins from", "salt coins", c["salt"]),
         ("Lean verdict", "Lean verdict", c["lean"])))
     if c["challenger"] == "deployed" or c["parameters"] is False:
         raise Unreadable(f"{NO_DEPLOYED} (the record's {RAN} says "
@@ -749,7 +758,7 @@ def coins_text(c: dict) -> str:
     coins and parameters it does state."""
     stated = "not stated in the record"
     return (f"  coins as the record states them, which doesn't say whose challenger: "
-            f"{c['sample'] or 'sample source ' + stated} sample, "
+            + (f"sample from {SOURCE.get(c['sample'], c['sample'])}, " if c["sample"] else f"sample source: {stated}, ")
             + (f"salt coins from {c['salt']}" if c["salt"] else f"salt coins: {stated}")
             + f"; Lean verifier run {'as ' + c['lean'] if c['lean'] else stated}"
             + f"; parameters: draws {c['draws'] if c['draws'] is not None else stated}, "
@@ -762,7 +771,8 @@ def text(doc: dict) -> str:
     macs, cls, tokens, record = doc["macs"], doc["class"], doc["tokens"], doc["record"]
     lines = [(f"compute: {100 * doc['value']:.2f}% of the served model's MACs ({doc['credited_macs']:,} of "
               f"{doc['model_macs']:,}), {'at or above' if doc['met'] else 'below'} the {100 * doc['target']:g}% target. "
-              "This is what the Pearl+ piece's own answer credits, not PoUW's row in the run's record of verdicts")]
+              "This is what the Pearl+ verifier's own answer credits, not PoUW's verdict in the run's record of "
+              "verdicts")]
     if doc["made_up"]:
         lines.append(made_up_text(doc["made_up"]))
     if ran_with(doc) is None:
@@ -772,9 +782,11 @@ def text(doc: dict) -> str:
                  + (f" (scheme {doc['scheme']})" if doc["scheme"] else "")
                  + (f" at {at} ({SAMPLING_ALONE})" if at else "")
                  + ", and the Lean verifier's verdict is the same")
-    lines.append("  PoUW's row in the run's composed record " + ("accepts too" if record["verdict"] == "accept" else
+    lines.append(RESTS_ON)
+    lines.append("  PoUW's verdict in the run's record of verdicts " + ("accepts too" if record["verdict"] == "accept" else
                  (f"is `{record['verdict']}`, not an accept" if record["verdict"] else "is absent")
-                 + ", so the credit is the Pearl+ piece's alone" + (f": {record['why']}" if record["why"] else "")))
+                 + ": PoUW credits nothing of this run, and the number above is the Pearl+ verifier's answer alone"
+                 + (f" (the record's reason for PoUW's verdict: {record['why']})" if record["why"] else "")))
     if doc["withdrawn"]:
         lines.append(f"  part of the run's record was withdrawn, none of it a file read here: {'; '.join(doc['withdrawn'])}")
     lines.append(f"  {doc['model']} at revision {doc['revision']}, {cls['slots']} slots of {cls['prompt']} prompt and "
