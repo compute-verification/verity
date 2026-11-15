@@ -760,10 +760,10 @@ def test_an_operands_lazy_words_are_its_edges_then_seeded_random_words():
     ew = VX.edges(8)
     for i in range(len(ew)):
         assert {VX.wide_words(pt, i, len(ew), 7, 2)(k) for k in range(pt.leaves)} == {ew[i]}
-    draw = lambda i, param=2: [VX.wide_words(pt, i, len(ew), 7, param)(k) for k in range(pt.leaves)]  # noqa: E731
-    a = draw(len(ew))
-    assert a == draw(len(ew)) and all(0 <= v < 256 for v in a) and len(set(a)) > 64
-    assert a != draw(len(ew) + 1) and a != draw(len(ew), param=3)
+    sample = lambda i, param=2: [VX.wide_words(pt, i, len(ew), 7, param)(k) for k in range(pt.leaves)]  # noqa: E731
+    a = sample(len(ew))
+    assert a == sample(len(ew)) and all(0 <= v < 256 for v in a) and len(set(a)) > 64
+    assert a != sample(len(ew) + 1) and a != sample(len(ew), param=3)
     with pytest.raises(ValueError, match="one width of at most 64 bits"):
         VX.wide_words(Array(4, Value(128)), 0, 1, 7, 0)
 

@@ -184,7 +184,7 @@ SCHEMES = ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0"
 """The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
 keys that sign."""
 OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
-"""The operand classes of a tensor-core MAC (`OperandClass`, in kebab case): int8 operands drawn uniformly over
+"""The operand classes of a tensor-core MAC (`OperandClass`, in kebab case): int8 operands sampled uniformly over
 [-128, 127], [-2, 1], [0, 3] and [0, 15], and the one value 0."""
 REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "figures", "capacity", "owner",
             "inventory", "uncertified", "challenger-reach")
