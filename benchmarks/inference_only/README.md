@@ -14,13 +14,20 @@ uv run verity bench inference_only --stated-only --served RUN
 ~~~
 
 `RUN` is a served run's directory, or its `out/`, on your disk; nothing else is read, no store, host or key. The
-command runs the policy's record check on the run's files and prints the run's number with the run it read (the
-record's own name and the directory), the PoUW verdict it found, the share of the blocks' work that no PoUW verdict of
-record credits, and why the number is 1 where it is: the check refused the record, or the record holds no PoUW accept
-of record. The run's `out/` holds `record/verdicts.json`, `inference-only-policy.json`, `inference-only-limits.json`,
-one `block-counts-*.json`, and the files the run registered: `registered/program.json`, `registered/circuit.json` and
+command runs the policy's record check on the run's files. Its first lines say that the number is a measurement and not
+an audit, name the record read, and say in one line which coins and parameters the record states PoUW's piece was made
+with (its `coin_source`, where its draw came from, its `scheme`), or that the record does not say. Then comes the run's
+number, which is the command's number and the JSON's `value`, with its own mark (`measured`, or `partial` under the
+tie), with the run it read (the record's own `run`, else the directory's name), the PoUW verdict it found, the share
+of the blocks' work that no PoUW verdict of record credits, and why the number is 1 where it is: the check refused the
+record, or the record holds no PoUW accept of record. The stated policy's number follows, labelled as not the result.
+The run's `out/` holds `record/verdicts.json`, `inference-only-policy.json`, `inference-only-limits.json`, a
+`block-counts-CLASS.json` for each class it counts (`SLOTS-PROMPT-OUTPUTS`, or `record`), and the files the run
+registered: `registered/program.json`, `registered/circuit.json` and
 `registered/log.jsonl`, the registration log one record a line, its first first and the run's own last. `--program P
---circuit C --log L0 L1 ...` name those three apart instead (a log a record a file, or one `.jsonl` file). A record
+--circuit C --log L0 L1 ...` name those three apart instead (a log a record a file, or one `.jsonl` file). Where the
+record holds counts of more than one class, `--served-class CLASS` (`SLOTS,PROMPT,OUTPUTS`, or `record`) names the one
+read; without it the command refuses, naming the classes the record holds and the option. A record
 with no Program can't be checked, since the circuit record and the registration name the Program only by its digest
 and the check reads each template's Definition from its text: the command says so, runs no check, and its number is 1.
 
@@ -56,12 +63,13 @@ absolute); with no `record` there, or no file, it reads none.
   `1 / (s + 1/slowdown)`; one who gives up all of it, or whose PoUW row is a development accept or no accept, has
   `s = 1` and gets 1. A verdict crediting below 0, above the blocks' work or above the MACs it counts, or counting
   other MACs than the class's linears, is refused; so are a verdict tied to another record than the check's, a record
-  holding two counts, and a record missing a file, which is named. `tests/test_served_record.py` holds each.
+  holding counts of two classes with no `--served-class`, and a record missing a file, which is named. `tests/test_served_record.py` holds each.
 
 ## What it prints
 
-1. **The served policy**, first, and its number, which is the command's number and the JSON's `value`. The policy is
-   **stated, not built**: `served.toml` holds the numbers the serve states for its class before it starts, this tree
+1. **The served policy**, first, and its number, which is the command's number and the JSON's `value` where no record
+   is read; with a record read, the record's section comes first (below) and the policy's number follows it, labelled
+   `THE SERVED POLICY'S NUMBER, NOT THE RESULT`. The policy is **stated, not built**: `served.toml` holds the numbers the serve states for its class before it starts, this tree
    builds no circuit of that class, and so no check here runs on it. `--policy FILE` prices another stated policy.
 2. **The class this tree builds**, labelled as not served: the exact-int8 checkpoint with its layers' linears inside the
    circuit, which is what registering the linears inside the circuit would give. Its policy is computed by the
@@ -83,7 +91,8 @@ absolute); with no `record` there, or no file, it reads none.
    `benchmarks/harness/README.md`), as `verity bench compute` and `verity bench memory` do: as `inference_only.json` in
    `--out DIR` where given, else in the run's `out/` (`$RESEARCH_RUN_DIR/out`) under a research run, else in `$OUT`
    where set; with none of them, or an empty one, it is only printed. Its first keys are `value`, `unit`, `commit` and
-   `run` (the research run around the command, `null` outside one), then, in name order, `benchmark`, `check`,
+   `run` (with a record read, the record's value and run; else the research run around the command, `null` outside
+   one), then, in name order, `benchmark`, `check`,
    `divisions`, `periods`, `policies` (each with its `c`, `k`, `n` and their `units`), `record` (a served record's,
    below, `null` without `--served`), `rests_on`, `tied` (the tied section's figures, `null` without a share) and
    `work_is`. `check` is the Lean count's verdict on the policy the value is
@@ -91,14 +100,15 @@ absolute); with no `record` there, or no file, it reads none.
    has no instance of the stated class to give the count. The count's instance names no θ and carries no wire, so it
    counts every weight and wired row a block reads as fresh input: on the built class it counts `c` exactly and
    refuses on `k`, and an instance of any other class has the same form.
-6. **The metric**: where the JSON is written, the served policy's `value` is also a measurement named
+6. **The metric**: where the JSON is written, its `value` is also a measurement named
    `training/inference-only-slowdown` in the run's `result.json` (the harness kit's writer: `$RESEARCH_RUN_DIR` under
-   a research run, else the place the JSON went), the number `benchmarks/inference_only/metrics.toml` declares, marked `modeled`: it
-   is priced from the policy's stated numbers, and no check runs on the served class. Its target is 1,000, its goal's
+   a research run, else the place the JSON went), the number `benchmarks/inference_only/metrics.toml` declares. With a
+   record read it is the record's number at the record's own mark, `measured` or `partial` (a record with no figure
+   writes no value, and its reading as why). With none it is the served policy's, marked `modeled`: it is priced from
+   the policy's stated numbers, and no check runs on the served class. Its target is 1,000, its goal's
    (the `goal` `metrics.toml` names: a slowdown of at least 1,000), and its verdict says
    where the value stands against it, `misses` below it and `within target` at or above it: the console's Metrics tab
-   shows that verdict beside the target. A `--policy FILE` writes none, and neither does a record read (`--served`, or
-   the run `served_of_record.toml` names): the metric is the stated policy's. The metric's command is
+   shows that verdict beside the target. A `--policy FILE` with no record read writes none. The metric's command is
    `metrics.toml`'s, which runs `uv run python benchmarks/inference_only/run.py`, the script
    `verity bench inference_only` runs, in the team's own runs.
 
@@ -157,10 +167,10 @@ and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it wo
 ## A served run's record
 
 `--served RUN` reads a served run's record (`record.py`): its `out/` (the compose's `record/verdicts.json`, its
-`inference-only-policy.json`, `inference-only-limits.json` and one `block-counts-*.json`), and the Program, circuit
-record and registration log it registered (`record.REGISTERED` in its `out/`, or `--program`, `--circuit`, `--log`, its
-own registration last). A file that isn't there is named as one the run did not write. It prints, under the run's
-name:
+`inference-only-policy.json`, `inference-only-limits.json` and the `block-counts-CLASS.json` of one class, the one
+`--served-class` names where there are several), and the Program, circuit record and registration log it registered
+(`record.REGISTERED` in its `out/`, or `--program`, `--circuit`, `--log`, its own registration last). A file that isn't
+there is named as one the run did not write. Before anything else it prints, under the run's name:
 
 - **The check's verdicts, public form only.** The policy's record check runs on the run's files: its script writes the
   case (`served_record_case.py --case-only`) and its compiled command (`inference-only-record-check`) judges it. The
@@ -179,7 +189,8 @@ name:
   (`quantity.tie.record`) must be the `previous` of the run's registration, the log's last record, whose chain the
   check holds. Both are printed; a difference is refused; a verdict with no window record prints that nothing ties
   them.
-- **The value**, with its reading and mark. The check refusing (either rule; the reading names the rate rule, the count
+- **The value**, with its reading and mark, which are the command's number and mark, in its headline, the JSON's
+  `value` and the metric. The check refusing (either rule; the reading names the rate rule, the count
   or both), or no PoUW accept of record, gives 1, `measured`.
   Otherwise one block's value is the smaller of its two limits at `s` under the tie (`tied.priced` on the record's
   class: its `c`, `n` and work, and `k` its policy's own `k_by_kind` but the linears' outputs, with `tied.toml`'s
