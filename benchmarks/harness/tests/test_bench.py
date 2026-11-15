@@ -1309,9 +1309,9 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ll
     from the run's step bound, and the LLM fills the model runner and in-process coins after the build; a spec can't
     supply them, nor S."""
 
-    from verity_vllm.llm import protocol_context, resolve_options
     from verity.errors import Refused
     from verity.protocols.accounting.pouw.prover.serving import H1_SCHEME
+    from verity_vllm.llm import protocol_context, resolve_options
 
     spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
     control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)

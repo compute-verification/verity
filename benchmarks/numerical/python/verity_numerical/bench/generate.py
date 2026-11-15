@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -145,13 +146,16 @@ def register(set_dir: str | Path) -> str:
     return art
 
 
+#: a ``--param`` value that is a number: an integer (group ``int``), else a decimal float with an optional exponent
+NUMBER = re.compile(r"[+-]?(?:(?P<int>\d+)|(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?)")
+
+
 def parse_value(v: str) -> Any:
-    for f in (int, float):
-        try:
-            return f(v)
-        except ValueError:
-            pass
-    return v
+    """A ``--param`` value: an int or a float where it is one (`NUMBER`), else the string itself."""
+    m = NUMBER.fullmatch(v)
+    if m is None:
+        return v
+    return int(v) if m["int"] else float(v)
 
 
 def _print_set(s: Mapping[str, Any]) -> None:

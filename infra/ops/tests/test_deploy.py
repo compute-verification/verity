@@ -226,6 +226,25 @@ def test_install_refuses_an_unpushed_commit_and_installs_a_pushed_one_atomically
         deploy.install(n, "origin/main", "lane-x", ["nope"], local, apply=True, repo=repo)
 
 
+def test_a_root_step_sudo_refuses_stops_the_command_naming_the_admin_login(world, capsys):
+    """On a locked node research's sudo refuses `python3 -c` (lockout's EXCLUDED): install and attic stop at that step, exit 3,
+    and say to log in as vy-admin, rather than report an install that failed for a reason they don't name."""
+    node, repo = world["node"], world["repo"]
+    (node / "bin" / "a.py").write_text("a1\n")
+    (node / "bin" / "x.prev").write_text("old\n")
+
+    def locked(name: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
+        if argv[:2] == ["sudo", "-n"]:
+            return subprocess.CompletedProcess(argv, 1, b"", b"sudo: a password is required\n")
+        return local(name, argv, stdin)
+
+    for cmd in (["install", "n"], ["attic", "n", str(node / "bin" / "x.prev")]):
+        assert deploy.main([*cmd, "--by", "lane-x", "--apply", "--no-fetch"], run=locked, manifest=world["manifest"], repo=repo) == 3
+        err = capsys.readouterr().err
+        assert "sudo refused `python3 -c` to its registry login" in err and "--login vy-admin" in err, err
+    assert (node / "bin" / "a.py").read_text() == "a1\n" and (node / "bin" / "x.prev").exists()
+
+
 def test_a_dry_run_says_what_would_change_and_an_install_names_only_what_still_runs_old_code(world, capsys):
     node, repo, n = world["node"], world["repo"], world["nodes"]["n"]
     deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=repo)
