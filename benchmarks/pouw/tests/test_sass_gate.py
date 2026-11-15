@@ -25,7 +25,7 @@ import pytest
 
 #: the gate as the harness's scripts hold it: one module a process, which `ieee_pin` loads from its repository path
 SG = ieee_pin.SG
-FIX = Path(__file__).parent / "fixtures" / "sass_gate"
+FIX = Path(__file__).parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "tests" / "fixtures" / "sass_gate"
 NOTES = json.loads((FIX / "tool_notes.json").read_text())
 PLAIN_COVERED = {"int-seed": 10, "__cuda_sm20_rem_s64": 1, "__cuda_sm20_div_u64": 1, "__cuda_sm20_div_u16": 1,
                  "sqrt-fast-path": 6, "__cuda_sm20_sqrt_rn_f32_slowpath": 18, "div-fast-path": 4,
