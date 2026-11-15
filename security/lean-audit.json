@@ -6152,16 +6152,60 @@
    "sealed": true,
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
   },
+  "Definitions.Slowdown": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.InferenceOnly",
+    "Definitions.Slowdown",
+    "Definitions.Registration.Physical"
+   ],
+   "except": [],
+   "why": "the bound is stated over core's model and imports no proofs"
+  },
+  "Definitions.Slowdown.Assumptions": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Core.Assumptions",
+    "Definitions.InferenceOnly",
+    "Definitions.Slowdown",
+    "Definitions.InferenceOnly.Assumptions",
+    "Definitions.Slowdown.Assumptions"
+   ],
+   "except": [],
+   "sealed": true,
+   "why": "a named assumption reads the protocol, never a proof"
+  },
+  "Definitions.Slowdown.Guarantees": {
+   "except": ["Definitions.Slowdown.Guarantees.FitRate"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Core.Assumptions",
+    "Definitions.Core.Guarantees",
+    "Definitions.InferenceOnly",
+    "Definitions.Slowdown",
+    "Definitions.InferenceOnly.Assumptions",
+    "Definitions.Slowdown.Assumptions",
+    "Definitions.Assumptions",
+    "Definitions.Slowdown.Guarantees",
+    "Definitions.Registration.Physical"
+   ],
+   "sealed": true,
+   "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
+  },
   "Definitions.Slowdown.Guarantees.FitRate": {
    "imports": [
     "Mathlib",
     "Definitions.Core",
     "Definitions.InferenceOnly",
     "Definitions.InferenceOnly.Assumptions",
+    "Definitions.Slowdown.Assumptions",
+    "Definitions.Slowdown",
     "Definitions.Accounting",
     "Definitions.Slowdown.Guarantees.FitRate",
-    "Definitions.Registration.Physical",
-    "Definitions.Slowdown.Assumptions.Fit"
+    "Definitions.Registration.Physical"
    ],
    "except": [],
    "why": "the fit bound on a run is stated over NCI's window premises and the actual circuit's windows (Definitions.Accounting), never over a proof"
