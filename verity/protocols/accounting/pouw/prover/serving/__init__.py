@@ -4,16 +4,17 @@
 A workload reaches it only through the names this module exports. Per call there are two:
 
 * `run_matmul(run, site, x, weight, bias)`: run this matrix multiply under PoUW, y = x weightᵀ (+ bias), served and
-  committed by ``run`` (a `MatmulRun`): ``ncp-v1`` (`NcpRun`), ``ncp-v2`` (`NcpCircuitRun`), Pearl-C (`PearlCDeviceRun`)
-  and the lead (`LeadRun`, whose ``x`` is the arm's `QuantizedRows` and ``weight`` the linear its backend loaded).
+  committed by ``run`` (a `MatmulRun`): ``ncp-v1`` (`NcpRun`), ``ncp-v2`` (`NcpCircuitRun`), the lead (`LeadRun`, whose
+  ``x`` is the arm's `QuantizedRows` and ``weight`` the linear its backend loaded), or a workload's own (Pearl-C's run on
+  the device is the workload's).
 * `observe_matmul(run, site, x, weight, y, ...)`: a matrix multiply the workload served itself, recorded by ``run`` (a
   `MatmulObserver`), which computes nothing: H1 (`H1Run`), whose ``x`` is the int8 arm's s8 rows. The workload hands
   H1 its arm's GEMM and dequantization first (`use_int8_arm`, `int8_arm.Int8Arm`).
 
 ``site`` is the linear's ordinal in the forward pass (its weight id), the same at every forward. The buffers are the
 caller's own, on its device, and this package names no tensor library: the workload hands in how its buffers are read,
-written and allocated (`use_tensors`, `tensors.Tensors`) and H1's device half (`use_h1_device`, `tensors.H1Device`), and
-every other name loads its module when first read. A run closes with ``finish()``; its ``commits`` and ``details`` are what it publishes.
+written and allocated (`use_tensors`, `tensors.Tensors`) and H1's device half (`use_h1_device`, `tensors.H1Device`);
+without them the host paths run. Every other name loads its module when first read. A run closes with ``finish()``; its ``commits`` and ``details`` are what it publishes.
 
 To manage a window: `in_process_coins` (coins held in this process, which credit nothing), `reserve_salt` and `gate_of`
 (a salt session at infra's gate), `PearlCKernel` (Pearl-C's kernel, loaded), `ready_verifier` (the Lean verifier's
@@ -46,7 +47,6 @@ _LAZY = {
     "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
     "H1Run": (f"{_SERVING}.h1", "H1Run"),
     "LeadRun": (f"{_SERVING}.lead", "LeadRun"),
-    "PearlCDeviceRun": (f"{_SERVING}.pearl_c.run_device", "PearlCDeviceRun"),
     "PearlCKernel": (f"{_SERVING}.pearl_c.kernel", "Kernel"),
     "PearlC": (f"{_PROVER}.schemes.pearl_c", "PearlC"),
     "H100": (f"{_PROVER}.schemes.pearl_c_device", "H100"),
@@ -94,7 +94,6 @@ _LAZY = {
     "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
     "finish_window": (f"{_SERVING}.h1.window", "finish"),
     "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
-    "hook_steps": (f"{_SERVING}.pearl_c.passes", "hook_steps"),
     "in_process_draw": (f"{_SERVING}.h1.window", "in_process_draw"),
     "lead_refusals": (f"{_SERVING}.lead", "refusals"),
     "live_challenger": (f"{_POUW}.verifier.window", "live_challenger"),
@@ -106,7 +105,6 @@ _LAZY = {
     "pearl_c_salt_key": (f"{_SERVING}.pearl_c", "new_salt_key"),
     "pearl_c_schedule": (f"{_SERVING}.pearl_c", "schedule_of"),
     "pearl_c_scheme": (f"{_SERVING}.pearl_c", "scheme_of"),
-    "pearl_c_weight_roots": (f"{_SERVING}.pearl_c.run_device", "weight_roots"),
     "period_reason": (f"{_SERVING}.h1.window", "period_reason"),
     "period_setting": (f"{_SERVING}.h1.window", "period_setting"),
     "program_salt": (f"{_SERVING}.h1", "program_salt"),
@@ -128,7 +126,6 @@ _LAZY = {
     "PEARL_C_ROW_ALIGN": (f"{_SERVING}.pearl_c", "ROW_ALIGN"),
     "POLLS": (f"{_SERVING}.h1.serve_gate", "POLLS"),
     "REPLY_FIELDS": (f"{_SERVING}.h1.challenger", "REPLY_FIELDS"),
-    "Receipts": (f"{_SERVING}.h1.receipts", "Receipts"),
     "SESSION_FIELDS": (f"{_SERVING}.h1.challenger", "SESSION_FIELDS"),
     "Sites": (f"{_SERVING}.h1.commit", "Sites"),
     "Writer": (f"{_SERVING}.h1.prover", "Writer"),
@@ -144,7 +141,6 @@ _LAZY = {
     "drawn_reads": (f"{_SERVING}.h1.serve_draw", "drawn_reads"),
     "drawn_units": (f"{_SERVING}.h1.serve_draw", "drawn_units"),
     "dump_live": (f"{_SERVING}.h1.live", "dump"),
-    "h1_tables_available": (f"{_SERVING}.h1.tables_device", "available"),
     "h1_units": (f"{_SERVING}.h1", "units"),
     "kept_bytes": (f"{_SERVING}.h1.prover", "kept_bytes"),
     "layout_of": (f"{_POUW}.verifier.credit", "layout_of"),
