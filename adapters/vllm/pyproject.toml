@@ -159,7 +159,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/ver
           "tools/research/src/research/pipefail.py",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py",
-          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py", "benchmarks/pouw/h1_prove/stagers.py",
+          "verity/protocols/accounting/pouw/prover/lowering/h1unit.py", "benchmarks/pouw/h1_prove/live.py", "verity/protocols/accounting/pouw/prover/lowering/stagers.py",
           "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py", "tools/difftest",
           "adapters/torch/tests/pouw/test_pouw_h1_receipts.py", "tools/verity/cli/verity_cli/configurations.toml"]
 parallel = true
