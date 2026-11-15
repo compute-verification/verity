@@ -1,7 +1,7 @@
 """`research goals`: the Goals page (the console's /admin/goals), read and written with this agent's Cursor identity.
 
   research goals show [--json]               every goal by due date: when, status, title, tags, id, what it waits on
-  research goals set ID [--title T] [--status on-track|off-track|done] [--due D] [--owner HANDLE] [--tag T ...]
+  research goals set ID [--title T] [--status on-track|off-track|parked|done] [--due D] [--owner HANDLE] [--tag T ...]
                         [--tier N | --no-tier] [--wait goal:ID|ask:CARD ... | --no-wait]
                         [--description TEXT|@FILE] [--blockers TEXT|@FILE | --no-blockers]
                                              # adds the goal, or changes only the fields given
@@ -29,13 +29,16 @@ description of what will be true and what is true today, which never restates th
 its subgoal. The page derives how deep a goal sits from what waits on what: 1 when nothing waits on it, down to 3;
 --tier, which keeps its old name, overrides that. What a goal waits on is links only: the narrowest goal that blocks
 it, due before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
---blockers. The site checks every write and answers which field is wrong. --url points the command at another server;
-the token's audience stays the route's.
+--blockers. A parked goal is one nobody works toward for now: it is neither on track nor off, and its --blockers say who
+parked it, when and why. The site checks every write and answers which field is wrong. --url points the command at
+another server; the token's audience stays the route's. With $GOALS_KEY set (a site key with `goals:write`, which the
+page's editor holds on the agents platform) every call carries that key, not a Cursor identity.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 from datetime import UTC, datetime
@@ -46,16 +49,17 @@ from .slack import RouteError, SlackError, _Identity, http_json, route_error
 
 GOALS = "https://website-docs-sage.vercel.app/api/goals"   # the route, and its OIDC token's audience
 PACIFIC = ZoneInfo("America/Los_Angeles")
-STATUSES = ("on-track", "off-track", "done")
-STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet", "prioritySetBy", "prioritySetAt")
+STATUSES = ("on-track", "off-track", "parked", "done")
+STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "firstDue", "dueMoves", "priority", "prioritySet", "prioritySetBy", "prioritySetAt")
 
 
 class Route:
-    """The page's route. ``key`` is a site key with `events:read`, for a machine that holds no Cursor identity: it only
-    reads. Without one every call carries this agent's identity."""
+    """The page's route. ``key`` is a site key, for a machine that holds no Cursor identity: one with `events:read`
+    only reads, and one with `goals:write` (``writes``) also writes. Without a key every call carries this agent's
+    identity."""
 
-    def __init__(self, url: str = GOALS, key: str | None = None) -> None:
-        self.base, self.key = url, key
+    def __init__(self, url: str = GOALS, key: str | None = None, writes: bool = False) -> None:
+        self.base, self.key, self.writes = url, key, writes
         self._oidc = _Identity(GOALS)
 
     def call(self, body: dict | None = None) -> list[dict]:
@@ -63,7 +67,7 @@ class Route:
         data = None if body is None else json.dumps(body).encode()
         headers = {"Content-Type": "application/json"} if data else {}
         what = f"{method} {GOALS}"
-        if self.key and body is not None:
+        if self.key and body is not None and not self.writes:
             raise SlackError(f"{what}: a site key only reads the page; a write carries an agent's Cursor identity")
 
         def send(token: str) -> dict:
@@ -207,7 +211,8 @@ def main(argv: list[str], route: Route | None = None) -> int:
     bl.add_argument("--now", metavar="TIME", help="the time to read at, with its offset (default: now)")
     bl.add_argument("--json", action="store_true", help="the rows in full, with the tier-1 goals above each")
     ns = p.parse_args(argv)
-    route = route or Route(ns.url)
+    key = os.environ.get("GOALS_KEY") or None
+    route = route or Route(ns.url, key, writes=bool(key))
     try:
         if ns.cmd == "show":
             goals = route.call()

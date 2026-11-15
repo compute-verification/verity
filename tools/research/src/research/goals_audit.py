@@ -1,6 +1,6 @@
 """`research goals audit`: what on the Goals page keeps a lead's plan from being read, by lead, each line with its fix.
 
-  overdue    an open goal past its due
+  overdue    an open goal, not of the status `parked`, past its due
   stale      an open off-track goal, not parked, last written over STALE_H hours ago
   near       an open goal, not parked, due within NEAR_H hours and not written in the NEAR_H hours before its due
   unplaced   an open goal with no tier set that no goal waits on and that waits on no goal: tier 1 only by default
@@ -54,8 +54,8 @@ def written(goal: dict) -> datetime | None:
 
 
 def parked(goals: list[dict]) -> set[str]:
-    """The parked goals' ids: PARKED and what it waits on, through other goals too, less whatever an open goal outside
-    that also waits on. A goal a live goal still needs is live."""
+    """The parked goals' ids: each goal whose status is `parked`, and PARKED with what it waits on, through other goals
+    too, less whatever an open goal outside that also waits on. A goal a live goal still needs is live."""
     by = {g["id"]: g for g in goals}
 
     def under(start: Iterable[str]) -> set[str]:
@@ -69,7 +69,8 @@ def parked(goals: list[dict]) -> set[str]:
         return seen
 
     held = under([PARKED])
-    return held - under(g["id"] for g in goals if g.get("status") != "done" and g["id"] not in held)
+    held -= under(g["id"] for g in goals if g.get("status") != "done" and g["id"] not in held)
+    return held | {g["id"] for g in goals if g.get("status") == "parked"}
 
 
 def findings(goals: list[dict], now: datetime, owners: Iterable[str] = ()) -> dict[str, dict]:
@@ -89,7 +90,7 @@ def findings(goals: list[dict], now: datetime, owners: Iterable[str] = ()) -> di
         found: list[tuple[str, str | None, str]] = []
         for g in mine:
             gid, at = g["id"], due_at(g["due"])
-            if at < now:
+            if at < now and g.get("status") != "parked":
                 found.append(("overdue", gid, f"`{gid}` was due {_when(g['due'])}: give the date you now believe (`research goals set "
                               f"{gid} --due D`), or mark it done with its evidence (`research goals done {gid}`)"))
             last = None if gid in paused else written(g)
