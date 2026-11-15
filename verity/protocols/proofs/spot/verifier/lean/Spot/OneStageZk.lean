@@ -210,7 +210,9 @@ private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
   else pure ()
 
-private def digest? (s : String) : Bool := s.length == 128 && isHex s
+/-- A SHA-512 digest's hex form: 128 lowercase hex characters. Public (not `private`) so a completeness proof can show an
+honest file's spliced digest (`hexOf (Sha512.hash …)`) passes without evaluating the hash; its callers are unchanged. -/
+def digest? (s : String) : Bool := s.length == 128 && isHex s
 
 private def without (j : Json) (k : String) : List (String × Json) :=
   match j with
