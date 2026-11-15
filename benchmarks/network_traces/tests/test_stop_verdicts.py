@@ -27,7 +27,7 @@ sys.path.insert(0, str(HERE))
 from verity.protocols.accounting.certifier.device import connection_rows_run as CR  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 from verity.protocols.accounting.certifier.prover import stop_verdicts as SV  # noqa: E402
-from verity.protocols.accounting.certifier.device.tests.verdict_records import (  # noqa: E402
+from verity.protocols.accounting.certifier.prover.tests.verdict_records import (  # noqa: E402
     TIE, FORMATS, UNDER, checked, names_under, SERVED, OTHERS, REGISTERED, COUNTS, streams, with_streams, four,
     the_controls, under, Store, jsonl, OTHER, ROWS)
 from verity.protocols.accounting.certifier.verifier import class_charge as CC  # noqa: E402

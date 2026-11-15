@@ -591,19 +591,19 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
     if a.coins == "verifier":
         return [] if a.draw is None else ["--draw", str(a.draw)]
     if a.draw is None:
-        raise Refused("--coins gate draws --draw K of the scan's units: give K")
+        raise Refused("--coins gate samples --draw K of the scan's units: give K")
     served = served_peer(fetch)
     if served is None:
         raise Refused(f"{fetch} holds no request naming the node it served on (the gate gives it in witness/request.json, "
                       "to the run's own lane's key), so the coin peer can't be checked")
     if a.coin_peer in (served, PEER):
         raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the network certifier run's "
-                      f"witness are the auditor's, so the draw runs where the chain does, {AUDITOR} by default")
+                      f"witness are the auditor's, so the sample runs where the chain does, {AUDITOR} by default")
     if a.challenger_key is None:
         raise Refused("--coins gate needs --challenger-key, the deployment's challenger-key/v1 record "
                       "(challenger-key current)")
     if not a.key.is_file():
-        raise Refused(f"no gate key {a.key}: the draw runs on the node that holds the lane's gate key, {AUDITOR}")
+        raise Refused(f"no gate key {a.key}: the sample runs on the node that holds the lane's gate key, {AUDITOR}")
     key = input_file(a.challenger_key, "challenger key record")
     main = input_file(a.main, "--main") if a.main else first_parent(TREE, a.keep / a.run / "scan-main.txt")
     return ["--draw", str(a.draw), "--challenger", f"gate:{a.gate}", "--main", str(main), "--peer", a.coin_peer,
@@ -779,7 +779,7 @@ def chain(a: argparse.Namespace) -> int:
         if not (eq and k.startswith("CR_")):
             raise Refused(f"{kv!r}: CR_K=V, a chain_record.sh variable")
         if k in ("CR_SCAN_ARGS", "CR_SCAN_CMD") and any(w in v for w in ("--draw", "--challenger", "--peer")):
-            raise Refused(f"{k}: the scan's draw and its coins are --draw and --coins's, which keep the draw off the "
+            raise Refused(f"{k}: the scan's sample and its coins are --draw and --coins's, which keep the sample off the "
                           "developer's node")
         env[k] = v
     coins = coin_args(a, fetch)

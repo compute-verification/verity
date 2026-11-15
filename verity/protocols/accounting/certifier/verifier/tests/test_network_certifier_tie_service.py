@@ -88,29 +88,29 @@ class Run:
                                   hashlib.sha512(b"wiring %d" % w).digest())
                       for w, rec in enumerate(served.records)]
 
-    def draw(self, w):
+    def sample(self, w):
         reg = self.tie.register(self.stream, self.tie.registration(self.cells[w].head, self.previous))
         self.previous = reg.digest
         return self.stream.select(reg)
 
     def prove(self, w, advice, lanes=OWN_LANES, releases=None, **kw):
-        draw = self.draw(w)
+        sample = self.sample(w)
         releases = self.served.releases if releases is None else releases
         lanes = self.tie.lanes(advice, releases, w) if lanes is OWN_LANES else lanes
-        return draw, standin.prove_tie(self.tie, self.cells[w], draw, lanes,
-                                       self.tmp / f"tie-{draw.docket.order}", **kw)
+        return sample, standin.prove_tie(self.tie, self.cells[w], sample, lanes,
+                                       self.tmp / f"tie-{sample.docket.order}", **kw)
 
-    def decide(self, w, draw, delivered, advice, head=None):
-        return self.tie.outcome(self.stream, draw, delivered, circuit_sha512=standin.circuit_sha512(delivered),
+    def decide(self, w, sample, delivered, advice, head=None):
+        return self.tie.outcome(self.stream, sample, delivered, circuit_sha512=standin.circuit_sha512(delivered),
                                 advice=advice, releases=self.served.releases,
                                 head=self.cells[w].head if head is None else head, opening=self.cells[w])
 
     def round(self, w, advice, lanes=OWN_LANES, **kw) -> S.Outcome:
-        draw, delivered = self.prove(w, advice, lanes, **kw)
-        late = self.stream.deliver(draw, delivered.sessions())
+        sample, delivered = self.prove(w, advice, lanes, **kw)
+        late = self.stream.deliver(sample, delivered.sessions())
         if late is not None:
             return late
-        outcome = self.decide(w, draw, delivered, advice)
+        outcome = self.decide(w, sample, delivered, advice)
         verdict = self.stream.records[-1]["audit"]["verdicts"][TS.VERIFIER]
         assert verdict["decided_by"] == "proof" and verdict["accepted"] == outcome.accepted
         if lanes is OWN_LANES and not kw:
@@ -143,7 +143,7 @@ def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_
     salts, so an honest window's proof is proved and accepted, where a file naming ``wit`` alone rejects it at
     ``pub``."""
     run, advice = Run(tmp_path), _advice(SPAN)
-    draw, delivered = run.prove(0, advice)
+    sample, delivered = run.prove(0, advice)
     head, lanes = run.cells[0].head, run.tie.lanes(advice, SERVED.releases, 0)
     reads = run.tie.registered(head, lanes)
     assert sorted(reads["ports"]) == sorted(TS.PORTS) and TS.KNOWN_KEY not in reads["ports"][TS.REGISTERED]
@@ -160,8 +160,8 @@ def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_
     findings, refused = standin.lean(delivered.proof, registered=wit_only, **kw)
     assert refused is None and findings and not any(f.accepted for f in findings)
     assert "port pub is no port of the verifier's registered reads" in findings[0].why
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert run.decide(0, draw, delivered, advice).accepted
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert run.decide(0, sample, delivered, advice).accepted
 
 
 def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_path, monkeypatch):
@@ -184,12 +184,12 @@ def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_pat
     monkeypatch.setattr(TS.IngressTie, "known_tree", lambda self, head, port, rows: G.Registered.commit(
         (t := known_tree(self, head, port, rows)).program, t.value, t.rows, None, t.word_bits, t.schema,
         window=t.window))
-    draw, delivered = run.prove(0, advice)
+    sample, delivered = run.prove(0, advice)
     monkeypatch.setattr(TS.IngressTie, "known_tree", known_tree)
     findings, refused = standin.lean(delivered.proof, registered=run.tie.registered(run.cells[0].head, lanes), **kw)
     assert refused is None and not findings[0].accepted and "port pub: table row" in findings[0].why
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(0, draw, delivered, advice).accepted
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(0, sample, delivered, advice).accepted
 
 
 def test_the_tie_source_gives_the_verdict_only_on_its_own_link_and_stream(tmp_path):
@@ -220,10 +220,10 @@ def test_a_proof_on_an_added_carried_field_count_is_refused(tmp_path, delta):
     assert (ln.q, ln.left, ln.fields, ln.left_out, ln.fields_out) == (2, 310, 12, 0, 40)
     added = ((ln._replace(fields=ln.fields + delta, fields_out=ln.fields_out + delta),) + lanes[0][1:],) + lanes[1:]
     assert run.round(0, advice).accepted
-    draw, delivered = run.prove(1, advice, added)
+    sample, delivered = run.prove(1, advice, added)
     assert delivered.outputs == {u: 1 for u in range(4)}, "IoTieRequest accepts each row on the added lanes"
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(1, draw, delivered, advice).accepted
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(1, sample, delivered, advice).accepted
     assert run.stream.records[-1]["audit"]["verdicts"][TS.VERIFIER]["clear"]["accepted"]
     assert run.verdict(advice).accepted == (True, False)
 
@@ -270,21 +270,21 @@ def test_an_outcome_on_another_advice_in_the_clear_or_late_is_refused(tmp_path):
 
     run = Run(tmp_path / "clear")
     assert run.round(0, advice).accepted
-    draw, delivered = run.prove(1, advice)
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    verdict = run.tie.verify(draw, delivered, circuit_sha512=standin.circuit_sha512(delivered), advice=advice,
+    sample, delivered = run.prove(1, advice)
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    verdict = run.tie.verify(sample, delivered, circuit_sha512=standin.circuit_sha512(delivered), advice=advice,
                              releases=SERVED.releases, head=run.cells[1].head)
     assert verdict["accepted"]
-    outcome = run.stream.outcome(draw, {TS.VERIFIER: {**verdict, "decided_by": "clear"}}, run.tie.statement(draw),
-                                 session_roots={TS.VALUE: draw.docket.record["roots"][0]["root"]})
+    outcome = run.stream.outcome(sample, {TS.VERIFIER: {**verdict, "decided_by": "clear"}}, run.tie.statement(sample),
+                                 session_roots={TS.VALUE: sample.docket.record["roots"][0]["root"]})
     assert outcome.accepted
     assert run.verdict(advice).accepted == (True, False)
 
     run = Run(tmp_path / "late")
     assert run.round(0, advice).accepted
-    draw, delivered = run.prove(1, advice)
+    sample, delivered = run.prove(1, advice)
     run.now[0] = 61.0
-    late = run.stream.deliver(draw, delivered.sessions())
+    late = run.stream.deliver(sample, delivered.sessions())
     assert late is not None and not late.accepted
     assert run.verdict(advice).accepted == (True, False)
 
@@ -344,21 +344,21 @@ def test_a_row_that_isnt_the_network_certifiers_is_refused(tmp_path):
                          rows=rows).accepted
 
     run = Run(tmp_path / "swapped")
-    draw, delivered = run.prove(0, advice, units=[1, 0, 2, 3])
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(0, draw, delivered, advice).accepted
+    sample, delivered = run.prove(0, advice, units=[1, 0, 2, 3])
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(0, sample, delivered, advice).accepted
 
 
 def test_a_head_of_another_window_is_refused(tmp_path):
     """The verifier reads the registered root's head: a head of window 1 on window 0's sample, or a head of another
     session's domain, refuses it."""
     run, advice = Run(tmp_path), _advice(SPAN)
-    draw, delivered = run.prove(0, advice)
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(0, draw, delivered, advice, head=run.cells[1].head).accepted
+    sample, delivered = run.prove(0, advice)
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(0, sample, delivered, advice, head=run.cells[1].head).accepted
     other = WR.Cells.commit(LINK, Direction.INGRESS, 0, run.cells[0].rows, run.cells[0].wiring, PARAMS,
                             hashlib.sha512(b"another session").digest(), run.cells[0].salts)
-    assert not run.tie.verify(draw, delivered, circuit_sha512=standin.circuit_sha512(delivered), advice=advice,
+    assert not run.tie.verify(sample, delivered, circuit_sha512=standin.circuit_sha512(delivered), advice=advice,
                               releases=SERVED.releases, head=other.head)["accepted"]
 
 
@@ -386,10 +386,10 @@ def test_an_unpinned_size_class_is_refused(tmp_path):
     served = _serve(params=params, windows=2)
     run, advice = Run(tmp_path, params=params, served=served), _advice(SPAN)
     assert not HC.pinned(run.tie.gates()[0])
-    draw, delivered = run.prove(0, advice)
+    sample, delivered = run.prove(0, advice)
     assert delivered.outputs == {u: 1 for u in range(4)}
-    assert run.stream.deliver(draw, delivered.sessions()) is None
-    assert not run.decide(0, draw, delivered, advice).accepted
+    assert run.stream.deliver(sample, delivered.sessions()) is None
+    assert not run.decide(0, sample, delivered, advice).accepted
 
 
 def test_only_the_tie_service_builds_an_ingress_tie_verdict():

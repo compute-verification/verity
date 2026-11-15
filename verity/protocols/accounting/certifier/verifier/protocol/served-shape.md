@@ -3,8 +3,8 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 ## The replay at the served shape
 
 How a real served window becomes `CompileSlice_v1`'s input, and what the replay's parts cost at the shapes served
-windows need: `ReplayStep_v1` (`verity_vllm.compiler.replay_step`), with `verity_vllm.compiler.replay_chain`'s `ReplayAdvance` beside each step and `ReplayLoad`
-once a window.
+windows need: `ReplayStep_v1` (`verity_vllm.compiler.replay_step`), with `verity_vllm.compiler.replay_chain`'s
+`ReplayAdvance` beside each step and `ReplayLoad` once a window.
 
 **A served window as the slice's input** (`benchmarks/network_e2e/encodings/replay_vectors.py`):
 - `served_window(records, w)` cuts window w out of a served scheduler trace (the recorder's `advice_trace.jsonl`): the
@@ -18,7 +18,7 @@ once a window.
   default to the window's own counts; a larger public class pads the window into it, and a smaller one is refused.
 - `served_record(seal, w, requests, base)` gives window w's served rows as the Commit's seal recorded them
   (`SamplerInputsSource.rows`), with the map from a runner's request id to its arrival id, the input of
-  `served_rows.step_rows`.
+  `verity_vllm.compiler.served_rows.step_rows`.
 - `python3 replay_vectors.py TRACE --slice W [--served SEAL] [--max-model-len L] [--R R --W W --A A] [--Q Q --D D
   --P P --K K] [--AS 1] --out FIXTURE.json` writes all three as one fixture. At AS = 1 a proof block is a `schedule()`
   and the update of the step before it, an arrival is (id, P, O, cap), and the seal's steps are placed at the proof
@@ -41,7 +41,7 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   (`engine`).
 - Its keys: `R`, `W`, `A`, `IW`, `Q`, `D`, `P`, `K` and `engine` for `CS.statics`; `arrivals`, `decisions` and `steps`
   for `CS.Slice`; `rows`, the replay's step rows; `served`, the seal's runner rows a step, and `ids`, for
-  `served_rows.step_rows(S, served[u], ids)`.
+  `verity_vllm.compiler.served_rows.step_rows(S, served[u], ids)`.
 - `CompileSlice_v1` accepts it with the seal's rows in ``srv`` (0x3F; 27 bits from the session's carry), at 117,164
   ANDs; 8eb1 serves without prefix caching, so the slice makes no cache call and ``cache`` is 1. The circuit is its
   reference on it and on its negatives ([compile-slice.md](compile-slice.md))
@@ -65,12 +65,13 @@ the session, 20 steps, decisions `[0]*6 + [1] + [0]*6 + [1]`.
   proves every window at one class, padded with idle steps and empty slots, and that shows only the session's
   maximum: 8eb1's engine class in the table below.
 
-**Cost at the served shapes** (`verity_vllm.compiler.replay_step.size` and `verity_vllm.compiler.replay_chain.size`). A step proof block is `ReplayStep_v1` and
-`ReplayAdvance`, and a window is P step proof blocks and one `ReplayLoad`. Under async scheduling a proof block is a
-`schedule()` and the update of the step before it, so P counts proof blocks, a few more than the steps. The AS and EW
-rows are the chain at those statics (`verity_vllm.compiler.replay_chain.Shape`'s AS and EW), its rows `ReplayStep_v1`'s fields. EW =
-bitlen(NB): the walk entries matter only with prefix caching, and while the no-eviction bound holds the table has N = NB
-− 1 entries. 8eb1 serves without prefix caching, so its EW = 17 row is what it would cost with it.
+**Cost at the served shapes** (`verity_vllm.compiler.replay_step.size` and `verity_vllm.compiler.replay_chain.size`). A
+step proof block is `ReplayStep_v1` and `ReplayAdvance`, and a window is P step proof blocks and one `ReplayLoad`. Under
+async scheduling a proof block is a `schedule()` and the update of the step before it, so P counts proof blocks, a few
+more than the steps. The AS and EW rows are the chain at those statics (`verity_vllm.compiler.replay_chain.Shape`'s AS
+and EW), its rows `ReplayStep_v1`'s fields. EW = bitlen(NB): the walk entries matter only with prefix caching, and while
+the no-eviction bound holds the table has N = NB − 1 entries. 8eb1 serves without prefix caching, so its EW = 17 row is
+what it would cost with it.
 
 | shape | (R, W, A) | Q, D, P, K | AS, EW | ReplayStep_v1 | ReplayAdvance | step proof block | ReplayLoad | window |
 |---|---|---|---|---|---|---|---|---|
@@ -112,20 +113,20 @@ async heavy window is 651 step proof blocks of 739,906 ANDs, 4.8 × 10^8 in all,
   state rows u and u + 1 and window row 1. A step past the window's executed count is idle and costs the same.
 - **The links:** a window commits P + 2 state rows of 20,320 bits and two window rows of 37,024 bits, and makes
   3P + 4 = 1,957 reads, each a frame-v3 path of depth 10.
-- **k steps a proof block** (not built; `verity_vllm.compiler.replay_chain` is k = 1 and the slice is k = P): a proof block reads state row j
-  and writes row j + k, the k − 1 rows between them wires. That divides the state rows and reads by k at k step proof
-  blocks a proof block.
+- **k steps a proof block** (not built; `verity_vllm.compiler.replay_chain` is k = 1 and the slice is k = P): a proof
+  block reads state row j and writes row j + k, the k − 1 rows between them wires. That divides the state rows and reads
+  by k at k step proof blocks a proof block.
 - **What the split adds to the slice:** no charge state crosses step proof blocks. The charge is the load proof block's,
   `ChargeLink_v1{D}` over window row 1's decisions, and its carry crosses windows in `charge_chain`'s rows
   ([charge-chain.md](charge-chain.md)).
 
 **For the 25 async windows.** Their sync replay isn't the served schedule, so `slice_inputs` refuses them at AS = 0.
 At AS = 1 the step also reads `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free` and `arr_cap A×1` after
-`arr_O`. `verity_vllm.compiler.replay_chain`'s rows carry them at its AS (PROTOCOL.md, "The rows'"), with an arrival's cap as `q_cap` in the
-window row and `a_cap` in the network certifier's slots. The slice takes its chain's shape from its statics
-(`compile_slice.chain`), so at an async engine its rows widen and its circuit hands the step these fields.
-**w1** is the smallest of them with more than one request: window 1, requests 4–7 of the session, decisions
-`[1, 1, 1]`, 38 steps; its sync replay diverges from the trace at step 2.
+`arr_O`. `verity_vllm.compiler.replay_chain`'s rows carry them at its AS (PROTOCOL.md, "The rows'"), with an arrival's
+cap as `q_cap` in the window row and `a_cap` in the network certifier's slots. The slice takes its chain's shape from
+its statics (`verity_vllm.compiler.compile_slice.chain`), so at an async engine its rows widen and its circuit hands the
+step these fields. **w1** is the smallest of them with more than one request: window 1, requests 4–7 of the session,
+decisions `[1, 1, 1]`, 38 steps; its sync replay diverges from the trace at step 2.
 - At 8eb1's engine class under its async scheduling it is
   `verity/protocols/accounting/certifier/verifier/tests/fixtures/compile_slice_w1_class.json` (`--slice 1 --served SEAL --R 8 --W 1
   --A 9 --Q 4 --D 32 --P 54 --K 4 --AS 1`, the seal's records being `seal-w1.jsonl`): AS = 1, EW = 0 (no prefix
@@ -134,20 +135,20 @@ window row and `a_cap` in the network certifier's slots. The slice takes its cha
 - `ReplayStep_v1` at AS = 1 and the class is w1's served scheduler on all 39 of its async units, circuit and reference
   (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
 - `CompileSlice_v1` takes it at AS = 1, with two parts that sync didn't need:
-  - **The reference at AS = 1.** It reads its entries by `verity_vllm.compiler.replay_chain`'s names at its shape (`running_names`,
-    `waiting_names`, `arrival_names`) in `_state`, `_row`, `_inputs` and `check`'s decoding of `cert` and `arr`,
-    where it built sync tuples and `case` raised `MalformedRow` on w1's first state row. The build fed the step by
-    name already.
-  - **The served rows matched by request.** `served_rows.step_rows` gives a row the slot of its position in the
-    runner's batch, and at w1 that isn't the scheduler's running slot at two proof blocks: at proof block 0 the batch is
-    requests 4, 6, 5, 7, and at proof block 5 request 5 holds slot 0 while its last output is in flight, so request 6,
-    in slot 1, is the batch's first row. The rows are the replay's at every proof block as (request, kind, start, n)
-    (`adapters/vllm/tests/compiler/test_network_certifier_compile_slice_w1.py`). At AS = 1 ``wit`` carries
-    ``map``, R × R bits a step, and ``rows`` holds served row b to the slot its map row names: at most one 1 in each
-    map row and column, a slot's column set iff the slot has a row, and the served row equal to that slot's (an empty
-    map row's served row zero). The map is then unique, the identity when the batch is in slot order, so the check is
-    as strict as the slot-for-slot one, which AS = 0 keeps. It costs R² products of a slot's row and 2·R·(R − 1)
-    one-to-one ANDs a step.
+  - **The reference at AS = 1.** It reads its entries by `verity_vllm.compiler.replay_chain`'s names at its shape
+    (`running_names`, `waiting_names`, `arrival_names`) in `_state`, `_row`, `_inputs` and `check`'s decoding of `cert`
+    and `arr`, where it built sync tuples and `case` raised `MalformedRow` on w1's first state row. The build fed the
+    step by name already.
+  - **The served rows matched by request.** `verity_vllm.compiler.served_rows.step_rows` gives a row the slot of its
+    position in the runner's batch, and at w1 that isn't the scheduler's running slot at two proof blocks: at proof
+    block 0 the batch is requests 4, 6, 5, 7, and at proof block 5 request 5 holds slot 0 while its last output is in
+    flight, so request 6, in slot 1, is the batch's first row. The rows are the replay's at every proof block as
+    (request, kind, start, n) (`adapters/vllm/tests/compiler/test_network_certifier_compile_slice_w1.py`). At AS = 1
+    ``wit`` carries ``map``, R × R bits a step, and ``rows`` holds served row b to the slot its map row names: at most
+    one 1 in each map row and column, a slot's column set iff the slot has a row, and the served row equal to that
+    slot's (an empty map row's served row zero). The map is then unique, the identity when the batch is in slot order,
+    so the check is as strict as the slot-for-slot one, which AS = 0 keeps. It costs R² products of a slot's row and
+    2·R·(R − 1) one-to-one ANDs a step.
 - The slice accepts w1 (0x3F, 21 bits) at its own statics (4, 1, 5), Q 4, D 3, P 38, K 4
   (`verity/protocols/accounting/certifier/verifier/tests/fixtures/compile_slice_w1.json`) and at the class. The negatives fail as
   at w212: late admission 0x2E (`load` and `rows`; at the class only, past w1's own D), charge 0x37, longer prompt

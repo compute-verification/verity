@@ -554,7 +554,7 @@ def _gate_chain(tmp_path, monkeypatch, peer):
             "--main", str(tmp_path / "main.txt")]
 
 
-def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
+def test_a_gate_coin_sample_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
     argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
     assert SS.main(argv) == 0
     scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")

@@ -235,7 +235,7 @@ def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics
     what the step found of the traffic (`network_certifier_chain.WITNESS_KEYS`: which execution phases the signer refused, how
     many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
     held any of it would fail the record."""
-    from verity.protocols.accounting.certifier.device import released_keys as RK
+    from verity.protocols.accounting.certifier.prover import released_keys as RK
 
     listing = RK.load().listing("certs.json")
     assert listing is not None and not RK.load().waits("certs.json")
@@ -374,7 +374,7 @@ def test_n2_on_a_sampled_network_certifier_period_tampers_every_window_and_prove
                for x in w["members"]["tampered"]["reference"].values())
     assert [x["expect"] for x in other] == [1] * sz.W63.windows
     rc, *_, held = _n2(run, tmp_path / "x", "--draw", "3")
-    assert rc == 1 and "a period draw takes 1 to 2" in held
+    assert rc == 1 and "a period sample takes 1 to 2" in held
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:

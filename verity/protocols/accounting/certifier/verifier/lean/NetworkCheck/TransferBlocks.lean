@@ -7,8 +7,8 @@ public import Flock.FV3
 /-!
 # N2's execution phase verdict of record
 
-`verdict` decides one execution phase of N2 (`verity/core/protocols/certifier/service.py`, `TransferBlocks.verify`) from
-the proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
+`verdict` decides one execution phase of N2 (`verity/protocols/accounting/certifier/verifier/service.py`,
+`TransferBlocks.verify`) from the proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
 
 * the verifier's own run of Flock's Lean verifier (`proofs.verify`, whose findings `Case.findings` carries) refused
   nothing, every gate of the link's proof block names a pinned circuit digest (`pinned`), one or more sessions each
@@ -52,7 +52,7 @@ open Flock (V)
 open NetworkCheck.Check (Certificate)
 
 def verdictFormat : String := "verity-network-certifier/verdict/v0"
-/-- `verity.ml.commitments.window.WINDOW_DOMAIN`, one-stage's served domain. -/
+/-- `verity.commitments.window.WINDOW_DOMAIN`, one-stage's served domain. -/
 def executionPhaseDomainTag : String := "verity/one-stage/served-domain/v1"
 def value : String := "certificates"
 def schema : String := "hm96-sha512/row/v2"

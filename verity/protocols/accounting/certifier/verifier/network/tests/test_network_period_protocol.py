@@ -1044,7 +1044,7 @@ def as_facts(entry: dict) -> Facts:
 def sample_size(entry: dict) -> tuple[int, int]:
     """An entry of a public's `audits` or `charged`: its units and how many of them its sample takes."""
     f = as_facts(entry)
-    return f.units, f.drawn
+    return f.units, f.sampled
 
 
 def charged(case: dict, public: dict) -> list[int]:
@@ -1613,9 +1613,9 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server):
     audits' sampled in part, and its profile names no sync; its evidence holds each execution phase's three records'
     certificates and two row registrations, with one scan an execution phase, all at one δ, and a schedules term equal to
     the cells'; `cases(seed)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
-    drawn = {(k, s): PC.case(k, s) for k in KINDS for s in range(6)}
-    answers = {ks: PC.answer(c) for ks, c in drawn.items()}
-    assert {ks: a["verdict"] for ks, a in answers.items()} == {(k, s): verdict_of(k) for k, s in drawn}
+    sampled = {(k, s): PC.case(k, s) for k in KINDS for s in range(6)}
+    answers = {ks: PC.answer(c) for ks, c in sampled.items()}
+    assert {ks: a["verdict"] for ks, a in answers.items()} == {(k, s): verdict_of(k) for k, s in sampled}
     assert all(a["reason"].startswith(k.removeprefix("broken-") + ":")
                and (a["commitment"] is None) == (k != "broken-evidence")
                for (k, _), a in answers.items() if k.startswith("broken-"))
@@ -1624,18 +1624,18 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server):
         (Fraction(t["delta"]) for t in x["scans"]), Fraction(0)) + sum(
         (Fraction(f["delta"]) for f in x.get("charged", ())), Fraction(0)))
         and [sample_size(f) for f in x.get("charged", ())] == [
-            sample_size(x["audits"][i]) for i in charged(drawn[ks], x)]
+            sample_size(x["audits"][i]) for i in charged(sampled[ks], x)]
         and all(f["delta"] == str(PC.TIED_DELTA) for f in x.get("charged", ()))
         for ks, a in answers.items() if ks[0] == ACCEPT for x in [a["public"]])
     assert all(sorted(a["profile"]) == ["link", "windows"] for (k, _), a in answers.items() if k == ACCEPT)
-    shown = [w for (k, _), c in drawn.items() if k == ACCEPT
+    shown = [w for (k, _), c in sampled.items() if k == ACCEPT
              for w in json.loads(bytes.fromhex(c["evidence"]))["windows"]]
     assert all(sorted(w) == PC.ROWS_WINDOW_KEYS and len(w["certificates"]) == 3 and len(w["registrations"]) == 2
                for w in shown)
     assert all(x["schedules"] == x["cells"] and len(x["scans"]) == x["windows"]
                and len({t["delta"] for t in x["scans"]}) == 1 for x in accepted)
-    assert PC.cases(3) == {k: (drawn[k, 3], answers[k, 3]) for k in KINDS}
-    D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(drawn.values()))), examples=2 * len(drawn),
+    assert PC.cases(3) == {k: (sampled[k, 3], answers[k, 3]) for k in KINDS}
+    D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(sampled.values()))), examples=2 * len(sampled),
           server=server)
 
 
@@ -1670,8 +1670,8 @@ def test_the_rows_forms_bound_counts_what_it_says():
     assert (out["schedules"], out["cells"], scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"],
             scan["faulty_entries"], out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 0, 5 + 5 + (1120 + 11 + 3 * 512 + 10))
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
-    drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
-    assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0)])["K"] == 0
+    sampled = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
+    assert public(sampled, [], [(Facts(8, 8, Fraction(1, 100), 0), 0, 0)])["K"] == 0
     w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8),), cells=(), jitter=1,
                               scan=PC.Scan(32, 0, 300, 512))
     tied = public(w63, [Facts(8, 8, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 8 * 1136, 0)])
