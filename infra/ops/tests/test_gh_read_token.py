@@ -1,6 +1,7 @@
 """The control pod's read-only GitHub token (infra/control/gh_read_token.sh), which every watcher that reads GitHub takes, and
 the watchers' `gh` (infra/control/bin/gh), with openssl, curl and python3.12 stood in: the request asks GitHub for read
-permissions only, its cache is a file no write token is kept in, and `gh` takes the token of the moment at each call."""
+permissions only, its cache is a file no write token is kept in, `gh` takes the token of the moment at each call, and every
+token helper names its repositories to GitHub by id."""
 import json
 import os
 import re
@@ -12,6 +13,8 @@ from pathlib import Path
 
 CONTROL = Path(__file__).resolve().parents[3] / "infra" / "control"
 READ, WRITE, NOTES = (CONTROL / f"gh_{n}_token.sh" for n in ("read", "app", "notes"))
+# GitHub's ids of compute-verification/verity, the platform repository (compute-verification/infra) and research-notes
+VERITY, PLATFORM, NOTES_REPO = 1380037273, 1436193999, 1386530989
 # curl's stand-in records what the helper asks GitHub for (the URL and the body after -d) and answers with $REPLY
 CURL = """#!/bin/sh
 while [ $# -gt 0 ]; do
@@ -57,17 +60,33 @@ class Pod:
         return [(url, json.loads(body)) for url, body in zip(lines[::2], lines[1::2])]
 
 
-def test_the_read_helper_asks_github_for_read_permissions_only_on_the_two_repositories(tmp_path):
+def test_the_read_helper_asks_github_for_read_permissions_only_on_the_two_repositories_by_id(tmp_path):
     pod = Pod(tmp_path)
     r = pod.run(READ)
     assert (r.returncode, r.stdout) == (0, "dummy-minted\n"), r.stderr
     (url, body), = pod.requests()
     assert url == "https://api.github.com/app/installations/173153984/access_tokens"
-    assert body == {"repositories": ["verity", "infra"], "permissions": {"contents": "read", "pull_requests": "read"}}
+    assert body == {"repository_ids": [VERITY, PLATFORM], "permissions": {"contents": "read", "pull_requests": "read"}}
     assert set(body["permissions"].values()) == {"read"}
     pod.answer(None, "Bad credentials")
     r = pod.run(READ)
     assert r.returncode != 0 and r.stdout == "" and "gh_read_token: GitHub refused: Bad credentials" in r.stderr
+
+
+def test_every_helper_names_its_repositories_to_github_by_id_so_a_rename_breaks_no_token(tmp_path):
+    """GitHub looks a repository name in a token request up as a name, with no redirect: a helper asking by name would be
+    refused the moment its repository is renamed, drive's landing token first."""
+    pod = Pod(tmp_path)
+    for helper in (READ, WRITE, NOTES):
+        r = pod.run(helper)
+        assert (r.returncode, r.stdout) == (0, "dummy-minted\n"), r.stderr
+    asked = {url for url, _ in pod.requests()}
+    assert asked == {"https://api.github.com/app/installations/173153984/access_tokens"}
+    bodies = [body for _, body in pod.requests()]
+    assert [sorted(b) for b in bodies] == [["permissions", "repository_ids"]] * 3
+    assert [b["repository_ids"] for b in bodies] == [[VERITY, PLATFORM], [VERITY, PLATFORM], [NOTES_REPO]]
+    for body in pod.asked.read_text().splitlines()[1::2]:
+        assert not re.search(r"verity|infra|platform|research-notes", body), body
 
 
 def test_the_cached_read_token_is_in_a_file_of_its_own_so_no_reader_gets_a_write_token_and_no_writer_a_read_one(tmp_path):
