@@ -145,11 +145,11 @@ class Node:
         """The node of `figures`: R measured is the larger of its `read_bytes_per_s` and the prover's reported read, R
         at spec the larger of its `spec_bytes_per_s` and that, so a prover reporting a slower read can't shrink a term.
         Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one second at the disks'
-        rate, which is a highest second; its link burst `figures.link_window_bytes` when the links are charged.  Its
+        rate, which is a highest second; its link burst `figures.link_burst_bytes` when the links are charged.  Its
         tiers are every GPU's HBM and the host's DRAM, which no reported read raises."""
         f = figures
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
-        link = (f.link_window_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
+        link = (f.link_burst_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
         tiers = {"hbm": Tier(f.gpus, f.gpu_spec_bytes_per_s, f.gpu_read_bytes_per_s, f.gpu_chip_bytes),
                  "dram": Tier(1, f.host_spec_bytes_per_s, f.host_read_bytes_per_s, f.host_chip_bytes)}
         return cls(f.spec_bytes_per_s, f.read_bytes_per_s, f.chip_bytes, f.squarings_per_s,

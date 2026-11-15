@@ -141,7 +141,7 @@ def talkL (Coin : Type) : ZkCompiled Coin (talkArg Coin) where
   scopeCheck _ := true
   partition _ := some toyPart
   commit := accCm
-  stage2 _ := Finset.univ
+  secondStage _ := Finset.univ
   checked _ _ := [0]
   sh _ _ := ()
   κb _ _ := 0
@@ -362,7 +362,7 @@ noncomputable def zkL : ZkCompiled FlockDeploy.Coin zkA where
   scopeCheck _ := true
   partition _ := some toyPart
   commit := rejCm
-  stage2 _ := Finset.univ
+  secondStage _ := Finset.univ
   checked _ _ := [0]
   sh x _ := zkA.shape x
   κb x _ := zkA.κ x

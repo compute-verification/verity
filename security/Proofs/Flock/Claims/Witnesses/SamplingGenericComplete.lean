@@ -56,7 +56,7 @@ def rejL (Coin : Type) : Compiled Coin (twoA Coin) where
   scopeCheck _ := true
   partition _ := some twoPart
   commit := trueCm
-  stage2 _ := ∅
+  secondStage _ := ∅
   checked _ _ := []
   sh _ _ := ()
   κb _ _ := 0

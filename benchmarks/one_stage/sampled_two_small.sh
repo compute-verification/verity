@@ -75,7 +75,7 @@ KEPT=(); [ -z "$LOGITS" ] || KEPT=(--kept "$LOGITS")
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086
-"${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
+"${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --first-stage "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --challenger-host "$W/first/challenger-host" --deployed-key \
   --interior-trees --form-case --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
@@ -112,7 +112,7 @@ echo "FORM_OFF rc=$off $(head -c 2000 "$O/form/off.json")"
   > "$O/first-tree.log" 2>&1 || { tail -20 "$O/first-tree.log"; exit 9; }
 rc=0
 # shellcheck disable=SC2086
-"${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --stage1 "$W/first-tree/$(basename "$CLASS")/stage1.json" \
+"${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --first-stage "$W/first-tree/$(basename "$CLASS")/stage1.json" \
   --boundary "$CLASS" --capture "$W/serve/capture" --challenger local --challenger-host "$W/first-tree/challenger-host" \
   --deployed-key --interior-trees --form-case --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second-tree" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second-tree.log" 2>&1 || rc=$?

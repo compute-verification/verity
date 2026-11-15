@@ -67,7 +67,7 @@ def check (q : P2.Params) (c : SetupProtocol.Commitment) (cl : Claim) : Core.Out
   | .error m => .reject s!"params: {m}"
   | .ok _ =>
     if c.salt.size != 24 then .reject "the salt is 24 bytes, drawn by the verifier after W is committed"
-    else if cl.law != samplingDesign q then .reject s!"the sampling design is {samplingDesign q}, not {cl.law}"
+    else if cl.samplingDesign != samplingDesign q then .reject s!"the sampling design is {samplingDesign q}, not {cl.samplingDesign}"
     else .reject s!"the sampled audit's check is not built: {GOAL}"
 
 def protocol : Core.Protocol where

@@ -15,7 +15,8 @@ The Commit: it commits a served run's values while it serves. The package's docs
   `partition`, `executed_prefix`, `served_record`, `registered_rows`, `run_roots`, `native_ranges`, `json_chunks` and
   five more of the committer's modules (`device_pool`, `flush_points`, `plan_cache`, `run_values`, `topp_splits`).
   `row_tables_device` and `history_tables_device` take the row-table kernels' build from PoUW's serving package
-  (`RowTableLibrary`, `row_table_host_lib`, `hm_tables`, …) and re-export none of it. Not yet behind an `__all__`: one
+  (`row_table_host_lib`, `hm_tables`, …) and a device's copy of them from the PyTorch adapter (`verity_torch.pouw`'s
+  `RowTableLibrary`), and re-export none of it. Not yet behind an `__all__`: one
   module of another package reads `store_dump._as_bytes`.
 - **Loaded by:** the integration's `pipeline`, `check`, `acquire`, `protocols`, `engine` and
   `program.predict` packages and its `glue`, and `benchmarks/served_commit` and the other benchmarks that commit or open
