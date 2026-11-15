@@ -214,7 +214,9 @@ private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
 honest file's spliced digest (`hexOf (Sha512.hash …)`) passes without evaluating the hash; its callers are unchanged. -/
 def digest? (s : String) : Bool := s.length == 128 && isHex s
 
-private def without (j : Json) (k : String) : List (String × Json) :=
+/-- An object's members but one key's. Public (not `private`) so a completeness proof can state the field facts of the
+parser's derived object (`mkObj (without j "proofs")`) as rewrite rules; its callers and behaviour are unchanged. -/
+def without (j : Json) (k : String) : List (String × Json) :=
   match j with
   | .obj kvs => (kvs.toArray.filter (·.1 != k)).toList
   | _ => []
