@@ -1,4 +1,4 @@
-"""PoUB's pinned vectors (`vectors.json`): `python poub_vectors.py` rewrites them, and
+"""PoUB's pinned vectors (the package's `vectors.json`, `vectors.PATH`): `python poub_vectors.py` rewrites them, and
 `test_poub_vectors.py` holds the code to them.
 
 Payload blocks are generated, not stored: payload `j` is 64 pieces of 64 bytes, piece u the first 64 bytes of
@@ -34,7 +34,6 @@ import copy
 import functools
 import hashlib
 import json
-from pathlib import Path
 
 from poub_fakes import Entropy
 
@@ -42,10 +41,9 @@ from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
+from verity.protocols.accounting.poub.verifier.vectors import PATH, payload
 from verity.protocols.proofs.spot.device.challenger import live_domain, live_leaf
 
-PATH = Path(__file__).with_name("vectors.json")
-PAYLOAD_DOMAIN = b"verity/remote-bandwidth/test-payload/v0\0"
 SOURCE = b"verity remote bandwidth vector source"
 NODE = b"verity remote bandwidth vector node"
 NONCE = bytes(range(32))
@@ -66,14 +64,6 @@ VARIANTS = (*((k, b, receipts.sketch_rows(k)) for k in receipts.KINDS for b in (
 
 def name(kind: str, bind: bool, rows: int) -> str:
     return kind + ("/bind" if bind else "") + ("" if rows == receipts.sketch_rows(kind) else f"/rows{rows}")
-
-
-def payload(j: int) -> bytes:
-    if j == 0:
-        return bytes(codec.BLOCK_BYTES)
-    pieces = (hashlib.sha512(PAYLOAD_DOMAIN + j.to_bytes(8, "big") + u.to_bytes(4, "big")).digest()[:63] + b"\0"
-              for u in range(codec.BLOCK_BYTES // 64))
-    return b"".join(pieces)
 
 
 def payload_salts() -> list[bytes]:

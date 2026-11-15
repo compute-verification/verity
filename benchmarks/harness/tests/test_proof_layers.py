@@ -33,15 +33,16 @@ def recursion(root: Path, composed: bool | None = True) -> Path:
     return root
 
 
-def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = False, lean: bool = True) -> Path:
+def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = False, lean: bool = True, ranks: int = 1,
+                   a5_lines: int | None = None) -> Path:
     arm = out / name
     arm.mkdir(parents=True)
     a5 = {"audit": {"accepted": lean, "verdicts": {"lean-draw/m0": True, "lean-verify/m0": lean, "m0-verifier/m0": True}}}
     rank = {"accepted": lean, "ok": lean, "population": 8, "draw_counts": {"SiluMul_v2{I=8192}": 2},
             "per_unit": {"SiluMul_v2{I=8192}": {"units": 2, "proof_bytes": 1700000, "prove_s_per_unit": 3.0,
                                                 "lean_verify_s_per_unit": 1.0}}}
-    line = {"forged": forged, "ok": lean, "proof": proof, "coins": "challenger", "ranks": {"0": rank}}
-    (arm / "audit.log").write_text("A5 {\"lean_workers\": 1}\n" + "A5 " + json.dumps(a5) + "\n"
+    line = {"forged": forged, "ok": lean, "proof": proof, "coins": "challenger", "ranks": {str(r): rank for r in range(ranks)}}
+    (arm / "audit.log").write_text("A5 {\"lean_workers\": 1}\n" + ("A5 " + json.dumps(a5) + "\n") * (a5_lines or ranks)
                                    + "PROVE-PATH " + json.dumps(line) + "\n")
     (arm / "summary.json").write_text(json.dumps({"coins": {"source": "challenger", "challenger": "local"}}))
     return arm
@@ -112,6 +113,37 @@ def test_a_prove_path_run_whose_lean_verify_refused_prints_no_number(tmp_path):
     assert not row.accepted and row.prover_s is None and "lean-verify/m0 False" in row.lean
 
 
+def test_every_rank_needs_its_own_lean_verify_verdict(tmp_path):
+    """Two ranks with one audited A5 line between them are not every rank verified by Lean, though that one line is."""
+
+    assert PL.read("zk", str(prove_path_arm(tmp_path / "a", "llama", ranks=2))).accepted
+    row = PL.read("zk", str(prove_path_arm(tmp_path / "b", "llama", ranks=2, a5_lines=1)))
+    assert not row.accepted and row.prover_s is None and "not every rank has a Lean verify verdict" in row.lean
+    assert "1 audited A5 line(s) for 2 rank(s), 0 without a Lean verify verdict: not one verdict a rank" in row.notes
+
+
+def test_the_printed_row_states_its_proof(tmp_path):
+    """Each printed row says its proof; a plain a5 out given as ``--sampling`` (Flock with zero knowledge at the sampling
+    plan) says plain, prints no number and says why."""
+
+    rows = [PL.read("sampling", str(a5_out(tmp_path / "p", plain=True))), PL.read("zk", str(prove_path_arm(tmp_path, "z"))),
+            PL.read("flock", None)]
+    text = PL.render(rows)
+    line = {r.layer: x for r, x in zip(rows, text.splitlines()[4:7], strict=True)}
+    assert line["sampling"].startswith("| with sampling | row llama32-1b__int8__h200__tp1__b4: ")
+    assert "| plain | — |" in line["sampling"] and "| zk | 3 (s a block" in line["zk"]
+    assert line["flock"].startswith("| Flock | not run | — | — |")
+    assert ("- with sampling: no number: --sampling is the zk proof's row, and this output says its proof is plain"
+            in text.splitlines())
+
+
+def test_a_plain_sampling_row_writes_null_with_why_under_every_id(tmp_path):
+    rows = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, plain=True)))]
+    own = [m for m in PL.measured(rows, IDS) if m["member"] is None]
+    assert [m["name"] for m in own] == list(IDS)
+    assert all(m["value"] is None and "says its proof is plain" in m["why"] and m["extra"]["proof"] == "plain" for m in own)
+
+
 def test_an_a5_run_reads_its_audit_its_timing_and_states_no_more_of_its_coins_than_it_says(tmp_path):
     row = PL.read("sampling", str(a5_out(tmp_path)))
     assert row.accepted and row.format == PL.A5
@@ -155,12 +187,19 @@ def test_a_run_id_is_read_from_the_record_its_fetcher_lands(tmp_path):
     assert row.accepted and row.given == "r20261115-183449-c6f6"
 
 
-def test_the_command_prints_every_layer_and_writes_a_measurement_a_row(tmp_path, monkeypatch, capsys):
+#: `benchmarks/prove/run.py`'s ``LAYER_METRICS``
+IDS = {"benchmarks/proof-layer-prover-seconds": "prover_s", "benchmarks/proof-layer-lean-seconds": "lean_s",
+       "benchmarks/proof-layer-proof-bytes": "proof_bytes"}
+
+
+def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_then_sampling(tmp_path, monkeypatch,
+                                                                                              capsys):
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setenv("RESEARCH_RUN_ID", "local")
     monkeypatch.setenv("OUT", str(tmp_path / "report"))
     assert main(["prove-layers", "--recursion", str(recursion(tmp_path / "r")),
-                 "--sampling", str(a5_out(tmp_path / "s"))]) == 0
+                 "--zk", str(prove_path_arm(tmp_path / "z", "llama")),
+                 "--sampling", str(a5_out(tmp_path / "s"))], metrics=IDS) == 0
     text, line = capsys.readouterr().out.rstrip("\n").rsplit("\n", 1)
     for title in PL.LAYERS.values():
         assert f"| {title} |" in text
@@ -168,13 +207,33 @@ def test_the_command_prints_every_layer_and_writes_a_measurement_a_row(tmp_path,
     doc = json.loads(line)
     assert doc["schema"] == PL.SCHEMA and [r["layer"] for r in doc["rows"]] == list(PL.LAYERS)
     assert json.loads((tmp_path / "report" / "proof-layers.json").read_text()) == doc
-    result = json.loads((tmp_path / "report" / "result.json").read_text())
-    got = {m["member"]: m for m in result["measurements"]}
-    assert set(got) == set(PL.LAYERS) and all(m["name"] == PL.MEASUREMENT and m["mark"] == "measured" for m in got.values())
-    assert got["recursion"]["value"] == 1202.0 and got["sampling"]["value"] == 5.0
-    assert got["flock"]["value"] is None and got["flock"]["why"].startswith("not run")
-    assert got["recursion"]["detail"].startswith("inputs.inner: ") and doc["rows"][3]["ran_with"] == "ran with: not stated"
+    written = json.loads((tmp_path / "report" / "result.json").read_text())["measurements"]
+    assert [(m["name"], m.get("member")) for m in written] == [
+        (name, member) for name in IDS for member in ("flock", "zero knowledge", None)]
+    values = {(m["name"], m.get("member")): m for m in written}
+    assert [values[name, "zero knowledge"]["value"] for name in IDS] == [3.0, 1.0, 850000.0]
+    assert [values[name, None]["value"] for name in IDS] == [5.0, 2.0, 250.0]
+    assert all(values[name, "flock"]["value"] is None and values[name, "flock"]["why"].startswith("not run") for name in IDS)
+    assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
+                                                                                           for m in written)
+    assert doc["rows"][3]["ran_with"] == "ran with: not stated" and doc["rows"][3]["prover_s"] == 1202.0
     assert "| ran with |" in text and "| ran with: not stated |" in text
+
+
+def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_any_id(tmp_path):
+    """A refused Lean verify and an a5 member whose timing is keyed by its chunk's name (no ``draw_counts`` entry) each
+    write null with why, never a figure; recursion's row is no member of any id."""
+
+    refused = PL.read("zk", str(prove_path_arm(tmp_path / "z", "llama", lean=False)))
+    chunk = PL.read("sampling", str(a5_out(tmp_path / "s", draw_counts={"OtherTemplate_v1": 4})))
+    assert chunk.accepted and chunk.prover_s is None
+    assert "no per-block figure: member RoPEHead_v1{D=64}'s timing has no drawn-block count (draw_counts)" in chunk.notes
+    rows = [PL.read("flock", None), refused, chunk, PL.read("recursion", str(recursion(tmp_path / "r")))]
+    written = PL.measured(rows, IDS)
+    assert len(written) == 9 and all(m["value"] is None and m["why"] for m in written)
+    assert {m["member"] for m in written} == {"flock", "zero knowledge", None}
+    with pytest.raises(ValueError, match="not one of"):
+        PL.measured(rows, {"benchmarks/x": "seconds"})
 
 
 @pytest.mark.parametrize("out", ["", None])
@@ -185,5 +244,5 @@ def test_an_empty_out_or_run_dir_is_no_place_to_write(tmp_path, monkeypatch, cap
         monkeypatch.delenv("OUT", raising=False)
     else:
         monkeypatch.setenv("OUT", out)
-    assert PL.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read("flock", None)])) is None
+    assert PL.report(PL.REPORT, "text", {"rows": []}, PL.measured([PL.read(x, None) for x in PL.LAYERS], IDS)) is None
     assert capsys.readouterr().out == 'text\n{"rows": []}\n' and not any(tmp_path.iterdir())

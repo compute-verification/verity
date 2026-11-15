@@ -334,7 +334,7 @@ Lean's job in `check` and the tools around the audit:
   (`unread_caps`).
 - `trusted_size.py`: the size of a package's spec, per area.
 - `tool.py`: the store's declarations of the scheduled runs.
-- `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.
+- Its tests: the suite `verity-lean-audit`, with the controls' fixtures (`check.FIXTURES`).
 
 ## Using it from another repository
 

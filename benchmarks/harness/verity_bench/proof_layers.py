@@ -38,10 +38,16 @@ LAYERS = {"flock": "Flock", "zk": "Flock with zero knowledge", "sampling": "with
 RECURSION, PROVE_PATH, A5 = "recursion_e2e", "prove_path", "a5"
 #: the outputs a layer's row may be read from
 ACCEPTS = {"flock": (PROVE_PATH,), "zk": (PROVE_PATH, A5), "sampling": (A5, PROVE_PATH), "recursion": (RECURSION,)}
-#: the proof a prove_path row of the layer must have run (its PROVE-PATH line's ``proof``)
-PROOF = {"flock": "plain", "zk": "zk"}
-#: the name the report writes its JSON under, and its one measurement a row
-REPORT, MEASUREMENT = "proof-layers", "prover-seconds"
+#: the proof a row of the layer must state it ran, whichever command wrote it: the sampling layer is Flock with zero
+#: knowledge at the sampling plan
+PROOF = {"flock": "plain", "zk": "zk", "sampling": "zk"}
+#: the name the report writes its JSON under
+REPORT = "proof-layers"
+#: what a runner's metric id may name (`benchmarks/prove/run.py`'s ``LAYER_METRICS``), each with the unit it is written in
+FIGURES = {"prover_s": "s a proof block", "lean_s": "s a proof block", "proof_bytes": "bytes a proof block"}
+#: the layers each metric id holds, in the order they are written, each with its member: the sampling layer, the system
+#: as served, is the id's own reading, written last with no member
+MEMBERS = {"flock": "flock", "zk": "zero knowledge", "sampling": None}
 #: a research run's id, which the store fetches
 RUN_ID = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
 #: the files of a run's record the readers read, fetched from the store by these globs
@@ -77,6 +83,7 @@ class Row:
     lean_what: str = ""
     proof_bytes: float | None = None
     bytes_what: str = ""
+    per_block: bool = False
     ran_with: str = "ran with: not stated"
     detail: str | None = None
     proof: str | None = None
@@ -205,8 +212,10 @@ def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]]) -> No
     n, figures = 0, {"prove": 0.0, "lean": 0.0, "bytes": 0.0}
     missing: set[str] = set()
     for per in units:
-        for x in per.values():
+        for key, x in per.items():
             k = int(x.get("units") or 0)
+            if not k:
+                row.notes.append(f"no per-block figure: member {key}'s timing has no drawn-block count (draw_counts)")
             n += k
             for name, v in (("prove", _number(x.get("prove_s_per_unit"))), ("lean", _number(x.get("lean_verify_s_per_unit")))):
                 missing |= {name} if v is None else set()
@@ -217,7 +226,8 @@ def _per_block(row: Row, units: Iterable[Mapping[str, Mapping[str, Any]]]) -> No
     if not n:
         row.notes.append("no drawn block holds a timing")
         return
-    row.prover_unit = "s a block"
+    row.notes += [f"no per-block {name} figure: a drawn member's timing doesn't give one" for name in sorted(missing)]
+    row.prover_unit, row.per_block = "s a block", True
     row.prover_s = None if "prove" in missing else figures["prove"] / n
     row.prover_what = f"Flock's prove_total_s a drawn block, the mean over {n}"
     row.lean_s = None if "lean" in missing else figures["lean"] / n
@@ -294,15 +304,21 @@ def read_prove_path(d: Path, row: Row) -> None:
                          "directory")
     arm, pp = honest[0]
     ranks = pp.get("ranks") or {}
-    lean = _lean_verdicts([x for x in _tagged(_text(arm / "audit.log"), "A5", row.notes) if "audit" in x])
+    audits = [x for x in _tagged(_text(arm / "audit.log"), "A5", row.notes) if "audit" in x]
+    per_rank = [_lean_verdicts([x]) for x in audits]
+    lean = [v for vs in per_rank for v in vs]
+    each = len(audits) == len(ranks) and all(per_rank)
+    if not each:
+        row.notes.append(f"{len(audits)} audited A5 line(s) for {len(ranks)} rank(s), "
+                         f"{sum(1 for vs in per_rank if not vs)} without a Lean verify verdict: not one verdict a rank")
     row.accepted = (pp.get("ok") is True and bool(ranks) and all(r.get("accepted") is True for r in ranks.values())
-                    and bool(lean) and all(v is True for _, v in lean))
+                    and each and all(v is True for _, v in lean))
     if row.accepted:
         row.lean = f"accepted: every rank's audit ({len(ranks)}), each with Lean's {', '.join(sorted({k for k, _ in lean}))}"
     else:
         held = [f"PROVE-PATH ok {pp.get('ok')}"] + [f"rank {r} accepted {x.get('accepted')}" for r, x in sorted(ranks.items())
                                                    if x.get("accepted") is not True]
-        held += [f"{k} {v}" for k, v in lean if v is not True] or ([] if lean else ["no Lean verify verdict in the log"])
+        held += [f"{k} {v}" for k, v in lean if v is not True] or ([] if each else ["not every rank has a Lean verify verdict"])
         row.lean = "not accepted: " + "; ".join(held)
     counts: dict[str, int] = {}
     for r in ranks.values():
@@ -347,7 +363,7 @@ def read_a5(d: Path, row: Row) -> None:
     machine = next((x for x in _text(d / "machine.txt").splitlines() if x.startswith("row dir ")), None)
     registered = next((x for x in text if x.startswith("REGISTERED ")), "")
     window = " ".join(w for w in registered.split() if w.startswith(("kind=", "commitment=")))
-    counts = (a5 or {}).get("draw_counts") or summary.get("draw_counts") or {}
+    counts = summary.get("draw_counts") or (a5 or {}).get("draw_counts") or {}
     row.workload = ((f"row {Path(machine[len('row dir '):]).name}: " if machine else
                      f"source {summary['source']}: " if summary.get("source") else "")
                     + _drawn(counts, summary.get("population")) + (f" ({window})" if window else ""))
@@ -409,11 +425,12 @@ def render(rows: Sequence[Row]) -> str:
     """The table as text: a row a layer, then why each row without a number has none."""
 
     lines = ["The proof system by layer, each row read from its own run's output (`verity bench prove layers`).", "",
-             "| layer | workload | prover s | Lean verifier | Lean s | proof bytes | ran with |",
-             "|---|---|---|---|---|---|---|"]
+             "| layer | workload | proof | prover s | Lean verifier | Lean s | proof bytes | ran with |",
+             "|---|---|---|---|---|---|---|---|"]
     for r in rows:
         unit = f"{r.prover_unit}: {r.prover_what}" if r.prover_what else r.prover_unit
-        lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {_cell(r.prover_s, unit)} | {r.lean} | "
+        proof = r.proof or (NOT_STATED if r.status == "read" else "—")
+        lines.append(f"| {LAYERS[r.layer]} | {r.workload} | {proof} | {_cell(r.prover_s, unit)} | {r.lean} | "
                      f"{_cell(r.lean_s, r.lean_what)} | {_cell(r.proof_bytes, r.bytes_what, bytes_=True)} | {r.ran_with} |")
     lines += ["", *(f"- {LAYERS[r.layer]}: no number: {r.why}" for r in rows if r.why)]
     lines += [f"- {LAYERS[r.layer]}: {n}" for r in rows for n in r.notes]
@@ -424,19 +441,25 @@ def document(rows: Sequence[Row]) -> dict[str, Any]:
     return {"schema": SCHEMA, "rows": [{"title": LAYERS[r.layer], **asdict(r)} for r in rows]}
 
 
-def measured(rows: Sequence[Row]) -> list[dict[str, Any]]:
-    """The writer's measurements, one a row (``member`` its layer): the prover's seconds, with the rest of the row beside
-    them; a row without them says why."""
+def measured(rows: Sequence[Row], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
+    """The writer's measurements: under each of `metrics`' ids (each naming one of `FIGURES`), one a layer of `MEMBERS`,
+    in its order. A layer's value is its figure a proof block, only where its Lean verdict is an accept; else the value is
+    None, with why. Recursion's row is no member: its seconds are a whole recursive run's."""
 
+    if bad := sorted(set(metrics.values()) - set(FIGURES)):
+        raise ValueError(f"metric ids name {bad}, not one of {sorted(FIGURES)}")
+    by_layer = {r.layer: r for r in rows}
     out = []
-    for r in rows:
-        why = None if r.prover_s is not None else r.why or "its output holds no prover seconds"
-        out.append({"name": MEASUREMENT, "value": r.prover_s, "unit": r.prover_unit, "member": r.layer, "why": why,
-                    "inputs": [r.given] if r.given else [],
-                    "extra": {"layer": LAYERS[r.layer], "status": r.status, "format": r.format, "workload": r.workload,
-                              "prover_what": r.prover_what, "lean": r.lean, "lean_s": r.lean_s, "lean_what": r.lean_what,
-                              "proof_bytes": r.proof_bytes, "bytes_what": r.bytes_what, "ran_with": r.ran_with, "detail": r.detail,
-                              "proof": r.proof}})
+    for name, figure in metrics.items():
+        for layer, member in MEMBERS.items():
+            r = by_layer[layer]
+            value = getattr(r, figure) if r.accepted and r.per_block else None
+            why = None if value is not None else r.why or (
+                f"its output gives no {figure} a proof block" if r.per_block else "its output gives no per-block figure")
+            out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": member, "why": why,
+                        "inputs": [r.given] if r.given else [],
+                        "extra": {"layer": LAYERS[layer], "status": r.status, "format": r.format, "workload": r.workload,
+                                  "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof}})
     return out
 
 
@@ -473,5 +496,5 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 
 def run(args: argparse.Namespace) -> int:
     rows = [read(layer, getattr(args, layer)) for layer in LAYERS]
-    report(REPORT, render(rows), document(rows), measured(rows))
+    report(REPORT, render(rows), document(rows), measured(rows, getattr(args, "metrics", None) or {}))
     return 0

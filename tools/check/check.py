@@ -37,7 +37,7 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             checked out, the record `research merge` reads; with presigned URLs
                                                             for the pinned upstream build and inputs when the commit changes
                                                             verity/protocols/proofs/flock/ or a Lean package its verifier requires by path
-                                                            (but sigma/, a README.md or PROTOCOL.md)
+                                                            (but verifier/sigma/, a README.md or PROTOCOL.md)
                                                             against --base REF (default origin/main; also
                                                             ratchet-gate's base unless --ratchet-base REF is given), the pinned
                                                             Lean dependency bundles and the newest recorded checks' verdict
@@ -189,7 +189,7 @@ doesn't name:
                     the upstream build stored once and pinned by hash (`verity/protocols/proofs/flock/prover/agreement/upstream.json`), which the step
                     fetches when the run was sent its presigned URLs (`agreement_url_file`); skipped by name without them.
                     `research merge` requires it for a change under verity/protocols/proofs/flock/ or a Lean package the verifier
-                    requires by path (but sigma/, a README.md or PROTOCOL.md; `tool.py`)
+                    requires by path (but verifier/sigma/, a README.md or PROTOCOL.md; `tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
@@ -1054,7 +1054,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
         return [("lean", "skipped: verity/protocols/proofs/flock/verifier is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "verity-verify-proof"
     agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/proofs/flock/ or "
-                                  "a Lean package the verifier requires by path (but sigma/, a README.md or PROTOCOL.md) requires this step: "
+                                  "a Lean package the verifier requires by path (but verifier/sigma/, a README.md or PROTOCOL.md) requires this step: "
                                   "`check.py --record` sends its URLs)")
     if UPSTREAM_PIN.exists() and agreement_urls is not None:
         try:
@@ -2806,8 +2806,8 @@ STEP_KEYS = {"lean-agreement": agreement_key, "flock-rust-tests": rust_tests_key
 def agreement_closure(files: list[str]) -> list[str]:
     """The tracked files the agreement job can read: verity/protocols/proofs/flock/prover/agreement/, the verifier's Lean package and the
     packages of the tree it requires by path (`required_in_tree`), which its executable is built from; less any Lake package
-    nested in the verifier's (Flock's proofs are under `security/Proofs/`), which it is not built from as long as the Lean
-    package requires nothing (a `require` in its lakefile keeps them all in), less each of those packages'
+    nested in the verifier's directory that the verifier doesn't require (the σ-lift check's difftest, `sigma/`, which
+    requires the verifier), since Lake builds the verifier without reading it; less each of those packages'
     `lean-audit.json`, which only `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the
     verifier's lakefile mention it), and less their Markdown, which neither Lake nor a script of the agreement reads (a
     test fails if a file this keeps names a doc but to cite it, or a Lean file of it has an `include_str`), so a doc edit
@@ -2815,9 +2815,9 @@ def agreement_closure(files: list[str]) -> list[str]:
     pre, lean = "verity/protocols/proofs/flock/prover/agreement/", "verity/protocols/proofs/flock/verifier/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
-    nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in root)
-    if any("require" in (ROOT / f).read_text() for f in root if (ROOT / f).is_file()):
-        nested = ()
+    required = {d for d in required_packages(ROOT / lean).values() if d is not None}
+    nested = tuple(d for f in lakefiles if f not in root
+                   if (ROOT / (d := f.rsplit("/", 1)[0] + "/")).resolve() not in required)
     packages = (lean, *required_in_tree(lean))
     locks = {p + "lean-audit.json" for p in packages}
     return [f for f in files if f.startswith((pre, *packages)) and f not in locks and not f.startswith(nested or ("\0",))

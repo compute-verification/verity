@@ -179,12 +179,11 @@ def decode_key() -> str:
 
 
 def kv_tokens(llm) -> int | None:
-    """The engine's KV cache in tokens (vLLM's block count times block size), read in-process; None where vLLM hides it."""
-    try:
-        cc = llm.llm_engine.vllm_config.cache_config
-        return int(cc.num_gpu_blocks) * int(cc.block_size)
-    except (AttributeError, TypeError):
-        return None
+    """The engine's KV cache in tokens (vLLM's block count times block size), read in-process; None where vLLM hides it
+    (no cache config on the engine, or its block count not yet set)."""
+    cc = getattr(getattr(getattr(llm, "llm_engine", None), "vllm_config", None), "cache_config", None)
+    blocks, size = getattr(cc, "num_gpu_blocks", None), getattr(cc, "block_size", None)
+    return None if blocks is None or size is None else int(blocks) * int(size)
 
 
 def pass_capacity(tile: int, ns: list[int]) -> tuple[int, int]:
@@ -927,7 +926,8 @@ def memory_mib() -> int | None:
         q = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits", "-i", gpu()],
                            capture_output=True, text=True, timeout=10, check=False)
         return int(q.stdout.strip())
-    except (OSError, ValueError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+        print(f"e2e: no GPU memory reading from nvidia-smi, recorded as none ({type(e).__name__}: {e})", file=sys.stderr)
         return None
 
 
