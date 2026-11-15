@@ -25,6 +25,9 @@ a run id never reads a local file. `tests/fixtures/record/` is a record director
 shows the format, not a served run's number. `verity bench` runs the command from the clone's root, so a relative DIR
 is taken from there.
 
+Outside `research run` it only prints. To keep what it prints as files too (`compute.json` and `result.json`, below),
+set `OUT` to a directory: `OUT=/tmp/compute verity bench compute --record DIR`.
+
 Producing a record (serving a model and auditing the run) is not yet one command from a clone. Today a record comes
 from a run on our machines.
 

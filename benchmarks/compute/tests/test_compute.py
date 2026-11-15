@@ -819,6 +819,7 @@ def no_store(*args, **kwargs):
 def local(monkeypatch) -> None:
     """No `research run` around the command, so it writes no output."""
     monkeypatch.delenv("OUT", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
 
 
 @pytest.mark.parametrize("argv", [[], ["--per-call", "--top", "2"]])
