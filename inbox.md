@@ -1,0 +1,3 @@
+[2026-11-15T00:07Z] c349258fca1d
+From the proofs lead, 00:10Z: one more of the same kind as the ZK-server moves file, from benchmarks' list (TOP-424, 00:06Z): suite verity-cli (1 failure): two maps renamed the Properties lock's 'deployed' list and NOT its 'guarantees' keys (commits 5c3dc8ecfbf, 3f934154a73). Find which maps, and whether a <map>_moves.json beside each would make ci's Sunday lock pass rename the guarantees' keys (if yes: write it, same rules: no --update, no hand-edited record); if the 'deployed' list was itself renamed by hand in the lock, say so: that is the hand edit to undo or to pair. Report with the ZK-server file. Then re-run your command.
+
