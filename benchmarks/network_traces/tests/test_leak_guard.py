@@ -21,8 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.device import leak_guard as LG, runner_parts as rp
-from verity.protocols.accounting.certifier.device.tests.gate_runs import (
+from benchmarks.network_traces import leak_guard as LG
+from verity.protocols.accounting.certifier.device import runner_parts as rp
+from benchmarks.network_traces.tests.gate_runs import (
     CERTIFIED, DEPLOYMENT, GATE, INDENTED, LINES, SALTS, _gate, _put, _sig_piece, _tar)
 
 

@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.device import leak_guard as LG, released_keys as RK
+from benchmarks.network_traces import leak_guard as LG
+from verity.protocols.accounting.certifier.device import released_keys as RK
 
 ROOT = Path(__file__).resolve().parents[6]
 
