@@ -96,11 +96,6 @@
   }
  },
  "layers": {
-  "Spot.RecordText": {
-   "imports": ["Flock.Sigma", "Flock.TemplateQuery", "Spot.Wires"],
-   "except": [],
-   "why": "what an execution phase's circuit record's text declares is code, read from the decoded Program and the parsed text alone: Flock's program decoder and template queries, a type's bits read from its structure (Flock.Sigma, which imports the decoder alone) and SPOT's reader of the record's wires; nothing else of InferenceOnlyCheck, so that a package InferenceOnlyCheck requires can hold it, no Mathlib and nothing of Security"
-  },
   "InferenceOnlyCheck.RowsProtocol": {
    "imports": [
     "Std",
