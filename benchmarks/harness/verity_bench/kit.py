@@ -10,9 +10,10 @@
   `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
   `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
-- `record_dir(arg)`, `ran_with(coins, parameters, detail=None)` and `report(name, text, doc, measured, ...)`: the core
-  benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface"), written in `kit_report`: what a
-  command takes, the one line of its coins and parameters, and its last step, which prints and writes its number.
+- `record_dir(arg)`, `ran_with(coins, parameters, detail=None, verified=False)` and `report(name, text, doc, measured,
+  ...)`: the core benchmarks' interface (`benchmarks/README.md`'s "The core benchmarks' interface"), written in
+  `kit_report`: what a command takes, the one line of its coins and parameters, and its last step, which prints and
+  writes its number.
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
 `validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
@@ -512,4 +513,5 @@ def writer(out: str | os.PathLike, kind: str | None = None) -> Writer:
 from verity_bench import kit_report  # noqa: E402
 
 COINS, NOT_STATED, PARAMETERS = kit_report.COINS, kit_report.NOT_STATED, kit_report.PARAMETERS
-NoRecord, ran_with, record_dir, report = kit_report.NoRecord, kit_report.ran_with, kit_report.record_dir, kit_report.report
+NoRecord, Record, ran_with = kit_report.NoRecord, kit_report.Record, kit_report.ran_with
+record, record_dir, report = kit_report.record, kit_report.record_dir, kit_report.report
