@@ -35,7 +35,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / "adapters/vllm"), str(ROOT / "adapters/torch"), str(HERE)]
+sys.path[:0] = [str(ROOT), str(ROOT / "adapters/vllm"), str(ROOT / "adapters/torch"), str(HERE), str(HERE.parent / "prove_path")]
 
 VERDICTS = ("ROW-DIR", "SERVED-ROWS", "CUT")
 #: a made-up root and salt: 64 bytes each, which W's writer reads as hex
@@ -167,7 +167,7 @@ def cut(PP: Any, serve: dict, cls: Any, tables: Any, scheme: str, w: Path) -> di
 def main(argv: list[str]) -> int:
     phi_file, cls_arg, scheme, engine_arg, out = argv
 
-    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
+    import prove_path as PP
     from verity_vllm.program.predict.window_class import PearlTables
 
     cls, tables = PP.window_class_of(cls_arg), PearlTables(scheme)
