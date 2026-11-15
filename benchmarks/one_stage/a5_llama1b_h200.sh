@@ -14,6 +14,10 @@
 #    the deployed LMS parameters), at the rate rate:K/N (the partition's subset:K over the window's N units), every
 #    session's coin tree from that session's release log (a5.window_trees), Flock --zk behind the Lean ZK server; then SPOT's
 #    one-stage check (spot-one-stage-zk, `Spot.OneStageZk` v2) on the case the audit wrote, whose V2 line is the verdict.
+#    A5_PLAIN=1 makes its sessions plain (`records_audit.py --plain`, a5's plain audit) at stratified-rate:K/N: one session
+#    on its own keyed coin tree from a development challenger of its own (FC_COINS=tree, FLOCK_CHALLENGER=1), served the
+#    challenger session's stratified sample and held to it by Lean's `verify --coins tree --stratified K`; no ZK server, and
+#    no OneStageZk, which checks --zk sessions only. summary.json's ``epsilon`` is the sample's bound at several deltas.
 #
 #   research run --on MACHINE --project verity --source TREE --cwd clone --mem-gb 448 --timeout 3h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/one_stage/a5_llama1b_h200.sh
@@ -55,11 +59,12 @@ PART=${A5_PARTITION:-$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json}
 ROOT=${A5_ROOT:-$WORK/a5-llama1b}
 BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 D=$BASE/$ROW WD=$BASE/serving-rows FW=${A5_FLOCK_WORK:-$ROOT/flock-work} KEPT=$BASE/unpublished
-VENV=${VENV:-$WORK/venv312} HF_HOME=${HF_HOME:-$WORK/hf} A5_COINS=${A5_COINS:-dev}
+VENV=${VENV:-$WORK/venv312} HF_HOME=${HF_HOME:-$WORK/hf} A5_COINS=${A5_COINS:-dev} A5_PLAIN=${A5_PLAIN:-}
 CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 BOOT="(cd adapters/vllm && WORK=$WORK bash verity_vllm/ops/pod_bootstrap.sh --cases $ROLE)"
 refuse() { echo "a5_llama1b_h200.sh: $1" >&2; exit 2; }
 case $A5_COINS in dev|challenger) ;; *) refuse "A5_COINS=$A5_COINS: dev or challenger";; esac
+case $A5_COINS/$A5_PLAIN in */|challenger/1) ;; *) refuse "A5_PLAIN=$A5_PLAIN: 1 with A5_COINS=challenger, or unset";; esac
 [ -x "$VENV/bin/python" ] || refuse "no vLLM Python environment at $VENV/bin/python (VENV): make it with $BOOT"
 CKPT=$(PYTHONPATH=$TREE/adapters/vllm "$VENV/bin/python" -c 'import sys; from verity_vllm.config import checkpoint_dir
 print(checkpoint_dir(*sys.argv[1:]) or "")' "$REPO" "$REV" "$HF_HOME" 2>/dev/null)
@@ -115,7 +120,7 @@ export VERITY_WEIGHTS_HASH=${VERITY_WEIGHTS_HASH:-device-checked}
 unset CONFIG_RUN REPLAY_K REPLAY_DEFERRED SERVING_ROWS
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "row dir $D"; echo "CUDA_HOME $CUDA_HOME"; nvidia-smi -L
-  sha256sum ${UNGUARDED[1]+"${UNGUARDED[1]}"} "$FA3G" "$NT"; echo "HF_HOME $HF_HOME VENV $VENV A5_COINS $A5_COINS: $CARD"; } | tee "$OUT/machine.txt"
+  sha256sum ${UNGUARDED[1]+"${UNGUARDED[1]}"} "$FA3G" "$NT"; echo "HF_HOME $HF_HOME VENV $VENV A5_COINS $A5_COINS${A5_PLAIN:+ A5_PLAIN 1}: $CARD"; } | tee "$OUT/machine.txt"
 rs keep "$ROOT" --owner @vllm --expires 7d --priority normal \
   --why "A5 over a GPU-served rows-sha512 window (Llama-3.2-1B int8 H200): the row dir, its sealed bundle and window" | tail -2
 
@@ -168,13 +173,13 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
   k=$("$TPY" -c 'import json, sys; l = json.load(open(sys.argv[1]))["law"]; print(l.split(":")[1] if l.startswith("subset:") else "")' "$PART")
   n=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["population"])' "$WD/registration.json")
   [ -n "$k" ] && [ -n "$n" ] || { echo "A5_COINS=challenger takes a subset:K partition law, the rate rate:K/N over the window's N units" >&2; return 22; }
-  rate=rate:$k/$n
+  rate=${A5_PLAIN:+stratified-}rate:$k/$n
   git -C "$TREE" rev-list --first-parent HEAD > "$BASE/main.txt" || return 23
   "$TPY" -m verity_numerical.bench.generate --subcircuit "${A5_SUBCIRCUIT:-rope-head/d64/neox-bf16}" --n 4 --seed 1 \
     --out "$BASE/sets" > "$OUT/a5/sets.log" 2>&1 || return 24
-  RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20)) "$TPY" benchmarks/prove_path/records_audit.py audit --window "$WD" \
+  FLOCK_CHALLENGER=${A5_PLAIN:+1} RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20)) "$TPY" benchmarks/prove_path/records_audit.py audit --window "$WD" \
     --sampling-design "$rate" --circuit "$(sha512sum "$WD/circuit.json" | cut -c1-128)" --run "$run" --template-sets "$BASE/sets" \
-    --challenger local --deployed-key --main "$BASE/main.txt" \
+    --challenger local --deployed-key ${A5_PLAIN:+--plain} --main "$BASE/main.txt" \
     --m0-pythonpath "$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm:$TREE/adapters/torch" \
     --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --out "$A" > "$OUT/a5/a5.log" 2> "$OUT/a5/audit.err"
@@ -182,6 +187,7 @@ challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one
   (cd "$A" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*private*' ! -path './*/archive/*' \
      ! -path '*/challenger-work/*' \( ! -path './challenger/*' -o -name windows.jsonl -o -name pins.jsonl \) -print0 \
     | xargs -0 -r -I{} cp --parents {} "$OUT/a5/")
+  [ -z "$A5_PLAIN" ] || return $rc
   # the case the audit wrote (a5.write_case: it names the challenger, its window root and coins), as SPOT's check reads it;
   # v2_case.py's rebuild from the kept files carries no coins, which v2 refuses (NO_CHALLENGER)
   "$TPY" - "$A/window/case-v2.json" "$BASE/v2" "$TREE/verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-one-stage-zk" \
@@ -246,8 +252,10 @@ print("WEIGHTS root_bytes=" + ",".join(sorted({str(len(r) // 2) for r in roots})
 PY
 grep -a '^A5 ' "$OUT/a5/a5.log" 2>/dev/null | tail -1 | cut -c1-4000 | tee -a "$OUT/summary.txt"
 grep -a -E '^V2(CASE)? ' "$OUT/a5/v2.log" 2>/dev/null | cut -c1-2000 | tee -a "$OUT/summary.txt"
-A5_COINS=$A5_COINS CARD=$CARD "$PY" - "$OUT/a5" <<'PY' | tee -a "$OUT/summary.txt"
+A5_COINS=$A5_COINS A5_PLAIN=$A5_PLAIN CARD=$CARD "$PY" - "$OUT/a5" <<'PY' | tee -a "$OUT/summary.txt"
 import json, os, pathlib, sys
+from fractions import Fraction
+from math import comb
 d = pathlib.Path(sys.argv[1])
 s = next((p for p in (d / "a5" / "summary.json", d / "summary.json") if p.is_file()), d / "summary.json")
 def read(p):
@@ -264,7 +272,13 @@ audit = next((json.loads(x[3:]).get("audit") for x in reversed(lines) if '"audit
 accepted = "accepted" if audit.get("accepted") is True else "NOT accepted"
 sample = (f"law {law.get('law', '?')} k={law.get('k', '?')} of {summ.get('population', '?')} units, delta {summ.get('delta', '?')}, "
           f"drew {len(summ['draw']) if isinstance(summ.get('draw'), list) else '?'}" + (f", sampled at {rate}" if rate else ""))
-if os.environ["A5_COINS"] == "challenger":
+if os.environ["A5_PLAIN"]:
+    line = (f"COINS draw: one local challenger session (the auditor device's service run on this machine, a development "
+            f"stand-in for the auditor's, its key made for the run at the deployed LMS parameters), {sample}; sessions: Flock "
+            f"plain, no ZK server, its one session on a development challenger of its own (coin trees "
+            f"{summ.get('coin_trees', '?')}); the audit {accepted}, by Flock's plain per-session Lean verify --coins tree "
+            f"--stratified K and Lean's draw; SPOT's one-stage check does not apply (OneStageZk checks --zk sessions); {card}")
+elif os.environ["A5_COINS"] == "challenger":
     v2 = [x for x in (d / "v2.log").read_text(errors="replace").splitlines()] if (d / "v2.log").is_file() else []
     rc = next((x.split()[1] for x in v2 if x.startswith("V2RC ")), None)
     verdict = {"0": "accepted", "1": "rejected", "2": "undecided or no case"}.get(rc, "did not run")
@@ -284,9 +298,19 @@ print(line)
 if s.is_file():  # benchmarks' printer reads summary.json's coins, an object: the line rides as its text
     doc = read(s)
     doc["coins"] = {**(doc.get("coins") if isinstance(doc.get("coins"), dict) else {}), "text": line}
+    n, k = summ.get("population"), law.get("k")
+    if isinstance(n, int) and isinstance(k, int) and 0 < k <= n:
+        # profile.Stratified.count_bound for one stratum: the largest m whose C(n-m, k)/C(n, k) is at least delta
+        def bound(delta):
+            return max(m for m in range(n + 1) if Fraction(comb(n - m, k), comb(n, k)) >= Fraction(delta))
+        doc["epsilon"] = {"k": k, "population": n, "rule": "except with probability delta, an accepted audit has at most "
+                          "wrong_units of the population's units wrong, the largest m with C(population-m, k)/C(population, k) "
+                          ">= delta; epsilon = wrong_units/population",
+                          "table": [{"delta": x, "wrong_units": bound(x), "epsilon": round(bound(x) / n, 6)}
+                                    for x in (0.5, 0.1, 0.01, 1e-3, 1e-6, 1e-9)]}
     s.write_text(json.dumps(doc, indent=1, sort_keys=True))
 PY
 tail -8 "$OUT/verdicts.txt" 2>/dev/null | tee -a "$OUT/summary.txt"
-vr=; [ "$A5_COINS" != challenger ] || { vr=$(awk '/^V2RC /{print $2}' "$OUT/a5/v2.log" 2>/dev/null); vr=${vr:-2}; }
+vr=; [ "$A5_COINS" != challenger ] || [ -n "$A5_PLAIN" ] || { vr=$(awk '/^V2RC /{print $2}' "$OUT/a5/v2.log" 2>/dev/null); vr=${vr:-2}; }
 echo "replay rc=$rr a5 rc=$ar${vr:+ v2 rc=$vr}" | tee -a "$OUT/summary.txt"
 exit $(( rr != 0 ? 17 : ar != 0 ? 18 : vr != 0 ? 19 : 0 ))
