@@ -18635,6 +18635,12 @@
    },
    "type_hash": "ee60206832e37d35ddc2a6d2b6186b490be8fe8eb2fb51df6b86b9ba081dfea7"
   },
+  "FlockComplete.ZkTables.accepts_masked": {
+   "owner": "@proofs"
+  },
+  "FlockComplete.ZkTables.complete_masked": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Audit.Adaptive.harm_budget": {
    "owner": "@proofs",
    "signature": [
