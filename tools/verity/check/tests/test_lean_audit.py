@@ -206,7 +206,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--facts-cache"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--program-cache", "--artifacts", "--facts-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
