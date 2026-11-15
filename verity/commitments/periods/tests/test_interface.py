@@ -2282,7 +2282,7 @@ def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(
 
 def _cut(circuit: I.Circuit, units: int = 2, registered: dict | None = None) -> I.Window:
     """``circuit``'s window under the tests' run, in members of at most ``units`` units."""
-    return I.Window(circuit, RUN, LAW, units, registered=registered)
+    return I.Window(circuit, RUN, SAMPLING_DESIGN, units, registered=registered)
 
 
 def _handed(win: I.Window) -> tuple[CS.Binding, list[dict], dict]:
