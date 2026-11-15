@@ -787,7 +787,7 @@ from verity_vllm.definitions.numerics import (  # noqa: E402
     batched_gemm_rows,
     cublas_gemm_rows,
     deepgemm_rows,
-    dense_rows,  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
+    dense_rows,  # the dense chain's kernels (registers them) and the float64 GEMM chain
     dsa_norm_rows,
     dsv4_rows,
     glm53_rows,

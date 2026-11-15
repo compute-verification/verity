@@ -66,7 +66,7 @@ from typing import TYPE_CHECKING, Any
 from verity_vllm import protocols as PO
 from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
 from verity_vllm.acquire.sources import hidden_source as HS
-from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.acquire.sources import taps as TAPS  # noqa: E402
 from verity_vllm.config import UsageError, group, option, workload_arg
 from verity_vllm.engine import engine_profile as prof
 
@@ -75,18 +75,18 @@ prof.apply_env()
 import torch  # noqa: E402
 
 from verity_vllm.commit import opened as OV  # noqa: E402
-from verity_vllm.commit import step_rows as SR
+from verity_vllm.commit import step_rows as SR  # noqa: E402
 from verity_vllm.engine import arrivals as AR  # noqa: E402
-from verity_vllm.engine import served as SV
-from verity_vllm.engine import vllm_adapter as va
+from verity_vllm.engine import served as SV  # noqa: E402
+from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.engine.handle import Steps, scheduler_or_none  # noqa: E402
 from verity_vllm.pipeline import boundary_plan as BP  # noqa: E402
-from verity_vllm.pipeline import c2_replay as C2
+from verity_vllm.pipeline import c2_replay as C2  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC  # noqa: E402
-from verity_vllm.pipeline import commit_plan as CP
-from verity_vllm.pipeline import gpu_lease as GL
-from verity_vllm.pipeline import remote_session as RS
-from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.pipeline import commit_plan as CP  # noqa: E402
+from verity_vllm.pipeline import gpu_lease as GL  # noqa: E402
+from verity_vllm.pipeline import remote_session as RS  # noqa: E402
+from verity_vllm.pipeline import replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
 from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402

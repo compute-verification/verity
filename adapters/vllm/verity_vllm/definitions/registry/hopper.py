@@ -156,15 +156,19 @@ HOPPER_COMPOSITES = [DotBf16Hopper, GemmCoordinateHopper, GemmHopper, AttnBlockF
                      LayerPreHopper, LayerPostHopper, FinalHopper, ServeHopper]
 HOPPER_PRIMITIVES = [HopperBF16WgmmaDot16, Fa3InvSum]
 
+# The three chains below register in this order, which REGISTRY keeps and the readers that walk it (the Boolean-versions
+# lookup among them) see, so the import sort is split between them rather than reordering them.
 # FA3's per-iteration Check_inf chain (`Attention_v4`, `TargetProfile.fa3_construction`) registers with the Hopper bindings, so every process
 # that decodes a Hopper Program can decode one built under that construction
+from verity_vllm.definitions.registry import fa3_check_inf  # noqa: E402, F401
+
+# isort: split
 # FA2's (`Attention_v5`, the Hopper k16 step's FA2 on cc 12.0) likewise
+from verity_vllm.definitions.registry import fa2_check_inf  # noqa: E402, F401
+
+# isort: split
 # and FA2's softcapped chain under it (`AttentionSoftcap_v2`)
-from verity_vllm.definitions.registry import (
-    fa2_check_inf,  # noqa: E402, F401
-    fa2_softcap,  # noqa: E402, F401
-    fa3_check_inf,  # noqa: E402, F401
-)
+from verity_vllm.definitions.registry import fa2_softcap  # noqa: E402, F401
 
 # --- the Hopper eager profile as a binding record of b1's factored `Serve_v2` -----------
 # The environment substitution above (`_BoundPrims._over`, `ENV["BN"]`) written as the statics it always was: the same
