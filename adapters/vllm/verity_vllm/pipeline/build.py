@@ -148,7 +148,7 @@ def workload_engine_args(workload: str | None, tp: int) -> dict:
 def applicability_conditions(profile, applied: dict, attention_impls: dict, export_facts: dict, sampling: dict | None = None, tp: dict | None = None,
                              launch: dict | None = None) -> dict:
     """The facts READ BACK from the environment/model/export that the Program's Definition selection rests on — the conditions under
-    which the artifact may be reused (`target_profile.check_reuse`). Every value is observed, none is a literal."""
+    which the artifact may be reused (`artifact.check_reuse`). Every value is observed, none is a literal."""
     from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
     from verity_vllm.program.frontend.rules.vllm_bindings import (
         GEMM_PINS,

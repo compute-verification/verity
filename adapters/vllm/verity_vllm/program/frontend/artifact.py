@@ -1,5 +1,13 @@
-"""The wrapper of an ahead-of-time constructed Program (`target_profile`): its identity (`ArtifactIdentity`) and the
-fail-closed reuse check (`check_reuse`)."""
+"""The wrapper of an ahead-of-time constructed Program, built for a `target_profile.TargetProfile`:
+
+* `ArtifactIdentity` — the cache key / wrapper identity of a constructed artifact:
+      sha256( canonical(construction_version) || canonical(TargetProfile) || canonical(applicability) || program_digest )
+  The Program digest is a component, not a function of the profile: two targets that genuinely produce the same circuit share the
+  Program digest and differ in identity; two hosts building the same profile share both (no host fact enters any component).
+* `check_reuse(artifact, profile, applicability_now)` — fail-closed: an artifact may be reused only under the profile it was built
+  for and only when every applicability condition it was built under holds for the requester; the refusal names every differing
+  field with both values.
+"""
 
 from __future__ import annotations
 

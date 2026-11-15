@@ -1,17 +1,8 @@
-"""The applicability contract of an ahead-of-time constructed Program (cb-fix).
-
-Three objects, all pure Python (no torch; testable on any host):
-
-* `TargetProfile` — the ONE declared input a construction is built for: compute capability, SM count, batch-invariant switch,
-  attention-backend knob, pinned vLLM revision, numerics profile (derive vocabulary). Everything the builder's shims answer to vLLM
-  and everything the manifest reports as "declared" comes from this object; there is no second copy of any of these values.
-* `ArtifactIdentity` — the cache key / wrapper identity of a constructed artifact:
-      sha256( canonical(construction_version) || canonical(TargetProfile) || canonical(applicability) || program_digest )
-  The Program digest is a component, not a function of the profile: two targets that genuinely produce the same circuit share the
-  Program digest and differ in identity; two hosts building the same profile share both (no host fact enters any component).
-* `check_reuse(artifact, profile, applicability_now)` — fail-closed: an artifact may be reused only under the profile it was built
-  for and only when every applicability condition it was built under holds for the requester; the refusal names every differing
-  field with both values.
+"""The applicability contract of an ahead-of-time constructed Program (cb-fix), pure Python (no torch; testable on any host):
+`TargetProfile`, the ONE declared input a construction is built for: compute capability, SM count, batch-invariant switch,
+attention-backend knob, pinned vLLM revision, numerics profile (derive vocabulary). Everything the builder's shims answer to vLLM
+and everything the manifest reports as "declared" comes from this object; there is no second copy of any of these values. The
+artifact's identity and the reuse check are `artifact`'s.
 
 Canonical bytes = `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`; tuples are serialised as lists.
 """
@@ -711,5 +702,4 @@ def parse_target_arg(s: str | None, *, base: TargetProfile | None = None) -> Tar
     return TargetProfile.from_json(doc)
 
 
-__all__ = ["TargetProfile", "DEFAULT_TARGET", "canonical_bytes", "sha256_hex", "profile_mismatches",
-           "parse_target_arg"]
+__all__ = ["TargetProfile", "DEFAULT_TARGET", "canonical_bytes", "sha256_hex", "profile_mismatches", "parse_target_arg"]
