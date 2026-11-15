@@ -29,9 +29,9 @@ from verity_vllm.definitions.registry import dsa_topk_mask as M
 from verity_vllm.definitions.registry.prims import BF16, BIT, I32
 
 _INDEX_CONF = ("reference-defined: a mask's members' positions in ascending order, held to the rows network (DsaButterflyRows_v1 at "
-               "DsaButterflySettings_v1) on counted masks of TOPK members (adapters/vllm/tests/program/test_dsa_table.py)")
+               "DsaButterflySettings_v1) on counted masks of TOPK members (tests/adapters/vllm/tests/program/test_dsa_table.py)")
 _READS_CONF = ("reference-defined: an index into its operand, held to the rows network's read at DsaTopKIndex_v1 of counted masks "
-               "(adapters/vllm/tests/program/test_dsa_table.py)")
+               "(tests/adapters/vllm/tests/program/test_dsa_table.py)")
 
 
 def _refuse_index(b: dict) -> str | None:

@@ -56,13 +56,13 @@ if [ -n "${STACKED:-}" ]; then
   STK="--stacked $B ${FORGE:+--forge $FORGE}"
   REG="$SPA --stacked $B"; [ "${FORGE:-}" = cell ] && REG="$REG --forge cell"
 fi
-FSHA=$( (echo $LSHA; cat verity/protocols/proofs/flock/prover/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
+FSHA=$( (echo $LSHA; cat tests/verity/protocols/proofs/flock/prover/lean/InnerFold.lean) | sha256sum | cut -c1-16)
 FOLD_BIN=$L/fold-$FSHA/inner-fold
 (
   export PATH=$HOME/.elan/bin:$PATH
   exec 9>$L/fold.lock; flock 9
   if [ ! -x $FOLD_BIN ]; then
-    C=$L/fold-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $C) && cp verity/protocols/proofs/flock/prover/tests/lean/InnerFold.lean $C/ \
+    C=$L/fold-src; rm -rf $C && C=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $C) && cp tests/verity/protocols/proofs/flock/prover/lean/InnerFold.lean $C/ \
       && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
       && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
   fi

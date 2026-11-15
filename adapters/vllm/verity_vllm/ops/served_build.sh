@@ -25,7 +25,7 @@
 #
 # Exit: served-match's: 0 when the Match passes, 1 when it fails, 3 when the Build refuses the artifact, the device or the
 # served switches; 8 when the checkpoint's snapshot is absent. What served-match runs, the served Build's derivation and its
-# check, is tested in adapters/vllm/tests/acquire/ and adapters/vllm/tests/check/.
+# check, is tested in tests/adapters/vllm/tests/acquire/ and tests/adapters/vllm/tests/check/.
 set -uo pipefail
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 ROOT=$PWD

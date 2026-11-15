@@ -41,11 +41,11 @@ I64, U8, F16, F32, BIT = Value(64), Value(8), Value(16), Value(32), Value(1)
 M64, M32 = (1 << 64) - 1, 0xFFFFFFFF
 F16_NAN, F32_NAN = 0x7FFF, 0x7FFFFFFF
 _EXACT = ("exact-model-tested: integer arithmetic on the words, torch's on CPU and GPU alike "
-          "(adapters/vllm/verity_vllm/definitions/tests/test_torch_words.py)")
+          "(tests/adapters/vllm/verity_vllm/definitions/test_torch_words.py)")
 _PTX = ("model-untested on the GPU: as the PTX ISA and torch 2.14's CUDA source define it; torch CPU agrees on every word but a "
-        "NaN (adapters/vllm/verity_vllm/definitions/tests/test_torch_words.py)")
+        "NaN (tests/adapters/vllm/verity_vllm/definitions/test_torch_words.py)")
 _PTX_SAT = ("model-untested on the GPU: as the PTX ISA and torch 2.14's CUDA source define it; torch CPU agrees on every word but a "
-            "NaN and from 2^63 up (adapters/vllm/verity_vllm/definitions/tests/test_torch_words.py)")
+            "NaN and from 2^63 up (tests/adapters/vllm/verity_vllm/definitions/test_torch_words.py)")
 
 
 def _s64(t: int) -> int:

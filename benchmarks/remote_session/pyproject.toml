@@ -36,7 +36,7 @@ untraced = [
 inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/__init__.py",
           # the sessions' harness (PoUB's own tests'), and the verifier host whose run's out/ auditor_line.py reads
           # (test_live_verifier_host.py: its gate, its stub verifier and the challenger's tunnel client)
-          "verity/protocols/accounting/poub/tests/__init__.py", "verity/protocols/accounting/poub/tests/session_harness.py",
+          "tests/verity/protocols/accounting/poub/__init__.py", "tests/verity/protocols/accounting/poub/session_harness.py",
           "verity/protocols/accounting/poub/device/live_verifier", "verity/protocols/compose/device/live_challenger/serve.py",
           "verity/protocols/accounting/poub/prover/audit_prover.py",
           "verity/protocols/accounting/poub/prover/remote_session/device.py",
@@ -76,7 +76,7 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           "verity/protocols/proofs/spot", "verity/protocols/interface",
           # test_challengers.py: challengers.Gate against the auditor device's gate, its sessions served by serve.py
           "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",
-          "verity/protocols/compose/device/live_challenger/tests/stub_serve.py",
+          "tests/verity/protocols/compose/device/live_challenger/stub_serve.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/poub",
           "verity/protocols/__init__.py",
@@ -96,4 +96,4 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_gate_whatif.py"]
-paths = ["verity/protocols/compose/device/live_challenger/tests"]
+paths = ["tests/verity/protocols/compose/device/live_challenger"]

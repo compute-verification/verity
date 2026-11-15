@@ -39,7 +39,7 @@ its k_log is at most 27. The tile is bound to `{"partition": "0"*128, "program":
   about 10 min and 12 GiB.
 - `--guard all` adds `WIDE`: the (2048, 4 × 8) tile and the (64, 32 × 32) tile, about 40 and 56 GiB.
 
-`benchmarks/pouw/tests/test_hidden_zk_stage.py` must still pass.
+`tests/benchmarks/pouw/test_hidden_zk_stage.py` must still pass.
 
 | | K 2048 lane | K 2048 combine |
 | --- | --- | --- |

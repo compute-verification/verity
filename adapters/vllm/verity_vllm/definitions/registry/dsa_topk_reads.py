@@ -268,7 +268,7 @@ DsaMaskPositionsV2 = CompositeDefinition(
     "DsaMaskPositions", 2, ("N", "AT", "K"),
     lambda S: ((("mask", X.words(S.N)),), Tuple(Array(S.K, I32), I32)), _positions_calls,
     conformance="exact-model-tested: held to DsaMaskPositions_v1 and to the index units' twin by "
-                "adapters/vllm/tests/program/test_dsa_long_row_calls.py",
+                "tests/adapters/vllm/tests/program/test_dsa_long_row_calls.py",
     refuse=_refuse_positions, doc=_positions_calls.__doc__)
 
 
@@ -306,7 +306,7 @@ def _merge_calls(B, S, *ports):
 DsaPositionsMergeV2 = CompositeDefinition(
     "DsaPositionsMerge", 2, ("M", "K"), _merge_sig, _merge_calls, refuse=_refuse_merge, doc=_merge.__doc__,
     conformance="exact-model-tested: held to merge and to DsaPositionsMerge_v1, whose ANDs it has count for count, by "
-                "adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+                "tests/adapters/vllm/tests/program/test_dsa_long_row_calls.py")
 
 
 def _select(C, rows: list[list], idx: list) -> list:

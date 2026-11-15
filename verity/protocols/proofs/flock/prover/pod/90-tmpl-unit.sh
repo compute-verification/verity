@@ -43,7 +43,7 @@ trap 'rm -rf $S' EXIT
 
 # Lean's verity-verify-proof, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
 # is no part of the verifier), built once per source, while the prover builds
-LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean)
+LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean)
 LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-zk-server
 (
   export PATH=$HOME/.elan/bin:$PATH
@@ -51,7 +51,7 @@ LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-un
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ] || [ ! -x $UNIT_BIN ] || [ ! -x $FW_BIN ]; then
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && cp verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean $LEAN_SRC/ \
+      && cp tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean $LEAN_SRC/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $LEAN_SRC/lakefile.toml \
       && (cd $LEAN_SRC && lake build verity-verify-proof flock-tmpl-unit flock-zk-server) && mkdir -p $L/lean-$LSHA \
       && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN && cp $LEAN_SRC/.lake/build/bin/flock-tmpl-unit $UNIT_BIN \
@@ -86,11 +86,11 @@ CHALLENGER_PY=python3
 challenger_built || exit 1
 
 D=$S/stage; N=8; LAYOUT=${LAYOUT:-iv}
-python3 verity/protocols/proofs/flock/prover/tests/tmpl_statement.py template --out $D > $O/template.json 2> $O/template.err || { tail -20 $O/template.err; exit 1; }
+python3 tests/verity/protocols/proofs/flock/prover/tmpl_statement.py template --out $D > $O/template.json 2> $O/template.err || { tail -20 $O/template.err; exit 1; }
 wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
 $UNIT_BIN $D/unit.tmpl --layout $LAYOUT --out $D/unit.placed > $O/tmpl.txt 2>&1 || { cat $O/tmpl.txt; exit 1; }
 grep -h '^TMPL ' $O/tmpl.txt | cut -c6- > $D/tmpl.json
-python3 verity/protocols/proofs/flock/prover/tests/tmpl_statement.py stage --out $D --tmpl $D/tmpl.json --layout $LAYOUT > $O/stage.json 2> $O/stage.err \
+python3 tests/verity/protocols/proofs/flock/prover/tmpl_statement.py stage --out $D --tmpl $D/tmpl.json --layout $LAYOUT > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }
 mkdir -p $D/tables
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)

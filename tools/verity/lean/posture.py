@@ -32,7 +32,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 TRUST_LIST = HERE / "trust-list.json"
-FIXTURES = "tools/verity/lean/tests/fixtures/"
+FIXTURES = "tests/tools/verity/lean/fixtures/"
 # The lock section of definitions still by choice, and each record's `premises` key for those under its collision
 # premises: the Lean check writes both, and until it does no lock has them and no line shows one.
 CHOOSING = "choosing"

@@ -41,6 +41,6 @@ tests = ["tests/test_network_certifier_registered.py"]
 paths = [
     "verity/circuits/base",
     "verity/protocols/accounting/certifier/verifier/lean",
-    "verity/protocols/accounting/certifier/verifier/tests/lean",
+    "tests/verity/protocols/accounting/certifier/verifier/lean",
     "verity/protocols/interface",
 ]
