@@ -67,7 +67,8 @@ SIDECAR = ".circuit-check.py"
 DEFINITIONS = MANIFESTS / "definitions.json"
 #: the directory `verity` sits in (the repository root, in a checkout)
 VERITY_HOME = Path(str(resources.files("verity"))).resolve().parent
-ALLOWLISTS = (ROOT / "tests" / "by_name_allowlist.json", ROOT / "tests" / "lint" / "allowlists")
+TESTS = ROOT.parents[1] / "tests" / "adapters" / "vllm" / "tests"
+ALLOWLISTS = (TESTS / "by_name_allowlist.json", TESTS / "lint" / "allowlists")
 
 Sql = Callable[[str], list[dict[str, Any]]]
 Fetch = Callable[[str, str], bytes]
