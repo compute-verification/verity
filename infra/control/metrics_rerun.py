@@ -20,8 +20,9 @@ that finds it held does nothing and says so. Then:
                 that is no `research run` is run under one;
               - its `research run` options are all in ALLOWED, each with a value of its form: no option names a path of the
                 pod (`--send`, `--source DIR`), so a row can't ship one of the pod's files to a machine;
-              - it asks for no more than the default job: a row whose `research run` takes any of PAST_DEFAULT (`--mem-gb`,
-                `--timeout`, `--pool`) is rerun by its owner, whether or not the plan lists a machine for it;
+              - it asks no more than the default job (DEFAULT_JOB, `research run`'s own): no `--pool`, and `--mem-gb` and
+                `--timeout` each at or under the default's GiB and seconds (a row may carry no `--cpus`, so it takes the
+                default's CPUs); any other row is rerun by its owner, whether or not the plan lists a machine for it;
               - it names no placeholder but its machine's (a run id such as FIRE_RUN, which only its owner picks);
               - none of its numbers has a launch of this loop's still in flight, or one that ran and ended less than that
                 number's `every` ago, whatever the door says (the record);
@@ -83,6 +84,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from research.cli import AUTO_MAX_MIN, AUTO_MEM_GB
 from research.jobs import dispatch
 from research.runs import ENDED
 
@@ -93,8 +95,9 @@ TREES = ("benchmarks", "demos", "infra", "tools")      # where a metrics.toml ma
 SKIP = {".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"}
 LOOPS = "infra/control/"                                # a row whose command's script is here is a loop's, which sends it itself
 PARKED = "top/parked"                                   # a row whose goal is this is parked work, rerun only by hand
-#: the loop launches only the default job: a row whose `research run` takes any of these asks for more, and its owner reruns it
-PAST_DEFAULT = ("--mem-gb", "--timeout", "--pool")
+#: the default job (`research run`'s own, in GiB and seconds): the loop launches a row only when its `research run` asks no more
+#: than this, and its owner reruns any other. None: any value is more, as a pool of the row's own is
+DEFAULT_JOB: dict[str, float | None] = {"--mem-gb": AUTO_MEM_GB, "--timeout": AUTO_MAX_MIN * 60, "--pool": None}
 SCRIPT = re.compile(rf"(?:^|\s)((?:{'|'.join(TREES)})/\S+\.(?:sh|py))(?:\s|$)")
 EVERY = re.compile(r"^([1-9][0-9]*)([mhd])$")
 UNIT_S = {"m": 60, "h": 3600, "d": 86400}
@@ -421,7 +424,9 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
         except Refused as x:
             skip(f"{why}; but {x}")
             continue
-        if past := [f"{n} {v}" for n, v in opts if n in PAST_DEFAULT]:
+        over = [(n, v, DEFAULT_JOB[n]) for n, v in opts
+                if n in DEFAULT_JOB and (DEFAULT_JOB[n] is None or float(v) > DEFAULT_JOB[n])]
+        if past := [f"{n} {v}" if most is None else f"{n} {v} over {most:g}" for n, v, most in over]:
             skip(f"{why}; but its command asks for more than the default job ({', '.join(past)}): such a number is rerun "
                  "by its owner")
             continue

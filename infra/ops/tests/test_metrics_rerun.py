@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from research import runs
+from research.cli import AUTO_MAX_MIN, AUTO_MEM_GB
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTROL = ROOT / "infra" / "control"
@@ -208,36 +209,47 @@ def past_default_line(options):
             f"({options}): such a number is rerun by its owner")
 
 
-@pytest.mark.parametrize("option", ["--mem-gb 16", "--timeout 600", "--pool network"])
-def test_a_number_whose_command_asks_past_the_default_job_is_left_to_its_owner(tmp_path, option):
+MEM, MAX_S = AUTO_MEM_GB, AUTO_MAX_MIN * 60          # the default job's GiB and seconds
+
+
+@pytest.mark.parametrize("option, said", [
+    (f"--mem-gb {MEM:g}", None), (f"--mem-gb {MEM + 1:g}", f"--mem-gb {MEM + 1:g} over {MEM:g}"),
+    (f"--timeout {MAX_S:g}", None), (f"--timeout {MAX_S + 1:g}", f"--timeout {MAX_S + 1:g} over {MAX_S:g}"),
+    ("--pool network", "--pool network")])
+def test_a_number_is_launched_only_when_its_command_asks_no_more_than_the_default_job(tmp_path, option, said):
+    """At or under the default job's memory and time, a row is launched like one that names neither; one unit over, or with a
+    pool of its own, it is left to its owner, and the pass names the option, its value and the default it exceeds."""
     cfg, pod = past_default(tmp_path, option)
     state, _ = run(cfg, pod)
-    assert [e["metrics"] for e in state["launches"]] == [["training/plain"]]
-    assert pod.lines.count(past_default_line(option)) == 1
+    assert sorted(i for e in state["launches"] for i in e["metrics"]) == (
+        ["training/plain"] if said else ["training/asks", "training/plain"])
+    assert pod.lines.count(past_default_line(said)) == (1 if said else 0)
 
 
-@pytest.mark.parametrize("option", ["--mem-gb 16", "--timeout=600"])
-def test_a_dry_run_judges_a_command_past_the_default_job_the_same(tmp_path, option):
+@pytest.mark.parametrize("option, said", [(f"--mem-gb={MEM:g}", None), (f"--timeout={MAX_S + 1:g}", f"--timeout {MAX_S + 1:g} over {MAX_S:g}")])
+def test_a_dry_run_judges_the_default_job_the_same(tmp_path, option, said):
     cfg, pod = past_default(tmp_path, option)
     state, _ = run(cfg, pod, dry_run=True)
     assert pod.launched == [] and state["launches"] == []
-    assert past_default_line(option.replace("=", " ")) in pod.lines
     assert any(ln.startswith("would launch training/plain on vy-nebius-cpu-12: ") for ln in pod.lines)
-    assert not any(ln.startswith("would launch training/asks") for ln in pod.lines)
+    assert any(ln.startswith("would launch training/asks on vy-nebius-cpu-12: ") for ln in pod.lines) == (said is None)
+    assert (past_default_line(said) in pod.lines) == (said is not None)
 
 
 @pytest.mark.parametrize("dry_run", [False, True])
 def test_a_planned_command_past_the_default_job_is_not_launched_though_the_plan_lists_its_machine(tmp_path, dry_run):
-    """The shape of the network scans' rows: a machine of the plan's choosing and more than the default job. The default job
-    is judged first, so the plan's machine doesn't launch it."""
-    scan = row("network-accounting/scan", "research run --on NODE --mem-gb 128 --timeout 10800 -- bash benchmarks/scan/run.sh")
+    """The shape of the network scans' rows: a machine of the plan's choosing, a pool of its own and more than the default
+    job's memory and time. The default job is judged first, so the plan's machine doesn't launch it."""
+    scan = row("network-accounting/scan",
+               "research run --on NODE --pool network --mem-gb 128 --timeout 10800 -- bash benchmarks/scan/run.sh")
     cfg = setup(tmp_path, {"benchmarks/scan": [scan]})
     cfg.plan.write_text(free("vy-nebius-cpu-9", ["network-accounting/scan"]))
     pod = Pod(ages={"network-accounting/scan": None})
     state, _ = run(cfg, pod, dry_run=dry_run)
     assert pod.launched == [] and state["launches"] == []
     assert ("skip network-accounting/scan: network-accounting/scan has no reading; but its command asks for more than the "
-            "default job (--mem-gb 128, --timeout 10800): such a number is rerun by its owner") in pod.lines
+            f"default job (--pool network, --mem-gb 128 over {MEM:g}, --timeout 10800 over {MAX_S:g}): such a number is "
+            "rerun by its owner") in pod.lines
 
 
 def test_at_most_max_launches_a_pass_and_the_rest_are_said(tmp_path):
