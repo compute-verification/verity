@@ -1127,7 +1127,7 @@ LAUNCHERS = {"none": None, **{f"{who} {said}": ran(**({} if who == "unnamed" els
 
 @pytest.mark.parametrize("launcher", LAUNCHERS)
 @pytest.mark.parametrize("pieces", PIECES)
-def test_no_record_prints_an_audit(tmp_path, capsys, pieces, launcher):
+def test_no_record_prints_an_audit(tmp_path, capsys, local, pieces, launcher):
     """Every shape of the record's pieces against every word the launcher may say: a deployed word exits 2, and
     every other prints ``a measurement, not an audit`` with ``audit`` false and development parameters."""
     edits = PIECES[pieces] | ({} if LAUNCHERS[launcher] is None else {"RAN": LAUNCHERS[launcher]})
