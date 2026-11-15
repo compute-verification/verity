@@ -2034,7 +2034,7 @@ def test_a_run_from_before_rate_json_is_read_from_its_proof_server_reports(tmp_p
     assert all("out/light/server-k2" in r["note"] for r in at_two)
 
 
-#: a scan that read every run of 10 and 11 Nov but one, and found one of them off its card's node
+#: a scan that read every run of its range but one, and found one of them off its card's node
 SCAN = R.OffNodeScan("r20261110-000000-0000", "r20261111-235959-ffff", frozenset({"r20261111-000000-0009"}),
                      frozenset({"r20261110-211750-65a0"}))
 
