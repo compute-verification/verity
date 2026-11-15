@@ -112,6 +112,7 @@ adapters/vllm/tests/engine/fixtures/glm53_tp8_moe_l3.rank0.jsonl.gz
 adapters/vllm/tests/engine/fixtures/qwen3_235b_a22b_tp8_moe_l47.rank0.jsonl.gz
 adapters/vllm/tests/engine/fixtures/qwen3_235b_a22b_tp8_moe_l47.rank7.jsonl.gz
 adapters/vllm/tests/engine/fixtures/qwen3_30b_a3b_tp2_moe_l24.rank0.jsonl.gz
+adapters/vllm/tests/observe/fixtures/glm53_tp8_fp8_ds_mla.rank0.jsonl.gz
 adapters/vllm/tests/engine/collectives/fixtures/tp2/collective_shard.steps03.rank0.json.gz
 adapters/vllm/tests/engine/collectives/fixtures/tp2/collective_shard.steps03.rank1.json.gz
 adapters/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank0.json
