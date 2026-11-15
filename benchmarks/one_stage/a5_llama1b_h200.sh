@@ -14,7 +14,8 @@
 #    the deployed LMS parameters), at the rate rate:K/N (the partition's subset:K over the window's N units), every
 #    session's coin tree from that session's release log (a5.window_trees), Flock --zk behind the Lean ZK server; then SPOT's
 #    one-stage check (spot-one-stage-zk, `Spot.OneStageZk` v2) on the case the audit wrote, whose V2 line is the verdict.
-#    A5_PLAIN=1 makes its sessions plain (`records_audit.py --plain`, a5's plain audit) at stratified-rate:K/N: one session
+#    A5_PLAIN=1 makes its sessions plain (`records_audit.py --plain`, a5's plain audit) at the partition's law, which must be
+#    a stratified rate (stratified-rate:NUM/DEN, which the Commit registers as the window's stratified design): one session
 #    on its own keyed coin tree from a development challenger of its own (FC_COINS=tree, FLOCK_CHALLENGER=1), served the
 #    challenger session's stratified sample and held to it by Lean's `verify --coins tree --stratified K`; no ZK server, and
 #    no OneStageZk, which checks --zk sessions only. summary.json's ``epsilon`` is the sample's bound at several deltas.
@@ -72,6 +73,8 @@ print(checkpoint_dir(*sys.argv[1:]) or "")' "$REPO" "$REV" "$HF_HOME" 2>/dev/nul
 [ -e "$FA3G" ] || refuse "no guarded FA3 tap at $FA3G (A5_TAPS): make it with $BOOT"
 [ -e "$NT" ] || refuse "no norm tap at $NT (A5_TAPS): make it with $BOOT"
 [ -e "$PART" ] || refuse "no partition file at $PART (A5_PARTITION): a copy of benchmarks/one_stage/llama32_1b_rope_d64_l0.json with its law"
+[ -z "$A5_PLAIN" ] || "$VENV/bin/python" -c 'import json, sys; sys.exit(not json.load(open(sys.argv[1]))["law"].startswith("stratified-rate:"))' "$PART" \
+  || refuse "A5_PLAIN=1 takes a partition whose law is stratified-rate:NUM/DEN (a plain audit's draw is stratified, and the Commit registers the partition's law): $PART"
 command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the row serves on one H200 (sm_90), which this machine doesn't show"
 UNGUARDED=(); [ ! -e "$FA3" ] || UNGUARDED=(--hidden-so-fa3 "$FA3")
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
@@ -168,12 +171,17 @@ echo "$(date -u +%H:%M:%SZ) builds rc=$pb" | tee -a "$OUT/steps.txt"
 [ "$pb" = 0 ] || { tail -30 "$OUT/prebuild.log"; stop "the builds (rc $pb, prebuild.log)" 16; }
 challenger_audit() {  # A5_COINS=challenger: records_audit.py audit of WD on one local challenger session, then OneStageZk v2
   local A=$BASE/audit TPY=$TREE/.venv/bin/python leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin
-  local run k n rate rc
+  local run law n rate rc
   run=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$B/binding_map.json") || return 21
-  k=$("$TPY" -c 'import json, sys; l = json.load(open(sys.argv[1]))["law"]; print(l.split(":")[1] if l.startswith("subset:") else "")' "$PART")
-  n=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["population"])' "$WD/registration.json")
-  [ -n "$k" ] && [ -n "$n" ] || { echo "A5_COINS=challenger takes a subset:K partition law, the rate rate:K/N over the window's N units" >&2; return 22; }
-  rate=${A5_PLAIN:+stratified-}rate:$k/$n
+  law=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' "$PART")
+  n=$("$TPY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["population"])' "$WD/registration.json") || return 22
+  # the audit's rate is the one the Commit registered the window under: subset:K as rate:K/N over the window's N units
+  case ${A5_PLAIN:+plain}/$law in
+    /subset:*) rate=rate:${law#subset:}/$n ;;
+    /rate:*|plain/stratified-rate:*) rate=$law ;;
+    *) echo "A5_COINS=challenger takes a partition law subset:K or rate:NUM/DEN, and A5_PLAIN=1 stratified-rate:NUM/DEN: $law" >&2
+       return 22 ;;
+  esac
   git -C "$TREE" rev-list --first-parent HEAD > "$BASE/main.txt" || return 23
   "$TPY" -m verity_numerical.bench.generate --subcircuit "${A5_SUBCIRCUIT:-rope-head/d64/neox-bf16}" --n 4 --seed 1 \
     --out "$BASE/sets" > "$OUT/a5/sets.log" 2>&1 || return 24
@@ -276,8 +284,9 @@ if os.environ["A5_PLAIN"]:
     line = (f"COINS draw: one local challenger session (the auditor device's service run on this machine, a development "
             f"stand-in for the auditor's, its key made for the run at the deployed LMS parameters), {sample}; sessions: Flock "
             f"plain, no ZK server, its one session on a development challenger of its own (coin trees "
-            f"{summ.get('coin_trees', '?')}); the audit {accepted}, by Flock's plain per-session Lean verify --coins tree "
-            f"--stratified K and Lean's draw; SPOT's one-stage check does not apply (OneStageZk checks --zk sessions); {card}")
+            f"{summ.get('coin_trees', '?')}); the audit {accepted}" + (", by Flock's plain per-session Lean verify --coins tree "
+            "--stratified K and Lean's draw" if audit.get("accepted") is True else "") + "; SPOT's one-stage check does not "
+            f"apply (OneStageZk checks --zk sessions); {card}")
 elif os.environ["A5_COINS"] == "challenger":
     v2 = [x for x in (d / "v2.log").read_text(errors="replace").splitlines()] if (d / "v2.log").is_file() else []
     rc = next((x.split()[1] for x in v2 if x.startswith("V2RC ")), None)
