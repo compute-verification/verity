@@ -19,7 +19,10 @@ check = "guard-outside-checkout"
 reads = "declared"
 how = """Reads the hooks the tree declares at the commit the run is at (`.cursor/hooks.json` there), not what a VM runs. \
 Closed only when every hook command starts with a file directly under `/opt/agent-guard/` and no other word of it is a \
-path or names one of the checkout's top-level files or directories; a command that doesn't split into plain words (a \
+path or names one of the checkout's top-level files or directories, or is `/bin/sh -c` of the one wrapper `open_findings.py` \
+holds word for word (`GUARD_WRAPPER`: under a fixed PATH and a scrubbed environment, `/opt/agent-guard`'s hook where it is readable; on a Cursor cloud VM without it, a \
+refusal of all but the command that restores it; on any other machine, origin/main's committed hook.sh out of git, never \
+the working tree's); a command that doesn't split into plain words (a \
 variable, a substitution, quoting that joins, a redirection, `..`) counts as running from the checkout, and a commit that \
 tracks no hooks file declares no hook and stays open. A branch's own copy of the file is exactly the finding: this reads \
 only the copy at the commit it runs at."""

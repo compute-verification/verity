@@ -49,8 +49,7 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
   a side stream.
 - `dither_so.py` (`dither-a-*-so<D>`): dither-a in the statement's order, the arm of record. A step's tables go under its
   round's root before its coin, and its proof blocks run after it. `j10r_so.py` holds its J10-R form's references;
-  `dither_manifest.py` an ended execution phase's manifest and its check against the challenger's own run; `live_audit.py` a live
-  execution phase's audit.
+  `dither_manifest.py` an ended execution phase's manifest and its check against the challenger's own run.
 - `dither_one.py` (`dither-1s*`): y = dequant(z) from `h1o.cu`'s one stream, whose noised MMAs are the ones the call's
   receipts fold.
 - `dither_fused.py` (`dither`, `dither-side`): y from `h1f.cu`'s one GEMM, which also computes the previous step's
@@ -81,7 +80,7 @@ loaded build's own flags (`workspace_bytes`). The other front ends and the scrip
 
 ## Tools
 
-- `pin.sh`, `pin_glm53.sh` (`pin_glm53.toml`): the int8 Llama-3.1-8B and GLM-5.3 pins in a node's HF cache.
+- `pin.sh`: the int8 Llama-3.1-8B pin in a node's HF cache.
 - `benchmarks/kernels/numabind/numabind.py` runs each timed command here on the leased GPU's NUMA node.
 - `kernels.py`, `stepprof.py`: from an nsys capture's SQLite export, an arm's kernels and a decode step by part.
 - `picks.py`: each Inductor kernel's autotune choice in an engine's process, or a fixed one, so two processes compiling the
@@ -92,5 +91,5 @@ loaded build's own flags (`workspace_bytes`). The other front ends and the scrip
 ## Tests
 
 `tests/` is the directory's suite, on the CPU (`pyproject.toml`): `dbw.py`'s report,
-J10-R's workspace sizes, `j10r_so.py`'s references, `live_audit.py`, and the settings registry. The GPU gates run in each
+J10-R's workspace sizes, `j10r_so.py`'s references, `dither_manifest.py`'s check, and the settings registry. The GPU gates run in each
 bench's own run, before it times anything.

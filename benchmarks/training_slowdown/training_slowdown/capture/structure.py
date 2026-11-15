@@ -72,9 +72,10 @@ from typing import Any
 
 import numpy as np
 import torch
+from verity_torch.frontend.train_trace import ATTENTION, BACKWARD, CaptureRefused
 
 from training_slowdown.capture.circuit import ATTR, CARRIED, COMPUTED, OTHER_INPUT, RANDOM, TOKEN_INPUT, Net, StepCircuit, measure
-from training_slowdown.capture.trace import ATTENTION, BACKWARD, Capture, CaptureRefused
+from training_slowdown.capture.steps import Capture
 from training_slowdown.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
                            TOKEN_INDEX, _is_view, dtype_of, gather_macs)
 from training_slowdown.gates import Unpriced, kind_of, per_mac
@@ -334,7 +335,7 @@ def _phases(gm) -> dict:
 def _attention(gm) -> dict:
     """The nodes a scaled-dot-product attention call computes, forward and backward, each with the dtype the call
     computes in, its query's as autocast hands it to the kernel: the innermost ``te_capture::attention::DTYPE``
-    marker around it (`capture.trace._MarkedAttention`). That dtype is the one |C| counts the node in
+    marker around it (`verity_torch.frontend.train_trace`). That dtype is the one |C| counts the node in
     (`_counted_dtype`)."""
     out = {}
     for n, markers in _marked(gm):
