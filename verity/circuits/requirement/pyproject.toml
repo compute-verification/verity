@@ -26,6 +26,6 @@ inputs = ["verity/circuits", "verity/circuits/kernels/__init__.py", "verity/circ
           "verity/protocols/proofs/spot/verifier/window_place.py",
           "verity/commitments/periods", "verity/commitments",
           "verity/commitments/crypto", "verity/commitments/randomness",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py",
           "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "verity/circuits/base", "verity/circuits/lean"]
