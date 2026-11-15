@@ -154,7 +154,7 @@ import tomllib
 from pathlib import Path, PurePosixPath
 from typing import IO, Any, Callable
 
-from . import clone, launcher
+from . import clone
 from .telemetry.events import utc_now_ms
 from .telemetry.job import write_json_atomic
 
@@ -763,6 +763,7 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any], *, n
     description in the --source tree (infra/cluster), with each candidate node's stop as the node reports it (`live_stop`, passed
     as `--stop`), so a renewal places without a new description. Refused when the queue refuses the job. Under a trusted
     launcher tree (research.launcher) both are that tree's, run from its own directory, and the --source tree isn't read."""
+    from . import launcher
     from .store import tools_registry
 
     tree = launcher.code(source)
@@ -958,6 +959,8 @@ GIT_ARCHIVE_LIMITS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGit
 
 
 def _git_archive(git_dir: Path) -> subprocess.Popen:
+    from . import launcher
+
     err = tempfile.TemporaryFile()
     proc = subprocess.Popen(launcher.git(*GIT_ARCHIVE_LIMITS, "archive", "--format=tar", "HEAD"), cwd=git_dir, stdout=subprocess.PIPE,
                             stderr=err, env=launcher.git_env())
@@ -1189,6 +1192,8 @@ def _push_main(ssh: list[str], repo: str, git_dir: Path, size: int) -> None:
     `origin/main` (its clone's view of that `main`) is no older than its newest launcher's, and `suites.py --changed origin/main` in a
     run diffs against a current `main`, not the one the repository was created with.  A launcher whose `origin/main` is older is
     refused by git and changes nothing; no failure here stops the ship."""
+    from . import launcher
+
     main = subprocess.run(launcher.git("rev-parse", "--verify", "-q", "refs/remotes/origin/main^{commit}"), cwd=git_dir,
                           capture_output=True, text=True, env=launcher.git_env()).stdout.strip()
     if not main:
@@ -1209,6 +1214,8 @@ def _push_commit(ssh: list[str], repo: str, git_dir: Path, sha: str, size: int) 
         return NO_GIT
     if r.returncode != 0:
         return f"could not create {repo}: {r.stderr.decode(errors='replace')[-200:].strip()}"
+    from . import launcher
+
     try:
         push = subprocess.run(launcher.git("-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo),
                                            f"{sha}:refs/research/src/{sha}"),
@@ -1361,6 +1368,8 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          `launch` refuses a command that needs git (`needs_git`).
     Any failure (transport rc != 0, the launcher's timeout, digest or manifest mismatch) removes the partial directory and raises
     SourceNotReady; `<identity>/` is never created by a failed ship.  The machine side (`launch_request`) enforces `require_ready_source`."""
+    from . import launcher
+
     env = launcher.git_env()
     st = subprocess.run(launcher.git("status", "--porcelain", "--untracked-files=all"), cwd=git_dir, capture_output=True, text=True, env=env)
     if st.returncode != 0:
