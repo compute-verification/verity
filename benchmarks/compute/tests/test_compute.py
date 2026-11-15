@@ -139,15 +139,22 @@ def bench(store: FakeStore, *argv: str) -> int:
     return C.main(list(argv), store_of=lambda: C.EvidenceStore(store, store.pull, Refused, "withdrawn"))
 
 
-def no_number(capsys, why: str) -> dict:
-    """What the command printed with no number: the kit's ``compute: no number: WHY`` (`why` its start), that the
-    record states no coins and that this is no audit, and its document, with nothing on stderr."""
+def no_number(capsys, why: str, said: str | None = None) -> dict:
+    """What the command printed with no number: the kit's ``compute: no number: WHY`` (`why` its start), the coins
+    the record states (`said`, where given, is that line), that this is no audit, and its document, with nothing on
+    stderr. A record that doesn't say who drew its coins has the line naming what it does state at the end."""
     out, err = capsys.readouterr()
     lines = out.splitlines()
     assert err == "" and lines[0].startswith(f"compute: no number: {why}"), (out, err)
-    assert lines[1:3] == ["ran with: not stated", "a measurement, not an audit"]
+    assert lines[1].startswith("ran with: ") and lines[2] == "a measurement, not an audit"
+    assert said is None or lines[1] == said
     doc = json.loads(lines[-1])
-    assert lines[3:-1] == ([C.kit.kit_report.MADE_UP, C.made_up_text(doc["made_up_says"])] if doc.get("made_up") else [])
+    up = [C.kit.kit_report.MADE_UP, C.made_up_text(doc["made_up_says"])] if doc.get("made_up") else []
+    rest = lines[3:-1]
+    assert rest[:len(up)] == up
+    stated = rest[len(up):]
+    assert stated == [] if lines[1] != "ran with: not stated" else \
+        len(stated) <= 1 and all(x.startswith("  coins as the record states them") for x in stated)
     assert doc["value"] is None and doc["no_number"] == lines[0].removeprefix("compute: no number: ")
     assert doc["audit"] is False
     return doc
@@ -303,6 +310,19 @@ def test_an_answer_that_is_not_an_accept_the_lean_verifier_shares_prints_no_numb
     store.add(RUN, a_record(tmp_path, **edits))
     assert bench(store, "--from", RUN) == 1
     no_number(capsys, why)
+
+
+@pytest.mark.parametrize("launcher, said", [(None, RAN_WITH),
+                                            ("local", RAN_WITH.replace("coins in-process", "coins local challenger"))])
+def test_a_refused_record_still_says_the_coins_it_states(store, tmp_path, capsys, launcher, said):
+    """With no number the line under the refusal is still who drew the coins as the record states it, never
+    ``not stated`` where the record says: the fixture's in-process coins, or the launcher's local challenger."""
+    edits = {"LEAN": None} | ({} if launcher is None else {"RAN": ran(challenger=launcher, development=True)})
+    record = a_record(tmp_path, **edits)
+    store.add(RUN, record)
+    for argv in (["--from", RUN], ["--from", str(record)]):
+        assert bench(store, *argv) == 1
+        no_number(capsys, f"the record holds no {C.LEAN}", said)
 
 
 @pytest.mark.parametrize("edits, missing", [({"LEAN": None}, C.LEAN), ({"LEAN_CHECK": None}, C.LEAN_CHECK),
@@ -1053,7 +1073,7 @@ def ran(**said) -> str:
     ({"RAN": ran(challenger="in-process", development=True)}, RAN_WITH),
     ({**LIVE, "RAN": ran(challenger="local", development=True)},
      (f"ran with: coins local challenger; parameters development ({DETAIL}, sample from a challenger, salt coins from "
-      "challenger, Lean verdict of record)")),
+      "challenger, Lean verdict of record against the local challenger's key)")),
 ])
 def test_the_ran_with_line_says_who_drew_the_coins_as_the_record_states_it(store, tmp_path, capsys, edits, said):
     """Under the number, the kit's line: who drew the coins is the launcher's ``challenger`` where the record holds
@@ -1135,7 +1155,8 @@ def test_no_record_prints_an_audit(tmp_path, capsys, local, pieces, launcher):
     text, doc, _ = printed(capsys)
     assert rc == (2 if "deployed" in launcher else 0)
     if rc == 0:
-        assert text[1].endswith(("not stated", "Lean verdict development)", "Lean verdict of record)"))
+        assert text[1].endswith(("not stated", "Lean verdict development)", "Lean verdict of record)",
+                                 "Lean verdict of record against the local challenger's key)"))
         assert text[2] == "a measurement, not an audit" and doc["audit"] is False and "deployed" not in "\n".join(text)
 
 

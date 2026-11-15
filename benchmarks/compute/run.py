@@ -76,8 +76,8 @@ so no file of it can show the auditor's challenger drew the coins, and reading a
 challenger's signature against a pinned key. DETAIL is what the record states
 of the rest (`coins`): the answer's draws and δ and scheme, its sample source (`profile.source_from`), the piece's salt
 coins (``coin_source``), and whether the Lean verifier ran as of record (``--of-record`` in
-`pearlplus-lean-check.json`'s ``argv``), each ``not stated`` where the record holds none. None of them refuses a
-number.
+`pearlplus-lean-check.json`'s ``argv``; with a ``local`` challenger, ``of record against the local challenger's key``,
+the test key the run made), each ``not stated`` where the record holds none. None of them refuses a number.
 
 The record holds neither the tokens the run served nor the seconds it served them in (both stay on the developer's
 node). So the tokens are the class's, and the capacity share (the credited MACs over the card's rate times the seconds
@@ -107,8 +107,8 @@ sample: the verifier takes it off the records whose cells hold the most MACs a t
 for the whole run. ``--top N`` (default 10) calls are printed, by give-up.
 
 It exits 0 with the number printed, 1 with none (the answer isn't an accept, the record holds no Lean verdict or one
-that isn't the answer's, or the run left no answer: the kit prints ``compute: no number: WHY`` and writes the result
-with no value and why) and 2 when the command line, the run or its policy can't be read,
+that isn't the answer's, or the run left no answer: the kit prints ``compute: no number: WHY``, under it the coins as
+the record states them (`stated`), and writes the result with no value and why) and 2 when the command line, the run or its policy can't be read,
 or the policy's load is not the benchmark's. A record
 withdrawn whole, or in a part that holds a file read here, is refused before any of it is fetched; a withdrawal of
 other files of it is printed beside the number. Under `research run` the printed document is also `$OUT/compute.json`;
@@ -375,8 +375,8 @@ def coins(tree: Path) -> dict:
     credit is the piece's, not a row of record) or any of the three is not live. ``challenger`` names a challenger
     session, the auditor's or a local one: the record doesn't say whose. Read after `credit`, which has read the answer
     and the comparison; `Unreadable` where the record holds a development piece that doesn't read as JSON."""
-    profile = _held(tree, ANSWER).get("profile") or {}
-    argv = _held(tree, LEAN_CHECK).get("argv")
+    profile = (_held(tree, ANSWER) or {}).get("profile") or {}
+    argv = (_held(tree, LEAN_CHECK) or {}).get("argv")
     lean = None if not isinstance(argv, list) else "of record" if "--of-record" in argv else "development"
     piece, ran = _optional(tree, DEVELOPMENT), _optional(tree, RAN)
     sample, salt = profile.get("source_from"), piece.get("coin_source") if isinstance(piece, dict) else None
@@ -407,11 +407,14 @@ def ran_with(doc: dict) -> tuple[str, dict] | None:
     with each other prove nothing, and reading a deployed run waits on a check of the challenger's signature against a
     pinned key."""
     c = doc["coins"]
+    # of record here means only that the Lean took its of-record path: against a local challenger, that challenger's key
+    lean = c["lean"] + " against the local challenger's key" if c["lean"] == "of record" and c["challenger"] == "local" \
+        else c["lean"]
     detail = ", ".join(f"{said} {v}" if v is not None else f"{unsaid} not stated" for said, unsaid, v in (
         ("draws", "draws", c["draws"]), ("delta", "delta", c["delta"]), ("scheme", "scheme", doc["scheme"]),
         ("sample from", "sample source", SOURCE.get(c["sample"], c["sample"])),
         ("salt coins from", "salt coins", c["salt"]),
-        ("Lean verdict", "Lean verdict", c["lean"])))
+        ("Lean verdict", "Lean verdict", lean)))
     if c["challenger"] == "deployed" or c["parameters"] is False:
         raise Unreadable(f"{NO_DEPLOYED} (the record's {RAN} says "
                          + ("the deployed challenger" if c["challenger"] == "deployed" else "development false") + ")")
@@ -700,9 +703,27 @@ def from_run(store: EvidenceStore, run: str, per_call: bool = False, given: Path
     if attempt is None:
         raise Unreadable(f"{run} is not in the evidence store this machine reads")
     tree, withdrawn = store.files(run, RECORDS + [VERIFY] * (given is None))
-    if tree is None or not (tree / ANSWER).is_file():
-        raise NoNumber(f"{run} left no Pearl+ answer (it ended rc {(attempt.get('status') or {}).get('rc')})")
-    return _with_split(document(tree, commit_of(attempt), run, withdrawn, given), tree, per_call, given, top)
+    try:
+        if tree is None or not (tree / ANSWER).is_file():
+            raise NoNumber(f"{run} left no Pearl+ answer (it ended rc {(attempt.get('status') or {}).get('rc')})")
+        return _with_split(document(tree, commit_of(attempt), run, withdrawn, given), tree, per_call, given, top)
+    except NoNumber as e:
+        e.tree = tree
+        raise
+
+
+def stated(tree: Path | None) -> tuple[tuple[str, dict] | None, str]:
+    """On a refusal, what the record under `tree` states of its coins: the `ran with` pair where it says who drew them
+    (`ran_with`), else None with the line naming what it does state (`coins_text`); (None, "") where nothing of it
+    reads."""
+    if tree is None:
+        return None, ""
+    try:
+        c = coins(tree)
+        said = ran_with({"coins": c, "scheme": ((_held(tree, ANSWER) or {}).get("public") or {}).get("scheme")})
+    except (Unreadable, OSError, ValueError, AttributeError, TypeError):
+        return None, ""
+    return said, "" if said else coins_text(c)
 
 
 def from_dir(record: Path, per_call: bool = False, given: Path | None = None, top: int = 10) -> dict:
@@ -842,8 +863,10 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         except Unreadable as u:
             print(f"compute: {u}", file=sys.stderr)
             return 2
-        return kit.report("compute", made_up_text(up) if up else "", none | {"made_up_says": up},
-                          not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]), ran_with=None,
+        said, line = stated(getattr(e, "tree", None) or tree)
+        return kit.report("compute", "\n".join(x for x in (made_up_text(up) if up else "", line) if x),
+                          none | {"made_up_says": up},
+                          not_an_audit([{"name": METRIC, "unit": UNIT, "target": float(TARGET)}]), ran_with=said,
                           accepted=False, why=str(e), made_up=bool(up))
     except Unreadable as e:
         print(f"compute: {e}", file=sys.stderr)

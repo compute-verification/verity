@@ -42,8 +42,10 @@
 # Env: VERITY_BENCH_VENV (the pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search), HF_HOME, CUDA_HOME,
 # RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459),
 # DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30). The load is
-# benchmarks/compute/load.toml's, which run.py holds the record to. Exit 0 only where Python and Lean both accept and
-# run.py prints the share.
+# benchmarks/compute/load.toml's, which run.py holds the record to. Before any step it exits 3 on a RUN_DIR already
+# holding a record, a missing verity_torch or lake, or a GPU that isn't an idle H100 or H200. A failed step exits 1 with
+# a sentence naming it and compute-run.json written, and run.py isn't run on what it left. Exit 0 only where Python and
+# Lean both accept and run.py prints the share.
 set -euo pipefail
 # the one path under verity/ this names, which a layout move may change
 AUDITOR=verity/protocols/compose/device/live_challenger/auditor.py
@@ -56,6 +58,11 @@ SCHEME=pearl-c-h100-v1-h3
 SPEC=benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml
 SP=benchmarks/pouw/pearl_c_vllm/served_passes.py
 PIECE=$OUT/pieces/pouw REC=$OUT/record
+# a run's share is read from the files it wrote alone, never an earlier run's left in the same place
+for f in steps.txt compute-run.json logs pieces record registered; do
+  [ ! -e "$OUT/$f" ] || { echo "$OUT already holds a run's record ($OUT/$f): give RUN_DIR a new directory, or remove" \
+    "$RUN, so this run's share can't be read from an earlier run's files" >&2; exit 3; }
+done
 mkdir -p "$OUT/logs" "$PIECE" "$REC" || exit 3
 # shellcheck source=/dev/null
 . benchmarks/harness/env.sh
@@ -78,6 +85,16 @@ command -v lake > /dev/null || {
        "(https://github.com/leanprover/elan), which fetches the toolchain each Lean package's lean-toolchain file names," \
        "or put its bin directory on PATH" >&2
   exit 3; }
+# the card: Pearl-C's cubin is sm_90a's, so an H100 or H200 (compute capability 9.0), and idle, before the build
+command -v nvidia-smi > /dev/null || { echo "nvidia-smi isn't on PATH: serve.sh serves on one H100 or H200 (GPU, default 0)" \
+  "and needs the NVIDIA driver" >&2; exit 3; }
+card=$(nvidia-smi ${GPU:+-i "$GPU"} --query-gpu=index,name,compute_cap --format=csv,noheader 2> /dev/null | grep ', 9\.0$' \
+  | head -1) || card=
+[ -n "$card" ] || { echo "no H100 or H200 (compute capability 9.0) at GPU=${GPU:-any} (nvidia-smi -L lists the cards):" \
+  "Pearl-C's cubin is sm_90a's; set GPU to such a card's index" >&2; exit 3; }
+busy=$(nvidia-smi -i "${card%%,*}" --query-compute-apps=pid --format=csv,noheader 2> /dev/null | grep -c .) || busy=0
+[ "$busy" = 0 ] || { echo "card ${card%%,*} ($card) runs $busy compute process(es) (nvidia-smi -i ${card%%,*}): serve.sh" \
+  "serves alone on its card; wait for them to end or set GPU to an idle H100 or H200" >&2; exit 3; }
 # the passes' directory: under research run the run's own scratch (`--cwd clone`'s, the tree's parent), else SCRATCH or
 # TMPDIR; removed on exit with the challengers stopped, unless PASSES names it
 here=$(dirname "$TREE")
@@ -110,9 +127,14 @@ lease() {  # CMD...: on one card, under gpu-lease where the machine has it
     CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-$GPU} "$@"
   fi
 }
-cubin() {
+cubin() (  # a subshell: the setup script exits on a failed gate, which must end this step, not serve.sh
   # shellcheck source=/dev/null
   . benchmarks/harness/setup/pearl_c_sm90.sh && printf '%s\n' "$PEARLC_KERNEL" "$PEARLC_CUBIN" > "$W/setup.paths"
+)
+fail() {  # NAME: a step serve.sh can't go on without failed; the run's statement written, no share read
+  echo "serve.sh: $1 failed, so this run has no share (its log is $OUT/logs/$1.log; $OUT/steps.txt has each step)" >&2
+  coins > "$OUT/coins.txt" || true
+  exit 1
 }
 coins() {  # the coins and parameters the run used, as a line and as compute-run.json
   "$PY" - "$OUT/compute-run.json" "$COINS" "$CLASS" "$DRAWS" "$DELTA" "$SCHEME" "$REPO" "$REV" \
@@ -211,18 +233,18 @@ cleanup() {
 trap cleanup EXIT
 echo "passes: $P" | tee -a "$OUT/steps.txt"
 
-step cubin cubin || exit 1
+step cubin cubin || fail cubin
 { read -r PEARLC_KERNEL; read -r PEARLC_CUBIN; } < "$W/setup.paths"
 export PEARLC_KERNEL PEARLC_CUBIN PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 unset PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER PEARLC_CHALLENGER_LANE VLLM_BATCH_INVARIANT
 case $COINS in
   local)
     [ -f "$AUDITOR" ] || { echo "no $AUDITOR in this tree: set AUDITOR at the top of serve.sh to the gate's path" >&2; exit 3; }
-    step gate gate_up || exit 1
+    step gate gate_up || fail gate
     { read -r PEARLC_CHALLENGER_GATE; read -r PEARLC_CHALLENGER_PEER; read -r PEARLC_CHALLENGER_LANE; } < <("$PY" -c '
 import json, sys
 g = json.load(open(sys.argv[1]))
-print(g["gate"], g["peer"], g["lane"], sep="\n")' "$OUT/auditor-gate.json") || exit 1
+print(g["gate"], g["peer"], g["lane"], sep="\n")' "$OUT/auditor-gate.json") || fail gate
     export PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER PEARLC_CHALLENGER_LANE ;;
   in-process) ;;
   *) echo "COINS is local or in-process, not $COINS" >&2; exit 3 ;;
@@ -231,15 +253,17 @@ coins | tee "$OUT/coins.txt"
 step serve lease "$PY" "$SP" serve --spec "$SPEC" --requests "$SLOTS" --prompt-tokens "$PROMPT" \
   --output-tokens "$OUTPUTS" --max-num-batched-tokens "${T:-8192}" --no-warm-up --passes "$P" --out "$PIECE/served.json" || failed=1
 if [ "$failed" = 0 ]; then
-  step volunteer-needed "$PY" "$SP" volunteer-needed || exit 1
-  grep -q '^no' "$OUT/logs/volunteer-needed.log" || { echo "the verdict needs a give-up before its coin; this runs none"; exit 1; }
-  step retain "$PY" "$SP" retain --passes "$P" --window-record "$WR" || exit 1
+  step volunteer-needed "$PY" "$SP" volunteer-needed || fail volunteer-needed
+  grep -q '^no' "$OUT/logs/volunteer-needed.log" || {
+    echo "serve.sh: the verdict needs a give-up before its coin, and this runs none" >&2; fail volunteer-needed; }
+  step retain "$PY" "$SP" retain --passes "$P" --window-record "$WR" || fail retain
   cp "$WR" "$REC/window-record.json"
   step verify "$PY" "$SP" verify --passes "$P" --tie "$WR" --class "$CLASS" --out "$PIECE/verify.json" \
     --answer "$PIECE/pearlplus-answer.json" --draws "$DRAWS" --delta "$DELTA" --jobs "$JOBS" ${FAST:+--fast} || failed=1
   [ -s "$PIECE/verify.json" ] && step lean "$PY" "$SP" lean --passes "$P" --verify "$PIECE/verify.json" \
     --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$PIECE/pearlplus-lean.json" --timeout "${LEAN_TIMEOUT:-3600}" || failed=1
-  if [ -s "$P/coin.json" ]; then step publish publish && step piece piece || failed=1; else failed=1; fi
+  if [ -s "$P/coin.json" ]; then step publish publish && step piece piece || failed=1
+  else echo "serve.sh: the verify step left no verifier's coin ($P/coin.json), so no piece" >&2; failed=1; fi
 fi
 phi() {
   CUDA_VISIBLE_DEVICES='' "$PY" -c '
@@ -262,6 +286,13 @@ step circuit env CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.
 step verdicts verdicts || failed=1
 step registered registered || failed=1
 coins
+if [ "$failed" != 0 ]; then
+  coins > "$OUT/coins.txt"
+  echo "serve.sh: no share: these steps failed, so run.py isn't run on what they left:" \
+    "$(grep -v ' rc=0 ' "$OUT/steps.txt" | grep -v '^passes: ' | cut -d' ' -f1 | tr '\n' ' ')(each one's log is" \
+    "$OUT/logs/STEP.log)" >&2
+  exit 1
+fi
 step share "$PY" benchmarks/compute/run.py --from "$RUN" || failed=1
 coins > "$OUT/coins.txt"
 cat "$OUT/logs/share.log"
