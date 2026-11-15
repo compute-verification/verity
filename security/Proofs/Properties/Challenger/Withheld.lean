@@ -46,7 +46,7 @@ open Plain (PlainStr PlainAt)
 open Built (isDigest_hex plain_hexOf hexOf_len keys?_mkObj canon_num)
 open Bodies (openBody endBody read_str read_num read_bool nat?_num)
 open Ledger (filesOf)
-open Properties.NetworkCertifier.Bytes (hash_size)
+open Properties.Certifier.Bytes (hash_size)
 
 /-! ## The names a play is written under -/
 
