@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.Instance
+public import Proofs.Properties.Challenger.Entry
+public import Proofs.Properties.Challenger.Lines
+public import Proofs.Flock.Claims.Complete.Json.RoundTrip
 public import Lms.Sign
 public import Base.JsonParse
 
@@ -34,11 +37,17 @@ challenger on its auditor device, each field what the host's code does:
 * **The signatures** (`sign`): LMS `signAt` (`Lms.Sign`, `lms.sign_at`) under the host's key, the `i`-th message of the play
   at the host's leaf plus `i`: the ledger's three opening entries, then the run's record and close (`serve.py`'s `sign`),
   then the ledger's two closing entries, the order the host signs them in.
+* **The deployment** (`deployment`): pinned at the host's key (`Host.pin`), on the windows the auditor's pins designate
+  for the challenger. The host's key has no earlier history in this model, so no earlier line opens a designated
+  window and no earlier run shares the play's id (`earlier_closed`, `fresh_id`). Its ledger holds one line per `seq`
+  (`numbered`), and an open names the play's session (`opens_run`), where each line it prints reads back as the record
+  it printed (`ReadsBack`, the open premise `Properties.Challenger.LedgerReadsBack` at each of the play's records;
+  `readsBack_of_plain` where their JSON is plain).
 * **At it** (`signer`, `dev`, `cost`, `base`): the deployed device's signer at `families`, its history at each play, the
-  declared calls covering its reading (`costs`), and a vocabulary at it whose fields `Instance` ties to the deployment
-  (`base_signer`, `coins_families`, `costs`).
+  declared calls covering its reading (`costs`), and a vocabulary at it, pinned at the host's key alone, whose fields
+  `Instance` ties to the deployment (`base_signer`, `coins_families`, `costs`).
 * **The audit's own parameters** (`Holds`): v2's parameters in `θ` name a challenger whose key is the host's. There the
-  history's key is the host's (`pubOf_holds`). Whatever challenger they name, the layout gives it `MAX_COINS` coins
+  parameters' key is the host's, the pinned one the history sits under (`pubOf_holds`). Whatever challenger they name, the layout gives it `MAX_COINS` coins
   (`families_params`), the family clause of the session v2 sets up (`SetsUp.params`).
 -/
 
@@ -49,7 +58,8 @@ namespace Verity.Sampled.LiveDevice
 open scoped ENNReal
 open Lean (Json)
 open Spot Spot.Challenger
-open Verity.Sampled.Device (RunSetup Deployment pubOf)
+open Verity.Sampled.Device (RunSetup Deployment)
+open Properties.Challenger (History OpensOn LedgerReadsBack)
 
 /-! ## The host -/
 
@@ -86,6 +96,10 @@ def pub : ByteArray := H.key.publicKey
 
 /-- `key_sha512`: the SHA-512 of the host's public key, as each opening entry names the key (`key_signer`). -/
 def keySha512 : String := sha512Hex H.pub
+
+/-- **The host's pin**: the challenger's, its public key under the deployed LMS parameters. -/
+def pin : AuditorPin :=
+  { role := .challenger, key := H.pub.data.toList, scheme := (Lms.deployed.N, Lms.deployed.W, Lms.deployed.H) }
 
 /-- The host a session's record signs, `<name>.<session>` (`reserve`'s `host`). -/
 def hostAt (θ : ByteArray) : String := H.name ++ "." ++ H.session θ
@@ -178,9 +192,10 @@ def run (H : Host) (θ a : ByteArray) (_ : List Release) (b : ByteArray) (ρ : L
     | _ => 0
   ledger := []
 
-/-- The run's setup at a play, under the parameters' key and at `families`, before its ledger. -/
+/-- The run's setup at a play, under the host's key, the pinned one (`Deployment.setupAt`), and at `families`, before
+its ledger. -/
 def setup (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) : RunSetup :=
-  { run H θ a log b ρ with key := pubOf θ, families := families θ }
+  { run H θ a log b ρ with families := families θ }
 
 /-- The run's coin commitment (`Properties.Challenger.Run.commitment`), its layout's and its coins' and salts'. -/
 def commitmentAt (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
@@ -195,31 +210,38 @@ def releaseLog (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray
 
 /-! ## The ledger -/
 
-/-- **An entry's line, as `append` writes it**: entry `seq θ + j` of `kind` for `session`, after the line whose SHA-512 is
-`prev`, its `sig` the host's signature at leaf `q` over `ledger_message` of the entry without it, in the ledger's
-canonical text (`ledger_text`). -/
-def entryLine (H : Host) (θ : ByteArray) (j q : ℕ) (prev kind : String) (session : Option String) (body : Json) :
-    Json :=
+/-- **An entry's record, as `append` writes it**: entry `seq θ + j` of `kind` for `session`, after the line whose
+SHA-512 is `prev`, its `sig` the host's signature at leaf `q` over `ledger_message` of the entry without it. -/
+def entryRecord (H : Host) (θ : ByteArray) (j q : ℕ) (prev kind : String) (session : Option String) (body : Json) :
+    _root_.Core.Record :=
   let unsigned := Json.mkObj [("body", body), ("kind", .str kind), ("prev", .str prev), ("schema", .str LEDGER_SCHEMA),
     ("seq", Lean.toJson (H.seq θ + j)), ("session", (session.map Json.str).getD .null)]
   let m := (ledgerMessage (Properties.Challenger.ident H.pub) unsigned).toOption.getD .empty
-  let r : _root_.Core.Record := ⟨body, kind, prev, LEDGER_SCHEMA, H.seq θ + j, session, H.signAt q m⟩
-  .str ((PyJson.canonical r.toJson).toOption.getD "")
+  ⟨body, kind, prev, LEDGER_SCHEMA, H.seq θ + j, session, H.signAt q m⟩
 
-/-- **Consecutive entries' lines**: from entry `seq θ + j` at leaf `q`, after the line whose SHA-512 is `prev`, each
-the next one's `prev` (`Core.Record.prevOf`). -/
-def entries (H : Host) (θ : ByteArray) : ℕ → ℕ → String → List (String × Option String × Json) → List Json
+/-- A record's ledger line, its canonical text (`ledger_text`). -/
+def recordLine (r : _root_.Core.Record) : Json := .str ((PyJson.canonical r.toJson).toOption.getD "")
+
+/-- **An entry's line, as `append` writes it**: its record's, in the ledger's canonical text. -/
+def entryLine (H : Host) (θ : ByteArray) (j q : ℕ) (prev kind : String) (session : Option String) (body : Json) :
+    Json :=
+  recordLine (entryRecord H θ j q prev kind session body)
+
+/-- **Consecutive entries' records**: from entry `seq θ + j` at leaf `q`, after the line whose SHA-512 is `prev`, each
+line the next one's `prev` (`Core.Record.prevOf`). -/
+def records (H : Host) (θ : ByteArray) :
+    ℕ → ℕ → String → List (String × Option String × Json) → List _root_.Core.Record
   | _, _, _, [] => []
   | j, q, prev, (kind, s, body) :: es =>
-    let l := entryLine H θ j q prev kind s body
-    l :: entries H θ (j + 1) (q + 1) (_root_.Core.Record.prevOf (strOf l)) es
+    let r := entryRecord H θ j q prev kind s body
+    r :: records H θ (j + 1) (q + 1) (_root_.Core.Record.prevOf (strOf (recordLine r))) es
 
-theorem entries_length (H : Host) (θ : ByteArray) :
-    ∀ (j q : ℕ) (prev : String) (es : List (String × Option String × Json)), (entries H θ j q prev es).length = es.length
+theorem records_length (H : Host) (θ : ByteArray) :
+    ∀ (j q : ℕ) (prev : String) (es : List (String × Option String × Json)), (records H θ j q prev es).length = es.length
   | _, _, _, [] => rfl
   | j, q, prev, (_, _, _) :: es => by
-    simp only [entries, List.length_cons]
-    rw [entries_length H θ]
+    simp only [records, List.length_cons]
+    rw [records_length H θ]
 
 /-- A body: the host's own fields of the entry's kind, then the request's `keep` fields of `part`, then the device's,
 each later field in place of an earlier one of its name. -/
@@ -256,10 +278,13 @@ def openBody (H : Host) (θ a : ByteArray) : Json :=
 
 /-- **The ledger's entries before any coin**: the period's open, the window's reserve and its open, entries `seq θ` to
 `seq θ + 2` at the host's leaves `leaf θ` to `leaf θ + 2`, after the host's ledger head. -/
-def opens (H : Host) (θ a : ByteArray) : List Json :=
-  entries H θ 0 (H.leaf θ) (H.prev θ)
+def openRecords (H : Host) (θ a : ByteArray) : List _root_.Core.Record :=
+  records H θ 0 (H.leaf θ) (H.prev θ)
     [("period-open", none, periodOpenBody H θ a), ("reserve", some (H.session θ), reserveBody H θ a),
       ("open", some (H.session θ), openBody H θ a)]
+
+/-- Their lines. -/
+def opens (H : Host) (θ a : ByteArray) : List Json := (openRecords H θ a).map recordLine
 
 /-- Whether the client closed the session: its close left no reason it ended otherwise. -/
 def closed (b : ByteArray) : Bool :=
@@ -300,23 +325,184 @@ def periodCloseBody (H : Host) (θ a : ByteArray) (log : List Release) : Json :=
 
 /-- **The ledger's entries at the close**: the window's end and the period's close, entries `seq θ + 3` and
 `seq θ + 4`, after the window's open, at the leaves after the run's record and close (`leaf θ + 5`, `leaf θ + 6`). -/
-def closes (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) : List Json :=
-  entries H θ 3 (H.leaf θ + 5) (_root_.Core.Record.prevOf (strOf ((opens H θ a).getLastD .null)))
+def closeRecords (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
+    List _root_.Core.Record :=
+  records H θ 3 (H.leaf θ + 5) (_root_.Core.Record.prevOf (strOf ((opens H θ a).getLastD .null)))
     [("end", some (H.session θ), endBody H θ a log b ρ), ("period-close", none, periodCloseBody H θ a log)]
 
-theorem opens_length (H : Host) (θ a : ByteArray) : (opens H θ a).length = 3 :=
-  entries_length H θ _ _ _ _
+/-- Their lines. -/
+def closes (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) : List Json :=
+  (closeRecords H θ a log b ρ).map recordLine
+
+theorem opens_length (H : Host) (θ a : ByteArray) : (opens H θ a).length = 3 := by
+  rw [opens, List.length_map, openRecords, records_length]
+  rfl
 
 theorem closes_length (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
-    (closes H θ a log b ρ).length = 2 :=
-  entries_length H θ _ _ _ _
+    (closes H θ a log b ρ).length = 2 := by
+  rw [closes, List.length_map, closeRecords, records_length]
+  rfl
+
+/-- The play's records' numbers: `seq θ` to `seq θ + 4`, in order. -/
+theorem records_seq (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
+    (openRecords H θ a ++ closeRecords H θ a log b ρ).map (·.seq) =
+      [H.seq θ + 0, H.seq θ + 1, H.seq θ + 2, H.seq θ + 3, H.seq θ + 4] := by
+  simp [openRecords, closeRecords, records, entryRecord]
+
+/-- The play's records' sessions: the gate's session for the reserve, the open and the end, none for the period's. -/
+theorem records_session (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
+    (openRecords H θ a ++ closeRecords H θ a log b ρ).map (·.session) =
+      [none, some (H.session θ), some (H.session θ), some (H.session θ), none] := by
+  simp [openRecords, closeRecords, records, entryRecord]
+
+/-! ## The read-back -/
+
+/-- **Each ledger line the host prints at a play reads back as its record** (`LedgerReadsBack`): the three it prints
+before any coin and the two at the close. -/
+def ReadsBack (H : Host) : Prop :=
+  ∀ θ a log b ρ, ∀ r ∈ openRecords H θ a ++ closeRecords H θ a log b ρ, LedgerReadsBack r
+
+-- `mvcgen` splits `ledgerEntry?` into one goal per field it parses
+set_option maxHeartbeats 1000000 in
+/-- `ledgerEntry?` read its entry from the line's text, which parses to it. -/
+theorem ledgerEntry_parse {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some e) :
+    line = .str e.text ∧ (Flock.JsonParse.parse e.text).toOption = some e.entry := by
+  refine Properties.Pouw.LiveSalt.Ledger.of_triple_opt
+    (Q := fun e => line = .str e.text ∧ (Flock.JsonParse.parse e.text).toOption = some e.entry) ?_ h
+  clear h
+  mvcgen [ledgerEntry?, guard, -Std.Do.Spec.throw_Option, Properties.Pouw.LiveSalt.Ledger.none_spec,
+    Properties.Pouw.LiveSalt.Ledger.failure_spec, Properties.Pouw.LiveSalt.Ledger.toOption_spec,
+    Properties.Pouw.LiveSalt.Ledger.ledgerTag_spec, Properties.Pouw.LiveSalt.Ledger.nat_spec,
+    Properties.Pouw.LiveSalt.Ledger.some_pure_spec]
+  all_goals first | exact ⟨rfl, by assumption⟩ | (constructor <;> first | rfl | assumption)
+
+/-- **A record whose JSON is plain reads back** (`LedgerReadsBack`): its canonical text is `Flock.canon`'s
+(`Plain.canonical_canon`), which parses to a value alike it (`parse_canon`), whose `seq`, kind and session are its. -/
+theorem ledgerReadsBack_of_plain {r : _root_.Core.Record}
+    (hp : Properties.Challenger.Plain.PlainAt PyJson.DEPTH r.toJson) : LedgerReadsBack r := by
+  intro e he
+  obtain ⟨t, ht⟩ := FlockComplete.JsonRT.canon_ok_some r.toJson (Properties.Challenger.Entry.good_of_plain hp)
+  have hline : PyJson.canonical r.toJson = .ok t := (Properties.Challenger.Plain.canonical_canon hp).trans ht
+  rw [hline] at he
+  obtain ⟨j', hj', hsame⟩ :=
+    FlockComplete.JsonRT.parse_canon r.toJson t (Properties.Challenger.Entry.good_of_plain hp) ht
+  obtain ⟨htext, hparse⟩ := ledgerEntry_parse he
+  simp only [Except.toOption, Option.getD_some, Json.str.injEq] at htext
+  have hent : e.entry = j' := by
+    rw [← htext, hj'] at hparse
+    simp only [Except.toOption, Option.some.injEq] at hparse
+    exact hparse.symm
+  subst hent
+  obtain ⟨r', hr', hq⟩ := Properties.Challenger.Lines.ledgerEntry_seq he
+  obtain ⟨n, hn, hrn⟩ := Properties.Challenger.Lines.recordOfJson_seq
+    (Properties.Challenger.ChallengePhase.toOption_some hr')
+  obtain ⟨-, -, hk, -, -, hopen, -⟩ := Properties.Challenger.Window.ledgerEntry_fields he
+  obtain ⟨-, hkr, -, -, hsr, hses, -⟩ := Properties.Challenger.Entry.toJson_vals r
+  have hsk := Properties.Challenger.Entry.same_getD hsame "kind"
+  have hsq := Properties.Challenger.Entry.same_getD hsame "seq"
+  have hss := Properties.Challenger.Entry.same_getD hsame "session"
+  rw [hkr] at hsk
+  rw [hsr] at hsq
+  rw [hses] at hss
+  have hkind : e.kind = r.kind := by
+    have := FlockComplete.JsonRT.same_str hsk
+    rw [hk] at this
+    exact Json.str.inj this
+  refine ⟨?_, hkind, fun ho => ?_⟩
+  · have := FlockComplete.JsonRT.same_num hsq
+    rw [hn] at this
+    obtain rfl := Json.num.inj this
+    rw [← hq, hrn]
+    rfl
+  · have hs := hopen ho
+    revert hss
+    cases r.session with
+    | none =>
+      intro hss
+      have := FlockComplete.JsonRT.same_null hss
+      rw [hs] at this
+      cases this
+    | some s =>
+      intro hss
+      have := FlockComplete.JsonRT.same_str hss
+      rw [hs] at this
+      rw [Json.str.inj this]
+
+/-- **The host's lines read back where its records' JSON is plain** (`ledgerReadsBack_of_plain`). -/
+theorem readsBack_of_plain (H : Host)
+    (h : ∀ θ a log b ρ, ∀ r ∈ openRecords H θ a ++ closeRecords H θ a log b ρ,
+      Properties.Challenger.Plain.PlainAt PyJson.DEPTH r.toJson) : ReadsBack H :=
+  fun θ a log b ρ r hr => ledgerReadsBack_of_plain (h θ a log b ρ r hr)
 
 /-! ## The deployment -/
 
-/-- **The live challenger as deployed** on the host `H`: the run of the session the gate reserved, its coins and salts
-sampled at the close, the ledger's three entries before any coin and two at the close, and each of the play's messages
-signed with the host's key at its leaf. -/
-def deployment (H : Host) : Deployment where
+/-- A filter-map whose every value is `g`'s at its element is a sublist of `g`'s map. -/
+theorem filterMap_sublist {α β : Type} {f : α → Option β} {g : α → β} :
+    ∀ {l : List α}, (∀ x ∈ l, ∀ y, f x = some y → y = g x) → (l.filterMap f).Sublist (l.map g)
+  | [], _ => by simp
+  | x :: l, h => by
+    have ih := filterMap_sublist (l := l) fun y hy => h y (List.mem_cons_of_mem _ hy)
+    cases hx : f x with
+    | none =>
+      simp only [List.filterMap_cons, hx, List.map_cons]
+      exact ih.cons _
+    | some y =>
+      simp only [List.filterMap_cons, hx, List.map_cons]
+      rw [h x (by simp) y hx]
+      exact ih.cons₂ _
+
+/-- **The host's ledger holds one line per `seq`** where its lines read back (`ReadsBack`): a line that reads as an
+entry carries its record's `seq`, and the play's records are numbered `seq θ` to `seq θ + 4`. The host's key has no
+earlier history in this model, so its ledger is the play's lines alone. -/
+theorem numbered (H : Host) (hR : ReadsBack H) (θ a : ByteArray) (log : List Release) (b : ByteArray)
+    (ρ : List Bool) : Device.Numbered (opens H θ a ++ closes H θ a log b ρ) := by
+  have hl : opens H θ a ++ closes H θ a log b ρ =
+      (openRecords H θ a ++ closeRecords H θ a log b ρ).map recordLine := by
+    simp [opens, closes]
+  unfold Device.Numbered
+  rw [hl, List.filterMap_map]
+  refine List.Nodup.sublist (filterMap_sublist (g := (·.seq)) fun r hr s hs => ?_) ?_
+  · change (ledgerEntry? (recordLine r)).map (·.seq) = some s at hs
+    obtain ⟨e, he, rfl⟩ := Option.map_eq_some_iff.1 hs
+    exact (hR θ a log b ρ r hr e he).1
+  · rw [records_seq]
+    simp [List.nodup_cons]
+
+/-- **An open the host prints names the play's session** where its lines read back (`ReadsBack`): an open line's
+session is its record's, and the host's records name the gate's session or none. -/
+theorem opens_run (H : Host) (hR : ReadsBack H) (θ a : ByteArray) (log : List Release) (b : ByteArray)
+    (ρ : List Bool) (pk : ByteArray) (w id : String)
+    (h : OpensOn ⟨fun _ => [], fun _ => opens H θ a ++ closes H θ a log b ρ⟩ pk w id) : id = H.session θ := by
+  obtain ⟨line, hl, e, he, hk, -, hid, -, -⟩ := h
+  have hl' : line ∈ (openRecords H θ a ++ closeRecords H θ a log b ρ).map recordLine := by
+    simpa [opens, closes] using hl
+  obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hl'
+  have hs := (hR θ a log b ρ r hr e he).2.2 hk
+  have hses : r.session ∈ [none, some (H.session θ), some (H.session θ), some (H.session θ), none] := by
+    rw [← records_session H θ a log b ρ]
+    exact List.mem_map_of_mem hr
+  rw [hs] at hses
+  simp at hses
+  rw [← hid, hses]
+
+/-- **No earlier line of the host's key opens a designated window**: the host's key has no earlier history in this
+model (`Challenger.earlier` at its default, no run and no ledger line), so this holds with nothing to close. -/
+theorem earlier_closed (pk : ByteArray) (w id : String) : ¬ OpensOn ⟨fun _ => [], fun _ => []⟩ pk w id :=
+  fun ⟨_, hl, _⟩ => absurd hl List.not_mem_nil
+
+/-- **No earlier run of the host's key has the play's session's id**: the host's key has no earlier history in this
+model, so there is no earlier run and the id is fresh with nothing to compare. -/
+theorem fresh_id (pk : ByteArray) (id : String) :
+    ∀ r ∈ (⟨fun _ => [], fun _ => []⟩ : History).runs pk, r.id ≠ id :=
+  fun _ h => absurd h List.not_mem_nil
+
+/-- **The live challenger as deployed** on the host `H`, pinned at its key (`Host.pin`), on the windows `W` the
+auditor designated: the run of the session the gate reserved, its coins and salts sampled at the close, the ledger's
+three entries before any coin and two at the close, and each of the play's messages signed with the host's key at its
+leaf. Its lines read back (`hR`) give its numbering and its opens. -/
+def deployment (H : Host) (W : List Hash.Msg) (hR : ReadsBack H) : Deployment where
+  pin := H.pin
+  sessions := W
   run := run H
   opens := opens H
   closes := closes H
@@ -324,32 +510,45 @@ def deployment (H : Host) : Deployment where
   ledger_le θ a log b ρ := by rw [opens_length, closes_length]
   draws := draws
   sign θ i m := (H.signAt (H.leaf θ + i) ⟨m.toArray⟩).data.toList
+  numbered θ a log b ρ := by
+    simpa using numbered H hR θ a log b ρ
+  earlier_closed pk w id _ := earlier_closed pk w id
+  opens_run θ a log b ρ w id _ h := opens_run H hR θ a log b ρ _ w id h
+  fresh_id θ a log b ρ pk := fresh_id pk _
 
 /-- The deployed device's signer at the parameters `θ`, at `families`. -/
-def signer (H : Host) (θ : ByteArray) : Signer := (deployment H).signer families θ
+def signer (H : Host) (W : List Hash.Msg) (hR : ReadsBack H) (θ : ByteArray) : Signer :=
+  (deployment H W hR).signer families θ
 
-/-- The deployed device's history at each play (`Device.dev`). -/
-noncomputable abbrev dev (H : Host) : Exchange → Properties.Challenger.History :=
-  Device.dev ((deployment H).setupOf families)
+/-- The deployed device's history at each play (`Deployment.dev`). -/
+noncomputable abbrev dev (H : Host) (W : List Hash.Msg) (hR : ReadsBack H) : Exchange → History :=
+  (deployment H W hR).dev families
 
 /-- **The declared calls**: the most, over the play's tapes, of what the device's reading of what the prover sent
 hashes (`Binding.breakCalls`) and one per blob it sent. -/
-noncomputable def cost (H : Host) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Verity.Game.Strategy (Verity.play (families θ) (signer H θ) θ F c)) : ℕ :=
-  Finset.univ.sup fun t : Verity.Game.Tape (Verity.play (families θ) (signer H θ) θ F c) σ =>
-    Binding.breakCalls (dev H (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
+noncomputable def cost (H : Host) (W : List Hash.Msg) (hR : ReadsBack H) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Verity.Game.Strategy (Verity.play (families θ) (signer H W hR θ) [] θ F c)) : ℕ :=
+  Finset.univ.sup fun t : Verity.Game.Tape (Verity.play (families θ) (signer H W hR θ) [] θ F c) σ =>
+    Binding.breakCalls (dev H W hR (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
       (Verity.Game.Tape.out _ σ t).sent.blobs.size
 
 /-! ## A vocabulary at the deployment -/
 
 /-- **v2's reading at the deployed device**: `Idle.vocab δ 1` with the deployment's families, signer and signature count,
-v2's reading of the committed files at the host's pinned tables (`Host.tableFiles`) and its digests, the host's
-circuit and public files then its pinned table files as the registered files, the declared calls `cost`, and every
-name that reads a strategy of the play at them. -/
-noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
+the auditor's pins `S` with the host's key the one pinned (`Host.pin`) and the windows `S` designates for the
+challenger the deployment's, v2's reading of the committed files at the host's pinned tables (`Host.tableFiles`) and its
+digests, the host's circuit and public files then its pinned table files as the registered files, the declared calls
+`cost`, each forger at the key pinned at its index, and every name that reads a strategy of the play at them. -/
+noncomputable def base (H : Host) (S : AuditorPins) (hR : ReadsBack H) (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
   { Verity.Idle.vocab δ 1 with
     families := families
-    signer := signer H
+    signer := signer H (S.sessions .challenger) hR
+    pins := { S with keys := [H.pin] }
+    pinned := fun _ => rfl
+    disjoint := fun _ l h => by
+      change l ∈ List.map (·.1) (Parties.families []) at h
+      simp [Parties.families] at h
+    signer_families := fun _ => rfl
     read := fun θ F => .one (readOf H.tableFiles θ F)
     programDigest := programDigestOf
     publicDigest := publicDigestOf
@@ -357,15 +556,19 @@ noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device U
     place := fun θ F _ g => placeOfFiles (.one (readOf H.tableFiles θ F)) g
     extract := fun _ _ _ _ _ => 0
     finder := fun _ _ _ _ _ => Verity.Idle.finder
-    cost := cost H
+    cost := cost H (S.sessions .challenger) hR
     finder_calls := fun _ _ _ _ _ _ => Nat.zero_le _
     finders := fun _ _ _ _ => []
     premises := fun _ _ _ _ _ => True
-    forger := fun _ _ _ _ _ _ => Verity.Idle.forger
-    forger_calls := fun _ _ _ _ _ _ => Nat.zero_le _
-    signatures := (deployment H).signatures
-    signs_le := (deployment H).signs_le families
-    forger_signed := fun _ _ _ _ _ _ => Nat.zero_le _
+    forger := fun _ i _ _ _ _ => { Verity.Idle.forger with key := (([H.pin][i]?).map (·.key)).getD [] }
+    forger_pinned := fun _ _ _ _ _ _ _ => rfl
+    forger_calls := fun _ _ _ _ _ _ _ => Nat.zero_le _
+    signatures := (deployment H (S.sessions .challenger) hR).signatures
+    signs_le := fun θ P hP a log b ρ => by
+      rcases List.mem_cons.1 hP with rfl | h
+      · exact (deployment H (S.sessions .challenger) hR).signs_le families θ a log b ρ
+      · exact absurd h List.not_mem_nil
+    forger_signed := fun _ _ _ _ _ _ _ => Nat.zero_le _
     computed := fun _ _ _ _ _ => ∅
     macs := fun _ _ _ _ _ => 0
     world := fun _ _ _ _ _ => Verity.Idle.world
@@ -374,28 +577,40 @@ noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device U
     schedule := fun θ F => Instance.Honest.blocks (readOf H.tableFiles θ F).circuit
     wipe := fun θ F => Instance.Honest.wipe (readOf H.tableFiles θ F).circuit
     wipeRun := fun θ F c _ =>
-      Instance.Honest.ofRun (readOf H.tableFiles θ F).circuit (Verity.play (families θ) (signer H θ) θ F c)
+      Instance.Honest.ofRun (readOf H.tableFiles θ F).circuit
+        (Verity.play (families θ) (signer H (S.sessions .challenger) hR θ) [] θ F c)
     honest := fun θ F c =>
-      Verity.requestThen (families θ) (signer H θ) θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩ }
+      Verity.requestThen (families θ) (signer H (S.sessions .challenger) hR θ) [] θ F c .empty
+        ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩ }
 
 /-- `Instance.signer` at `base`: its signer is the deployment's at its families. -/
-theorem base_signer (H : Host) (δ : ℝ≥0∞) (θ : ByteArray) :
-    (base H δ).signer θ = (deployment H).signer (base H δ).families θ :=
+theorem base_signer (H : Host) (S : AuditorPins) (hR : ReadsBack H) (δ : ℝ≥0∞) (θ : ByteArray) :
+    (base H S hR δ).signer θ = (deployment H (S.sessions .challenger) hR).signer (base H S hR δ).families θ :=
   rfl
 
 /-- `Instance.coins` at `base`: each family it names samples `MAX_COINS` coins. -/
-theorem base_coins (H : Host) (δ : ℝ≥0∞) (θ : ByteArray) (l : String) (m : ℕ) (h : (l, m) ∈ (base H δ).families θ) :
-    m = MAX_COINS :=
+theorem base_coins (H : Host) (S : AuditorPins) (hR : ReadsBack H) (δ : ℝ≥0∞) (θ : ByteArray) (l : String) (m : ℕ)
+    (h : (l, m) ∈ (base H S hR δ).families θ) : m = MAX_COINS :=
   coins_families h
 
+/-- **The pins designate the deployment's windows for the challenger** (`Deployment.binds`'s hypothesis). -/
+theorem base_sessions (H : Host) (S : AuditorPins) (hR : ReadsBack H) (δ : ℝ≥0∞) :
+    (base H S hR δ).pins.sessions .challenger = (deployment H (S.sessions .challenger) hR).sessions :=
+  rfl
+
 /-- `Instance.costs` at `base`: its declared calls cover the deployed device's reading at its history. -/
-theorem costs (H : Host) (δ : ℝ≥0∞) : CostsRead (base H δ) (Device.dev ((deployment H).setupOf (base H δ).families)) :=
+theorem costs (H : Host) (S : AuditorPins) (hR : ReadsBack H) (δ : ℝ≥0∞) :
+    CostsRead (base H S hR δ) ((deployment H (S.sessions .challenger) hR).dev (base H S hR δ).families) :=
   fun θ F c σ t =>
-    Finset.le_sup (f := fun t : Verity.Game.Tape (Verity.play (families θ) (signer H θ) θ F c) σ =>
-      Binding.breakCalls (dev H (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
-        (Verity.Game.Tape.out _ σ t).sent.blobs.size) (Finset.mem_univ t)
+    Finset.le_sup (f := fun t : Verity.Game.Tape
+        (Verity.play (families θ) (signer H (S.sessions .challenger) hR θ) [] θ F c) σ =>
+      Binding.breakCalls (dev H (S.sessions .challenger) hR (Verity.Game.Tape.out _ σ t))
+        (Verity.Game.Tape.out _ σ t).sent + (Verity.Game.Tape.out _ σ t).sent.blobs.size) (Finset.mem_univ t)
 
 /-! ## The audit's own parameters -/
+
+/-- The public key of the parameters' challenger key (`Binding.keyOf`), the empty string where they name none. -/
+def pubOf (θ : ByteArray) : ByteArray := ((Binding.keyOf θ).map (·.pub)).getD .empty
 
 /-- **The deployment holds the audit's registration at `θ`**: v2's parameters in `θ` name a challenger whose key is the
 host's, its public key and the deployed LMS parameters. -/
@@ -429,8 +644,8 @@ theorem findSome_keyAt : ∀ {ps : List _root_.Core.Composition.Named} {x : _roo
       rw [List.findSome?_cons, hn']
       exact findSome_keyAt h hk
 
-/-- **At the audit's own parameters the history's key is the host's**: the key every run and ledger line of the
-deployed device's history sits under (`Deployment.setupAt`'s `pubOf`). -/
+/-- **At the audit's own parameters their challenger key is the host's**: the pinned key every run and ledger line of
+the deployed device's history sits under (`Deployment.setupAt`'s `pub`). -/
 theorem pubOf_holds {H : Host} {θ : ByteArray} (h : Holds H θ) : pubOf θ = H.pub := by
   obtain ⟨p, key, l, ⟨ps, hps, x, hx, hp⟩, hc, hpub, -⟩ := h
   have hid : x.id = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hx

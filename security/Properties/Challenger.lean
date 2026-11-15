@@ -143,6 +143,14 @@ def OpensOn (dev : History) (pk : ByteArray) (w id : String) : Prop :=
   ∃ line ∈ dev.ledger pk, ∃ e, ledgerEntry? line = some e ∧ e.kind = "open" ∧ e.schema = LEDGER_SCHEMA ∧
     e.session = id ∧ getD (getD e.body "window") "root" = .str w ∧ getD e.body "withheld" = .bool true
 
+/-- **A ledger line reads back as the record it prints**: where `ledgerEntry?` reads the line the device prints of the
+record `r` (its `PyJson.canonical` text), the entry has `r`'s `seq` and kind, and an open's session is `r`'s. It holds
+of a record whose JSON is plain (`Plain.canonical_canon`, `parse_canon`); for one with other strings it needs
+`PyJson.canonical`'s text to parse back alike, which no proof has yet. -/
+def LedgerReadsBack (r : _root_.Core.Record) : Prop :=
+  ∀ e, ledgerEntry? (.str ((PyJson.canonical r.toJson).toOption.getD "")) = some e →
+    e.seq = r.seq ∧ e.kind = r.kind ∧ (e.kind = "open" → r.session = some e.session)
+
 /-! ## What the reader checks and hashes -/
 
 /-- Whether the LMS verifier accepts `sig`, once decoded, under the key over the message `m`. -/
