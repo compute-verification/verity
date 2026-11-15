@@ -6171,6 +6171,7 @@
  },
  "four_names": [
   "InferenceOnly",
+  "Slowdown",
   "NetTiming",
   "Pous",
   "Pouw",
