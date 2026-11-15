@@ -61,13 +61,14 @@ from verity_vllm.pipeline.cli import write
 __all__ = ["Options", "main"]
 
 MARKER = "__models__"
-SCAN = (Path(__file__).parent, ROOT / "tests")
+TESTS = ROOT.parents[1] / "tests" / "adapters" / "vllm" / "tests"
+#: each tree scanned for marked modules, with the directory its paths are relative to
+SCAN = ((Path(__file__).parent, ROOT), (TESTS, TESTS.parent))
 SIDECAR = ".circuit-check.py"
 #: The models each Definition that belongs in Verity exists for, by its path: from `VERITY_HOME` under `verity/`, else from `ROOT`.
 DEFINITIONS = MANIFESTS / "definitions.json"
 #: the directory `verity` sits in (the repository root, in a checkout)
 VERITY_HOME = Path(str(resources.files("verity"))).resolve().parent
-TESTS = ROOT.parents[1] / "tests" / "adapters" / "vllm" / "tests"
 ALLOWLISTS = (TESTS / "by_name_allowlist.json", TESTS / "lint" / "allowlists")
 
 Sql = Callable[[str], list[dict[str, Any]]]
@@ -90,19 +91,19 @@ def marked(path: Path, root: Path = ROOT) -> tuple[str, ...]:
 
 
 def markers() -> dict[str, tuple[str, ...]]:
-    """Every marked module under `SCAN`, by path relative to `ROOT`, and every Definition `DEFINITIONS` ties, by its row's path,
+    """Every marked module under `SCAN`, by path relative to `ROOT` (a test's to `TESTS.parent`), and every Definition `DEFINITIONS` ties, by its row's path,
     each with its sidecar.  A `DEFINITIONS` row whose module is gone refuses."""
     out: dict[str, tuple[str, ...]] = {}
-    for top in SCAN:
+    for top, base in SCAN:
         for p in sorted(top.rglob("*.py")):
             if "__pycache__" in p.parts or p.name.endswith(SIDECAR):
                 continue
             models = marked(p)
             if models:
-                out[p.relative_to(ROOT).as_posix()] = models
+                out[p.relative_to(base).as_posix()] = models
                 car = p.with_name(p.stem + SIDECAR)
                 if car.exists():
-                    out[car.relative_to(ROOT).as_posix()] = models
+                    out[car.relative_to(base).as_posix()] = models
     for rel, models in json.loads(DEFINITIONS.read_text())["models"].items():
         p = source(rel)
         if not (rel.endswith(".py") and p.is_file()):
@@ -115,7 +116,8 @@ def markers() -> dict[str, tuple[str, ...]]:
 
 def source(rel: str) -> Path:
     """The file a `markers()` path names."""
-    return VERITY_HOME / rel if rel.split("/", 1)[0] == "verity" else ROOT / rel
+    top = rel.split("/", 1)[0]
+    return VERITY_HOME / rel if top == "verity" else TESTS.parent / rel if top == "tests" else ROOT / rel
 
 
 def checkpoints() -> list[dict[str, Any]]:
