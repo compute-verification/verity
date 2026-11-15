@@ -265,9 +265,11 @@ def is_stop(B, o, token, STOP: tuple[int, ...], ignore_eos):
     if not STOP:
         return None
     lo, hi = B.call(P.Bf16ToF32, token[0]), B.call(P.Bf16ToF32, token[1])
+    los = {w: o.ieq(lo, o.word(w << 16)) for w in sorted({s & 0xFFFF for s in STOP})}
+    his = {w: o.ieq(hi, o.word(w << 16)) for w in sorted({s >> 16 for s in STOP})}
     hit = None
     for s in STOP:
-        h = o.band(o.ieq(lo, o.word((s & 0xFFFF) << 16)), o.ieq(hi, o.word((s >> 16) << 16)))
+        h = o.band(los[s & 0xFFFF], his[s >> 16])
         hit = h if hit is None else o.bor(hit, h)
     return o.band(o.ieq(ignore_eos, o.word(0)), hit)
 
