@@ -301,8 +301,9 @@ TWO = "census:Small_v1{N=1}@full\t1\t1\t1\t1\ncensus:Big_v1{N=9}@full\t1\t1\t1\t
 
 def test_prove_routes_past_the_gpu_bound_to_the_cpu_prover_and_checks_each_proof_with_lean(job, tmp_path: Path):
     """The statement route sends past the GPU prover's bound is proved with no card, one group, into out/cpu; the other on
-    the cards. Each proved statement's last kept session is checked by the Lean verifier at FLOCK_WORK's statement with its
-    kept public files and its Program (a bound statement's program.json, else the word's), before FLOCK_WORK is removed."""
+    the cards. Each proved statement's kept sessions are checked by the Lean verifier at FLOCK_WORK's statement with its
+    kept public files and its Program (a bound statement's program.json, else the word's), before FLOCK_WORK is removed:
+    the last first, then, each check under LEAN_ALL_S, every other one; a row a statement in out/lean-statements.tsv."""
     fw = staged(tmp_path, TWO)
     rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", TO_CPU="Big", PROVED="1", LAKE_OK="1", BOUND="big")
     out = tmp_path / "run/out"
@@ -312,9 +313,16 @@ def test_prove_routes_past_the_gpu_bound_to_the_cpu_prover_and_checks_each_proof
         "window prove gpus=1 allowed=4,5 cvd=[] device=cpu census:Big_v1{N=9}@full",
         "lake build flock-verify cvd=[unset]",
         f"lean-verify small-k0 l0001-1 pub={out}/kept/small/pub.bin program-word.json",
-        f"lean-verify big-k0 l0001-1 pub={out}/cpu/out/kept/big/pub.bin program.json"]
+        f"lean-verify small-k0 l0000-1 pub={out}/kept/small/pub.bin program-word.json",
+        f"lean-verify big-k0 l0001-1 pub={out}/cpu/out/kept/big/pub.bin program.json",
+        f"lean-verify big-k0 l0000-1 pub={out}/cpu/out/kept/big/pub.bin program.json"]
     rows = [ln.split("\t")[:4] for ln in (out / "lean.tsv").read_text().splitlines()]
-    assert rows == [["name", "session", "accepted", "label"], ["small", "l0001-1", "True", "L"], ["big", "l0001-1", "True", "L"]]
+    assert rows[1:] == [["small", "l0001-1", "True", "L"], ["small", "l0000-1", "True", "L"], ["big", "l0001-1", "True", "L"],
+                        ["big", "l0000-1", "True", "L"]]
+    per = [ln.split("\t")[:7] for ln in (out / "lean-statements.tsv").read_text().splitlines()]
+    assert per == [["name", "kept", "checked", "accepted", "verdict", "max_wall_s", "max_peak_gib"],
+                   ["small", "2", "2", "2", "accepted", "1.5", "0.0"], ["big", "2", "2", "2", "accepted", "1.5", "0.0"]]
+    assert "LEAN accepted: small: 2 of 2 kept sessions checked, each accepted; at most 1.5 s" in steps
     assert "the Lean verifier: 2 proved statements accepted, 0 refused or not checked" in steps and not fw.exists()
 
 
@@ -337,3 +345,23 @@ def test_a_statement_whose_prover_failed_has_no_proof_to_check(job, tmp_path: Pa
     rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", PROVED="1", PROVER_EXIT="1")
     assert rc == 0 and "LEAN: small: its prover exited 1: no proof to check" in steps, steps
     assert "the Lean verifier: 0 proved statements accepted, 0 refused" in steps and not any(c.startswith("lake") for c in calls)
+
+
+def test_a_check_past_lean_all_s_checks_the_last_session_alone(job, tmp_path: Path):
+    """A statement whose one check takes LEAN_ALL_S or more is checked on its last kept session alone, and its row says
+    one of its kept sessions was checked."""
+    fw = staged(tmp_path, TWO)
+    rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", PROVED="1", LAKE_OK="1", LEAN_ALL_S="1")
+    assert rc == 0 and [c.split()[2] for c in calls if c.startswith("lean-verify")] == ["l0001-1", "l0001-1"], calls
+    assert "LEAN accepted: small: 1 of 2 kept sessions checked" in steps and not fw.exists()
+
+
+def test_cpu_prove_0_lists_the_past_bound_statements_and_proves_them_nowhere(job, tmp_path: Path):
+    """Under CPU_PROVE=0 the statements route sends past the GPU prover's bound are left in out/cpu.units for CPU nodes:
+    no CPU prover runs, and the job's exit is the cards' and the Lean verifier's."""
+    fw = staged(tmp_path, TWO)
+    rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6", TO_CPU="Big", PROVED="1", LAKE_OK="1", CPU_PROVE="0")
+    assert rc == 0 and "CPU_PROVE=0: 1 statements past the GPU prover's bound not proved here" in steps, steps
+    assert not any("device=cpu" in c for c in calls) and [c.split()[1] for c in calls if c.startswith("lean-verify")] == [
+        "small-k0", "small-k0"]
+    assert (tmp_path / "run/out/cpu.units").read_text().startswith("census:Big_v1{N=9}@full") and not fw.exists()
