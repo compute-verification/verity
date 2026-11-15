@@ -148,7 +148,7 @@ def test_a_class_wired_to_a_writer_of_two_units_a_block_is_committed_by_its_repl
     assert [(x.per, x.runs) for x in d.rows if (x.template, x.port) == (ids[1], "mask")] == [(o, (SS.Run(0, o, 0, 1),))]
     first = TS.first(c.public(), check, TS.rule_of(layout, f"rate:{Q}/{N}", K, 60.0),
                      FC.Challenger("first", label=TS.family_of(layout)))
-    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"))
     sample = [int(u) for u in again.sample.units]
 
     def units(u: int) -> tuple[IR.Span, ...]:
