@@ -16,7 +16,7 @@ fields (``lp``, ``max_tokens``, ``min_tokens``, ``ignore_eos``):
     GreedyCombineFirst_v1{V,N,O,STOP,MAX_MODEL_LEN}
         (logits: bf16[N], r0, .., r{K-2}, request: Array<4, i32>)
         -> (o0: Array<2, Value<16>>, o1: bit, o2: Array<k, bit>, o3: Array<2, Value<16>>)
-    GreedyCombine_v3{V,N,O,STOP,MAX_MODEL_LEN}
+    GreedyCombineLive_v1{V,N,O,STOP,MAX_MODEL_LEN}
         (logits: bf16[N], r0, .., r{K-2}, request: Array<4, i32>, count: Array<16, bit>, live: Array<16, bit>)
         -> the same four
 
@@ -321,14 +321,14 @@ _CLASS_CONF = "model-untested: StopRule_v1's rule step by step, and GreedyCombin
 @composite("GreedyCombineFirst", 1, ["V", "N", "O", "STOP", "MAX_MODEL_LEN"], _first_sig, refuse=refuse_class,
            conformance=_CLASS_CONF)
 def GreedyCombineFirst(B, S, logits, *rest):
-    """A class's first select: `GreedyCombine_v3` at its step's bit 1 and count 0, constants of this body, so neither is a
+    """A class's first select: `GreedyCombineLive_v1` at its step's bit 1 and count 0, constants of this body, so neither is a
     parameter.  ``o0`` the token, the first served id; ``o1`` the next step's bit, the token ends no rule at one id; ``o2``
     the count 1, a constant; ``o3`` the token ANDed with ``o1``, the next step's key (the module docstring)."""
     *results, request = rest
     return class_step(B, S, logits, results, request)
 
 
-@composite("GreedyCombine", 3, ["V", "N", "O", "STOP", "MAX_MODEL_LEN"], _live_sig, refuse=refuse_class,
+@composite("GreedyCombineLive", 1, ["V", "N", "O", "STOP", "MAX_MODEL_LEN"], _live_sig, refuse=refuse_class,
            conformance=_CLASS_CONF)
 def GreedyCombineLive(B, S, logits, *rest):
     """A class's decode-step select: `GreedyCombine_v2`'s token over its logits and results, taking its step's bit ``live``

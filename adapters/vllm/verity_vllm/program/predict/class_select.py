@@ -1,6 +1,7 @@
 """A class's selects and its length check (`class_window`'s module docstring has the design): each a registered Definition
 bound from the class's statics alone, `first_select` the prefill's (`greedy_stages.GreedyCombineFirst_v1`), `live_select`
-each decode step's (`greedy_stages.GreedyCombine_v3`) and `class_check` the length check (`greedy_stop.GreedyStopCheck_v2`).
+each decode step's (`greedy_stages.GreedyCombineLive_v1`) and `class_check` the length check
+(`greedy_stop.GreedyStopCheckClass_v1`).
 `class_window`'s stubs of the same names delegate here. What holds, each by its Definition's body:
 
 - **The first bit and the first count are constants** inside the first select (bit 1, count 0, so it writes the count 1),
@@ -52,12 +53,12 @@ def first_select(V: int, N: int, O: int, stops: Sequence[int], max_model_len: in
 
 
 def live_select(V: int, N: int, O: int, stops: Sequence[int], max_model_len: int) -> SpecializedDefinition:
-    """`GreedyCombine_v3{V, N, O, STOP, MAX_MODEL_LEN}`, each decode step's select, at `first_select`'s statics."""
+    """`GreedyCombineLive_v1{V, N, O, STOP, MAX_MODEL_LEN}`, each decode step's select, at `first_select`'s statics."""
     return bind(G.GreedyCombineLive, V=V, N=N, O=O, STOP=_stops(stops), MAX_MODEL_LEN=max_model_len)
 
 
 def class_check(V: int, N: int, P: int, O: int, stops: Sequence[int], max_model_len: int) -> SpecializedDefinition:
-    """`GreedyStopCheck_v2{V, N, P, T, STOP, MAX_MODEL_LEN}` at T = ``O``, the class's length check, at the selects'
+    """`GreedyStopCheckClass_v1{V, N, P, T, STOP, MAX_MODEL_LEN}` at T = ``O``, the class's length check, at the selects'
     statics and the class's P prompt ids."""
     return bind(GS.GreedyStopCheckClass, V=V, N=N, P=P, T=O, STOP=_stops(stops), MAX_MODEL_LEN=max_model_len)
 
