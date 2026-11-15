@@ -43,7 +43,7 @@ public import Definitions.Certifier.Tap
 public import Definitions.Certifier.RecordRows
 public import Definitions.Certifier.MonitoringPeriod
 public import Definitions.Certifier.Witness
-public import Definitions.NetworkCertifier.ResponseTie
+public import Definitions.Certifier.ResponseTie
 public import Definitions.Accounting.Sheets
 public import Definitions.Accounting
 public import Definitions.Spot

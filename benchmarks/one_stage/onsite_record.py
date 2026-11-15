@@ -590,8 +590,8 @@ PREMISES: dict[str, dict[str, Any]] = {
                         "which its scope check gives where ScopeMatches holds of the deployment) and the layout's fit "
                         "(BoundaryGates.Fits, every clause), through the decoder link and the period check running "
                         "Circuit.check; what each discharge takes of the deployment is its pin's (`DISCHARGES`)",
-                  "discharged_by": ("Properties.NetworkCertifier.wiredScopeAcc",
-                                    "Properties.NetworkCertifier.circuitWiresFit",
+                  "discharged_by": ("Properties.Certifier.wiredScopeAcc",
+                                    "Properties.Certifier.circuitWiresFit",
                                     "Properties.NetworkPeriod.rowsWiresChecked")},
     "session-wires": {"is": "SessionWires: each sampled proof block's wired inputs equal their writers' committed rows, "
                             "proved inside its own session, whose statement reads the writer's committed leaf by path and "
@@ -605,7 +605,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                          "registered gates are read at a template's first unit, so it holds only of templates of one "
                          "unit per VU (units_per_vu 1): its discharge counts only at a statement that takes no premise "
                          "on units_per_vu, which the period check's circuit read gives once it refuses every other",
-                   "discharged_by": ("Properties.NetworkCertifier.circuitCounts",)},
+                   "discharged_by": ("Properties.Certifier.circuitCounts",)},
     "tied-padding-reads": {"is": "CircuitCounts' tied-audit half: that no unit of a tied audit's circuit file reads "
                                  "into its padding (FilesOf's readsWhy at no reads is none). The period check reads "
                                  "the scan's circuit files whole, so the scan's half follows from its acceptance, but "
@@ -661,7 +661,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                               "the scan's rows/<d> root and domain are those the network certifier signed for its "
                               "link, d and window; the device's, under trusted-device: its rows at the transfer gates are "
                               "its observations, its ingress values its operator on the earlier ones",
-                        "discharged_by": ("Properties.NetworkCertifier.certifiersOpen",)},
+                        "discharged_by": ("Properties.Certifier.certifiersOpen",)},
     "certifier-key": {"is": "that the network certifier's key, LMS parameters and session every check reads are the "
                             "auditor's record of its own device (certifier-key/v1, `warden_chain.RECORD`), whose key the "
                             "auditor's registration holds for the network certifier it placed (Registration.Auditor.key), "
@@ -706,7 +706,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                                 "until k_sched's count bounds that union and the Property that gives it, stated over "
                                 "that audit, is in the lock at the statement `DISCHARGES` pins; SenderDecodes, the "
                                 "decoder, is what K counts (`COUNTS`)",
-                          "discharged_by": ("Properties.NetworkCertifier.schedulesCoveredAt",)},
+                          "discharged_by": ("Properties.Certifier.schedulesCoveredAt",)},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KSBy at "
                                  "the wired check at the layout's wires, KS where it has none, from KS_of's hypotheses "

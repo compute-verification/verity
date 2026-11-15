@@ -3,8 +3,8 @@ module
 /-!
 # The certifier program: the active network certifier's records as rows, and their audit
 
-The executable form of `security/Definitions/NetworkCertifier/RecordRows.lean` over the lanes of
-`security/Definitions/NetworkCertifier/Warden.lean`, for the records the active network certifier writes
+The executable form of `security/Definitions/Certifier/RecordRows.lean` over the lanes of
+`security/Definitions/Certifier/Warden.lean`, for the records the active network certifier writes
 (`verity/protocols/accounting/certifier/verifier/warden.py`, whose `audit` is the reference). Each direction's record
 has a row a bucket holding the `r` cells of every connection live in it, connection by connection in ordinal order,
 each cell naming its connection (`readCell`); the `fails` record holds a failed connection's reason (`readReason`).

@@ -4,7 +4,7 @@ public import Definitions.Certifier.Guarantees.MonitoringPeriodChecked
 public import Proofs.Certifier.Witnesses
 public import Proofs.Certifier.WitnessesChecked
 public import Proofs.Certifier.SampledAuditAccepted
-public import Proofs.NetworkCertifier.MonitoringPeriodChecked
+public import Proofs.Certifier.MonitoringPeriodChecked
 public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.Claims.Prob
 import Mathlib.Algebra.Order.Floor.Extended
