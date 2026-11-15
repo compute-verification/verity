@@ -19,18 +19,18 @@ the stream's first round in the schedule (`leaveOf`, the streams whose rounds ca
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
-open _root_.Flock.Firewall.Frame (Req Place)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frame (Req Place)
 
 set_option maxHeartbeats 1000000 in
 /-- **The mark `roundPlace` returns is the found frame's**: no coins and no round taken yet, read before `withAlg` and
 rep 0's algebraic-phase coins at rep 1's first round change the frame. -/
-theorem roundPlace_first {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
+theorem roundPlace_first {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
     f = (p.coins.isEmpty && !p.st.begun) := by
-  unfold _root_.Flock.Firewall.Frames.roundPlace at h
+  unfold _root_.Flock.ZkServer.Frames.roundPlace at h
   simp only [hf, bind, Except.bind, pure, Except.pure] at h
   by_cases hfst : (p.coins.isEmpty && !p.st.begun) = true
   all_goals repeat' (first
@@ -51,10 +51,10 @@ theorem roundPlace_first {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots
 /-- **The loop's mark of a stream's first round is the schedule's**: on the found frame's run, its requests before its
 rounds rep 0's algebraic-phase coins alone, where it took no round exactly where no round of its stream is in
 `seen`. -/
-theorem roundPlace_mark {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
+theorem roundPlace_mark {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i r = some (j, p))
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
     {pre : List Req} {ev : List (Nat × ByteArray × Place × Array F128)} (hR : RepRun pre ev p)
     (hpre : ∀ x ∈ pre, ∃ k b, x = .prior k b) {seen : List String} {stream : String}
     (hev : ev.isEmpty = !seen.contains stream) : f = !seen.contains stream :=

@@ -3,14 +3,14 @@ module
 public import Evaluate.TC.Fp8Atom
 
 /-!
-# The block-scaled FP4 tensor-core steps: `verity.ml.circuits.silicon.models.BlockScaledAlignAdd`
+# The block-scaled FP4 tensor-core steps: `verity.circuits.silicon.models.BlockScaledAlignAdd`
 
-A copy of `Security/Definitions/Pouw/PearlC/Fp4.lean`'s step, definition for definition (its `decode`, `scaleValue`,
+A copy of `security/Definitions/Pouw/PearlC/Fp4.lean`'s step, definition for definition (its `decode`, `scaleValue`,
 `blockProduct`, the `groupSum` form and the vectors left out): E2M1 nibbles, the UE4M3 and UE8M0 block scales, the group
 terms and the five-way align-add with its truncations, on sm_120's NVFP4 and MXFP4 atoms. `Fp4Atom.step` is `none` exactly
 where the Python model raises; `Fp4Atom.sumNegative`, the sign the MXFP4 primitive reads where the sum leaves binary32, is
 transcribed from `prims._block_scaled_sum_negative` (Security: none yet). Each definition names the Security definition it
-must equal, to be proved where the equalities live, since code never requires `Security/`.
+must equal, to be proved where the equalities live, since code never requires `security/`.
 -/
 
 @[expose] public section

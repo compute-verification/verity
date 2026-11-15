@@ -1,5 +1,5 @@
-"""A recorded remote session replayed through both verifiers, `RemoteAudit.Session` (the definition, served by
-`remote-audit-difftest` as `session`) and `audit.AuditRun` (`ra_cases.session`), their verdicts and reasons compared.
+"""A recorded remote session replayed through both verifiers, `Poub.Session` (the definition, served by
+`poub-difftest` as `session`) and `audit.AuditRun` (`ra_cases.session`), their verdicts and reasons compared.
 
 A record is one of two kinds:
 
@@ -217,7 +217,7 @@ def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
         else:
             continue
         if type(at) is not int:
-            raise ValueError(f"window {t} was drawn at no recorded time")
+            raise ValueError(f"window {t} was sampled at no recorded time")
         timed.append((at, 2, t, 0, {"kind": "close", "t": t, "now": at}))
     start = seen[0]["released_ns"]
     events = [{"kind": "start", "now": start}] + [e for *_, e in sorted(timed, key=lambda x: x[:4])]
@@ -259,7 +259,7 @@ def held(session: dict, verdict: dict) -> tuple[bool, str]:
     if verdict["drawn"] != want:
         return False, f"drew {verdict['drawn']}, the record {want}"
     if session.get("accepted") and len(want) != coins.openings_coins(W, g):
-        return False, f"an accepted session with {len(want)} of {coins.openings_coins(W, g)} draws drawn"
+        return False, f"an accepted session with {len(want)} of {coins.openings_coins(W, g)} samples taken"
     if session.get("accepted"):
         return True, "every draw drawn, as many as recorded"
     return True, "no rejection in what the record keeps; its failure is in what it doesn't"

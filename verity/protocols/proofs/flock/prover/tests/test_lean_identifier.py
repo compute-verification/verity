@@ -19,7 +19,7 @@ import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "public-inputs"
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
 #: PoUW's (H, s, U) stand-in: Flock reads none of it
@@ -35,7 +35,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None,
 def store():
     assert (FIXTURE / "stage" / "circuit.txt").is_file(), (
         f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures verity/protocols/proofs/flock/prover/tests/fixtures/{FIXTURE.name}`")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return FIXTURE
 
 

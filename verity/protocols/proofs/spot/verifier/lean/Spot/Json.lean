@@ -1,7 +1,3 @@
-/-
-JSON as the Python reference reads it, over canonical JSON (integers only): Python's `==`, `bool(x)`, `x.get(k)` and its
-integer tests. The one difference is deliberate: `jeq` tells `true` from `1`, which Python's `==` doesn't.
--/
 module
 
 public import Flock.Canon
@@ -12,6 +8,11 @@ meta import Flock.Hash
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 public import Lean.Data.Json.FromToJson.Basic
+
+/-!
+JSON as the Python reference reads it, over canonical JSON (integers only): Python's `==`, `bool(x)`, `x.get(k)` and its
+integer tests. The one difference is deliberate: `jeq` tells `true` from `1`, which Python's `==` doesn't.
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true

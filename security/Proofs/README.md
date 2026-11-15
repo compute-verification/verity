@@ -39,11 +39,11 @@ registry, path by path: `research msg owners PATH`.
 | Area | What it holds |
 |---|---|
 | `Accounting` | The proofs of resource accounting's guarantees; the joint period's bridges |
+| `Certifier` | The network certifier's proofs ([README](Certifier/README.md)) |
 | `Core` | `Verity.SecurityProofs.G` for core's guarantees, and every lemma behind them |
 | `Flock` | Flock's proofs: the verifier's, level3's and soundness's (`Flock/Soundness/README.md`) |
 | `Hash` | The hash area's proofs |
-| `Nci` | The proofs of the inference-only policy's guarantees |
-| `NetworkCertifier` | The network certifier's proofs ([README](NetworkCertifier/README.md)) |
+| `InferenceOnly` | The proofs of the inference-only policy's guarantees |
 | `Pous` | The proofs of PoUS's guarantees; `Statements` holds the lemmas' statements |
 | `Pouw` | PoUW's proofs: every theorem and lemma over `Definitions.Pouw` |
 | `Properties/` | The proofs of `security/Properties/`, under each property's area name |

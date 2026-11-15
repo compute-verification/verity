@@ -9,7 +9,7 @@ public import Definitions.Pouw.PearlC.Sha512
 
 `Fp4Sem.lines` is abstract. This module is the noise Pearl-C4's registered hashing (`pearl-c-nvfp4-v0`, h0) samples, as
 a function of the salt, the commitment roots and the unit's index, through the spec's own SHA-512 (`Sha512.digest`), not
-a random oracle. D-SK (`Fp4Sem.SaltKeyedB`) reads `seedB` and `drawB`, and `sha512Fp4Sem` (beside `Fp4Sem`) is the
+a random oracle. D-SK (`Fp4Sem.SaltKeyedB`) reads `seedB` and `sampleB`, and `sha512Fp4Sem` (beside `Fp4Sem`) is the
 semantics whose lines these rules give; the oracle `H` is then unused, and what is uniform is the salt.
 
 The rules, op for op, are `verity/protocols/pouw/prover/schemes/pearl_c4.py` at h0:
@@ -25,7 +25,7 @@ The rules, op for op, are `verity/protocols/pouw/prover/schemes/pearl_c4.py` at 
   each byte two E2M1 codes, its low nibble first (`pearl_c4._codes`).
 - The lines (`PearlC4.encode`, `_side`, `basis`), with the roles `ROLE_EA = 0`, `ROLE_FA = 1`, `ROLE_EB = 2` and
   `ROLE_FB = 3`: `E_A` row `i` is line `i` of `seedA` at role 0, `F_A` row `t` line `t` of `seedB` at role 1, `E_B` row `j`
-  line `j` of `seedB` at role 2, and `F_B` row `t` line `t` of `seedB` at role 3 (`drawB`).
+  line `j` of `seedB` at role 2, and `F_B` row `t` line `t` of `seedB` at role 3 (`sampleB`).
 
 **What is a parameter.**
 - The salt's bytes, `salt : S → List ℕ`: the 32-byte epoch salt is `NoiseSha512.Salt32`, uniform when the game samples
@@ -81,7 +81,7 @@ def drawA (sh : Shape) (seedA seedB : List ℕ) : Matrix (Fin sh.m) (Fin 32) Nib
   (fun i t => line seedA 0 i t, fun l t => line seedB 1 l t)
 
 /-- **`B̃`'s lines from `seed_B`**: `E_B`'s `n` lines (role 2) and `F_B`'s `k` lines (role 3) of a unit of shape `sh`. -/
-def drawB (sh : Shape) (seedB : List ℕ) : Matrix (Fin sh.n) (Fin 32) Nib × Matrix (Fin sh.k) (Fin 32) Nib :=
+def sampleB (sh : Shape) (seedB : List ℕ) : Matrix (Fin sh.n) (Fin 32) Nib × Matrix (Fin sh.k) (Fin 32) Nib :=
   (fun j t => line seedB 2 j t, fun l t => line seedB 3 l t)
 
 end NoiseSha512Fp4

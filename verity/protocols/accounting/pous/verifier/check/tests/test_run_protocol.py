@@ -7,7 +7,7 @@ Under `--test` (`testProtocol`, the test signers' schemes alone) the cases are `
 honest and under one edit of the run, of its session or of its JSON, each as the protocol's case with its setup's own
 commitment and evidence, those under one edit of the case's framing, and those under one edit of the setup's evidence
 (another setup's, a bit of its commitment, salt or `C*` off, `C*` cut short, the setup missing). Under the deployed
-protocol (S1's LMS alone) they are a small period of `pous.period.run` (the small point, `point_for(size, W, C0)`),
+protocol (S1's LMS alone) they are a small period of `pous.period_prover.run` (the small point, `point_for(size, W, C0)`),
 signed by a key at S1's deployed parameters (`mc_cases.deployed_signer`), honest and under a prover that answers every
 other round with zeros; each protocol refuses the other's signer; and the same two at the certified point
 (`period.point_for`'s default) on a store set up there, where the honest one certifies its store (slow: a 256-block
@@ -48,6 +48,7 @@ from verity_difftest import protocol as P
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.protocols.accounting.pous.verifier import setup as pous_setup
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 
@@ -227,8 +228,8 @@ def periods(signer, store: bytes = STORE) -> dict[str, period.Run]:
     kw = dict(signer=signer, schemes=mc.SCHEMES if signer.scheme == mc.LMS else M.ts.SCHEMES,
               protocol=period.PROTOCOL if signer.scheme == mc.LMS else TEST_ID,
               point=period.point_for(len(store), period.W, period.C0))
-    return {"honest": period.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9), **kw),
-            "zeros": period.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9),
+    return {"honest": period_prover.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9), **kw),
+            "zeros": period_prover.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9),
                                 prover=_zeros_on_odd_rounds, **kw)}
 
 
@@ -264,12 +265,12 @@ def test_a_small_periods_answers_agree(deployed_server, test_server) -> None:
 
 
 @pytest.fixture(scope="module")
-def certified_store() -> period.EncodedStore:
+def certified_store() -> period_prover.EncodedStore:
     """`STORE` set up at the certified point (`period.point_for`'s default, 256 labels), its `C*` encoded in up to
     `period.SETUP_WORKERS` processes: about 16 core-minutes, since no `C*` that setup accepts there is cheaper than
     encoding one (a random label decodes to a payload with probability 2^-16)."""
     workers = min(period.SETUP_WORKERS, len(os.sched_getaffinity(0)))
-    return period.setup_store(STORE, COINS, period.point_for(len(STORE)), workers=workers)
+    return period_prover.setup_store(STORE, COINS, period.point_for(len(STORE)), workers=workers)
 
 
 @pytest.mark.slow
@@ -282,8 +283,8 @@ def test_a_certified_periods_answers_agree(deployed_server, certified_store) -> 
     held = certified_store
     kw = dict(signer=M.deployed_signer(), schemes=mc.SCHEMES, protocol=period.PROTOCOL, clock=M.Clock(10 ** 9))
     got = {}
-    for name, prover in (("honest", period.honest), ("zeros", _zeros_on_odd_rounds)):
-        p = period.audit("n0", held, COINS, log=M.ts.session_log(), prover=prover, **kw)
+    for name, prover in (("honest", period_prover.honest), ("zeros", _zeros_on_odd_rounds)):
+        p = period_prover.audit("n0", held, COINS, log=M.ts.session_log(), prover=prover, **kw)
         assert _part(DEPLOYED.reference(p.case)) == _part(p.answer), name
         got[name] = json.loads(D.replay(DEPLOYED, p.case, deployed_server)[1])
         assert _part(got[name]) == _part(p.answer), name

@@ -61,7 +61,7 @@ names and the rep streams' are distinct (`Names`: `tableNames_nodup`, `repNames_
 `Case.tables_nodup`), and the session returns the printed honest masked record of one `root_B` per table and sends
 the link of them, then the streams' rounds (`Session`: `sessionPZk_factsJ`); that record decodes, each table's
 `root_B` read under its name and each rep stream found under its name, reads live and carries the sample (`Decode`:
-`decode_recordObjZkJ`, `live_recordObjZkJ`, `recordDraw_recordObjZkJ`). Every table's cap and reps are what the record
+`decode_recordObjZkJ`, `live_recordObjZkJ`, `recordSample_recordObjZkJ`). Every table's cap and reps are what the record
 needs (`Prover`: `Case.points_regions`, `proverOkJ`), so the record's checks hold but what they ask of the proof files
 (`Goals`: `Run.jsonJ`, `recordJsonJ`, `FilesAt`, `recordAt_of`, `recordJ_of`), and `complete` holds with `FilesJ` for
 `RecordJ` (`completeJ`). Each table's reps' proof files decode to proofs of its parameters, its `root_B` as their cap
@@ -105,7 +105,8 @@ salts and 64-byte path entries, and a file under `2^64` bytes at a good case's a
 (`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four and the
 mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` proves three of level 0's four and
 `Zk.RankDeployed` the bound, so `complete_jsonT` rests on the JSON specification and level 0's verifier premise
-(`Level0.Verifier`), which is not proved.
+(`Level0.Verifier`), which is not proved. That premise covers both statement versions, so completeness at today's
+version rests on it at both.
 For zero knowledge, `honestPR`'s first message is the link of
 the tables' level-0 caps, each cap a function of its level's leaves, over `encodeRowsZk`'s rows (`Round0`:
 `honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β`,

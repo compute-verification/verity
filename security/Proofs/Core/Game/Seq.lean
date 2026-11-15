@@ -49,8 +49,8 @@ theorem expect_runsG (g : Game α) (s : Strategy g) :
       rw [expect_map]
       exact expect_runsG g s n _
 
-theorem expect_draw (C : Type) [Fintype C] [Nonempty C] (F : C → ℝ) :
-    expect F (Game.draw C) (drawStrat C) = (∑ c : C, F c) / Fintype.card C := rfl
+theorem expect_sample (C : Type) [Fintype C] [Nonempty C] (F : C → ℝ) :
+    expect F (Game.draw C) (sampleStrat C) = (∑ c : C, F c) / Fintype.card C := rfl
 
 end Game
 

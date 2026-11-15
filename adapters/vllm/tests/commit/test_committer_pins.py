@@ -90,8 +90,8 @@ def test_a_served_models_geometry_digest():
     com = O.committer(run_id="pins")
     config = SimpleNamespace(hidden_size=64, num_hidden_layers=2, num_attention_heads=4, num_key_value_heads=2, head_dim=16,
                              intermediate_size=128, vocab_size=1000)
-    engine = SimpleNamespace(vllm_config=SimpleNamespace(model_config=SimpleNamespace(hf_config=config)))
-    com.engine = SimpleNamespace(llm=SimpleNamespace(llm_engine=engine), cp={"repo": "pins/model", "revision": "r0"})
+    com.engine = SimpleNamespace(vllm_config=SimpleNamespace(model_config=SimpleNamespace(hf_config=config)),
+                                 cp={"repo": "pins/model", "revision": "r0"})
     assert com._model_geo_digest().hex() == MODEL_GEO
 
 

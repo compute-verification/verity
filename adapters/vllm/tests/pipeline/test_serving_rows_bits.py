@@ -22,19 +22,19 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
+from verity.circuits.defs import SpecializedDefinition, bind
 from verity.commitments.gates.embedding import read
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity_flock import circuit as FC
 from verity_flock.class_statement import UnitStager
+
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import long_row as LR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 #: `Flock.Statement.checkInRange`'s bound on a statement's regions; a unit's are one a row (`Flock.HmOut.regions`)
 REGIONS_MAX = 1024
@@ -43,7 +43,7 @@ BIND = {"partition": "0" * 128, "program": "0" * 128}
 VERIFY = PF.PACKAGE / ".lake" / "build" / "bin" / PF.EXE
 
 
-def _templates(t) -> dict[str, object]:
+def _templates(t) -> dict[str, SpecializedDefinition]:
     """The long row ``t``'s templates but its read, by id, in body order."""
     return {descriptor_id(d): d for _k, d in LR.units(t) if spec_base(descriptor_id(d)) != "EmbeddingRead_v1"}
 

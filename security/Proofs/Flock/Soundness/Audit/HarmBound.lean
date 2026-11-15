@@ -27,14 +27,14 @@ closed form. Stratum `s` has `n_s` units of which `k_s` are sampled uniformly wi
   bound at `τ`, so its value `∑ s g_s x_s` is a harm bound. The greedy fill, strata taken whole in decreasing
   `g_s n_s / k_s` until the budget `ln(1/δ)` runs out, the last one fractionally, is separated by that last stratum's
   `g_s n_s / k_s`, or by `0` when the budget never runs out. This is `density_bound` in the sampling optimizer
-  (`verity.core.protocols.spot.optimize`).
+  (`verity.protocols.proofs.spot.prover.optimize`).
 * `work_isHarmBound_fill`: the same under the work sampling design with harm the credited work `w_s`, so its value bounds
   `workOf σ w B`.
 * `IsHarmBound.natFloor`, `stratified_isHarmBound_bits`, `Partition.audit_exfiltration_stratified`: **the exfiltration
   form**. With harm a unit's output bits `b_s`, the floor of the fill's value is `audit_exfiltration`'s `H`.
 * `stratumRisk`, `le_stratumRisk`, `stratified_isHarmBound_exact`: the same weak duality with each stratum's exact risk
   `ln(C(n_s, k_s)/C(n_s − c, k_s))` in place of `k_s c / n_s`, which is at most it. Core's
-  `verity.core.protocols.profile.Stratified.harm_bound` is that knapsack's value over the exact risk increments: below the
+  `verity.protocols.proofs.spot.verifier.profile.Stratified.harm_bound` is that knapsack's value over the exact risk increments: below the
   closed form's, and a harm bound by this theorem at the price its greedy fill stops at, not by the closed form.
 -/
 
@@ -45,13 +45,13 @@ namespace FlockSoundness.Audit
 open Game Finset
 open scoped ENNReal NNReal
 
-namespace Law
+namespace SamplingDesign
 
 variable {n m : ℕ}
 
 /-! ## The closed form -/
 
-/-- The hypergeometric escape of `c` of `N` units under a uniform `k`-subset is at most `exp(−k c / N)`: it is at most
+/-- The hypergeometric missProb of `c` of `N` units under a uniform `k`-subset is at most `exp(−k c / N)`: it is at most
 `(1 − c/N)^k` (`choose_div_le_pow`), and `1 − x ≤ exp(−x)`. -/
 theorem choose_div_le_exp {N c k : ℕ} (hk : k ≤ N) (hc : c ≤ N) :
     ((N - c).choose k : ℝ) / (N.choose k : ℝ) ≤ Real.exp (-((k : ℝ) * c / N)) := by
@@ -198,7 +198,7 @@ theorem card_filter_le_stratum (σ : Fin n → Fin m) (s : Fin m) (B : Finset (F
 units in stratum `s` escapes with probability at most `exp(−∑ s k_s c_s / n_s)`. -/
 theorem stratified_escape_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (B : Finset (Fin n)) :
-    (stratified σ k hk).escape B ≤
+    (stratified σ k hk).missProb B ≤
       ENNReal.ofReal (Real.exp (-∑ s, (k s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card)) := by
   rw [stratified_escape]
   exact prod_choose_div_le_exp (fun s => (stratum σ s).card) (fun s => (B.filter (σ · = s)).card) k hk
@@ -207,14 +207,14 @@ theorem stratified_escape_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk 
 /-- **The work sampling design in closed form**: a set with `c_s` units in stratum `s` escapes with probability at most
 `exp(−∑ s k_s c_s / n_s)`, `k_s = workK σ w f K s`, at any floors. -/
 theorem work_escape_le_exp (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (B : Finset (Fin n)) :
-    (work σ w f K).escape B ≤
+    (work σ w f K).missProb B ≤
       ENNReal.ofReal (Real.exp (-∑ s, (workK σ w f K s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card)) :=
   stratified_escape_le_exp σ (workK σ w f K) (workK_le σ w f K) B
 
 /-- A set escaping with probability at least `δ > 0` holds at most `n_s − k_s` units of stratum `s`, and its closed-form
 risk `∑ s k_s c_s / n_s` is at most `ln(1/δ)`. -/
 theorem stratified_risk_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) {δ : ℝ≥0∞}
-    (hδ : 0 < δ) {B : Finset (Fin n)} (hB : δ ≤ (stratified σ k hk).escape B) :
+    (hδ : 0 < δ) {B : Finset (Fin n)} (hB : δ ≤ (stratified σ k hk).missProb B) :
     (∀ s, (B.filter (σ · = s)).card + k s ≤ (stratum σ s).card) ∧
       ∑ s, (k s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card ≤ Real.log δ.toReal⁻¹ := by
   rw [stratified_escape] at hB
@@ -256,7 +256,7 @@ theorem work_isHarmBound_fill (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : 
   stratified_isHarmBound_fill σ (workK σ w f K) (workK_le σ w f K) (fun s => (w s : ℝ)) x hδ hτ hfull hempty hspent
 
 /-- Harm in whole bits: the floor of a harm bound is one. -/
-theorem _root_.FlockSoundness.Audit.IsHarmBound.natFloor {L : Law n} {b : Fin n → ℕ} {δ : ℝ≥0∞} {H : ℝ}
+theorem _root_.FlockSoundness.Audit.IsHarmBound.natFloor {L : SamplingDesign n} {b : Fin n → ℕ} {δ : ℝ≥0∞} {H : ℝ}
     (hH : IsHarmBound L (fun u => (b u : ℝ)) δ H) : IsHarmBound L (fun u => (b u : ℝ)) δ (⌊H⌋₊ : ℕ) := by
   intro B hB
   have h : ((∑ u ∈ B, b u : ℕ) : ℝ) ≤ H := by
@@ -278,7 +278,7 @@ theorem stratified_isHarmBound_bits (σ : Fin n → Fin m) (k : Fin m → ℕ) (
 
 /-! ## The exact risk -/
 
-/-- Stratum `s`'s exact risk with `c` of its units wrong, `ln(C(n_s, k_s)/C(n_s − c, k_s))`: minus the log of its escape. -/
+/-- Stratum `s`'s exact risk with `c` of its units wrong, `ln(C(n_s, k_s)/C(n_s − c, k_s))`: minus the log of its missProb. -/
 noncomputable def stratumRisk (σ : Fin n → Fin m) (k : Fin m → ℕ) (s : Fin m) (c : ℕ) : ℝ :=
   Real.log (((stratum σ s).card.choose (k s) : ℝ) / (((stratum σ s).card - c).choose (k s) : ℝ))
 
@@ -319,7 +319,7 @@ theorem stratified_isHarmBound_exact (σ : Fin n → Fin m) (k : Fin m → ℕ) 
           (mul_le_mul_of_nonneg_left hrisk hτ)
     _ = _ := add_comm _ _
 
-end Law
+end SamplingDesign
 
 namespace Partition
 
@@ -328,27 +328,27 @@ variable {C : Verity.Boolean.Circuit} {n m : ℕ} (P : Partition C n)
 /-- **Exfiltration under the stratified sampling design**: `audit_exfiltration` at the harm bound of a separated fill of the output
 bits `b_s` per unit of stratum `s`. A prover that picks its strategy from a uniform message and a receiver that sees only
 what is delivered on `D` succeed together with probability at most
-`2^⌊∑ s b_s x_s⌋ · ∑_{i ≤ j} C(n, i) / |M| + δ + ε_ks + δ_link + δ_in`, where `miss (j + 1) < δ`. -/
+`2^⌊∑ s b_s x_s⌋ · ∑_{i ≤ j} C(n, i) / |M| + δ + ε_ks + ε_bind + δ_in`, where `miss (j + 1) < δ`. -/
 theorem audit_exfiltration_stratified {σs : Fin n → Fin m} {k : Fin m → ℕ}
-    {hk : ∀ s, k s ≤ (Law.stratum σs s).card} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
-    {X : (R : Reg) → Cont (Law.stratified σs k hk) Reg session R → (Fin C.N → Bool)}
+    {hk : ∀ s, k s ≤ (SamplingDesign.stratum σs s).card} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
+    {X : (R : Reg) → Cont (SamplingDesign.stratified σs k hk) Reg session R → (Fin C.N → Bool)}
     {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
-    {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]
-    [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
+    {a : Fin C.N → Bool} {εks εbind δin : ℝ≥0∞} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]
+    [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound εbind)
     (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (b : Fin m → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
     (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, b (σs u))
     (x : Fin m → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ) {τ : ℝ} (hτ : 0 ≤ τ)
-    (hfull : ∀ s, τ * k s / (Law.stratum σs s).card < b s → x s = (((Law.stratum σs s).card - k s : ℕ) : ℝ))
-    (hempty : ∀ s, (b s : ℝ) < τ * k s / (Law.stratum σs s).card → x s = 0)
-    (hspent : τ = 0 ∨ ∑ s, (k s : ℝ) * x s / (Law.stratum σs s).card = Real.log δ.toReal⁻¹)
-    {j : ℕ} (hj : (Law.stratified σs k hk).miss (j + 1) < δ)
-    (σ : M → Strategy (audit (Law.stratified σs k hk) Reg session)) (g : (D → Bool) → M) :
+    (hfull : ∀ s, τ * k s / (SamplingDesign.stratum σs s).card < b s → x s = (((SamplingDesign.stratum σs s).card - k s : ℕ) : ℝ))
+    (hempty : ∀ s, (b s : ℝ) < τ * k s / (SamplingDesign.stratum σs s).card → x s = 0)
+    (hspent : τ = 0 ∨ ∑ s, (k s : ℝ) * x s / (SamplingDesign.stratum σs s).card = Real.log δ.toReal⁻¹)
+    {j : ℕ} (hj : (SamplingDesign.stratified σs k hk).miss (j + 1) < δ)
+    (σ : M → Strategy (audit (SamplingDesign.stratified σs k hk) Reg session)) (g : (D → Bool) → M) :
     avg (fun msg => prob (fun o => o.1 = true ∧ g (out D (X (reg (σ msg)) (cont (σ msg)))) = msg)
-        (audit (Law.stratified σs k hk) Reg session) (σ msg)) ≤
+        (audit (SamplingDesign.stratified σs k hk) Reg session) (σ msg)) ≤
       ((2 ^ ⌊∑ s, (b s : ℝ) * x s⌋₊ * ∑ i ∈ range (j + 1), n.choose i : ℕ) : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) +
-        (δ + εks + δlink + δin) :=
+        (δ + εks + εbind + δin) :=
   P.audit_exfiltration hks hlink hin hD (fun u => b (σs u)) K hK hsep hw
-    (Law.stratified_isHarmBound_bits σs k hk b x hδ hτ hfull hempty hspent) hj σ g
+    (SamplingDesign.stratified_isHarmBound_bits σs k hk b x hδ hτ hfull hempty hspent) hj σ g
 
 end Partition
 

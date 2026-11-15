@@ -3,7 +3,7 @@ sampler the vocabulary lacks, a top-p split count other than the registered one,
 outside the decoder's, and an engine the target doesn't apply)."""
 from __future__ import annotations
 
-from verity.definitions.registry.topp_geometry import registered_splits
+from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
 from .common import Unexpressible
 from .phi import Phi

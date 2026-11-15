@@ -20,7 +20,7 @@ from pathlib import Path
 
 import figure1 as f1
 from verity.protocols.proofs.spot.prover.optimize import Grain, leak_count
-from verity.circuits.partition_v2 import UNIT_CLASSES
+from verity.circuits.partition_v2 import SIZE_CLASSES
 
 SCHEMA = "spot-figure4/v1"
 #: the evasion threshold the post's sampling argument is stated at
@@ -73,11 +73,11 @@ def run(model: str, one: dict) -> dict:
     t = target["value"]
     tokens = {s.name: s.requests * c["tokens_per_request"].value for s in f1.scopes(c, part)}
     scopes = (f1.PRIMARY, f1.SECONDARY)
-    marks = [{"label": f"{UNIT_CLASSES[0]:,} bits: the smallest size class", "bits": float(UNIT_CLASSES[0])},
+    marks = [{"label": f"{SIZE_CLASSES[0]:,} bits: the smallest size class", "bits": float(SIZE_CLASSES[0])},
              {"label": f"{part.bits:.0f} bits: {model}'s mean proof block", "bits": part.bits},
              {"label": f"{one['served_bits_request']:,} bits: a request's tokens",
               "bits": float(one["served_bits_request"])},
-             {"label": f"{UNIT_CLASSES[-1]:,} bits: the largest size class", "bits": float(UNIT_CLASSES[-1])}]
+             {"label": f"{SIZE_CLASSES[-1]:,} bits: the largest size class", "bits": float(SIZE_CLASSES[-1])}]
     need = {s: {m["label"]: exact(m["bits"], tokens[s], per_token, t)["rate"] for m in marks} for s in scopes}
     lines = [(one["configurations"][n]["label"], one["configurations"][n]["overhead"], one["taxes"][n]["tax"], n)
              for n in LINES]

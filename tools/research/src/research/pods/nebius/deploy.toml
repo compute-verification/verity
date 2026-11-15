@@ -55,7 +55,7 @@ managed = ["/usr/local/bin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/system
            "/etc/systemd/system.control/*/*",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# the auditor host for proofs' challenger service (us-north1, trusted-host): it runs the challenger as
+# the auditor device for proofs' challenger service (us-north1, trusted-device): it runs the challenger as
 # `auditor` from infra's pinned tree through vy-challenger-gate and takes no `research run` (/etc/vy/auditor), and no cluster pool
 # or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift skips it
 # (`admin`) and infra's lead reads it with `research deploy drift --on vy-challenger-1` from a machine holding vy-admin's key.
@@ -65,7 +65,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
            "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*"]
 
-# the auditor host for PoUB's verifier (uk-south2, trusted-host, as vy-challenger-1): it runs
+# the auditor device for PoUB's verifier (uk-south2, trusted-device, as vy-challenger-1): it runs
 # the verifier as `auditor` from infra's pinned tree through vy-verifier-gate and takes no `research run` (/etc/vy/auditor), and no
 # cluster pool or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift
 # skips it (`admin`), as on vy-challenger-1.
@@ -75,7 +75,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
            "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*", "/etc/vy/verifier.json"]
 
-# vy-auditor-2: the same auditor host for the demo H200 (vy-dc-h200-2, us-central1), where PoUS's timed reads need the
+# vy-auditor-2: the same auditor device for the demo H200 (vy-dc-h200-2, us-central1), where PoUS's timed reads need the
 # challenger in-region. A 1x RTX PRO 6000 VM, because the tenant's non-GPU vCPU quota in us-central1 is 0; its GPU is unused.
 [nodes.vy-auditor-2]
 admin = true
@@ -406,12 +406,13 @@ owner = "infra"
 # held to `main`'s rules whatever tree each run ships. research.remote's launch names it where the machine has it and whatever
 # reads a run's command there knows it (the machine's slot_only.py above where it has one, which may be installed before or
 # after this file; else, on a machine that starts a run only through a check slot, the research package the run ships). On
-# both nodes and every CPU node, which keep the pools. One file below its repository path, which is how a run's command is
-# known as slot.py's, with nothing beside it: alone, slot.py names the default check cache and reads no other file, so one
-# rename replaces the copy whole. No entry places a file under check-slot/ but this one.
+# both nodes and every CPU node, which keep the pools. One file below tools/verity/check/, where every machine has it whatever
+# the tree's own path (a launch names it), which is how a run's command is known as slot.py's, with nothing beside it: alone,
+# slot.py names the default check cache and reads no other file, so one rename replaces the copy whole. No entry places a
+# file under check-slot/ but this one.
 [[file]]
 path = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
-src = "tools/verity/check/slot.py"
+src = "tools/check/slot.py"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
          "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
@@ -458,7 +459,7 @@ src = "tools/research/src/research/pods/nebius/vy-slot-only.timer"
 nodes = ["vy-nebius-cpu-1"]
 owner = "infra"
 
-# ---- the auditor host: no `research run` (/etc/vy/auditor lists no command: research.remote refuses every one, and slot_only.py
+# ---- the auditor device: no `research run` (/etc/vy/auditor lists no command: research.remote refuses every one, and slot_only.py
 # --auditor stops one from an older tree); after installing, `sudo systemctl enable --now vy-auditor-only.timer`. The challenger runs
 # through vy-challenger-gate (verity/protocols/compose/device/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, each lane's own key, LANE `-` for a key that reads only; setup.sh), then
@@ -526,7 +527,7 @@ nodes = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
 run = ["systemd:vy-auditor-only.timer"]
 owner = "infra"
 
-# the auditor host's own list, made from the register too: its template names each serving node, and the host's own line asks
+# the auditor device's own list, made from the register too: its template names each serving node, and the host's own line asks
 # the register for its private address. No register file holds that field yet, so the entry is held: an install of the host's
 # other files passes it by, and drift says why. Held, it names its template as `src`; the PR that drops the hold makes it a
 # `template` with a `by`, as the others are (the header)
@@ -573,7 +574,7 @@ by = "research deploy, from the template and the register of machines"
 nodes = ["vy-control-verity"]
 owner = "infra"
 
-# ---- the verifier's auditor host, vy-auditor-1, an auditor host as above (/etc/vy/auditor, vy-auditor-only.timer). The verifier runs
+# ---- the verifier's auditor device, vy-auditor-1, an auditor device as above (/etc/vy/auditor, vy-auditor-only.timer). The verifier runs
 # through vy-verifier-gate (verity/protocols/accounting/poub/device/live_verifier/host.py): once installed, `sudo vy-verifier-setup GATE_KEYS TUNNEL_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, LANE `-` for a key that reads only; TUNNEL_KEYS: `prover|challenger ADDRESS TYPE
 # BASE64 [COMMENT]`, the audited node's tunnel key and vy-challenger-1's; setup.sh), `sudo systemctl reload ssh`, then
@@ -690,8 +691,8 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy
 owner = "infra"
 
 [[file]]
-path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/check/common.py"
-src = "tools/verity/check/common.py"
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/check/common.py"
+src = "tools/check/common.py"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
          "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]

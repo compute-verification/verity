@@ -7,7 +7,7 @@ Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Pro
 * :func:`from_instances` -- the Build's instance sequence (`instances.json.gz`, `derive_step._instance_sequence`): the same nodes
   written one row per Call (`i`, `spec`, `form`, `name`, `args` = operand runs) -- a projection of the descriptor body plus the
   name annotation, produced by the same derivation on meta tensors (nothing executed).  The output type is not in a row: it is
-  the registered Definition's signature bound to the row's statics (`verity.definitions.registry`), read once per distinct spec.
+  the registered Definition's signature bound to the row's statics (`verity_vllm.definitions.registry`), read once per distinct spec.
 
 Both yield the same :class:`ProgramView`: Calls with ports, reads and names; prescribed inputs as Values of negative ids
 (`-(k + 1)` for parameter `k`; a record parameter has one port per field, anything else the port `out`); outputs as the reader
@@ -44,8 +44,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits import codec, refs
+from verity.circuits.defs import DefinitionTable
 from verity.circuits.program import is_input
-from verity.circuits.types import RecordType
+from verity.circuits.types import RecordType, Type
 from verity.circuits.types import Tuple as TupleT
 from verity.circuits.call_scope import spec_base, spec_statics
 
@@ -54,7 +55,8 @@ from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 
 __all__ = ["Port", "CallView", "ProgramView", "InputView", "from_instances", "from_descriptor", "definition_ports", "parse_type_repr",
-           "spec_base", "spec_statics", "ports_of_type", "param_reads", "reads_any_of", "iter_instance_rows"]
+           "spec_base", "spec_statics", "ports_of_type", "param_reads", "reads_any_of", "iter_instance_rows",
+           "specialization"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -526,9 +528,9 @@ class _Builder:
 # spec ids and types
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def ports_of_type(t) -> tuple[Port, ...]:
+def ports_of_type(t: Type) -> tuple[Port, ...]:
     """The output ports of a `verity.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
-    def one(name: str, lo: int, ty) -> Port:
+    def one(name: str, lo: int, ty: Type) -> Port:
         n = ty.leaves
         return Port(name, lo, lo + n, n, ty.homogeneous_width())
 
@@ -557,7 +559,7 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     if hit is not None:
         return hit
     # importing the registry registers the on-demand primitive families, so it stays in the functions that read it
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     reg, errors = load()
     base = spec_base(spec)
     d = reg.defs.get(base)
@@ -583,7 +585,7 @@ def specialization(fam: str, statics: dict[str, Any]) -> Any:
     """`call_scope.specialization` over the catalog, every module loaded (`registry.catalog.load`): the registered Definition
     `fam` bound to `statics`."""
     from verity.circuits.call_scope import specialization as bound
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     return bound(fam, statics, load()[0])
 
 
@@ -730,7 +732,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
     return b.view((), doc.get("digest"), "instances", check_cids=_check_calls(doc))
 
 
-def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) -> ProgramView:
+def from_descriptor(desc: dict[str, Any] | str, registry: DefinitionTable | None = None, checks: int = 0) -> ProgramView:
     """A Program descriptor (dict, or a path to `descriptor.json[.gz]`), decoded by `codec.decode_program` -> ProgramView of its
     program function's body, or of the root's body when the program function is inlined into the root (a request Build's
     descriptor).  Names from the decoded annotations' `node_hints` (node index -> hint); ports from each node's own output type;
@@ -740,7 +742,7 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) 
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
     if registry is None:
-        from verity.definitions.registry.catalog import load
+        from verity_vllm.definitions.registry.catalog import load
         registry, _errors = load()
     decoded = codec.decode_program(desc, registry)
     hints = {int(k): str(v) for k, v in decoded.annotations.get("node_hints", {}).items()}

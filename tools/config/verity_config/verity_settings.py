@@ -416,15 +416,25 @@ REGISTRY = EnvSettings(
     # ---- verity.circuits, its suites included
     Setting("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word "
             "and every pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
-    # ---- verity.definitions' suite
+    # ---- verity_vllm.definitions' suite
     Setting("VERITY_ML_DEFINITIONS_SLOW", flag, False, WHERE, "the definitions' tests at served statics run (the DSA mask's cut "
-            "at 43,008 and 131,072 keys, minutes): which tests run, never what a circuit computes"),
+            "at 43,008 and 131,072 keys, and the served positions merge against its one-port merge, minutes): which tests run, "
+            "never what a circuit computes"),
     # ---- verity_flock's suite
     Setting("VERITY_ML_FLOCK_CUDA_GHASH", stripped, "", WHERE, "a Flock b684b12 checkout's cuda-ghash directory, which "
             "test_zerocheck_fused and test_ring_switch build their kernels against where a GPU is present: which tests run"),
     # ---- verity.protocols.compose.verifier.lean's suite
     Setting("VERITY_COMPOSITION_SERVED", stripped, "", WHERE, "a directory holding a served Pearl+ run, which the composition "
             "suite's opt-in served test reads: which tests run, never what a verdict says"),
+    Setting("VERITY_SAMPLED_TWO_CASE", stripped, "", WHERE, "a directory holding one honest two-stage play's case "
+            "(sampled_two_small.sh's $OUT/form), which the composition suite's opt-in accept test reads: which tests run, "
+            "never what a verdict says"),
+    # ---- PoUW's prover suite
+    Setting("VERITY_SUITE_ROOT", stripped, "", WHERE, "the tree the suite runner (tools/check/suites.py) runs a suite in, "
+            "set under check, where test_pouw_device's CPU build runs and fails without a C++ compiler instead of skipping: "
+            "which tests run, never what a commitment holds"),
+    Setting("VERITY_POUW_H1_PIN", present, False, WHERE, "set, test_h1_pin.py builds the H1 unit's circuit at K = 64 and "
+            "holds it to its pin (about 3.5 minutes, 9.5 GB): which tests run, never what a circuit computes"),
     schema=RECORD_SCHEMA)
 
 

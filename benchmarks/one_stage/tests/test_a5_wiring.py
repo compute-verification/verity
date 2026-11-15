@@ -19,11 +19,11 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.windows import interface as I
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import interface as I
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
 import a5
 
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
@@ -116,7 +116,7 @@ def test_a_held_wired_row_flipped_at_the_row_its_reference_names_is_refused():
     assert all(v["refused"] for v in neg.values())
 
 
-def test_a_shared_row_readers_flipped_wired_row_is_its_drawn_units_own():
+def test_a_shared_row_readers_flipped_wired_row_is_its_sampled_proof_blocks_own():
     """A shared-row reader (its body each port's table, then its units' refs) whose wired port is not its first, as the weights
     tie's stream rows (``data`` a registered read, ``cv`` wired): the flipped string is its unit 0's ``cv`` row, so the
     verifier's wiring check on that unit refuses it, and the honest wires hold."""

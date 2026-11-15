@@ -6,7 +6,7 @@ question. Each claim is a fact a proof would establish about the prover *system*
 trusted clock:
 
 - `Computed(part, work)`: the values committed for a part of the Program are its evaluation (here by re-execution; in
-  Verity, sampled proofs at ε and δ over the part's proof blocks, `units` of the partition the profile names), `work`
+  Verity, SPOT at ε and δ over the part's proof blocks, `units` of the partition the profile names), `work`
   its ANDs.
 - `Carried(port, bits)`: a certifier port carried exactly the committed crossings in the declared occupancy, so its only
   freedom was `bits` of timing advice.

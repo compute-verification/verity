@@ -43,12 +43,14 @@ import torch
 HERE = Path(__file__).resolve().parent
 CT = HERE.parent / "codec_tensor"
 sys.path.insert(0, str(CT))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/codec_tensor/reader.py").parent))
 
 import bench as BW  # noqa: E402  (codec_tensor's)
 import reader as RD  # noqa: E402
 import sketching as SKT  # noqa: E402
 
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/word_codec/paged.py").parent))
 import kernels as K  # noqa: E402
 import paged as P  # noqa: E402
 import step_spans as SS  # noqa: E402

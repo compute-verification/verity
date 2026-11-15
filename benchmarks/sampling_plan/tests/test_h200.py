@@ -1,5 +1,5 @@
 """The H200 plan (`h200.py`): the block's units are circuits' partition, every execution phase is a uniform sample its tables
-divide within the statement cap, its K0 is IntegrityPeriodLog's, commitments are priced beside the proving and not in
+divide within the statement cap, its K0 is IntegrityMonitoringPeriodLog's, commitments are priced beside the proving and not in
 it, both alternative cuts are priced, the frontier is monotone and an execution phase of `window_blocks` blocks proves within its
 GPU time."""
 
@@ -10,8 +10,8 @@ from math import ceil, log
 
 import pytest
 
-import h200 as H
-from inputs import observations
+from verity.protocols.proofs.spot.prover.cost import h200 as H
+from verity.protocols.proofs.spot.prover.cost.inputs import observations
 
 M = H.Shape()
 
@@ -31,7 +31,7 @@ def test_the_units_are_circuits_partition():
     assert sum(t.units for t in H.templates(M, pad=True)) == sum(t.units for t in ts)
 
 
-def test_windows_draw_k_split_evenly_under_the_cap(plan):
+def test_windows_sample_k_split_evenly_under_the_cap(plan):
     k = ceil(log(len(plan["windows"]) / H.DELTAS[0]) / H.SHARE)
     caps = {t.id: t.cap for t in H.templates(M)}
     for w in plan["windows"]:

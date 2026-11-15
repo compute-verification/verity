@@ -5,7 +5,7 @@ hold have their own variables and files, so they can't collide:
     research jobs     `$JOBS_TOKEN`, else ~/.research/jobs/token: the coordinator's, which adds jobs
     research worker   `$JOBS_WORKER_TOKEN`, else ~/.research/jobs/dispatch-{name}.token: the dispatcher's `jobs:work` token
 Each file is one line, mode 600.  A token is sent as `Authorization: Bearer`, never printed, and never put
-in an argv.  The site is `$JOBS_URL`, default the production control app.
+in an argv.  The site is `$JOBS_URL`, default the deployed control app.
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
+from .. import settings
 from . import model
 
 DEFAULT_URL = "https://website-docs-sage.vercel.app"
@@ -58,7 +59,7 @@ def load_token(environ: dict[str, str] | None = None, path: Path | None = None, 
 
 class HTTPClient:
     def __init__(self, url: str | None = None, token: str | None = None):
-        self.url = (url or os.environ.get(URL_ENV) or DEFAULT_URL).rstrip("/")
+        self.url = (url or settings.get(URL_ENV) or DEFAULT_URL).rstrip("/")
         if (scheme := urllib.parse.urlsplit(self.url).scheme) not in ("http", "https"):
             raise ValueError(f"the Job queue's URL (${URL_ENV}) is not an http or https URL (scheme {scheme!r})")
         self._token = token if token is not None else load_token()

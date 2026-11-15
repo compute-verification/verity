@@ -15,15 +15,18 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import dsa
-from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.definitions.registry.dsa_norm import DsaRMSNorm
-from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity.definitions.registry.sparse_mla_split import (
+from verity_vllm.definitions.registry import dsa
+from verity_vllm.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity_vllm.definitions.registry.dsa_norm import DsaRMSNorm
+from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity_vllm.definitions.registry.sparse_mla_split import (
     SparseMlaSplit,
     launch_num_splits,
 )
+from verity.device import load_card, number
 
+from verity_vllm.engine.profiles.devices import CARD
+from verity_vllm.engine.profiles.engine_classes import CLASS_G
 from verity_vllm.observe.events import TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
 from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
@@ -31,7 +34,12 @@ from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_row_major
 from verity_vllm.observe.fold.patterns.kv_cache import kv_slots
 from verity_vllm.observe.fold.patterns.norms import CudaFusedAddRmsNorm, CudaRmsNorm
-from verity_vllm.observe.fold.patterns.ops import bound_args, op_name, triton_name
+from verity_vllm.observe.fold.patterns.ops import (
+    as_float,
+    bound_args,
+    op_name,
+    triton_name,
+)
 from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.patterns.rotary import step_positions
 from verity_vllm.observe.fold.patterns.target import target_of
@@ -61,6 +69,7 @@ FA3_OP = "fwd"
 NORM_SRC_SHA = "2dcf56892eb2b61c0f0249965013fc1f63968c00e473b3df35cb186d42c650de"
 Q_SRC_SHA = "7380a1385db787ceded52869fe395160e859d22710ca46f20d1d0fdef2f41043"
 INDEX_SHARE_SRC_SHA = "ad40bdb415664d3b65e3e4163863158096f2ea52f2e2a3e01ff8be63aeb98f63"
+RECORD_SMS = int(number(load_card(CARD[CLASS_G["device_name"]])["sm"]["count"]))
 
 
 def _module(node: TreeNode) -> str:
@@ -238,9 +247,8 @@ class DsaNormRope:
             return slots
         kv_cache = ViewDesc(latent_rows.alloc, latent_rows.offset, (latent_rows.shape[0], 512), (576, 1), "bfloat16", latent_rows.device)
         kpe_cache = ViewDesc(latent_rows.alloc, latent_rows.offset + 512, (latent_rows.shape[0], 64), (576, 1), "bfloat16", latent_rows.device)
-        try:
-            qeps, kveps = float(a.get("q_rms_eps")), float(a.get("kv_rms_eps"))
-        except (TypeError, ValueError):
+        qeps, kveps = as_float(a.get("q_rms_eps")), as_float(a.get("kv_rms_eps"))
+        if qeps is None or kveps is None:
             return unsupported(node, "norm epsilons are not static floats", q_eps=repr(a.get("q_rms_eps")), kv_eps=repr(a.get("kv_rms_eps")))
         parts: list[Compute] = [
             Compute(bind(DsaRMSNorm, N=2048, EPS=qeps), M, (PerRow(q), Shared(qw)), (PerRow(qo),), (node.id,),
@@ -270,7 +278,9 @@ class DsaNormRope:
                 return unsupported(node, str(e))
             if any(s >= ix.slots for s in slots):
                 return unsupported(node, "a current-token slot is outside the index-K cache", slots=slots[:8], cache_slots=ix.slots)
-            ieps = float(a.get("index_k_layer_norm_eps"))
+            ieps = as_float(a.get("index_k_layer_norm_eps"))
+            if ieps is None:
+                return unsupported(node, "index-K layer-norm epsilon is not a static float", eps=repr(a.get("index_k_layer_norm_eps")))
             parts.append(Compute(bind(dsa.DsaIndexerKRow, D=128, ROPE=64, EPS=ieps), M,
                                  (PerRow(ik), Shared(iw), Shared(ib), Gather(ics, pos)),
                                  (Gather(ix.rows, tuple(map(ix.row, slots))), Gather(ix.scales, tuple(map(ix.scale, slots)))), (),
@@ -337,9 +347,10 @@ class DsaQ:
                 return unsupported(node, "index-Q dimensions differ from the recorded GLM-5.3 pin")
             if iq.shape != (M, 32, 128) or iw.shape != (M, 32) or iqo.shape != (M, 32, 128) or iwo.shape != (M, 32):
                 return unsupported(node, "index-Q views have the wrong shape", q=repr(iq), weights=repr(iw), q_out=repr(iqo), weights_out=repr(iwo))
-            ss, hs = float(a.get("index_weights_softmax_scale")), float(a.get("index_weights_head_scale"))
-            if not math.isclose(ss, 128 ** -0.5, rel_tol=1e-15) or not math.isclose(hs, 32 ** -0.5, rel_tol=1e-15):
-                return unsupported(node, "index-Q scales differ from D^-0.5 and H^-0.5", softmax_scale=ss, head_scale=hs)
+            ss, hs = as_float(a.get("index_weights_softmax_scale")), as_float(a.get("index_weights_head_scale"))
+            if ss is None or hs is None or not math.isclose(ss, 128 ** -0.5, rel_tol=1e-15) or not math.isclose(hs, 32 ** -0.5, rel_tol=1e-15):
+                return unsupported(node, "index-Q scales differ from D^-0.5 and H^-0.5", softmax_scale=a.get("index_weights_softmax_scale"),
+                                   head_scale=a.get("index_weights_head_scale"))
             parts.append(Compute(bind(dsa.DsaIndexerQ, H=32, D=128, ROPE=64), M,
                                  (PerRow(iq), Gather(ics, pos), PerRow(iw)), (PerRow(iqo), PerRow(iwo)), (),
                                  hint=f"{_module(node)}/indexer_q", pattern=self.name, roots=(None, _root(ctx, ics), None)))
@@ -562,7 +573,7 @@ class DsaSparseMla:
             return unsupported(node, "FA3 num_splits is not a nonnegative integer", num_splits=ns_arg)
         valid = [int(position) + 1 for _, position in ctx.start.rows]
         tp = target_of(ctx)[0]
-        if int(tp.num_sms) != 132:
+        if int(tp.num_sms) != RECORD_SMS:
             return unsupported(node, "GLM-5.3 sparse split heuristic is pinned to the record target's 132-SM launch", num_sms=tp.num_sms)
         splits = launch_num_splits(valid, int(tp.num_sms), 2048, ns_arg)
         parts: list[Compute] = []
