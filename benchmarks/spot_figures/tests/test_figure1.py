@@ -194,7 +194,7 @@ def test_the_infiltration_panel_samples_its_card(card_dir, tmp_path):
     vertical = cards.load("proof_overhead", "GLM-5.3")["value"]["model_overhead"]
     xs = [1.0, vertical, 1e14]
     card = envelope("infiltration", "GLM-5.3", {
-        "design": "layer_of_token", "form": "write", "unit": "bit", "caption": "Deferred interiors at a layer.",
+        "design": "layer_of_token", "form": "write", "unit": "bit", "caption": "Interior commitments at a layer.",
         "consumer": None, "series": [{"scope": s, "budget": b, "x": xs, "y": [1e3, 1e9, 1e15]}
                                      for s in SCOPES for b in (0.001, 0.01, 0.1)]})
     cards.write(card)
@@ -210,7 +210,7 @@ def test_the_infiltration_panel_samples_its_card(card_dir, tmp_path):
     head = next(s for s in out["panels"]["exfiltration"]["series"]
                 if (s["scope"], s["budget"], s["design"]) == ("world year", f.RATIO_BUDGET, "two-stage"))
     ratio = 1e9 / head["y"][head["x"].index(vertical)]
-    assert caption.startswith("Deferred interiors at a layer. At the measured overhead and 1% of compute, this curve "
+    assert caption.startswith("Interior commitments at a layer. At the measured overhead and 1% of compute, this curve "
                               f"is 1e9 bits, {ratio:.2g}× the exfiltration panel's tokens-only two-stage bound")
     assert out["scopes"]["world year"]["captions"]["exfiltration_appendix"].endswith(
         " At 0, sampled along the axis's floor: no advice.")
