@@ -33,7 +33,19 @@ export TORCH_EXTENSIONS_DIR=$W/cache/torch_extensions TRITON_CACHE_DIR=$W/cache/
 export CUDA_CACHE_PATH=$W/cache/nv NATIVE_COLLECT_BUILD=$W/cp/nc_build FA2_TAP_HDIMS=64 FA3_TAP_HDIMS=64   # the row's head size
 unset UV_CACHE_DIR PIP_CACHE_DIR
 PY=$VENV/bin/python
-export PY PY312=$PY PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/tools/research/src
+# every workspace member's import root: the parent of each package its wheel names (the root pyproject.toml's members)
+toml_list() {
+  awk -v s="[$2]" -v k="$3" '/^\[/ { in_s = ($0 == s) } in_s && $0 ~ "^" k " *=" { on = 1; sub(/^[^=]*=/, "") }
+    on { print; if (/\]/) on = 0 }' "$1" | tr -d '[]",'
+}
+ROOTS=$TREE
+for m in $(toml_list "$TREE/pyproject.toml" tool.uv.workspace members); do
+  for p in $(toml_list "$TREE/$m/pyproject.toml" tool.hatch.build.targets.wheel packages 2>/dev/null); do
+    r=$TREE/$m/$p; r=${r%/*}
+    case ":$ROOTS:" in *":$r:"*) ;; *) ROOTS=$ROOTS:$r ;; esac
+  done
+done
+export PY PY312=$PY PYTHONPATH=$ROOTS
 HSO=$FA2/build/fa3_matReqG/verity_fa3_matReqG.so; NSO=$NT/build/verity_norm_tap.so
 WL=$TREE/adapters/vllm/workloads/$ROW.json; LOGS=$W/logs; PORT=${PORT:-$(( 18200 + RANDOM % 700 ))}
 fail() { echo "SERVE-FRESH FAILED $1: $2"; exit 1; }
@@ -46,6 +58,7 @@ if [ "$DRY" = 1 ]; then
   echo "serve_fresh --dry-run: tree $TREE"
   for v in WORK VENV HF_HOME FA2 NT RT HOME XDG_CACHE_HOME XDG_DATA_HOME UV_PYTHON_INSTALL_DIR TMPDIR TORCH_EXTENSIONS_DIR \
            TRITON_CACHE_DIR VLLM_CACHE_ROOT CUDA_CACHE_PATH NATIVE_COLLECT_BUILD; do echo "path $v=${!v}"; done
+  echo "pythonpath $PYTHONPATH"
   echo "path uv and pip caches: $W/.cache/{uv,pip} (the bootstrap's; removed after the install)"
   echo "checks: a card of compute capability 9.0, nvcc under CUDA_HOME ($CUDA_HOME), uv, ${DISK_GB:-35} GB free at $W"
 fi
