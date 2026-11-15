@@ -3,6 +3,8 @@
 # `Layered.fanin`, its fields `legs_reads`, `legs_thread`, `legs_card` and `legs_disjoint` become `fanin_*`, and the prose
 # "`d` legs" "fan-in `d`" (a root's legs, "fan-in reads"), as `tools/move/fanin_map.toml` spells it in Python. Only the
 # files below: "leg" elsewhere in the Lean (a protocol's part of a bound) is another sense and another map's.
+# The field itself, bare `legs`, has no row: `leg_words_map.toml`'s `Legs` and `LEGS` fold onto it in the test of two
+# maps, and the files below no longer hold it.
 
 [words]
 
@@ -30,7 +32,6 @@ files = [
 "legs_thread" = "fanin_thread"
 "legs_card" = "fanin_card"
 "legs_disjoint" = "fanin_disjoint"
-"legs" = "fanin"
 
 [rewrite]
 exclude = ["tools/move/**", "**/lean-audit.json"]
