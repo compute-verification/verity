@@ -366,11 +366,6 @@ loaded_by = [
 
 [[place]]
 paths = [
-    "verity/hardware",
-]
-
-[[place]]
-paths = [
     "verity/protocols/accounting/certifier/device",
 ]
 loads = [
