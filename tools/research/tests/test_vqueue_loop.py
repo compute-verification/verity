@@ -3839,7 +3839,7 @@ def test_under_lean_stages_2_two_staged_heavy_batches_records_runs_take_two_heav
     taking it, as before; at 2 the second's takes the machine the first's doesn't hold, and a run started again after
     infra takes the machine no other run in flight holds."""
     (env.tmp / "heavy").write_text("*\n")
-    one, two = env.put(1, LEAN), env.put(2, QKG)
+    env.put(1, LEAN), env.put(2, QKG)
     records = Records(env.tmp / "clone")
     loop = env.loop(vqueue.decide, records=records, lean=1, lean_stages=stages)
     loop.world.slim_driver = lambda: "drive"
@@ -3892,7 +3892,7 @@ def test_a_member_its_mark_s_preflight_couldn_t_judge_with_the_landing_gates_is_
     The build runs the gates on #1's and #3's heads alone, never #2's: #3 passes and is built beside #2, and #1, refused, is
     left out, its owner told the gate's reason and fix.  At that head it stays out of `ready`, with the gate's reason, and
     the gates never run on it again, nor in a new loop on the same cache."""
-    h1, h2, h3 = env.put(1, {"a.txt": "1\n"}), env.put(2, {"b.txt": "2\n"}), env.put(3, {"c.txt": "3\n"})
+    h1, _, h3 = env.put(1, {"a.txt": "1\n"}), env.put(2, {"b.txt": "2\n"}), env.put(3, {"c.txt": "3\n"})
     env.labels.ungated = {(1, h1): UNJUDGED, (3, h3): UNJUDGED}
     refusal = "the landing gate gates/g.py at `main`: touches a.txt; delete a.txt"
     ran = _gates(monkeypatch, {h1: ([refusal], []), h3: ([], [])})

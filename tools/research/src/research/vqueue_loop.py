@@ -3540,7 +3540,7 @@ class Loop:
         """The machines the heavy runs of the candidate of ``line`` take, `World.heavy_on`, when a member of it is a heavy PR or
         the heavy file names every candidate (`World.heavy`, read at each launch), `main`'s own check then too; "" else, and
         when no machines are named.  Under `lean_stages` above 1, with more than one named, the first of them no heavy run of
-        another candidate in flight holds (its records run's or its check's not yet judged, or one this tick launched), so
+        another candidate in flight holds (its records run's or its check's still running, or one this tick launched), so
         two staged Lean batches take two machines; all of them while each is held."""
         if not (on := getattr(self.world, "heavy_on", "")):
             return ""
@@ -3554,7 +3554,7 @@ class Loop:
         for sha, p in self._flying.items():
             if sha not in own:
                 for rec, key in ((p.regenerated(sha)[1], "on"), (p.slim(sha)[1], "heavy_on")):
-                    if isinstance(rec, dict) and "verdict" not in rec and rec.get(key):
+                    if isinstance(rec, dict) and ("verdict" not in rec or rec.get("still_running")) and rec.get(key):
                         held.update(str(rec[key]).split(","))
         free = [m for m in on.split(",") if m not in held]
         if not free:
