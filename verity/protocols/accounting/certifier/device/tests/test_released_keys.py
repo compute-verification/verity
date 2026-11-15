@@ -1,7 +1,7 @@
 """`released_keys`: every JSON file a chain record releases holds only keys its declared list names, each with its
-kind; a file is read strictly, by key and never by bytes; a JSON file whose list isn't written yet is counted as not
-yet checked and one under no list fails; and the leak guard (``--keys``) moves a file with an undeclared key to the
-quarantine, fails the record and names the key only there."""
+kind; a file is read strictly, by key and never by bytes; and a JSON file whose list isn't written yet is counted as
+not yet checked and one under no list fails. The leak guard's pass by key (``--keys``) is tested with the guard
+(`benchmarks/network_traces/tests/test_leak_guard.py`)."""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.network_traces import leak_guard as LG
 from verity.protocols.accounting.certifier.device import released_keys as RK
 
 ROOT = Path(__file__).resolve().parents[6]
@@ -20,7 +19,6 @@ LIST = {"name": "a step's summary", "writer": "step.py", "files": ["step/*.json"
         "maps": {"units/*": "u[0-9]+"}}
 GOOD = {"schema": "s/v1", "verdict": {"accepted": True}, "rounds": [{"root": "00", "sample": [1, 2]}, {"root": "01"}],
         "units": {"total": 2, "u0": {"root": "02"}, "u17": {"root": "03"}}}
-CERTIFICATE = {"key_id": "k", "link": 0, "direction": "ingress", "window": 0, "digest": "00", "signature": "11"}
 
 
 def _declared(*lists: dict, not_yet: tuple[str, ...] = ()) -> dict:
@@ -161,118 +159,3 @@ def test_a_pass_counts_what_it_checked_what_waits_and_what_has_no_keys(tmp_path,
     assert RK.main([str(out / "absent"), "--declared", str(tmp_path / "declared.json")]) == 2
     (tmp_path / "declared.json").write_text(json.dumps(_declared({**LIST, "keys": {"schema": "secret"}})))
     assert RK.main(argv) == 2 and "refused" in capsys.readouterr().err
-
-
-def _guard(tmp: Path, *extra: str, declared: dict | None = None) -> tuple[int, dict | None, dict | None]:
-    """The guard on run dir tmp/run with ``--keys``: its exit, its report and the quarantine's (None if unwritten)."""
-    keys = ["--keys"]
-    if declared is not None:
-        (tmp / "declared.json").write_text(json.dumps(declared))
-        keys.append(str(tmp / "declared.json"))
-    report = tmp / "report.json"
-    if "--report" in extra:
-        report = Path(extra[extra.index("--report") + 1])
-        extra = tuple(x for x in extra if x not in ("--report", str(report)))
-    report.unlink(missing_ok=True)
-    rc = LG.main([str(tmp / "run"), str(tmp / "q"), *keys, "--report", str(report), *extra])
-    held = tmp / "q" / "leak-guard.json"
-    return (rc, json.loads(report.read_text()) if report.is_file() else None,
-            json.loads(held.read_text()) if held.is_file() else None)
-
-
-def test_a_released_file_with_one_undeclared_key_fails_the_record(tmp_path):
-    """The control: a record whose released files hold declared keys alone passes the guard with its counts; the same
-    record with one undeclared key in one released file fails (exit 3), the file moved to the quarantine. The report
-    that is released names the file and how many keys, the quarantine's names the key's path with the fix, and a file
-    outside out/ is counted and not read by key."""
-    run = tmp_path / "run"
-    certs = "out/gates/c0/r0/out/certificates.jsonl"
-    _put(run, {certs: (json.dumps({"certificate": CERTIFICATE}) + "\n").encode(),
-               "out/n2/outcome.json": {"verdict": "accept"}, "out/n2/prove.log": b"text", "resources.jsonl": b"{}\n"})
-    rc, report, _ = _guard(tmp_path)
-    assert rc == 0 and report["verdict"] == "clean" and report["found"] == []
-    assert report["keys"] == {"declared": RK.SCHEMA, "checked": 1, "not_yet": {"n2": 1}, "no_keys": {".log": 1},
-                              "outside": 1, "undeclared": 0}
-    _put(run, {certs: {"certificate": {**CERTIFICATE, "undeclared_key": "a value of any length " * 40}}})
-    rc, report, held = _guard(tmp_path)
-    assert rc == 3 and report["verdict"] == "refused"
-    assert report["found"] == [{"path": certs, "bytes": (tmp_path / "q" / "files" / certs).stat().st_size,
-                                "why": ["1 key not declared public (--keys)"], "pieces": 0}]
-    assert report["keys"]["undeclared"] == 1 and not (run / certs).exists()
-    assert "undeclared_key" not in (tmp_path / "report.json").read_text()
-    [bad] = held["found"][0]["keys_undeclared"]
-    assert bad["key"] == "certificate/undeclared_key" and bad["count"] == 1
-    assert "is not declared public" in bad["fix"] and "auditor.py" in bad["fix"]
-    rc, report, _ = _guard(tmp_path)
-    assert rc == 0 and report["keys"]["checked"] == 0
-    rc, report, _ = LG.main([str(run), str(tmp_path / "q"), "--report", str(tmp_path / "report.json")]), json.loads(
-        (tmp_path / "report.json").read_text()), None
-    assert rc == 0 and "keys" not in report
-
-
-def test_a_gate_runs_file_that_says_an_execution_phase_was_refused_fails_the_record(tmp_path):
-    """Which execution phases the signer refused depends on what the node sent and when, and no list declares the
-    key that says it. So a record of a gate run with one refused line fails (exit 3) on that file alone, by the key
-    and its count, and a record is released only of a run whose every execution phase was certified."""
-    run = tmp_path / "run"
-    files = [f"out/gates/c0/r0/out/{name}" for name in ("certificates.jsonl", "cells-certificates.jsonl",
-                                                         "rows-certificates.jsonl", "cells-registrations.jsonl")]
-    refused = (json.dumps({"refused": ["l", "egress", 1]}) + "\n").encode()
-    _put(run, {files[0]: (json.dumps({"certificate": CERTIFICATE}) + "\n").encode(), **dict.fromkeys(files[1:], b"")})
-    rc, report, _ = _guard(tmp_path)
-    assert rc == 0 and report["keys"]["checked"] == 4 and report["keys"]["undeclared"] == 0
-    for path in files:
-        (run / path).write_bytes((run / path).read_bytes() + refused)
-    rc, report, held = _guard(tmp_path)
-    assert rc == 3 and report["verdict"] == "refused" and report["keys"]["undeclared"] == 4
-    assert sorted(f["path"] for f in report["found"]) == sorted(files)
-    for found in held["found"]:
-        [bad] = found["keys_undeclared"]
-        assert (bad["key"], bad["count"]) == ("refused", 1) and "is not declared public" in bad["fix"]
-    assert not any((run / path).exists() for path in files)
-
-
-def test_a_held_file_with_an_undeclared_key_is_not_released(tmp_path, capsys):
-    """With --hold, a held file is read by key at the record path it is bound for: one with an undeclared key or under
-    no list goes to the quarantine and never to out/, the rest is released, and the guard's line says how many files
-    it checked by key and how many wait."""
-    run, hold = tmp_path / "run", tmp_path / "hold"
-    (run / "out").mkdir(parents=True)
-    _put(hold, {"step/a.json": GOOD, "step/b.json": {**GOOD, "rounds": [{"salt": "00"}, {"salt": "01"}]},
-                "scan/summary.json": {"admitted": 3}, "other/x.json": {"k": 1}, "step/prove.log": b"text"})
-    rc, report, held = _guard(tmp_path, "--hold", str(hold), declared=_declared(LIST, not_yet=("scan/**",)))
-    assert rc == 3 and (report["held"], report["released"]) == (5, 3)
-    assert {d["path"]: d["why"] for d in report["found"]} == {
-        "out/other/x.json": ["1 key not declared public (--keys)"],
-        "out/step/b.json": ["1 key not declared public (--keys)"]}
-    assert sorted(p.relative_to(run / "out").as_posix() for p in (run / "out").rglob("*") if p.is_file()) == [
-        "scan/summary.json", "step/a.json", "step/prove.log"]
-    assert report["keys"] == {"declared": RK.SCHEMA, "checked": 2, "not_yet": {"scan": 1}, "no_keys": {".log": 1},
-                              "outside": 0, "undeclared": 2}
-    by_path = {d["path"]: d["keys_undeclared"] for d in held["found"]}
-    assert [(b["key"], b["count"]) for b in by_path["out/step/b.json"]] == [("rounds/*/salt", 2)]
-    assert by_path["out/other/x.json"][0]["key"] == "(the file)"
-    assert "2 files checked by key, 2 with a key not declared public; 1 not yet checked (scan 1); 1 with no keys" in (
-        capsys.readouterr().out)
-
-
-def test_the_guards_own_report_is_read_by_key_before_anything_is_released(tmp_path, capsys):
-    """A report the guard writes under out/ is a released file too: where its list doesn't declare each key it holds,
-    or no list and no ``not_yet`` glob names it, the guard is refused (exit 2) with nothing released or moved and no
-    report written; where its list isn't written yet it is counted with the files that wait. Declared data that
-    doesn't load refuses the guard too."""
-    run, hold = tmp_path / "run", tmp_path / "hold"
-    (run / "out").mkdir(parents=True)
-    _put(hold, {"step/a.json": GOOD})
-    own = {"name": "the guard's report", "writer": "leak_guard.py", "files": ["leak-guard.json"], "form": "json",
-           "keys": {"schema": "structure", "verdict": "output"}}
-    at = ("--hold", str(hold), "--report", str(run / "out" / "leak-guard.json"))
-    for declared, why in ((_declared(LIST, own), "holds keys the list \"the guard's report\""),
-                          (_declared(LIST), "no list of released_keys.json names this file"),
-                          ({**_declared(LIST), "allow": []}, "is not network-traces/released-keys/v1")):
-        rc, report, _ = _guard(tmp_path, *at, declared=declared)
-        assert rc == 2 and report is None and why in capsys.readouterr().err
-        assert (hold / "step" / "a.json").is_file() and list((run / "out").iterdir()) == []
-    rc, report, _ = _guard(tmp_path, *at, declared=_declared(LIST, not_yet=("leak-guard.json",)))
-    assert rc == 0 and report["keys"]["checked"] == 1 and report["keys"]["not_yet"] == {RK.TOP: 1}
-    assert report["released"] == 1 and (run / "out" / "step" / "a.json").is_file()
