@@ -26,7 +26,7 @@ the target, costs below `Tmax`, and has none of the analysed structures `Core` i
 
 `Core C x` says that the run's computation meets some local argument's premises at the block budgets and carries at
 least its minimum weighted total `Ω_*` (the counted products weighted as that argument weights them, not their raw
-number). Each method may have its own covered structure; none has to reproduce a reference circuit.
+number). Each method may have its own covered structure; none has to reproduce a reference training algorithm.
 
 It doesn't say that every successful method, however slow, has such a structure: only that methods cheap enough to
 matter do. A method that reduces the restricted state or dependence and reaches the target within the range refutes it

@@ -118,7 +118,7 @@ class DyingResponder(Responder):
 
 
 class GreedyChallenger(Challenger):
-    """A challenger that samples 64 coins where the recorded one drew 32."""
+    """A challenger that samples 64 coins where the recorded one sampled 32."""
 
     def start(self, params, identity):
         super().start(params, identity)

@@ -92,8 +92,8 @@ TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
 NO_ROW_WHY = "the circuit's units_per_vu is 0: a template instance of no unit, a proof block of no gate"
 WIDE_WHY = ("a template instance returns more than 262144 bits (16 per output leaf of its units_per_vu units): past "
             "the widest size class")
-#: `OneStageZk.UNIT_CLASS_MAX`: the widest public size class of a proof block's outputs, in bits
-UNIT_CLASS_MAX = 262144
+#: `OneStageZk.SIZE_CLASS_MAX`: the widest public size class of a proof block's outputs, in bits
+SIZE_CLASS_MAX = 262144
 #: `Flock.MUFU_TABLES`' SHA-512s, in its order: the digests the v2 audit finds a pinned lookup table under among its blobs
 #: (`OneStageZk.tablesOf`)
 MUFU_SHA512 = {t.name: t.sha512 for t in TABLES if t.name in ("rsq", "sqrt", "rcp", "ex2")}
@@ -217,7 +217,7 @@ def ks_form_why(circuit: Path, public: Path) -> str | None:
 
 def template_why(circuit: Path) -> str | None:
     """`OneStageZk.templateOk`'s refusals on the circuit file's head, with its reasons: a template instance of no unit
-    (META's ``units_per_vu`` is 0), else one returning more than `UNIT_CLASS_MAX` bits (16 per entry of META's
+    (META's ``units_per_vu`` is 0), else one returning more than `SIZE_CLASS_MAX` bits (16 per entry of META's
     ``leaves_out`` over its ``units_per_vu`` units); None when neither applies or the head is not in that form. v2
     refuses each session of such a circuit with that reason, so `verify` turns a session Lean accepts into one rejected
     with it."""
@@ -231,7 +231,7 @@ def template_why(circuit: Path) -> str | None:
     if upv == 0:
         return NO_ROW_WHY
     if 16 * sum(len(leaves[u]) if u < len(leaves) and isinstance(leaves[u], list) else 0 for u in range(upv)) \
-            > UNIT_CLASS_MAX:
+            > SIZE_CLASS_MAX:
         return WIDE_WHY
     return None
 
@@ -700,7 +700,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
-           "UNIT_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2",
+           "SIZE_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2",
            "circuit_lookups", "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
            "lookups_of", "order_why", "own_tables", "population_why", "printed", "printed_size", "proved_units",
            "reads_registered", "statements_v2", "tables_match_why", "tables_why", "template_why", "units_exactly",

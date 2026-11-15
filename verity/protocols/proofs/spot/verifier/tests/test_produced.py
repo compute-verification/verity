@@ -45,8 +45,8 @@ def test_a_32_bit_entry_and_its_port():
                     "domain": e["domain"], **G.schema_entry(G.SCHEMA_V2), "reads": [None, 2, None]}
 
 
-def _rec(registration=REG):
-    tree = PR.commit(PD, "partials", ROWS, registration)
+def _rec(docket=REG):
+    tree = PR.commit(PD, "partials", ROWS, docket)
     return PR.record(REG, DRAW, [tree.entry()], {"partials": PR.rows_of(tree)}), tree
 
 

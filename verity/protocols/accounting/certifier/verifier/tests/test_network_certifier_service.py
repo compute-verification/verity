@@ -94,10 +94,10 @@ class Run:
         return reg
 
     def prove(self, opening, draw, **kw) -> SVC.Delivered:
-        return standin.prove(self.lw, opening, draw, SYNCS, self.tmp / f"proof-{draw.registration.order}", **kw)
+        return standin.prove(self.lw, opening, draw, SYNCS, self.tmp / f"proof-{draw.docket.order}", **kw)
 
     def decide(self, draw, opening, **kw) -> S.Outcome:
-        return standin.decide(self.lw, self.stream, draw, opening, SYNCS, self.tmp / f"proof-{draw.registration.order}",
+        return standin.decide(self.lw, self.stream, draw, opening, SYNCS, self.tmp / f"proof-{draw.docket.order}",
                               **kw)
 
     def round(self, opening, delivered=None) -> S.Outcome:
@@ -406,8 +406,8 @@ def test_the_challenger_never_holds_a_certificate_or_a_violation_kind(tmp_path):
     forged = CertifiedRecord(eg.head, eg.salt, replace(eg.certificate, signature=bytes(len(eg.certificate.signature))))
     assert run.round(honest).accepted
     assert reject(run.round(run.lw.commit(1, forged, ig, SALTS[1])))
-    kept = json.dumps([run.stream.records, [e.registration.record for e in run.stream._entries],
-                       [e.registration.receipt for e in run.stream._entries]])
+    kept = json.dumps([run.stream.records, [e.docket.record for e in run.stream._entries],
+                       [e.docket.receipt for e in run.stream._entries]])
     for rec in honest.records:
         for secret in (rec.certificate.signature[4:68].hex(), rec.certificate.digest.hex(), rec.head.root.hex(),
                        rec.head.parameters.hex(), rec.salt.hex(), encode(rec)[:96].hex()):

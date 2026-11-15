@@ -9,7 +9,7 @@ verifier, the Lean verifier's sample checks, and the audit record with its integ
   OS salts). The values were read under the served run's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
   link is provenance, not proof, and the docket says so.
 * **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
-* **Verifier of record.** Lean's `verity-verify-proof verify` replays the session offline with the circuit and the public
+* **The verifier.** Lean's `verity-verify-proof verify` replays the session offline with the circuit and the public
   file held by content; Lean also checks U1-U3 on the sample, and M0's own verifier (`flock-circuit serve`) checks it live.
 """
 from __future__ import annotations
@@ -146,7 +146,7 @@ def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.
     return sr
 
 
-def unit_class(set_dir: str, m0_path: str, out: Path) -> str:
+def proof_block_class(set_dir: str, m0_path: str, out: Path) -> str:
     """The class of every instance, from the verifier's own composition of the circuit (M0's `--class-only`)."""
     p = run([sys.executable, "-m", "verity_flock.circuit", "--input-set", set_dir, "--class-only"], out / "class.log", {"PYTHONPATH": m0_path})
     return json.loads(p.stdout.strip().splitlines()[-1])["class_sha512"]
@@ -679,7 +679,7 @@ def audit_negatives(result: dict, sampling_design: dict, delta: float, session_r
     (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`) and refused only
     where the Lean answered (`lean_answered`);
     `agree` is whether the Lean and the Python decided it alike."""
-    base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=sampling_design,
+    base = dict(docket=result["registration"], receipt=result["receipt"], draw=result["draw"], sampling_design=sampling_design,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
                 verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
 
@@ -694,7 +694,7 @@ def audit_negatives(result: dict, sampling_design: dict, delta: float, session_r
                                                                    for k, v in vs.items()}),
            "no-verifier-of-record (C2)": decide(verdicts={k: v for k, v in vs.items() if not v.get("of_record")}),
            "session-root-not-registered": decide(session_roots={**session_roots, port: "00" * 64})}
-    opened = audit.session_registered(vs, base["registration"])
+    opened = audit.session_registered(vs, base["docket"])
     if opened:
         value = next(iter(opened))
         neg["registered-read-opened-against-another-root"] = decide(verdicts={
@@ -792,7 +792,7 @@ def main() -> int:
     receipt = R.receipt(rec, "one-stage-e2e verifier (a0.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     if a.bind:
-        checks["bindings"] = bindings(st["meta"], header, rec, unit_class(a.set, a.m0_pythonpath, out))
+        checks["bindings"] = bindings(st["meta"], header, rec, proof_block_class(a.set, a.m0_pythonpath, out))
     summary["registration_digest"] = R.digest(rec)
     summary["partition_digest"] = rec["partition"]
     summary["checks_before_draw"] = {k: v["ok"] for k, v in checks.items()}

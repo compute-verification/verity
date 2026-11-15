@@ -122,7 +122,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   that key, short of a SHA-512 collision. A key the block computes, a wire, is refused, with a reason of its own
   (`KEY_WHY`): no statement covers it. Only where the wired key's switch is on (`WIRED_KEY`, off in the build of
   record; on only in the development executable `spot-wired-key-dev`) is such a key taken, when it is whole
-  (`keyFailure`, each failure its own reason) and each sampled unit's key its writer unit's committed output row
+  (`keyFailure`, each failure its own reason) and each sampled proof block's key its writer unit's committed output row
   (`second-read`). A read is a template the auditor's params record as one (`Own.reads`,
   `Run.templateReads`): the template check (`flock-read-tmpl check V H`, `Flock.ReadNet.check`) accepted the circuit
   file they name for it as the read of a table of `V` rows, where the params were made; round 2 runs no template
@@ -845,7 +845,7 @@ def KEY_ORDER_WHY : String :=
 else `KEY_WIRES_WHY`), no link does (`KEY_LINKED_WHY`), the writer's output field the wire names is a row of the key
 row's u16 words (`Own.widths`, `KEY_WIDTH_WHY`), the writer's part is before the reader's in the interior window
 (`posOf`, `KEY_ORDER_WHY`), and the key's rows give each unit a writer row among the writer's units a replay block
-(`KEY_BOUNDS_WHY`). That a sampled unit's key is that row's committed value is `second-read`'s (`readOk`). -/
+(`KEY_BOUNDS_WHY`). That a sampled proof block's key is that row's committed value is `second-read`'s (`readOk`). -/
 def keyFailure (own : Own) (t : String) : Option String :=
   let ws := (own.wires.getD #[]).filter fun w => w.template == t && w.port == OPENING_KEY
   match ws with
@@ -1438,7 +1438,7 @@ of round 1's record or of the tables its params pin at every unit, of the read's
 (`OPENING_KEY`) is either no wire, and
 linked at values the interior registration doesn't register (`registered`: a port of round 1's record then, by
 `second-links`) or the verifier holds (`own.fixed`, `mine`), or, where the wired key's switch is on (`Own.wiredKey`),
-one wire, whole (`keyFailure`), the key at each sampled unit its writer unit's committed output row (`second-read`'s
+one wire, whole (`keyFailure`), the key at each sampled proof block its writer unit's committed output row (`second-read`'s
 `readOk`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference statement's reads (`Own.refReads`,
 the template's first), a value the verifier fills, of at least one row, each row `VERDICT_ONE_LEAF`. With the switch off, a
 key the block computes, a wire, is refused: no statement covers it (`inputsWhy`). -/

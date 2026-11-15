@@ -26,7 +26,7 @@ guarantee `audit_executionPhase_split_of_record` is stated over), on its own so 
   deterministic prover strategy, the exact probability of an outcome over the verifier's coins, and the uniform average
   and probability;
 * `SamplingDesign`, a sampling design over units, and its missProb (`L.missProb B`), the probability that its sample misses a set, both core's
-  (`Verity.SamplingDesign`, `Definitions.Core.Draw`); `SamplingDesign.prod`, the calls' laws each sampled on its own coins, the product distribution that
+  (`Verity.SamplingDesign`, `Definitions.Core.Draw`); `SamplingDesign.prod`, the calls' sampling designs each sampled on its own coins, the product distribution that
   distinct contexts give (M1);
 * `auditReg`: the registration, then the coin of the sampling design at that registration, then the session on its sample (C1);
 * `WUnit`, `slice`, `seqCalls`, `executionPhaseSession`: a window's units (a call and a unit of that call), a call's share of a
@@ -53,8 +53,8 @@ guarantee `audit_executionPhase_split_of_record` is stated over), on its own so 
 * `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed transcript isn't anchored and
   served with probability at most a term of the window's state;
 * the deployed sample, SPOT (`verity/protocols/accounting/pouw/verifier/window.py`): `subsetDraw`, one uniform `K`-of-`N`
-  tile subset; `sessions`, `chunk` and `serviceLaw`, its rank-ordered sessions, each a call of the window whose units are
-  the `N` tiles; `share` and `sessionLaw`, each session's own uniform distribution; `CopyClosed`, the unit sets that hold a tile
+  tile subset; `sessions`, `chunk` and `serviceSamplingDesign`, its rank-ordered sessions, each a call of the window whose units are
+  the `N` tiles; `share` and `sessionSamplingDesign`, each session's own uniform distribution; `CopyClosed`, the unit sets that hold a tile
   in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `IncorrectCopyClosed`,
   statements whose incorrect sets are copy-closed.
 -/
@@ -262,25 +262,25 @@ def CallAnalysis.KnowledgeSound {Reg Tr : Type} {U : UnitStmts Tr n} {c : Fin C}
     (g : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess S R) → ℝ≥0∞) : Prop :=
   ∀ S R (τ : Strategy (sess S R)) u, u ∈ S → A.ks S R τ u ≤ κ + g S R τ
 
-/-- **A call's binding error in the window** (premise `δlink_c`): for every window prover state `τ` after the registration
+/-- **A call's binding error in the window** (premise `εbind_c`): for every window prover state `τ` after the registration
 `R` and every rule that picks a sampled proof block before the sessions' first coin, the average over the sample of call `c`'s
 `link` at the picked unit if it is one of `c`'s, at the state the window's run brings to `c`'s session (`along`),
-against the window's committed transcript, is at most `δlink_c(R, τ)`, a function of the window's state as `BindSound`'s
-`δlink` is (`Proofs/Flock/Soundness/Audit/Extraction.lean`): the link's finder bounds it at the state. The committed
+against the window's committed transcript, is at most `εbind_c(R, τ)`, a function of the window's state as `BindSound`'s
+`εbind` is (`Proofs/Flock/Soundness/Audit/Extraction.lean`): the link's finder bounds it at the state. The committed
 transcript is a function of the prover's state at registration, so it is the same for every call and every sample. The
 picked unit's `link` is at its place `⟨c, u⟩` (`CallAnalysis`): no state or rule sets a unit's position, and the roots
 its seed reads are the committed transcript's, fixed before the sample. -/
 def BindSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → SamplingDesign (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (committed : (R : Reg) → Cont Lw (executionPhaseSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
-    (c : Fin C) (δlink : (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) : Prop :=
+    (c : Fin C) (εbind : (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont Lw (executionPhaseSession sess) R) (tgt : (Lw R).Ω → Option (WUnit n)),
     avg (fun ω => along (fun c' => sess c' (slice ((Lw R).draw ω) c') R)
       (fun c' τc => if c' = c then
           atTgt (slice ((Lw R).draw ω) c') (pick (tgt ω) c')
             fun u => (A c').link (slice ((Lw R).draw ω) c') R τc u (committed R τ)
         else 0)
-      (List.finRange C) (τ ω)) ≤ δlink R τ
+      (List.finRange C) (τ ω)) ≤ εbind R τ
 
 /-- **The window's collision term** at the registration `R` and the window's state `τ`: the calls' state terms
 `g c` (`CallAnalysis.KnowledgeSound`), each at the state the window's run brings to call `c`'s session, counted on the
@@ -297,7 +297,7 @@ noncomputable def coll {Reg : Type} (Lw : Reg → SamplingDesign (WUnit n))
     (fun c τc => g c (slice ((Lw R).draw ω) c) R τc) (List.finRange C) (τ ω)
 
 /-- **The window's collision term at the sessions' counted queries** (premise, open; the random-oracle claim's, with gap
-(4)'s `ε_id`): for windows indexed by the oracle `H`, uniform on a finite `O` (the window's game, its laws, sessions
+(4)'s `ε_id`): for windows indexed by the oracle `H`, uniform on a finite `O` (the window's game, its sampling designs, sessions
 and state terms at each oracle), every prover's plays `σ H` whose sessions make at most `q` oracle calls by the count
 `qs` have collision term at most `f q` on average over the oracle.
 
@@ -416,7 +416,7 @@ def chunk {N : ℕ} (cap : ℕ) (D : Finset (Fin N)) (σ : ℕ) : Finset (Fin N)
 
 /-- **The service's sample**: a uniform permutation's `K`-subset, each sampled tile a unit of the one session that holds its
 rank. -/
-def serviceLaw (N K cap : ℕ) : SamplingDesign (WUnit fun _ : Fin (sessions K cap) => N) where
+def serviceSamplingDesign (N K cap : ℕ) : SamplingDesign (WUnit fun _ : Fin (sessions K cap) => N) where
   Ω := Equiv.Perm (Fin N)
   draw π := Finset.univ.sigma fun σ => chunk cap (subsetDraw K π) σ.val
 
@@ -424,7 +424,7 @@ def serviceLaw (N K cap : ℕ) : SamplingDesign (WUnit fun _ : Fin (sessions K c
 def share (K cap σ : ℕ) : ℕ := min cap (K - σ * cap)
 
 /-- **Session `σ`'s own sampling design**: a uniform `share K cap σ`-subset of the `N` tiles, on coins of its own. -/
-def sessionLaw (N K cap σ : ℕ) : SamplingDesign (Fin N) where
+def sessionSamplingDesign (N K cap σ : ℕ) : SamplingDesign (Fin N) where
   Ω := Equiv.Perm (Fin N)
   draw π := subsetDraw (share K cap σ) π
 

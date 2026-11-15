@@ -1043,7 +1043,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
             rec["census"] = c = sized(fn)
             log(f"{shape}: census {c}")
             if c["refused_block"]:
-                rec["blocker"] = (f"refused by C-Flock's block: its rows ({c['row_bits']} bits) need a block of 2^{c['rows_log']} "
+                rec["blocker"] = (f"refused by Flock's block: its rows ({c['row_bits']} bits) need a block of 2^{c['rows_log']} "
                                   f"for their in-circuit hashing alone, past 2^{c['k_max']}")
             if c["est_ands"] > max_ands:
                 rec["blocker"] = rec.get("blocker") or f"not lowered here: estimated {c['est_ands']} ANDs past this run's {max_ands}"
@@ -1057,7 +1057,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
                 except ValueError as ex:
                     if "needs a block of" not in str(ex) and not isinstance(ex, OutsideShape):
                         raise
-                    rec["blocker"] = "; ".join(x for x in (rec.get("blocker"), f"C-Flock's stager refused it: {ex}") if x)
+                    rec["blocker"] = "; ".join(x for x in (rec.get("blocker"), f"Flock's stager refused it: {ex}") if x)
                     log(f"{shape}: {rec['blocker']}")
                     continue
                 rec.pop("blocker", None)
@@ -1105,7 +1105,7 @@ def main(argv=None) -> int:
     d.add_argument("--negatives", action="store_true")
     d.add_argument("--census", action="store_true", help="size each shape only: no lowering, no proof")
     d.add_argument("--lower-refused", action="store_true",
-                   help="lower a shape the census finds past C-Flock's block, for the stager's own refusal")
+                   help="lower a shape the census finds past Flock's block, for the stager's own refusal")
     d.add_argument("--seed", type=int, default=20261025)
     d.add_argument("--mem-gb", type=int, default=64, help="the job's memory: a shape estimated past mem / 700 B an AND isn't lowered")
     d.add_argument("--reads", choices=("inline", "slots"), default=None,

@@ -167,11 +167,11 @@ def _session(proxy, n=1, hello=HELLO):
 
 def _proxy(schedule=SCHEDULE, coins=None):
     """A proxy held to ``schedule``, on live coins."""
-    return RL.Proxy(coins or RL.CoinServer(_counter_rand()), _salts(), schedule=schedule)
+    return RL.Proxy(coins or RL.LiveCoinPart(_counter_rand()), _salts(), schedule=schedule)
 
 
-def test_the_coin_server_sees_only_public_data_and_the_record_keeps_the_session(tmp_path):
-    coins = RL.CoinServer(_counter_rand())
+def test_the_live_coin_part_sees_only_public_data_and_the_record_keeps_the_session(tmp_path):
+    coins = RL.LiveCoinPart(_counter_rand())
     proxy = _proxy(coins=coins)
     resp = _session(proxy)
     assert resp[0] == (RL.RESP_SAMPLE, "null") and resp[1] == (RL.RESP_OK,)
@@ -229,7 +229,7 @@ def _refusal(resp):
     return resp[1]
 
 
-def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_sees_it():
+def test_a_session_off_its_pinned_schedule_is_refused_before_the_live_coin_part_sees_it():
     assert _session(_proxy())[-1][0] == RL.RESP_VERDICT
     cases = {
         "Hello": lambda s: s["hello"].update(reps=1),
@@ -331,7 +331,7 @@ class _Logged(RL.OsTree):
 
 
 def _tree_coins(source=None):
-    return RL.CoinServer(_counter_rand(), TREE, source or _Logged(_counter_rand()))
+    return RL.LiveCoinPart(_counter_rand(), TREE, source or _Logged(_counter_rand()))
 
 
 def test_on_the_coin_tree_every_coin_opens_the_challengers_root_and_the_record_names_its_nonce():
@@ -359,7 +359,7 @@ def test_on_the_coin_tree_every_coin_opens_the_challengers_root_and_the_record_n
     assert RL.schedule_of(coins.record()) == SCHEDULE
 
 
-def test_on_the_coin_tree_each_round_is_opened_after_the_coin_servers_record_of_what_it_answers():
+def test_on_the_coin_tree_each_round_is_opened_after_the_live_coin_parts_record_of_what_it_answers():
     """The source opens the link points after ``Commit``'s salted tops and each round after its record without the coins,
     so a release log of the openings binds them to the challenger's live-coin part's record."""
     coins = _tree_coins()
@@ -427,7 +427,7 @@ def test_the_challengers_release_log_holds_an_inner_session_on_its_tree_and_refu
 
 
 def test_on_the_coin_tree_a_coin_that_does_not_open_stops_the_session():
-    class Altered(RL.CoinServer):
+    class Altered(RL.LiveCoinPart):
         def _draw(self, stream, k, n, after):
             got = super()._draw(stream, k, n, after)
             return [got[0] ^ 1, *got[1:]] if stream == "circuit/rep0" and k == 1 else got
@@ -436,7 +436,7 @@ def test_on_the_coin_tree_a_coin_that_does_not_open_stops_the_session():
     why = next(r[1] for r in _tree_session(proxy) if r[0] == RL.RESP_REFUSED)
     assert why.startswith("rec proxy: ZK-SERVER-REFUSED: ") and "circuit/rep0 round 1" in why
 
-    class Forged(RL.CoinServer):
+    class Forged(RL.LiveCoinPart):
         def _draw(self, stream, k, n, after):
             got = super()._draw(stream, k, n, after)
             if stream == "circuit/rep0" and k == 1:
@@ -459,9 +459,9 @@ def test_the_prover_hello_names_the_challengers_tree_and_live_coins_refuse_one()
         _tree_coins().commit_coins(SCHEDULE)
 
 
-def test_the_coin_server_samples_no_coin_tree_of_its_own():
+def test_the_live_coin_part_samples_no_coin_tree_of_its_own():
     with pytest.raises(ValueError, match="takes it from a source"):
-        RL.CoinServer(_counter_rand(), TREE)
+        RL.LiveCoinPart(_counter_rand(), TREE)
 
 
 def test_a_session_that_stops_after_hello_reports_the_coin_tree_the_challenger_drew(tmp_path):

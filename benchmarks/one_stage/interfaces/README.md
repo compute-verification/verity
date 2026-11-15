@@ -62,8 +62,9 @@ for one server block and the Lean check's answer for it. It extends the all-prot
   its answer's profile names it, and a bandwidth answer that names none is refused: no entry is built from it, and
   `check` and the schema refuse a record whose bandwidth entry has none. The error, its certificates at each δ and
   every sum over it read with the term beside them (`error_form`, the ledger's `DELTA_FORM` with the error for δ);
-- the composed verdict, which is the answer's: the Lean check of the block's product (`CHECKS`: `verity/onsite/v0` or
-  `verity/remote/v0`, as the composite Lean check writes its `answer.json`), `accept`, `reject` or `undecided`, and
+- the composed verdict, which is the answer's: the Lean check of the block's product (`CHECKS`: `verity/onsite/v0`, or
+  `verity/remote/v0` or remote's composite of record `verity/remote/v1`, as the composite Lean check writes its
+  `answer.json` and `composite.py` its public `composite.json`), `accept`, `reject` or `undecided`, and
   `undecided` with no answer. Nothing in Python combines the subprotocols' verdicts;
 - what the product's subprotocols say (`compose`) and the error of `Accounting.Guarantees.JointPooledLive` over the
   block: the accepted subprotocols' errors summed, with `joint_horizon.named_terms` naming, by subprotocol, the terms
@@ -88,19 +89,3 @@ SPOT at δ = 1/100 and the wipe on the same server, the other subprotocols absen
 `integrity-profile-stratified` is the profile of a served run's SPOT answer, which samples each template's units as a
 stratum of their own (all 160 of one, 2 of another's 4): its bound is 2 of 164 at δ = 1/100, where a uniform sample of
 162 of 164 would say 1.
-
-## Demo A's report
-
-`verity_e2e_demo/report.py` renders block records and a measurements file (`verity/demo-a-measurements/v1`) through
-`demo_a.template`; its module docstring is the contract. A report with an unfilled number is refused; only a draft
-(`render(..., draft=True)`, never the command) shows `⟨NAME⟩`. Part 3 is circuit size in AND gates, with no FLOP figure or
-price; its H and B are one recorded run of proofs' planner (`verity/protocols/proofs/spot/prover/cost/demo_a.py --spans week`), filled
-together with `PLANNER`. A measurements file with `sections` or `proved` renders the H200 report (`m3.template`): every row is one number with
-its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is the
-sampled-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line is the fallback's until every sampled
-H200 proof block is proved in Flock and accepted by Lean. Per-call noise's serving overhead is one line,
-`serve_noise_line`: the seconds it adds a step with both ratios, never γ_step alone, ending the section marked
-`"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the
-evidence store (kind `demo-a-report/v1`), never Git.
-
-    python -m verity_e2e_demo.report [RECORD.json ...] --measurements M.json --out FILE

@@ -2,7 +2,7 @@
 (`verity_vllm.pipeline.boundary_rows`) on its two-stage stream, sampled on a test's own challenger (`fake_challenger`);
 the replay side's stream again from ``stage1.json`` alone, sampling the same spans on the bytes the first stage read; the
 interior docket over the sampled spans' proof blocks and the second stage on the next challenger's coins; and what
-`resume` refuses. A toy check template of one gate's worth."""
+`resume` refuses. A toy check template of one gate's worth, and the long row's check over a 131,072-id prompt."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import importlib
 import itertools
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -33,11 +34,10 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P, regi
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
-                                  interior_rows as IR, serving_rows as SRW)
+                                  interior_rows as IR, long_row as LR, serving_rows as SRW)
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
+REPO = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("verity.protocols.proofs.spot.prover.audit.two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("verity.protocols.proofs.spot.device.challenger_session")
@@ -113,14 +113,14 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     challenger's coins, opened after the interior docket's digest."""
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
-    assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
+    assert got.layout.n_rho == N_RHO and got.docket.record["population"] == N
     assert _samples_q(got) and got.read
     handoff = json.loads(json.dumps(got.first_stage()))
     assert handoff["units"] == list(got.sample.units) and handoff["spec"] == got.stream.spec.digest()
     again = TS.resume(handoff, PAIR, FC.Challenger("second"))
-    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
-    ireg, second = again.second(*_interior(again.layout, again.registration.digest))
-    assert ireg.order == again.registration.order and again.coins.live
+    assert (again.docket.digest, again.sample.units) == (got.docket.digest, got.sample.units)
+    ireg, second = again.second(*_interior(again.layout, again.docket.digest))
+    assert ireg.order == again.docket.order and again.coins.live
     assert second.replay_sample == again.sample and len(second.units) == Q * K
     assert [u // N_RHO for u in second.units] == list(range(Q))
 
@@ -133,8 +133,8 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
     got = TS.first(c.public(), WRAP, RULE, _placed(c.layout))
     assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
     again = TS.resume(json.loads(json.dumps(got.first_stage())), WRAP, FC.Challenger("second"))
-    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
-    _, second = again.second(*_interior(again.layout, again.registration.digest))
+    assert (again.docket.digest, again.sample.units) == (got.docket.digest, got.sample.units)
+    _, second = again.second(*_interior(again.layout, again.docket.digest))
     assert len(second.units) == Q * K and [u // (2 * N_RHO) for u in second.units] == list(range(Q))
 
 
@@ -165,7 +165,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     assert handoff["rule"]["k"] == ks
     again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
-    _, second = again.second(*_interior(again.layout, again.registration.digest, again.stream.interior_program(Q)))
+    _, second = again.second(*_interior(again.layout, again.docket.digest, again.stream.interior_program(Q)))
     assert second.law == S.second_sampling_design(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
     pairs = [u for u in second.units if u < Q * 2 * N_RHO]
     assert sorted(u // (2 * N_RHO) for u in pairs) == [0, 0, 0, 1, 1, 1] and len(second.units) - len(pairs) == Q
@@ -246,7 +246,7 @@ def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     assert hand["family"] == mine and "window_root" not in hand and TS.first_root(hand) == pub["run"]
     for handoff in (hand, {**hand, "window_root": pub["run"]}, {k: v for k, v in hand.items() if k != "family"}):
         again = TS.resume(handoff, PAIR, window_root=TS.first_root(handoff))
-        assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
+        assert again.docket.digest == got.docket.digest and again.sample.units == got.sample.units
         assert again.stream.family(again.sample) == mine
 
     assert FC.LABEL != mine != AC.family(0)
@@ -328,7 +328,7 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
     assert _samples_q(got)
     again = TS.resume(json.loads(json.dumps(got.first_stage())), SAME, FC.Challenger("second"))
-    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
+    assert (again.docket.digest, again.sample.units) == (got.docket.digest, got.sample.units)
 
 
 def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
@@ -456,7 +456,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     sampled = [hs[n] for n in names]
     toks = ((1, 5, 0, 2), (0, 4, 3, 2))
     it = IR.interior([IR.Span(f"s{k}", member, IR.table_reads(t, toks[k]), [[0, cells]], "p" * 64)
-                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.sample.units,
+                      for k, t in enumerate(sampled)], cells, got.docket.digest, got.sample.units,
                      row="two-stage-driver-test", tables=sampled, served=got.record, positions=c, links=links)
     entries = {e["value"]: e for e in it.record["registered"]}
     assert list(entries) == [x.value for x in links]
@@ -562,8 +562,8 @@ def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_
     assert list(c.public()["values"]) == [*BR.PARTS, BR.STOP]
     got = TS.first(c.public(), PAIR, RULE, _placed(c.public()), stop=stop)
     assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
-    assert [r["port"] for r in got.registration.record["roots"]] == list(BR.PARTS)
-    assert got.registration.record["population"] == N and len(got.sample.units) == Q
+    assert [r["port"] for r in got.docket.record["roots"]] == list(BR.PARTS)
+    assert got.docket.record["population"] == N and len(got.sample.units) == Q
 
 
 #: a serve's stop rule: one stop id, a model of 64 ids, responses of at most 4
@@ -716,7 +716,7 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     blocks = TS.family_of(got.layout, blocks=True)
     coins = _placed(pub, "stop", blocks=True)
     s = TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", coins, got.record)
-    assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == N
+    assert s["record"]["previous"] == got.docket.digest and s["record"]["population"] == N
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP]
     assert sorted(e["value"] for e in s["record"]["registered"]) == sorted(BS.STOP_READS)
     assert s["record"]["window"] == {**got.record["window"], "population": "stop"}
@@ -961,12 +961,45 @@ def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it
     got = VR.record("stop_record", first, summary, **NAMES)
     layout = r.layout
     assert got["class"] == f"w{pubs[0]['window']}/p{layout.prompt}-o{layout.outputs}"
-    assert got["registration"] == r.boundary == first["registration"] != r.registration.digest
+    assert got["registration"] == r.boundary == first["registration"] != r.docket.digest
     assert got["rate"] == VR.rate({"population": layout.spans, **_design("subset", len(r.sample.units))})
     assert (got["verdict"], got["verifier"]["module"]) == ("not complete", SA.TOOL)
-    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.registration.digest, True)
-    assert r.registration.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
+    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.docket.digest, True)
+    assert r.docket.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
     interior = _record(4, 4, previous=r.boundary, interior=True)
-    second = {"first_stage": {"registration": r.first.registration.digest}, "held": True, "outcome": {"accepted": False},
+    second = {"first_stage": {"registration": r.first.docket.digest}, "held": True, "outcome": {"accepted": False},
               "second_stage": {"registration": R.digest(interior)}}
     assert VR.record("second_stage", first, second, stream=interior, **NAMES)["verdict"] == "withheld"
+
+
+def test_the_command_finds_the_long_rows_check_by_its_id_in_a_process_that_never_imported_it():
+    """The command looks a class's check up by the descriptor id its ``commit.json`` names (`template_fn`): the long
+    row's (`long_row`'s `DsaTopKReadRowsCut_v1`, which no registry module registers) is found in a process of its own,
+    since this one has imported `long_row`."""
+    t = descriptor_id(bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=E.read(16, 1)))
+    code = ("import sys\nfrom verity.protocols.proofs.spot.prover.audit import two_stage\nfrom verity.circuits.codec import descriptor_id\n"
+            "assert 'verity_vllm.pipeline.long_row' not in sys.modules\nprint(descriptor_id(two_stage.template_fn(sys.argv[1])))")
+    got = subprocess.run([sys.executable, "-c", code, t], capture_output=True, text=True, check=False)
+    assert got.returncode == 0, got.stderr[-2000:]
+    assert got.stdout.strip() == t
+
+
+@pytest.mark.slow
+def test_the_long_rows_class_over_a_131072_id_prompt_has_its_rule_from_its_replay_block():
+    """The rule the command's first stage gives a class when none is named (`rule_of`), on the record of the long row's
+    class (`long_row.layout`: a prompt of 2^17 ids, 2 outputs) at small statics: its digit picks are wired to a writer
+    of two units a block, which the interior window places by the replay block's rows (`second_stage.replay_rows`), as
+    round 2 reads them; the same design without its rows is refused as before. The draw itself is not run here: at this
+    prompt `first` takes ten minutes on a CPU. Over a minute, nearly all of it building the check's body; the cheaper
+    tests here have no wire to a writer of several units a block."""
+    t = bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=E.read(16, 1))
+    span = BR.Span("r0", tuple(i % 1000 for i in range(1 << 17)), {**GREEDY, "max_tokens": 2}, (7, 8), "length")
+    pub = json.loads(json.dumps(BR.commit([span], LR.layout(ROOT, t), 0).public()))
+    assert (pub["prompt"], pub["values"]["b.ingress"]["words"]) == (1 << 17, 262172)
+    layout = BR.layout_of(pub, t, None)
+    rule = TS.rule_of(layout, "rate:1/1", 1)
+    d = TS.design(layout, unlinked=True)
+    assert d.rows == tuple(SS.replay_rows(layout.program, d.key)) and d.rows
+    assert rule.interior == tuple(v for m in d.window("00", [0]).members for v in TS.interior_values(m)) and rule.interior
+    with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
+        replace(d, rows=()).window("00", [0])

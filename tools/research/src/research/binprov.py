@@ -24,6 +24,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import settings
+
 SCHEMA = "research/binary-provenance/v1"
 SUFFIX = ".provenance.json"
 BIN_DIRS_ENV = "RESEARCH_BIN_DIRS"
@@ -50,14 +52,16 @@ def source_identity(source: Path | None) -> dict[str, Any]:
             if (p / name).is_file():
                 try:
                     doc = json.loads((p / name).read_text())
-                except (OSError, ValueError):
+                except (OSError, ValueError) as e:
+                    print(f"binprov: {p / name} unread, so the next record or git names the source ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                     continue
                 return {"commit": doc.get("commit") or doc.get("identity"), "tree": doc.get("tree"),
                         "dirty": False if name == READY_FILE else doc.get("dirty"), "dir": str(p), "via": name}
     def git(*args: str) -> str | None:
         try:
             r = subprocess.run(["git", "-C", str(d), *args], capture_output=True, text=True, timeout=30)
-        except (OSError, subprocess.SubprocessError):
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"binprov: git {args[0]} in {d} did not run ({type(e).__name__})", file=sys.stderr, flush=True)
             return None
         return r.stdout.strip() if r.returncode == 0 else None
     commit = git("rev-parse", "HEAD")
@@ -72,7 +76,7 @@ def record(binary: Path, source: Path | None = None) -> dict[str, Any]:
     """Write `<binary>.provenance.json` (atomically) and return it."""
     binary = Path(binary)
     doc = {"schema": SCHEMA, "path": str(binary.resolve()), "sha256": sha256_file(binary), "bytes": binary.stat().st_size,
-           "source": source_identity(source), "built_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "source": source_identity(source), "built_utc": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "host": socket.gethostname()}
     out = binary.with_name(binary.name + SUFFIX)
     tmp = out.with_name(f".{out.name}.tmp-{os.getpid()}")
@@ -82,7 +86,7 @@ def record(binary: Path, source: Path | None = None) -> dict[str, Any]:
 
 
 def bin_dirs() -> list[Path]:
-    env = os.environ.get(BIN_DIRS_ENV)
+    env = settings.get(BIN_DIRS_ENV)
     return [Path(x) for x in (env.split(":") if env else DEFAULT_BIN_DIRS) if x]
 
 
@@ -103,8 +107,9 @@ def snapshot(dirs: list[Path] | None = None) -> list[dict[str, Any]]:
                 continue
             prov = p.with_name(p.name + SUFFIX)
             try:
-                doc = json.loads(prov.read_text())
-            except (OSError, ValueError):
+                doc = json.loads(prov.read_text()) if prov.exists() else None
+            except (OSError, ValueError) as e:
+                print(f"binprov: {prov} unread, so its provenance counts as missing ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 doc = None
             if doc is None:
                 row["provenance"] = "missing"

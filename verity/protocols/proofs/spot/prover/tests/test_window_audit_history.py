@@ -27,7 +27,7 @@ from verity.commitments.periods import history as HW, interface as I, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verifier" / "tests"))
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import window_audit as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
@@ -80,7 +80,7 @@ def _verifier(mine, rec: dict):
     return check, D.derive(mine.program, mine.query, own, mine.work_table)
 
 
-def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_bodies(tmp_path):
+def test_the_verifier_holds_the_registered_history_root_to_the_writers_bodies(tmp_path):
     mine, doc, rec, publics, table = _window(tmp_path / "w")
     roots = I.registered_roots(rec["window"])
     assert roots == {"latent": table.root.hex()}

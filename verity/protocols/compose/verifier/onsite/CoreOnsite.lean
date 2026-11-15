@@ -5,7 +5,7 @@ accounts for space, bandwidth and communication. Its subprotocols are integrity 
 blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, and the recursive audit, which SPOT's
 soundness doesn't cover, are refused), the
 inference-only policy (`InferenceOnlyCheck.Protocol.protocol`,
-`verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
+`verity/inference-only/v0`: the registered circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
 period's execution phases credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
 by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
@@ -125,9 +125,11 @@ private def allRefused : Answer := answer (components.map refused)
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.filter (·.id != InferenceOnlyCheck.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
-#guard (answer ((components.take 6).map refused)).reason == some "params: verity/wipe/v0 is missing"
-#guard (answer ((components.filter (·.id != PousCheck.RunProtocol.protocol.id)).map refused)).reason ==
-  some "params: verity/pous/p2/v4/run is missing"
+-- a served run that leaves PoUS's case or the wipe's out of the composite gets a rejection naming the one missing
+private def without (id : String) : Answer := answer ((components.filter (·.id != id)).map refused)
+#guard [PousCheck.RunProtocol.protocol.id, MemoryChallenger.WipeProtocol.protocol.id].all fun id =>
+  (without id).verdict == .reject && (without id).published.isNone &&
+    (without id).reason == some s!"params: {id} is missing"
 #guard (answer ((components.take 5).map refused ++
     [refused Spot.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"

@@ -11,7 +11,7 @@ from verity.circuits.types import Array
 from verity_vllm.definitions.registry import b1, hopper
 from verity_vllm.definitions.registry.prims import F32
 
-from tests.program.test_running_example import Id16, Relu16, make_program
+from tests.frontend.running_example import Id16, Relu16, make_program
 from verity_torch.frontend.correspond import (
     _statics_diff,
     compare_bodies,

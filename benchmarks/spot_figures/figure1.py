@@ -147,13 +147,13 @@ CAP_RULE = "NetTiming.Guarantees.ResponseCapped"
 DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token ids, and a replay block is a request.",
               "skipped_work": "Every block: serving commits every proof block's outputs, and a replay block is a "
                               "request.",
-              "layer_of_token": "Deferred interiors at a layer of a token: serving commits each layer's residual "
+              "layer_of_token": "Interior commitments at a layer of a token: serving commits each layer's residual "
                                 "stream and the K and V a later token reads, and a replay block is one layer of one "
                                 "token."}
 #: the deployment every panel prices: SPOT[Flock]'s three roles, and the network certifier a layer of its own
 ROLES = ("The deployment is SPOT[Flock]'s three roles: an inference server serves and commits its values; a proof "
          "server replays each sampled replay block and proves it with flock-circuit prove --zk, with no ZK server and "
-         "no recursion (the proof_overhead card's dev arm); and a verifier draws the sample on the challenger's live "
+         "no recursion (the proof_overhead card's dev arm); and a verifier samples the sample on the challenger's live "
          "coins and decides with the Lean verifier. The network certifier, which stamps each request's release order "
          "and bucket at ingress, is a layer of its own.")
 #: what every bound rests on
@@ -877,7 +877,7 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
         out[panel] += "".join(f" {s}" for s in sentences)
     for panel, labels in (zeros or {}).items():
         if labels:
-            out[panel] += f" At 0, drawn along the axis's floor: {'; '.join(labels)}."
+            out[panel] += f" At 0, sampled along the axis's floor: {'; '.join(labels)}."
     return out
 
 

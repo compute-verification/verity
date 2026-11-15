@@ -343,7 +343,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
   every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
   generation config (a committing LLAMA32_1B's: temperature 0.6, top_p 0.9) to a request that omits them. The gate
-  takes a top_p below 1, which the compile unit refuses while the seeded top-p sampler's split count reads the live
+  takes a top_p below 1, which the compile slice's proof block refuses while the seeded top-p sampler's split count reads the live
   row count.
 - **A rehearsal's keys** (`--height`): LMS (N = 64, W = 1) at a tree height within `REHEARSAL_HEIGHT`, the
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
@@ -778,10 +778,10 @@ def cap_of(v: Any) -> int:
         raise Refused(str(e)) from None
 
 
-def draw_k_of(s: str) -> int:
+def sample_k_of(s: str) -> int:
     """A period-open's sample K (`--draw-k`, written as `draw_k`): a positive integer at most 2^24, or Refused."""
     if not re.fullmatch(r"[1-9][0-9]{0,7}", s) or int(s) > MAX_DRAW_K:
-        raise Refused(f"--draw-k {s!r}: the draw K the proof system selects each window's units with, 1 to 2^24")
+        raise Refused(f"--draw-k {s!r}: the sample K the proof system selects each window's units with, 1 to 2^24")
     return int(s)
 
 
@@ -909,7 +909,7 @@ def registration_of(s: str) -> str:
 
 #: a period-open's optional fields, as the gate hands them to `period` (``FIELD=VALUE``) and its open records them; `model`
 #: and `weights_root` name a model registry entry, whose root and model the open signs (`models.resolve`)
-PERIOD_FIELDS = {"draw_k": draw_k_of, "rows": rows_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
+PERIOD_FIELDS = {"draw_k": sample_k_of, "rows": rows_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
                  "model": model_of, "length": length_of, "policy": policy_of, "alpha": alpha_of, "gamma": gamma_of,
                  "policy_name": policy_name_of, "registration": registration_of}
 #: what an inference-only period's open signs, all of it or none, each with its flag: the policy its check holds the

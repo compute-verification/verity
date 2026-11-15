@@ -3,7 +3,7 @@ the ``second_statements`` piece of two executables: `spot-difftest`, the build o
 off (`SecondStage.WIRED_KEY`), and `spot-wired-key-dev`, the development executable with it on. One MoE
 layer's read of its expert's row, over the two-template interior (`SECOND_MIXED`): its router, PAIR, writes each
 token's expert index at `out`, and the read, TRIPLE, a read of the table round 1's record registers, takes its key
-`tok` from it, unit for unit. And the verifier of record (`spot-verifier`) serves no piece that takes the
+`tok` from it, unit for unit. And the verifier (`spot-verifier`) serves no piece that takes the
 switch from its input.
 """
 
@@ -129,15 +129,15 @@ def test_no_input_turns_the_switch_on(of_record):
         assert got["detail"]["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}, (extra, got)
 
 
-def test_the_verifier_of_record_serves_no_piece_that_takes_the_switch(verifier):
-    """The verifier of record's executable answers no ``second_statements`` request, whatever it carries: round 2 runs
+def test_the_verifier_serves_no_piece_that_takes_the_switch(verifier):
+    """The verifier's executable answers no ``second_statements`` request, whatever it carries: round 2 runs
     in it only inside the stream's run (`Run.run`), whose `Own` holds the switch as the build does."""
     for extra in ({}, {"wired_key": True}, {"wiredKey": True}):
         with pytest.raises(D.ProtocolError, match="unknown fn: second_statements"):
             verifier.call("second_statements", {**MOE, **extra})
 
 
-def test_a_sampled_unit_whose_key_is_not_its_writers_row_is_refused(dev):
+def test_a_sampled_proof_block_whose_key_is_not_its_writers_row_is_refused(dev):
     """The wired key's read in a statement (`second-read`, `second_stage._read_ok`'s wired arm, which the switch doesn't
     touch): TRIPLE's session reads `tok` at its writer units' committed rows, each slot its writer's first unit in its
     cell, and passes; a prover that opens another row, another unit's or another cell's, is refused ``second-read``.

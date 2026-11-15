@@ -6449,7 +6449,7 @@ def test_a_piece_agrees(pieces, port, examples):
 
 def test_the_callers_check_agrees(callers):
     """The caller's check (`VStar.Recursive.Caller.check`, `spot-flock-caller`) gives the Python's codes
-    (`caller.check`) on the registration piece's inputs: SPOT's check no longer makes these codes, so this port is the
+    (`caller.check`) on the docket piece's inputs: SPOT's check no longer makes these codes, so this port is the
     one that holds them."""
     stats = D.run(CALLER, examples=700, server=callers)
     assert stats.outputs > 175 and stats.rejects > 0, stats
@@ -6628,7 +6628,7 @@ def test_the_select_piece_samples_every_rule(pieces):
 
 
 def test_a_work_samples_design_is_cores(pieces):
-    """C-Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Spot.Pieces.designOfSamplingDesign`) the Python's
+    """Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Spot.Pieces.designOfSamplingDesign`) the Python's
     (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
     stratified one at its k_s."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
@@ -7662,10 +7662,10 @@ def _unnamed(j):
     return {**j, "window_values": []} if isinstance(j, dict) else j
 
 
-def _base_held(verdicts, registration, window_values=()):
+def _base_held(verdicts, docket, window_values=()):
     """The registered reads `audit_record` held before window values: the docket's own, less its ports' at their
     own roots."""
-    return audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
+    return audit.less_own_reads(audit.session_registered(verdicts, docket), docket)
 
 
 #: The one refusal whose text names the keys it was given, which a `window_values` added to keys already wrong joins.

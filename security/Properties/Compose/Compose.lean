@@ -35,12 +35,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A declared circuit's proof blocks, commit coins, seed preimages and sample are the service's (`Spot.Slots.layout`, `Select.select`)
+# A registered circuit's proof blocks, commit coins, seed preimages and sample are the service's (`Spot.Slots.layout`, `Select.select`)
 
 `Accounting.Compose.Declared` gives each gate its proof block (`Declared.unit`), each value its commit coin
 (`Declared.commitRound`) and each round the values its seed names (`Declared.seedNames`), and the composed credit
 (`Definitions.Compose.Guarantees.Compose`) samples, proves and charges tiles by them, its sample `Pouw.Window.subsetDraw`
-(`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the declared circuit is the service's on a
+(`Accounting.Compose.drawOf`). `UnitsOfLayout` is the statement that the registered circuit is the service's on a
 program `p` and query:
 * **units**: the service samples and proves the units of the verifier's own partition of its program
   (`Spot.Slots.layout`: the population's proof blocks, each its unit and its gates, then the input
@@ -62,7 +62,7 @@ program `p` and query:
   seed names a value exactly when it is a registered input, and `Accounting.Compose.SeedNamed` fails wherever a
   seeded round reads an activation (a run input or an earlier round's output), which is why the seeded statements
   credit nothing on today's code either;
-* **the sample**: the code's sample under the `subset:K_d` law, from `L` uniform bytes (`Select.select`, its sampled proof blocks
+* **the sample**: the code's sample under the `subset:K_d` sampling design, from `L` uniform bytes (`Select.select`, its sampled proof blocks
   then its closure, `Properties.Spot.bytesOf`), is accepted and samples no unit of a set `U` no more often than
   `subsetDraw K_d` of a uniform permutation of the population's `N_p` tiles misses `U`.
 

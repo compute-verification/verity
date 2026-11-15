@@ -1,6 +1,7 @@
 """vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
 with `verity_vllm.protocols.poub.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
-`verity_vllm.protocols.poub.remote.StoreBackend` proves that store to a verifier while the engine serves a trace of requests:
+PoUB's prover's `serving.StoreBackend` (`verity.protocols.accounting.poub.prover.node_store.serving`) proves that store to a
+verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
 reads every live block at it (`prover.py`'s serve modes: ``serve``, or ``servedrop:K``, which withholds the first K
 blocks appended).
@@ -33,7 +34,7 @@ finish and free theirs, and freed pages are reused.
 OUT/serve.json holds the store (`Binder.stats`), the requests, the prover's session result and, with --local, the
 verifier's (its record and ledgers, the memory line among them: on the pass clock a window's span is ticks, which
 the rebuild charge reads as nanoseconds, so it credits nothing there and only the held and read bytes mean anything).
-It needs `verity_vllm.protocols.poub.remote.StoreBackend` and vLLM on a GPU (`tests/test_vllm_serve.py`).
+It needs vLLM on a GPU (`tests/test_vllm_serve.py`); the prover it serves by (`provers`) needs neither, nor the adapter.
 """
 from __future__ import annotations
 
@@ -259,8 +260,16 @@ def engine(work: Path):
     return LLMEngine.from_engine_args(args)
 
 
-def backend_class(remote):
-    class Backend(remote.StoreBackend):
+def provers():
+    """PoUB's prover's serving loop and its store, which serving proves by; none of it the adapter's, vLLM's or a
+    GPU's (the adapter's `Binder` is imported where the engine is built)."""
+    from verity.protocols.accounting.poub.prover.node_store import serving
+    from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
+    return serving, NodeMemory
+
+
+def backend_class(serving):
+    class Backend(serving.StoreBackend):
         """The store's backend, its passes ticking ``clock`` if it has one; `layout` is the hello's public layout,
         each registered region's kind, tier and blocks."""
 
@@ -382,16 +391,15 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("one session a process: a NodeMemory serves one session")
     a.out.mkdir(parents=True, exist_ok=True)
 
-    from verity_vllm.protocols.poub import remote
     from verity_vllm.protocols.poub.binder import Binder
-    from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
 
+    serving, NodeMemory = provers()
     store = NodeMemory()
     binder = Binder(store, passes=False).install()
     with tempfile.TemporaryDirectory() as work:
         trace = Trace(engine(Path(work)))
         clock = PassClock() if a.local else None
-        backend = backend_class(remote)(store, trace, clock=clock)
+        backend = backend_class(serving)(store, trace, clock=clock)
         result, th = {}, None
         if a.local:
             lsock = wire.listen("127.0.0.1", 0)
@@ -400,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
             th.start()
         else:
             address = a.connect
-        (prover_result,) = remote.prove(backend, address, a.plan, node=a.node.encode(),
+        (prover_result,) = serving.prove(backend, address, a.plan, node=a.node.encode(),
                                         codec=wire.codec_named(a.codec), log=lambda m: print(m, flush=True))
         if th is not None:
             th.join()

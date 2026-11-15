@@ -1,4 +1,4 @@
-"""A served run's inference-only verdict: its declared circuit accepted as at most n (c, k)-inference blocks, or refused,
+"""A served run's inference-only verdict: its registered circuit accepted as at most n (c, k)-inference blocks, or refused,
 by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 
@@ -39,7 +39,7 @@ its Boolean version where it has one, and otherwise by an explicit circuit of it
 evaluates against the primitive. Any other primitive the table can't price leaves the count undecided, and the verdict
 refuses (`gate-table`).
 
-**The verdict** (`verdict`, `VERDICT_FORMAT`) reads the run's declared circuit: the picked window's circuit record at the
+**The verdict** (`verdict`, `VERDICT_FORMAT`) reads the run's registered circuit: the picked window's circuit record at the
 policy's class (``--circuit``, `served_verdicts.sh`'s step 3), whose session is the run's block Definition, its gates
 by the table, and its fresh bits at the verifier's pins (``--pins``, the weights registration) and the window's roots
 (``--registration``), as `block_counts` counts them; and the serve dir's sealed windows, each of which the class takes

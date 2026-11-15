@@ -345,7 +345,7 @@ def _at_rows(s: dict, row) -> dict:
 
 def _own(second: S.Draw, shift: int = 0, port: str = "out") -> dict:
     """A registered read of the interior's own `port`, one row a slot: each slot's own, or the one `shift` on."""
-    r, = (r for r in second.registration.record["roots"] if r["port"] == port)
+    r, = (r for r in second.docket.record["roots"] if r["port"] == port)
     return {"value": port, "root": r["root"], "domain": r["domain"], "leaves": r["leaves"], "reads_from": 0,
             "reads": [(u + shift) % (Q * N_RHO) for u in range(Q * N_RHO)]}
 
@@ -563,7 +563,7 @@ def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it()
     fields, and passes, refused only on the form."""
     stream = _stream()
     _, second = _stages(stream)
-    rec, (s,) = second.registration.record, stream.statements(second)
+    rec, (s,) = second.docket.record, stream.statements(second)
     h, n = s["header"], Q * N_RHO
     assert h["set"] == SS.set_name(RUN, 0) == f"served/{RUN}/m0" and rec["window"]["run"] == RUN
     assert h["frame_v3"]["bindings"] == {
@@ -615,10 +615,10 @@ def test_round_two_derives_the_links_from_the_replay_block(monkeypatch):
     (`second-links`); the run of record, deriving its own, then disagrees."""
     stream = _stream()
     first, _ = _stages(stream)
-    assert SS.replay_links(P.population_program(BLOCK, N), codec.descriptor_id(BLOCK), first.registration.record) == \
+    assert SS.replay_links(P.population_program(BLOCK, N), codec.descriptor_id(BLOCK), first.docket.record) == \
         (SS.Link(TEMPLATE, "x", BX), SS.Link(TEMPLATE, "o0", BOUT))
     with pytest.raises(TypeError):
-        stream.register_interiors(first, *_interior(Q * N_RHO, first.registration.digest, D.proved(first.draw)), links=[])
+        stream.register_interiors(first, *_interior(Q * N_RHO, first.docket.digest, D.proved(first.draw)), links=[])
     monkeypatch.setattr(SS, "replay_links", lambda *a: None)
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s])
@@ -1032,7 +1032,7 @@ def test_a_read_whose_key_is_wired_lists_no_table_rows():
 def test_nothing_of_record_turns_the_wired_key_on():
     """No file under `verity/` sets the wired key's switch but round 2's own code and the development executable
     `spot-wired-key-dev` (`Spot.WiredKeyDevMain`), and none but that executable's lakefile entry and its
-    difftest names it: the service's run, the verifier of record and every script take the switch as the code holds it,
+    difftest names it: the service's run, the verifier and every script take the switch as the code holds it,
     off."""
     root = next(p for p in Path(__file__).resolve().parents if (p / "verity" / "__init__.py").is_file())
     spot = root / "verity/protocols/proofs/spot/verifier"
@@ -1185,7 +1185,7 @@ def test_the_rule_and_the_spec_state_one_form():
     assert S.boundary_values(VALUES) == VALUES[:2] and S.interior_values(VALUES) == VALUES[2:]
 
 
-def test_the_verifier_of_record_samples_both_stages():
+def test_the_verifier_samples_both_stages():
     """The verifier's executable (`Pieces.verifier`, `verifier.EXE`) samples a two-stage rule's first stage, `Q`
     of the `N` replay blocks, and its second, `k` of each sampled replay block's proof blocks, as the service does."""
     assert V.EXE == "spot-verifier" and _spec().selection == RULE

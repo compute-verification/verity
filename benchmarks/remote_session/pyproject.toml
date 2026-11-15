@@ -28,11 +28,16 @@ untraced = [
     "tests/test_gate_whatif.py",
     "tests/test_host_read_tiers.py",
     "tests/test_lease.py",
+    "tests/test_live_verifier_host.py",
     "tests/test_run_serve.py",
     "tests/test_session.py",
     "tests/test_store_layout.py",
 ]
 inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/__init__.py",
+          # the sessions' harness (PoUB's own tests'), and the verifier host whose run's out/ auditor_line.py reads
+          # (test_live_verifier_host.py: its gate, its stub verifier and the challenger's tunnel client)
+          "verity/protocols/accounting/poub/tests/__init__.py", "verity/protocols/accounting/poub/tests/session_harness.py",
+          "verity/protocols/accounting/poub/device/live_verifier", "verity/protocols/compose/device/live_challenger/serve.py",
           "verity/protocols/accounting/poub/prover/audit_prover.py",
           "verity/protocols/accounting/poub/prover/remote_session/device.py",
           "verity/protocols/accounting/poub/prover/remote_session/session.cu", "verity/__init__.py",
@@ -81,7 +86,10 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           # test_run_serve.py: the kv.cu that run.sh's SERVE=row hands nvcc (rows.sh's, above), and the lease script
           # run.sh falls back to, are files of the tree
           "tools/research/src/research/pods/sh/gpu_lease.sh",
-          "verity/protocols/compose/device/live_challenger/__init__.py"]
+          "verity/protocols/compose/device/live_challenger/__init__.py",
+          # test_vllm_serve.py: serve.py proves by PoUB's node store (`provers`: serving.prove, NodeMemory), which its
+          # CPU test loads without the adapter
+          "verity/protocols/accounting/poub/prover/node_store"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

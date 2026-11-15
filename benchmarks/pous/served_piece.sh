@@ -4,7 +4,7 @@
 #
 #   POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'
 #
-# Before the card: libp2v1.so built for it (benchmarks/torch_gpu/p2_stage/build.sh at ARCH, default sm_90a) into a
+# Before the card: libp2v1.so built for it (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh at ARCH, default sm_90a) into a
 # scratch directory removed on exit, unless P2_LIB names one, as a node that refuses `setarch -R` needs, since the build
 # doesn't run there; the library loaded once by the sessions' Python, with no card to see; and the two Lean verifiers
 # that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), built in a scratch copy of
@@ -50,8 +50,8 @@ LIB=${P2_LIB:-}
 if [ -z "$LIB" ]; then
   setarch "$(uname -m)" -R true 2> /dev/null \
     || { echo "POUS: no answer: setarch -R is refused on this node, so libp2v1.so doesn't build here: build it where" \
-           "it is allowed (benchmarks/torch_gpu/p2_stage/build.sh) and name its directory in P2_LIB"; exit 3; }
-  ARCH=${ARCH:-sm_90a} bash "$ROOT/benchmarks/torch_gpu/p2_stage/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
+           "it is allowed (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB"; exit 3; }
+  ARCH=${ARCH:-sm_90a} bash "$ROOT/verity/protocols/accounting/pous/prover/p2/p2_store/build.sh" "$S/p2" > "$DIR/build.log" 2>&1 \
     || { tail -20 "$DIR/build.log"; echo "POUS: no answer: libp2v1.so doesn't build (build.log)"; exit 3; }
   LIB=$S/p2/lib
   stamp "built libp2v1.so"

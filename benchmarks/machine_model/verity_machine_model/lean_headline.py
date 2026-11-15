@@ -50,7 +50,7 @@ __all__ = ["BULK_FLOORS", "CATCH_ALL", "E", "EPS", "EPS_M", "LN2", "LN_P", "LN_P
            "P_OPERAND", "Q", "ROOT", "SM120", "VECTOR", "VEC_64", "branches", "coef", "design_skip", "exact",
            "exact_logs", "instance", "load", "main", "measured", "mload", "price", "stars", "write"]
 
-OUT = ROOT / "security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
+OUT = ROOT / "security" / "Definitions" / "Pouw" / "Headline" / "Sm120.lean"
 OUT_M = OUT.with_name("Sm120Measured.lean")
 
 Q = Fraction(1, 2)                 # A6's floors: two words a lane, so q = q_T = ½ and b_T = 0 (SheetScalarRouteHalf)
@@ -521,7 +521,7 @@ public import Definitions.Pouw.Headline.Encoding
 /-!
 # {f.key}'s headline instance: {f.device} and {f.title} (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/machine_model/data`), and
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.{f.ns}SheetHeadline` reads it.
 
@@ -621,7 +621,7 @@ public import Definitions.Pouw.Headline.Sm120
 /-!
 # sm_120's measured headline instance: {VECTOR} and H1 + fx1 (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/machine_model/data`), and
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 

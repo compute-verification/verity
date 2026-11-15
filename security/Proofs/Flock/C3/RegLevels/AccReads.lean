@@ -26,7 +26,7 @@ checked its statement (`checkAcc_of_checkStmt`):
 * `accRead_sampled`: at a sampled proof block, `OwnReadsHJ` puts a registered read of an `acc` (`acc_out`) column at `own`'s entry
   of its name, so the reads file names the column's port and the read's port has `acc0`'s registration; its position
   is `accReads`' row at the sampled statement's label of the unit (`idx`, which `OwnReadsHJ` reads), not at the unit;
-* `readsOwn_of_hown`: V*'s sessions sample every unit (`VLaw.live`, `execOS_subset_full_mem`), so at an accepted outcome
+* `readsOwn_of_hown`: V*'s sessions sample every unit (`VSamplingDesign.live`, `execOS_subset_full_mem`), so at an accepted outcome
   the session's game reaches (`Reached`) `OwnReadsHJ` holds at every registered read: its port is `own`'s entry of its
   name, read at the sampled statement's label of the unit (`AtLabel`; `HmRow.drawn` labels unit `u` with the registered
   population's `units.indices` at `u`, which no check here holds to `u`);
@@ -324,7 +324,7 @@ def AtLabel (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (R : Reg) (ω : L.
       .ok dp ∧ Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
     reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos)
 
-/-- **`OwnReadsHJ`'s conclusion at every unit, from `hown`**: V*'s sessions sample every unit (`VLaw.live`, the full sample,
+/-- **`OwnReadsHJ`'s conclusion at every unit, from `hown`**: V*'s sessions sample every unit (`VSamplingDesign.live`, the full sample,
 `execOS_subset_full_mem`), so at an accepted outcome a session's game reaches (`Reached`) every registered read is a
 sampled proof block's: its port is `own`'s entry of its name, read at the unit's label (`AtLabel`). -/
 theorem readsOwn_of_hown {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}

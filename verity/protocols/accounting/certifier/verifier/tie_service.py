@@ -150,7 +150,7 @@ def _unit(check) -> CompositeDefinition:
 
 _UNIT = _unit(gate)
 #: the same proof block with the gate replaced by the Definition it names, as a proof's circuit lowers it
-_PROOF_UNIT = _unit(_expanded)
+_PROOF_BLOCK = _unit(_expanded)
 
 
 def request_cells(prompt_len: int, B: int) -> int:
@@ -340,7 +340,7 @@ class IngressTie:
     def proof_block(self):
         """The proof block a proof's circuit lowers: `unit` with its gate the Definition it names (`head_check.expand`,
         a `ValueError` for an unpinned size class)."""
-        return bind(_PROOF_UNIT, **dict(zip(_STATICS, self.key)))
+        return bind(_PROOF_BLOCK, **dict(zip(_STATICS, self.key)))
 
     @cached_property
     def query(self) -> dict[str, Any]:
@@ -530,7 +530,7 @@ class IngressTie:
         """The in-the-clear check on the network certifier's opening of the rows, the witness: the debug comparison
         `verify` makes on request, never a verdict of record. Accepted when the opening reproduces the registered root
         and IoTieRequest's reference accepts every row on the verifier's lanes from `advice` and `releases`."""
-        reg = draw.registration.record
+        reg = draw.docket.record
         root, w = reg["roots"][0]["root"], reg["window"]["window"]
         lanes = self.lanes(advice, releases, w)
         accepted = cells.window == w and cells.root.hex() == root and lanes is not None and \
@@ -549,7 +549,7 @@ class IngressTie:
         `advice`'s digest (`digest`), None without an `LinkAdvice`. A head that isn't the registered
         root's refuses. `opening` (the witness) is for a debug comparison only: given, the verdict also carries
         `clear`'s accept bit, which decides nothing."""
-        reg = draw.registration.record
+        reg = draw.docket.record
         w, root = reg["window"]["window"], reg["roots"][0]
         try:
             self._held(head)
@@ -569,7 +569,7 @@ class IngressTie:
                 for u in units)
         public = {"verdict": int(accepted), "advice": digest(advice) if type(advice) is LinkAdvice else None}
         sessions = delivered.sessions()
-        bound = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
+        bound = _sha512({"format": VERDICT, "registration": draw.docket.digest, "sessions": sessions,
                          "accepted": accepted, "public": public})
         verdict = {"of_record": True, "decided_by": "proof", "accepted": accepted, "digest": bound,
                    "sessions": sessions, "public": public}
@@ -578,7 +578,7 @@ class IngressTie:
         return verdict
 
     def statement(self, draw: S.Draw) -> dict[str, Any]:
-        reg = draw.registration.record
+        reg = draw.docket.record
         return {"format": STATEMENT, "check": self.spec.check.program, "link": self.link,
                 "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
 
@@ -588,7 +588,7 @@ class IngressTie:
         verdict = self.verify(draw, delivered, circuit_sha512=circuit_sha512, advice=advice, releases=releases,
                               head=head, opening=opening)
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
-                              session_roots={VALUE: draw.registration.record["roots"][0]["root"]})
+                              session_roots={VALUE: draw.docket.record["roots"][0]["root"]})
 
     def tie(self, stream: S.Stream, advice: LinkAdvice, profile: AdvisedProfile,
             releases: Sequence[Q.Release]) -> IoTieVerdict:

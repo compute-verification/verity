@@ -7,7 +7,7 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # The service's units read the tile, not the session: its incorrect sets are copy-closed
 
-The deployed window's units are the `N` tiles in each of its sessions (`serviceLaw`), and their statements are the
+The deployed window's units are the `N` tiles in each of its sessions (`serviceSamplingDesign`), and their statements are the
 tiles' statements read in every session (`UnitStmts.copies`), since an instance's public inputs are its tile `t` and the
 window's common words, never the session. So at every transcript a tile is incorrect in every session or in none
 (`incorrectCopyClosed_copies`), and on such statements PoUW's family `harmSets W_ref ε ∧ CopyClosed`, at which it reads

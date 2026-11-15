@@ -35,13 +35,13 @@ def _drawn():
 
 
 def _args(reg, draw, **change) -> dict:
-    return {"registration": reg.record, "receipt": reg.receipt, "draw": draw.draw, "law": draw.law,
+    return {"docket": reg.record, "receipt": reg.receipt, "draw": draw.draw, "sampling_design": draw.law,
             "proved_units": list(draw.units), "instances": len(draw.units), "statement": {"statement": "stub"},
             "verdicts": _lean(), "delta": DELTA, "sessions": [SESSION], **change}
 
 
 def _python_record(a: dict) -> dict:
-    return audit.audit_record(*a.values(), session_registered=audit.held_reads(a["verdicts"], a["registration"]))
+    return audit.audit_record(*a.values(), session_registered=audit.held_reads(a["verdicts"], a["docket"]))
 
 
 def _public(rec: dict) -> tuple:
@@ -187,15 +187,15 @@ def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_
     twice = {**rec, "roots": [*rec["roots"], {**rec["roots"][0], "root": "77" * 64}]}
     reads = lambda root: _lean(registered={"0": {"value": x, "root": root},  # noqa: E731
                                            "1": {"value": "elsewhere", "root": "00" * 64}})
-    for registration, given, verdicts, failed in (
+    for docket, given, verdicts, failed in (
             (rec, roots, _lean(), []), (rec, {**roots, x: "77" * 64}, _lean(), ["roots"]),
             (rec, {**roots, "elsewhere": "00" * 64}, _lean(), ["roots"]),
             (twice, {**roots, x: "77" * 64}, _lean(), ["receipt"]), (twice, roots, _lean(), ["receipt", "roots"]),
             (rec, roots, reads(roots[x]), []), (rec, roots, reads("77" * 64), ["registered"])):
-        a = {**_args(reg, draw, registration=registration, verdicts=verdicts), "session_roots": given}
+        a = {**_args(reg, draw, docket=docket, verdicts=verdicts), "session_roots": given}
         got = V.audit_record(**a)
         assert got["verifiers"]["agree"] and got["verifiers"]["lean"]["failed"] == failed, got["verifiers"]
-        py = audit.audit_record(**a, session_registered=audit.held_reads(verdicts, registration))
+        py = audit.audit_record(**a, session_registered=audit.held_reads(verdicts, docket))
         assert canonical_json({k: v for k, v in got.items() if k != "verifiers"}) == canonical_json(py)
     assert got["checks"]["registered"]["detail"]["opened"] == [x]
 
@@ -209,7 +209,7 @@ def test_a_named_window_values_reads_are_held_to_its_window_entrys_root():
     rec = {**reg.record, "window": {**reg.record["window"], "activations": {"values": {"st": {"root": root, "value": "st"}}}}}
     for named, read, failed in ((["st"], root, False), (["st"], "77" * 64, True), ((), "77" * 64, False)):
         verdicts = _lean(registered={"0": {"value": "st", "root": read}})
-        a = {**_args(reg, draw, registration=rec, verdicts=verdicts),
+        a = {**_args(reg, draw, docket=rec, verdicts=verdicts),
              "session_roots": {r["port"]: r["root"] for r in rec["roots"]}}
         got = V.audit_record(**a, window_values=named)
         assert got["verifiers"]["agree"] and ("registered" in got["verifiers"]["lean"]["failed"]) == failed, got["verifiers"]

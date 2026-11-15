@@ -22,7 +22,7 @@ A proof block costs its ANDs (int8 MACs at `BlackwellS8ImmaDot32_v1`'s 4,190 per
 ops at their pieces, and every row it opens at hm96's `row_ands`) at the cost model fitted from Flock's zero-knowledge
 sessions (`inputs.observations`, GPU-seconds of an RTX PRO 6000), with its statement's share when statements are full.
 `fits` is false for a rung with a proof block Flock's block can't hold (`inputs.cap`: its ANDs and rows at the composer's
-occupancy past 2^`K_MAX`) or wider than the widest size class (`UNIT_CLASS_MAX` bits); such a rung is priced one proof
+occupancy past 2^`K_MAX`) or wider than the widest size class (`SIZE_CLASS_MAX` bits); such a rung is priced one proof
 block a statement, what lifting the limit would buy.
 
 **Two views.**  `lean`: each rung as n equal proof blocks of its mean size (`optimize.Grain`), its proving cost weighted by
@@ -64,7 +64,7 @@ from verity.protocols.proofs.spot.prover.cost.inputs import (EPILOGUE, I, K_MAX,
 from verity.protocol import MONITORING_PERIODS
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 from verity.protocols.proofs.spot.prover.costfit import Fitted, fit
-from verity.protocols.proofs.spot.verifier.one_stage.partition import UNIT_CLASS_MAX
+from verity.protocols.proofs.spot.verifier.one_stage.partition import SIZE_CLASS_MAX
 from verity.protocols.proofs.spot.prover.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
                                                            Objective, ReplayGrain, for_target, grain_costs, leak_count,
                                                            loc_bits, met_replay, row_ands, sqrt_grain)
@@ -120,7 +120,7 @@ class Part:
 
     @property
     def fits(self) -> bool:
-        return cap(round(self.gates), self.rows) > 0 and self.out_bits <= UNIT_CLASS_MAX
+        return cap(round(self.gates), self.rows) > 0 and self.out_bits <= SIZE_CLASS_MAX
 
     @property
     def per_statement(self) -> int:
@@ -462,7 +462,7 @@ def render(out: dict) -> str:
                  "rows, or at h/ρ, a code at rate ρ whose proof blocks hash no row in circuit, its encoding and openings "
                  "unpriced; replay: H200, each request a drawn proof block lies in re-run from its prompt). 'x serve' divides "
                  "by the scope's stock serving time. s* is the cheapest rung every proof block "
-                 f"of which C-Flock's block holds (k_log <= {K_MAX} at the composer's occupancy, `inputs.cap`; attention in "
+                 f"of which Flock's block holds (k_log <= {K_MAX} at the composer's occupancy, `inputs.cap`; attention in "
                  f"key blocks of {attention_keys()}) and the size classes; 'any' includes the rungs that don't.")
     lines += ["", "| scope | target | h | commitment | mode | s* (lean) | s* (MACs a gate_up block) | total | prove | commit | "
               "replay | x serve | s* (planner) | planner total | s* any, as fitted | s* any, marginal |",

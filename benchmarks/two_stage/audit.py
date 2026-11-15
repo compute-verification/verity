@@ -98,7 +98,7 @@ def publics(c: T.CS.Committed) -> dict[str, bytes]:
 
 
 class StageCoins(CC.ChallengerCoins):
-    """Both stages' coins of the run's one challenger session (``turns``, `a5_coins.Draws`' proxy) as the stream reads
+    """Both stages' coins of the run's one challenger session (``turns``, `a5_coins.Samples`' proxy) as the stream reads
     them: the first stage's rank 0's, the second's rank 1's, each its own family's, committed to its registration's
     digest in turn."""
 
@@ -137,25 +137,25 @@ def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
     return stream
 
 
-def drawn(stream: S.Stream, coins: StageCoins, registration: S.WindowCommitmentRecord) -> tuple[S.Draw, dict]:
-    """The stream's one sample of ``registration``, on the coins opened after its digest, and their segment (which ends
+def sampled(stream: S.Stream, coins: StageCoins, docket: S.WindowCommitmentRecord) -> tuple[S.Draw, dict]:
+    """The stream's one sample of ``docket``, on the coins opened after its digest, and their segment (which ends
     the stage's turn on the session's client)."""
-    coins.commit(bytes.fromhex(registration.digest))
+    coins.commit(bytes.fromhex(docket.digest))
     try:
-        draw = stream.select(registration)
+        sample = stream.select(docket)
     finally:
         segment = coins.stages[coins.at].drawn()
-    return draw, segment
+    return sample, segment
 
 
-def stage_of(registration: S.WindowCommitmentRecord, draw: S.Draw) -> dict:
-    return {"registration": registration.digest, "law": dict(draw.law), "draw": draw.units}
+def stage_of(docket: S.WindowCommitmentRecord, sample: S.Draw) -> dict:
+    return {"registration": docket.digest, "law": dict(sample.law), "draw": sample.units}
 
 
-def own_ports(window: T.CS.Binding, drawn: list[int]) -> list[str]:
+def own_ports(window: T.CS.Binding, sampled: list[int]) -> list[str]:
     """The interior registration's own ports the sessions read: the port holding each port but its link port of each
-    member the second stage drew a unit of (`Binding.held`: a wired port's, its writer's output port), each once."""
-    return sorted({window.held(m, p) for t, m in enumerate(window.members) if any(m.base <= u < m.base + m.n for u in drawn)
+    member the second stage sampled a unit of (`Binding.held`: a wired port's, its writer's output port), each once."""
+    return sorted({window.held(m, p) for t, m in enumerate(window.members) if any(m.base <= u < m.base + m.n for u in sampled)
                    for p, _ in m.all_rows if p != T.link(t)})
 
 
@@ -209,17 +209,17 @@ def main(argv=None) -> int:
                     "--first-parent origin/main`), which the challenger session's pin is held to")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
-    manager, draws, finisher = AC.start("local", ROOT, [0, 1], a.out / "challenger", a.main, local=LC.Local)
+    manager, samples, finisher = AC.start("local", ROOT, [0, 1], a.out / "challenger", a.main, local=LC.Local)
     try:
-        return run(a, a.out, StageCoins(draws), draws)
+        return run(a, a.out, StageCoins(samples), samples)
     finally:
         for rank in (0, 1):
-            draws.skip(rank)
+            samples.skip(rank)
         finisher.join()
         manager.shutdown()
 
 
-def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
+def run(a: argparse.Namespace, out: Path, coins: StageCoins, samples) -> int:
     """Both stages on the stream, the second stage's sessions, and the stream's outcome on the session's evidence."""
     stream = stream_of(a, coins)
     summary = {"n": a.n, "q": a.q, "n_rho": T.N_RHO, "k": a.k, "altered": a.altered, "root": ROOT,
@@ -237,7 +237,7 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     brec = T.write(bc, out / "boundary", {"toy": "two-stage boundary"})
     try:
         reg = stream.register(brec, T.CS.expected_ports(bc.window), leaf_layer=T.CS.leaf_layer(publics(bc)), window_root=ROOT)
-        first, segment = drawn(stream, coins, reg)
+        first, segment = sampled(stream, coins, reg)
     except (S.Refused, Ch.CoinError) as e:
         return refused("first_stage", e)
     bd, sample, segments = reg.digest, first.units, [segment]
@@ -251,7 +251,7 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     try:
         ireg = stream.register_interiors(first, irec, T.CS.expected_ports(it.window),
                                          leaf_layer=T.CS.leaf_layer(publics(it.committed)), window_root=ROOT)
-        second, segment = drawn(stream, coins, ireg)
+        second, segment = sampled(stream, coins, ireg)
     except (S.Refused, Ch.CoinError) as e:
         return refused("second_stage", e)
     segments.append(segment)
@@ -268,7 +268,7 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
                    sample=sample, **got)
     drawn_units = s.get("draw") or []
     summary["record"]["own_reads_only"] = own_reads_only(record, own_ports(it.window, drawn_units))
-    published = draws.evidence()
+    published = samples.evidence()
     summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
     evidence = [AC.evidence(published, g) for g in segments]
     (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [c.read.hex() for c in coins.stages]},

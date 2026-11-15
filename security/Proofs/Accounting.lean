@@ -40,6 +40,7 @@ public import Proofs.Accounting.ReadUnit.RowSeg
 public import Proofs.Accounting.ReadUnit.Leaf
 public import Proofs.Accounting.ReadUnit.Select
 public import Proofs.Accounting.ReadUnit.Check
+public import Proofs.Accounting.ReadUnit.Accepts
 public import Proofs.Accounting.ReadUnit.Deployed
 public import Proofs.Accounting.ReadUnit.Binding
 public import Proofs.Accounting.ReadUnit.BitsPorts
@@ -63,7 +64,6 @@ public import Proofs.Pouw.PerRunStop
 public import Proofs.Poub.RemoteHeld
 public import Proofs.Poub.RemoteHeld.Meets
 public import Proofs.Poub.RemoteHeld.OverTime
-public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld.DrawMeets
 public import Proofs.Poub.RemoteHeld.Binding
 public import Proofs.Poub.RemoteHeld.Sketch
@@ -122,6 +122,7 @@ public import Proofs.Compose.Additive
 public import Proofs.Slowdown.Coverage
 public import Proofs.Slowdown.ServingBlocks
 public import Proofs.Slowdown.ServingBlocks.Witnesses
+public import Proofs.Accounting.Registration.Sound
 public import Proofs.Accounting.Defs.Actual.Source
 public import Proofs.Accounting.Defs.Localization
 public import Definitions.Pous.P2.Cost

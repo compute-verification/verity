@@ -641,6 +641,19 @@ def test_node_ops_quiet_spares_a_gpu_leases_jobs_and_their_own_groups(tmp_path, 
         other.wait()
 
 
+def test_node_ops_quiet_spares_a_check_at_tools_check_as_it_spares_one_at_tools_verity_check(tmp_path, monkeypatch):
+    """A tree whose check is at tools/check/ runs tools/check/slot.py and check.py: a timed window leaves them and their own
+    groups running, as it leaves the same programs at tools/verity/check/, and pauses a look-alike path."""
+    ops = node_ops(tmp_path, monkeypatch, {})
+    for prog in ("tools/check/slot.py", "tools/check/check.py", "tools/verity/check/slot.py", "tools/verity/check/check.py",
+                 "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"):
+        cmd = f"python3 {prog} --by x -- uv run python tools/check/suites.py"
+        assert ops.QUIET_EXEMPT.search(cmd) and ops.QUIET_EXEMPT_TREE.search(cmd), prog
+    for prog in ("x/tools/check/slot.py.bak", "tools/checks/slot.py", "tools/check/lean_slot.py", "tools/check/check.pyc"):
+        cmd = f"python3 {prog} --by x -- uv run python bench.py"
+        assert not ops.QUIET_EXEMPT.search(cmd) and not ops.QUIET_EXEMPT_TREE.search(cmd), prog
+
+
 def pool(node2, monkeypatch, slots: int = 6):
     """The Verity pool open, its disk empty, and a start that records (job, its cores, the claim's descriptor) and keeps the
     descriptor open, as the job it stands for does."""
@@ -741,3 +754,14 @@ def test_a_pool_job_starts_at_nice_0_in_a_scope_holding_its_cores_and_inherits_i
         assert fr.header(fill / "queue" / "v-b.sh")["cpus"] == want
     queue(fill, "v-b.sh", "owner=a gpus=0 project=verity cpus=eight")
     assert fr.header(fill / "queue" / "v-b.sh")["bad"] == "cpus=eight"
+
+
+def test_timing_owners_it_cannot_read_let_nobody_time_and_say_so_but_no_file_is_quiet(node2, capsys):
+    load, fill, _ = node2
+    fr = load()
+    (fill / "timing-owners").unlink()
+    assert fr.timing_owners() == []
+    assert capsys.readouterr().err == ""
+    (fill / "timing-owners").mkdir()
+    assert fr.timing_owners() == []
+    assert "fill: " in (err := capsys.readouterr().err) and "nobody's job may be a timing job (IsADirectoryError" in err

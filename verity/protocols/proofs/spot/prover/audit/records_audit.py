@@ -15,7 +15,7 @@ The verifier's window is `interface.of_records`'s, each template resolved among 
 template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
 is refused until its records carry their segment roots. Before the sample the audit holds the docket to that circuit,
 to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
-(`source`), and runs the compile check (`compile_check`, the named gap until the compile unit exists): the advice's opening
+(`source`), and runs the compile check (`compile_check`, the named gap until the compile slice's proof block exists): the advice's opening
 opens the registered root under the registered compiler, and that compiler, run as the command the verifier's own table
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
@@ -388,7 +388,7 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
     less those its wires,
     registered reads of a parameter whose window root (``roots``, those the docket records: `window_roots`) is the
     verifier's pin (``pins``, ``{param: root}``) and the run's ingress fill
-    leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of
+    leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile slice's proof block's one input, a statement of
     its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. That is the run figure,
     the one to quote: only Lean's run ingress (the ingress gates ``freeInputs`` reads) counts as ingress. A listed
     record's window ingress (`interface.listed_ingress`: what its members read from rows before the window) adds the
@@ -1020,8 +1020,8 @@ def audit(a: argparse.Namespace) -> int:
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
-        registration = json.loads((wdir / "registration.json").read_text())
-        own = registration.get("window") or {}
+        docket = json.loads((wdir / "registration.json").read_text())
+        own = docket.get("window") or {}
         ties, untied = window_pins(own, doc, resolve)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
@@ -1032,7 +1032,7 @@ def audit(a: argparse.Namespace) -> int:
             raise ValueError(f"values {twice} are both pinned and the earlier registration's")
         pins |= tie_pins
         roots = window_roots(own)
-        for e in registration.get("registered") or ():
+        for e in docket.get("registered") or ():
             if e.get("value") in tie_pins and roots.setdefault(e["value"], e["root"]) != e["root"]:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
         histories = HW.pins(doc, roots)
@@ -1178,7 +1178,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--sampling-design", required=True, help="the rate the audit's stream states as its rule (rate:NUM/DEN, "
                    "stratified-rate:NUM/DEN or work-rate:NUM/DEN), whose sampling design over the window's proof blocks the "
                    "registration is held to; a fixed count (subset:K, stratified:K, work:K) is refused")
-    p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile unit")
+    p.add_argument("--opening", help="the advice's opening (interface.advice_opening): the named gap, until the compile slice's proof block")
     p.add_argument("--compilers", help="with --opening: the registered compilers the verifier holds, {name: {digest, argv, "
                    "code, pythonpath}}")
     p.add_argument("--repo", help="with --opening: the repository a registered compiler's commit is checked out from (default "

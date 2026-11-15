@@ -266,7 +266,7 @@ def seeds() -> tuple[tuple[int, ...], tuple[int, ...]]:
         out = name(reference(case_of(seed, "honest")))
         if out == "circuit-file":
             honest.append(seed)
-        elif out not in ("circuits", "accept", "size", "nci"):
+        elif out not in ("circuits", "accept", "size", "inference_only"):
             refused.append(seed)
     return tuple(honest), tuple(refused)
 
@@ -346,11 +346,11 @@ def made(draw, m: str) -> dict:
 #: The honest case on circuit files a random `serve` run takes now and then (`SERVE_FILE_ONE_IN` of its cases), each
 #: with the verdict it aims at: both templates on one taken file of 56 MB, at its limits and one past each.
 SERVE_FILES = ("plain-tree", "plain-tree")
-SERVE_FILE_CASES = {"file-accept": "accept", "file-size": "size", "file-nci": "nci"}
+SERVE_FILE_CASES = {"file-accept": "accept", "file-size": "size", "file-inference_only": "inference_only"}
 SERVE_FILE_ONE_IN = 40
 #: what `limits` names: `at`, `Γ` and `α` exactly what a block holds; `rows`, `Γ` one under it; `fresh`, `α` one
 #: fresh bit under it
-LIMITS = {"accept": "at", "size": "rows", "nci": "fresh"}
+LIMITS = {"accept": "at", "size": "rows", "inference_only": "fresh"}
 
 TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
@@ -491,7 +491,7 @@ CHECK_AT = ("plain-tree", "forged-proofs")
 CHECK_CASES = {"accept": (CHECK_AT, "at", "accept"),
                "zk-sessions": (("zk-sessions", "forged-proofs"), "at", "accept"),
                "size": (CHECK_AT, "rows", "size"),
-               "nci": (CHECK_AT, "fresh", "nci"),
+               "nci": (CHECK_AT, "fresh", "inference_only"),
                "more-rows": (("forged-proofs", "forged-proofs"), "at", "size"),
                "no-blob": (("plain-tree", None), "at", "circuit-file"),
                **{f"refused:{n}": ((n, None), "at", "circuit-file") for n in REFUSED}}

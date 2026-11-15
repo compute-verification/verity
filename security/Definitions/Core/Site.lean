@@ -39,10 +39,10 @@ counts are public.
 The Site is folded from an append-only log, **the registration** (`Verity.Registration`), whose entries each have a
 kind (`Registration.Entry`): the site entry (`Registration.Entry.site`), which adds sheets, locations and links
 (`Site.Entry`), and the information entry (`Registration.Entry.information`), which registers items
-(`Registration.Item`): θ's values, each by its committed root (`Registration.Theta`), and the builder `B`, the registered
+(`Registration.Item`): θ's values, each by its committed root, its rows' shape and its leaves' domain
+(`Registration.Theta`), and the builder `B`, the registered
 compiler (`Registration.Builder`, holding `Verity.Compiler`), and the declaration (`Registration.Entry.declaration`),
-which declares a day's circuit (`Registration.Declared`: its program's digest and its block Definitions by descriptor
-key). The log's θ and builder are what its items register (`Registration.theta`, `Registration.builder?`), and the
+which declares a day's circuit (`Registration.Declared`: its program's digest). The log's θ and builder are what its items register (`Registration.theta`, `Registration.builder?`), and the
 registered circuit reads both from it (`Verity.RegisteredCircuit`). Each entry names the head of the log it follows
 (`Registration.Entry.previous`): the digest of the log's last entry, which names its own predecessor, so the head is a
 digest of the whole prefix. The Site of a log is its entries' additions in order (`Site.ofLog`), and a log is valid when
@@ -76,7 +76,7 @@ the entry's own refusal, else by these (`Registration.refusal`).
 declaration names its day by the part's index. The prover declares one circuit a day, before the day's first coin: the
 verifier reads the day's declaration from the log it holds when it samples (`Registration.declared`), and since a second
 declaration of the day is refused, that declaration is the day's for the rest of the log. A window runs its day's
-declared circuit when its span lies within the day's and its program is the one the day declares
+registered circuit when its span lies within the day's and its program is the one the day declares
 (`Registration.RunsDeclared`).
 
 The digests are parameters (`Registration.Digests`), SHA-512 in the deployed check. The auditor's data sheets, public
@@ -263,12 +263,11 @@ def Registration.Item.key : Registration.Item → String
   | .theta t => "theta " ++ t.value
   | .builder _ => "builder"
 
-/-- **A day's declared circuit**: the day, by its index among the parts of the monitoring period's span cut into days
-(`Registration.RunsDeclared`), the digest of the circuit's program, and its block Definitions by descriptor key. -/
+/-- **A day's registered circuit**: the day, by its index among the parts of the monitoring period's span cut into days
+(`Registration.RunsDeclared`), and the digest of the circuit's program. -/
 structure Registration.Declared where
   day : ℕ
   program : String
-  blocks : List String
   deriving DecidableEq
 
 /-- **An entry of the registration**, by its kind, naming the head of the log it follows: the site entry, which adds
@@ -326,12 +325,12 @@ def builder? (log : Registration) : Option Builder := log.items.findSome? fun | 
 /-- The days the log's declarations declare, in the log's order. -/
 def days (log : Registration) : List ℕ := log.filterMap fun e => e.declared?.map (·.day)
 
-/-- **Day `j`'s declared circuit** in the log: the declaration that declares day `j`, the first when a log the check
+/-- **Day `j`'s registered circuit** in the log: the declaration that declares day `j`, the first when a log the check
 refuses declares it twice; `none` when the log declares no circuit for day `j`. -/
 def declared (log : Registration) (j : ℕ) : Option Declared :=
   log.findSome? fun e => e.declared?.filter (·.day == j)
 
-/-- **A window runs its day's declared circuit**: the days are the cut `days` of the monitoring period `m`'s span into
+/-- **A window runs its day's registered circuit**: the days are the cut `days` of the monitoring period `m`'s span into
 `n` consecutive spans, the window's span `w` lies within day `j`'s, and `program` is the program the log declares for
 day `j`. -/
 def RunsDeclared (log : Registration) (m : MonitoringPeriod) {n : ℕ} (cut : m.span.Cut n) (w : TickSpan)
@@ -412,9 +411,10 @@ namespace Registration
 
 open Site (Sheet)
 
-/-- **A composite**: the ids of the protocols it composes, in the order of their ids. Any list is one; onsite and remote
-are two (`Composite.onsite`, `Composite.remote`). A site's log is registered for a composite. The code's
-`Core.Site.Registration.Composite` is this type, `List String`, and its two lists are these two. -/
+/-- **A composite**: the ids of the protocols it composes, in the order of their ids. Any list is one; onsite, remote and
+remote's plain sibling are three (`Composite.onsite`, `Composite.remote`, `Composite.plain`). A site's log is registered
+for a composite. The code's `Core.Site.Registration.Composite` is this type, `List String`, and its three lists are
+these three. -/
 abbrev Composite : Type := List String
 
 /-- **Onsite**, the composite of an auditor with devices at the datacenter: network certification, the inference-only
@@ -428,6 +428,11 @@ def Composite.onsite : Composite :=
 Pearl+'s run verdict, and SPOT. -/
 def Composite.remote : Composite :=
   ["verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
+
+/-- **Remote's plain sibling**, the composite whose guarantee is soundness alone: remote's list with the inference-only
+policy's rows check (`verity/inference-only/rows/v1`, which reads the run's blocks in the clear) in place of v0. -/
+def Composite.plain : Composite :=
+  ["verity/inference-only/rows/v1", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
 
 /-- The digests the log names things by, SHA-512 in the deployed check: a sheet's, an entry's, and the head of a
 composite's empty log. -/

@@ -55,11 +55,11 @@ with `Flock.Draw.drawWith`'s stratified sampling design (strata `St`, matching `
 `src` that A3 makes uniform (`hA3`), the challenger's coins, and run the batched session with SHA-512 leaves, nodes and
 rows. If `execAccept` holds, the probability that at least `K` units of the program's rows circuit are incorrect at the
 committed values (1 on `ones`, 0 on `zeros`, the plurality of the prover's openings elsewhere) is at most
-`miss(K) + ε_ks + δ_link + δ_tree`:
+`miss(K) + ε_ks + ε_bind + δ_tree`:
 * `miss(K)`, `SamplingDesign.stratified`'s count curve, which `stratified_miss_eq_greedy` computes, under A3 (`hA3`);
 * `ε_ks = ksAvgStrict`, under `SHA512CRStrict` (`cr/sha-512`) for each table's knowledge finders at budgets `qF`, `qS`
   (`hKS`);
-* `δ_link = linkBoundE`, under `SHA512CRExpected` (`ecr/sha-512`) for the prover's link finders (`hCR`);
+* `ε_bind = linkBoundE`, under `SHA512CRExpected` (`ecr/sha-512`) for the prover's link finders (`hCR`);
 * `δ_tree = TreeRewind.bound qT`, under `SHA512CRStrict` (`cr/sha-512`) for the serving roots' rewinding finder (`hT`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)

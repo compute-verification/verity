@@ -94,7 +94,7 @@ research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-
 ~~~
 
 `flock_read.sh K...` measures Flock's Lean verifier (`verity-verify-proof verify --zk`) on the H1 tile unit, step by step:
-`flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
+`flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `verity/protocols/accounting/pouw/prover/lowering/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
 `Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
 `$OUT` gets build-K.json (the unit's ANDs, matrix entries, text bytes and its Program descriptor's size) and
@@ -123,7 +123,7 @@ units: `population.py` writes, per N, a population of about N units over a layer
 batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
 changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
 `Partition.unitGates` (a range at a time, `TemplateQuery.unitGates`), `Slots.popOk` (from the ranges,
-`popOk_eq_popOkRanges`: no replay unit and no input gate is built), the one-stage check's call of it
+`popOk_eq_popOkRanges`: no replay block and no input gate is built), the one-stage check's call of it
 (`OneStageZk.popHeld`, compiled in `Spot/OneStageZkStatement.lean`, which imports `Spot.PopOrder` so that it runs from
 the ranges too; its row carries the root's input gates, counted) and the references: `TemplateQuery.gates` on every
 unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s

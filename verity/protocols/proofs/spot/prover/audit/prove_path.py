@@ -4,7 +4,7 @@ Each window's step units are Programs a registered compiler made from the advice
 workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
 and each window's docket binds the compiler's digest and that commitment's root, before any coin. The prover commits each
 window over the compiler's Programs from its sealed bundle. The verifier, handed the commitment's opening (the named gap: the
-advice is opened to the verifier until the compile unit exists, README.md), compiles the advice with its own copy of the
+advice is opened to the verifier until the compile slice's proof block exists, README.md), compiles the advice with its own copy of the
 compiler, derives its own window and audits it through the one-stage audit's `service.Stream` (`verity/protocols/proofs/spot/prover/audit/window_audit.py`'s
 `audit`): register, select on the auditor's challenger's coins (committed to the docket before any is read), Flock `--zk` behind the Lean
 ZK server on the sampled proof blocks, Lean's verdicts, and the outcome, which the Lean verifier's `Run.run` must agree with. It
@@ -1884,7 +1884,7 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
         p.add_argument("--jobs", type=int, help="ranks at once, each in its own process (default: commit one, audit every "
                        "audited rank, which draw from the run root's one challenger session)")
         p.add_argument("--transfer-gate", action="append", default=[], help="a template the registered compiler lists as holding "
-                       "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's law is work-rate:NUM/DEN). A "
+                       "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's sampling design is work-rate:NUM/DEN). A "
                        "served window's are its model's of record (GATES_OF_RECORD), which this may only restate")
         p.add_argument("--out", required=True)
     p = sub.choices["commit"]
@@ -1909,7 +1909,7 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
                    "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
-    p.add_argument("--plain", action="store_true", help="plain Flock sessions, not --zk (a5's --plain): the partition's law "
+    p.add_argument("--plain", action="store_true", help="plain Flock sessions, not --zk (a5's --plain): the partition's sampling design "
                    "stratified (stratified-rate:NUM/DEN), each window one member with no registered reads or shared rows "
                    "(a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "

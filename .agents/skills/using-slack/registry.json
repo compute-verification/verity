@@ -107,7 +107,7 @@
       "lineage": [
         "bc-8f4b652b"
       ],
-      "remit": "C-Flock, its guarantees (recursion's knowledge soundness, the ZK server's zero knowledge), SPOT, red team, proof-system sweeps.",
+      "remit": "Flock, its guarantees (recursion's knowledge soundness, the ZK server's zero knowledge), SPOT, red team, proof-system sweeps.",
       "charter": "PRF-282 and proofs' goals on the Goals page: proofs/recursion-knowledge-sound, proofs/zero-knowledge, proofs/zero-knowledge-any-worker",
       "usergroup": "S0CAGBJTJF4",
       "retired_usergroups": [
@@ -858,8 +858,8 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
+        "demos/README.md",
         "demos/",
-        "tools/verity/cli/tests/lifecycle/",
         "benchmarks/tree/",
         "benchmarks/communication/",
         "pyproject.toml",

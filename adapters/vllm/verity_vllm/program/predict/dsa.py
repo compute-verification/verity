@@ -73,10 +73,9 @@ def _refuse(fact: str) -> NoReturn:
     raise Unexpressible(f"vocabulary cannot express: {fact}")
 
 
-# vLLM d9105ea80's FlashMLA sparse backend (flashmla_sparse.py): below this many heads a rank an fp8_ds_mla cache takes one mixed
-# batch of every sparse row, its query padded to FP8_PADDED_HEADS heads, the planner's h_q.
-MIN_HEADS_FOR_BF16_PREFILL = 32
-FP8_PADDED_HEADS = 64
+#: a layer's latent history groups (`Net.prefix_params`) and the logs of `_Model` each fills: the latent rows, which over an
+#: fp8_ds_mla cache are its rows' NoPE bytes, then their scales and k_pe
+_ROW_GROUPS, _ROW_LOGS = ("prefix", "prefix_scale", "prefix_rope"), ("latent", "scale", "rope")
 
 
 def run_field(layer: int, pos: int) -> str:
@@ -221,6 +220,7 @@ class Net:
         FlashMLA's sparse fp8 kernel takes every sparse row of a step in one mixed batch below MIN_HEADS_FOR_BF16_PREFILL heads a
         rank, over whole BN-row blocks of INDEX_TOPK rows (`FlashMlaV32Decode_v1`)."""
         from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import MIN_HEADS_FOR_BF16_PREFILL
         C, G = self.C, FLASHMLA_GLM53
         if self.kv_layout != "fp8_ds_mla":
             return [f"a KV cache in layout {self.kv_layout!r} (the decoder writes fp8_ds_mla's)"]
@@ -250,20 +250,25 @@ class Net:
     def edge_groups(self, keys: int) -> tuple[str, ...]:
         """The history groups of a request whose rows read up to `keys` keys that some row of it reads, which a Commit window's edge
         carries (`segment.edge_of`): the latent rows, and the indexer's keys and scales where a row reads past INDEX_TOPK (below, its
-        top-k selection keeps every key and reads no logit: `past_topk`)."""
-        return ("prefix", *(("prefix_ik", "prefix_iks") if self.past_topk(keys) else ()))
+        top-k selection keeps every key and reads no logit: `past_topk`); over an fp8_ds_mla cache the latent rows are its cache
+        rows' three parts (`prefix_params`)."""
+        rows = ("prefix", "prefix_scale", "prefix_rope") if self.kv_layout is not None else ("prefix",)
+        return (*rows, *(("prefix_ik", "prefix_iks") if self.past_topk(keys) else ()))
 
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
         """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
         layer's latent rows `prefix` (bf16 [NL, C, KV_LORA + QK_ROPE]: the normed kv_c, then the roped k_pe), and the indexer
         layers', in layer order, index-K slots `prefix_ik` (e4m3 [NI, C, INDEX_HEAD_DIM]) and their scales `prefix_iks` (f32 [NI, C]).
-        Over an fp8_ds_mla cache no history is read as Inputs yet."""
+        Over an fp8_ds_mla cache every layer's latent rows are its cache rows' three parts: `prefix` the e4m3 NoPE bytes
+        [NL, C, KV_LORA], `prefix_scale` their f32 scales [NL, C, KV_LORA / 128] and `prefix_rope` the bf16 k_pe [NL, C, QK_ROPE]."""
+        NI, KVL, R = len(self.indexers), int(self.C["KV_LORA"]), int(self.C["QK_ROPE"])
         if self.kv_layout is not None:
-            _refuse(f"a history of {C} positions over an {self.kv_layout} cache read as Inputs (a prefix-cache hit or a Commit window's "
-                    f"edge: a request's Program computes every cache row it reads)")
-        NI, row = len(self.indexers), int(self.C["KV_LORA"]) + int(self.C["QK_ROPE"])
-        return [("prefix", _arr((self.NL, C, row), 16)), ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)),
-                ("prefix_iks", _arr((NI, C), 32))]
+            from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+            rows = [("prefix", _arr((self.NL, C, KVL), 8)), ("prefix_scale", _arr((self.NL, C, KVL // FLASHMLA_GLM53["QT"]), 32)),
+                    ("prefix_rope", _arr((self.NL, C, R), 16))]
+        else:
+            rows = [("prefix", _arr((self.NL, C, KVL + R), 16))]
+        return [*rows, ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)), ("prefix_iks", _arr((NI, C), 32))]
 
     def model(self, B: Builder, W: Coll, peers: _Peers) -> _Model:
         return _Model(self, B, W, peers)
@@ -513,15 +518,18 @@ class _Model(_Calls):
     net: Net
 
     def open_with(self, prefix: list[Coll], C: int) -> None:
-        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
-        index-K slots and scales), read and never computed: the request's own rows follow at positions C.."""
-        latent, ik, iks = prefix
+        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, over an fp8_ds_mla cache
+        as their three parts, then the indexer layers' index-K slots and scales), read and never computed: the request's own rows
+        follow at positions C.."""
+        *rows, ik, iks = prefix
         for L in range(self.net.NL):
-            logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
+            logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog(), "scale": PartLog(),
+                                            "rope": PartLog()})
             if len(logs["latent"]):
                 raise AssertionError(f"layer {L}'s history opens once, before its first call")
-            for j in range(C):
-                logs["latent"].append(latent[L][j].refs)
+            for log, part in zip(_ROW_LOGS, rows):
+                for j in range(C):
+                    logs[log].append(part[L][j].refs)
         for n, L in enumerate(sorted(self.net.indexers)):
             for j in range(C):
                 self.logs[L]["ik"].append(ik[n][j].refs)
@@ -531,7 +539,7 @@ class _Model(_Calls):
         """Every layer's rows so far of each history group in `groups` (`Net.edge_groups`), its history's and its own, as
         `Net.prefix_params` lays out a history of them: wires and no gates."""
         E, net = len(self.logs[0]["latent"]), self.net
-        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
+        logs = {**{g: [self.logs[L][h] for L in range(net.NL)] for g, h in zip(_ROW_GROUPS, _ROW_LOGS)},
                 **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
         if any(len(log) != E for g in groups for log in logs[g]):
             raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
@@ -586,8 +594,8 @@ class _Model(_Calls):
         qn = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS)
         qc = [self.call(qn, q.slice(0, QL), w("q_a_ln").refs).refs for q in qkv]
         if fp8:
-            from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
-            lr = self.k("dsa_latent_row_ds_mla", KVL=KVL, R=R, TILE=FLASHMLA_GLM53["QT"], EPS=self.EPS)
+            from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import DS_MLA_TILE
+            lr = self.k("dsa_latent_row_ds_mla", KVL=KVL, R=R, TILE=DS_MLA_TILE, EPS=self.EPS)
             cache = [self.call(lr, q.slice(QL, QL + KVL + R), w("kv_a_ln").refs, c) for q, c in zip(qkv, cs)]
             kvc, kpe = [o[0].refs.slice(0, KVL) for o in cache], [o[0].refs.slice(KVL, KVL + R) for o in cache]
         elif self.batched:
@@ -686,17 +694,15 @@ class _Model(_Calls):
     def _flashmla_fp8(self, logs: dict[str, PartLog], ql: list[Refs], qpe: list[Refs], keys: list[int], tokens: int) -> list[Refs]:
         """The rows' attention over an fp8_ds_mla cache (`FlashMLASparseImpl._forward_fp8_kv_mixed_batch`) -> rows [NH * KV_LORA]: one
         FlashMLA call over the launch's `tokens` sparse rows, which the planner takes as one request of that many query rows at
-        FP8_PADDED_HEADS heads over INDEX_TOPK cache rows (`flashmla_twin.sched_meta`), so every row shares its SPLITS.  Row i's
+        FP8_PADDED_HEADS heads over INDEX_TOPK cache rows (`vllm_dsa_fp8.decode_splits`), so every row shares its SPLITS.  Row i's
         query is per head [ql | q_pe]; its INDEX_TOPK cache rows are its keys' (nope, scale, rope) in index order, then row 0's
         under index -1 (`FlashMlaV32KvRow_v1` zeroes them)."""
-        from verity_vllm.definitions.numerics import flashmla_twin as FT
-        from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53 as G
+        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import FLASHMLA_FP8_GEOMETRY, decode_splits
         C = self.C
         KVL, R, NH, TOPK = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "NH", "INDEX_TOPK"))
-        metas, ns = FT.sched_meta([TOPK], topk=TOPK, parts=FT.num_sm_parts(FP8_PADDED_HEADS, s_q=tokens,
-                                                                          num_sms=int(self.net.tp.num_sms)), block_size_n=G["BN"])
-        fn = self.k("flashmla_v32_decode", NH=NH, SPLITS=FT.request_splits(metas, ns, 0, TOPK // G["BN"]), DN=KVL, DR=R, QT=G["QT"],
-                    BN=G["BN"], DOT=G["DOT"], SCALE=float(C["ATTN_SCALE"]))
+        G = FLASHMLA_FP8_GEOMETRY[(R, KVL)]
+        fn = self.k("flashmla_v32_decode", NH=NH, SPLITS=decode_splits(tokens, TOPK, int(self.net.tp.num_sms), G["BN"]), DN=KVL, DR=R,
+                    QT=G["QT"], BN=G["BN"], DOT=G["DOT"], SCALE=float(C["ATTN_SCALE"]))
         valid, pad = (self.call(self.k("const", W=32, BITS=v)).refs for v in (0, 0xFFFFFFFF))
         out = []
         for i, n in enumerate(keys):

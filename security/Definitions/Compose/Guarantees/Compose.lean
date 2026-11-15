@@ -5,7 +5,7 @@ public import Definitions.Registration.Guarantees.Sheet
 public import Definitions.Compose.Assumptions.Compose
 
 /-!
-# PoUW's credit on an arbitrary declared circuit (trusted)
+# PoUW's credit on an arbitrary registered circuit (trusted)
 
 THEOREM's composed statement. Each `def G : Prop` is proved as `Accounting.SecurityProofs.Compose.G` in
 `Proofs.Compose.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one, a `Gates.IntDag`
@@ -21,7 +21,7 @@ PoUW's code today has one salt a window and derives every noise in the scheme, s
 its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), over the same circuit, at the
 grinding premium per seed group. The certificate records which (`CreditCertificate.coins`). Nothing yet builds a
 `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its units, its commit
-coins and its sample to the service's, is unproved: until both exist, these speak of the declared circuit, not of a
+coins and its sample to the service's, is unproved: until both exist, these speak of the registered circuit, not of a
 served workload.
 
 The credit splits in two, and `CircuitCredit` is their composition:
@@ -76,7 +76,7 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-! ## The logical layer -/
 
-/-- **(L) The circuit's work, live coins** (the logical layer). For every declared circuit `Cd` and scheme `Sc`, run as
+/-- **(L) The circuit's work, live coins** (the logical layer). For every registered circuit `Cd` and scheme `Sc`, run as
 one window: the circuit's rounds in order, each round's noise coin live and released after its operands are committed
 (one coin a round), then the service's sample of `K_d` of the `N_p ≥ units` grid-padded tiles, one a proof block (`drawOf`,
 a uniform `K_d`-subset), with the proofs' coins `Ξ`, each sampled tile proved with its noise's generation. Under:
@@ -93,7 +93,7 @@ a uniform `K_d`-subset), with the proofs' coins `Ξ`, each sampled tile proved w
 * the play's ideal game the service's at share `1` per unit of each skipped tile's late cone (`tileCone`, tiles of no
   words included), and sampled (I8)'s pieces on the window's proofs, the IR's layer (`Declared.layer` at the run's `pr`:
   positions the IR's gates, its slots, writers, cuts, coins and sample defined from the circuit): `Of`, binding at
-  `δ_bind` in the round (`MovedIn`; ExecutionPhaseDelta: `Σ_c δlink_c`, which needs `LayerCommitted`'s order), proof soundness
+  `δ_bind` in the round (`MovedIn`; ExecutionPhaseDelta: `Σ_c εbind_c`, which needs `LayerCommitted`'s order), proof soundness
   jointly over the samples at `δ_ks` (`JointSound`; ExecutionPhaseDelta: `max_c κ_c + coll`) and `Pins`;
 * the four claims: (H-μ) (`OperandHMu` at its kind's `μ`) and B′ (`ReceiptLuckAt` at its kind's `r_B`) for every
   credited tile folded at its stage, the guess bound (`GuessLuckAt` at its kind's guess) for every one whole, and the
@@ -118,7 +118,7 @@ it would hold here too; reading it needs a per-round moment premise and a rate l
 statement of its own, so this line leaves that margin unused.
 
 Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its
-units, commit coins and sample to the service's, is unproved: until both exist, this speaks of the declared circuit, not
+units, commit coins and sample to the service's, is unproved: until both exist, this speaks of the registered circuit, not
 of a served workload. -/
 def CircuitWork : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
@@ -144,7 +144,7 @@ def CircuitWork : Prop :=
 
 /-- **(L) The circuit's work, seeded coins** (the logical layer under one seed a call), stated as Fiat–Shamir in the
 random-oracle model (`fiat-shamir`): the window's seeds are uniform answers to the prover's queries naming its operands'
-roots, and `SeedExtractedAt` is where that model is named. For every declared circuit `Cd` and scheme `Sc`, run as one
+roots, and `SeedExtractedAt` is where that model is named. For every registered circuit `Cd` and scheme `Sc`, run as one
 window whose rounds are seed groups: each round one call site, its coin the oracle's answers to the cheater's `T_q`
 queries for that call's seed (`Fin T_q → B`, uniform), then the service's live sample of `K_d ≥ 1` of the `N_p` tiles
 (`drawOf`) with the proofs' coins `Ξ`. The run is any joint run `R` of all the rounds' answers: a cheater may choose
@@ -204,7 +204,7 @@ folded tile's one point luck `p = 7/8` at `1/(1 − p) = 8`, from which no momen
 needed). The premium `a·Π_F + b·Π_0` is what the seeded line pays for its seeds.
 
 Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its
-units, commit coins and sample to the service's, is unproved: until both exist, this speaks of the declared circuit, not
+units, commit coins and sample to the service's, is unproved: until both exist, this speaks of the registered circuit, not
 of a served workload. -/
 def CircuitWorkSeeded : Prop :=
   ∀ {ι K T L U B Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype B] [Fintype Ξ]
@@ -231,7 +231,7 @@ def CircuitWorkSeeded : Prop :=
 /-! ## The physical layer's step -/
 
 /-- **(P) Credit of the work, on a data sheet** (the physical layer: the tensor–scalar model and its vendor axioms,
-attribution's unit grade). For a declared circuit `Cd` and scheme `Sc` whose model `Z` is the circuit's on sheet `Sh`
+attribution's unit grade). For a registered circuit `Cd` and scheme `Sc` whose model `Z` is the circuit's on sheet `Sh`
 (`Fits`, `ModelScope`), every run `A` that meets the data sheet's A1–A7, FOLD-OPT per word folded at its `folded` words
 and the certificate `lam`, and FILL-OPT, and has the work `WorkAt` states at the circuit's costs `aOf`, `bOf` and bound
 `r`, takes at least `(1 − ε)·T_cred`, `ε = ε_♭ + ε_μ + r` (`epsOf`) and `T_cred = B(♭)/f_max` at the circuit's floor
@@ -265,7 +265,7 @@ small-batch decode under every premise but `WholeEntropyAt`'s (`CircuitCreditSee
 the certificate is what the physical layer's ledger consumes: what device time the work took, and whose, is the
 ledger's, which credits one device's time once. Nothing yet builds a `Declared` from a compiled Program, and
 `Properties.Compose.UnitsOfLayout`, which would tie its units, commit coins and sample to the service's, is unproved:
-until both exist, this speaks of the declared circuit, not of a served workload. -/
+until both exist, this speaks of the registered circuit, not of a served workload. -/
 def CircuitCredit : Prop :=
   ∀ {ι K P T L U F X C Ξ V : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] [Fintype C] [Fintype Ξ] [Nonempty V]
@@ -316,7 +316,7 @@ The live pair's is 0.744% closed and 0.681% sharp. It is the credit of every win
 derives from the salt, once the code's seed preimages name what each round reads (`SeedNamed`, in `ScopeSeeded`) and
 its binding is checked at the sample. Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would
 tie its units, commit coins, seed preimages and sample to the service's, is unproved: until both exist, this speaks of
-the declared circuit, not of a served workload. -/
+the registered circuit, not of a served workload. -/
 def CircuitCreditSeeded : Prop :=
   ∀ {ι K P T L U F X B Ξ V : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] [Fintype B] [Fintype Ξ] [Nonempty V] {Tq : ℕ}

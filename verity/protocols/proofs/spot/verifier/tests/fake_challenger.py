@@ -158,14 +158,14 @@ class Stream(S.Stream):
                            **kwargs: Any) -> S.WindowCommitmentRecord:
         return super().register_interiors(draw, record, ports, **{"window_root": WINDOW["root"], **kwargs})
 
-    def select(self, registration: S.WindowCommitmentRecord, **kwargs: Any) -> S.Draw:
-        if self.fake is not None and bytes.fromhex(registration.digest) not in self.fake.sessions:
-            self.fake.commit(bytes.fromhex(registration.digest))
-        return super().select(registration, **kwargs)
+    def select(self, docket: S.WindowCommitmentRecord, **kwargs: Any) -> S.Draw:
+        if self.fake is not None and bytes.fromhex(docket.digest) not in self.fake.sessions:
+            self.fake.commit(bytes.fromhex(docket.digest))
+        return super().select(docket, **kwargs)
 
-    def _evidence(self, registration: S.WindowCommitmentRecord) -> dict[str, Any] | None:
-        after = bytes.fromhex(registration.digest)
-        return self.fake.evidence(registration.digest) if self.fake and after in self.fake.sessions else None
+    def _evidence(self, docket: S.WindowCommitmentRecord) -> dict[str, Any] | None:
+        after = bytes.fromhex(docket.digest)
+        return self.fake.evidence(docket.digest) if self.fake and after in self.fake.sessions else None
 
     def outcome(self, draw: S.Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 coins: Mapping[str, Any] | None = _NONE, statements: Any = _NONE, proofs: Any = _NONE,
@@ -174,9 +174,9 @@ class Stream(S.Stream):
         (`interior_coins`) after the interior docket."""
         first = draw.replay_sample or draw
         if coins is Stream._NONE:
-            coins = self._evidence(first.registration)
+            coins = self._evidence(first.docket)
         if draw.replay_sample is not None:
-            kwargs.setdefault("interior_coins", self._evidence(draw.registration))
+            kwargs.setdefault("interior_coins", self._evidence(draw.docket))
         if statements is Stream._NONE:
             statements = None if draw.replay_sample is None else self.statements(draw)
         if proofs is Stream._NONE:
@@ -193,10 +193,10 @@ class Stream(S.Stream):
         """Each template of the interior program in the check's order, `(template, lo, hi, reference header)`: its
         part's slots `[lo, hi)` and the header of its reference statement, fixed before the run (`reference_header`),
         each port at the schema its value has in the spec."""
-        e = self._entries[second.registration.order]
+        e = self._entries[second.docket.order]
         schema = {v.name: v.schema for v in self.spec.values if v.schema}
         return [(t, lo, hi, reference_header(t, lo, hi, {p: schema.get(r["port"], ROW_SCHEMA)
-                                                         for p, r in self._roots(second.registration.record, t).items()}))
+                                                         for p, r in self._roots(second.docket.record, t).items()}))
                 for t, ((lo, hi),) in P.strata(e.interior_program, self.spec.check.query)]
 
     def _reads(self, second: S.Draw) -> list[dict[str, Any] | None]:
@@ -204,8 +204,8 @@ class Stream(S.Stream):
         block's Definition links (`second_stage.replay_links`) of the boundary port its link names, each slot its unit's
         row of its cell's replay block's (`second_stage.replay_rows`), and each value the interior docket
         registers, under a port of its name (None when it reads none)."""
-        e = self._entries[second.registration.order]
-        rec, boundary = second.registration.record, second.replay_sample.registration.record
+        e = self._entries[second.docket.order]
+        rec, boundary = second.docket.record, second.replay_sample.docket.record
         values = {x["value"]: {k: x[k] for k in ("value", "root", "domain", "leaves")}
                   for x in rec.get("registered", [])}
         at = {r["port"]: r for r in boundary["roots"]}
@@ -238,7 +238,7 @@ class Stream(S.Stream):
         docket (`served_header`: the run's input set, the slots' indices, and its ports' roots, domains and
         bindings there), its sample the second stage's units among them, counted from its first, and its registered
         reads (`_reads`)."""
-        rec = second.registration.record
+        rec = second.docket.record
         out = []
         for m, ((t, lo, hi, ref), reads) in enumerate(zip(self._references(second), self._reads(second))):
             units = [u - lo for u in D.proved(second.draw) if lo <= u < hi]

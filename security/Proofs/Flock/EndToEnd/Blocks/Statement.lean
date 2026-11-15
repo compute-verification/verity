@@ -25,14 +25,14 @@ sessions from `start b` up to `start (b + 1)` (`ServerBlocks`): a wipe separates
 sessions), adaptively, so a block's sessions may depend on everything the prover saw in the blocks before.
 
 * `IntegrityBlock`: for block `b`, the probability that every session of block `b` is accepted and its incorrect proof blocks total
-  at least `ln(1/δ)/q` is at most `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, where each of block `b`'s samples covers at least a
+  at least `ln(1/δ)/q` is at most `δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t)`, where each of block `b`'s samples covers at least a
   fraction `q` of its session's units. The block's bound holds inside the monitoring period, against the prover that
   played the blocks before it. It is a lemma: the listed guarantee of the per-block reading is `IntegrityBlockCarried`,
   which also covers carried state and is `IntegrityBlock` with no carried leaf.
 * `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` incorrect proof blocks is at most
-  `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint horizon over blocks sums with the other subprotocols.
+  `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + ε_bind,t))`: the per-block form a joint horizon over blocks sums with the other subprotocols.
 * `IntegrityPooledBlocks`: the probability that every session of every block is accepted and the incorrect proof blocks over the
-  horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading. It is a
+  horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + ε_bind,t)`, the pooled reading. It is a
   lemma: the listed guarantee of the pooled reading is `IntegrityPooledCarried`, which also covers carried state.
 
 The named assumptions are `IntegrityPooled`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
@@ -89,7 +89,7 @@ def blockIncorrect (b : ℕ) (l : List SamplingBlockRec) : ℕ := ((l.filter fun
 def BlockMissProb (q δ : ℝ) (b : ℕ) (l : List SamplingBlockRec) : Prop :=
   (∀ r ∈ l, r.idx ∈ S.sessions b → r.accepted) ∧ Real.log (1 / δ) / q ≤ (S.blockIncorrect b l : ℝ)
 
-/-- Block `b`'s knowledge and binding errors, `Σ_{t ∈ b} (ε_ks,t + δ_link,t)`. -/
+/-- Block `b`'s knowledge and binding errors, `Σ_{t ∈ b} (ε_ks,t + ε_bind,t)`. -/
 noncomputable def err (b : ℕ) : ℝ≥0∞ := ∑ t ∈ S.sessions b, ((S.W t).ks + (S.W t).link)
 
 end ServerBlocks

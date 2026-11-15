@@ -6,11 +6,11 @@
 `code_v1` carries the decisions' KT counts and their context min(run, 2) from window to window (`arith_encode.Carry`),
 so a window's charge depends on every decision before it. The session's first carry is the book's priors and run 0,
 public (`arith_encode.first_carry`). Every later one is a function of the decisions so far, a value, so it is committed
-as `replay_chain` commits the scan's state: each window has a produced value `VALUE` of two rows, its carry-in and its
-carry-out, and `ChargeLink_v1{N}` is `ChargeCount_v1{N}` reading its carry from row 0 and holding its carry' to row 1.
-This module is that chain: the row (`encode`, `carry_of`), the commitment and reads (`commit_window`, `reads`), the
-verifier's check of how the windows join (`check_chain`), and the Boolean part with its specification
-(`ChargeLink`, `reference_link`).
+the way the scan's state is in the replay's state chain vLLM's compiler commits (`verity_vllm.compiler.replay_chain`):
+each window has a produced value `VALUE` of two rows, its carry-in and its carry-out, and `ChargeLink_v1{N}` is
+`ChargeCount_v1{N}` reading its carry from row 0 and holding its carry' to row 1. This module is that chain: the row
+(`encode`, `carry_of`), the commitment and reads (`commit_window`, `reads`), the verifier's check of how the windows
+join (`check_chain`), and the Boolean part with its specification (`ChargeLink`, `reference_link`).
 
 **The row**, `ROW_BITS` = 96 bits, six u16 words: n0 3×15 | n1 3×15 | run 1×2, each element least significant bit
 first, then four zero bits (`arith_encode._CARRY`'s fields in order).
@@ -27,9 +27,10 @@ fitted to the window, either breaks the chain, which `check_chain` refuses, or c
 fails that proof block's proof as any false proof block does. A carry row's padding needs no check: window 0's is the
 priors' row, and every later one a proved proof block's carry-out.
 
-**Why a value of its own.** `replay_chain.ReplayLoad` writes the window row and checks it in full at the window's
-start, before any decision is coded, so a carry-out there would need ReplayLoad to leave a field unchecked and change
-its pins. A sibling value under the same carry rule gives the same guarantee and leaves the scan's chain as it is.
+**Why a value of its own.** `ReplayLoad` (`verity_vllm.compiler.replay_chain`) writes the window row and checks it in
+full at the window's start, before any decision is coded, so a carry-out there would need ReplayLoad to leave a field
+unchecked and change its pins. A sibling value under the same carry rule gives the same guarantee and leaves the
+scan's chain as it is.
 
 **Cost** (`size`): `ChargeCount_v1{N}` and 96 ANDs, the equality of carry' with row 1 and the ok: 19,632 at N = 2 and
 50,760 at N = 14, and in a lowering ChargeCount's copies of its carry, about 175 rows a decision. Per window two rows

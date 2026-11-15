@@ -2072,9 +2072,9 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     assert [(m["name"], m["value"], m["unit"]) for m in saved["measurements"]] == [
         (name, cost, "percent of stock's serving compute")
         for name, cost in (("chat", 2.03), ("long", 2.03), ("prefix", 100.0), ("vllm/serving-cost-glm53", 2.03))]
-    assert saved["workload_fingerprint"] == {"benchmark": "serve_tax", "model": "glm-5.3", "arm": "two-stage",
-                                             "reference": "compiled", "loads": ["chat", "long", "prefix"],
-                                             "vllm": "0.1+gd9105ea8"}
+    assert saved["workload_fingerprint"] == {"source_sha": None, "benchmark": "serve_tax", "model": "glm-5.3",
+                                             "arm": "two-stage", "reference": "compiled",
+                                             "loads": ["chat", "long", "prefix"], "vllm": "0.1+gd9105ea8"}
 
 
 def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -37,8 +37,8 @@ theorem pearlCGapUOnlySm120LoopRev1_8192 {Q R S : Type} [Fintype Q] [DecidableEq
     (by norm_num) hTT
 
 /-- **v2 at the cap 1/1,000 with U-only binding, 8192³**, at sm_120's in-loop prices (an upper bound): `g =
-522517/139900000`. Twin of `pearlCGapUOnlyUnpromotedCap1000_8192`. -/
-theorem pearlCGapUOnlyUnpromotedCap1000Loop_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
+522517/139900000`. Twin of `pearlCGapUOnlyUnpromotedInertShare1000_8192`. -/
+theorem pearlCGapUOnlyUnpromotedInertShare1000Loop_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (d : PearlCDevice) (sem : PearlCSem Q R S) (hG : d.G = 0)
     (hp : d.prices = Prices.sm120Loop) (hTT : TTOutPearlCDevUOnly CM d sem (1 / 1000)) :
     GGapU CM (pearlCProtocolDevRev1 d sem (1 / 1000)) (pearlCDomainDevAt d sh8192) ((522517 / 139900000 : ℚ) : ℝ)

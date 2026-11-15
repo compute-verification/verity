@@ -6,10 +6,11 @@ combine statements, costs, and the file it writes.
     run.py --guard [all] --scratch DIR --out DIR [--tree PATH]
     run.py --pin-reference --scratch DIR --out DIR
 
-The tile's lowering is `pouw_h1_circuits --lower K R C BIND PATH` (adapters/vllm), the auditor's lowering whose file a PoUW
-period-open commits as ``k<K>``, bound to `BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the R x C
-leaf (`lanes.py`), bound to the Program a served window's verifier derives for it. Each runs in a child process with
-``HZ_STAGE`` (``fast`` by default) and ``H1_TMPL`` unset for the flat form or ``structural``. Its peak RSS is the child's
+The tile's lowering is `h1unit.Shape.stager` (`lanes.py tile`), the auditor's lowering whose file a PoUW period-open commits
+as ``k<K>`` (`pouw_h1_circuits --lower` lowers it so in the adapter, a tree from before it left benchmarks/ there), bound to
+`BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the R x C leaf (`lanes.py`), bound to the Program
+a served window's verifier derives for it. Each runs in a child process with ``HZ_STAGE`` (``fast`` by default) and
+``H1_TMPL`` unset for the flat form or ``structural``. Its peak RSS is the child's
 ``ru_maxrss`` (`os.wait4`, KiB on Linux) and its wall time the child's. The file is then read once for its SHA-512, bytes,
 META's ``k_log`` and AND rows (`scan`), and deleted.
 
@@ -88,7 +89,8 @@ def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = R
         env["PYTHONPATH"] = ":".join(p for p in (tree_pythonpath(tree), env.get("PYTHONPATH")) if p)
         if (tree / ".venv" / "bin" / "python").exists():
             python = str(tree / ".venv" / "bin" / "python")
-    if unit == "tile":
+    if unit == "tile" and not (tree / "benchmarks" / "pouw" / "h1_prove" / "h1form.py").is_file():
+        # a tree from before H1's lowering left benchmarks/: its adapter lowers the tile under HZ_STAGE and H1_TMPL
         argv, cwd = [python, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k), str(r), str(c), json.dumps(BIND),
                      str(path)], tree / "adapters" / "vllm"
     else:

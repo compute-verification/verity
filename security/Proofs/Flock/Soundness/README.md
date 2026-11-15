@@ -114,7 +114,7 @@ binding error per audit.
 - **The expected-time extractor** (DESIGN.md §3) uses `k` reruns in which the session accepts:
   `ε·Pr[fails] ≤ ε_c⁻ + N₀ε/(ek) + √(k·Adv₀)` (`joint_le_accB`). `analysisBE`'s `cover` absorbs the middle term.
 - **The link theorem** (`flock_batched_linkSoundE`, DESIGN.md §3): given `ValueBinding` (named), at each prover whose
-  link finders satisfy A2 (`LinkCR`), `δ_link` is at most `Q_s(2(1+k)t'/2^256 + …)/(1 − ρ)`, `Q_s ≤ N_s`; at any other
+  link finders satisfy A2 (`LinkCR`), `ε_bind` is at most `Q_s(2(1+k)t'/2^256 + …)/(1 − ρ)`, `Q_s ≤ N_s`; at any other
   prover the bound is `⊤` (`linkBoundCR`). A2 is not asked of every prover at once: a prover can hard-code a collision.
   It dominates the audit's hash term.
 - **The value binding** (`Binding/`). `ValueBinding` is built from the serving rows' `hm96-sha512/row/v1` leaves

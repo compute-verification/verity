@@ -50,7 +50,7 @@ compiled sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds:
   the witness;
 * on a statement in scope whose check pins `chk` (`CheckedUnique`), at every `ρ` and every opened row `rin`, the
   sequences accepted from `rin` (`AccSeqsCarried`) number at most
-  `2^#(freeInputs \ (reg ∪ chk ∪ prow)) · #faultySets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible
+  `2^#(freeInputs \ (reg ∪ chk ∪ prow)) · #incorrectSets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible
   incorrect set. -/
 def SampledLeakCarried : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -67,7 +67,7 @@ def SampledLeakCarried : Prop :=
           (AccSeqsCarried s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) (valid s) (prow s)
               (nrow s) rin δ op Dj).encard ≤
             ((2 ^ (freeInputs s.prog (lay s) (k s) \ (reg s ∪ chk s ∪ (prow s).toFinset)).card *
-              (faultySets s.design P δ).card * 2 ^ ((faultySets s.design P δ).sup (faultyBits s.prog P)) *
+              (incorrectSets s.design P δ).card * 2 ^ ((incorrectSets s.design P δ).sup (faultyBits s.prog P)) *
               Dj ^ k s : ℕ) : ℕ∞)
 
 /-- **The leak through the network certifier over a monitoring period whose runs carry the pool** (conditional on its
