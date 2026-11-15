@@ -6,13 +6,19 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from verity_config import Admission, ConfigError, gpus, load, sha256
 
 VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
-SPEC_ROOT = Path(__file__).resolve().parents[3] / "specs"
-SOURCE_ROOT = SPEC_ROOT.parents[1]
+SPEC_ROOT = Path(__file__).resolve().parents[2] / "specs"
+SOURCE_ROOT = Path(__file__).resolve().parents[4]
+#: A spec's path from the source tree's root while the specs had a directory of their own, and that directory. A run
+#: recorded then names its spec by that path, and so does a command written then: each is the spec of that name in
+#: `SPEC_ROOT` (`former_name`).
+FORMER_SPEC = "benchmarks/specs/{name}.toml"
+FORMER_SPECS = PurePosixPath(FORMER_SPEC).parent.as_posix()
 GPUS = gpus()
 ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 # What the dispatcher, the queue or the launcher sets: a spec naming one would be overridden or would override them.
@@ -40,10 +46,10 @@ class Preset:
         return asdict(self)
 
 
-#: Engine precisions an arm may name (`runner.engine_args`). ``int8_exact`` is the eager exact-int8 engine on an int8 pin
+#: Engine precisions an arm may name (`engine.engine_args`). ``int8_exact`` is the eager exact-int8 engine on an int8 pin
 #: (`TargetProfile.int8_exact` ``"all"``: every linear and every attention layer on the plain exact-int8 arm)
 PRECISIONS = ("bfloat16", "fp8", "int8_exact")
-#: The keys a preset's `engine_settings` may set: those `runner.engine_args` reads, and the two `served` sets from the
+#: The keys a preset's `engine_settings` may set: those `engine.engine_args` reads, and the two `served` sets from the
 #: spec's `eager` (``cuda_graphs``, ``enforce_eager``), which a spec's own value doesn't change
 ENGINE_SETTINGS = (
     "max_model_len", "max_num_seqs", "max_num_batched_tokens", "resident_gpu_memory_utilization",
@@ -130,11 +136,20 @@ class ResolvedSpec:
         return sha256(self, identity=True)
 
 
+def former_name(spec: str | Path) -> str | None:
+    """The name of the spec that a path under the specs' former directory (`FORMER_SPECS`) names; None for a name or any
+    other path."""
+
+    path = PurePosixPath(Path(spec).as_posix())
+    under = path.parent.as_posix()
+    return path.name.removesuffix(".toml") if under == FORMER_SPECS or under.endswith("/" + FORMER_SPECS) else None
+
+
 def _spec_path(spec: str | Path) -> Path:
     path = Path(spec)
     if path.is_file():
         return path
-    named = SPEC_ROOT / f"{spec}.toml"
+    named = SPEC_ROOT / f"{former_name(spec) or spec}.toml"
     if named.is_file():
         return named
     raise ConfigError(f"no benchmark spec {spec!r}")

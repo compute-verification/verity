@@ -1,7 +1,8 @@
-"""`block_census.py`: each row's cut (the row itself when it fits, else each slot's coarsest fitting option, else a gap with
-its finest option's reason; a ``COLS`` or ``WIDE_COORDS`` row or slot at its fitting width of least leakage-weighted proving
+"""`block_census.py`: each row's cut (the row itself when it fits and is no longer than its family's `WHOLE_UP_TO`, else each
+slot's coarsest fitting option, else a gap with its finest option's reason; a ``COLS`` or ``WIDE_COORDS`` row or slot at its fitting width of least leakage-weighted proving
 cost; no proof block
-for a row of no gate or no input), the slots of each kind of split the serving rows' tables name, and the census's counts per
+for a row of no gate or no input; a ``CHAINS`` row's key blocks as scores and values units before whole), the slots of each
+kind of split the serving rows' tables name, and the census's counts per
 Definition, phase, token and request over the ranks. The sized units are stand-ins: nothing is bound or lowered."""
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ def family(spec, units=(), *, steps=None, gates=10, **row):
 
 @pytest.mark.parametrize("e, why", [
     ({"error": "does not bind"}, "does not bind"),
-    (unit("X_v1{}", unpieced=["Erf_v1"]), "C-Flock has no piece for Erf_v1"),
+    (unit("X_v1{}", unpieced=["Erf_v1"]), "Flock has no piece for Erf_v1"),
     (unit("X_v1{}", rows_log=28, est_log=28), "its rows alone need a 2^28 block"),
     (unit("X_v1{}", est_log=28, ands=2**27), "a 2^28 block at 134,217,728 ANDs"),
     (unit("X_v1{}", out=(262_144, 16)), "262,160 output bits, past the widest size class"),
@@ -43,7 +44,7 @@ def test_a_unit_fits_or_says_why_not(e, why):
 
 def test_a_unit_holding_the_top_p_keep_word_names_the_word_gate_form():
     why = B.misfit(unit("GumbelTopPTokenSelectSharedGreedy_v1{V=154880}", unpieced=["TopPMaskWordx154880_v1"]))
-    assert why.startswith("C-Flock has no piece for TopPMaskWordx154880_v1: ") and "TopPKeepWord_v2{V,S}" in why
+    assert why.startswith("Flock has no piece for TopPMaskWordx154880_v1: ") and "TopPKeepWord_v2{V,S}" in why
 
 
 def test_a_parts_rows_slots_are_its_parts_each_whole_then_finer():
@@ -52,10 +53,103 @@ def test_a_parts_rows_slots_are_its_parts_each_whole_then_finer():
     assert B.slots("DeepGemmFp8Linear_v1{K=8,N=4}", [q, g, g1]) == [[[q]], [[g], [g1]]]
 
 
-@pytest.mark.parametrize("row", ["RoPE_v1{D=64}", "SparseMlaSplit_v1{T=9,NS=2}"])
-def test_a_cut_or_split_rows_units_are_each_a_slot(row):
+def test_a_cut_rows_units_are_each_a_slot():
     a, b = unit("A_v1{}"), unit("B_v1{}")
-    assert B.slots(row, [a, b]) == [[[a]], [[b]]]
+    assert B.slots("RoPE_v1{D=64}", [a, b]) == [[[a]], [[b]]]
+
+
+#: a decode row of GLM-5.3's sparse attention: 272 keys in five splits, eight heads
+CHAIN_ROW = ('SparseMlaSplit_v1{T=272,NS=5,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
+             'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}')
+
+
+def _chain_units(row=CHAIN_ROW, **sized):
+    """``row``'s unit templates past itself as stand-in sized units (``sized``: a family's fields), and its ways' units."""
+    ways = dict(B.ST.chain_ways(row))
+    by = {u: unit(u, n, **sized.get(u.split("{")[0], {})) for way in ways.values() for u, n in way}
+    return list(by.values()), {g: [by[u] for u, _n in way] for g, way in ways.items()}
+
+
+def test_a_chain_rows_slot_is_its_key_blocks_as_scores_and_values_units_of_64_columns_then_whole():
+    units, ways = _chain_units()
+    assert B.CHAIN_COLS == 64 and sorted(ways, key=str) == [16, 32, 64, None]
+    assert B.slots(CHAIN_ROW, units) == [[ways[64], ways[None]]]
+    assert [(u["spec"].split("{")[0], u["n"]) for u in ways[64]] == [
+        ("SparseMlaHeadScoresCols_v1", 32), *[("SparseMlaHeadValues_v1", 32)] * 8, *[("SparseMlaHeadKeysWire_v1", 4)] * 9,
+        ("SparseMlaHeadScoresCols_v1", 8), *[("SparseMlaHeadValues_v1", 8)] * 8, *[("SparseMlaHeadKeysWire_v1", 1)] * 9,
+        ("SparseMlaSplitEnd_v1", 320), ("SparseMlaCombine_v1", 64)]
+    assert [u["spec"].split(",C=")[1] for u in ways[64][1:18]] == [f"{c}}}" for c in (*range(8), *range(9))]
+    assert B.slots(CHAIN_ROW, ways[None]) == [[ways[None]]]                         # a census sized before the units existed
+
+
+def test_a_chain_row_takes_its_scores_and_values_units_and_whole_key_blocks_when_one_misfits():
+    units, ways = _chain_units()
+    row = family(CHAIN_ROW, units, est_log=31)
+    assert B.cut(CHAIN_ROW, row) == ("split", ways[64], None)
+    units, ways = _chain_units(SparseMlaHeadValues_v1={"unpieced": ["Erf_v1"]})
+    assert B.cut(CHAIN_ROW, family(CHAIN_ROW, units, est_log=31)) == ("split", ways[None], None)
+
+
+def test_a_fitting_row_past_its_familys_whole_bound_is_cut_like_its_longer_rows_and_whole_only_when_no_cut_fits():
+    short, long = (CHAIN_ROW.replace("T=272,NS=5", f"T={t},NS=1") for t in (3, 4))
+    assert B.WHOLE_UP_TO["SparseMlaSplit_v1"] == ("T", 3) and not B.past_whole(short) and B.past_whole(long)
+    units, _ways = _chain_units(short)
+    kind, got, why = B.cut(short, family(short, units, est_log=27))
+    assert (kind, [u["spec"] for u in got], why) == ("row", [short], None)
+    units, ways = _chain_units(long)
+    assert B.cut(long, family(long, units, est_log=27)) == ("split", ways[64], None)
+    units, ways = _chain_units(long, SparseMlaHeadValues_v1={"unpieced": ["Erf_v1"]})
+    assert B.cut(long, family(long, units, est_log=27)) == ("split", ways[None], None)
+    units, _ways = _chain_units(long, SparseMlaHeadValues_v1={"est_log": 28}, SparseMlaHeadBlock_v1={"est_log": 28})
+    kind, got, why = B.cut(long, family(long, units, est_log=27))
+    assert (kind, [u["spec"] for u in got], why) == ("row", [long], None)
+    for n, kind in ((36, "row"), (37, "split")):
+        row, one = f"DsaMqaLogits_v3{{N={n},H=32,D=128}}", unit("DsaMqaLogits_v3{N=1,H=32,D=128}", n)
+        k, got, _why = B.cut(row, family(row, [one], est_log=27))
+        assert (k, [(u["spec"], u["n"]) for u in got]) == (kind, [(row, 1)] if kind == "row" else [(one["spec"], n)])
+
+
+@pytest.mark.parametrize("t", [4, 9])
+def test_a_split_row_past_its_bound_takes_a_scores_unit_a_key_block_and_head_and_its_values_and_ends_per_column_block(t):
+    """Each head's key blocks (``ceil(T / BN)``) a scores unit and a values unit on each of its ``DV / G`` column blocks at
+    ``NVIS = T``, each key block's rows a writer on each of their ``(DV + DR) / G`` column blocks for all the heads, and each
+    head an end on each column block (G = `CHAIN_COLS`): the row's counts, as serving names them."""
+    row = CHAIN_ROW.replace("T=272,NS=5", f"T={t},NS=1")
+    st = B.spec_statics(row)
+    G, blocks = B.CHAIN_COLS, -(-t // st["BN"])
+    units, _ways = _chain_units(row)
+    kind, got, _why = B.cut(row, family(row, units, est_log=27))
+    assert kind == "split"
+    assert sorted((B.spec_base(u["spec"]), B.spec_statics(u["spec"]).get("C", -1), u["n"]) for u in got) == sorted([
+        ("SparseMlaHeadEnd_v1", -1, st["NH"] * st["DV"] // G), ("SparseMlaHeadScoresCols_v1", -1, st["NH"] * blocks),
+        *(("SparseMlaHeadValues_v1", c, st["NH"] * blocks) for c in range(st["DV"] // G)),
+        *(("SparseMlaHeadKeysWire_v1", c, blocks) for c in range((st["DV"] + st["DR"]) // G))])
+    for u in got:
+        base, s = B.spec_base(u["spec"]), B.spec_statics(u["spec"])
+        if base == "SparseMlaHeadEnd_v1":
+            assert s["DV"] == G
+        elif base == "SparseMlaHeadKeysWire_v1":
+            assert (s["NVIS"], s["W"]) == (t, G)
+        else:
+            assert (s["NVIS"], s["FIRST"], s["G"]) == (t, True, G)
+
+
+@pytest.mark.parametrize("n", [37, 60])
+def test_a_sliced_row_past_its_bound_takes_n_units_of_one_slice(n):
+    """Serving's unit templates of the row (`serving_rows.unit_templates`) past itself, cut: ``N`` units at ``N = 1``."""
+    row = f"DsaMqaLogits_v3{{N={n},H=32,D=128}}"
+    templates = B.ST.unit_templates(row)
+    assert (B.spec_statics(templates[0][0]), templates[0][1]) == (B.spec_statics(row), 1)
+    kind, got, _why = B.cut(row, family(row, [unit(s, k) for s, k in templates[1:]], est_log=27))
+    assert (kind, [(B.spec_statics(u["spec"]), u["n"]) for u in got]) == ("split", [({"N": 1, "H": 32, "D": 128}, n)])
+
+
+def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():
+    """The served partition's templates are `CHAIN_ROW`'s units at `CHAIN_COLS` (a scores or values unit or a key rows' writer
+    its Boolean form), the cut `chain_ways` gives the row, so the planner rerun cuts the row as the served partition does.  It
+    reads `chain_ways`, not the planner's card on the tree."""
+    served = json.loads((HERE.parent / "glm53_sparse_mla_tp8_step16.json").read_text())["templates"]
+    assert sorted(B.ST.template(t).word for t in served) == sorted(u for u, _n in dict(B.ST.chain_ways(CHAIN_ROW))[B.CHAIN_COLS])
 
 
 def test_a_kchunks_rows_slot_is_its_coordinate_or_its_chunks_of_one_width():

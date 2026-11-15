@@ -14,10 +14,11 @@ from math import floor, fsum, log1p
 import pytest
 
 import demo_a as D
-from verity.protocols.pouw.verifier.window import k_prime
-from verity.protocols.spot.verifier.profile import IntegrityProfile, Stratified, Stratum
-from verity.protocols.spot.verifier.consumers import location_bits
-from verity.protocols.spot.optimize import Objective, certify
+from verity.protocols.accounting.pouw.verifier.window import k_prime
+from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Stratified, Stratum
+from verity.protocols.proofs.spot.verifier.consumers import location_bits
+from verity.protocols.proofs.spot.prover.optimize import Objective, certify
+from verity.commitments.periods.interface import K_MAX
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)
 
@@ -58,7 +59,7 @@ def test_the_partition_is_families_table_within_the_cap():
         assert t.chunks * D.TILE_CHUNK_MACS == D.TILE_OUTPUTS * k_of(t)
         assert t.cap * t.chunks <= 2 ** (35 - t.k_log) * t.groups and (t.cap + 1) * t.chunks > 2 ** (35 - t.k_log)
     assert [(t.cap, t.groups) for t in tiles] == [(2, 1), (1, 2)]
-    assert max(t.k_log for t in fs) <= D.K_LOG_MAX
+    assert max(t.k_log for t in fs) <= K_MAX
     assert all(t.cap == min(2 ** (35 - t.k_log), 2 ** 20) for t in fs if not t.chunks)
     one, week = D.candidates(), D.candidates(blocks=7)
     by_c = {t.id: t for t in fs}
@@ -100,10 +101,10 @@ def test_the_risk_is_cores_remembered():
 
 
 def test_location_is_location_bits_at_the_exact_count():
-    law = Stratified((Stratum("a", 400, 30), Stratum("b", 90, 9)))
-    profile = IntegrityProfile(("unit",), (law.population,), {"unit": law}, 0.01)
-    assert D.location(law.population, law.count_bound(0.01)) == location_bits(profile)
-    assert floor(law.harm_bound({"a": 1.0, "b": 1.0}, 0.01)) >= law.count_bound(0.01)
+    sampling_design = Stratified((Stratum("a", 400, 30), Stratum("b", 90, 9)))
+    profile = IntegrityProfile(("unit",), (sampling_design.population,), {"unit": sampling_design}, 0.01)
+    assert D.location(sampling_design.population, sampling_design.count_bound(0.01)) == location_bits(profile)
+    assert floor(sampling_design.harm_bound({"a": 1.0, "b": 1.0}, 0.01)) >= sampling_design.count_bound(0.01)
 
 
 def test_the_certificate_is_certifys_on_small_strata():
@@ -157,10 +158,10 @@ def test_m3_draws_a_uniform_eight_and_certifies_the_heaviest_units():
     o = D.m3()
     assert o["of_block"] == o["cost"] / D.SHAPE.block_s > 0
     assert o["of_budget"] == pytest.approx(o["of_block"] / D.BUDGET_SHARE)
-    law = Stratified.uniform(o["units"], D.M3_UNITS)
+    sampling_design = Stratified.uniform(o["units"], D.M3_UNITS)
     for d in D.DELTAS:
         at = o["at"][str(d)]
-        assert at["wrong_units"] == floor(law.harm_bound({"unit": 1.0}, d))
+        assert at["wrong_units"] == floor(sampling_design.harm_bound({"unit": 1.0}, d))
         assert at["wrong_units"] == pytest.approx(o["units"] * (1 - d ** (1 / D.M3_UNITS)), rel=3e-6)
         assert 0 < at["work_share"] < 1 and 0 < at["bits_share"] <= 1
     assert o["at"]["1e-06"]["free_compute"] > o["at"]["0.01"]["free_compute"]

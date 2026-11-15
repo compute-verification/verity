@@ -34,12 +34,18 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
+
+#: what the scorer, the arms' modules and their runners read
+__all__ = [
+    "ARMS", "ArmError", "Colocation", "FILL_V1_SPLIT", "FOLDS", "FillV1", "Filler", "Idle", "NOISE", "NONE", "VERSION",
+    "check_arm", "config", "load", "placed", "point_lookup", "record_problems",
+]
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 VERSION = "filler-arm/v1"
 PLACES = ("none", "split", "co")
-PHASES = ("decode", "prefill")
 SMS = 188  # the RTX PRO 6000's SMs
 #: a filler's declarable operands: its chain's own outputs, fresh uniform ±1, fresh uniform {0,1} bits on both sides,
 #: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU), or
@@ -95,12 +101,12 @@ def _record_rules():
     for p in (HERE.parent / "harness", REPO / "tools" / "research" / "src"):
         if str(p) not in sys.path:
             sys.path.append(str(p))
-    import ledger  # noqa: PLC0415
-    from research.store import canon, ids, model  # noqa: PLC0415
+    import ledger
+    from research.store import canon, ids, model
     return ledger, canon, ids, model
 
 
-def record_problems(arm) -> list[str]:
+def record_problems(arm: Any) -> list[str]:
     """What the ledger or the store would refuse in the arm's record (`score.record`), by the code they run after the
     run, so an arm that would lose its record fails when it loads, before a build or a GPU lease (filler-scorer/v3):
     the hypothesis and the choice are one line of at most `ledger.ONE_LINE` characters (`ledger.one_line`); a parent
@@ -146,7 +152,7 @@ def record_problems(arm) -> list[str]:
     return bad
 
 
-def check_arm(arm, *, record: bool = False) -> list[str]:
+def check_arm(arm: Any, *, record: bool = False) -> list[str]:
     """What is wrong with `arm` against the contract (empty when nothing is); with `record`, also what the ledger or the
     store would refuse in its record (`record_problems`, filler-scorer/v3)."""
     bad = []
@@ -175,7 +181,7 @@ def check_arm(arm, *, record: bool = False) -> list[str]:
     return bad
 
 
-def placed(arm, phase: str, b: int, l: int) -> Colocation:
+def placed(arm: Any, phase: str, b: int, l: int) -> Colocation:
     p = arm.placement(phase, b, l)
     if not isinstance(p, Colocation):
         raise ArmError(f"{arm.name}.placement({phase}, {b}, {l}) returned {p!r}, not a Colocation")
@@ -191,12 +197,12 @@ class Idle:
     name: str = "idle"
     lineage: dict = field(default_factory=lambda: {
         "parent": None, "approach": "pouw/filler-idle", "mechanism": ["place:none"],
-        "hypothesis": "serving alone: coverage is serving's certified share, and the A/A slowdown is the timing noise"})
+        "hypothesis": "serving alone: coverage is serving's utilization, and the A/A slowdown is the timing noise"})
     sources: tuple = ("benchmarks/pouw/filler/arms.py",)
     filler: Filler | None = None
     choice: str = "nothing to choose"
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> Colocation:
         return NONE
 
 
@@ -206,7 +212,7 @@ FILL_V1_SPLIT = {(1, 2048): 108, (32, 1024): 92, (32, 5120): 108, (32, 8192): 12
                  (128, 2048): 92, (132, 5120): 60, (144, 5120): 60, (256, 1024): 60, (256, 2048): 60}
 
 
-def point_lookup(table: dict, b: int, l: int):
+def point_lookup(table: dict, b: int, l: int) -> Any:
     """FILL's `PointFiller` rule (share.py): the measured point with the smallest B ≥ b and, among those, the longest
     L ≤ l (the shortest when none is); past the largest B, the largest B's."""
     bs = sorted({pb for pb, _ in table})
@@ -226,7 +232,7 @@ class FillV1:
         "parent": "cursor/dram-free-filler-ea24@e015e0515", "approach": "pouw/filler-dram-free",
         "mechanism": ["filler:chained-imma-registers", "place:split", "split:per-point-table", "prefill:none"],
         "hypothesis": "FILL v1 as measured: 0.35–0.62 certified ÷ capacity at ≤ 5% decode slowdown"})
-    sources: tuple = ("benchmarks/pouw/filler/dcap.cu", "benchmarks/pouw/filler/arms.py")
+    sources: tuple = ("verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu", "benchmarks/pouw/filler/arms.py")
     filler: Filler | None = Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")
     choice: str = "an offline table of 11 (B, L) splits from FILL's runs 2–5; a lookup and a green split at serving time"
     #: dcap.cu builds pfill.cuh's filler unless -DDFILL_V1; score.py's nvcc reads NVCC_APPEND_FLAGS after the arm loads
@@ -235,7 +241,7 @@ class FillV1:
     def __post_init__(self):
         os.environ["NVCC_APPEND_FLAGS"] = self.nvcc_flags
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> Colocation:
         if phase == "prefill":
             return NONE
         return Colocation("split", point_lookup(FILL_V1_SPLIT, b, l))
@@ -244,7 +250,7 @@ class FillV1:
 ARMS = {"idle": Idle, "fill-v1": FillV1}
 
 
-def load(spec: str, *, record: bool = False):
+def load(spec: str, *, record: bool = False) -> Any:
     """An arm by name (`ARMS`) or as ``path/to/file.py:Attr`` under benchmarks/pouw/filler/, refused unless it meets
     `check_arm` (with `record`, its record's limits too)."""
     if spec in ARMS:

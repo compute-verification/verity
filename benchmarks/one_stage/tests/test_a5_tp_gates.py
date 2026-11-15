@@ -2,10 +2,10 @@
 node): the transfer-gate unit is the registered AllReduce2_v1 with a port a rank, its sums bit for bit; each rank's chunk
 c<k> reads both ranks' registered partials of request q's collective k at the token rows, under their owners' salts, and
 they open the roots each
-owner's registration names at the positions the verifier's own reads name; the registration passes the verifier's check with every
-transfer-gate unit proved; each rank's provenance is the verifier's read of both registrations; the negatives (a peer's
+owner's docket names at the positions the verifier's own reads name; the docket passes the verifier's check with every
+transfer-gate unit proved; each rank's provenance is the verifier's read of both dockets; the negatives (a peer's
 partial under another root, the rank's own as its peer's, another request's as its peer's, a partial under another TP
-run's domain, the other rank's registration, ports built before the peer registered, and each way of moving a bit through
+run's domain, the other rank's docket, ports built before the peer registered, and each way of moving a bit through
 the received partial) are refused by name; and each refused run's window changes only rank 1's received port of q0c0."""
 
 from __future__ import annotations
@@ -20,10 +20,10 @@ import pytest
 
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.protocols.certifier.verifier import warden_rows as WR
-from verity.protocols.spot.verifier.one_stage import draw as D, verifier as V
-from verity.definitions.registry.b1_tp2 import AllReduce2
-from verity.commitments.windows import rows as SR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
+from verity_vllm.definitions.registry.b1_tp2 import AllReduce2
+from verity.commitments.periods import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -109,7 +109,7 @@ def test_each_chunk_opens_both_ranks_registered_partials_at_the_token_rows(tmp_p
     assert len({b for t in parts.values() for req in t for v in req for b in v.bcs}) == len(AT.RANKS) * Q * K * T
 
 
-def test_the_registration_proves_every_transfer_gate_unit_beside_the_drawn_rest(tmp_path, parts) -> None:
+def test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_rest(tmp_path, parts) -> None:
     mine, c, regs, _wins = committed(tmp_path, parts)
     for r in AT.RANKS:
         tg, rid = mine[r].members[0].template, mine[r].members[-1].template
@@ -158,7 +158,7 @@ def test_ports_need_every_ranks_registration(tmp_path, parts) -> None:
 @pytest.mark.parametrize("kind", sorted(AT.TRANSFERS))
 def test_a_refused_runs_window_moves_the_bit_through_rank_1s_received_partial_only(tmp_path, parts, kind) -> None:
     """``--altered`` / ``--made-for``'s windows: rank 1's q0c0 ``part0`` (rank 0's embedding partial of request 0, as rank 1
-    received it) made for that read, its sums the rows it read (the circuit holds), the registration's checks passing; only the verifier's
+    received it) made for that read, its sums the rows it read (the circuit holds), the docket's checks passing; only the verifier's
     port refuses it, by `TRANSFERS`' reason, and every other port of both ranks opens."""
     mine, c, regs, wins = committed(tmp_path, parts, altered=kind == "altered", made=None if kind == "altered" else kind)
     for r in AT.RANKS:
@@ -219,3 +219,85 @@ def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_
     afresh = heads.pop("registered-reads-leaving-a-port-committed-afresh")
     assert afresh == (("part0",), bytes(range(8))) and set(heads.values()) == {(tuple(sorted(ports)), bytes(range(8)))}
     assert (member / f"pub-{T}.bin").read_bytes() == pub
+
+
+def staged_member(tmp_path: Path, ports: dict) -> Path:
+    """A member's directory with a public file whose header names ``ports`` registered, as a5 staged it."""
+    member = tmp_path / "m"
+    member.mkdir()
+    head = {"registered": {p: {"value": e["value"], "positions": e["reads"], "paths": [""] * T} for p, e in ports.items()}}
+    (member / f"pub-{T}.bin").write_bytes(json.dumps(head).encode() + b"\n" + bytes(range(8)))
+    return member
+
+
+AFRESH = "registered-reads-leaving-a-port-committed-afresh"
+
+
+def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(tmp_path, monkeypatch) -> None:
+    """Where a chunk's file binds its other ports to the docket's roots (`registered.bind_ports`), a5's negatives add
+    its first bound port at another root and that port left out, each with every other port as honest: Lean is to refuse
+    the one port the negative changes, by its reason. The port committed afresh keeps the bound ports, and with no
+    record declaring it registered its reason is the complete check's."""
+    import a5
+
+    ports = {f"part{j}": {"value": AT.value_name(j, 0, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
+             for j in AT.RANKS}
+    bound = {p: {"root": f"{i + 4}" * 128, "domain": f"{i + 6}" * 128} for i, p in enumerate(("o0", "o1"))}
+    honest = {"format": "verity/registered-reads/v1", "ports": ports, "bound": bound}
+    (tmp_path / "registered.json").write_text(json.dumps(honest))
+    seen = {}
+
+    def lean_verify(lean, st, n, sdir, zk, log):
+        seen[log] = json.loads(st["registered_file"].read_text()) if "registered_file" in st else None
+        return {"accepted": False, "digest": "d", "why": "registered reads (complete): the statement's port part1 is neither"
+                if log == AFRESH else "setup: registered reads: none"}
+
+    monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
+    out = a5.registered_negatives(SimpleNamespace(lean="lean"), {
+        "st": {"registered_file": tmp_path / "registered.json", "dir": staged_member(tmp_path, ports)},
+        "m": SimpleNamespace(n=T)}, tmp_path)
+    assert seen["bound-port-at-another-root"] == {**honest, "bound": {**bound, "o0": {**bound["o0"], "root": "00" * 64}}}
+    assert seen["bound-port-left-out"] == {**honest, "bound": {"o1": bound["o1"]}}
+    assert seen["registered-read-against-another-root"]["bound"] == bound
+    assert seen["bound-ports-without-interface"] == honest and "declared-port-bound" not in seen
+    assert seen[AFRESH] == {**honest, "ports": {"part0": ports["part0"]}} and out[AFRESH]["refused"]
+
+
+def test_a5s_declared_port_negatives_move_a_port_the_interface_declares_into_bound_or_leave_it_out(tmp_path, monkeypatch):
+    """Where the window's registered circuit record declares a registered port of the chunk's template (an embedding
+    read's ``o1``, an opening's verdict), a5's negatives move it from the file's ports into ``bound`` at its header's root
+    and domain, and leave it out, each beside the other registered port, under the record (`--interface`); the file that
+    binds ports is verified without the record too. Each is to be refused by its reason; the port committed afresh is
+    that declared port here, so its reason is the declared check's, which Lean makes first."""
+    import a5
+
+    ports = {p: {"value": f"v-{p}", "root": f"{i}" * 128, "leaves": T, "reads": list(range(T))}
+             for i, p in enumerate(("domain", "o1"))}
+    bound = {"x": {"root": "4" * 128, "domain": "6" * 128}}
+    honest = {"format": "verity/registered-reads/v1", "ports": ports, "bound": bound}
+    (tmp_path / "registered.json").write_text(json.dumps(honest))
+    iface = tmp_path / "circuit.json"
+    opening = {"reader": "TEmb_v1", "table": "emb", "key": "k", "ports": ["row"], "verdict": "o1", "at": 0, "units": T}
+    table = {"name": "emb", "param": "embed", "offset": 0, "words": 64, "rows": 512}
+    iface.write_text(json.dumps({"format": "verity/window-circuit/v1", "program": "ab", "registered": {
+        "params": {}, "tables": [table], "reads": [], "roots": [], "openings": [opening]}}))
+    seen = {}
+
+    def lean_verify(lean, st, n, sdir, zk, log):
+        seen[log] = (json.loads(st["registered_file"].read_text()) if "registered_file" in st else None, st.get("interface_file"))
+        return {"accepted": False, "digest": "d", "why": "registered reads (declared): the statement's port o1 is one"
+                if log == AFRESH else "setup: registered reads: none"}
+
+    monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
+    assert a5.declared_ports(iface, "TEmb_v1") == ["o1"] and a5.declared_ports(iface, "TOther_v1") == []
+    fv = {"roots": {"o1": "8" * 128}, "domain_ids": {"o1": "9" * 128}}
+    out = a5.registered_negatives(SimpleNamespace(lean="lean"), {
+        "st": {"registered_file": tmp_path / "registered.json", "interface_file": iface,
+               "dir": staged_member(tmp_path, ports)},
+        "m": SimpleNamespace(n=T, template="TEmb_v1"), "header": {"frame_v3": fv}}, tmp_path)
+    kept = {**honest, "ports": {"domain": ports["domain"]}}
+    assert seen["declared-port-bound"] == ({**kept, "bound": {**bound, "o1": {"root": "8" * 128, "domain": "9" * 128}}}, iface)
+    assert seen["declared-port-left-out"] == (kept, iface)
+    assert seen["bound-ports-without-interface"] == (honest, None) and seen["bound-port-left-out"][1] == iface
+    assert not out["declared-port-bound"]["refused"], "a refusal for another reason is not the negative's"
+    assert seen[AFRESH] == (kept, iface) and out[AFRESH]["refused"]

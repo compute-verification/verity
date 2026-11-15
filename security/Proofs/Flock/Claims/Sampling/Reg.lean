@@ -1,8 +1,8 @@
 module
 
-public import Spot.Registration
+public import Spot.Docket
 public import Proofs.Flock.Claims.Sampling.Code
-public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
 public import Properties.Spot.Second
 
 /-!
@@ -16,7 +16,9 @@ code with those
 checked units, and `replayTwo`, the replay sample of record; and `Code.atOrder`, the code at its round order (`Order`):
 its second stage the rounds after the first stage's coin, and its sessions' rounds those after the second stage's, and
 `codeTwoAt`, the two-stage code at its round order, each stage's bytes read off its own coin (`bytesFirst`,
-`bytesSecond`).
+`bytesSecond`); and the same with a second stage that reads several rounds' coins: `StageOrder`, a round order whose
+second stage reads the `R` rounds up to `second` (`Order.stage` at one round), and `codeTwoStage`, the two-stage code
+at it (`bytesStage`).
 -/
 
 @[expose] public section
@@ -32,7 +34,7 @@ open Lean (Json)
 verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the sample reads), the selection
 rule and the challenger's closure map. -/
 structure Reg where
-  verifier : Spot.Registration.Verifier
+  verifier : Spot.Docket.Verifier
   rule : Spot.Select.Rule
   closure : Option (Array (Int × Array Int))
 
@@ -43,15 +45,15 @@ def Reg.query (g : Reg) : Json := g.verifier.query
 def Reg.table (g : Reg) : Option Json := g.verifier.workTable
 
 /-- The registration's layout (`Slots.layout`), empty where its query doesn't apply. -/
-def Reg.layout (g : Reg) : Spot.Slots.Layout :=
+def Reg.layout (g : Reg) : Spot.Slots.SlotOrder :=
   match Spot.Slots.layout g.program g.query with
   | .ok l => l
   | .error _ => default
 
 /-- **The sample of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
-is refused (`drawChecked`). -/
+is refused (`sampleChecked`). -/
 def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
-  (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
+  (sampleChecked g.rule g.program g.query g.table g.closure g.layout src).toList
 
 /-- **A two-stage registration as the samples of record read it**: the boundary registration the first stage samples on
 (`first`), each template's proof blocks in a replay block (`ns`, a cell each) and the second stage's count in each of
@@ -121,7 +123,7 @@ structure Order (k : ℕ) where
 session's rounds those of `c`'s after the second stage's coin. -/
 def Code.atOrder (c : Code) (j : (x : Msg) → Order (c.V.k x)) : Code :=
   { c with
-    stage2 := fun x => univ.filter fun t => (j x).first < t
+    secondStage := fun x => univ.filter fun t => (j x).first < t
     rounds := fun x u => (c.rounds x u).filter fun t => (j x).second < t }
 
 section At
@@ -141,5 +143,40 @@ def bytesSecond : (x : Msg) → (Fin ((c.atOrder j).V.k x) → FlockDeploy.Coin)
 abbrev codeTwoAt : Code := codeTwo (c.atOrder j) reg L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂)
 
 end At
+
+/-! ## A second stage of several rounds -/
+
+/-- **The round order with a second stage of `R` rounds**: the second stage reads the coins of the `R` rounds up to
+`second`, each after the first stage's coin. -/
+structure StageOrder (k R : ℕ) extends Order k where
+  fits : first.val + R ≤ second.val
+
+/-- **A round order is a stage order of one round.** -/
+def Order.stage {k : ℕ} (o : Order k) : StageOrder k 1 := ⟨o, by have := Fin.lt_def.1 o.lt; omega⟩
+
+/-- The second stage's `i`-th round, in the run's order; its last is `second`. -/
+def StageOrder.round {k R : ℕ} (o : StageOrder k R) (i : Fin R) : Fin k :=
+  ⟨o.second.val - (R - 1 - i.val), lt_of_le_of_lt (Nat.sub_le _ _) o.second.isLt⟩
+
+/-- A stage order's round order: the first stage's coin and the second stage's last. -/
+abbrev orderOf {c : Code} {R : Msg → ℕ} (j : (x : Msg) → StageOrder (c.V.k x) (R x)) (x : Msg) : Order (c.V.k x) :=
+  (j x).toOrder
+
+section Stage
+
+variable (c : Code) (reg : Msg → Option RegTwo) (L₁ L₂ : Msg → ℕ)
+  (b₁ : (x : Msg) → FlockDeploy.Coin → Fin (L₁ x) → Fin 256) (R : Msg → ℕ)
+  (s : (x : Msg) → StageOrder (c.V.k x) (R x)) (bs : (x : Msg) → (Fin (R x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256)
+
+/-- The second stage's bytes: `bs x` on the coins of the second stage's rounds. -/
+def bytesStage : (x : Msg) → (Fin ((c.atOrder (orderOf s)).V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256 :=
+  fun x r => bs x fun i => r ((s x).round i)
+
+/-- **The two-stage sampled verifier's code at a stage order**: `codeTwo` at the stage order's round order, its second
+stage's bytes read off the coins of the second stage's rounds. -/
+abbrev codeTwoStage : Code :=
+  codeTwo (c.atOrder (orderOf s)) reg L₁ L₂ (bytesFirst c L₁ (orderOf s) b₁) (bytesStage c L₂ R s bs)
+
+end Stage
 
 end SamplingDeploy

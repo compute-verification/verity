@@ -15,7 +15,7 @@ token over its ranks; a stratum whose Definition has no cut on main, sized at th
 total parameters, scales the references that go as the model's size.  The `references` cards
 of a model add up: each is kept as `cards/references.MODEL.ART.json`, under the first twelve hex digits of its art id,
 and the figures plot every card's lines, with its `caption` appended to the caption of each panel it has lines on; a
-line at 0 is drawn along its panel's floor and named in its caption.  A `partition` card is another cut of the model's circuit: its
+line at 0 is sampled along its panel's floor and named in its caption.  A `partition` card is another cut of the model's circuit: its
 strata take the place of the `workload` card's strata of the kinds it `replaces`, each with the k_log it is staged at,
 which prices it until the `proof_overhead` card measures its type; they add up as `references` cards do, each Figure
 1's line of its own.  A `verifier_cost` card gives the verifier's core-seconds a statement by block prefix, a family's
@@ -27,7 +27,9 @@ holds only `served-measured` rows, and Figure 5 names each row's basis.  A `serv
 computed tokens, prompt and output, a GPU-second on the mix its `plan` names (the art id of the plan file or of the
 record that holds it, or the id of the run that does), measured; `saturated` only where a rate above it was served and
 computed no more, so a lower bound is `saturated` false on a `provisional` card, and `bound` says what held the rate
-(`BOUNDS`).  No figure reads it unless asked to (`figure1.SERVING`).  A card reaches the figures by art id, a later one
+(`BOUNDS`).  No figure reads it unless asked to (`figure1.SERVING`).  A `certifier` card is the model's deployment
+schedule for the network certifier, `NetworkCertifierParams`' fields (the parameters every record head's digest binds), whose
+response cap, where it has one, bounds what a request serves.  A card reaches the figures by art id, a later one
 naming the earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
@@ -44,6 +46,8 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 
 HERE = Path(__file__).resolve().parent
 CARDS = HERE / "cards"
@@ -96,7 +100,11 @@ SERIES = {"scope": F(str), "budget": F(NUM), "x": F(list), "y": F(list)}
 AXIS = {"label": F(str), "unit": F(str)}
 POINT = {"x": F(NUM), "y": F(NUM), "runs": _opt(list), "note": _opt(str)}
 CURVE = {"label": F(str), "model": _opt(str, nullable=True, choices=MODELS), "points": F(list, each=POINT)}
-TAX_PART = {"part": F(str), "share": F(NUM), "low": F(NUM), "high": F(NUM), "source": F(str)}
+#: how a serve tax's part got its share: priced from the code and a measured rate, simulated on served traces, or
+#: measured on the served engine
+PART_STATUS = ("modeled", "simulated", "measured")
+TAX_PART = {"part": F(str), "status": F(str, choices=PART_STATUS), "share": F(NUM), "low": F(NUM), "high": F(NUM),
+            "source": F(str)}
 TAX = {"config": F(str, choices=CONFIGURATIONS), "status": F(str, choices=("priced", "measured")), "tax": F(NUM),
        "low": F(NUM), "high": F(NUM), "lower_bound": F(bool), "parts": F(list, each=TAX_PART), "runs": _opt(list)}
 VERIFY_TYPE = {"block": F(str), "core_seconds": F(NUM), "peak_gb": F(NUM, nullable=True), "runs": _opt(list)}
@@ -133,6 +141,7 @@ SLOTS = {
                       "families": F(list, each=VERIFY_FAMILY)},
     "headline": {"bases": F(list), "rows": F(list, each=HEADLINE_ROW), "quote": F(str)},
     "serving_rate": {"tokens_per_gpu_second": F(NUM), "plan": F(str), "saturated": F(bool), "bound": F(str, choices=BOUNDS)},
+    "certifier": {"schedule": F(dict)},
 }
 
 
@@ -204,6 +213,15 @@ def check(card: dict) -> dict:
                    if names.count(n) > 1]
         errors += [f"serve_tax.value.configurations[{i}]: low <= tax <= high, but {t['low']}, {t['tax']}, {t['high']}"
                    for i, t in enumerate(value["configurations"]) if not 0 <= t["low"] <= t["tax"] <= t["high"]]
+        for i, t in enumerate(value["configurations"]):
+            parts = [p["part"] for p in t["parts"]]
+            errors += [f"serve_tax.value.configurations[{i}].parts: {n!r} given {parts.count(n)} times"
+                       for n in sorted(set(parts)) if parts.count(n) > 1]
+            errors += [f"serve_tax.value.configurations[{i}].{k}: {t[k]}, but its parts' {key}s add to {total}: a "
+                       "priced configuration is the sum of its named parts (regenerate it with total_cost.py "
+                       "priced-card)"
+                       for k, key in (("tax", "share"), ("low", "low"), ("high", "high")) if t["status"] == "priced"
+                       for total in [sum(p[key] for p in t["parts"])] if abs(t[k] - total) > 1e-12 * max(1.0, total)]
     if slot == "verifier_cost" and not errors:
         measured = {t["block"] for t in value["types"]}
         errors += [f"verifier_cost.value.families[{i}]: member {m!r} is none of the measured types' blocks"
@@ -236,6 +254,11 @@ def check(card: dict) -> dict:
         if not value["saturated"] and not card["provisional"]:
             errors.append("serving_rate.value.saturated: false on a card that is not provisional; a lower bound is "
                           "provisional, so that a floor is never read as the rate")
+    if slot == "certifier" and not errors:
+        try:
+            NetworkCertifierParams(**value["schedule"])
+        except (TypeError, ValueError) as e:
+            errors.append(f"certifier.value.schedule: not a network certifier schedule (NetworkCertifierParams): {e}")
     if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
         in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])
         if value["served_macs_per_token"] < in_blocks * (1 - 1e-9):

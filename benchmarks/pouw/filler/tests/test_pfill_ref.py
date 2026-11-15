@@ -9,20 +9,16 @@ depends on every fragment, on the tile id, on the coins and on the tile's kind."
 from __future__ import annotations
 
 import ctypes
-import importlib.util
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
+import pfill_ref as R
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("pfill_ref", HERE / "pfill_ref.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
+KERNEL = HERE.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/filler"
 
 C0, C1 = 0x0123456789ABCDEF, 0xFEDCBA9876543210
 
@@ -34,7 +30,7 @@ def lib(tmp_path_factory):
         pytest.skip("no g++ for the host build of pfill.cuh")
     so = tmp_path_factory.mktemp("pfill-host") / "pfill_host.so"
     subprocess.run([gxx, "-O2", "-std=c++17", "-shared", "-fPIC", "-Wall", "-Wextra", "-Werror", "-Wno-unknown-pragmas",
-                    "-o", str(so), str(HERE / "pfill_host.cpp")], check=True)
+                    "-o", str(so), str(KERNEL / "pfill_host.cpp")], check=True)
     cdll = ctypes.CDLL(str(so))
     cdll.pfill_ref.restype = ctypes.c_uint64
     cdll.pfill_ref.argtypes = [ctypes.c_uint64] * 3 + [ctypes.c_int] * 4
@@ -101,7 +97,7 @@ def test_operands_are_balanced_noise(lib):
             assert got.tolist() == [val((nib >> q) & 1) for q in range(4)]
 
 
-def test_kinds_draw_independent_noise():
+def test_kinds_sample_independent_noise():
     """Each kind hashes in its own domain, so no kind's noise is another's."""
     rs = {kind: R.rows(C0, C1, 9, R.CTR_B, 0, kind) & np.uint64(R.M32) for kind in R.KINDS}
     assert len({r.tobytes() for r in rs.values()}) == len(R.KINDS)
@@ -126,7 +122,10 @@ def test_product_is_the_popcount_identity(kind):
     k = 64 if kind == R.E2M1 else 32
     a_rows, b_cols = R.rows(C0, C1, 3, 0, 0, kind), R.rows(C0, C1, 3, R.CTR_B, 0, kind)
     ent = (lambda b: b) if kind == R.BITS else (lambda b: 1 - 2 * b)
-    val = lambda w: np.array([ent((int(w) >> i) & 1) for i in range(k)])
+
+    def val(w):
+        return np.array([ent((int(w) >> i) & 1) for i in range(k)])
+
     a = np.stack([val(w) for w in a_rows])
     b = np.stack([val(w) for w in b_cols]).T
     x, y = a_rows[:, None], b_cols[None, :]
@@ -154,7 +153,7 @@ def test_theorem_k_hypothesis_on_the_committed_word(kind):
     input bits: it needs integer operands affine in the bits (the bits tile's bytes are the bits) and a target whose
     (a_k, b_k') coefficients are odd exactly when k = k' (F_2 rank 2K). A word is Σ_k A_k B_k, so its second difference
     in (a_u, b_v) is that coefficient at every base point: 1·[u = v] on bits. The ±1 tile is K's mutation: its
-    coefficient is 4, 0 mod 2, and the F_2 rank is 0 (round 6 §1, "K is vacuous on even coefficients")."""
+    coefficient is 4, 0 mod 2, and the F_2 rank is 0: K is vacuous on even coefficients."""
     k, rng = 32, np.random.default_rng(7)
 
     def word(a: int, b: int) -> int:

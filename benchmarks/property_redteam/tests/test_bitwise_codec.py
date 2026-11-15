@@ -7,18 +7,12 @@ of its ANDs on two run-time bits is a data product and costs a unit, and its wor
 from __future__ import annotations
 
 import random
-import sys
-from pathlib import Path
 
+import bitwise_codec as BC
+import free_codec as FC
+import gates as G
 import pytest
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import bitwise_codec as BC  # noqa: E402
-import free_codec as FC  # noqa: E402
-import gates as G  # noqa: E402
-import squaring as S  # noqa: E402
+import squaring as S
 
 # security/Proofs/Accounting/Gates.lean's `codecRows`: (n, c, cs, K, τ, i, m, encodeWord).
 CODEC_ROWS = [
@@ -33,7 +27,7 @@ CODEC_ROWS = [
 
 
 def targets(n: int, y: int) -> list[int]:
-    return [(y // 2 * 2) >> (8 * l) & 255 for l in range(n // 8)]
+    return [(y // 2 * 2) >> (8 * ell) & 255 for ell in range(n // 8)]
 
 
 def check_block(b, outs, x: dict, want: dict[int, list[int]]) -> None:
@@ -66,7 +60,7 @@ def test_codec_rows_at_n8(rounds):
     for n, c, cs, K, tau, i, m, y in rows:
         p = (1 << n) - c
         assert FC.encode_word_ref(p, cs, K, tau * i % p, m) == y
-        x = BC.draw_inputs(n, c, cs, K, tau, {j: m for j in words})
+        x = BC.sample_inputs(n, c, cs, K, tau, {j: m for j in words})
         vals, window, hold = b.evaluate(x)
         assert window and hold
         assert [vals[g] for g in outs[i]] == targets(n, y)
@@ -98,7 +92,7 @@ def test_units_do_not_grow_with_the_block(block8):
         cs, K, tau = [rng.randrange(p) for _ in range(k)], rng.randrange(1 << n), rng.randrange(1, p)
         payload = {i: rng.randrange(1 << n) for i in words}
         want = {i: targets(n, FC.encode_word_ref(p, cs, K, tau * i % p, payload[i])) for i in words}
-        check_block(b, outs, BC.draw_inputs(n, c, cs, K, tau, payload), want)
+        check_block(b, outs, BC.sample_inputs(n, c, cs, K, tau, payload), want)
 
 
 def test_the_conjecture_fails_at_p1024():
@@ -134,7 +128,7 @@ def test_bitwise_squaring_pays_its_partial_products():
         b = G.Builder()
         B = BC.Bits(b)
         F = BC.Field(B, n, c)
-        xs = [bit for l in range(n // 8) for bit in B.byte_bits(b.inp(("a", l), 0, 255, binding="coin"))]
+        xs = [bit for ell in range(n // 8) for bit in B.byte_bits(b.inp(("a", ell), 0, 255, binding="coin"))]
         before = b.products
         F.mul(xs, xs)
         assert b.products - before >= n * n, (n, b.products - before)
@@ -154,7 +148,7 @@ def test_codec_at_n16():
     check_costs(b, n, k)
     for _, _, cs, K, tau, i, m, y in rows:
         assert FC.encode_word_ref(p, cs, K, tau * i % p, m) == y
-        vals, window, hold = b.evaluate(BC.draw_inputs(n, c, cs, K, tau, {j: m for j in words}))
+        vals, window, hold = b.evaluate(BC.sample_inputs(n, c, cs, K, tau, {j: m for j in words}))
         assert window and hold
         assert [vals[g] for g in outs[i]] == targets(n, y)
     rng = random.Random(16)
@@ -162,4 +156,4 @@ def test_codec_at_n16():
         cs, K, tau = [rng.randrange(p) for _ in range(k)], rng.randrange(1 << n), rng.randrange(1, p)
         payload = {i: rng.randrange(1 << n) for i in words}
         want = {i: targets(n, FC.encode_word_ref(p, cs, K, tau * i % p, payload[i])) for i in words}
-        check_block(b, outs, BC.draw_inputs(n, c, cs, K, tau, payload), want)
+        check_block(b, outs, BC.sample_inputs(n, c, cs, K, tau, payload), want)

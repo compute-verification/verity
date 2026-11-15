@@ -8,6 +8,15 @@ public import Definitions.Pouw.Assumptions.Dimension.OpenPipe
 
 **Draft semantics, pending review**.
 
+**Review.** The H200's measurements (`Pouw.Dimension.H100W`'s review) can't check `M4090`, whose prices are the RTX
+4090's as measured on that card, so the marker stays.
+
+`MH100w` reads one definition here, `fpVal`, through `Op100.outs`: an FP32 instruction's value is `fpSem κ` of the
+three source registers in its own lane, and a missing register reads the constant `0`. That is PTX's reading of
+FFMA, FADD and FMUL, none of which reads another lane. None of the 58 captured lane forms is an FP32 one, so the
+reading rests on the ISA. Every statement quantifies over `fpSem`, so no rounding rule is assumed. So `fpVal` is
+checked, and `MH100w` reads nothing else in this file.
+
 `M4090` makes W1 precise for straight-line programs over 32-bit words, on the
 noise grid. Registers are SSA and hold functions of the noise (the int32 reading of each 32-bit pattern); every
 register ever written is an output, and the inputs are the noise coordinates. The instructions and their prices:
@@ -128,7 +137,7 @@ open Classical in
 noncomputable def canonNaN (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (a b c : ℚ) : ℚ :=
   if NaNGap (fpSem κ a b c) then 2147483647 else fpSem κ a b c
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Guarantees (draft semantics, pending review) -/
 
 /-- **The embedding theorem** (draft semantics, pending review): for every FP32 semantics, every
 well-formed `M4090` program on inputs in `V₀` maps to an `OpenQuadPipe 16 8` program whose slots contain every

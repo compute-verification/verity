@@ -18,10 +18,13 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.certifier.verifier import active as A, compile_slice as CS, io_tie as IT, release as REL, served_rows as SRW
+from verity_vllm.compiler import compile_slice as CS, served_rows as SRW
+from verity.protocols.accounting.certifier.verifier import id_form as IDF, io_tie as IT, release as REL
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
+from verity_vllm.engine.step_trace import scheduler_config
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
@@ -124,7 +127,7 @@ def test_ids_frames_are_the_scans_id_events():
     req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
     assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
     assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
-    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - A.HEADER.size
+    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - HEADER.size
     with pytest.raises(ValueError, match="at least 138"):
         proto.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
@@ -146,7 +149,8 @@ def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifi
 
 
 @pytest.mark.parametrize("precision, parts, scope", [("verity_int8", ("linears",), "linears"),
-                                                     ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None)])
+                                                     ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None),
+                                                     ("bfloat16", ("linears",), None)])
 def test_every_precision_registers_the_verity_int8_method_before_the_engine(precision, parts, scope):
     got: list = []
     assert so.register_int8(precision, got.append) == scope
@@ -394,13 +398,15 @@ class Tokenizer:
 
 
 class Serving:
-    """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it."""
+    """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it; ``runner`` the model runner
+    (a `Runner`, by default a fresh one)."""
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None, pool: tuple[Any, int] | None = None, no_slice: str | None = None) -> None:
-        self.runner = Runner()
+                 arm: Any = None, runner: Runner | None = None, pool: tuple[Any, int] | None = None,
+                 no_slice: str | None = None) -> None:
+        self.runner = runner if runner is not None else Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks,
@@ -496,15 +502,14 @@ def test_errors_and_whole_response(tmp_path):
 
 
 def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
-    """The network certifier's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
-    return A.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
+    """The network certifier's id request in cells of P + 9 bytes (`id_form.id_request`, offset 0)."""
+    return IDF.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + HEADER.size,
                         offset=0)
 
 
 def shims_request(port: int) -> bytes:
-    """An id request as the network certifier's live shim sends it straight to the endpoint
-    (`benchmarks/network_traces/active_replay.LiveServer._serve`): its fields, the user forwarded and
-    certifier_serve's `UPSTREAM_FIELDS` added, compact, in a POST of the shim's own head with a release."""
+    """An id request as a shim in front of the endpoint sends it straight there: its fields, the user forwarded and
+    ``return_token_ids`` added, compact, in a POST of the shim's own head with a release."""
     body = json.loads(id_request().partition(b"\r\n\r\n")[2])
     name = body.pop("user")
     raw = json.dumps(body | {"user": name} | {"return_token_ids": True}, separators=(",", ":")).encode()
@@ -522,7 +527,7 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
     return head, body
 
 
-def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
+def test_ids_answers_in_id_form_exactly_the_network_certifiers_id_requests():
     """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network certifier's release
     headers (`release.with_release`: the release, the run and, as the certifier sends it, the release's bucket); its base
     for anything else, the shim's rebuilt POST, an id request in other cells, or bytes that aren't a request."""
@@ -534,12 +539,12 @@ def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
     assert proto.PlainProtocol().of(id_request()).name == "plain"
 
 
-def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
-    """``--protocol ids`` on the network certifier's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
+def test_under_ids_the_network_certifiers_id_request_streams_raw_id_events_then_done(tmp_path):
+    """``--protocol ids`` on the network certifier's own id request (`id_form.id_request` in its P + 9-byte cells, offset 0, with the
     release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
     scan's P = 503 every P bytes are one id event, the cells the certifier makes of them, and the whole is what
-    warden_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
+    network_certifier_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
     response under ids is still the JSON one."""
     for payload in (140, proto.ID_PAYLOAD):
         ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))
@@ -623,7 +628,7 @@ def test_under_ids_a_failed_stream_stops_unterminated():
 
 
 def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
-    """The same endpoint under ``--protocol ids`` for the network certifier (certifier_serve, straight to the
+    """The same endpoint under ``--protocol ids`` for the network certifier (a shim straight to the
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""
@@ -830,7 +835,7 @@ HOT = dict(CERTIFIER_BODY, temperature=0.8, user="u-hot")
 
 def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_derived_seed_and_a_seeded_one_its_own(tmp_path):
     """The derived seed is the one `engine.served_seed.derived` makes of the coin the request's window names and its user,
-    never `DEFAULT_SEED` or one the engine draws."""
+    never `DEFAULT_SEED` or one of the engine's own."""
     with Serving(tmp_path) as s:
         serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6], seed=1234), dict(HOT, prompt=[7, 8])])
     by_rule = {r["ingress"]["seed_rule"]: r for r in records(tmp_path, "requests.jsonl")}
@@ -845,12 +850,12 @@ def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_deri
     assert all(r["check"]["passed"] for r in by_rule.values()) and s.windows.summary()["passed"]
 
 
-def test_each_busy_period_draws_a_fresh_seed_coin_that_every_window_cut_from_it_keeps(tmp_path, monkeypatch):
+def test_each_busy_period_flips_a_fresh_seed_coin_that_every_window_cut_from_it_keeps(tmp_path, monkeypatch):
     """One user's two requests, each into an idle engine, are seeded under two coins, so differently; the windows
     ``--window-steps`` cuts from a request's run keep the coin of the one before them, so every window holding one of its
     rows names the coin it was seeded under."""
-    draws = iter(range(1, 100))
-    monkeypatch.setattr(served_seed, "in_process", lambda: (next(draws).to_bytes(64, "big"), "test"))
+    flips = iter(range(1, 100))
+    monkeypatch.setattr(served_seed, "in_process", lambda: (next(flips).to_bytes(64, "big"), "test"))
     with Serving(tmp_path, window_steps=2) as s:
         for _ in range(2):
             assert s.post("/v1/completions", dict(HOT, max_tokens=5, min_tokens=5))[0] == 200
@@ -865,7 +870,7 @@ def test_each_busy_period_draws_a_fresh_seed_coin_that_every_window_cut_from_it_
 
 
 def test_a_committed_seed_other_than_the_one_admitted_fails(tmp_path):
-    """The engine sampling under a seed of its own (vLLM's drawn one) rather than the default or the derived one fails the
+    """The engine sampling under a seed of its own (vLLM's, from ``np.random``) rather than the default or the derived one fails the
     request's check, naming the seed it committed."""
     for i, body in enumerate((CERTIFIER_BODY, HOT)):
         (tmp_path / str(i)).mkdir()
@@ -1009,6 +1014,29 @@ def test_the_served_statics_refuse_an_output_length_past_a_length_slot():
                                                                        "IW": 6})["L"] == 2**32 - 1
 
 
+def test_a_serve_launched_with_the_context_limit_left_to_vllm_gets_its_served_statics():
+    """What a committing serve hands the binding at start, the step trace's config of its scheduler, for a launch at
+    ``--max-model-len -1``: ``max_model_len_auto`` beside the limit vLLM fitted. It binds, and to the statics of a
+    launch that stated the fitted limit."""
+    class Scheduler(SimpleNamespace):
+        pass
+
+    def config(launch: int) -> dict:
+        return scheduler_config(Scheduler(
+            scheduler_config=SimpleNamespace(max_num_batched_tokens=2048, max_num_seqs=8, enable_chunked_prefill=True,
+                                             long_prefill_token_threshold=0, max_num_partial_prefills=1, policy="fcfs",
+                                             async_scheduling=False),
+            cache_config=SimpleNamespace(block_size=16, enable_prefix_caching=True, num_gpu_blocks=64, cache_dtype="auto"),
+            max_model_len=1008, vllm_config=SimpleNamespace(speculative_config=None, model_config=SimpleNamespace(
+                max_model_len=1008, original_max_model_len=launch))))
+
+    size_class = {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3, "IW": 6}
+    auto, stated = config(-1), config(1008)
+    assert auto == {**stated, "max_model_len_auto": True}
+    assert sc.served_statics(auto, size_class) == sc.served_statics(stated, size_class)
+    assert sc.served_statics(auto, size_class)["L"] == 1008
+
+
 def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--max-num-seqs", "8", "--window-steps", "16", *more],
@@ -1053,7 +1081,9 @@ def test_the_pool_row_setting_is_a_token_width_and_needs_the_prefix_cache(tmp_pa
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more], environ={})
 
-    ninja = lambda _: "/v/bin/ninja"  # noqa: E731
+    def ninja(_: str) -> str:
+        return "/v/bin/ninja"
+
     so.preflight(opts(), which=ninja)
     monkeypatch.setenv("VERITY_POOL_ROW", "18")
     with pytest.raises(cli.UsageError, match="needs --prefix-caching and the Commit"):

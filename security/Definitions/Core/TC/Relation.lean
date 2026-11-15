@@ -3,25 +3,22 @@ module
 public import Definitions.Core.TC.Pipeline
 
 /-!
-# The step relation: `verity.ml.tc.relation.check_step`
+# The step relation
 
-A transcription of `relation.py`'s tables, its predicate kinds (`Census.MUL`, `BOOL`, `LIN`, `LOOKUP`, `RANGE`, `ISZERO`)
-and `check_step`, predicate for predicate and in order, over the integers (Python's `int`). It reads nothing from
-`Verity.TC.Spec`: the two transcriptions are independent, and `Verity.SecurityProofs.TC.Sound` proves them equivalent.
-
-Where this differs from the Python:
+The tensor-core step relation, the definition of record: its tables (`tBf16`, `tPcls`, `tPow`, `tNorm`, `tExp`, `tShift`,
+`tAny`), its predicate kinds (`MUL`, `BOOL`, `LIN`, `LOOKUP`, `RANGE`, `ISZERO`) and `StepHolds`, over the integers. It
+reads nothing from `Verity.TC.Spec`: the relation and the semantics are independent definitions, and
+`Verity.SecurityProofs.TC.Sound` proves them equivalent.
 
 * **The witness has a fixed shape**: `k` product rows, one group row per group, `size + 1` term rows per group
-  (`Witness.Shaped`), the columns the census counts. The Python witness is a dict of lists, whose lengths the shape
-  pins.
-* **The operands and the input state are arguments**, not witness fields (`w["a"]`, `w["b"]`, `w["in"]`).
-* **`RANGE` and `ISZERO` are their meaning**: `RANGE x bits` is `0 ≤ x < 2^bits`, which is what `Census.RANGE` accepts
-  (one `T_range` lookup when `bits ≤ 16`; otherwise non-negativity, the 16-bit chunk split and a lookup per chunk), and
-  `ISZERO x bits z` is `x` in range with `z = [x = 0]`, which is what `Census.ISZERO`'s 12-bit chunks, lookups and muls
+  (`Witness.Shaped`), the columns the census counts.
+* **The operands and the input state are arguments**, not witness fields.
+* **`RANGE` and `ISZERO` are their meaning**: `RANGE x bits` is `0 ≤ x < 2^bits`, which the census's range gadget
+  accepts (one `T_range` lookup when `bits ≤ 16`; otherwise non-negativity, the 16-bit chunk split and a lookup per
+  chunk), and `ISZERO x bits z` is `x` in range with `z = [x = 0]`, which the census's 12-bit chunks, lookups and muls
   accept. `Verity.SecurityProofs.TC.Gadgets` proves the chunked forms equivalent.
 * **Products the checker computes itself** (`both`, `fin_inf`, `any_inf * any_ninf`, `inf_out * neg_inf`, the running
-  product of the "attained" chain) appear as those products, as in the Python, and the `MUL`s that check them against
-  themselves are kept.
+  product of the "attained" chain) appear as those products, and the `MUL`s that check them against themselves are kept.
 -/
 
 @[expose] public section
@@ -356,7 +353,7 @@ def StepHolds (pipe : Pipeline) (align : Align) (st : State) (a b : List Nat) (w
   (∀ j (h : j < w.prod.length), prodHolds p (a[j]!) (b[j]!) w.prod[j]) ∧
   groupsHold p align pipe.groups st w.prod w.groups
 
-/-- A verification unit's steps from the input state `st`, as `test_verification_unit_on_captured_gemm_coordinates` chains
+/-- A proof block's steps from the input state `st`, as `test_verification_unit_on_captured_gemm_coordinates` chains
 them: each step's input state is the previous step's output, and `out` is the last one's. -/
 def ChainHolds (pipe : Pipeline) (align : Align) : State → List (List Nat × List Nat × Witness) → State → Prop
   | st, [], out => out = st

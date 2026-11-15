@@ -24,22 +24,20 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity_flock.class_statement import UnitStager
-from verity.protocols.spot.verifier.one_stage import registered as G1
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.commitments.gates import embedding as EMB
-from verity.definitions.numerics import fp8_moe_rows as FR
-from verity.definitions.registry import boolean_fp8_moe as BM
-from verity.definitions.registry import boolean_moe as BMOE
-from verity.definitions.registry import fp8_moe_experts as X
-from verity.definitions.registry import moe as MOE
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity_vllm.definitions.numerics import fp8_moe_rows as FR
+from verity_vllm.definitions.registry import boolean_fp8_moe as BM
+from verity_vllm.definitions.registry import boolean_moe as BMOE
+from verity_vllm.definitions.registry import fp8_moe_experts as X
+from verity_vllm.definitions.registry import moe as MOE
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import expert_rows as EX
 from verity_vllm.pipeline import serving_rows as SRW
@@ -47,6 +45,8 @@ from verity_vllm.pipeline import weight_rows as WT
 from verity_vllm.query.program_view import spec_statics
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.fields import RecordError
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G1
+from verity_flock.class_statement import UnitStager
 
 E, TOPK, K, N, G, KB, NR, T = 8, 2, 64, 4, 32, 32, 2, 2
 NB, KG, B, P = -(-N // G), K // G, N // NR, T * TOPK
@@ -125,8 +125,9 @@ def build(monkeypatch, proj: str = "w13", rank: int = 0, n: int = N) -> SimpleNa
     pr, pi, nb = ids(proj, n), Index(proj, n), -(-n // G)
     w, ws = _e4m3(rng, E * n * K), _f32(rng, 1e-4, 1e-2, E * nb * KG)
     ops = {json.dumps([["p", 0, 0, w.size]]): w, json.dumps([["p", 0, w.size, w.size + ws.size]]): ws}
-    words = {"topk_weights": [], "topk_ids": [], "out": []}
-    routers, pairs, experts = [], [], []
+    words: dict[str, list[int]] = {"topk_weights": [], "topk_ids": [], "out": []}
+    routers, experts = [], []
+    pairs: list[tuple] = []
     bias = (rng.standard_normal(E) * 1e-2).astype(np.float32).view(np.uint32)
     ops[json.dumps([["x", 90, 0, E]])] = bias
     for t in range(T):
@@ -479,6 +480,33 @@ def test_a_fused_blocks_tables_are_declared_on_it_committed_by_reference_and_cou
     counted = IF.input_count(doc, resolve, pins=pins, roots=pins)
     assert counted["free"] == free and counted["registered"] > 0
     assert IF.input_count(doc, resolve, pins=None, roots=pins)["registered"] == 0
+
+
+def test_two_fused_templates_reading_one_table_declare_and_commit_it_once(monkeypatch):
+    """A served window holds one projection's fused blocks on two kernels (here w2's QGMMA block and its MMA v2 twin, each one
+    token's pairs), both reading the same tables: each table is declared and committed once, each template's reads and
+    openings of it its own, and the record's check (`interface.listed_reads`) and the verifier's count accept it."""
+    pr, ns = PROJ["w2"], build(monkeypatch, "w2")
+    twin = descriptor_id(bind(BM.MoeExpertFp8ReadGemmWV1, READ=EMB.read(E, NR * K // 2), K=K, N=NR, G=G, KB=KB, SWAP=False,
+                              DOT=BG.HopperE4m3MmaV2Dot32))
+    tmpls, most = [SLOTS, READ_WS, pr.fused, twin], {SLOTS: 4, READ_WS: 4, pr.fused: 4, twin: 4}
+    rows = [ns.routers, ns.pairs, ns.pairs[:TOPK], ns.pairs[TOPK:]]
+    plan, ms = cut(rows, tmpls, most)
+    w = [EX.table_param(pr.w, NR * K // 2, b) for b in range(B)]
+    want = sorted([*w, EX.table_param(pr.ws, 2 * K // G, 0)])
+    for t in (pr.fused, twin):
+        assert [p for _a, _n, _b, p, _l in plan.tables(t)] == w
+    reg = EX.declarations(plan)
+    assert sorted(t.name for t in reg.tables) == sorted(reg.params) == want
+    assert {(o.reader, o.at, o.units) for o in reg.openings} == {
+        (t, at, n) for t in (READ_WS, pr.fused, twin) for at, n, _b, _param, _l in plan.tables(t)}
+    tables = EX.commit_tables(plan, ns.store, None, None, SRW._slices, committer(plan))
+    assert sorted(tables) == want
+    templates = [[t, sum(m.n for m in ms if m.template == t)] for t in tmpls]
+    assert set(IF.listed_reads(ms, templates, reg).values()) == set(want)
+    pins = {p: v.root.hex() for p, v in tables.items()}
+    doc = {"templates": templates, "members": [IF._member_doc(m) for m in ms], "registered": reg.doc()}
+    assert IF.input_count(doc, {t: SRW.template(t).fn for t in tmpls}.__getitem__, pins=pins, roots=pins)["registered"] > 0
 
 
 def test_a_pair_row_cut_both_fused_and_apart_is_refused(layer):

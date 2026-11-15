@@ -22,17 +22,17 @@ def _git(repo: Path, *args: str) -> str:
 _RESULT = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', "
            "'run_id': os.environ['RESEARCH_RUN_ID'], 'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, "
            "'measurements': [], 'steps': [{'step': 'agree', 'status': '%s'}]}, open(d + '/result.json', 'w'))")
-#: the throwaway target's tools/verity/check/check.py: it passes as check does, with a passing `check/v1` result, or runs the Python in
+#: the throwaway target's tools/check/check.py: it passes as check does, with a passing `check/v1` result, or runs the Python in
 #: $FAKE_CHECK instead (`_checked`)
 CHECK_PY = f"import os\nexec(os.environ.get('FAKE_CHECK') or {_RESULT % 'passed'!r})\n"
 #: the command the throwaway target declares for `check`: the gate admits only a run of it, with a passing result of a kind the
 #: declaration produces
-CHECKED = (sys.executable, "tools/verity/check/check.py")
+CHECKED = (sys.executable, "tools/check/check.py")
 #: the throwaway target's declaration of `check`, which the gate reads `command`, `produces` and `merge_requires` from
 DECL = ("from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', "
         f"command={list(CHECKED)!r}, produces=['check/v1']{{}})\n")
 #: what a throwaway target holds of its check: the declaration and the script it declares
-CHECK_FILES = {"tools/verity/check/tool.py": DECL.format(""), "tools/verity/check/check.py": CHECK_PY}
+CHECK_FILES = {"tools/check/tool.py": DECL.format(""), "tools/check/check.py": CHECK_PY}
 
 
 def _repos(tmp_path: Path) -> tuple[Path, Path, str]:
@@ -40,7 +40,7 @@ def _repos(tmp_path: Path) -> tuple[Path, Path, str]:
     main = tmp_path / "main"
     (main / "mytools").mkdir(parents=True)
     (main / "mytools" / "decl_check.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1')\n")
-    (main / "tools" / "verity" / "check").mkdir(parents=True, exist_ok=True)
+    (main / "tools" / "check").mkdir(parents=True, exist_ok=True)
     for rel, text in CHECK_FILES.items():
         (main / rel).write_text(text)
     (main / "a.txt").write_text("a\n")
@@ -56,9 +56,9 @@ def _repos(tmp_path: Path) -> tuple[Path, Path, str]:
 
 
 def _declared_by_the_throwaway_repo(monkeypatch) -> None:
-    """`--tool check` imports `tools.verity.check.tool` whenever `tools` is importable in this process (the suite's own checkout, from
+    """`--tool check` imports `tools.check.tool` whenever `tools` is importable in this process (the suite's own checkout, from
     sys.path or an earlier test's import) and reads the throwaway repo's file only when that fails: make it fail."""
-    for name in ("tools", "tools.verity.check", "tools.verity.check.tool"):
+    for name in ("tools", "tools.check", "tools.check.tool"):
         monkeypatch.setitem(sys.modules, name, None)
 
 
@@ -207,7 +207,7 @@ def test_prepare_pushes_the_pinned_train_and_never_touches_the_checkout(tmp_path
     tip = _git(origin, "rev-parse", "train-prep/1")
     out = capsys.readouterr().out
     assert f"pushed origin/train-prep/1 = {tip[:12]} (tree {_git(origin, 'rev-parse', 'train-prep/1^{tree}')[:12]})" in out
-    assert f"`tools/verity/check/train.sh {tip[:12]} MACHINE`" in out, "the branch is only on origin; train.sh resolves the sha here"
+    assert f"`tools/check/train.sh {tip[:12]} MACHINE`" in out, "the branch is only on origin; train.sh resolves the sha here"
     assert _git(origin, "rev-parse", "train-prep/1^1") == _git(origin, "rev-parse", "main") and _git(origin, "rev-parse", "train-prep/1^2") == a
     assert _git(origin, "log", "-1", "--format=%s", "train-prep/1") == f"Merge #7 ({a[:8]})"
     assert _git(main, "symbolic-ref", "--short", "HEAD") == "lander-work" and (main / "a.txt").read_text() == "uncommitted\n"
@@ -396,8 +396,8 @@ def test_a_generated_file_is_regenerated_by_the_tree_s_pins_py_on_each_merge_nev
     it, the merge's `Regenerated:` trailer names it, and the lines regeneration drops (a stale `old` no pull request removes)
     don't count as a revert; a conflict in any other file still refuses."""
     main, _feat, _tip = _repos(tmp_path)
-    (main / "tools" / "verity" / "check").mkdir(parents=True, exist_ok=True)
-    origin, heads = _origin_with(tmp_path, main, {"tools/verity/check/pins.py": STUB_PINS, "gen.txt": "old\n", "x.txt": "x\n"}, {
+    (main / "tools" / "check").mkdir(parents=True, exist_ok=True)
+    origin, heads = _origin_with(tmp_path, main, {"tools/check/pins.py": STUB_PINS, "gen.txt": "old\n", "x.txt": "x\n"}, {
         21: {"a.dep": "", "gen.txt": "old\na\n"},
         22: {"b.dep": "", "gen.txt": "old\nb\n"},
         23: {"x.txt": "y\n"},
@@ -587,7 +587,7 @@ def test_merge_admits_only_a_result_of_a_kind_the_targets_declaration_produces(t
     err = capsys.readouterr().err
     assert "refused: it published no result, and the target's declaration of the tool produces check/v1" in err
     assert "refused: its result is a bench-result/v1, and the target's declaration of the tool produces check/v1" in err
-    (main / "tools" / "verity" / "check" / "tool.py").write_text(DECL.replace(", produces=['check/v1']", "").format(""))
+    (main / "tools" / "check" / "tool.py").write_text(DECL.replace(", produces=['check/v1']", "").format(""))
     _git(main, "commit", "-q", "-am", "check produces nothing")
     _git(feat, "merge", "-q", "main")
     assert _checked(tmp_path, feat, monkeypatch) == 0
@@ -629,8 +629,8 @@ def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_p
     behind `slot.py` when it was sent to a machine, followed by check.py's own flags.  Anything else is another command."""
     from research.merge import unlike
 
-    cmd = ("uv", "run", "--locked", "python", "tools/verity/check/check.py")
-    slot = ["python3", "tools/verity/check/slot.py"]
+    cmd = ("uv", "run", "--locked", "python", "tools/check/check.py")
+    slot = ["python3", "tools/check/slot.py"]
     for argv in ([*cmd], [*cmd, "--keep-going"], [*cmd, "--no-cache", "--cores", "8"], [*cmd, "--keep-going", "--verdicts-in", "v.tgz"],
                  [*cmd, "--keep-going", "--no-cache", "--circuit-cache", "--verdicts-in", "v.tgz"],
                  [*cmd, "--verdicts-in", "v.tgz", "--cores", "4"], [*slot, "--", *cmd], [*slot, "--by", "x", "--", *cmd],
@@ -742,7 +742,7 @@ def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, mon
     elsewhere but not one under flock/; one where it passed admits both."""
     _declared_by_the_throwaway_repo(monkeypatch)
     main, feat, _tip = _repos(tmp_path)
-    (main / "tools" / "verity" / "check" / "tool.py").write_text(DECL.format(", merge_requires={'agree': ['flock/']}"))
+    (main / "tools" / "check" / "tool.py").write_text(DECL.format(", merge_requires={'agree': ['flock/']}"))
     _git(main, "add", "-A")
     _git(main, "commit", "-q", "-m", "rule")
     _git(feat, "merge", "-q", "main")
@@ -773,8 +773,8 @@ def test_a_file_renamed_out_of_a_path_rule_requires_its_step(tmp_path):
     from research.merge import required_steps
 
     main, _feat, _tip = _repos(tmp_path)
-    (main / "tools" / "verity" / "check").mkdir(parents=True, exist_ok=True)
-    (main / "tools" / "verity" / "check" / "tool.py").write_text("from research.store.tool import Tool\n"
+    (main / "tools" / "check").mkdir(parents=True, exist_ok=True)
+    (main / "tools" / "check" / "tool.py").write_text("from research.store.tool import Tool\n"
                                                       "CHECK = Tool(name='check', version='1', merge_requires={'agree': ['flock/']})\n")
     (main / "flock").mkdir()
     (main / "flock" / "x.txt").write_text("x\n")
@@ -793,7 +793,7 @@ def test_a_stacked_train_meets_the_steps_the_declaration_main_gained_from_the_tr
     _declared_by_the_throwaway_repo(monkeypatch)
     main, _feat, _tip = _repos(tmp_path)
     _git(main, "checkout", "-q", "-b", "A")
-    (main / "tools" / "verity" / "check" / "tool.py").write_text(DECL.format(", merge_requires={'agree': ['flock/']}"))
+    (main / "tools" / "check" / "tool.py").write_text(DECL.format(", merge_requires={'agree': ['flock/']}"))
     _git(main, "commit", "-q", "-am", "A: the rule")
     _git(main, "checkout", "-q", "-b", "C")
     (main / "flock").mkdir()
@@ -863,7 +863,7 @@ def test_the_push_guard_refuses_a_main_commit_no_check_passed_and_allows_a_check
 
 
 def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_branches(tmp_path, monkeypatch):
-    """ci's case: a `--train` fast-forward lands the checked tip over prep merges nobody checked one by one; and infra's: an
+    """A `--train` fast-forward lands the checked tip over prep merges nobody checked one by one, and an
     older worktree's push to a lane branch must pass without the guard starting at all."""
     from research.merge import ZERO, install_push_guard, unchecked_pushes
     from research.store.local import LocalStore
@@ -892,23 +892,23 @@ def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_b
 
 
 def test_a_flock_file_whose_name_git_quotes_still_requires_the_agreement(tmp_path):
-    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/protocols/flock/prover/\\303\\251.py"`), which no prefix of a
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/protocols/proofs/flock/prover/\\303\\251.py"`), which no prefix of a
     `merge_requires` rule matched, so a train changing such a file required no `lean-agreement`."""
     from research.merge import required_steps
 
     repo = tmp_path / "repo"
     (repo / "mytools").mkdir(parents=True)
     (repo / "mytools" / "agree.py").write_text("from research.store.tool import Tool\nT = Tool(name='check', version='1', "
-                                               "merge_requires={'lean-agreement': ['verity/protocols/flock/prover/', '!README.md']})\n")
+                                               "merge_requires={'lean-agreement': ['verity/protocols/proofs/flock/prover/', '!README.md']})\n")
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "base")
     base = _git(repo, "rev-parse", "HEAD")
-    (repo / "verity" / "protocols" / "flock" / "prover").mkdir(parents=True)
-    (repo / "verity" / "protocols" / "flock" / "prover" / "é.py").write_text("x = 1\n")
+    (repo / "verity" / "protocols" / "proofs" / "flock" / "prover").mkdir(parents=True)
+    (repo / "verity" / "protocols" / "proofs" / "flock" / "prover" / "é.py").write_text("x = 1\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "é")
-    assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["verity/protocols/flock/prover/"]}
+    assert required_steps(repo, base, _git(repo, "rev-parse", "HEAD"), "mytools.agree:T") == {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]}
 
 
 def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_admits_the_control(tmp_path, monkeypatch, capsys):
@@ -966,7 +966,7 @@ def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_ad
                 "refused it") in capsys.readouterr().out
 
     monkeypatch.chdir(tmp_path)
-    assert merge_main(["--canary"]) == 3 and "no tools/verity/check/tool.py, its declaration of `check`" in capsys.readouterr().err
+    assert merge_main(["--canary"]) == 3 and "no tools/check/tool.py, its declaration of `check`" in capsys.readouterr().err
     for argv in (["--canary", "feat"], ["--canary", "--sweep"], ["--json", "feat"]):
         try:
             merge_main(argv)
@@ -976,8 +976,9 @@ def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_ad
             raise AssertionError(f"{argv} is a usage error")
 
 
-def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str) -> str:
-    """Drive's lock commit on ``tip``, naming its lock run ``checked``."""
+def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str, made_as: dict[str, str] | None = None) -> str:
+    """Drive's lock commit on ``tip``, naming its lock run ``checked``; its author and committer ``made_as``'s (as git's
+    environment names them) when given."""
     _git(feat, "reset", "-q", "--hard", tip)
     for rel, text in files.items():
         (feat / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -985,7 +986,10 @@ def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str) ->
         _git(feat, "add", rel)
     _git(feat, "commit", "-q", "-m", f"Lock records regenerated for #1\n\nChecked: {checked} (the lock run of `checked` {tip[:12]}, "
                                      f"passed by regenerating them)\nRegenerated: {', '.join(files)}")
-    return _git(feat, "rev-parse", "HEAD")
+    if made_as is None:
+        return _git(feat, "rev-parse", "HEAD")
+    return subprocess.run(["git", "commit-tree", "HEAD^{tree}", "-p", tip, "-m", _git(feat, "log", "-1", "--format=%B")], cwd=feat,
+                          check=True, capture_output=True, text=True, env={**os.environ, **made_as}).stdout.strip()
 
 
 def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_running_check_regenerated(tmp_path):
@@ -1018,6 +1022,27 @@ def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_
     assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000003-0003"), "r20261020-000003-0003", elsewhere) is None  # it checked main
 
 
+def test_a_lock_commit_is_vouched_for_by_its_records_whoever_made_it(tmp_path):
+    """The queue makes a lock commit as its own identity (`queue.IDENTITY`) or, where its repository's rules name one, as that
+    author (`Rules.author`): the gate reads the commit's trailers, its parent and its records' bytes, so it vouches for
+    either against the run, and neither author vouches for records the run didn't regenerate."""
+    from research.merge import regenerated_parent
+    from research.queue import IDENTITY, Rules
+    from research.store.local import LocalStore
+    from test_landing import _live_run
+    from test_queue import AUTHORED, NAMED, OWN, _who
+
+    main, feat, tip = _repos(tmp_path)
+    store, lock, rid = LocalStore(), "pkg/lean-audit.json", "r20261020-000001-0001"
+    _, fetch, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
+    for made_as, who in ((IDENTITY, OWN), (Rules.parse(AUTHORED).identity, NAMED)):
+        ok, forged = (_deferred_lock(feat, tip, {lock: text}, rid, made_as) for text in ('{"records": 2}\n', '{"records": 1}\n'))
+        assert _who(feat, ok) == _who(feat, forged) == who
+        got = [regenerated_parent(feat, c, store, tool="check", kinds=frozenset({"check/v1"}), command=CHECKED, deferred=rid,
+                                  fetch=fetch) for c in (ok, forged)]
+        assert got == [rid, None], who
+
+
 def test_a_lean_report_naming_a_repaired_file_outside_repaired_is_unreadable():
     import pytest
 
@@ -1029,7 +1054,7 @@ def test_a_lean_report_naming_a_repaired_file_outside_repaired_is_unreadable():
         "tests/test_lean_packages.py": "lean-audit/repaired/t.py"}
 
 
-def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(tmp_path):
+def test_a_lock_commit_carries_the_files_its_lock_run_repaired_and_no_other_file(tmp_path):
     """The lock run's `--bookkeeping warn` repairs files beside the locks (`REPAIRED`, its report's `repaired`): a lock commit
     holding the repaired copy byte for byte is vouched for; one whose copy differs, one that leaves it out, and one changing
     any other file is refused."""
@@ -1040,23 +1065,23 @@ def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(
     from test_landing import _live_run
 
     main, feat, tip = _repos(tmp_path)
-    store, lock, caps, rid = LocalStore(), "pkg/lean-audit.json", "tests/test_lean_packages.py", "r20261020-000005-0005"
-    assert caps in REPAIRED
+    store, lock, packages, rid = LocalStore(), "pkg/lean-audit.json", "tests/test_lean_packages.py", "r20261020-000005-0005"
+    assert packages in REPAIRED
     d, fetch, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
     (d / "lean-audit" / "repaired" / "tests").mkdir(parents=True)
-    (d / "lean-audit" / "repaired" / caps).write_text('UNWITNESSED = {"pkg": 3}\n')
+    (d / "lean-audit" / "repaired" / packages).write_text('UNWITNESSED = {"pkg": 3}\n')
     audit = json.loads((d / "lean-audit" / "audit.json").read_text())
-    audit["repaired"] = {caps: f"/workspace/research/runs/{rid}/lean-audit/repaired/{caps}"}
+    audit["repaired"] = {packages: f"/workspace/research/runs/{rid}/lean-audit/repaired/{packages}"}
     (d / "lean-audit" / "audit.json").write_text(json.dumps(audit))
 
     def vouched(files: dict[str, str]) -> str | None:
         return regenerated_parent(feat, _deferred_lock(feat, tip, files, rid), store, tool="check", kinds=frozenset({"check/v1"}),
                                   command=CHECKED, deferred=rid, fetch=fetch)
 
-    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 3}\n'}) == rid
-    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 9}\n'}) is None
+    assert vouched({lock: '{"records": 2}\n', packages: 'UNWITNESSED = {"pkg": 3}\n'}) == rid
+    assert vouched({lock: '{"records": 2}\n', packages: 'UNWITNESSED = {"pkg": 9}\n'}) is None
     assert vouched({lock: '{"records": 2}\n'}) is None
-    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 3}\n', "a.txt": "x\n"}) is None
+    assert vouched({lock: '{"records": 2}\n', packages: 'UNWITNESSED = {"pkg": 3}\n', "a.txt": "x\n"}) is None
 
 
 def test_a_report_naming_a_regenerated_record_the_stores_files_lack_is_unreadable_not_none(tmp_path, monkeypatch):
@@ -1264,7 +1289,7 @@ def test_verdicts_cites_a_pass_in_a_checks_reused_pack_as_that_check(tmp_path, m
     assert "no verdicts.tar.gz or verdicts-reused.tar.xz of that sha256" in judge[1][1]
 
 
-def test_verdicts_cites_a_post_landing_runs_pack_though_no_tool_recorded_it_and_no_other_untooled_run(tmp_path, monkeypatch):
+def test_verdicts_cites_an_after_landing_runs_pack_though_no_tool_recorded_it_and_no_other_untooled_run(tmp_path, monkeypatch):
     """Drive cancels a train's check once every step it doesn't defer passed, and runs the deferred ones (pytest, circuit-check)
     on the `main` it landed: `check.py --record --deferred STEPS`, recorded without `--tool check` so no gate takes it as a
     check.  Its pack holds passes as a check's does, so `--verdicts` cites them part by part (`post_landing`); a run without the
@@ -1287,7 +1312,7 @@ def test_verdicts_cites_a_post_landing_runs_pack_though_no_tool_recorded_it_and_
     assert judge(late, late_sha) == (sorted([rid, late]), None)
     assert "is a `python" in judge(bare, bare_sha)[1] and "not `check`" in judge(bare, bare_sha)[1]
     assert "not `check`" in judge(odd, odd_sha)[1]
-    assert M.post_landing(["python3", "tools/verity/check/slot.py", "--priority", "--", *CHECKED, "--deferred", "pytest"],
+    assert M.post_landing(["python3", "tools/check/slot.py", "--priority", "--", *CHECKED, "--deferred", "pytest"],
                           CHECKED) == "pytest"
     assert M.post_landing([*CHECKED, "--deferred", "Py test"], CHECKED) is None
 

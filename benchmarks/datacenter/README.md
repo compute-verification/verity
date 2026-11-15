@@ -5,19 +5,18 @@
 - **Python**: the package `datacenter`, the distribution `verity-datacenter` (this directory's `pyproject.toml`; it
   depends on `verity` alone). It is not a member of the uv workspace, so nothing installs it: an importer puts this
   directory on `sys.path`.
-- **Importers**: `benchmarks/network_sim` alone (its `graph.py`, `mockdc.py`, `records.py` and `workload/`, and their
-  tests). No code under `verity/` imports it. What they import:
-  - from `datacenter`: `Datacenter`, `Fleet`, `Plan`, `Profile`, `Interval`, `Maintenance`, `Carried`, `Refused`,
-    `LinkEntry`, `Port`, `PortRecord`, `Cadence`, `Assumption`, `serve_time`, `check_records` and `account`;
-    `workload/accounting.py` imports the package whole;
-  - from `datacenter.examples`: `leaf_spine` and `two_sites`;
-  - from `datacenter.logical`: `binding`, `gates` and `layout`.
-- **Command**: `python -m datacenter.demo`, run from this directory; `benchmarks/network_sim/run.py` runs it and
-  keeps what it prints. There is no console script.
+- **Importers**: `benchmarks/pouw/tests/test_proved_ticks_placed.py` alone. No code under `verity/` imports it. What
+  it imports:
+  - from `datacenter`: `FLEET_CLOSED`, `Assumption`, `Cadence`, `Computed`, `Credit`, `Datacenter`, `DeviceEntry`,
+    `Interval`, `LinkEntry`, `Plan`, `Zone`, `account`, `ands`, `crossings`, `names`, `place` and `register`;
+  - from `datacenter.logical`: `census_of`;
+  - from `datacenter.models`: `s8_grid`.
+- **Command**: `python -m datacenter.demo`, run from this directory. There is no console script.
 - **Lean**: none. `physical` mirrors the Lean physical model, and no Lake package is here.
 - **Documents**: none. The package writes no file and defines no schema.
-- **Loads from**: `verity.circuits`, `verity.commitments`, `verity.definitions`, `verity.hardware` (`registration`),
-  `verity.protocols.spot.verifier` and PoUB's `timing` and `codec` (`verity.protocols.poub.verifier`).
+- **Loads from**: `verity.circuits`, `verity.commitments`, `verity_vllm.definitions`, the registration log
+  (`verity.protocols.accounting.registration.verifier`), `verity.protocols.proofs.spot.verifier` and PoUB's `timing`
+  and `codec` (`verity.protocols.accounting.poub.verifier`).
 
 ## Overview
 
@@ -25,7 +24,7 @@ A datacenter as Verity accounts for it, in a small Python API: a Program, the ha
 them, the verifier's plan, a run with what the trusted devices record, the audit's claims, and the account.
 
 The accounting layer has two layers. The **logical layer** is where the cryptography happens: `logical` (a
-`verity.circuits` Program, the one circuit format the sampled proofs, PoUW's compiler and the census all read, at the
+`verity.circuits` Program, the one circuit format SPOT, PoUW's compiler and the census all read, at the
 census's grain: its root nodes, the census values they pass each other, each Call's work by kind and its ANDs, the
 credit; its evaluation, a Call at a time through `verity.circuits.evaluation`'s kernels; and the hm96-sha512
 commitments to its registered inputs, with the occupancy profiles the developer may choose from, and to a run's census
@@ -69,8 +68,7 @@ scaled up from the demo's machines says which parts are proved and which are sca
 nodes), `with_dpu` (a BlueField-3 between its NIC and its certifier, with its BMC behind it), `leaf_spine` (nodes behind
 their certifiers on a leaf-spine fabric), `rack` (the demo's) and `two_sites` (a `Fleet` of two leaf-spines joined by
 a WAN between their spines). A link between datacenters is fabric, as a switch is: coverage is per block, every block's
-boundary is certified already, and the outside world is everything off every block. `benchmarks/network_sim/graph.py`
-exports them as a network, a netns plan or a GML graph, and its tests pin their tensor-core rates to the census.
+boundary is certified already, and the outside world is everything off every block.
 `models` builds the demo's and the tests' small Programs from registered Boolean Definitions (`Gemm_v3`, the BF16
 tensor-core step on bits, which `Gemm_v2`'s kernel evaluates through the word view).
 
@@ -89,11 +87,10 @@ print(account(audit(run(p, {"x": X}, plan), profile), profile))
 
 `python -m datacenter.demo` runs a night on a two-node rack, honestly and then with an adversary, and
 `python tests/test_walkthrough.py` prints the walkthrough ("Accounting for a datacenter, from a circuit up") section by
-section. `benchmarks/network_sim/workload/accounting.py` accounts for the network simulator's MLP and
-verity_vllm's serving Program the same way.
+section.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `DeviceEntry` is
-`Accounting.Device` (the node's constants are its one Python mirror's, `verity.protocols.poub.verifier.timing`),
+`Accounting.Device` (the node's constants are its one Python mirror's, `verity.protocols.accounting.poub.verifier.timing`),
 `Zone` is `Hardware.SpatialUnit` with `Covered`, `Placed` is `Accounting.Placed` (and
 `Accounting.Requirement.Placement`) at the census's grain, a `StoreEntry` is `Accounting.Requirement.Store`, and an
 `Interval` is `Accounting.Window`.

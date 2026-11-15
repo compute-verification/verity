@@ -72,7 +72,7 @@ class Fused:
         "hypothesis": "decode's kernels leave the tensor pipe idle while they wait on memory: filler warps in the "
                       "linears and attention blocks, beside the pump on the rest, cover 0.70-0.82 of int8 peak on "
                       "decode at <= 5% slowdown"})
-    sources: tuple = ("benchmarks/pouw/filler/dcap.cu", "benchmarks/pouw/filler/flin.cuh",
+    sources: tuple = ("verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu", "verity/protocols/accounting/pouw/prover/kernels/filler/flin.cuh",
                       "benchmarks/pouw/filler/fscore.cu", "benchmarks/pouw/filler/fused_arm.py",
                       "benchmarks/pouw/filler/fused_score.py")
     filler: A.Filler | None = A.Filler(W=8, NC=4, S=2048, chunk_log2=19, noise="chained")
@@ -88,15 +88,15 @@ class Fused:
     def _row(self, b, l):
         return A.point_lookup(self.table, b, l)
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> A.Colocation:
         if phase == "prefill":
             return A.Colocation("co")
         return A.Colocation("split", self._row(b, l)[0])
 
-    def fused(self, phase, b, l):
+    def fused(self, phase: str, b: int, l: int) -> FusedStep | None:
         return None if phase == "prefill" else self._row(b, l)[1]
 
-    def filler_at(self, phase, b, l):
+    def filler_at(self, phase: str, b: int, l: int) -> A.Filler | None:
         return CO_PREFILL if phase == "prefill" else self.filler
 
 
@@ -186,12 +186,12 @@ class FusedPumpK(FusedPump):
                    "a green split and one graph a step")
     nvcc_flags: str = "-DPFILL_BITS"
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> A.Colocation:
         if phase == "prefill":
             return A.Colocation("split", 4)
         return super().placement(phase, b, l)
 
-    def filler_at(self, phase, b, l):
+    def filler_at(self, phase: str, b: int, l: int) -> A.Filler | None:
         return self.filler
 
 

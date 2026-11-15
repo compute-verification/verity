@@ -24,7 +24,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # A hidden-output statement (`Stmt.setupHidden`): what it is, and its frozen statements
 
-With hidden outputs (`Tags.hiddenOutputs`, `HmOut`) flock-verify sets a table up with `Stmt.setupHidden`,
+With hidden outputs (`Tags.hiddenOutputs`, `HmOut`) verity-verify-proof sets a table up with `Stmt.setupHidden`,
 `Stmt.setupH`'s checks on `HmOut`'s rows: the input rows, then one output row per output port. The public file holds no
 output word; every row's `b ‖ c` is a region; Δ is `HmRow.delta`'s, then each output row's message bits copied from
 the output bits the circuit computes (`outPairs`), zero past the port's words, then each pinned output bit's copy of the
@@ -190,7 +190,7 @@ def OutputsCommitted : Prop :=
     tags.typed = false → tags.isTmpl = false →
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    ∀ {D : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     st.c.outNet = st.c.unitNet →
     (∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
@@ -201,8 +201,8 @@ def OutputsCommitted : Prop :=
     (pop.digest D.proved[o.val * st.c.g + g] (HmOut.nIn st.c + j) st.c.ports.size).data.toList =
       Binding.commitString
         ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++
-          outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-        (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+          outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+        (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
 
 /-- **`CommitPairSpec`**: the row commitment's extractor outputs a SHA-512 collision whenever two different rows'
 bytes have one commit string `b ‖ c`, under any salts. -/
@@ -222,8 +222,8 @@ def OutputsBinding : Prop :=
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
-    Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
+    ∀ {D D' : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    Draw.UnitSample.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     st.c.outNet = st.c.unitNet →
     (∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
@@ -236,13 +236,13 @@ def OutputsBinding : Prop :=
     g < st.c.g → g < 2 ^ st.c.g.log2 → g' < st'.c.g → g' < 2 ^ st'.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size) (hr' : o'.val * st'.c.g + g' < D'.proved.size),
     D.proved[o.val * st.c.g + g] = D'.proved[o'.val * st'.c.g + g'] →
-    outBytes (Hm.blockBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j →
+    outBytes (Hm.chunkBit (L.model regs) z o) st.c g j ≠ outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j →
     Binding.Collides (commitPair
       ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++
-        outBytes (Hm.blockBit (L.model regs) z o) st.c g j)
-      (Hm.bytesOf (Hm.blockBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
+        outBytes (Hm.chunkBit (L.model regs) z o) st.c g j)
+      (Hm.bytesOf (Hm.chunkBit (L.model regs) z o) 192 (Hm.saltCol st.c g (HmOut.nIn st.c + j)))
       ((HmRow.rowPrefix (st'.c.ports.getD (HmOut.nIn st'.c + j) default).words).data.toList ++
-        outBytes (Hm.blockBit (L'.model regs') z' o') st'.c g' j)
-      (Hm.bytesOf (Hm.blockBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
+        outBytes (Hm.chunkBit (L'.model regs') z' o') st'.c g' j)
+      (Hm.bytesOf (Hm.chunkBit (L'.model regs') z' o') 192 (Hm.saltCol st'.c g' (HmOut.nIn st'.c + j))))
 
 end FlockSoundness.Discharge.Hidden

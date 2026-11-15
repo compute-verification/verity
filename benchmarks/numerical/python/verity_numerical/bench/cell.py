@@ -23,7 +23,7 @@ records its container's identity (DMI product uuid, kernel boot id, CPU model, p
 
 ``check`` reads the prover run's result and says what keeps it from counting: the result contract (``contract.validate``), the
 protocol (``interaction.protocol_problem``), the interaction record (``interaction.interaction_problem``), a live verifier on another machine for an
-interactive backend, the loopback probe, and that its statement and instance set are the cell's.  ``register`` runs the backend's
+interactive backend, the loopback probe, and that its statement and input set are the cell's.  ``register`` runs the backend's
 registration script, stamps the cell (backend, family, statement, subcircuit, scheme, input set, both machines) into the document, checks it,
 and puts it in the evidence store (``research data put --kind bench-result/v1 --ref run_files=... --preserve``).
 """
@@ -31,21 +31,42 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shlex
 import subprocess
 import sys
 import time
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
-from . import census as CN
-from . import contract, drivers, interaction, placement as PL
 from verity_flock import input_sets as IS
 from verity_flock import lowerings as LW
 from verity_flock import subcircuit_templates as TM
+
+from .. import settings
+from . import census as CN
+from . import contract, drivers, interaction, placement as PL
+
+__all__ = [
+    "BACKENDS",
+    "Cell",
+    "DEFAULT_POINTS",
+    "NotSupported",
+    "PROBE_WRAP",
+    "check",
+    "family_of",
+    "launch",
+    "main",
+    "placement_problems",
+    "plan",
+    "register",
+    "resolve_input_set",
+    "run_files",
+    "runs_root",
+    "split_statement",
+]
 
 FAMILIES = {"A": "A-GKR", "B": "B-Ligero", "C": "C-Flock", "D": "D-SP1"}
 BACKENDS = ("A-interactive", "A-fs", "A-route-a", "B-interactive", "B-fs", "C-interactive", "D-fs")
@@ -93,7 +114,7 @@ class Cell:
         return json.dumps(asdict(self), indent=1, default=str) + "\n"
 
     @classmethod
-    def load(cls, path: str | Path) -> "Cell":
+    def load(cls, path: str | Path) -> Cell:
         return cls(**json.loads(Path(path).read_text()))
 
 
@@ -176,7 +197,7 @@ def resolve_placement(cell: Cell) -> dict[str, Any]:
     """Both pods' identity from the RunPod API (machine id, public IP) and the address the prover will reach the verifier at."""
     try:
         prover, verifier = PL.from_runpod(cell.prover), PL.from_runpod(cell.verifier or "")
-    except Exception as e:  # noqa: BLE001  (no API, no key, an unknown pod: the separation cannot be shown)
+    except Exception as e:  # no API, no key, an unknown pod: the separation cannot be shown
         raise NotSupported(f"the pods' machine identity is unavailable ({type(e).__name__}: {e}); pass it with --placement FILE") from e
     return {"prover": prover, "verifier": verifier, "link": PL.link_to(cell.verifier_addr or "")}
 
@@ -188,11 +209,11 @@ PROBE_WRAP = (f'python3 {PL.PROBE} probe --peer "$1" --rtt "$2" --out "${{RESEAR
 
 def probe_pods(cell: Cell) -> dict[str, Any]:
     """A shared-IP pair's full identity before any job: both pods probed over ssh (the prover with its link and TCP-connect RTT to
-    the verifier), merged over the API's (red-team-flock-3 S2)."""
+    the verifier), merged over the API's."""
     try:
         p = PL.remote_probe(cell.prover, cell.verifier_addr)
         v = PL.remote_probe(cell.verifier or "")
-    except Exception as e:  # noqa: BLE001  (no ssh, no pod: the exception cannot be shown)
+    except Exception as e:  # no ssh, no pod: the exception cannot be shown
         raise NotSupported(f"the pods share a public IP and could not be probed ({type(e).__name__}: {e})") from e
     plan = cell.placement
     return {"prover": PL.merge(plan.get("prover"), {k: x for k, x in p.items() if k != "link"}),
@@ -263,8 +284,8 @@ RUN_NAT_KEYS = ("pod_id", "boot_id", "hypervisor", "sys_vendor")
 
 def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path | None) -> list[str]:
     """Why the prover and verifier are not shown to be separate machines on a routed link, and whether each run ran on the pod
-    the cell planned (a run whose pod id differs from the plan's).  Under the NAT exception every value is the runs' own
-    (red-team-flock-3 S2): each run records all of :data:`RUN_NAT_KEYS` (the prover its link and RTT too), and the boot id
+    the cell planned (a run whose pod id differs from the plan's).  Under the NAT exception every value is the runs' own:
+    each run records all of :data:`RUN_NAT_KEYS` (the prover its link and RTT too), and the boot id
     the plan probed on that pod, since the machine id is the plan's."""
     if not (cell.placement or prover_run or verifier_run):
         return []
@@ -332,7 +353,7 @@ def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, ve
 # --- register ----------------------------------------------------------------------------------------------------------------
 
 def runs_root() -> Path:
-    return Path(os.environ.get("RESEARCH_RUNS", "~/.research/runs")).expanduser()
+    return Path(settings.RESEARCH_RUNS).expanduser()
 
 
 def run_dir(ref: str) -> Path:
@@ -431,7 +452,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     p.add_argument("--verifier", default=None, help="the verifier pod (vy-*), same datacenter, not the prover's")
     p.add_argument("--verifier-addr", default=None, help="HOST:PORT the prover reaches the verifier's session port at")
     p.add_argument("--rtt-target", default=None, help="HOST:PORT on the verifier pod the RTT probe connects to (its sshd)")
-    p.add_argument("--campaign", default=os.environ.get("RESEARCH_CAMPAIGN"))
+    p.add_argument("--campaign", default=settings.RESEARCH_CAMPAIGN)
     p.add_argument("--lane", default=None)
     p.add_argument("--points", default=DEFAULT_POINTS, help="the sweep's batch sizes (both sides of a remote verifier use them)")
     p.add_argument("--runs", type=int, default=5)

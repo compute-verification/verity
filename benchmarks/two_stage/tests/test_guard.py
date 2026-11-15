@@ -1,23 +1,31 @@
 """SPOT[Flock]'s two-stage Lean model on a real run of the toy: the conjuncts of `SpotFlock.stmtOk`
 (`security/Proofs/Flock/SpotFlock/Code.lean`) that read the run accept an honest two-stage run at a `Held` fixed before
-the run, and refuse two runs they must refuse.
+the run, and refuse the runs they must refuse.
 
 What it shows: `stmtOk` is its conjuncts on the registration alone (`regOk`: `partition` and `two`) and its conjuncts on
 the run (`runOkAt`), a kernel-checked equation (`TwoGuard.stmtOk_split`). On the honest run's messages (the boundary
-record x, the interior record m₁, its four session statements m₂ in template order, the two stages' coins c₀ and c₁),
-`runOkAt h x m₁ m₂ c₀ c₁` evaluates to true in Lean, at an `h` that `TwoGuard.lean` builds only from what the auditor
-registers before the run: the boundary registration's program, query, work table and selection rule, the counts, the
-templates' names, links and descriptor (`held.json`), the templates' reference statements, made from the interior
-window with no run in it and admitted only after the script checks each is in Flock's masked scope (`zkOk`), and the
-templates' reference reads as the params name them (`ref-<t>.reads.json`, `Held.refReads`). Nothing in
-`h` reads the run's messages or coins. `two`'s conjuncts on the members' files (`twoFilesOk`: the layout fits them, and
-each reference statement reads as a member's) evaluate to true too. `runOkAt` refuses the altered run, and the honest
-run with one byte of a session statement's registered reads flipped (`guard.flip_registered`).
+record x, the interior record m₁, its session statements m₂, one per template in template order, the two stages' coins
+c₀ and c₁), `runOkAt h x m₁ m₂ c₀ c₁` evaluates to true in Lean, at an `h` that `TwoGuard.lean` builds only from what the
+auditor registers before the run: the boundary registration's program, query, work table and selection rule, the counts,
+the templates' names, links, wires and descriptor, the boundary and interior registrations' ports (`held.json`), the
+templates' reference statements, made from the interior window with no run in it and admitted only after the script
+checks each is in Flock's masked scope (`zkOk`), and the templates' reference reads as the params name them
+(`ref-<t>.reads.json`, `Held.refReads`). Nothing in `h` reads the run's messages or coins. Of `two`'s conjuncts on the
+members' files (`twoFilesOk`), the layout fits them and each reference statement reads as a member's (`filesFitOk`),
+and the registered wiring passes every clause of its check but one: FLIP_B writes its own port
+`o0`, which no link names and no wire reads, so `writtenRowsRead` refuses the toy's registration, and `twoFilesOk` and
+the design with it. `runOkAt` refuses the altered run,
+and the honest run with one byte of a session statement's registered reads
+flipped (`guard.flip_registered`). Its records check (`recordsOk`) refuses the honest run with FLIP_B's own port `o0`,
+which no link or wire names, dropped from round 1's record and registered as a value of its name (`guard.drop_port`),
+and with a value the registration registers registered twice (`guard.register`), where the same run with it registered
+once passes.
 
-What it doesn't show: that `stmtOk` accepts, so not that a guarantee over it (`SpotKSTwo`) is non-vacuous. `regOk` also
-asks for `partition`'s `membersPart` and `two`'s `scopeOk` over `bitsProgs`, which read only `h` and unroll the members'
-circuits; `regOk h = true` is a fact about the registration, to be proved rather than decided on a run, and this evaluates
-neither. The result lists each member's sizes.
+What it doesn't show: that `stmtOk` accepts, so not that a guarantee over it (`SpotKSTwo`) is non-vacuous: at the toy's
+registration it refuses, by the wiring's clause above. `regOk` also asks for `partition`'s `membersPart` and `two`'s
+`scopeOk` over `bitsProgs`, which read only `h` and unroll the members' circuits; `regOk h = true` is a fact about the
+registration, to be proved rather than decided on a run, and this evaluates neither. The result lists each member's
+sizes.
 Nor that each session accepts: `stmtOk` reads the session statements and their registered reads, never a session's
 transcript. Each session's acceptance is the Lean verifier's verdict in the run that made the fixture (`verdicts.json`,
 asserted here), whose statements these are byte for byte (`guard.session_statement` rebuilds each from its command line
@@ -44,6 +52,11 @@ import guard as G  # noqa: E402
 
 EXE = of(__file__).VERITY_TWO_STAGE_GUARD
 FIXTURE = HERE / "fixtures" / "guard.tar.xz"
+#: a value no port of the toy's is named, which the registered-value variants register
+VALUE = "TwoStageToyGuard/registered"
+#: `toy.FLIP_B`'s name, the template whose own port `o0` no link or wire names; `toy` needs the workspace, which
+#: `guard_node.py --pytest`'s environment doesn't have
+FLIP_B = "TwoStageToyFlipB"
 pytestmark = pytest.mark.skipif(not EXE, reason="VERITY_TWO_STAGE_GUARD names the command that runs TwoGuard.lean "
                                 "(guard_node.py --pytest makes it)")
 
@@ -71,10 +84,47 @@ def verdicts(run: Path) -> list[bool]:
     return [v["accepted"] for v in json.loads((run / "verdicts.json").read_text())]
 
 
-def test_honest_run_passes(runs: Path):
+def variant(tmp_path: Path, run: Path, files: dict[str, bytes]) -> Path:
+    """``run``'s export with ``files`` in place of its own, the rest linked."""
+    d = tmp_path / "run"
+    d.mkdir()
+    for p in run.iterdir():
+        if p.name not in files:
+            (d / p.name).symlink_to(p)
+    for name, data in files.items():
+        (d / name).write_bytes(data)
+    return d
+
+
+def registered(run: Path, tmp_path: Path, times: int) -> dict:
+    """``check`` of ``run`` at a registration whose interior registers `VALUE`, its record registering it ``times`` times."""
+    held = json.loads((run / "held.json").read_text())
+    held["interior_names"]["values"] = [VALUE]
+    m1 = G.register((run / "m1.bin").read_bytes(), VALUE, times)
+    return check(variant(tmp_path, run, {"held.json": json.dumps(held).encode(), "m1.bin": m1}))
+
+
+def flip_b(run: Path) -> str:
+    """`toy.FLIP_B`'s template among the registration's names."""
+    (name,) = [n for n in json.loads((run / "held.json").read_text())["names"] if n.startswith(f"{FLIP_B}_")]
+    return name
+
+
+@pytest.fixture(scope="module")
+def honest(runs: Path) -> dict:
+    return check(runs / "honest")
+
+
+def test_honest_run_passes(runs: Path, honest: dict):
     assert all(verdicts(runs / "honest"))
-    result = check(runs / "honest")
-    assert result["runOk"] and result["twoFilesOk"], result
+    assert honest["runOk"] and honest["recordsOk"] and honest["filesFitOk"], honest
+
+
+def test_the_wiring_refuses_the_port_no_link_names_and_no_wire_reads(runs: Path, honest: dict):
+    """The toy's registration fails one clause of the wiring, at one port: FLIP_B's own `o0`."""
+    assert [name for name, ok in honest["wiring"].items() if not ok] == ["writtenRowsRead"], honest
+    assert honest["unread"] == [[flip_b(runs / "honest"), "o0"]] and honest["unnamed"] == [], honest
+    assert not honest["twoFilesOk"], honest
 
 
 def test_altered_run_fails(runs: Path):
@@ -86,3 +136,20 @@ def test_one_registered_byte_flipped_fails(runs: Path, tmp_path: Path):
     flipped = tmp_path / "m2-flipped.bin"
     flipped.write_bytes(G.flip_registered((runs / "honest" / "m2.bin").read_bytes()))
     assert not check(runs / "honest", flipped)["runOk"]
+
+
+def test_dropped_port_registered_as_a_value_fails(runs: Path, tmp_path: Path):
+    honest = runs / "honest"
+    port = f"{flip_b(honest)}/o0"
+    result = check(variant(tmp_path, honest, {"m1.bin": G.drop_port((honest / "m1.bin").read_bytes(), port)}))
+    assert not result["recordsOk"] and not result["runOk"], result
+
+
+def test_value_registered_once_passes(runs: Path, tmp_path: Path):
+    result = registered(runs / "honest", tmp_path, 1)
+    assert result["recordsOk"] and result["runOk"], result
+
+
+def test_value_registered_twice_fails(runs: Path, tmp_path: Path):
+    result = registered(runs / "honest", tmp_path, 2)
+    assert not result["recordsOk"] and not result["runOk"], result

@@ -1,25 +1,25 @@
-"""[X-06] `verity.definitions.registry.sampling`: stochastic token select with seed / pos / temperature as OPERANDS.  CPU: agreement with the
+"""[X-06] `verity_vllm.definitions.registry.sampling`: stochastic token select with seed / pos / temperature as OPERANDS.  CPU: agreement with the
 RTX-4090-validated static-seed composites (`GumbelArgmaxBf16_v1`, `GumbelArgmaxTempBf16_v1`), the kernel's early returns, masked lanes,
 and the plain-argmax limit.  The kernel correspondence itself is `registry/sampling_difftest.py` (G4, produce on the pod)."""
 from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity_vllm.properties.admission import evaluate_spec
 from verity.circuits.defs import bind
-from verity.definitions.registry import sampling as S
-from verity.definitions.registry.sampling import (
+from verity_vllm.definitions.registry import sampling as S
+from verity_vllm.definitions.registry.sampling import (
     GumbelArgmaxBf16,
     GumbelArgmaxTempBf16,
 )
+
+from verity_vllm.check.replay.stoch_recompute import evaluate_spec
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
 
 def _tables_ok() -> bool:
     try:
-        from verity.definitions.registry.prims import DivFullRcp
+        from verity_vllm.definitions.registry.prims import DivFullRcp
         DivFullRcp.evaluate(S.f32_bits(0.8))
         return True
     except Exception:  # noqa: BLE001  (RmsUnresolved: MUFU tables not on this machine)
@@ -74,7 +74,10 @@ def test_temperature_zero_is_the_greedy_first_maximum():
     f = _f32_of_bf16(x)
     assert select(x, 99, 5, 0.0) == int(np.argmax(f))
     # ties: the FIRST maximum (tl.max tie_break_left + torch.argmax first)
-    x2 = x.copy(); m = int(np.argmax(f)); x2[m + 7] = x2[m]; x2[m - 3] = x2[m]
+    x2 = x.copy()
+    m = int(np.argmax(f))
+    x2[m + 7] = x2[m]
+    x2[m - 3] = x2[m]
     assert select(x2, 99, 5, 0.0) == m - 3
     # -0.0 == 0.0: the kernel's `temperature == 0.0` early return holds for the negative zero word too
     assert evaluate_spec(bind(S.GumbelTokenSelect, V=1000), [x, w64(99), w64(5), w32(0x80000000)])[0] == int(np.argmax(f))
@@ -83,7 +86,7 @@ def test_temperature_zero_is_the_greedy_first_maximum():
 @needs_tables
 def test_seed_and_pos_are_inputs_not_structure():
     """The same specialization (V only) serves every request: seed and pos change the token through the operands."""
-    x = np.zeros(1024, dtype=np.uint16)                       # all-equal logits: the token is the argmax of the noise alone
+    x: np.ndarray = np.zeros(1024, dtype=np.uint16)                       # all-equal logits: the token is the argmax of the noise alone
     toks = {select(x, s, p, 1.0) for s, p in [(1, 0), (2, 0), (1, 1), (3, 5), (2**40, 0)]}
     assert len(toks) >= 4
     assert bind(S.GumbelTokenSelect, V=1024).id == bind(S.GumbelTokenSelect, V=1024).id
@@ -98,10 +101,11 @@ def test_masked_lanes_never_win_and_f32_entry_composes():
     x32 = (x.astype(np.uint32) << 16)
     V = 1000
     best = evaluate_spec(bind(S.GumbelSelectF32, V=V), [x32, w64(1), w64(2), w32(S.f32_bits(1.0))])[0]
-    masked = x32.copy(); masked[best] = 0xFF800000                                     # -inf as the top-p mask writes it
+    masked = x32.copy()
+    masked[best] = 0xFF800000  # -inf as the top-p mask writes it
     b2 = evaluate_spec(bind(S.GumbelSelectF32, V=V), [masked, w64(1), w64(2), w32(S.f32_bits(1.0))])[0]
     assert b2 != best
-    everything = np.full(V, 0xFF800000, dtype=np.uint32)
+    everything: np.ndarray = np.full(V, 0xFF800000, dtype=np.uint32)
     assert evaluate_spec(bind(S.GumbelSelectF32, V=V), [everything, w64(1), w64(2), w32(S.f32_bits(1.0))])[0] == 0
     # composition = the chained Definition
     scaled = evaluate_spec(bind(S.TemperatureScale, V=V), [x, w32(S.f32_bits(0.8))])
@@ -111,7 +115,7 @@ def test_masked_lanes_never_win_and_f32_entry_composes():
 
 @needs_tables
 def test_temperature_scale_early_returns_and_div_full():
-    from verity.definitions.registry.prims import DivFullRcp, DivFullScaleA, F32Mul
+    from verity_vllm.definitions.registry.prims import DivFullRcp, DivFullScaleA, F32Mul
     x = _bf16_row(64, seed=5)
     xf = (x.astype(np.uint32) << 16)
     for t in (0.0, 1.0):

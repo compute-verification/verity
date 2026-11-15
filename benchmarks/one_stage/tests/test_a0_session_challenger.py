@@ -1,8 +1,8 @@
 """a0's session on the challenger (`a0.session` under FLOCK_CHALLENGER=1): a session on the keyed coin tree (`--zk`, or a
 plain one under FC_COINS=tree) starts a challenger of its own, its server takes the tree from it (`--tree-from`), and the
 challenger's end and audit of the server's records come back as ``live["challenger"]``; a failed one refuses the session.
-Any other session starts none. A session's prover (`a0.prover_env`) runs `prove --zk` itself unless it is given Lean's
-`flock-firewall`, which puts it behind the ZK server's send check. The server and prover are a stand-in for
+Any other session starts none, and so does one whose caller names the challenger (``tree_from``). A session's prover (`a0.prover_env`) runs `prove --zk` itself unless it is given Lean's
+`flock-zk-server`, which puts it behind the ZK server's send check. The server and prover are a stand-in for
 `flock-circuit`, the challenger `verity_flock.challengers`' calls."""
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ import pytest
 
 from verity_flock import challengers as CH
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
 import a0
 
-ENV = ("FC_FIREWALL", "FC_FIREWALL_LEAN", "FC_FIREWALL_STATEMENT", "FC_HOST_WITNESS")
+ENV = ("FC_ZK_SERVER", "FC_ZK_SERVER_LEAN", "FC_ZK_SERVER_STATEMENT", "FC_HOST_WITNESS")
 
 #: a stand-in for flock-circuit: ``serve`` records one session holding its argv and its environment's FC_COINS and ENV,
 #: and ``prove`` prints its LIVE line with its own ENV
@@ -58,9 +58,9 @@ def run(tmp_path, monkeypatch):
     for k in ("FC_COINS", *ENV):
         monkeypatch.delenv(k, raising=False)
 
-    def go(name, zk=False, env=None):
+    def go(name, zk=False, env=None, **more):
         out = tmp_path / name
-        record, live = a0.session(str(bin_), st, 4, "subset:2", 0, out, zk=zk, env=env)
+        record, live = a0.session(str(bin_), st, 4, "subset:2", 0, out, zk=zk, env=env, **more)
         return out, record, live
 
     return go, calls, ends
@@ -100,17 +100,30 @@ def test_any_other_session_starts_no_challenger(run, monkeypatch, flag, zk, env)
     assert "--tree-from" not in record["argv"] and "challenger" not in live
 
 
+def test_a_session_on_its_callers_challenger_starts_none_of_its_own(run, monkeypatch):
+    """With ``tree_from`` the server takes its tree from the challenger its caller names, under FLOCK_CHALLENGER=1 too:
+    no challenger is started or audited here, and the session's ``live`` carries none."""
+    go, calls, _ = run
+    monkeypatch.setenv("FLOCK_CHALLENGER", "1")
+    _, record, live = go("s", zk=True, tree_from=["--tree-from", "127.0.0.1:2", "--tree-secret-file", "relay-secret"])
+    assert calls == {"start": [], "end": []}
+    argv = record["argv"]
+    assert argv[argv.index("--tree-from") + 1] == "127.0.0.1:2"
+    assert argv[argv.index("--tree-secret-file") + 1] == "relay-secret"
+    assert live["accepted"] is True and "challenger" not in live
+
+
 def test_a_session_proves_itself_unless_given_the_zk_server(run, monkeypatch):
-    """Without a firewall both sides run with the ZK server off and the witness where the prover builds it, a
+    """Without a ZK server both sides run with the ZK server off and the witness where the prover builds it, a
     FC_HOST_WITNESS the caller set removed (`a0.DIRECT`, zk_cost's `dev` arm); with one, the ZK server's send check is on
     and the caller's environment stands."""
     go, _, _ = run
     monkeypatch.delenv("FLOCK_CHALLENGER", raising=False)
     monkeypatch.setenv("FC_HOST_WITNESS", "1")
     _, record, live = go("direct", zk=True, env=a0.prover_env(None, {"partition_file": "p.json"}))
-    assert record["env"] == live["env"] == {"FC_FIREWALL": "0", "FC_FIREWALL_LEAN": None, "FC_FIREWALL_STATEMENT": None,
+    assert record["env"] == live["env"] == {"FC_ZK_SERVER": "0", "FC_ZK_SERVER_LEAN": None, "FC_ZK_SERVER_STATEMENT": None,
                                             "FC_HOST_WITNESS": None}
-    _, record, live = go("fw", zk=True, env=a0.prover_env("flock-firewall", {"partition_file": "p.json"}))
-    assert record["env"] == live["env"] == {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": "flock-firewall",
-                                            "FC_FIREWALL_STATEMENT": a0.STATEMENT_ID, "FC_HOST_WITNESS": "1"}
-    assert a0.firewall_env({"partition_file": "p.json"})["FC_FIREWALL_HELLO_ARGS"] == "--partition p.json"
+    _, record, live = go("fw", zk=True, env=a0.prover_env("flock-zk-server", {"partition_file": "p.json"}))
+    assert record["env"] == live["env"] == {"FC_ZK_SERVER": "1", "FC_ZK_SERVER_LEAN": "flock-zk-server",
+                                            "FC_ZK_SERVER_STATEMENT": a0.STATEMENT_ID, "FC_HOST_WITNESS": "1"}
+    assert a0.zk_server_env({"partition_file": "p.json"})["FC_ZK_SERVER_HELLO_ARGS"] == "--partition p.json"

@@ -1,6 +1,6 @@
-"""`verity.settings`, the settings machinery (`Registry`) and the distribution's own registry: every variable declared once (a
+"""`verity_config.verity_settings`, the settings machinery (`EnvSettings`) and the distribution's own registry: every variable declared once (a
 type, a role, a doc), read at the read, an undeclared ``VERITY_ML_*`` variable refused by name, a ``debug`` setting refused on
-a run of record, a program's startup check (`Registry.check`), the run's record of the value settings, and `direct_uses`,
+a run of record, a program's startup check (`EnvSettings.check`), the run's record of the value settings, and `direct_uses`,
 which a suite's ratchet counts with.  And the circuits area, on the soundness path, reads the environment through it alone:
 its direct reads are held at today's count, none."""
 from __future__ import annotations
@@ -12,11 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from verity import settings as S
+from verity_config import verity_settings as S
 
 REGISTRY = Path(S.__file__)
 AREA = Path(__file__).resolve().parents[1]
-PARTS = [AREA.parent / "definitions" / part for part in ("circuits", "ops", "silicon")]  # the rest of what was one tree
 ROOT = Path(__file__).resolve().parents[3]
 TOKEN = re.compile(r"\bVERITY_ML_[A-Z0-9_]*[A-Z0-9]\b")
 #: the attributes of ``os`` that touch the environment
@@ -39,9 +38,9 @@ def test_the_registry_imports_the_standard_library_alone() -> None:
 def test_declaring_a_setting_twice_or_with_an_unknown_role_fails() -> None:
     s = S.Setting("VERITY_ML_TEST_X", S.flag, False, S.WHERE, "a test's")
     with pytest.raises(ValueError, match="declared twice"):
-        S.Registry(S.__file__, ("VERITY_ML_",), s, s, schema=S.RECORD_SCHEMA)
+        S.EnvSettings(S.__file__, ("VERITY_ML_",), s, s, schema=S.RECORD_SCHEMA)
     with pytest.raises(ValueError, match="role 'telemetry'"):
-        S.Registry(S.__file__, ("VERITY_ML_",), S.Setting("VERITY_ML_TEST_X", S.flag, False, "telemetry", "a test's"),
+        S.EnvSettings(S.__file__, ("VERITY_ML_",), S.Setting("VERITY_ML_TEST_X", S.flag, False, "telemetry", "a test's"),
                    schema=S.RECORD_SCHEMA)
 
 
@@ -74,7 +73,7 @@ def test_an_unknown_prefixed_variable_is_refused_by_name(monkeypatch: pytest.Mon
     typo = {"VERITY_ML_BOOLEAN_EXHAUSTVE": "1", "VERITY_ML_BOOLEAN_EXHAUSTIVE": "0", "VERITY_SLOW": "1", "PATH": "/bin"}
     assert S.REGISTRY.unknown(typo) == ["VERITY_ML_BOOLEAN_EXHAUSTVE"]
     with pytest.raises(S.UnknownSetting, match=r"unknown setting VERITY_ML_BOOLEAN_EXHAUSTVE: nothing in the tree reads it.*"
-                                               r"verity/settings\.py"):
+                                               r"tools/config/verity_config/verity_settings.py"):
         S.REGISTRY.validate_environ(typo)
     with pytest.raises(S.UnknownSetting):
         S.get("VERITY_ML_BOOLEAN_EXHAUSTIVE", typo)
@@ -88,7 +87,7 @@ def test_an_unknown_prefixed_variable_is_refused_by_name(monkeypatch: pytest.Mon
 
 def _synthetic(monkeypatch: pytest.MonkeyPatch) -> None:
     """A registry with one setting of each role, and two credentials: today's declares a ``where`` setting alone."""
-    monkeypatch.setattr(S, "REGISTRY", S.Registry(
+    monkeypatch.setattr(S, "REGISTRY", S.EnvSettings(
         S.__file__, ("VERITY_ML_",),
         S.Setting("VERITY_ML_TEST_WIDTH", int, 32, S.VALUE, "a test's value"),
         S.Setting("VERITY_ML_TEST_SEED", str, "", S.VALUE, "a test's credential, by declaration", secret=True),
@@ -108,8 +107,8 @@ def test_a_debug_setting_is_refused_on_a_run_of_record(monkeypatch: pytest.Monke
 
 
 def test_check_refuses_an_unknown_name_a_value_that_doesnt_parse_and_a_debug_setting_on_a_run_of_record() -> None:
-    r = S.Registry("x.py", ("X_",), S.Setting("X_TRACE", str, None, S.DEBUG, "a trace file"),
-                   S.Setting("X_N", int, 3, S.VALUE, "a number"), schema=S.RECORD_SCHEMA)
+    r = S.EnvSettings("x.py", ("X_",), S.Setting("X_TRACE", str, None, S.DEBUG, "a trace file"),
+                      S.Setting("X_N", int, 3, S.VALUE, "a number"), schema=S.RECORD_SCHEMA)
     r.check({"X_TRACE": "/t"}, of_record=False)
     r.check({"X_TRACE": ""}, of_record=True)
     with pytest.raises(S.DebugOnRecord, match="X_TRACE: debug setting, refused on a run of record"):
@@ -145,7 +144,7 @@ def test_the_record_carries_the_value_settings_in_force_and_names_a_credential(m
 def _area() -> list[tuple[str, str]]:
     """Each Python file of the area, this one aside (it spells undeclared names to see them refused), with its text."""
     return [(p.relative_to(ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in sorted(AREA.rglob("*.py"))
-            if p != Path(__file__).resolve()] + [(str(p), p.read_text("utf-8")) for d in PARTS for p in sorted(d.rglob("*.py"))]
+            if p != Path(__file__).resolve()]
 
 
 def test_the_area_reads_the_environment_through_the_registry_alone() -> None:
@@ -159,7 +158,7 @@ def test_the_area_reads_the_environment_through_the_registry_alone() -> None:
             if (isinstance(n, ast.Attribute) and n.attr in OS_ENV
                     or isinstance(n, ast.ImportFrom) and n.module == "os" and any(a.name in OS_ENV for a in n.names)):
                 found.append(f"  {rel}:{n.lineno}")
-    assert not found, ("the circuits area reads the environment through verity.settings alone: declare the variable there "
+    assert not found, ("the circuits area reads the environment through verity_config.verity_settings alone: declare the variable there "
                        "(a type, a default, a role and a doc) and read it as settings.NAME\n" + "\n".join(found))
 
 

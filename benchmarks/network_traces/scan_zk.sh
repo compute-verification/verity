@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # The step-indexed scan composed in zero knowledge (scan_zk.py, w63's class or SC_CLASS's) on a CPU machine, on hidden_zk's builds (its
-# job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the
-# sampled-proofs verifier built in the tree. From a clone, in one of the network slots, as a job of at most 180 minutes:
-#   env SC_MEM_GB=128 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+# job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean frame and the
+# SPOT verifier built in the tree. From a clone, in one of the network slots, as a job of at most 180 minutes:
+#   env SC_MEM_GB=128 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
-#      SC_CLASS=w63|w63k4|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G
-#      (`prove --group G`: link-windows 0 … G − 1 in one registration)
-#      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
-#      `warden_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
-#      fake's id-form answer SC_FIRST_MS after each (past the warden's delay: a void run), SC_PROMPT_MAX and
+#      SC_CLASS=w63|w63k4|test|test2 (`prove --class`: test is the certifier tests' class, a CPU window; test2 its two
+#      execution phases)  SC_GROUP=G (`prove --group G`: execution phases 0 … G − 1, each a registration of its
+#      own, started from the record before it)
+#      SC_WARDEN_RUN=DIR (a network_certifier_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
+#      `network_certifier_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
+#      fake's id-form answer SC_FIRST_MS after each (past the network certifier's delay: a void run), SC_PROMPT_MAX and
 #      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean sample --stratified K on
 #      the verifier's coins)
 #      SC_CHALLENGER=local|gate:USER@HOST (with SC_DRAW: the honest round's K on the challenger's coins, `prove
@@ -20,6 +21,9 @@
 #      the lane's gate key)
 #      SC_RSS=1 (each flock-circuit process's own peak RSS, its command and wall, a line each in $OUT/rss.jsonl: a8's
 #      max_child_rss_gb is the largest of every session's so far)
+#      SC_LEAN_ONE=1 (the Lean verifier on one core: each of its processes is pinned to the lowest core
+#      the job has, with its command, the session archive it verifies, that core, its wall and CPU seconds and its
+#      peak RSS a line in $OUT/lean.jsonl)
 #      SC_PORT (`prove --port`, the sessions' first loopback port: by default 7811 + 16 × the lowest core the slot
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
@@ -32,14 +36,14 @@ SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 if mkdir -p "$SC_CACHE" 2>/dev/null && [ -w "$SC_CACHE" ]; then export HZ_CACHE=$SC_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-  > "$OUT/build-firewall.log" 2>&1
-[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "sczk: no firewall frame"; exit 7; }
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+  > "$OUT/build-zk-server.log" 2>&1
+[ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "sczk: no ZK server frame"; exit 7; }
 if [ -n "${SC_RSS:-}" ]; then
   cat > "$W/flock-circuit-rss" <<EOF
 #!$PY
@@ -54,15 +58,34 @@ EOF
   chmod +x "$W/flock-circuit-rss"
   BIN=$W/flock-circuit-rss
 fi
+if [ -n "${SC_LEAN_ONE:-}" ]; then
+  cat > "$W/lean-verifier-one" <<EOF
+#!$PY
+import json, os, resource, subprocess, sys, time
+core, args = min(os.sched_getaffinity(0)), sys.argv[1:]
+archive = args[args.index("--archive") + 1] if "--archive" in args[:-1] else None
+t = time.monotonic()
+rc = subprocess.call(["$LEAN", *args], preexec_fn=lambda: os.sched_setaffinity(0, {core}))
+used = resource.getrusage(resource.RUSAGE_CHILDREN)
+with open("$OUT/lean.jsonl", "a") as f:
+    f.write(json.dumps({"command": args[:1], "archive": archive and os.path.relpath(archive, "$W"), "core": core,
+                        "rc": rc, "wall_s": round(time.monotonic() - t, 2),
+                        "cpu_s": round(used.ru_utime + used.ru_stime, 2),
+                        "peak_gb": round(used.ru_maxrss / 2 ** 20, 2)}) + "\n")
+sys.exit(rc)
+EOF
+  chmod +x "$W/lean-verifier-one"
+  LEAN=$W/lean-verifier-one
+fi
 
 if [ -n "${SC_REHEARSE:-}" ]; then
-  log "sczk: rehearsing the warden at scan_zk's schedule"
+  log "sczk: rehearsing the network certifier at scan_zk's schedule"
   # shellcheck disable=SC2046
-  "$PY" benchmarks/network_traces/warden_serve.py rehearse --fake --ids --out "$W/warden" \
+  "$PY" -m verity.protocols.accounting.certifier.device.network_certifier_serve rehearse --fake --ids --out "$W/warden" \
     --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
     ${SC_FIRST_MS:+--first-ms "$SC_FIRST_MS"} ${SC_PROMPT_MAX:+--prompt-max "$SC_PROMPT_MAX"} \
     ${SC_MAX_TOKENS:+--max-tokens "$SC_MAX_TOKENS"} \
-    $("$PY" benchmarks/network_traces/scan_zk.py schedule ${SC_CLASS:+--class "$SC_CLASS"}) 2>&1 \
+    $("$PY" benchmarks/network_traces/zk_drivers.py scan_zk schedule ${SC_CLASS:+--class "$SC_CLASS"}) 2>&1 \
     | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
@@ -85,8 +108,8 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-pa
   esac
 fi
 SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
-log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
-"$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
+log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, network certifier run $SC_WARDEN_RUN}${SC_DRAW:+, sample $SC_DRAW}${SC_CHALLENGER:+, the honest sample on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
+"$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
   ${SC_CLASS:+--class "$SC_CLASS"} ${SC_GROUP:+--group "$SC_GROUP"} \
   ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000

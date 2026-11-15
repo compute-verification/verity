@@ -12,15 +12,17 @@ import json
 import os
 import subprocess
 import sys
-import threading
+import tempfile
 from pathlib import Path
 
 import pytest
 
 import research.queue as Q
+from research import landing
 from research.queue import StoreLabels, label_target
 from research.store import vocab
 from test_queue import World, _git
+from waits import Gate, wait_exit
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS = ("tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py")
@@ -28,6 +30,9 @@ MAP, PATHS, LIB = "tools/move/demo_map.toml", "tools/move/demo_paths_map.toml", 
 A = "def f():\n    return 1\n\n\ndef g():\n    return 2\n"
 B = "import old_proto.a\n\nX = old_proto.a.f()\n\n\nZ = 1\n"
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+#: what pushes and what reaches the store (`research.store`), which the loop holds
+KEYS = (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "R2_BUCKET", "R2_ENDPOINT", "RESEARCH_STORE",
+        "RESEARCH_STORE_CONFIG", "RESEARCH_EXPORT_ACCESS_KEY_ID", "CLOUDFLARE_API_TOKEN", "STORE_INDEXER_DATABASE_URL")
 #: the start of a `pins.py` that `rename.py` imports from the tree it runs on: the git directory of that worktree, the clone's
 GIT_DIR = ("import json, pathlib, subprocess\n"
            "c = pathlib.Path(subprocess.run(['git', 'rev-parse', '--git-common-dir'], capture_output=True, text=True)"
@@ -43,7 +48,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(Q, "MERGED_ROOT", tmp_path / "scratch")
     w = World(tmp_path)
     w.with_store_remote()
-    _push_main(w, w.change({**{p: (ROOT / p).read_text() for p in SCRIPTS}, "tools/verity/check/pins.py": "PINS = ()\n",
+    _push_main(w, w.change({**{p: (ROOT / p).read_text() for p in SCRIPTS}, "tools/check/pins.py": "PINS = ()\n",
                             "tools/research/src/research/store/moves.json": '{"moves": []}\n',
                             MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
                                  '[words]\n"old_proto" = "new_proto"\n',
@@ -61,12 +66,14 @@ def _push_main(world: World, commit: str) -> None:
     _git(world.dev, "fetch", "-q", "origin")
 
 
-def _move(world: World, path: str = MAP, on: str = "origin/main") -> str:
+def _move(world: World, path: str = MAP, on: str = "origin/main", line: str | None = None) -> str:
     """A map's commit on ``on`` (`main` as it is), as `stage.py` commits it: what `rename.py` writes there for the word map, with
-    its `Move:` line, or what `layout.py` writes for a path map, with its `Layout-move:` line."""
+    its `Move:` line, or what `layout.py` writes for a path map, with its `Layout-move:` line; with ``line``, a commit whose
+    own record is that line instead."""
     _git(world.dev, "checkout", "-q", "--detach", on)
-    script, args, line = (("tools/move/rename.py", ["--map", MAP], f"Move: {MAP}") if path == MAP
-                          else ("tools/move/layout.py", ["--map", path, "--no-lock"], f"Layout-move: {path} --no-lock"))
+    script, args, ran = (("tools/move/rename.py", ["--map", MAP], f"Move: {MAP}") if path == MAP
+                         else ("tools/move/layout.py", ["--map", path, "--no-lock"], f"Layout-move: {path} --no-lock"))
+    line = line or ran
     subprocess.run([sys.executable, script, *args], cwd=world.dev, env=ENV, check=True, capture_output=True)
     _git(world.dev, "add", "-A")
     _git(world.dev, "commit", "-q", "-m", f"Move by {args[1]}\n\n{line}\n")
@@ -239,11 +246,63 @@ def test_a_pr_the_map_doesnt_touch_keeps_both_by_its_plain_own_change_and_a_head
     assert q.mapped_change(new, new) is None and q.mapped_change(old, old) is None
 
 
-def test_with_mapped_jobs_a_head_waits_for_its_thread_and_the_mapping_is_kept_by_old_head_and_moves(world, monkeypatch):
+def _drop(q: Q.Queue) -> Path:
+    return Path(_git(q.workdir, "rev-parse", "--absolute-git-dir")) / "mapped-changes.d"
+
+
+def _marks(q: Q.Queue) -> dict[str, dict]:
+    """Each running mapping job's marker in `mapped-changes.d/` (`MAPPING_MARK`), by its old head's start."""
+    return {p.name[:12]: json.loads(p.read_text()) for p in sorted(_drop(q).glob(f"*{Q.MAPPING_MARK}"))}
+
+
+def _tick(world: World, olds: list[str], new: str, jobs: int = 2, now: float | None = None) -> tuple[Q.Queue, list, int]:
+    """One of the loop's `--once` ticks, each a process of its own: a queue started afresh asks for each old head's mapping
+    for ``new`` (`mapped_change`), then ends by working them out (`work_out_mapped`)."""
+    q = _queue(world)
+    q.mapped_jobs = jobs
+    if now is not None:
+        q.now = lambda: now
+    got = [q.mapped_change(old, new) for old in olds]
+    return q, got, q.work_out_mapped()
+
+
+@pytest.fixture
+def jobs(world, monkeypatch) -> Path:
+    """Mapping jobs whose launches go under the test's directory, run by a stand-in `MAP_JOB`: it waits on a gate at
+    GATES/HEAD (`Gate`) when there is one, then writes `write_mapped`'s record of the head, `patch-` and its start, or a
+    refusal, `boom`, when GATES/HEAD.refuse exists, or exits 3 with none written when GATES/HEAD.exit does.  GATES is returned."""
+    monkeypatch.setattr(tempfile, "tempdir", str(world.tmp / "tmp"))
+    (gates := world.tmp / "gates").mkdir()
+    monkeypatch.setattr(Q, "MAP_JOB", "import json, os, sys; from pathlib import Path\n"
+                        "sys.path.insert(0, sys.argv[1]); import research.queue as Q\n"
+                        "repo, head, onto, moves, out, root = sys.argv[2:]\n"
+                        f"gate = os.path.join({str(gates)!r}, head)\n"
+                        "if os.path.exists(gate): open(gate, 'rb').read(1)\n"
+                        "if os.path.exists(gate + '.exit'): sys.exit(3)\n"
+                        "Q.write_mapped(Path(out), Q.mapped_key(head, json.loads(moves)), "
+                        "None if os.path.exists(gate + '.refuse') else 'patch-' + head[:8], 'boom')\n")
+    return gates
+
+
+def _olds(world: World, n: int) -> tuple[list[str], str]:
+    """``n`` old heads based before a move `main` lands, and a new head after it."""
+    _push_main(world, base := world.change({"d.txt": "d\n"}))
+    olds = []
+    for k in range(1, n + 1):
+        olds.append(old := world.change({f"f{k}.txt": f"{k}\n"}, base=base))
+        _git(world.dev, "push", "-q", "origin", f"{old}:refs/heads/old-{k}")
+    _land(world, _move(world))
+    return olds, world.change({"g.txt": "g\n"})
+
+
+def test_with_mapped_jobs_a_tick_detaches_a_mapping_that_outlives_it_and_a_later_tick_carries_the_mark(world, monkeypatch):
     """With `mapped_jobs` (the loop's), `mapped_change` only asks: the new head takes nothing until `work_out_mapped`, at the
-    end of a tick, has started a thread mapping the old head and, at a later one, kept what it gave; then it takes both.  The
-    mapping is kept in `mapped-changes.json` by old head and the moves it crossed (`mapped_key`), so a queue started afresh
-    reads it there without running a script, for the head merged with a later `main` too."""
+    end of a tick, has detached a job mapping the old head (`MAP_JOB`, `landing.detach`), and the tick ends.  The job, a
+    process of its own, maps the old head for real, its scratch under the loop's `MERGED_ROOT`, and writes the mapping into
+    `mapped-changes.d/` by `mapped_key`; a later tick, a queue started afresh as each of the loop's `--once` ticks is, reads
+    it there without running a script, so the new head takes both labels, for the head merged with a later `main` too.  A
+    mapping that dies with the tick's process, as one on a thread of its own does, reaches no later tick."""
+    monkeypatch.setattr(tempfile, "tempdir", str(world.tmp / "tmp"))
     world.gh.put(1, old := world.change({"old_proto/a.py": A.replace("return 2", "return 3")}), ready=False)
     _mark(world, 1, old)
     _land(world, move := _move(world))
@@ -252,76 +311,141 @@ def test_with_mapped_jobs_a_head_waits_for_its_thread_and_the_mapping_is_kept_by
     q.mapped_jobs = 1
     assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, new) == (False, [])
     assert q.work_out_mapped() == 0
-    assert world.logs[-1] == (f"research queue: mapping {old[:8]} across the 1 move(s) `main` landed since, on a thread "
+    assert [m["at"] for m in _marks(q).values()] == [key := Q.mapped_key(old, [(move, [])])]
+    assert world.logs[-1] == (f"research queue: mapping {old[:8]} across the 1 move(s) `main` landed since, in a detached job "
                               "(1 of 1 running)")
-    concurrent.futures.wait(list(q._mapped_running.values()))
-    assert q.work_out_mapped() == 1 and q.work_out_mapped() == 0 and not q._mapped_running
-    assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, new) == (True, [("land", "reviewer")])
-    kept = json.loads((Path(_git(q.workdir, "rev-parse", "--absolute-git-dir")) / "mapped-changes.json").read_text())
-    assert kept == {f"{old} {hashlib.sha512(move.encode()).hexdigest()}": q.own_change(new)}
-    q._mapped_kept = {}
-    assert q.mapped_change(old, new) == q.own_change(new)                     # each (old, new) is answered once
+    (job,) = _marks(q).values()
+    del q
+    wait_exit(job["pid"])
+    assert not any(Path(world.tmp, "scratch").iterdir())
+
+    monkeypatch.setattr(Q, "mapped_tree", lambda *a, **k: pytest.fail("a script ran"))
+    later = _queue(world)
+    later.mapped_jobs = 1
+    assert _kept(StoreLabels(world.store, change=later.own_change, moved=later.mapped_change), 1, new) == \
+        (True, [("land", "reviewer")])
+    assert json.loads((_drop(later) / f"{Q.mapped_name(key)}.json").read_text()) == {key: later.own_change(new)}
+    assert later.work_out_mapped() == 1 and not _marks(later) and not Path(job["dir"]).exists()
+    assert later.work_out_mapped() == 0
 
     _push_main(world, world.change({"e.txt": "main moved on\n"}))
     _git(world.dev, "checkout", "-q", "--detach", new)
     _git(world.dev, "merge", "-q", "--no-edit", "origin/main")
-    _git(world.dev, "push", "-q", "origin", f"{(later := _git(world.dev, 'rev-parse', 'HEAD'))}:refs/heads/later")
-    world.gh.put(1, later, ready=False)
-    monkeypatch.setattr(Q, "mapped_tree", lambda *a, **k: pytest.fail("a script ran"))
+    _git(world.dev, "push", "-q", "origin", f"{(merged := _git(world.dev, 'rev-parse', 'HEAD'))}:refs/heads/later")
+    world.gh.put(1, merged, ready=False)
     again = _queue(world)
     again.mapped_jobs = 1
-    assert again.mapped_change(old, new) == again.mapped_change(old, later) == q.own_change(new) == again.own_change(later)
+    assert again.mapped_change(old, new) == again.mapped_change(old, merged) == again.own_change(new) == \
+        again.own_change(merged)
+    assert not _marks(again)
 
 
-def test_at_most_mapped_jobs_threads_map_at_once_and_a_head_wanted_meanwhile_waits_for_a_later_tick(world, monkeypatch):
-    """Of the heads `mapped_change` defers, `work_out_mapped` starts threads while fewer than `mapped_jobs` run, none for a head
-    already mapping; one wanted meanwhile is started at a later tick, once a thread has finished.  A thread that raises frees
-    its job, and its head maps to nothing, saying why."""
-    _push_main(world, base := world.change({"d.txt": "d\n"}))
-    olds = []
-    for n in (1, 2, 3):
-        olds.append(old := world.change({f"f{n}.txt": f"{n}\n"}, base=base))
-        _git(world.dev, "push", "-q", "origin", f"{old}:refs/heads/old-{n}")
-    _land(world, _move(world))
-    world.gh.put(1, new := world.change({"g.txt": "g\n"}), ready=False)
-    q = _queue(world)
-    assert q.work_out_mapped() == 0 and not q._mapped_running
-    q.mapped_jobs = 2
-    gates, started = {old: threading.Event() for old in olds}, []
+def test_at_most_mapped_jobs_map_at_once_and_while_a_heads_job_runs_no_tick_starts_another(world, jobs):
+    """Of the heads `mapped_change` defers, `work_out_mapped` starts jobs while fewer than `mapped_jobs` run, counting the
+    markers earlier ticks left: a later tick, started afresh, starts no second job for a head whose job runs, nor a third
+    while two run; it starts the third once a job has ended, and reads what each wrote.  With no marker a later tick
+    reads, each tick would start every head again."""
+    olds, new = _olds(world, 3)
+    gates = {old: Gate(jobs / old) for old in olds}
 
-    def mapping(repo, head, onto, moves):
-        started.append(head)
-        gates[head].wait()
-        if head == olds[2]:
-            raise RuntimeError("boom")
-        return f"patch-{head[:8]}", ""
+    def started() -> list[str]:
+        return [s.split()[3] for s in world.logs if s.startswith("research queue: mapping ")]
 
-    def ask_and_work_out() -> int:
-        assert [q.mapped_change(old, new) for old in olds] == [None] * 3
-        return q.work_out_mapped()
+    try:
+        q, got, done = _tick(world, olds, new)
+        assert (got, done, started()) == ([None] * 3, 0, [o[:8] for o in olds[:2]])
+        first = _marks(q)
+        assert sorted(first) == sorted(o[:12] for o in olds[:2])
+        q, got, done = _tick(world, olds, new)
+        assert (got, done, _marks(q), started()) == ([None] * 3, 0, first, [o[:8] for o in olds[:2]])
 
-    def finish(*heads: str) -> None:
-        for h in heads:
-            gates[h].set()
-        concurrent.futures.wait([q._mapped_running[Q.mapped_key(h, moves)] for h in heads])
+        gates[olds[0]].release()
+        wait_exit(first[olds[0][:12]]["pid"])
+        q, got, done = _tick(world, olds, new)
+        assert (got, done, started()) == ([f"patch-{olds[0][:8]}", None, None], 1, [o[:8] for o in olds])
+        assert sorted(_marks(q)) == sorted(o[:12] for o in olds[1:])
+        for old in olds[1:]:
+            gates[old].release()
+            wait_exit(_marks(q)[old[:12]]["pid"])
+        q, got, done = _tick(world, olds, new)
+        assert (got, done, _marks(q), len(started())) == ([f"patch-{old[:8]}" for old in olds], 2, {}, 3)
+    finally:
+        for g in gates.values():
+            g.close()
 
-    monkeypatch.setattr(Q, "map_one", mapping)
-    moves = q._moves_crossed(_git(q.workdir, "merge-base", q.base, new), olds[0])
-    assert ask_and_work_out() == 0 and list(q._mapped_running) == [Q.mapped_key(o, moves) for o in olds[:2]]
-    assert {t.name for t in threading.enumerate() if t.daemon and t.name.startswith("mapped-")} == \
-        {f"mapped-{o[:8]}" for o in olds[:2]}
-    assert ask_and_work_out() == 0 and len(q._mapped_running) == 2          # no third while two run
-    finish(olds[0])
-    assert ask_and_work_out() == 1                                           # the first kept, the third started beside the second
-    assert list(q._mapped_running) == [Q.mapped_key(o, moves) for o in olds[1:]]
-    finish(olds[1], olds[2])
-    assert q.work_out_mapped() == 2 and q.work_out_mapped() == 0 and not q._mapped_running
-    assert [q.mapped_change(old, new) for old in olds] == [f"patch-{olds[0][:8]}", f"patch-{olds[1][:8]}", None]
-    assert json.loads(q._mapped_at.read_text()) == {Q.mapped_key(o, moves): f"patch-{o[:8]}" for o in olds[:2]}
-    assert sorted(started) == sorted(olds)                                   # each once
-    assert world.logs[-1] == (f"research queue: {olds[2][:8]}'s own change isn't mapped across the moves `main` landed since: "
-                              "RuntimeError: boom")
-    assert q.work_out_mapped() == 0 and not q._mapped_running
+
+def test_a_stale_marker_whose_job_is_gone_with_no_result_starts_its_head_again(world, jobs):
+    """A marker whose process is gone with no exit written (a restart of the pod) and no result holds nothing: the tick says so
+    and starts the head again, and that job's mapping is read.  So does one with no result past the time a job may take
+    (`_mapped_lost`), whose pid may be another process's after a restart."""
+    olds, new = _olds(world, 1)
+    (old,) = olds
+    q, t = _queue(world), 1000.0
+    key = Q.mapped_key(old, moves := q._moves_crossed(_git(q.workdir, "merge-base", q.base, new), old))
+    (_drop(q) / "gone").mkdir(parents=True)
+    mark = _drop(q) / f"{Q.mapped_name(key)}{Q.MAPPING_MARK}"
+    mark.write_text(json.dumps({"dir": str(_drop(q) / "gone"), "pid": 2**31 - 1, "out": str(_drop(q)), "at": key,
+                                "until": 10.0 ** 12}))
+    q, got, done = _tick(world, olds, new, now=t)
+    assert (got, done) == ([None], 0)
+    assert world.logs[-2:] == [
+        f"research queue: the mapping job of {mark.stem} ended with no result (its process is gone with no exit written (a "
+        "restart of the pod)): a later tick that wants it starts it again",
+        f"research queue: mapping {old[:8]} across the 1 move(s) `main` landed since, in a detached job (1 of 2 running)"]
+    (job,) = _marks(q).values()
+    assert job["pid"] != 2**31 - 1 and not (_drop(q) / "gone").exists()
+    assert job["until"] == t + Q._mapped_lost(moves) == t + Q.MAPPED_TIMEOUT_S + Q.MAPPED_SLACK_S
+    wait_exit(job["pid"])
+    assert _tick(world, olds, new, now=t)[1:] == ([f"patch-{old[:8]}"], 1)
+
+    (_drop(q) / f"{Q.mapped_name(key)}.json").unlink()
+    mark.write_text(json.dumps({"dir": str(_drop(q) / "gone"), "pid": os.getpid(), "out": str(_drop(q)), "at": key,
+                                "until": t}))
+    q, got, done = _tick(world, olds, new, now=t)
+    assert (got, done, list(_marks(q))) == ([None], 0, [old[:12]])
+    assert _marks(q)[old[:12]]["pid"] == os.getpid()                        # within its time: it runs
+    q, got, done = _tick(world, olds, new, now=t + 1)
+    assert world.logs[-2].startswith(f"research queue: the mapping job of {mark.stem} ended with no result (none written by ")
+    (job,) = _marks(q).values()
+    assert job["pid"] != os.getpid()
+    wait_exit(job["pid"])
+    assert _tick(world, olds, new, now=t + 1)[1:] == ([f"patch-{old[:8]}"], 1)
+
+
+def test_a_refused_mapping_is_kept_so_no_tick_maps_that_head_again_but_a_new_head_is_mapped(world, jobs):
+    """A job's refusal is written into `mapped-changes.d/` beside its mappings, `{key: {"refused": why}}`, and logged once, when
+    a tick reads its end; no later tick starts that head across those moves again, and none restarts a job that exited with no
+    result written, whose exit is kept as its refusal.  A new head of the PR is another `mapped_key`, mapped afresh, and a
+    mapping `research queue map-moves` made elsewhere and copied in by hand outweighs a refusal.  A refusal kept only in the
+    tick's process would map its head again every tick."""
+    olds, new = _olds(world, 3)
+    refused, exited, fresh = olds
+    (jobs / f"{refused}.refuse").touch()
+    (jobs / f"{exited}.exit").touch()
+    q, got, done = _tick(world, olds[:2], new)
+    for job in _marks(q).values():
+        wait_exit(job["pid"])
+    q, got, done = _tick(world, olds[:2], new)
+    assert (got, done, _marks(q)) == ([None, None], 2, {})
+    moves = q._moves_crossed(_git(q.workdir, "merge-base", q.base, new), refused)
+    said = sorted(s for s in world.logs if "isn't mapped" in s)
+    assert said == sorted([f"research queue: {refused[:8]}'s own change isn't mapped across the moves `main` landed since: boom",
+                    f"research queue: {exited[:8]}'s own change isn't mapped across the moves `main` landed since: its mapping "
+                    "job exited 3 with none written"])
+    assert json.loads((_drop(q) / f"{Q.mapped_name(Q.mapped_key(refused, moves))}.json").read_text()) == \
+        {Q.mapped_key(refused, moves): {"refused": "boom"}}
+
+    before = len(world.logs)
+    q, got, done = _tick(world, olds[:2], new)
+    assert (got, done, _marks(q), world.logs[before:]) == ([None, None], 0, {}, [])
+
+    q, got, done = _tick(world, olds, new)
+    assert (got, done, list(_marks(q))) == ([None, None, None], 0, [fresh[:12]])
+    wait_exit(_marks(q)[fresh[:12]]["pid"])
+    assert _tick(world, olds, new)[1:] == ([None, None, f"patch-{fresh[:8]}"], 1)
+
+    (_drop(q) / "by-hand.json").write_text(json.dumps({Q.mapped_key(refused, moves): "patch-by-hand"}))
+    assert _tick(world, olds, new)[1] == ["patch-by-hand", None, f"patch-{fresh[:8]}"]
 
 
 def test_research_queue_map_moves_maps_old_heads_elsewhere_and_the_loop_reads_them_from_mapped_changes_d(world, monkeypatch,
@@ -376,7 +500,7 @@ def test_research_queue_map_moves_maps_old_heads_elsewhere_and_the_loop_reads_th
     (drop / "list.json").write_text("[1]")
     (drop / "dir.json").mkdir()
     (drop / "layout.json").write_text(out.read_text())
-    assert q.work_out_mapped() == 0 and not q._mapped_running
+    assert q.work_out_mapped() == 0
     assert [s.split(": ")[1:3] for s in world.logs if "isn't read" in s] == [
         [f"{drop / name} isn't read", kind] for name, kind in (("bad.json", "JSONDecodeError"), ("dir.json", "IsADirectoryError"),
                                                                 ("list.json", "TypeError"))]
@@ -453,17 +577,22 @@ def test_a_moves_script_runs_in_a_directory_of_its_own_under_merged_root_and_one
     assert copied[0][0].startswith(f"{scratch}/{Q.MERGED_PREFIX}{os.getpid()}-") and copied[0][1]
 
 
-def test_a_moves_script_runs_without_the_queues_credentials(world, monkeypatch):
+def test_a_moves_script_and_its_mapping_job_run_without_the_queues_credentials_or_the_stores_keys(world, monkeypatch):
     """The script runs the head's own code (`rename.py` runs the tree's `pins.py`, `layout.py` its `uv lock`), which needs none
-    of the queue's GitHub and Slack credentials, so it sees none, and `gh` finds no stored login."""
+    of the queue's GitHub and Slack credentials nor the store's keys the loop writes labels with, so it sees none, and `gh`
+    finds no stored login; nor does the detached job it runs in, which writes only its result."""
     q = _queue(world)
     head = _git(q.workdir, "rev-parse", q.base)
-    for k in Q.SCRIPT_UNSET:
+    for k in (*KEYS, "KEPT"):
         monkeypatch.setenv(k, "dummy-" + k.lower())
     monkeypatch.setattr(Q, "_MAPPED", "import os, sys; gh = os.environ.get('GH_CONFIG_DIR', ''); sys.exit("
                         "','.join(sorted(k for k, v in os.environ.items() if v.startswith('dummy-'))) + '|' + "
                         "str(gh.startswith(os.environ['TMPDIR']) and not os.path.exists(gh)))")
-    assert Q.mapped_tree(q.workdir, head, head, Path("unused")) == (None, "exit 1: |True")
+    assert Q.mapped_tree(q.workdir, head, head, Path("unused")) == (None, "exit 1: KEPT|True")
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(landing, "detach", lambda repo, argv, env: seen.update(env) or {"pid": 0})
+    q._start_mapping(world.tmp / "mapped" / "x.running", "at", head, head, [], 0.0)
+    assert [k for k, v in seen.items() if v.startswith("dummy-")] == ["KEPT"]
 
 
 def test_only_an_old_head_a_reviewer_passed_runs_a_moves_script_so_a_head_marked_alone_plants_no_hook(world):
@@ -473,7 +602,7 @@ def test_only_an_old_head_a_reviewer_passed_runs_a_moves_script_so_a_head_marked
     the clone, which the queue's next fetch would run with its credentials: no script runs on it, so nothing is planted, and
     its mark carries to no head across the move.  Its owner's own land verdict changes nothing (``owners``); a reviewer's
     lets the script run, and the mapping, not the new head's own change, carries nothing."""
-    world.gh.put(2, old := world.change({"tools/verity/check/pins.py": PLANT, "b.py": B + "W = 1\n"}), ready=False)
+    world.gh.put(2, old := world.change({"tools/check/pins.py": PLANT, "b.py": B + "W = 1\n"}), ready=False)
     world.store.add_label(label_target(2, old), vocab.READY, True, "ci", ts="2026-11-10T10:00:00Z")
     _land(world, _move(world))
     world.gh.put(2, new := world.change({"d.txt": "d\n"}), ready=False)
@@ -507,7 +636,7 @@ def test_a_head_marked_alone_runs_no_script_so_its_code_forges_no_mapping_that_c
     key, target = Q.mapped_key(h0, Q.moves_between(q.workdir, onto, h0)), q.own_change(h2)
     forge = (GIT_DIR + "d = c / 'mapped-changes.d'\nd.mkdir(exist_ok=True)\n"
              f"(d / 'x.json').write_text(json.dumps({{{key!r}: {target!r}}}))\nPINS = ()\n")
-    world.gh.put(2, k1 := world.change({"tools/verity/check/pins.py": forge}, base=f"{before}^"), ready=False)
+    world.gh.put(2, k1 := world.change({"tools/check/pins.py": forge}, base=f"{before}^"), ready=False)
     world.store.add_label(label_target(2, k1), vocab.READY, True, "lane-2", ts="2026-11-10T10:00:00Z")
     q.fetch(world.gh.open_prs())
     world.gh.put(2, k2 := world.change({"f.txt": "f\n"}), ready=False)
@@ -544,8 +673,8 @@ def test_a_head_based_after_a_move_that_isnt_the_last_is_mapped_across_the_rest_
 
 def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(world):
     """A PR based on a commit `main` took after the move's base, before the move landed, is one `restack.py` refuses
-    (`based-after`: its merge of the move's base would bring that commit in a second time), and its owner merges `main`
-    instead: `mapped_change` maps it to nothing either, and says why."""
+    (`based-after`: its merge of the move's base would bring that commit in a second time), and its owner carries it against
+    the move's own commit (`--main MOVE`) before merging `main`: `mapped_change` maps it to nothing either, and says why."""
     move = _move(world)
     _push_main(world, other := world.change({"c.txt": "c landed meanwhile\n"}))
     world.gh.put(1, old := world.change({"b.py": B + "Y = old_proto.a.g()\n"}), ready=False)
@@ -560,3 +689,59 @@ def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(wo
     assert q.mapped_change(old, new) is None
     assert world.logs[-1].endswith(f"it has {other[:12]}, which came after {_git(world.dev, 'rev-parse', f'{move}^')[:12]}, "
                                    f"the base of the move {move[:12]}: restack.py refuses it (based-after)")
+
+
+#: a word map that renames a word no file holds: a move commit's wrong record of the map it ran
+OTHER = "tools/move/demo_other_map.toml"
+
+
+def _corrections(move: str, plain: str | None = None) -> str:
+    """`restack.py`'s corrections table: ``move``'s record corrected to the map it ran (`MAP`), and ``plain``, whose message
+    has a move line, no move (`move = false`)."""
+    table = f'["{move}"]\nline = "Move: {MAP}"\nreason = "The move ran {MAP}, as its tree shows and its trailer doesn\'t."\n'
+    return table + (f'\n["{plain}"]\nmove = false\nreason = "A note quoting a move line, which no script wrote."\n'
+                    if plain else "")
+
+
+def test_a_restack_job_runs_restack_py_with_its_commits_corrections_beside_it_and_none_where_that_commit_has_none(
+        world, monkeypatch):
+    """`restack.py` reads the corrections to move commits' records from beside itself (its `MOVE_LINES`), so the job's copy
+    has the table of the commit the script is taken from; a commit without the table gets none, as before it existed."""
+    monkeypatch.setattr(tempfile, "tempdir", str(world.tmp / "tmp"))
+    q = _queue(world)
+    q._restack_starts = True
+    started: list[Path] = []
+    monkeypatch.setattr(landing, "detach", lambda repo, argv, env: started.append(Path(argv[6])) or {"pid": 0})
+    head = _git(q.workdir, "rev-parse", q.base)
+    assert q._launch_restack(head, Q.Move(head, MAP), head)
+    assert started[0].read_bytes() == (ROOT / Q.RESTACK).read_bytes()
+    assert sorted(p.name for p in started[0].parent.iterdir()) == ["restack.py"]
+    _push_main(world, world.change({Q.MOVE_LINES: _corrections(head)}))
+    q.fetch(world.gh.open_prs())
+    assert q._launch_restack(head, Q.Move(head, OTHER), head)
+    assert (started[1].parent / "move_lines.toml").read_text() == _corrections(head)
+
+
+def test_a_crossing_over_a_move_whose_record_the_table_corrects_passes_with_the_table_and_refuses_without_it(world):
+    """The move ran `MAP` and its commit's trailer names `OTHER`, and a later commit of `main`'s quotes a move line but is no
+    move.  Without corrections, `restack.py` reruns `OTHER` and finds the move isn't what that writes, so the crossing refuses
+    and no mark or verdict carries.  With `main`'s `move_lines.toml` naming `MAP` for the move and `move = false` for the
+    other, the queue finds the one move (`moves_between`, as `restack.py`'s `moves_on` does), and the table is written beside
+    `main`'s `restack.py` for the crossing and for the mapping that judges it (`cross_one`, `map_one`): #1 crosses with its
+    line renamed and its own change the old one's mapped."""
+    _push_main(world, world.change({OTHER: '[rewrite]\nexclude = ["tools/move/**"]\n\n[words]\n"no_such_word" = "none"\n'}))
+    world.gh.put(1, old := world.change({"b.py": B + "Y = old_proto.a.g()\n"}), ready=False)
+    landed = _land(world, move := _move(world, line=f"Move: {OTHER}"))
+    note = world.change({"d.txt": "d\n"})
+    _push_main(world, without := _git(world.dev, "commit-tree", f"{note}^{{tree}}", "-p", landed, "-m",
+                                      f"A note\n\nMove: {OTHER}\n"))
+    _push_main(world, corrected := world.change({Q.MOVE_LINES: _corrections(move, without)}))
+    q = _queue(world)
+    assert [m for m, _ in Q.moves_between(q.workdir, without, old)] == [move, without]
+    assert [m for m, _ in Q.moves_between(q.workdir, corrected, old)] == [move]
+    refused = Q.cross_one(q.workdir, old, without, Q.moves_between(q.workdir, without, old))
+    assert refused == {"why": f"{Q.RESTACK} exit 1:   old_proto/__init__.py |   old_proto/a.py |   "
+                              "tools/research/src/research/store/moves.json"}
+    crossed = Q.cross_one(q.workdir, old, corrected, Q.moves_between(q.workdir, corrected, old))
+    assert set(crossed) == {"new", "own", "key"}, crossed
+    assert _git(q.workdir, "show", f"{crossed['new']}:b.py").endswith("Y = new_proto.a.g()")

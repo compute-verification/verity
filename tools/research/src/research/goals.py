@@ -11,14 +11,21 @@
   research goals priority ID 1|2|3|clear     sets its priority (anyone may), or clears it back to the derived one
   research goals replace FILE.json           the whole page: exactly the goals in FILE (a JSON list)
   research goals audit [--owner HANDLE ...] [--from FILE.json] [--now TIME] [--json]
-                                             # by lead: goals overdue, under no project, due before what they wait on
-                                             # or titled past eight words, and a lead with nothing due in 12 hours;
-                                             # each line names its fix; exit 1 when anything is found (goals_audit.py)
+                                             # by lead: goals overdue, off track and not written in a day, due within
+                                             # a day and not written in the day before, under no project, due before
+                                             # what they wait on or titled past ten words; each line names its fix;
+                                             # exit 1 when anything is found
+                                             # (goals_audit.py)
+  research goals blockers [--owner LANE ...] [--top N] [--since DUMP] [--from FILE.json] [--now TIME] [--json]
+                                             # the open goals with a blockers text, ranked by the tier-1 goals and then
+                                             # all open goals waiting on each; --since DUMP (a file or an art: id, as
+                                             # `research velocity` reads) says which are standing, new, changed or
+                                             # cleared since (goals_blockers.py)
 
 The plan is one graph of goals. A goal is an outcome with one owner: a headline for a title (three to six plain words,
 no number; the writing-goals skill has the rule), a due date, a day meaning its end or a time with its offset such as
 2026-11-05T10:00-08:00, a status (will it be true by then?), tags from the site's fixed list of areas, and a Markdown
-description of what exactly will be true and where it stands, which never restates the fields. A goal under another is
+description of what will be true and what is true today, which never restates the fields. A goal under another is
 its subgoal. The page derives how deep a goal sits from what waits on what: 1 when nothing waits on it, down to 3;
 --tier, which keeps its old name, overrides that. What a goal waits on is links only: the narrowest goal that blocks
 it, due before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
@@ -44,8 +51,11 @@ STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet", "p
 
 
 class Route:
-    def __init__(self, url: str = GOALS) -> None:
-        self.base = url
+    """The page's route. ``key`` is a site key with `events:read`, for a machine that holds no Cursor identity: it only
+    reads. Without one every call carries this agent's identity."""
+
+    def __init__(self, url: str = GOALS, key: str | None = None) -> None:
+        self.base, self.key = url, key
         self._oidc = _Identity(GOALS)
 
     def call(self, body: dict | None = None) -> list[dict]:
@@ -53,9 +63,16 @@ class Route:
         data = None if body is None else json.dumps(body).encode()
         headers = {"Content-Type": "application/json"} if data else {}
         what = f"{method} {GOALS}"
+        if self.key and body is not None:
+            raise SlackError(f"{what}: a site key only reads the page; a write carries an agent's Cursor identity")
+
+        def send(token: str) -> dict:
+            return http_json(method, self.base, data, {"Authorization": f"Bearer {token}", **headers})
         try:
-            out = self._oidc.send(lambda t: http_json(method, self.base, data, {"Authorization": f"Bearer {t}", **headers}))
+            out = send(self.key) if self.key else self._oidc.send(send)
         except urllib.error.HTTPError as e:
+            if e.code == 401 and self.key:
+                raise RouteError(f"{what}: the route rejected the site key (HTTP 401): it takes a live one with events:read", 401) from None
             if e.code == 400:
                 try:
                     message = json.loads(e.read(65536)).get("message")
@@ -67,6 +84,9 @@ class Route:
             raise SlackError(f"{what}: the route is unreachable: {getattr(e, 'reason', e)}") from None
         if not isinstance(out, dict) or not isinstance(out.get("goals"), list):
             raise SlackError(f"{what}: the answer has no goals list")
+        if body is not None and isinstance(out.get("message"), str):
+            # A saved write the norms check warns about, or couldn't read: the findings and their fixes, for this agent.
+            print(f"research goals: {out['message']}", file=sys.stderr)
         return out["goals"]
 
 
@@ -179,6 +199,13 @@ def main(argv: list[str], route: Route | None = None) -> int:
     au.add_argument("--from", dest="file", metavar="FILE.json", help="a saved `research goals show --json` instead of the page")
     au.add_argument("--now", metavar="TIME", help="the time to audit at, with its offset (default: now)")
     au.add_argument("--json", action="store_true")
+    bl = sub.add_parser("blockers", help="the open goals with a blockers text, ranked by what waits on each (goals_blockers.py)")
+    bl.add_argument("--owner", action="append", default=[], metavar="LANE", help="only this lead's goals; repeat for more")
+    bl.add_argument("--top", type=int, default=20, metavar="N", help="print the first N (default 20)")
+    bl.add_argument("--since", metavar="DUMP", help="an earlier dump of the page: a file (.json or .json.gz) or an art: id")
+    bl.add_argument("--from", dest="file", metavar="FILE.json", help="a saved `research goals show --json` instead of the page")
+    bl.add_argument("--now", metavar="TIME", help="the time to read at, with its offset (default: now)")
+    bl.add_argument("--json", action="store_true", help="the rows in full, with the tier-1 goals above each")
     ns = p.parse_args(argv)
     route = route or Route(ns.url)
     try:
@@ -186,15 +213,32 @@ def main(argv: list[str], route: Route | None = None) -> int:
             goals = route.call()
             print(json.dumps(goals, indent=1, ensure_ascii=False) if ns.json else show(goals))
             return 0
-        if ns.cmd == "audit":
-            from . import goals_audit
-
+        if ns.cmd in ("audit", "blockers"):
             goals = json.loads(Path(ns.file).read_text()) if ns.file else route.call()
             if not isinstance(goals, list):
                 raise SlackError(f"{ns.file}: expected a JSON list of goals, as `research goals show --json` prints")
             now = datetime.fromisoformat(ns.now) if ns.now else datetime.now(UTC)
             if now.tzinfo is None:
                 raise SlackError(f"--now {ns.now}: give its offset, as in 2026-11-05T10:00-08:00")
+        if ns.cmd == "blockers":
+            from . import goals_blockers, velocity
+
+            found = goals_blockers.rows(goals, now, ns.owner)
+            moved, source = None, ""
+            if ns.since:
+                try:
+                    earlier = velocity.load(ns.since)
+                except velocity.Unread as e:
+                    raise SlackError(str(e)) from None
+                moved = goals_blockers.since(found, goals, earlier["goals"], ns.owner)
+                source = f"{earlier['source']} (taken {velocity.pst(earlier['taken'])})"
+            total, shown = goals_blockers.summary(found), found[:max(ns.top, 0)]
+            print(json.dumps({"now": now.isoformat(), "rows": shown, "summary": total} | ({"since": moved, "source": source} if moved is not None else {}),
+                             indent=1, ensure_ascii=False) if ns.json else goals_blockers.render(shown, total, moved, source))
+            return 0
+        if ns.cmd == "audit":
+            from . import goals_audit
+
             leads = goals_audit.findings(goals, now, ns.owner)
             leads = {o: v for o, v in leads.items() if not ns.owner or o in ns.owner}
             print(json.dumps({"now": now.isoformat(), "leads": leads, "counts": goals_audit.tally(leads)}, indent=1, ensure_ascii=False)

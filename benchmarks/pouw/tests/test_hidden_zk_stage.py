@@ -72,9 +72,9 @@ def test_fast_staging_composes_the_library_circuit_flat_and_templated(layout, tm
     """About 20 s: a Boolean unit's `UnitStager` circuit, flat, templated from the flat unit (`circuit.compose`'s
     ``layout``) and templated from struct_lower (``structural``, the H1 stagers' form under ``H1_TMPL=structural``), built under
     fast_stage's patches and without them, each in its own process: the same file, pin and class. The stager's file is
-    `circuit.compose_to`'s either way (fast_stage's scratch netlist is `stage_unit`'s,
+    `circuit.compose_to`'s either way (fast_stage's scratch description is `stage_unit`'s,
     `test_fast_staging_writes_the_library_bytes`), under fast_stage's lowering, layout and digests; a templated one has no
-    unit section to stream, and a structural one's unit_sha256 is over its template, never a netlist."""
+    unit section to stream, and a structural one's unit_sha256 is over its template, never a description."""
     runs = {mode: subprocess.Popen([sys.executable, "-c", STAGER, mode, str(tmp_path / mode), layout, str(STAGE.parent)],
                                    text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             for mode in ("fast", "library")}

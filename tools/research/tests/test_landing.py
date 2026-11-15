@@ -11,6 +11,7 @@ import contextlib
 import dataclasses
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -18,10 +19,10 @@ from pathlib import Path
 
 import pytest
 
-from research import landing, merge
+from research import landing, merge, remote
 from research.landing import AFTER_LANDING, AFTER_LANDING_OPTIONAL, SLIM_JUDGED, SLIM_STEPS, Landing, gating
 from research.policy import SCHEMA as POLICY_SCHEMA
-from research.queue import PR, Member
+from research.queue import PR, Member, merge_main
 from test_queue import World, _git
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "research"
@@ -31,7 +32,7 @@ LOOP_MODULES = ("queue.py", "landing.py", "vqueue.py", "vqueue_loop.py", "vqueue
 
 class Harness:
     """A `Landing` (`make`) on ``world`` whose records-run launches are recorded (`launched`) and whose launches of a check or
-    of the run beside one (`launch_postland`) are recorded (`posted`) as `r-post-N`, each running until a test sets its state
+    of the run beside one (`launch_after_landing`) are recorded (`posted`) as `r-post-N`, each running until a test sets its state
     in `run_state`; its posts, cancels, evidence and clock injected."""
 
     make = Landing
@@ -50,7 +51,7 @@ class Harness:
                            post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
                            cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
         self.evidence: list = []
-        self.d.launch_postland = self.launch_post
+        self.d.launch_after_landing = self.launch_post
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -74,7 +75,7 @@ def world(tmp_path):
 CI_TOML = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' for s in AFTER_LANDING)
 POLICY_TOML = 'schema = "policy/v0"\noff_gate = ["circuit-check"]\n'
 #: the files `_move_main` writes for a tree declaring `CI_TOML` under `POLICY_TOML`
-GATED_TREE = {"tools/verity/check/ci.toml": CI_TOML, "tools/verity/check/policy.toml": POLICY_TOML}
+GATED_TREE = {"tools/check/ci.toml": CI_TOML, "tools/check/policy.toml": POLICY_TOML}
 #: the preflights a check runs before any step (check.py's `preflight`), which the run beside a candidate's check judges
 PREFLIGHTS = tuple(s for s in SLIM_JUDGED if s not in SLIM_STEPS)
 
@@ -125,7 +126,7 @@ def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-su
 
 #: the analysis's packages, as an audit's log names each after its scratch directory
 SPEC, PROOFS = "security", "security/Proofs"
-LEAN_AUDIT_LOG = f"""lean-audit: verity/hardware/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
+LEAN_AUDIT_LOG = f"""lean-audit: verity/protocols/interface/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
 AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/{PROOFS}: FAIL; built WITHOUT a sandbox
   build: exit 1
     warning: ../Proofs/Flock/Recursive/PartTie.lean:168:47: Used `tac1 <;> tac2`
@@ -226,12 +227,34 @@ def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_nam
 
 
 def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_file(tmp_path):
+    """A frame in the check's tree (job.json's `run.cwd`) points at its repository path, one outside it at nothing."""
     from research.landing import implicated
 
-    d = _failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/x/site/pkg/conftest.py", line 3')
-    assert implicated(d) >= {"pkg/tests/test_x.py", "/x/site/pkg/conftest.py"}
+    d = _failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/x/site/pkg/conftest.py", line 3\n'
+                                                         'File "/usr/lib/python3.12/runpy.py", line 9')
+    assert implicated(d) == {"pkg/tests/test_x.py"}
+    (d / "job.json").write_text(json.dumps({"run": {"cwd": "/x/site"}}))
+    assert implicated(d) == {"pkg/tests/test_x.py", "pkg/conftest.py"}
     (d / "steps.jsonl").write_text('{"step": "circuit-check", "status": "failed"}\n')
     assert implicated(d) is None
+
+
+def test_a_runs_tree_root_is_its_job_jsons_run_cwd_and_a_malformed_job_json_raises(tmp_path):
+    """No job.json, or one naming no absolute `run.cwd`, gives no root; a job.json that isn't a JSON object raises rather than
+    reading as a run with no root."""
+    from research.landing import tree_root
+
+    assert tree_root(tmp_path) is None
+    for doc, root in (({"run": {"cwd": "/x/site/"}}, "/x/site"), ({"run": {"cwd": "site"}}, None), ({"run": None}, None),
+                      ({"environment": {}}, None)):
+        (tmp_path / "job.json").write_text(json.dumps(doc))
+        assert tree_root(tmp_path) == root, doc
+    (tmp_path / "job.json").write_text('{"run": {"cwd": "/x/si')
+    with pytest.raises(ValueError):
+        tree_root(tmp_path)
+    (tmp_path / "job.json").write_text("[]")
+    with pytest.raises(AttributeError):
+        tree_root(tmp_path)
 
 
 def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_and_their_readers(tmp_path):
@@ -245,11 +268,11 @@ def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_a
     (d / "suites").mkdir(parents=True)
     (d / "steps.jsonl").write_text('{"step": "lean-suites", "status": "failed"}\n')
     record = {"name": "verity-lean-audit", "suite": "tools/verity/lean", "status": "failed", "failed_tests": [],
-              "outside": {"tools/verity/check/lean_slot.py": "tools/verity/lean/tests/test_lean_changed.py",
-                          "tools/verity/check/slot.py": "*"},
+              "outside": {"tools/check/lean_slot.py": "tools/verity/lean/tests/test_lean_changed.py",
+                          "tools/check/slot.py": "*"},
               "child_outside": {"tools/verity/lean/tests/test_cache.py": ["elsewhere/data.txt"]}, "log": None}
     (d / "suites-lean.json").write_text(json.dumps([record]))
-    assert implicated(d) == {"tools/verity/check/lean_slot.py", "tools/verity/check/slot.py",
+    assert implicated(d) == {"tools/check/lean_slot.py", "tools/check/slot.py",
                              "tools/verity/lean/tests/test_lean_changed.py", "tools/verity/lean/tests/test_cache.py",
                              "elsewhere/data.txt"}
     (d / "suites-lean.json").write_text(json.dumps([{**record, "outside": {}, "child_outside": {}}]))
@@ -275,14 +298,14 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
     than every PR touching Lean."""
     from research.landing import lean_errors
 
-    flock = "verity/protocols/flock/verifier"
+    flock = "verity/protocols/proofs/flock/verifier"
     log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
-           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
+           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/accounting/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
            "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
     assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
-                                "verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
+                                "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
@@ -354,7 +377,7 @@ def test_status_fetches_only_paths_under_the_run_dir_beside_its_records(tmp_path
 def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     from research.queue import forces_cold
 
-    assert forces_cold(["verity/definitions/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
+    assert forces_cold(["verity/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
     assert forces_cold(["adapters/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
     assert not forces_cold(["adapters/vllm/tests/pipeline/test_row.py", "tools/research/src/research/landing.py"])
@@ -370,8 +393,8 @@ def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_pat
     the tty, and the loop with it."""
     from research.landing import train_launch
 
-    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
-    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text(
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "check" / "train.sh").write_text(
         'echo "prompt=$GIT_TERMINAL_PROMPT n=$GIT_CONFIG_COUNT $GIT_CONFIG_KEY_1=$GIT_CONFIG_VALUE_1 $GIT_CONFIG_KEY_2=$GIT_CONFIG_VALUE_2"\n'
         'read -r line && echo "stdin: $line"\necho "RUN r20261012-060000-aaaa"\n')
     monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
@@ -387,8 +410,8 @@ def test_train_launch_gives_train_sh_the_steps_and_flags_of_a_candidates_check(t
     regenerated never, ratchet-gate's base and its shard, in train.sh's order."""
     from research.landing import train_launch
 
-    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
-    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", True, deferred="lean-agreement,ratchet-gate", no_regenerate=True,
                              base="b" * 40, shard="2/3")
     assert ids == ["r20261027-120000-aaaa"]
@@ -404,8 +427,8 @@ def test_train_launch_gives_train_sh_no_cache_circuit_checks_cache_and_ratchet_g
     the `--base`."""
     from research.landing import train_launch
 
-    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
-    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="pytest,circuit-check", no_cache=True,
                              circuit_cache=True, no_regenerate=True)
     assert ids == ["r20261027-120000-aaaa"]
@@ -419,7 +442,7 @@ def test_the_records_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes
     (`takes_bookkeeping`); a train.sh that predates it would refuse every records run, so it isn't given it."""
     from research.landing import takes_bookkeeping, train_launch
 
-    sh = tmp_path / "tools" / "verity" / "check" / "train.sh"
+    sh = tmp_path / "tools" / "check" / "train.sh"
     sh.parent.mkdir(parents=True)
     assert not takes_bookkeeping(tmp_path)
     sh.write_text('# --bookkeeping-warn\necho "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
@@ -431,19 +454,19 @@ def test_the_records_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes
 
 
 def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
-    """Each part of a candidate's check and its records run ask for their check slot at `POSTLAND_SLOT_RANK`
+    """Each part of a candidate's check and its records run ask for their check slot at `AFTER_LANDING_SLOT_RANK`
     (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever the loop's own environment says: a ranked
     priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a slot for a `train.sh`
     launched by hand."""
     import types
 
-    from research.landing import POSTLAND_SLOT_RANK, launched
+    from research.landing import AFTER_LANDING_SLOT_RANK, launched
 
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setenv("CHECK_SLOT_RANK", "7")
     repo = tmp_path / "clone"
-    (repo / "tools" / "verity" / "check").mkdir(parents=True)
-    (repo / "tools" / "verity" / "check" / "train.sh").write_text(
+    (repo / "tools" / "check").mkdir(parents=True)
+    (repo / "tools" / "check" / "train.sh").write_text(
         'echo "rank=[$CHECK_SLOT_RANK] argv=[$*]"\necho "RUN r20261103-140000-aaaa"\n')
     d = Landing(types.SimpleNamespace(auth=(), workdir=repo), on="m1")
 
@@ -452,15 +475,15 @@ def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unran
             os.waitpid(job["pid"], 0)
         return launched(job)[1]
 
-    ranked = f"rank=[{POSTLAND_SLOT_RANK}]"
+    ranked = f"rank=[{AFTER_LANDING_SLOT_RANK}]"
     assert f"{ranked} argv=[{'c' * 40} m1 --deferred pytest --shard 1/3]" in tail(
-        d.launch_postland(repo, "c" * 40, "m1", "pytest", shard="1/3"))
+        d.launch_after_landing(repo, "c" * 40, "m1", "pytest", shard="1/3"))
     assert f"{ranked} argv=[{'c' * 40} m1 --deferred lean-audit]" in tail(d.launch_locks(repo, "c" * 40, "m1"))
 
 
 def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and_bookkeeping_where_train_sh_takes_it(
         tmp_path, monkeypatch):
-    """A `Landing` on `train_launch` launches with the queue's credentials (``q.auth``: `launch` as `launch_postland` and
+    """A `Landing` on `train_launch` launches with the queue's credentials (``q.auth``: `launch` as `launch_after_landing` and
     `launch_locks`), a candidate's check with the loop's own train.sh when given one (``train_from``), and the records run with
     `--bookkeeping-warn` where the clone's train.sh takes it (`takes_bookkeeping`)."""
     import types
@@ -470,7 +493,7 @@ def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
     repo, own, rid = tmp_path / "clone", tmp_path / "own" / "train.sh", "r20261110-100000-aaaa"
-    for path, who in ((repo / "tools" / "verity" / "check" / "train.sh", "clone"), (own, "own")):
+    for path, who in ((repo / "tools" / "check" / "train.sh", "clone"), (own, "own")):
         path.parent.mkdir(parents=True)
         path.write_text(f'# --bookkeeping-warn\necho "{who} n=$GIT_CONFIG_COUNT argv=[$*]"\necho "RUN {rid}"\n')
     d = Landing(types.SimpleNamespace(auth=("-c", "credential.helper="), workdir=repo), on="m1")
@@ -482,17 +505,17 @@ def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and
 
     assert d.launch(repo, "c" * 40, "m1", False) == ([rid], f"clone n=1 argv=[{'c' * 40} m1]\nRUN {rid}")
     assert f"own n=1 argv=[{'c' * 40} m1 --deferred pytest]" in tail(
-        d.launch_postland(repo, "c" * 40, "m1", "pytest", train_from=own))
+        d.launch_after_landing(repo, "c" * 40, "m1", "pytest", train_from=own))
     assert f"clone n=1 argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(
         d.launch_locks(repo, "c" * 40, "m1"))
 
 
 def test_a_landing_on_an_injected_launch_launches_a_candidates_check_and_its_records_run_through_it(world):
-    """With ``launch`` injected, `launch_postland` and `launch_locks` launch through it, on the machines asked for."""
+    """With ``launch`` injected, `launch_after_landing` and `launch_locks` launch through it, on the machines asked for."""
     got = []
     d = Landing(world.queue(), on="m1", launch=lambda repo, commit, machine, agreement: got.append(
         (commit, machine, agreement)) or (["r1"], ""))
-    assert d.launch_postland(d.repo, "c" * 40, "m2", "pytest", shard="1/3") == d.launch_locks(d.repo, "d" * 40, "m3") == (
+    assert d.launch_after_landing(d.repo, "c" * 40, "m2", "pytest", shard="1/3") == d.launch_locks(d.repo, "d" * 40, "m3") == (
         ["r1"], "")
     assert got == [("c" * 40, "m2", False), ("d" * 40, "m3", False)]
 
@@ -530,7 +553,7 @@ def test_a_detached_train_launch_runs_its_own_copy_of_train_sh(tmp_path, monkeyp
 
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     repo, gate, rid = tmp_path / "clone", tmp_path / "gate", "r20261026-093000-abcd"
-    script = repo / "tools" / "verity" / "check" / "train.sh"
+    script = repo / "tools" / "check" / "train.sh"
     script.parent.mkdir(parents=True)
     script.write_text(f'echo "train: $0 in $PWD"\ncat {gate} > /dev/null\necho "RUN {rid}"\n')
     os.mkfifo(gate)
@@ -553,7 +576,7 @@ def test_a_detached_train_launch_given_a_train_sh_runs_a_copy_of_it_in_the_clone
 
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     repo, own, rid = tmp_path / "clone", tmp_path / "own" / "train.sh", "r20261026-093000-abcd"
-    script = repo / "tools" / "verity" / "check" / "train.sh"
+    script = repo / "tools" / "check" / "train.sh"
     for path, text in ((script, 'echo "RUN r20261026-093000-ffff"\n'), (own, f'echo "train: own in $PWD"\necho "RUN {rid}"\n')):
         path.parent.mkdir(parents=True)
         path.write_text(text)
@@ -598,7 +621,7 @@ def test_a_check_of_a_candidate_sends_the_upstream_build_only_when_what_lean_agr
     the base, and none for a root."""
     asked, changed = [], [False]
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
-        {"lean-agreement": ["verity/protocols/flock/prover/"]} if changed[0] else {}))
+        {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]} if changed[0] else {}))
     h = Harness(world, monkeypatch)
     h.q._clone()
     base, sha = _main(world), world.change({"f.txt": "1\n"})
@@ -626,10 +649,10 @@ def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, 
     _move_main(world, GATED_TREE)
     h.q.fetch()
     assert gating(h.q.workdir, _main(world)) == h.d._gating(_main(world)) == [s for s in every if s != "circuit-check"]
-    _move_main(world, {"tools/verity/check/policy.toml": "not toml ["})
+    _move_main(world, {"tools/check/policy.toml": "not toml ["})
     h.q.fetch()
     assert gating(h.q.workdir, _main(world)) == every
-    _move_main(world, {"tools/verity/check/policy.toml": POLICY_TOML, "tools/verity/check/ci.toml": "not toml ["})
+    _move_main(world, {"tools/check/policy.toml": POLICY_TOML, "tools/check/ci.toml": "not toml ["})
     h.q.fetch()
     assert gating(h.q.workdir, _main(world)) == every
 
@@ -688,45 +711,186 @@ def test_a_step_more_than_one_shard_holds_passed_only_once_every_shard_that_hold
     assert shard_steps([[bare]], [False]) == [{"lean-build": "passed"}], "an unsharded run: its steps.jsonl"
 
 
-def test_run_states_reads_runs_in_parallel_and_keeps_each_state_with_its_run(tmp_path, monkeypatch):
+def _row(d: Path, state: str) -> tuple[Path, dict]:
+    """A read of run dir ``d`` (`landing.read_run`): it, and its `research status --json` row in ``state``."""
+    d.mkdir(parents=True, exist_ok=True)
+    return d, {"state": state, "rc": {"done": 0, "failed": 1}.get(state), "dir": str(d)}
+
+
+def test_run_states_reads_runs_in_parallel_and_keeps_each_state_with_its_run(tmp_path):
     """Reading about 40 runs one `research status` (an ssh round trip) at a time took a tick 33 min. Several are read at once, and each answer stays with the run it is about, whatever order they finish in."""
     seen: set[int] = set()
     lock = threading.Lock()
 
-    def run(argv, **kw):
-        rid = argv[argv.index("status") + 1]
+    def read(rid, names):
         with lock:
             seen.add(threading.get_ident())
         state = {"r1": "running", "r2": "done", "r3": "failed"}.get(rid)
-        if state is None:
-            return subprocess.CompletedProcess(argv, 1, "", "no such run")
-        d = tmp_path / rid
-        d.mkdir(exist_ok=True)
-        rc = 0 if state == "done" else (1 if state == "failed" else None)
-        return subprocess.CompletedProcess(argv, 0, json.dumps({"runs": [{"state": state, "rc": rc, "dir": str(d)}]}), "")
+        return None if state is None else _row(tmp_path / rid, state)
 
-    monkeypatch.setattr(landing.subprocess, "run", run)
     ids = ["r3", "r1", "nope", "r2"]
-    out = landing.run_states(tmp_path, ids)
+    out = landing.Reads(read=read, node=str).states(tmp_path, ids)
     assert list(out) == ids
     assert out["r1"][0] == "running" and out["r2"][:2] == ("done", 0) and out["r3"][:2] == ("failed", 1)
     assert out["nope"] == ("unknown", None, None, None)
     assert seen and threading.get_ident() not in seen, "read on worker threads, not one after another on the caller's"
 
 
-def test_each_keeps_order_and_runs_a_single_item_inline():
-    assert landing._each(lambda x: x * 2, [3, 1, 2]) == [6, 2, 4]
-    me = threading.get_ident()
-    assert landing._each(lambda _: threading.get_ident(), ["only"]) == [me]
-    assert landing._each(lambda x: x, []) == []
+def test_reads_keep_order_and_read_a_single_run_inline(tmp_path):
+    me, at = threading.get_ident(), []
+    one = landing.Reads(read=lambda rid, names: at.append(threading.get_ident()) or _row(tmp_path / rid, "done"), node=str)
+    assert list(one.states(tmp_path, ["only"])) == ["only"] and at == [me]
+    assert one.states(tmp_path, []) == {} and one.evidence(tmp_path, []) == []
 
 
-def test_evidence_drops_runs_it_cannot_fetch_and_keeps_the_rest_in_order(tmp_path, monkeypatch):
-    got = {"r1": tmp_path / "r1", "r3": tmp_path / "r3"}
-    for d in got.values():
-        d.mkdir()
-    monkeypatch.setattr(landing, "_fetch", lambda repo, rid, names: got.get(rid))
-    assert landing.evidence(Path("."), ["r3", "r2", "r1"]) == [got["r3"], got["r1"]]
+def test_evidence_drops_runs_it_cannot_fetch_and_keeps_the_rest_in_order_and_fetches_a_failed_suites_log(tmp_path):
+    """`Reads.evidence`: the runs' `EVIDENCE` first, then of a run whose suite failed, that suite's log with its guard's report
+    and its children's reads."""
+    asked = []
+    failed = _failed_run(tmp_path, "test_x", "t.py:1")
+
+    def read(rid, names):
+        asked.append((rid, names))
+        return {"r1": _row(tmp_path / "r1", "done"), "run": (failed, {"state": "failed", "dir": str(failed)})}.get(rid)
+
+    assert landing.Reads(read=read, node=str).evidence(Path("."), ["run", "r2", "r1"]) == [failed, tmp_path / "r1"]
+    assert sorted(asked) == sorted([("run", landing.EVIDENCE), ("r2", landing.EVIDENCE), ("r1", landing.EVIDENCE),
+                                    ("run", ("suites/pkg.log", "suites/pkg.json", "suites/pkg.reads"))])
+
+
+def _remote_run(root: Path, rid: str, state: str = "running") -> Path:
+    """The local dir of a run launched on a node, its status.json as last fetched in ``state``."""
+    d = root / rid
+    d.mkdir(parents=True)
+    (d / "remote.json").write_text(json.dumps({"host": "h", "port": 22, "machine": "m1", "remote_run_dir": f"/runs/{rid}"}))
+    (d / "status.json").write_text(json.dumps({"state": state}))
+    return d
+
+
+class Node:
+    """`remote.fetch` from a node: each fetch recorded (the run, the files asked), the run's status.json then the next of its
+    ``states`` (the last once they run out; None: the fetch fails)."""
+
+    def __init__(self, monkeypatch, **states):
+        self.fetches, self.states = [], {r: list(s) for r, s in states.items()}
+        monkeypatch.setattr(remote, "fetch", self.fetch)
+
+    def fetch(self, d: Path, *, also=(), **kw) -> dict:
+        self.fetches.append((d.name, also))
+        st = self.states[d.name]
+        if (state := st.pop(0) if len(st) > 1 else st[0]) is None:
+            return {"last_fetch_error": {"rc": 255}}
+        (d / "status.json").write_text(json.dumps({"state": state, **({"rc": 0} if state == "done" else {})}))
+        return {}
+
+
+def test_a_run_is_read_in_process_with_the_files_asked_and_not_the_nodes_memory_or_a_checks_timings(tmp_path, monkeypatch):
+    """`read_run` reads a run as `research status RUN --json --also NAME...` does, in the loop's process and without the two ssh
+    round trips of the command's that nothing it judges reads: the node's memory and holds, and a check's timings against the
+    machine's newest finished check, about 5 s of each running run's 7."""
+    from research import cli
+    from research.checkview import CHECK_FILES
+
+    monkeypatch.setattr(cli, "_read_holds", lambda *a: pytest.fail("read the node's memory and holds"))
+    monkeypatch.setattr(cli, "_check_view", lambda *a: pytest.fail("read a check's timings"))
+    monkeypatch.setattr(landing.subprocess, "run", lambda *a, **k: pytest.fail("ran a subprocess"))
+    d = _remote_run(tmp_path, "r1")
+    node = Node(monkeypatch, r1=["running"])
+    got = landing.read_run("r1", ("steps.jsonl.progress", "check-live.json"), tmp_path)
+    assert got is not None and got[0] == d and got[1]["state"] == "running" and Path(got[1]["dir"]) == d
+    assert node.fetches == [("r1", tuple(dict.fromkeys(("steps.jsonl.progress", "check-live.json", *CHECK_FILES))))]
+    assert landing.read_run("nope", (), tmp_path) is None
+
+
+def test_an_ended_run_is_fetched_until_a_fetch_begun_after_its_end_brought_the_files_asked_and_then_never(tmp_path, monkeypatch):
+    """A fetch copies a run dir's files one after another, its live record and spans before status.json, so the fetch that
+    finds a run ended may hold what it wrote before its end; one begun after brings its last, after which nothing changes, so
+    no later read of those files fetches them (each tick refetched every ended run, 1–2 s each).  A file not yet asked is
+    fetched once more; a failed fetch brings nothing."""
+    _remote_run(tmp_path, "r1")
+    node = Node(monkeypatch, r1=["running", "done"])
+    names = ("steps.jsonl.progress", "check-live.json")
+    assert landing.read_run("r1", names, tmp_path)[1]["state"] == "running" and len(node.fetches) == 1
+    assert landing.read_run("r1", names, tmp_path)[1]["state"] == "done"
+    assert len(node.fetches) == 3, "the fetch that found it ended, and one begun after"
+    assert landing.read_run("r1", names, tmp_path)[1]["state"] == "done"
+    assert landing.read_run("r1", names[:1], tmp_path)[1]["state"] == "done"
+    assert len(node.fetches) == 3, "its files as a fetch begun after its end brought them"
+    landing.read_run("r1", ("suites/pkg.log",), tmp_path)
+    landing.read_run("r1", ("suites/pkg.log", *names), tmp_path)
+    assert [also[0] for _, also in node.fetches[3:]] == ["suites/pkg.log"]
+
+    _remote_run(tmp_path, "r2", "done")
+    flaky = Node(monkeypatch, r2=[None, "done"])
+    for _ in range(3):
+        landing.read_run("r2", names, tmp_path)
+    assert len(flaky.fetches) == 2, "a fetch that failed, then the one that brought them"
+
+
+def test_a_tick_reads_each_run_once_and_again_only_for_files_it_has_not_fetched(tmp_path):
+    """Inside `Reads.tick` the judging of every candidate reads each run once, all of them at once first, however many times a
+    judge asks for its state and evidence (two rounds a candidate, one after another, while an early pass reads its runs too);
+    a log not yet fetched is read alone, and a read that fails keeps the tick's earlier one.  Outside a tick each ask reads
+    afresh."""
+    asked, gone = [], set()
+
+    def read(rid, names):
+        asked.append((rid, names))
+        return None if rid in gone else _row(tmp_path / rid, "running")
+
+    reads = landing.Reads(read=read, node=str)
+    with reads.tick(["r1", "r2", "r1"]):
+        assert sorted(asked) == [("r1", landing.EVIDENCE), ("r2", landing.EVIDENCE)], "read at once before any judge asks"
+        gone.add("r1")
+        assert reads.states(tmp_path, ["r1", "r2"])["r1"][0] == "running"
+        assert reads.evidence(tmp_path, ["r2", "r1"]) == [tmp_path / "r2", tmp_path / "r1"]
+        reads([("r1", ("suites/a.log",))])
+        reads([("r1", ("suites/a.log",)), ("r2", landing.PROGRESS)])
+        assert reads.states(tmp_path, ["r1"])["r1"][0] == "running", "its failed read keeps the tick's earlier one"
+    assert asked[2:] == [("r1", ("suites/a.log",))]
+    del asked[:]
+    reads.states(tmp_path, ["r2"])
+    reads.states(tmp_path, ["r2"])
+    assert asked == [("r2", (*landing.PROGRESS, landing.LIVE))] * 2, "outside a tick each ask reads afresh"
+
+
+def test_a_slow_node_holds_no_more_than_its_share_of_the_readers(tmp_path):
+    """A node that answers slowly (a stalled ssh, 120 s to a probe's timeout) held every reader its runs reached, the runs
+    of every other node waiting behind it.  Its runs hold at most `NODE_JOBS` readers, and every other node's runs are read
+    while they do: the slow node's reads end only once the last of the others' has.  Its runs come first and outnumber the
+    readers, so a pool with no share per node puts every reader on it; a read finding more of its node's in flight than its
+    share answers at once, so that pool fails here rather than hangs."""
+    slow = [f"s{k}" for k in range(landing.STATUS_JOBS + 2)]
+    fast = [f"f{k}" for k in range(landing.STATUS_JOBS)]
+    lock, flying, over, others_done, done = threading.Lock(), {"slow": 0, "fast": 0}, [], threading.Event(), []
+
+    def node(rid):
+        return "slow" if rid.startswith("s") else "fast"
+
+    def read(rid, names):
+        n = node(rid)
+        with lock:
+            flying[n] += 1
+            if flying[n] > landing.NODE_JOBS:
+                over.append((rid, flying[n]))
+            free = n == "fast" or bool(over)
+        try:
+            if not free:
+                others_done.wait()
+            return _row(tmp_path / rid, "running")
+        finally:
+            with lock:
+                flying[n] -= 1
+                if n == "fast":
+                    done.append(rid)
+                    if len(done) == len(fast):
+                        others_done.set()
+
+    ids = [*slow, *fast]
+    out = landing.Reads(read=read, node=node).states(tmp_path, ids)
+    assert not over, f"more of one node's runs read at once than its share: {over}"
+    assert list(out) == ids and all(s[0] == "running" for s in out.values())
+    assert sorted(done) == sorted(fast)
 
 
 def test_the_evidence_of_an_attempt_is_fetched_once(world, monkeypatch):
@@ -744,7 +908,7 @@ def test_a_failed_task_is_allowed_by_its_suites_row_or_by_each_circuit_failure_i
     covers nothing, and is named), a circuit-check task's when each failure it names, fewer than `CIRCUIT_NAMED`, has an
     allowance, and nothing of any other kind."""
     later, gone = "2030-06-01T00:00:00Z", "1970-01-01T00:00:01Z"
-    _move_main(world, {"tools/verity/check/policy.toml": _policy(("suite pkg", "ci", later), ("suite old", "ci", gone),
+    _move_main(world, {"tools/check/policy.toml": _policy(("suite pkg", "ci", later), ("suite old", "ci", gone),
                                                                  ("circuit-check fold/F01 Mul", "ci", later))})
     h = Harness(world, monkeypatch)
     h.q._clone()
@@ -859,8 +1023,9 @@ def test_the_owner_of_each_unmarked_pr_stacked_on_a_landed_one_hears_once_to_mer
     tip = _main(world)
     state = {"told": []}
     h.d._stacked(state, [Member(1, h1, "lane-1", tip)], tip)
-    assert sorted(h.posts) == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2",
-                               f"@lane-4 queue: #4's base #1 landed in main at {tip[:12]}; merge main into #4"]
+    assert sorted(h.posts) == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}: {merge_main('#2', gh.prs[2].branch)}",
+                               f"@lane-4 queue: #4's base #1 landed in main at {tip[:12]}: {merge_main('#4', 'cursor/w-4')}"]
+    assert "`python3 tools/move/restack.py cursor/w-4 --main MOVE`, then merge today's `main`" in h.posts[-1]
     assert set(state["told"]) == {"stacked:2<1", "stacked:4<1"}
     h.posts.clear()
     h.d._stacked(state, [Member(1, h1, "lane-1", tip)], tip)
@@ -890,7 +1055,7 @@ def test_after_members_reach_main_they_are_caught_up_with_their_run_their_stacke
     assert h.after == [(since, {h1: "r1 r2", tip: "r1 r2"})]
     assert swept == [("main", "origin", {"cursor/w-9": 9})]
     assert state["told"] == ["stacked:2<1"]
-    assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2"]
+    assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}: {merge_main('#2', gh.prs[2].branch)}"]
 
 
 # -- the verdict carry's judgement and a check's auto plan
@@ -1048,11 +1213,24 @@ def test_planned_takes_a_plan_of_a_shard_or_more_once_its_job_exited_0_and_says_
     assert planned({"dir": str(job), "pid": pid, "out": str(out)}) == got
 
 
+#: `git` as on the control pod's NFS TMPDIR, where `worktree remove` stops at a directory a silly-renamed file (one something
+#: still held when git unlinked it) keeps from emptying, and exits 255
+NFS_GIT = """#!/bin/sh
+if [ "$1 $2" = "worktree remove" ]; then
+  eval "t=\\${$#}"; echo "error: failed to delete '$t': Directory not empty" >&2; exit 255
+fi
+exec GIT "$@"
+"""
+
+
+@pytest.mark.parametrize("removal", ["git", "rm", "none"])
 @pytest.mark.parametrize("rc", [0, 2])
-def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(tmp_path, rc):
+def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(tmp_path, rc, removal):
     """`PLAN_JOB`, as `detach` runs it (here to its end): `check.py --shard-plan` in a worktree of the tip under TRAIN_TREES,
     its venv kept beside, the plan written into the plan's directory, the worktree removed after; `planned` gives the plan,
-    or why there is none, and keeps the plan's directory (its shards send the file) but not the job's."""
+    or why there is none, and keeps the plan's directory (its shards send the file) but not the job's.  The job exits as
+    check.py did however the worktree goes: by `git worktree remove`; by `rm -rf` once that fails as on the control pod
+    (`NFS_GIT`); or not at all, when `rm -rf` fails too."""
     from research.landing import AUTO_PLAN, DETACH_JOB, PLAN_JOB, planned
 
     repo, out, job, trees, bin_ = (tmp_path / x for x in ("repo", "plan", "job", "trees", "bin"))
@@ -1066,17 +1244,27 @@ def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(
                              f'printf "%s\\n" "$PWD" "$UV_PROJECT_ENVIRONMENT" "$(git rev-parse HEAD)" "$@" > {tmp_path}/argv\n'
                              'while [ "$1" != --out ]; do shift; done\n'
                              f"echo '{json.dumps(doc)}' > \"$2\"\necho 'shard plan: N = 3'\nexit {rc}\n")
-    (bin_ / "uv").chmod(0o755)
+    if removal != "git":
+        (bin_ / "git").write_text(NFS_GIT.replace("GIT", shutil.which("git")))
+    if removal == "none":
+        (bin_ / "rm").write_text("#!/bin/sh\nfor a; do t=$a; done\necho \"rm: cannot remove '$t': Directory not empty\" >&2\n"
+                                 "exit 1\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin", "TRAIN_TREES": str(trees)}
     subprocess.run(["sh", "-c", DETACH_JOB, "sh", str(job), "sh", "-c", PLAN_JOB, "sh", str(out), tip, "--deferred", "pytest",
                     "--max-shards", "3"], cwd=repo, env=env, check=True)
     cwd, venv, head, *argv = (tmp_path / "argv").read_text().splitlines()
     assert (cwd, venv, head) == (str(trees / "plan-plan"), str(trees / "plan-venv"), tip)
-    assert argv == ["run", "-q", "python", "tools/verity/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
+    assert argv == ["run", "-q", "python", "tools/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
                     "--deferred", "pytest", "--max-shards", "3"]
-    assert not (trees / "plan-plan").exists() and _git(repo, "worktree", "list").count("\n") == 0, "the worktree is removed"
+    left = removal == "none"
+    assert (trees / "plan-plan").exists() == left and len(_git(repo, "worktree", "list").splitlines()) == 1 + left, \
+        "the worktree is removed, and pruned, unless nothing can remove it"
     got = planned({"dir": str(job), "pid": None, "out": str(out)})
-    assert got == ((doc, None) if rc == 0 else (None, "`check.py --shard-plan` exited 2: shard plan: N = 3"))
+    why = "`check.py --shard-plan` exited 2: shard plan: N = 3" + \
+        f"\nrm: cannot remove '{trees / 'plan-plan'}': Directory not empty" * left
+    assert got == ((doc, None) if rc == 0 else (None, why))
     assert not job.exists() and (out / AUTO_PLAN).is_file()
 
 
@@ -1100,3 +1288,11 @@ def test_every_temporary_directory_in_the_loops_code_ignores_cleanup_errors():
     bad = {m: lines for m in LOOP_MODULES if (lines := _unguarded(SRC / m))}
     assert not bad, (f"tempfile.TemporaryDirectory without ignore_cleanup_errors=True at {bad}: pass it, since the loop's TMPDIR "
                      "is NFS and a silly-renamed file fails the cleanup")
+
+
+def test_a_progress_line_that_does_not_parse_is_skipped_and_said_but_no_progress_is_quiet(tmp_path, capsys):
+    assert landing.failing(tmp_path) is None
+    assert capsys.readouterr().err == ""
+    (tmp_path / "steps.jsonl").write_text('{"step": "lint", "status": "failed"}\n{"step": "su')
+    assert landing.failing(tmp_path) == "step lint"
+    assert "landing: a line of steps.jsonl is not JSON, skipped" in capsys.readouterr().err

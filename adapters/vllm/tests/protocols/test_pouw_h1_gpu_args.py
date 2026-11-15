@@ -1,15 +1,28 @@
 """`pouw_h1_gpu.py`'s engine flags reach the engine it builds: ``--engine-arg KEY=VALUE`` over the workload's ``LLM()``
-keywords, and ``--no-batch-invariant`` as the target's ``batch_invariant``."""
+keywords, and ``--no-batch-invariant`` as the target's ``batch_invariant``. Its ``--check-challenger``, the verifier's side
+on no GPU, fails closed, and its ``--receipts`` refuses a run handed no producer."""
 from __future__ import annotations
+
+import hashlib
+import json
+from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
-pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
+from verity.protocols.proofs.spot.device import remote as R
+
+from tests.protocols import challenger_host as CH
+from tests.protocols import pouw_h1_gpu as G
 from verity_vllm.engine import build as B
 from verity_vllm.program.frontend.target_profile import TargetProfile
-
-from tests.protocols import pouw_h1_gpu as G
+from verity_vllm.protocols import pouw
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 
 class _Built(Exception):
@@ -18,7 +31,7 @@ class _Built(Exception):
 
 @pytest.fixture
 def built(monkeypatch):
-    got = {}
+    got: dict = {}
 
     def build_engine(path, *, case, target, max_num_seqs, engine_args):
         got.update(target=target, max_num_seqs=max_num_seqs, engine_args=engine_args)
@@ -67,13 +80,6 @@ def test_the_period_program_under_ks_declares_the_linears_at_those_ks_alone(monk
     its run's, over J10-R's tile unit with ``--j10r``, in the digest's child as in this process: serve-openai's
     ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` over Llama-3.2-1B's linears (K 2,048 and 8,192). The declaration and the
     digest's child are stand-ins that record what they were given (a real one takes minutes)."""
-    import json
-    from types import SimpleNamespace
-
-    torch = G.torch
-    from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw.h1 import served as SV
-
     class Linear(torch.nn.Module):
         def __init__(self, n, k):
             super().__init__()
@@ -101,8 +107,12 @@ def test_the_period_program_under_ks_declares_the_linears_at_those_ks_alone(monk
 
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(G.subprocess, "Popen", Popen)
-    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None, arch=None: declared.append(
-        (shapes, modules, unit)) or "program")
+
+    def declare(shapes, modules, rows, steps, unit=None, arch=None):
+        declared.append((shapes, modules, unit))
+        return "program"
+
+    monkeypatch.setattr(SV, "declared", declare)
     program, digest, got = G.period_program(llama, 32, 4, j10r=True, arch="sm_90", ks=(2048,))
     assert (program, digest) == ("program", "d" * 128)
     shapes, modules, unit = declared[0]
@@ -111,3 +121,58 @@ def test_the_period_program_under_ks_declares_the_linears_at_those_ks_alone(monk
     assert unit is not None and child[0][0] == [list(s) for s in shapes] and child[0][4:] == [True, "sm_90"]
     G.period_program(llama, 32, 4, j10r=True, arch="sm_90")
     assert len(declared[1][0]) == 8
+
+
+def test_check_challenger_fails_closed_and_its_record_says_why(tmp_path, capsys):
+    """``pouw_h1_gpu.py --check-challenger CALLS DIR`` over a record that carries no coins and a ledger head with no entry
+    exits 1, and its record (``pouw_h1_challenger.json``) says why at each step. Without ``--window`` the key is read from
+    DIR's ``out/``: with none there nothing is read under the pin, so there is no credit, and a period is refused for the
+    unread ledger. With ``--window`` the key is read from DIR itself: one under another pin is no key; the pinned one
+    leaves the session untrusted (the ledger opens none for the window), a credit of none, and no such period."""
+    _private, key = CH.challenger_key(3)
+    pin = hashlib.sha512(key.public).hexdigest()
+    calls, ledger, window, tree = (tmp_path / n for n in ("calls.json", "windows.jsonl", "window.json", "tree"))
+    calls.write_text(json.dumps({"commitment": {}, "calls": []}))
+    ledger.write_text("")
+    window.write_text(json.dumps({"root": "00" * 64}))
+    tree.mkdir()
+
+    def check(pinned: str, *argv: str) -> dict:
+        rc = G.main(["--out", str(tmp_path / "out"), "--check-challenger", str(calls), str(tree), "--key-sha512", pinned,
+                     "--ledger", str(ledger), *argv])
+        assert "POUW-H1-CHALLENGER FAIL rounds=0 host=None" in capsys.readouterr().out
+        doc = json.loads((tmp_path / "out" / "pouw_h1_challenger.json").read_text())
+        assert rc == 1 and doc["ok"] is False and doc["rounds"] == 0 and doc["pinned_public_sha512"] == pinned
+        assert doc["manifest"].startswith("the window's salt can't be derived from its record")
+        assert "error" in doc[R.RECORD] and "error" in doc[R.CLOSE]
+        return doc
+
+    doc = check(pin, "--period", "p")
+    assert doc["reason"].startswith(f"CoinError: no challenger key at {tree / 'out' / R.KEY} (")
+    assert "key" not in doc and "credit" not in doc and doc["window_file"] is None
+    assert doc["period"] == {"name": "p", "reasons": ["ValueError: no key the pin names, so the auditor's ledger is unread"]}
+    (tree / R.KEY).write_text(json.dumps(key.to_json()))
+    doc = check("ab" * 64, "--window", str(window))
+    assert doc["reason"].startswith(f"CoinError: the challenger key at {tree / R.KEY} is {pin[:16]}..., not the auditor's")
+    assert "key" not in doc and "credit" not in doc and "period" not in doc
+    doc = check(pin, "--window", str(window), "--period", "p")
+    assert doc["key"] == {"W": key.W, "H": key.H, "public_sha512": pin} and doc["window"] == {"root": "00" * 64}
+    assert doc["reason"].startswith("the challenger's session is not trusted: ")
+    assert doc["credit"]["credit"] is None and doc["credit"]["manifest"] == doc["manifest"]
+    assert doc["period"] == {"name": "p", "reasons": ["the auditor's ledger has no period p"]}
+    (tree / "out").mkdir()
+    (tree / "out" / R.KEY).write_text(json.dumps(key.to_json()))
+    doc = check(pin)
+    assert doc["key"]["public_sha512"] == pin and "window" not in doc and doc["credit"]["credit"] is None
+    assert doc["reason"].startswith("the window's coins were held in the serving process")
+    with pytest.raises(SystemExit):
+        G.main(["--out", str(tmp_path / "out"), "--check-challenger", str(calls), str(tree), "--key-sha512", pin])
+    assert "--check-challenger needs --key-sha512" in capsys.readouterr().err
+
+
+def test_receipts_need_the_producer_handed_in(tmp_path, capsys):
+    """``--receipts`` computes and checks receipts with kernels' producer, which this package never loads itself: a run
+    whose ``main`` was handed none refuses before it builds an engine."""
+    with pytest.raises(SystemExit):
+        G.main(["--workload", "fill", "--served", "--receipts", str(tmp_path / "h1u_hbc.so"), "--out", str(tmp_path)])
+    assert "--receipts needs kernels' producer" in capsys.readouterr().err

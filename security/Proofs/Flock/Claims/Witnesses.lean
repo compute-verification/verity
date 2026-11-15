@@ -18,6 +18,8 @@ public import Proofs.Flock.Claims.Witnesses.SamplingTwoRankin
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoReg
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegX
+public import Proofs.Flock.Claims.Witnesses.SamplingTwoFirstHit
+public import Proofs.Flock.Claims.Witnesses.SamplingTwoOneWait
 public import Proofs.Flock.Claims.Witnesses.Encodings
 public import Proofs.Flock.Claims.Witnesses.EncodingsGeneric
 public import Proofs.Flock.Claims.Witnesses.ZKOutLeak
@@ -26,6 +28,7 @@ public import Proofs.Flock.Claims.Witnesses.RecursionMeets
 public import Proofs.Flock.Claims.Witnesses.RecursionLin
 public import Proofs.Flock.Claims.Witnesses.RecursionLin2
 public import Proofs.Flock.Claims.Witnesses.Stated
+public import Proofs.Flock.Claims.Witnesses.KSTable
 public import Proofs.Flock.Claims.Witnesses.Meets
 public import Proofs.Flock.Claims.Witnesses.BindingMeets
 
@@ -41,7 +44,7 @@ its committed form read at a time budget, with `CompilerKSRegAt`'s, and `Samplin
 zero-knowledge claims' and `ZKOut`'s) and `Recursion` the ZK-recursion compiler's. A claim still met by a trivial
 instance has a theorem `<Claim>_vacuous` that exhibits it.
 
-The lock's `claims` section (`Security/lean-audit.json`) lists, per claim, its `fails` and `meets` witnesses as
+The lock's `claims` section (`security/lean-audit.json`) lists, per claim, its `fails` and `meets` witnesses as
 guarantees: `Stated` states the shared, Flock and sampling claims' failures over the spec (`Claims.<Claim>_fails`), and
 `Meets` their checkable antecedents at Flock's deployed records (`deployPlain`, `deployZk`), and `BindingMeets` the
 sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). The ZK-recursion compiler's claims carry
@@ -51,8 +54,9 @@ under `claims.generic` with the guarantee that states it, which the lock's `witn
 nontrivial lemma (`SamplingGenericCompiler`, `SamplingGenericComplete`, `SamplingTwo` for the two-stage compiler,
 `SamplingTwoKSAt` for its extractor's cost and its KS read at a time budget, `SamplingTwoRankin` for Rankin's bound on
 its count, `SamplingTwoReg` for its committed form and headline, `SamplingTwoRegMiss` for its miss bound and the
-headline's honest lemma, `SamplingTwoRegX` for the three at the boundary trace read at the statement, `ZKOutLeak`, and
-the registered encodings' `EncodingsGeneric` at the toys of `Encodings`).
+headline's honest lemma, `SamplingTwoRegX` for the three at the boundary trace read at the statement,
+`SamplingTwoOneWait` for the committed form at the one-wait extraction's boundary trace, `ZKOutLeak`, and the registered
+encodings' `EncodingsGeneric` at the toys of `Encodings`).
 -/
 
 @[expose] public section

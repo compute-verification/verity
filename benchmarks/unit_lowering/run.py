@@ -6,10 +6,11 @@ combine statements, costs, and the file it writes.
     run.py --guard [all] --scratch DIR --out DIR [--tree PATH]
     run.py --pin-reference --scratch DIR --out DIR
 
-The tile's lowering is `pouw_h1_circuits --lower K R C BIND PATH` (adapters/vllm), the auditor's lowering whose file a PoUW
-period-open commits as ``k<K>``, bound to `BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the R x C
-leaf (`lanes.py`), bound to the Program a served window's verifier derives for it. Each runs in a child process with
-``HZ_STAGE`` (``fast`` by default) and ``H1_TMPL`` unset for the flat form or ``structural``. Its peak RSS is the child's
+The tile's lowering is `h1unit.Shape.stager` (`lanes.py tile`), the auditor's lowering whose file a PoUW period-open commits
+as ``k<K>`` (`pouw_h1_circuits --lower` lowers it so in the adapter, a tree from before it left benchmarks/ there), bound to
+`BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the R x C leaf (`lanes.py`), bound to the Program
+a served window's verifier derives for it. Each runs in a child process with ``HZ_STAGE`` (``fast`` by default) and
+``H1_TMPL`` unset for the flat form or ``structural``. Its peak RSS is the child's
 ``ru_maxrss`` (`os.wait4`, KiB on Linux) and its wall time the child's. The file is then read once for its SHA-512, bytes,
 META's ``k_log`` and AND rows (`scan`), and deleted.
 
@@ -34,6 +35,8 @@ from itertools import islice
 from pathlib import Path
 
 from verity_config.settings import SHARED
+
+__all__ = ["BIND", "guard", "scan"]
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -86,7 +89,8 @@ def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = R
         env["PYTHONPATH"] = ":".join(p for p in (tree_pythonpath(tree), env.get("PYTHONPATH")) if p)
         if (tree / ".venv" / "bin" / "python").exists():
             python = str(tree / ".venv" / "bin" / "python")
-    if unit == "tile":
+    if unit == "tile" and not (tree / "benchmarks" / "pouw" / "h1_prove" / "h1form.py").is_file():
+        # a tree from before H1's lowering left benchmarks/: its adapter lowers the tile under HZ_STAGE and H1_TMPL
         argv, cwd = [python, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k), str(r), str(c), json.dumps(BIND),
                      str(path)], tree / "adapters" / "vllm"
     else:
@@ -119,7 +123,7 @@ def _is_assert(line: bytes, row: int, const: int) -> bool:
     return t[la + 1:] == [b"1", b"%d" % const] and b"%d" % row in t[1:la + 1]
 
 
-def _netlist(f, lines: int) -> dict:
+def _section(f, lines: int) -> dict:
     """A ``flock-ir-unit/v2`` section's rows and AND rows: the rows between its input groups and its output groups (`ir_lower.layout`:
     the ANDs and table reads, the assertions, then forced-zero rows up to the first output group), less forced-zero rows and
     assertions."""
@@ -133,7 +137,7 @@ def _netlist(f, lines: int) -> dict:
             at += 3 + int(head[at + 2])
         spans.append(cols)
     if lines != useful + 1:
-        raise ValueError(f"a section of {lines} lines holds a netlist of {useful} rows")
+        raise ValueError(f"a section of {lines} lines, whose first line counts {useful} rows")
     lo = (spans[0][-1][0] + spans[0][-1][1]) * WORD if spans[0] else 0
     hi = spans[1][0][0] * WORD if spans[1] else const
     tail, pads, asserts = b" 1 %d\n" % const, 0, 0
@@ -151,7 +155,7 @@ def _netlist(f, lines: int) -> dict:
 
 def scan(path: Path) -> dict:
     """A circuit file's SHA-512, bytes, META's ``k_log`` (an instance's block, 2^k_log bits) and each ``CIRCUIT`` section's rows
-    and AND rows (`_netlist`); ``ands`` the unit section's, None for a templated file, whose unit is its template section
+    and AND rows (`_section`); ``ands`` the unit section's, None for a templated file, whose unit is its template section
     (``TEMPLATE n``, passed over here) and no ``CIRCUIT`` section."""
     with ThreadPoolExecutor(1) as pool:
         digest = pool.submit(_sha512, path)
@@ -170,7 +174,7 @@ def scan(path: Path) -> dict:
                 tag, name, lines = line.split()
                 if tag != b"CIRCUIT":
                     raise ValueError(f"{path}: {line[:80]!r} where a CIRCUIT section starts")
-                sections[name.decode()] = _netlist(f, int(lines))
+                sections[name.decode()] = _section(f, int(lines))
         sha512, size = digest.result()
     unit = sections.get("unit")
     return {"sha512": sha512, "bytes": size, "format": first.split()[0].decode(), "k_log": k_log,
@@ -264,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         (a.out / "unit_lowering.json").write_text(json.dumps(doc, indent=1) + "\n")
         print(line(doc), flush=True)
         if doc["k_log"] is not None and doc["k_log"] > K_MAX:
-            print(f"unit_lowering: k_log {doc['k_log']} is past C-Flock's 2^{K_MAX} block: no proof of this file", file=sys.stderr)
+            print(f"unit_lowering: k_log {doc['k_log']} is past Flock's 2^{K_MAX} block: no proof of this file", file=sys.stderr)
             rc = 1
     return rc
 

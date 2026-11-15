@@ -56,7 +56,7 @@ class PhaseSched:
                       "sched:graph-fork-join", "sched:node-priority", "prefill:none"],
         "hypothesis": "decode's attention leaves the tensor pipe idle on the step's SMs: a fixed count of short filler "
                       "tiles forked into it adds 0.05-0.34 coverage a point at <= 5% slowdown"})
-    sources: tuple = ("benchmarks/pouw/filler/dcap.cu", "benchmarks/pouw/filler/pscore.cu",
+    sources: tuple = ("verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu", "benchmarks/pouw/filler/pscore.cu",
                       "benchmarks/pouw/filler/psched_arm.py", "benchmarks/pouw/filler/psched_score.py")
     filler: A.Filler | None = A.Filler(W=8, NC=4, S=2048, chunk_log2=19)
     choice: str = ("an offline table of 18 (B, L) points (split, phase W and tiles) from two psched runs; a lookup, a green "
@@ -70,12 +70,12 @@ class PhaseSched:
     def _row(self, b, l):
         return A.point_lookup(TABLE, b, l)
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> A.Colocation:
         if phase == "prefill":
             return A.NONE
         return A.Colocation("split", self._row(b, l)[0])
 
-    def phase(self, phase, b, l):
+    def phase(self, phase: str, b: int, l: int) -> PhaseFill | None:
         return None if phase == "prefill" else self._row(b, l)[1]
 
 
@@ -107,10 +107,10 @@ class PhaseSchedCo(PhaseSched):
     def _row(self, b, l):
         return A.point_lookup(TABLE_V2, b, l)
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> A.Colocation:
         return A.Colocation("co") if phase == "prefill" else super().placement(phase, b, l)
 
-    def filler_at(self, phase, b, l):
+    def filler_at(self, phase: str, b: int, l: int) -> A.Filler | None:
         return CO_PREFILL if phase == "prefill" else self.filler
 
 
@@ -143,5 +143,5 @@ class PhaseSchedCo2(PhaseSchedCo):
     def _row(self, b, l):
         return A.point_lookup(TABLE_V3, b, l)
 
-    def filler_at(self, phase, b, l):
+    def filler_at(self, phase: str, b: int, l: int) -> A.Filler | None:
         return CO_PREFILL_V3 if phase == "prefill" else self.filler

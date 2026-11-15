@@ -6,7 +6,7 @@ header's read-back form (`vllm_adapter.compilation_facts`). Under Inductor, `cap
 `compile_cache` (a process switch; cached and fresh Inductor graphs are the same code) are not declared, so not constrained: GM-01
 compares only the keys both sides carry.
 
-* `piecewise`: vLLM's production default compiled configuration (default Inductor config: fp32 carried through the fused regions),
+* `piecewise`: vLLM's serving default compiled configuration (default Inductor config: fp32 carried through the fused regions),
   the panel's bi-compiled workloads. Its Program is P_compiled at Inductor-kernel granularity (S1/S2).
 * `piecewise-emu`: the separate declared specialization with Inductor's emulate_precision_casts (the eager roundings performed inside
   the fused kernels; a different numerical computation). Not a panel workload unless added by a 7-field note.
@@ -22,9 +22,11 @@ compares only the keys both sides carry.
 
 from __future__ import annotations
 
+from typing import Any
+
 _SPLIT_ATTENTION = "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"
 
-COMPILATIONS = {
+COMPILATIONS: dict[str, dict[str, Any]] = {
     "piecewise": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
                   "emulate_precision_casts": False, "attention": _SPLIT_ATTENTION},
     "piecewise-emu": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
@@ -34,3 +36,6 @@ COMPILATIONS = {
                   "attention": "captured at the padded batch in a uniform decode step's FULL graph, else eager breaks "
                                "(eager_break_during_capture) on the real batch between captured segments"},
 }
+
+
+__all__ = ["COMPILATIONS"]

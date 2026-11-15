@@ -23,7 +23,7 @@ import torch
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, runner_order
 from tests.pipeline.test_serve_openai import Committer, Runner, Tokenizer, records, serve_concurrently
-from verity.protocols.certifier.verifier import advice as I1
+from verity.protocols.accounting.certifier.verifier import advice as I1
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import advice_windows as AW
@@ -106,20 +106,25 @@ class SchedEngine:
 
 class Server:
     """`serve_openai.main`'s wiring over the stand-ins: the advice trace on the scheduler for the server's lifetime, the Commit's
-    windows marking it."""
+    windows marking it. ``engine_of`` builds its engine and `order` its frontend's admission order, none here."""
+
+    engine_of: Any = SchedEngine
 
     def __init__(self, out: Path, window_steps: int = 64, abort_after: dict[tuple[int, ...], int] | None = None) -> None:
         self.runner = Runner()
-        self.engine = SchedEngine(self.runner, abort_after)
+        self.engine = self.engine_of(self.runner, abort_after)
         self.engine.client_goes = self.client_goes
         self.trace = sc.advice_trace(out, self.engine.sched)
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=window_steps, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window)
         self.loop, self.admitted = so.EngineLoop(self.engine, self.windows), {}
         self.server = so.Server(proto=proto.PlainProtocol(True), served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={},
-                                submit=self.submit, abort=self.loop.abort, clock=lambda: 7)
+                                submit=self.submit, abort=self.loop.abort, clock=lambda: 7, order=self.order())
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
         self.engine_thread = threading.Thread(target=self.loop.run, daemon=True)
+
+    def order(self) -> Any:
+        return None
 
     def __enter__(self) -> Server:
         self.engine_thread.start()

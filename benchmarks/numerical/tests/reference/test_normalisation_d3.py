@@ -26,7 +26,7 @@ import random
 
 import pytest
 
-from verity.definitions.silicon import models as S
+from verity.circuits.silicon import models as S
 from verity_numerical.reference import hawkeye_close as H
 from wp1_cases import canon, canon_term, realise as _pair, term_of
 
@@ -88,7 +88,9 @@ def test_three_forms_agree_on_random_nine_term_groups() -> None:
 
 def test_closed_form_equals_successive_shifts_over_the_whole_reachable_domain_by_smt() -> None:
     z3 = pytest.importorskip("z3")
-    BV = lambda x: z3.BitVecVal(x, 32)
+    def BV(x):
+        return z3.BitVecVal(x, 32)
+
     v = z3.BitVec("v", 32)
     E = z3.BitVec("E", 32)
     # l = bit_length(v) for v < 2^30

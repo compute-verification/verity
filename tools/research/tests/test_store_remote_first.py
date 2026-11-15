@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from research import notes
+from research import notes, settings
 from research.store import labels_sync as LS
 from research.store import parity as PA
 from research.store import preserved as P
@@ -148,9 +148,9 @@ def test_d5_a_rebuild_killed_partway_leaves_the_previous_catalog_answering(env, 
     with monkeypatch.context() as m, pytest.raises(KeyboardInterrupt):
         m.setattr(Index, "rebuild", dies)
         LocalStore().reindex()
-    fresh = LocalStore(os.environ["RESEARCH_STORE"])
+    fresh = LocalStore(settings.need("RESEARCH_STORE"))
     assert fresh.index.artifact(art) == before and fresh.index.replicas(art)["remote"]["verified_utc"]
-    assert not list(Path(os.environ["RESEARCH_STORE"]).glob(".catalog.sqlite.rebuild-*"))
+    assert not list(Path(settings.need("RESEARCH_STORE")).glob(".catalog.sqlite.rebuild-*"))
     assert LocalStore().reindex()["artifacts"] == 1
     assert st.index.replicas(art)["remote"]["verified_utc"], "replicas survive the swap; an open store sees the new file"
 
@@ -174,7 +174,7 @@ def test_d6_refresh_picks_up_pod_writes_without_wiping(env):
 
 def test_refresh_fetches_the_small_payloads_of_the_named_kinds(env):
     """A render machine reads some payloads (instance-equiv/v1 documents): `refresh(payload_kinds=...)` makes the file payloads
-    of those kinds local -- up to the size cap, new and already-catalogued artifacts alike -- and nothing else."""
+    of those kinds local -- up to the size limit, new and already-catalogued artifacts alike -- and nothing else."""
     pod = LocalStore(env / "pod-store")
     doc = pod.put_artifact("instance-equiv/v1", {"lane": "x"}, file=_file(env / "pod", "e.json", b'{"schema": "instance-equiv/v1"}'))
     big = pod.put_artifact("instance-equiv/v1", {"lane": "y"}, file=_file(env / "pod", "big.json", b"x" * 64))

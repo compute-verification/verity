@@ -1,6 +1,6 @@
 """`engine.served_seed`: a client's seed is kept, a greedy request without one carries the public default, and a stochastic
 one is sampled under the seed derived from its window's seed coin and its certified id, a hash of those two alone, or refused
-without an id; the caller's params are never changed, and a fresh coin is drawn only into an idle engine."""
+without an id; the caller's params are never changed, and a fresh coin is flipped only for an idle engine."""
 from __future__ import annotations
 
 import copy
@@ -25,7 +25,7 @@ class Params:
 
 def test_the_default_is_the_hash_of_its_name():
     want = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1").digest()[:8], "big") >> 1
-    assert served_seed.DEFAULT_SEED == want and 0 <= want < 1 << 63
+    assert want == served_seed.DEFAULT_SEED and 0 <= want < 1 << 63
 
 
 def test_a_derived_seed_is_the_hash_of_its_domain_the_coin_and_the_id_each_length_prefixed():
@@ -59,6 +59,15 @@ def test_an_unseeded_stochastic_request_without_an_id_is_refused_by_name(params)
         served_seed.served(params, None, COIN)
 
 
+@pytest.mark.parametrize("params", [Params(temperature=0.8), {"temperature": 1.0, "seed": None}])
+def test_an_unseeded_stochastic_request_without_a_coin_is_refused_in_the_words_derived_refuses_it(params):
+    with pytest.raises(ValueError) as served:
+        served_seed.served(params, "q1", None)
+    with pytest.raises(ValueError) as derived:
+        served_seed.derived(None, "q1")
+    assert str(served.value) == str(derived.value) == "a window's verifier coin is non-empty bytes, not None"
+
+
 def test_a_served_seed_is_a_function_of_the_coin_and_the_id_alone():
     """Every other sampling field, the params' kind and the order requests come in leave a derived seed as it is; another coin or
     another id moves it."""
@@ -74,13 +83,13 @@ def test_a_served_seed_is_a_function_of_the_coin_and_the_id_alone():
         assert served_seed.served(Params(**kw), rid + "x", COIN)[0].seed != a.seed
 
 
-def test_seed_coins_draw_a_fresh_coin_only_into_an_idle_engine_and_name_each():
-    """A request coming into an idle engine with no window open draws a fresh coin; one joining a busy engine or an open window
+def test_seed_coins_flip_a_fresh_coin_only_for_an_idle_engine_and_name_each():
+    """A request coming into an idle engine with no window open flips a fresh coin; one joining a busy engine or an open window
     keeps the current one, so each window holds the coin its requests were seeded under."""
-    draws = iter([(COIN, "test"), (OTHER, "test")])
-    coins = served_seed.SeedCoins(lambda: next(draws))
+    flips = iter([(COIN, "test"), (OTHER, "test")])
+    coins = served_seed.SeedCoins(lambda: next(flips))
     assert coins.record() is None
-    assert coins.admitting(idle=False) == COIN                          # the first draws, whatever it joins
+    assert coins.admitting(idle=False) == COIN                          # the first flips, whatever it joins
     assert coins.admitting(idle=False) == COIN and coins.record() == {"index": 0, "coin": COIN.hex(), "source": "test"}
     assert coins.admitting(idle=True) == OTHER and coins.record() == {"index": 1, "coin": OTHER.hex(), "source": "test"}
     got = served_seed.SeedCoins().admitting(idle=True)

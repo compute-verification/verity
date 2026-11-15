@@ -18,12 +18,11 @@ import struct
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
-from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import sampling_topp_difftest as D
-from verity.definitions.registry import topp_split as TS
-from verity.definitions.registry import topp_geometry
+from verity_vllm.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import sampling_topp_difftest as D
+from verity_vllm.definitions.registry import topp_geometry
+from verity_vllm.definitions.registry import topp_split as TS
 
 f32 = np.float32
 NEG_INF_BITS = 0xFF800000
@@ -42,7 +41,7 @@ def _u64(*vals) -> np.ndarray:
 
 
 def _eval(spec, operands) -> list[int]:
-    from verity_vllm.properties.admission import evaluate_spec
+    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
     return [int(v) for v in evaluate_spec(spec, operands)]
 
 
@@ -79,7 +78,7 @@ def test_topp_mask_operand_form_equals_topp_keep_row_at_every_s(S):
 
 @pytest.mark.parametrize("bad", [0, 3, 5, 31, 33, 64, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0xFFFFFFF0])
 def test_a_split_count_the_pipeline_never_launches_keeps_no_lane(bad):
-    from verity.definitions.registry import sampling_rows as SR
+    from verity_vllm.definitions.registry import sampling_rows as SR
     V = 64
     x = _row(V)
     word = _eval(SM.topp_mask_word(V), [x.view(np.uint32), _u32(_bits(0.9)), _u32(bad)])[0]
@@ -133,7 +132,7 @@ def test_select_signature_has_splits_as_the_sixth_operand():
 
 def test_codec_materialises_the_operand_form_by_name():
     from verity.circuits import codec
-    fams = getattr(codec, "_LAZY_PRIMITIVE_FAMILIES")
+    fams = codec._LAZY_PRIMITIVE_FAMILIES
     hits = [(rx, mk) for rx, mk in fams if rx.match("TopPMaskWordx128256_v1")]
     assert len(hits) == 1
     prim = hits[0][1](hits[0][0].match("TopPMaskWordx128256_v1"))

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from research import secret_hint
+from research import secret_hint, settings
 from research.pods import runpod
 from research.store.cli import main
 from research.store.local import LocalStore, StoreError
@@ -35,7 +35,7 @@ def test_research_takes_a_lost_secret_from_the_tmux_server_and_leaves_the_rest(t
                                '  RUNPOD_SSH_KEY_B64) echo -RUNPOD_SSH_KEY_B64 ;;\n'
                                '  *) echo "unknown variable: $3" >&2; exit 1 ;;\nesac\n')
     (bin_ / "tmux").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{settings.need('PATH')}")
     for n in INJECTED.split(","):
         monkeypatch.setenv(n, "")
     assert secret_hint.recover() == [] and not (bin_ / "tmux.calls").exists()       # no injected list: tmux is never asked
@@ -44,12 +44,40 @@ def test_research_takes_a_lost_secret_from_the_tmux_server_and_leaves_the_rest(t
     assert secret_hint.recover() == [] and not (bin_ / "tmux.calls").exists()       # under a test: what it unset stays unset
     monkeypatch.delenv("PYTEST_CURRENT_TEST")
     assert secret_hint.recover() == ["R2_BUCKET", "NEBIUS_SA_ID"]
-    assert os.environ["R2_BUCKET"] == "bucket" and os.environ["NEBIUS_SA_ID"] == "line one\nline two"
-    assert os.environ["R2_ENDPOINT"] == "https://r2.invalid" and os.environ["RUNPOD_SSH_KEY_B64"] == ""     # set here; removed in tmux
+    assert settings.need("R2_BUCKET") == "bucket" and settings.need("NEBIUS_SA_ID") == "line one\nline two"
+    assert settings.need("R2_ENDPOINT") == "https://r2.invalid" and settings.need("RUNPOD_SSH_KEY_B64") == ""     # set here; removed in tmux
     assert "R2_ENDPOINT" not in (bin_ / "tmux.calls").read_text()
     assert secret_hint.lost("R2_BUCKET", "RUNPOD_SSH_KEY_B64") == f"RUNPOD_SSH_KEY_B64 not in this shell though this VM injects it: {HINT}"
     monkeypatch.setenv("PATH", str(tmp_path / "no-tmux"))
     assert secret_hint.recover() == []                                                # no tmux at all
+
+
+def test_research_asks_the_tmux_server_what_it_holds_and_whether_its_kept_session_is_there(tmp_path, monkeypatch):
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "tmux").write_text('#!/bin/sh\necho "$@" >> "$0.calls"\n'
+                               '[ -f "$0.down" ] && { echo "no server running on /tmp/tmux-0/default" >&2; exit 1; }\n'
+                               'case "$1" in\n'
+                               '  show-environment) printf "%s\\n" "R2_BUCKET=bucket" "NEBIUS_SA_ID=line one" "line two" \\\n'
+                               '                      "-RUNPOD_SSH_KEY_B64" "R2_ENDPOINT=" "ELSE=x" ;;\n'
+                               '  has-session) [ "$3" = "=vm-secrets" ] && [ -f "$0.kept" ] ;;\nesac\n')
+    (bin_ / "tmux").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", INJECTED)
+    assert secret_hint.server() is None and not (bin_ / "tmux.calls").exists()        # under a test: no server is asked
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    assert secret_hint.server() == (["R2_BUCKET", "NEBIUS_SA_ID"], False)             # set there, by name; no kept session
+    assert (bin_ / "tmux.calls").read_text() == "show-environment -g\nhas-session -t =vm-secrets\n"
+    (bin_ / "tmux.kept").write_text("")
+    assert secret_hint.server() == (["R2_BUCKET", "NEBIUS_SA_ID"], True)
+    (bin_ / "tmux.down").write_text("")
+    assert secret_hint.server() == (None, False)                                      # no server answers
+    monkeypatch.setenv("PATH", str(tmp_path / "no-tmux"))
+    assert secret_hint.server() is None                                               # no tmux at all: nothing to ask or start
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    monkeypatch.delenv("CLOUD_AGENT_INJECTED_SECRET_NAMES")
+    assert secret_hint.server() is None                                               # a laptop, a pod, a node
+    assert secret_hint.START_KEPT == f"tmux new-session -d -s {secret_hint.KEPT_SESSION}"
 
 
 def test_every_research_command_recovers_lost_secrets_first(monkeypatch):
@@ -118,7 +146,7 @@ def test_node_ssh_in_a_shell_that_lost_the_key_fails_with_the_hint(tmp_path, mon
 
 def test_nebius_auth_in_a_shell_that_lost_its_key_says_so():
     common = Path(runpod.__file__).parent / "nebius" / "common.sh"
-    env = {"PATH": os.environ["PATH"], "NEBIUS_BIN": "/bin/true"}
+    env = {"PATH": settings.need("PATH"), "NEBIUS_BIN": "/bin/true"}
     r = subprocess.run(["bash", "-c", f'. "{common}"; nebius_auth'], env=env, capture_output=True, text=True, check=False)
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set (a Cursor secret" in r.stderr
     env["CLOUD_AGENT_INJECTED_SECRET_NAMES"] = INJECTED

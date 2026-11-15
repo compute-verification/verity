@@ -35,6 +35,7 @@ import json
 import os
 import re
 import signal
+import sys
 import tempfile
 import time
 from collections.abc import Callable, Iterable
@@ -56,13 +57,16 @@ clock = time.monotonic
 sleep = time.sleep
 
 
-def claim(path: Path, doc: dict[str, Any]) -> bool:
-    """Create `path` holding `doc` unless it exists, atomically (a reader sees all of it or no file); whether this call created it."""
+def claim(path: Path, doc: dict[str, Any], mode: int | None = None) -> bool:
+    """Create `path` holding `doc` unless it exists, atomically (a reader sees all of it or no file); whether this call created it.
+    `mode`: the file's, for one another user reads (mkstemp's is the owner's alone)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(doc, f)
+            if mode is not None:
+                os.fchmod(f.fileno(), mode)
         os.link(tmp, path)
         return True
     except FileExistsError:
@@ -74,10 +78,13 @@ def claim(path: Path, doc: dict[str, Any]) -> bool:
 def cancel_request(attempt_dir: Path) -> dict[str, Any] | None:
     """`research cancel`'s request in CONTROL_CANCEL, once it is there and parses: {"grace_s", "actor", "reason", "scopes"}; None
     for none, and for the runner's `closed`."""
+    if not (attempt_dir / CONTROL_CANCEL).exists():
+        return None
     try:
         doc = json.loads((attempt_dir / CONTROL_CANCEL).read_text())
         return doc if isinstance(doc, dict) and float(doc.get("grace_s")) >= 0 else None
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError) as e:
+        print(f"tele: {attempt_dir / CONTROL_CANCEL} is no cancel request ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 

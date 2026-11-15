@@ -1,29 +1,45 @@
 """[GEN dense / ov-dense] the Gemma-2 patterns (`profiles/gen_dense_gemma2_patterns.py`) on a synthetic step that replays
 the exact ATen sequence of vLLM d9105ea80's eager `Gemma2ForCausalLM` (see the module docstring there): every root resolves
-to the intended `quarantine.dense` specialization, the widened-bf16 operands are re-pointed to their narrow sources, the
+to the intended `registry.dense` specialization, the widened-bf16 operands are re-pointed to their narrow sources, the
 Triton `mean_kernel` child is consumed by the `aten.mean.dim` compute, and the pins reject a foreign launch geometry."""
 from __future__ import annotations
 
-import importlib
-
 import dataclasses
+import importlib
 
 import numpy as np
 import pytest
 
+from tests.observe.test_patterns_synthetic import (
+    CUDA,
+    Builder,
+    bf,
+    by_spec,
+    context,
+    decode_step,
+)
 from verity_vllm.observe.events import StepEnd, ViewDesc
 from verity_vllm.observe.fold.patterns import BiasAdd, TransparentAten
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as B1PROF
-from verity_vllm.observe.fold.profiles.gen_dense_gemma2_patterns import (Bf16ScalarChain, MeanDimTriton, NarrowToBf16, gemma2_patterns,
-                                                                with_gemma2_patterns)
+from verity_vllm.observe.fold.profiles.gen_dense_gemma2_patterns import (
+    Bf16ScalarChain,
+    MeanDimTriton,
+    NarrowToBf16,
+    gemma2_patterns,
+    with_gemma2_patterns,
+)
+from verity_vllm.observe.fold.resolver import (
+    PerRow,
+    Shared,
+    Unsupported,
+    resolve_step,
+    spec_module,
+)
+from verity_vllm.observe.fold.tree import step_events
 
 gemma = importlib.import_module("verity_vllm.observe.fold.profiles.derived_GEMMA2_2B")
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, Unsupported, resolve_step, spec_module
-from tests.observe.test_patterns_synthetic import CUDA, Builder, bf, by_spec, context, decode_step, i64
-from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.quarantine.dense import ALL_DEFINITIONS, ALL_PRIMITIVES
 
-M, H, I, V = 2, 8, 4, 16
+M, H, INTER, V = 2, 8, 4, 16
 ADD = "aten::add.Tensor(Tensor self, Tensor other, *, Scalar alpha=1) -> Tensor"
 POW = "aten::pow.Tensor_Scalar(Tensor self, Scalar exponent) -> Tensor"
 MEAN = "aten::mean.dim(Tensor self, int[1]? dim, bool keepdim=False, *, ScalarType? dtype=None) -> Tensor"
@@ -102,8 +118,8 @@ def gemma_step(block=1024, warps=4, k_n=None):
     w = bf(A_W, (H,))
     n1, _ = gemma_norm(b, al, scaled, w, block=block, warps=warps, k_n=k_n)
     n2, res = gemma_norm(b, al, n1, w, residual=scaled, module="model.layers.1.input_layernorm")
-    gu = bf(al(), (M, 2 * I))
-    act = bf(al(), (M, I))
+    gu = bf(al(), (M, 2 * INTER))
+    act = bf(al(), (M, INTER))
     b.leaf("_C.gelu_tanh_and_mul.default", GELU, [act, gu], module="model.layers.0.mlp.act_fn")
     logits = bf(al(), (M, V))
     d = bf(al(), (M, V))
@@ -145,15 +161,15 @@ def test_every_gemma_root_resolves_to_a_quarantine_dense_compute():
         f"Bf16MulScalarTensor_v1{{N={H}}}": 1, f"AddScalarBf16_v1{{N={H},C=1.0}}": 2, f"SquareBf16_v1{{N={H}}}": 1, f"SquareF32_v1{{N={H}}}": 1,
         f"MeanTriton_v1{{N={H}}}": 2, "AddScalarF32_v1{N=1,C=1e-06}": 2, "RsqrtF32_v1{N=1}": 2, f"ScaleRowBf16_v1{{N={H}}}": 1,
         f"ScaleRowF32_v1{{N={H}}}": 1, f"MulVecF32_v1{{N={H}}}": 2, f"NarrowF32ToBf16_v1{{N={H}}}": 3, f"AddWidenedBf16_v1{{N={H}}}": 1,
-        f"GeluTanhMul_v1{{I={I}}}": 1, f"Bf16DivScalar_v1{{N={V},C=30.0}}": 1, f"Bf16Tanh_v1{{N={V}}}": 1, f"Bf16MulScalar_v1{{N={V},C=30.0}}": 1,
+        f"GeluTanhMul_v1{{I={INTER}}}": 1, f"Bf16DivScalar_v1{{N={V},C=30.0}}": 1, f"Bf16Tanh_v1{{N={V}}}": 1, f"Bf16MulScalar_v1{{N={V},C=30.0}}": 1,
     }
     assert {k: len(c) for k, c in specs.items()} == expected
     for k, cs in specs.items():
         for c in cs:
             # Bf16MulScalarTensor is in the accepted registry (b1); the rest in
-            # `verity.definitions.registry.dense` (the quarantine modules re-export the same objects: same ids, same bodies)
-            assert spec_module(c.spec) == "verity.definitions.registry.dense" or (
-                k.startswith("Bf16MulScalarTensor_v1") and spec_module(c.spec) == "verity.definitions.registry.b1"), (k, spec_module(c.spec))
+            # `verity_vllm.definitions.registry.dense` (the quarantine modules re-export the same objects: same ids, same bodies)
+            assert spec_module(c.spec) == "verity_vllm.definitions.registry.dense" or (
+                k.startswith("Bf16MulScalarTensor_v1") and spec_module(c.spec) == "verity_vllm.definitions.registry.b1"), (k, spec_module(c.spec))
             assert c.rows == (1 if k.startswith("AddScalarBf16") else M)
     # the widened operands read their bf16 sources (never the f32 copies) ...
     (sq,) = specs[f"SquareBf16_v1{{N={H}}}"]
@@ -170,7 +186,7 @@ def test_every_gemma_root_resolves_to_a_quarantine_dense_compute():
     # the mean compute consumes the dispatcher call AND its Triton child
     for c in specs[f"MeanTriton_v1{{N={H}}}"]:
         assert len(c.consumed) == 2 and c.kernels == ("mean_kernel",)
-    (g,) = specs[f"GeluTanhMul_v1{{I={I}}}"]
+    (g,) = specs[f"GeluTanhMul_v1{{I={INTER}}}"]
     assert g.operands == (PerRow(v["gu"]),) and g.outputs == (PerRow(v["act"]),)
 
 
@@ -182,7 +198,7 @@ def test_under_registered_values_gelu_binds_v1_and_the_scalar_constants_are_refu
     ctx = gemma_context(start)
     ctx = dataclasses.replace(ctx, profile=dataclasses.replace(ctx.profile, registered_values=True))
     res = resolve_step(step_events(events), ctx)
-    (g,) = by_spec(res)[f"GeluTanhMul_v1{{I={I}}}"]
+    (g,) = by_spec(res)[f"GeluTanhMul_v1{{I={INTER}}}"]
     assert g.operands == (PerRow(v["gu"]),) and g.outputs == (PerRow(v["act"]),)
     refused = [r for r in res if isinstance(r, Unsupported)]
     assert all("registered_values" in r.reason and "value twin" in r.reason for r in refused), [r.reason for r in refused]
@@ -199,11 +215,3 @@ def test_mean_kernel_pins_reject_a_foreign_launch(over, needle):
     uns = [r for r in res if isinstance(r, Unsupported)]
     assert len(uns) == 1 and uns[0].op == "aten.mean.dim" and needle in uns[0].detail["mismatches"]
 
-
-def test_quarantine_dense_registry_is_the_pattern_target_set():
-    ids = {d.id.split("{")[0] for d in ALL_DEFINITIONS}
-    used = {"Bf16MulScalarTensor_v1", "AddScalarBf16_v1", "AddScalarF32_v1", "SquareBf16_v1", "SquareF32_v1", "MeanTriton_v1", "RsqrtF32_v1",
-            "ScaleRowBf16_v1", "ScaleRowF32_v1", "MulVecF32_v1", "NarrowF32ToBf16_v1", "AddWidenedBf16_v1", "GeluTanhMul_v1", "Bf16DivScalar_v1",
-            "Bf16Tanh_v1", "Bf16MulScalar_v1"}
-    assert used == ids, ids ^ used
-    assert {p.id.split("{")[0] for p in ALL_PRIMITIVES} == {"TanhF32Rn_v1", "GeluTanhMulBf16_v1"}

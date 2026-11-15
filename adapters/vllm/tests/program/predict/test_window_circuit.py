@@ -4,7 +4,7 @@ of the weights or the network certifier's scan state rows, and nothing free; a s
 Programs' row. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small
 enough to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks included, is the same for windows that differ
 in everything, their request count included. At the class of record's slots (8, 4 at each of buckets 0 and 16) with TINY's
-caps, a 3-request and an 8-request window are one circuit. Every reader reads its writers' rows as they are, a port cut
+bounds, a 3-request and an 8-request window are one circuit. Every reader reads its writers' rows as they are, a port cut
 once a writer row. A head is `AttentionHead_v19`'s Calls, a unit each: a key block reads a key's row and a value's a key,
 so past 126 keys it holds more than a unit's 256 rows, and TINY at 129 positions is refused by name.
 """
@@ -16,9 +16,19 @@ import re
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
+from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import wiring as WI
+from verity_vllm.definitions.registry import io_shell as IO
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.accounting.pouw.verifier import audit as AU
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
 from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S
 from verity_vllm.check import weights_of_record as WR
@@ -29,21 +39,18 @@ from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
-from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
+from verity_vllm.program.predict.window_circuit import (
+    CLASS_OF_RECORD,
+    Grain,
+    WindowClass,
+    class_circuit,
+    window_circuit,
+)
 from verity_vllm.records import weights_registration as WRG
-
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.pouw.verifier import audit as AU
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.registry import io_shell as IO
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import wiring as WI
 
 GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 CLASS = WindowClass(2, 4, 2)
-#: the class of record's slots (8, 4 a boundary at buckets 0 and 16) at TINY's caps
+#: the class of record's slots (8, 4 a boundary at buckets 0 and 16) at TINY's bounds
 SLOTS = WindowClass(8, 4, 2, lanes=4, every=16)
 G2 = {**S.GREEDY, "max_tokens": 2}
 #: q0's prompt of 4 at step 0, q1's prompt of 3 chunked 2 then 1 across steps 0 and 1; each keeps two outputs
@@ -122,7 +129,7 @@ def test_windows_of_a_class_are_one_circuit_whatever_their_request_count(window)
 
 
 def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_one_circuit():
-    """At the class of record's slots, 4 a boundary at buckets 0 and 16 (at TINY's caps of 4 prompt ids and 2 outputs), a
+    """At the class of record's slots, 4 a boundary at buckets 0 and 16 (at TINY's bounds of 4 prompt ids and 2 outputs), a
     window of three requests (two anchored at bucket 0, one at 16) and one of eight (four at each) emit the
     same circuit, the same descriptor digest (SHA-512 of its description's bytes) and the same blocks: eight class Programs,
     each slot's `ScanSlots_v2` unit reading its lane of the scan's state row before its anchor (rows 0 and 16 of the 4-lane
@@ -142,15 +149,15 @@ def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_o
 
 def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
     """At the class of record's slots, the wires into the slots' entries begin and end at every lane's nb = 2 slots and
-    nowhere else, and no server block ends among them, so `interface.members` (which cuts a template's batch only there
-    and at the cap) makes the entry template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
+    nowhere else, so `interface.members` (which cuts a template's batch only there and at a statement's unit bound) makes the entry
+    template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
     entries, slot nb·j + b at leaf b, each lane's a hiding row with its own root in the window's registration, which the
     network certifier's scan reads as lane j's Programs."""
     eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
     entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in eight.templates}[ENTRY]
     nb = SLOTS.slots // SLOTS.lanes
     ends = {x for w in eight.wires if w.reader == entry for x in (w.at, w.at + w.reader_units)}
-    assert ends == set(range(0, SLOTS.slots + 1, nb)) and not eight.server_ends().get(entry)
+    assert ends == set(range(0, SLOTS.slots + 1, nb))
 
 
 def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeypatch):
@@ -161,26 +168,36 @@ def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeyp
     assert (CLASS_OF_RECORD.slots, CLASS_OF_RECORD.lanes, CLASS_OF_RECORD.every, CLASS_OF_RECORD.positions) == (8, 4, 16, 1087)
     assert (CLASS_OF_RECORD.boundaries, CLASS_OF_RECORD.buckets) == ((0, 16), 32)
     assert [(CLASS_OF_RECORD.anchor(k), CLASS_OF_RECORD.lane(k)) for k in range(8)] == [(16 * (k % 2), k // 2) for k in range(8)]
-    calls = []
-    monkeypatch.setattr(WC, "class_circuit", lambda *a: calls.append(a[1:]) or "the class circuit")
+    calls: list[tuple] = []
+
+    def class_circuit(*a):
+        calls.append(a[1:])
+        return "the class circuit"
+
+    monkeypatch.setattr(WC, "class_circuit", class_circuit)
     reg = S._registered()
     for window, placed in ((THREE, [(0, 1), (0, 2), (16, 31)]), (EIGHT, [(0, 1)] * 4 + [(16, 17)] * 4)):
         assert window_circuit(reg, S.compile_steps(reg, *S._session(*window)), CLASS_OF_RECORD, placed=placed) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True, None)] * 2
+    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, True, None)] * 2
 
 
 def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
     """A slot's Program hands all its outputs to the scan at its anchor bucket and the scan carries them across
     windows (`SC_GROUP`), so a request at the class of record's second boundary (bucket 16) keeping all 64 outputs, its last
     at bucket 16 + D + 64 / r = 59 past the 32-bucket window's end, is taken to the one class circuit."""
-    calls = []
-    monkeypatch.setattr(WC, "class_circuit", lambda *a: calls.append(a[1:]) or "the class circuit")
+    calls: list[tuple] = []
+
+    def class_circuit(*a):
+        calls.append(a[1:])
+        return "the class circuit"
+
+    monkeypatch.setattr(WC, "class_circuit", class_circuit)
     reg = S._registered()
     window = ([(1, 64, {**S.GREEDY, "max_tokens": 64})], [[(0, 0, 1)]] + [[(0, p, 1)] for p in range(1, 64)])
     compiled = S.compile_steps(reg, *S._session(*window))
     assert [(u.LP, u.T + 1) for u in compiled.requests if u is not None] == [(1, 64)]
     assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(16, 59)]) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True, None)]
+    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, True, None)]
 
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
@@ -249,7 +266,7 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     assert circuit.external == (f"{ids[SCAN]}/state", f"{ids[ENTRY]}/o0")
 
 
-def test_a_positions_token_is_its_feed_below_the_prompt_cap_and_the_previous_select_past_it(window):
+def test_a_positions_token_is_its_feed_below_the_prompt_bound_and_the_previous_select_past_it(window):
     """Each slot's request is its lane's of the scan state row before its anchor (both slots at bucket 0, lanes 0 and 1, row 0
     of the registered scan state), read by its `ScanSlots_v2` unit, whose lane k is its outputs ``o4k`` to ``o4k+3``: the
     first position's token and slot (its `TokenFeed_v1`'s), the occupancy word and the head. Position 0's embedding reads
@@ -542,7 +559,7 @@ def test_every_input_row_is_wired_or_registered_counted_from_the_description(win
     one = WB.weight_param("model.norm.weight", 64)
     alone = IF.input_count(doc, pins={one: pins[one]}, roots=roots)["registered"]
     other = IF.input_count(doc, pins=pins, roots={**roots, one: "cd" * 64})["registered"]
-    assert 0 < alone and other == count["registered"] - alone
+    assert alone > 0 and other == count["registered"] - alone
 
 
 #: TINY's rotary table's parameter, the one weight with no byte digest in the weights record (held to the analytic table)
@@ -709,18 +726,19 @@ def _checkpoint(tmp_path, seed: int = 3, flip: str | None = None, quant: dict | 
     first element flipped) and a manifest pinning it at `test_steps._registered`'s model and revision: the checkpoint
     directory and the manifest. With ``quant`` (its config's ``quantization_config``), each linear is an exact-int8 one's,
     ``weight`` I8 [N, K] and ``weight_scale`` F32 [N, 1] (`engine.int8_checkpoint`)."""
-    T, rng = S.TINY, np.random.default_rng(seed)
-    H, I, NH, KVH, V = T["hidden_size"], T["intermediate_size"], T["num_attention_heads"], T["num_key_value_heads"], T["vocab_size"]
+    T: dict[str, Any] = S.TINY
+    rng = np.random.default_rng(seed)
+    H, INTER, NH, KVH, V = T["hidden_size"], T["intermediate_size"], T["num_attention_heads"], T["num_key_value_heads"], T["vocab_size"]
     D = H // NH
-    t = {"model.embed_tokens.weight": _bf16(rng, V, H), "model.norm.weight": _bf16(rng, H)}
+    w = {"model.embed_tokens.weight": _bf16(rng, V, H), "model.norm.weight": _bf16(rng, H)}
     for i in range(T["num_hidden_layers"]):
         p = f"model.layers.{i}."
-        t |= {p + "self_attn.q_proj.weight": _bf16(rng, NH * D, H), p + "self_attn.k_proj.weight": _bf16(rng, KVH * D, H),
+        w |= {p + "self_attn.q_proj.weight": _bf16(rng, NH * D, H), p + "self_attn.k_proj.weight": _bf16(rng, KVH * D, H),
               p + "self_attn.v_proj.weight": _bf16(rng, KVH * D, H), p + "self_attn.o_proj.weight": _bf16(rng, H, NH * D),
-              p + "mlp.gate_proj.weight": _bf16(rng, I, H), p + "mlp.up_proj.weight": _bf16(rng, I, H),
-              p + "mlp.down_proj.weight": _bf16(rng, H, I), p + "input_layernorm.weight": _bf16(rng, H),
+              p + "mlp.gate_proj.weight": _bf16(rng, INTER, H), p + "mlp.up_proj.weight": _bf16(rng, INTER, H),
+              p + "mlp.down_proj.weight": _bf16(rng, H, INTER), p + "input_layernorm.weight": _bf16(rng, H),
               p + "post_attention_layernorm.weight": _bf16(rng, H)}
-    t = {n: ("BF16", a) for n, a in t.items()}
+    t: dict[str, tuple[str, np.ndarray]] = {n: ("BF16", a) for n, a in w.items()}
     for n in [n for n in t if quant and n.endswith("_proj.weight")]:
         (N, K), s = t[n][1].shape, n.removesuffix("weight") + "weight_scale"
         t[n], t[s] = ("I8", rng.integers(-127, 128, (N, K), dtype=np.int8)), ("F32", rng.random((N, 1), dtype=np.float32))
@@ -802,11 +820,11 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
     assert unpinned["of_record"] is False and unpinned["root_of_record"] != rec["root_of_record"]
     with pytest.raises(ValueError, match="the checkpoint is not of record"):
         WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
-    assert WR.SCHEMA == rec["schema"]
+    assert rec["schema"] == WR.SCHEMA
 
 
 def test_what_the_class_doesnt_take_is_refused_by_name():
-    """A window past its class (three requests in two slots, a prompt past the cap, more outputs than the cap), a stochastic
+    """A window past its class (three requests in two slots, a prompt past the bound, more outputs than the bound), a stochastic
     request (its Program would read a seed) and a unit past the grain's rows (at 12, position 4's key block's 14) are
     refused, and so is a Program count the class has no slots for."""
     reg = S._registered()
@@ -864,7 +882,7 @@ def _unit_rows(circuit) -> dict[str, int]:
 
 
 def test_no_unit_holds_more_rows_in_and_out_than_the_grain(window):
-    """C-Flock's composer gives each row a unit reads or writes an hm96 slot, so at Llama-3.2-1B's grain a unit fits its
+    """Flock's composer gives each row a unit reads or writes an hm96 slot, so at Llama-3.2-1B's grain a unit fits its
     2^27-bit block with at most 256 rows in and out. A port is cut once a writer row, so a unit's rows are its writers' rows,
     its registered reads and its outputs: at the test grain the largest are SiluMul's (its 16 gate/up slices and its output,
     17), position 4's key block's (5 key rows, 5 value rows, its query and three outputs, 14), the fused norm's (8 down or
@@ -892,7 +910,7 @@ def _widest_row(circuit) -> dict[str, int]:
 
 
 def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_wouldnt_compose(window):
-    """C-Flock's composer refuses a proof block none of whose rows is over 111 bytes (no row then has a compression before its
+    """Flock's composer refuses a proof block none of whose rows is over 111 bytes (no row then has a compression before its
     last SHA-512 block, so the block's SHA range holds no slot), one of more than 256 rows, or one past 2^27 bits
     (`interface.check_proof_block`), and the class builder refuses such a unit at lowering, naming each. TINY's class is too
     small to prove: 12 templates have no wider row, its heads' of 16 values (RoPE, the key blocks, the head end), the token
@@ -906,7 +924,7 @@ def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_woul
     with pytest.raises(Unexpressible) as refused:
         class_circuit(S._registered(), CLASS, None, GRAIN)
     why = str(refused.value)
-    assert why.startswith(f"{len(short)} templates C-Flock's composer wouldn't prove: ")
+    assert why.startswith(f"{len(short)} templates Flock's composer wouldn't prove: ")
     named = {_label(fn) for fn, _ in circuit.templates if re.search(re.escape(IF.descriptor_id(fn)) + "(: | cut )", why)}
     assert named == set(short)
 

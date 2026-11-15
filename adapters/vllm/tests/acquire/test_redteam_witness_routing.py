@@ -13,15 +13,19 @@ from __future__ import annotations
 import json
 import types
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
-from tests.check.opened import commit_steps  # noqa: E402
-from verity_vllm.acquire.sources import moe_align_source as MA  # noqa: E402
-from verity_vllm.acquire.sources import oracle_witness as OW  # noqa: E402
-from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
-from verity_vllm.check import oracle_compare as OC  # noqa: E402
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
+from tests.check.opened import commit_steps
+from verity_vllm.acquire.sources import moe_align_source as MA
+from verity_vllm.acquire.sources import oracle_witness as OW
+from verity_vllm.acquire.sources import partial_source as tps
+from verity_vllm.check import oracle_compare as OC
 
 OPROJ, MOE = "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.experts"
 E, BM = 384, 8
@@ -68,18 +72,18 @@ def _tensors(seed: int) -> list[torch.Tensor]:
     return [torch.randn(1, 8, generator=g).to(torch.bfloat16) for _ in range(4)]
 
 
-def _oracle(cap: Path, steps: dict) -> None:
-    cap.mkdir(parents=True, exist_ok=True)
-    with (cap / "coll.rank0.jsonl").open("w") as f:
+def _oracle(capture_dir: Path, steps: dict) -> None:
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    with (capture_dir / "coll.rank0.jsonl").open("w") as f:
         for s, (parts, _outs) in steps.items():
             for k, mod in enumerate([OPROJ, MOE]):
                 f.write(json.dumps({"rank": 0, "step": s, "k": k, "kind": "all_reduce", "module": mod, "shape": list(parts[k].shape)}) + "\n")
     for s, (parts, outs) in steps.items():
-        torch.save({"step": s, "part": parts, "out": outs}, cap / f"coll.rank0.step{s}.pt")
+        torch.save({"step": s, "part": parts, "out": outs}, capture_dir / f"coll.rank0.step{s}.pt")
 
 
-def _record_witness(cap: Path, step: int, ws: list[torch.Tensor]) -> None:
-    with (cap / OW.witness_file(0)).open("a") as f:
+def _record_witness(capture_dir: Path, step: int, ws: list[torch.Tensor]) -> None:
+    with (capture_dir / OW.witness_file(0)).open("a") as f:
         for m, t in zip(OW.MEMBERS, ws):
             f.write(json.dumps({"rank": 0, "step": step, "k": 1, "module": MOE, "member": m, "sha256": OW.digest(tps._bytes(t))}) + "\n")
 

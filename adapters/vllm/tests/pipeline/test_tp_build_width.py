@@ -16,9 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import cli, row_tp
 from verity_vllm.pipeline import row_records as R
-from verity_vllm.pipeline import row_tp
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.pipeline.row_tp import TpRow
 
@@ -33,7 +32,8 @@ class _FakeChildren:
     command line's, a compose a workload digest over its command line and its components' digests, the manifest a complete one."""
 
     def __init__(self, t: TpRow, root: str):
-        self.t, self.root, self.lock, self.live, self.most, self.cmds = t, root, threading.Lock(), 0, 0, []
+        self.t, self.root, self.lock, self.live, self.most = t, root, threading.Lock(), 0, 0
+        self.cmds: list = []
 
     def __call__(self, to, lf: str, cmd: list[str]) -> int:
         args = [a.replace(self.root, "<sweep>") for a in cmd[len(self.t.cli()):]]
@@ -231,7 +231,8 @@ class _Timed:
     anything (rc 124), as GNU ``timeout`` kills it; otherwise it runs as `_FakeChildren`.  Records each child's limit."""
 
     def __init__(self, fake: _FakeChildren, seconds):
-        self.fake, self.seconds, self.limits = fake, seconds, []
+        self.fake, self.seconds = fake, seconds
+        self.limits: list = []
 
     def __call__(self, to, lf: str, cmd: list[str]) -> int:
         args = cmd[len(self.fake.t.cli()):]

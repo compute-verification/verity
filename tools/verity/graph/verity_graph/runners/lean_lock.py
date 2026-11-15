@@ -12,7 +12,11 @@ worker's `lean` env (`lean_module.packages`), and runs `check.py` there. It pass
 the committed lock; a lock whose every failure is a record difference is stale, a fail naming the command that regenerates
 it, `records` then the lock that command writes; a `roots` entry no read holds (`lake build +ROOT` fails on it) and any
 other failure of the audit are fails too. A lock's `runs` aren't run: a run's `generate` reads the tree beyond the task's
-inputs."""
+inputs.
+
+The scratch tree and the audit's directory are removed before the result is returned, whatever it is: the executor brings
+the whole work directory back from its worker with the result, and the scratch tree holds a copy of every input and a link
+to every read (for Security's locks, gigabytes in tens of thousands of files)."""
 from __future__ import annotations
 
 import json
@@ -33,10 +37,24 @@ def regenerate(pkg: str) -> str:
     return f"python3 tools/verity/lean/check.py --build --update {pkg}"
 
 
+def programs() -> Path:
+    """The worker's cache of the audit's compiled Lean programs (`check.py --program-cache`), as `lean_audit.py` keeps it."""
+    return la.COMMON.cache_dir() / "lean-programs"
+
+
 def run(task: dict, work: Path) -> dict:
+    tree, out = work / "tree", work / "audit"
+    try:
+        return _audit(task, work, tree, out)
+    finally:
+        for d in (tree, out):
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def _audit(task: dict, work: Path, tree: Path, out: Path) -> dict:
     pkg = task["vars"]["package"]
     records = next(work / o["path"] for o in task["outputs"] if o["name"] == "records")
-    lib, tree, out = work / "out" / "lean", work / "tree", work / "audit"
+    lib = work / "out" / "lean"
     lib.mkdir(parents=True, exist_ok=True)
     la.scratch_tree(tree, task["inputs"])
     policy = json.loads((tree / pkg / POLICY).read_text())  # the listing refuses a lock that isn't JSON
@@ -62,7 +80,7 @@ def run(task: dict, work: Path) -> dict:
     except EnvError as e:
         return {"status": "error", "detail": {"error": f"the lean env: {e}"}}
     rc = call([sys.executable, str(tree / "tools" / "verity" / "lean" / "check.py"), "--no-replay", "--no-runs",
-               "--repo", str(tree), "--out", str(out), str(tree / pkg)], work, tree,
+               "--program-cache", str(programs()), "--repo", str(tree), "--out", str(out), str(tree / pkg)], work, tree,
               {**os.environ, "LEAN_NUM_THREADS": str(task.get("resources", {}).get("cores", 1))})
     doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").is_file() else {}
     rep = next((r for r in doc.get("packages", []) if Path(r["package"]).resolve() == (tree / pkg).resolve()), None)

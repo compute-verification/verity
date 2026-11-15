@@ -1,45 +1,53 @@
 {
  "schema": "lean-unread-caps/v1",
  "areas": {
-  "Definitions/Core": {
+  "Definitions/Certifier": {
    "modules": 1,
-   "declarations": 12
+   "declarations": 19
+  },
+  "Definitions/Flock": {
+   "modules": 1,
+   "declarations": 3
   },
   "Definitions/Pouw": {
-   "modules": 27,
-   "declarations": 121
+   "modules": 21,
+   "declarations": 89
   },
   "Proofs/Accounting": {
    "modules": 5,
    "declarations": 56
+  },
+  "Proofs/Certifier": {
+   "modules": 4,
+   "declarations": 34
   },
   "Proofs/Core": {
    "modules": 4,
    "declarations": 60
   },
   "Proofs/Flock": {
-   "modules": 265,
-   "declarations": 2130
+   "modules": 300,
+   "declarations": 2415
   },
-  "Proofs/Nci": {
+  "Proofs/InferenceOnly": {
    "modules": 1,
    "declarations": 4
-  },
-  "Proofs/NetworkCertifier": {
-   "modules": 3,
-   "declarations": 33
   },
   "Proofs/Pous": {
    "modules": 1,
    "declarations": 3
   },
   "Proofs/Pouw": {
-   "modules": 49,
-   "declarations": 412
+   "modules": 47,
+   "declarations": 408
+  },
+  "Proofs/Slowdown": {
+   "modules": 1,
+   "declarations": 4
   },
   "Proofs/Spot": {
-   "modules": 7,
-   "declarations": 89
+   "modules": 6,
+   "declarations": 83
   }
  }
 }

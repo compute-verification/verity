@@ -6,9 +6,9 @@ from __future__ import annotations
 import bisect
 
 import numpy as np
-
 from verity.circuits.evaluation import MissingValue, evaluate_region
 from verity.circuits.layout import Circuit, FunctionCall, resolve
+
 
 class Segments:
     """Sorted disjoint [start, end) gate ranges, each backed by a flat words array and a location record.

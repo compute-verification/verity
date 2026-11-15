@@ -15,6 +15,7 @@ import argparse
 import ast
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 SRC = Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit.py"
 
@@ -40,10 +41,10 @@ def test_commit_delta_parser_builds_and_declares_every_option_once():
     seen: Counter[str] = Counter()
     for c in calls:
         opts = _option_strings(c)
-        assert opts, "add_argument without a literal option string at line %d" % c.lineno
+        assert opts, f"add_argument without a literal option string at line {c.lineno}"
         for o in opts:
             seen[o] += 1
-        kw = {}
+        kw: dict[str, Any] = {}
         for k in c.keywords:
             if k.arg in ("help", "metavar", "dest", "nargs", "choices", "required", "action") and isinstance(k.value, ast.Constant):
                 kw[k.arg] = k.value.value
@@ -54,8 +55,8 @@ def test_commit_delta_parser_builds_and_declares_every_option_once():
         # the option strings and their multiplicity are what is under test; argparse raises ArgumentError on a duplicate right here
         ap.add_argument(*opts, **kw)
     dups = sorted(o for o, n in seen.items() if n > 1)
-    assert dups == [], "option strings declared twice in commit_delta.main(): %s (argparse.ArgumentError at parse time)" % dups
+    assert dups == [], f"option strings declared twice in commit_delta.main(): {dups} (argparse.ArgumentError at parse time)"
     for must in ("--checkpoints", "--checkpoint-dir", "--weights-of-record", "--program-digest", "--program-dir", "--programs-root",
                  "--match-dir", "--replay-challenge"):
-        assert seen[must] == 1, "%s declared %d times" % (must, seen[must])
+        assert seen[must] == 1, f"{must} declared {seen[must]} times"
     assert ap.format_usage().startswith("usage: commit_delta")   # the parser is whole: usage renders over every declared option

@@ -3,7 +3,8 @@
 (`CI`, `INFRA`, the merge thread: `merge_thread_post`), a check's launch (`train_launch`: `train.sh SHA MACHINES --deferred
 STEPS`, detached by `detach`, its run ids read back by `launched`; shard K of N on `shard_machines`) and its records read back
 (`run_states`, `evidence`: steps.jsonl, the suites' reports, what a failure names: `implicated`, `step_paths`, `killed`; each
-shard's steps: `shard_steps`, `shard_passed`), the steps `main` waits for (`gating`), and `Landing`: those launches and reads
+shard's steps: `shard_steps`, `shard_passed`; the runs read from their nodes at once, each once a tick and an ended one's files
+once: `Reads`, `read_run`), the steps `main` waits for (`gating`), and `Landing`: those launches and reads
 on the queue's machines, policy.toml's allowances of a failed step or graph/v2 task, the owners of a path and of a job, and
 what follows a candidate's members reaching `main` (`Landing._on_main`).
 
@@ -27,13 +28,15 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 
-from . import carry, policy
-from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, unreviewed
+from . import carry, policy, settings
+from .notes import ART_RE
+from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, merge_main, unreviewed
 from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
 
 #: who hears what the queue can't settle
@@ -70,9 +73,8 @@ NOT_STARTED = 75
 #: the steps of a whole check: every ci.toml job (`--deferred` takes jobs; the preflights are none), those off the merge gate
 #: (policy.toml's `off_gate`) among them; what the check that gates a candidate sends (`vqueue_slim.start`)
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
-#: the steps of `AFTER_LANDING` a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
-#: and in every shard (`shards.NO_SHARD`)
-AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
+#: the steps of `AFTER_LANDING` a run may skip by name: lean-agreement when nothing it checks changed
+AFTER_LANDING_OPTIONAL = ("lean-agreement",)
 #: the steps whose tasks run test suites, so a `suite NAME` failure may be either's (`vqueue_slim.failing`)
 SUITE_STEPS = ("lean-suites", "pytest")
 #: the steps train.sh still checks beside the executor's check of a candidate: a run of them alone (`vqueue_slim.start`), whose
@@ -110,7 +112,7 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
     """The queue's `git -c` options (`credential_args`) as GIT_CONFIG_* variables, after any the caller carries, so every git a
     child runs in the queue's clone authenticates as the queue's own does."""
     pairs = [o.split("=", 1) for flag, o in zip(auth[::2], auth[1::2]) if flag == "-c"]
-    n = int(os.environ.get("GIT_CONFIG_COUNT") or 0)
+    n = int(settings.get("GIT_CONFIG_COUNT") or 0)
     env = {"GIT_CONFIG_COUNT": str(n + len(pairs))}
     for i, (k, v) in enumerate(pairs, n):
         env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"] = k, v
@@ -123,7 +125,7 @@ def authed(auth: tuple[str, ...]):
     (`merge.caught_up`, `_sweep_after`), whose git children read os.environ (a git that prompts, as `caught_up`'s `ls-remote` in the
     queue's clone would, waits on a password at the tty and holds the queue)."""
     extra = {**auth_env(auth), "GIT_TERMINAL_PROMPT": "0"}
-    was = {k: os.environ.get(k) for k in extra}
+    was = {k: settings.named(k) for k in extra}
     os.environ.update(extra)
     try:
         yield
@@ -139,7 +141,7 @@ def takes_bookkeeping(repo: Path) -> bool:
     """Whether ``repo``'s train.sh, which a records run launches from, takes `--bookkeeping-warn` (the run repairs bookkeeping
     and warns); one that predates it would refuse every records run."""
     try:
-        return "--bookkeeping-warn" in (repo / "tools" / "verity" / "check" / "train.sh").read_text()
+        return "--bookkeeping-warn" in (repo / "tools" / "check" / "train.sh").read_text()
     except OSError:
         return False
 
@@ -161,7 +163,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked one.
     ``bookkeeping_warn`` (a records run) has its lean-audit repair the locks' bookkeeping and warn (`--bookkeeping-warn`).
     ``script_from``, detached, is the train.sh that runs instead of the clone's (the loop's own)."""
-    argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
+    argv = ["bash", "tools/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
     if not cc_records:
         argv += [*(["--agreement"] if agreement else []),
                  *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
@@ -183,7 +185,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
 
 #: the check slot rank (`slot.py --rank`) of every part of a candidate's check and of its records run: a ranked
 #: priority waiter takes the next free check slot ahead of the unranked ones, so `main` never waits on a slot for them
-POSTLAND_SLOT_RANK = 0
+AFTER_LANDING_SLOT_RANK = 0
 #: where detached launches (`detach`) keep their output and exit, under the queue's TMPDIR
 LAUNCHES = "drive-launches"
 #: how long a detached launch may print no run ids before it is taken as having registered none: train.sh stops its launcher
@@ -209,11 +211,39 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
     return {"dir": d, "pid": p.pid}
 
 
+#: a quick tier's launch job (`quick_launch`): a worktree of its commit in its directory, the `research run` there, the worktree
+#: removed once the run has shipped it, and `RUN <id>` (`RUN_RE`, which `launched` reads) once the run registered
+QUICK_JOB = ('t=$1 c=$2 rid=$3; shift 3; git worktree add -q --detach "$t/tree" "$c" || exit; (cd "$t/tree" && "$@"); rc=$?; '
+             'git worktree remove --force "$t/tree"; rm -rf "$t"; git worktree prune; [ "$rc" = 0 ] && echo "RUN $rid"; exit "$rc"')
+#: how long a candidate's quick tier waits for a check slot, and runs in one
+QUICK_WAIT_S, QUICK_RUN_S = 3600, 3 * 3600
+
+
+def quick_launch(repo: Path, commit: str, base: str, machine: str, auth: tuple[str, ...] = ()) -> dict:
+    """The quick tier of candidate ``commit`` since ``base`` (`queue.QUICK_TIER`, as `research queue ready` runs it remotely:
+    `queue.quick_run`) launched detached (`detach`) as a `research run` on ``machine``, in a `--priority` check slot there, from
+    a worktree of ``commit`` of its own: the record `launched` reads, whose `RUN` line names the run."""
+    from . import runs as R
+    from .queue import quick_run
+
+    root = Path(tempfile.gettempdir()) / LAUNCHES
+    root.mkdir(parents=True, exist_ok=True)
+    t = tempfile.mkdtemp(prefix="quick-", dir=root)
+    rid = R.new_run_id()
+    argv = quick_run(rid, machine, Path(t) / "tree", commit, base, by="ci", wait_s=QUICK_WAIT_S, timeout_s=QUICK_RUN_S,
+                     priority=True)
+    env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0"}
+    return detach(repo, ["sh", "-c", QUICK_JOB, "sh", t, commit, rid, *argv], env)
+
+
 def _epoch(ts: object) -> float | None:
     """A UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) as seconds since the epoch, None when it isn't one."""
+    if ts is None or ts == "":
+        return None
     try:
         t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-    except ValueError:
+    except ValueError as e:
+        print(f"landing: {str(ts)[:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
     return (t if t.tzinfo else t.replace(tzinfo=UTC)).timestamp()
 
@@ -241,11 +271,28 @@ def _job_end(rec: dict, name: str) -> tuple[str, str, str | None] | str | None:
 
 
 def shard_machines(on: str, n: int) -> list[str]:
-    """Each of ``n`` shards' machines (train.sh's MACHINES) from ``on``'s: shard K gets every Nth from the Kth, so no machine is
-    in two shards and each keeps `on`'s order; with fewer machines than shards, shard K gets the ((K-1) mod M)th of the M,
-    shared.  train.sh twins only when no slot is free, so shards given one list all took its one free slot, one behind another."""
+    """Each of ``n`` shards' machines (train.sh's MACHINES) from ``on``'s: first its own, every Nth from the Kth for shard K, so
+    no machine is the own of two shards (with fewer machines than shards, the ((K-1) mod M)th of the M, shared); then every
+    other machine of ``on`` in its order from the Kth on, so each shard falls back on the next one's machines first.  check.py
+    places a check on the first machine of its list with a slot free for it and twins it on the two others with the most
+    slots free, which join their lines only after a delay, and only if it hasn't started there by then (with no slot free
+    anywhere, on every machine of the list at once): with slots
+    free the shards keep to their own machines (and their warm caches), and a shard whose own are busy, or whose slot was taken
+    after its launch, takes a free slot anywhere rather than waiting in one machine's line."""
     ms = on.split(",")
-    return [",".join(ms[k::n]) if len(ms) >= n else ms[k % len(ms)] for k in range(n)]
+    out = []
+    for k in range(n):
+        own = ms[k::n] if len(ms) >= n else [ms[k % len(ms)]]
+        r = k % len(ms)
+        out.append(",".join([*own, *(m for m in ms[r:] + ms[:r] if m not in own)]))
+    return out
+
+
+def elsewhere(on: str, ran: Iterable[str]) -> str:
+    """``on`` (machines, a comma list) without those of ``ran``, for a run launched again after a machine's fault; all of it
+    when that leaves none (`auto`, or only those)."""
+    ran = set(ran)
+    return ",".join(m for m in on.split(",") if m not in ran) or on
 
 
 def _hhmm(t: float) -> str:
@@ -283,11 +330,14 @@ PLAN_WAIT_S = 2400
 AUTO_PLAN = "check-shard-plan.json"
 #: a sharded check's auto plan (`plan_shards`): a worktree of the tip ($2) in the queue's clone, under TRAIN_TREES as train.sh's
 #: are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's directory ($1),
-#: the worktree removed after; its venv kept between plans
+#: the worktree removed after; its venv kept between plans.  The job exits as check.py did: on an NFS TMPDIR (the control
+#: pod's) `git worktree remove` can stop at a directory a silly-renamed file keeps from emptying and exit 255, so `rm -rf`
+#: takes what it left, and a worktree that won't go fails no plan
 PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
             'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
-            'trap \'cd "$r"; git worktree remove --force "$t"\' EXIT; cd "$t"; shift 2; '
-            'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
+            'trap \'s=$?; set +e; cd "$r"; git worktree remove --force "$t" 2>/dev/null || rm -rf "$t" 2>/dev/null || '
+            'rm -rf "$t"; git worktree prune; exit $s\' EXIT; cd "$t"; shift 2; '
+            'uv run -q python tools/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
 
 
 def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None, n: int | None = None) -> dict:
@@ -320,32 +370,40 @@ def planned(rec: dict) -> tuple[dict | None, str | None]:
 #: what a running check has written of its steps and suites so far (check.py's `STEPS_LOG`, suites.py's `failing_path` of each
 #: `--json`), fetched with its records
 PROGRESS = ("steps.jsonl", "suites.failed.json", "suites-lean.failed.json")
-#: a check's trace/v1 spans (`tools/verity/check/spans.py`), whose root span opens as the check starts its steps
+#: a check's trace/v1 spans (`tools/check/spans.py`), whose root span opens as the check starts its steps
 SPANS = "spans.jsonl"
-#: a check's live record (`tools/verity/check/live.py`): each step it planned, pending until it starts and running until it ends
+#: a check's live record (`tools/check/live.py`): each step it planned, pending until it starts and running until it ends
 LIVE = "check-live.json"
 #: the steps a check runs first, one after another, before its groups start (check.py's `preflight`)
 PREFLIGHT = tuple(s for s in CHECK_STEPS if s.startswith("preflight-"))
+#: the step check.py records after its preflights only when the C++ prebuild refused the run, before it plans its groups
+#: (check.py's `prebuild`): a live record naming it names no planned step
+PREBUILD_STEP = "prebuild"
 
 
 def failing(run_dir: Path) -> str | None:
     """What has failed so far in a check still running under `--keep-going`, which fails it whatever else it finds, or None."""
     out = []
     try:
-        lines = (run_dir / PROGRESS[0]).read_text().splitlines()
-    except OSError:
+        lines = (run_dir / PROGRESS[0]).read_text().splitlines() if (run_dir / PROGRESS[0]).exists() else []
+    except OSError as e:
+        print(f"landing: {run_dir / PROGRESS[0]} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         lines = []
     for line in lines:
         try:
             rec = json.loads(line)
-        except ValueError:
+        except ValueError as e:
+            print(f"landing: a line of {PROGRESS[0]} is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if rec.get("status") == "failed":
             out.append(f"step {rec.get('step')}")
     for name in PROGRESS[1:]:
+        if not (run_dir / name).exists():
+            continue
         try:
             doc = json.loads((run_dir / name).read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"landing: {run_dir / name} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         for s in doc if isinstance(doc, list) else ():
             tests = s.get("failed_tests") or []
@@ -365,35 +423,186 @@ def gating(repo: Path, commit: str) -> list[str]:
 
 
 def run_states(repo: Path, ids: list[str]) -> dict[str, tuple]:
-    """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`, the machine it runs on) from `research
-    status RUN --json`, which fetches `PROGRESS` and a check's live record (`LIVE`) with its records, so those of a run that ended
-    are its last (a check waiting in its machine's slot line reads `waiting`); a run it can't read is ("unknown", None, None, None)."""
-    also = [x for n in (*PROGRESS, LIVE) for x in ("--also", n)]
-
-    def one(rid: str) -> tuple:
-        r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
-        try:
-            run = json.loads(r.stdout)["runs"][0]
-            state = run.get("state") or "unknown"
-            return (state, run.get("rc"), run.get("ended_utc"),
-                    failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None, (run.get("remote") or {}).get("machine"))
-        except (ValueError, KeyError, IndexError):
-            return ("unknown", None, None, None)
-
-    return dict(zip(ids, _each(one, ids)))
+    """`Reads.states` of ``ids``, outside any tick."""
+    return Reads().states(repo, ids)
 
 
-#: how many runs are read at once: each `research status` is an ssh round trip to the run's node (reading
-#: a few dozen one at a time takes a tick half an hour)
+#: how many runs are read at once: each read is an ssh round trip or two to the run's node (reading a few dozen one at a
+#: time takes a tick half an hour)
 STATUS_JOBS = 8
+#: how many of one node's runs are read at once (`Reads`), so a node that answers slowly holds no more of the `STATUS_JOBS`
+#: readers than that while every other node's runs are read
+NODE_JOBS = 2
+#: what `Reads.evidence` fetches of a check's run dir with its records: what it has written of its steps and suites so far, its
+#: spans, its live record and its suites' reports
+EVIDENCE = (*PROGRESS, SPANS, LIVE, "suites.json", "suites-lean.json")
+#: in an ended run's local dir: the files of its run dir a fetch begun after it ended brought (`read_run`), its last
+FINAL = ".landing-final.json"
 
 
-def _each(fn, items: list, jobs: int = STATUS_JOBS) -> list:
-    """``fn`` of each of ``items``, ``jobs`` at a time, in their order."""
+def _ended(run_dir: Path) -> bool:
+    """Whether the local copy of a run's status.json says it ended (`remote.TERMINAL`), which it never unsays."""
+    from .remote import TERMINAL, _read_json
+
+    return (_read_json(run_dir / "status.json") or {}).get("state") in TERMINAL
+
+
+def _final(run_dir: Path) -> frozenset[str]:
+    """The files `FINAL` says a fetch begun after the run ended brought: none without it, or while status.json says it runs."""
+    if not _ended(run_dir) or not (marker := run_dir / FINAL).is_file():
+        return frozenset()
+    names = json.loads(marker.read_text()).get("names")
+    return frozenset(n for n in names if isinstance(n, str)) if isinstance(names, list) else frozenset()
+
+
+def read_run(rid: str, names: tuple[str, ...], root: Path | None = None) -> tuple[Path, dict] | None:
+    """(run ``rid``'s local dir under ``root``, the runs root by default, its `research status --json` row), its records and the
+    files of its run dir ``names`` (with a check's own, `checkview.CHECK_FILES`) fetched from its node first when it is remote,
+    as `research status RID --json --also NAME...` reads it, in this process: without the node's memory and holds and a check's
+    timings against the machine's newest finished one, two ssh round trips more that nothing here reads.  None when it can't be
+    read.  An ended run whose ``names`` a fetch begun after it ended brought (`FINAL`) is read from its local dir alone.  A fetch
+    that finds a run ended, begun before it ended, is made once more: a fetch copies the files of the run dir one after another,
+    the live record before status.json, so only one begun after its end is known to hold its last."""
+    from . import remote
+    from . import runs as R
+    from .checkview import CHECK_FILES
+    from .cli import _run_dir
+
+    also = tuple(dict.fromkeys((*names, *CHECK_FILES)))
+
+    def fetched(d: Path) -> bool:
+        try:
+            return "last_fetch_error" not in remote.fetch(d, also=also)
+        except remote.Refused as e:
+            print(f"research status: {rid}: {e}", file=sys.stderr)
+            return False
+
+    try:
+        d = _run_dir(R.runs_root(root), rid, None)
+        final = _final(d)
+        if (remote._read_json(d / "remote.json") or {}).get("remote_run_dir") and not set(names) <= final:
+            ended = _ended(d)
+            ok = fetched(d)
+            if ok and not ended and _ended(d):
+                ok, ended = fetched(d), True
+            if ok and ended:
+                part = d / f"{FINAL}.{os.getpid()}.{threading.get_ident()}"
+                part.write_text(json.dumps({"names": sorted(final | set(names))}))
+                os.replace(part, d / FINAL)
+        return d, R.summarize(d)
+    except Exception as e:  # noqa: BLE001  (`research status` exits without a row: the run reads as unknown, as it did)
+        print(f"research status: {rid}: {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+
+def _node(rid: str) -> str:
+    """The machine run ``rid`` runs on, as its local dir's remote.json names it; the run itself when it has none yet."""
+    from . import runs as R
+    from .remote import _read_json
+
+    return str((_read_json(R.runs_root(None) / rid / "remote.json") or {}).get("machine") or rid)
+
+
+def _spread(fn, items: list, node: Callable[[object], str], jobs: int = STATUS_JOBS, node_jobs: int = NODE_JOBS) -> list:
+    """``fn`` of each of ``items``, in their order: ``jobs`` at a time, at most ``node_jobs`` of them of one `node`, each started
+    in their order once a reader and its node are free, so a node that answers slowly holds only its own share."""
+    items = list(items)
     if len(items) < 2:
         return [fn(x) for x in items]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as ex:
-        return list(ex.map(fn, items))
+    out, keys, left = [None] * len(items), [node(x) for x in items], list(range(len(items)))
+    busy: dict[str, int] = {}
+    errors: list[BaseException] = []
+    cv = threading.Condition()
+
+    def one(i: int) -> None:
+        try:
+            out[i] = fn(items[i])
+        except BaseException as e:  # noqa: BLE001  (raised in the caller once every read ended)
+            errors.append(e)
+        finally:
+            with cv:
+                busy[keys[i]] -= 1
+                cv.notify()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(jobs, len(items))) as ex, cv:
+        while left:
+            i = next((i for i in left if busy.get(keys[i], 0) < node_jobs), None)
+            if i is None or sum(busy.values()) >= jobs:
+                cv.wait()
+                continue
+            left.remove(i)
+            busy[keys[i]] = busy.get(keys[i], 0) + 1
+            ex.submit(one, i)
+    if errors:
+        raise errors[0]
+    return out
+
+
+class Reads:
+    """Runs read from their nodes (``read``, `read_run`), `STATUS_JOBS` at once and at most `NODE_JOBS` of one node's (`_spread`,
+    ``node``).  Inside `tick`, each run is read once with the files asked of it, and every later ask of it answered from that
+    read but one naming a file it didn't fetch, which reads the run again for those; outside, each ask reads afresh."""
+
+    def __init__(self, read: Callable[[str, tuple[str, ...]], tuple[Path, dict] | None] = read_run,
+                 node: Callable[[str], str] = _node, jobs: int = STATUS_JOBS, node_jobs: int = NODE_JOBS):
+        self.read, self.node, self.jobs, self.node_jobs = read, node, jobs, node_jobs
+        #: inside `tick`: {run id: (the files its reads fetched, its newest read that answered)}
+        self._got: dict[str, tuple[frozenset[str], tuple[Path, dict] | None]] | None = None
+
+    def __call__(self, asks: list[tuple[str, tuple[str, ...]]]) -> list[tuple[Path, dict] | None]:
+        """The read of each (run id, the files of its run dir to fetch with its records) of ``asks``, in their order."""
+        if self._got is None:
+            return _spread(lambda a: self.read(*a), asks, lambda a: self.node(a[0]), self.jobs, self.node_jobs)
+        need: dict[str, tuple[str, ...]] = {}
+        for rid, names in asks:
+            if rid not in self._got or not set(names) <= self._got[rid][0]:
+                need[rid] = tuple(dict.fromkeys((*need.get(rid, ()), *names)))
+        todo = list(need.items())
+        for (rid, names), got in zip(todo, _spread(lambda a: self.read(*a), todo, lambda a: self.node(a[0]), self.jobs,
+                                                   self.node_jobs)):
+            had, was = self._got.get(rid, (frozenset(), None))
+            self._got[rid] = (had | set(names), got if got is not None else was)
+        return [self._got[rid][1] for rid, _ in asks]
+
+    @contextlib.contextmanager
+    def tick(self, ids: list[str] = ()):
+        """A tick's reads: the `evidence` of ``ids`` read at once first, and each run once from then until it ends."""
+        self._got = {}
+        try:
+            self.evidence(Path("."), list(dict.fromkeys(ids)))
+            yield self
+        finally:
+            self._got = None
+
+    def states(self, repo: Path, ids: list[str]) -> dict[str, tuple]:
+        """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`, the machine it runs on) from its
+        `research status` row, `PROGRESS` and a check's live record (`LIVE`) fetched with its records, so those of a run that
+        ended are its last (a check waiting in its machine's slot line reads `waiting`); a run it can't read is ("unknown",
+        None, None, None).  ``repo`` is the queue's clone, which no read needs."""
+        def one(got: tuple[Path, dict] | None) -> tuple:
+            try:
+                run = got[1]
+                state = run.get("state") or "unknown"
+                return (state, run.get("rc"), run.get("ended_utc"),
+                        failing(Path(run["dir"])) if state in ACTIVE and run.get("dir") else None,
+                        (run.get("remote") or {}).get("machine"))
+            except (TypeError, KeyError, AttributeError):
+                return ("unknown", None, None, None)
+
+        return dict(zip(ids, map(one, self([(r, (*PROGRESS, LIVE)) for r in ids]))))
+
+    def evidence(self, repo: Path, ids: list[str]) -> list[Path]:
+        """The local run dirs of ``ids`` with `EVIDENCE` and their failed suites' logs fetched, and beside a failed suite's log
+        but the repository's own suite's its guard's report and its children's reads, what its run traced
+        (`vqueue_slim.traced_reads`); a run that can't be read is left out."""
+        dirs = {r: Path(got[1]["dir"]) for r, got in zip(ids, self([(r, EVIDENCE) for r in ids]))
+                if got is not None and isinstance(got[1], dict) and got[1].get("dir")}
+        logs = {r: [f"suites/{Path(s['log']).stem}{x}" for s in failed_suites(d) if s.get("log")
+                    for x in (".log", *((".json", ".reads") if (s.get("suite") or ".") != "." else ()))]
+                + [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in SUITE_STEPS]
+                for r, d in dirs.items()}
+        self([(r, tuple(names)) for r, names in logs.items() if names])
+        return [dirs[r] for r in ids if r in dirs]
 
 
 def cancel_runs(repo: Path, ids: list[str], reason: str) -> dict[str, str]:
@@ -430,9 +639,12 @@ def _docs(run_dir: Path, *names: str) -> list[dict]:
     """The objects the JSON files ``names`` of ``run_dir`` hold: a list's, or the file's own; none of one missing or unreadable."""
     out = []
     for name in names:
+        if not (run_dir / name).exists():
+            continue
         try:
             doc = json.loads((run_dir / name).read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"landing: {run_dir / name} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else [doc] if isinstance(doc, dict) else []
     return out
@@ -445,26 +657,9 @@ def failed_suites(run_dir: Path) -> list[dict]:
     return done or _docs(run_dir, *PROGRESS[1:])
 
 
-def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
-    from .merge import fetch_run
-
-    got = fetch_run(rid, names, repo)
-    return got[0] if got else None
-
-
 def evidence(repo: Path, ids: list[str]) -> list[Path]:
-    """The local run dirs of ``ids`` with their steps, live records, spans, suite reports and failed suites' logs fetched
-    (`research status --also`)."""
-    def one(rid: str) -> Path | None:
-        if (d := _fetch(repo, rid, [*PROGRESS, SPANS, LIVE, "suites.json", "suites-lean.json"])) is None:
-            return None
-        logs = [f"suites/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log")]
-        logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
-        if logs:
-            _fetch(repo, rid, logs)
-        return d
-
-    return [d for d in _each(one, ids) if d is not None]
+    """`Reads.evidence` of ``ids``, outside any tick."""
+    return Reads().evidence(repo, ids)
 
 
 def failed_steps(run_dir: Path) -> list[dict]:
@@ -485,7 +680,8 @@ def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
     r = _git(repo, "show", f"{commit}:{own}", check=False)
     try:
         return tomllib.loads(r.stdout) if not r.returncode else {}
-    except tomllib.TOMLDecodeError:
+    except tomllib.TOMLDecodeError as e:
+        print(f"landing: {own} at {commit[:12]} did not parse, read as empty ({e})", file=sys.stderr, flush=True)
         return {}
 
 
@@ -544,12 +740,46 @@ def killed(run_dir: Path, why: str = "") -> bool:
     return any(f"rc={rc}" in why for rc in (*KILLED_RC, -9, -15))
 
 
-def _named(log: str, base: str) -> set[str]:
-    """The files a pytest log's failures name: its tracebacks' frames, and the repository paths in its failure report."""
-    rel = lambda p: p if p.startswith("/") else os.path.normpath(os.path.join(base, p))  # noqa: E731
-    paths = {rel(m[1] or m[2]) for m in TRACE_RE.finditer(log)}
-    report = log.partition("= FAILURES =")[2].partition("short test summary info")[0]
-    return paths | {rel(m[1]) for m in NAMED_RE.finditer(report)}
+def tree_root(run_dir: Path) -> str | None:
+    """The directory a run's check ran in, its job.json's `run.cwd` (`research run`'s clone or shipped source): the
+    repository's root in the absolute paths its logs print; None when the run dir has no job.json or it names no absolute
+    `run.cwd`.  A job.json that isn't a JSON object raises."""
+    if not (job := run_dir / "job.json").exists():
+        return None
+    cwd = (json.loads(job.read_text()).get("run") or {}).get("cwd")
+    return cwd.rstrip("/") if isinstance(cwd, str) and cwd.startswith("/") else None
+
+
+def relative(path: str, base: str = "", root: str | None = None) -> str | None:
+    """``path`` as a repository path: an absolute one under ``root`` (`tree_root`) from there, a relative one from ``base`` (the
+    directory pytest ran in, a suite's); None for one outside the tree (an interpreter's, an installed package's, the
+    environment's `.venv/`, a temporary directory's), which no change to the tree touches."""
+    if path.startswith("/"):
+        if root is None or not path.startswith(root + "/"):
+            return None
+        path, base = path[len(root) + 1:], ""
+    path = os.path.normpath(os.path.join(base, path))
+    return None if path in (".", "..") or path.startswith(("../", ".venv/")) else path
+
+
+def _report(log: str) -> str:
+    """The part of a pytest log that reports its failures: from its `ERRORS` or `FAILURES` section to its warnings summary or
+    short summary, which name the files of tests that passed; the whole log when it has neither (a crash before pytest
+    reported)."""
+    start = min((i for i in (log.find("= ERRORS ="), log.find("= FAILURES =")) if i >= 0), default=-1)
+    if start < 0:
+        return log
+    ends = [i for i in (log.find("= warnings summary =", start), log.find("short test summary info", start)) if i >= 0]
+    return log[start:min(ends, default=len(log))]
+
+
+def _named(log: str, base: str, root: str | None = None) -> set[str]:
+    """The repository paths a pytest log's failures name (`_report`), each `relative` to the repository: their tracebacks'
+    frames and the paths and `art:` ids the report holds."""
+    report = _report(log)
+    paths = {relative(m[1] or m[2], base, root) for m in TRACE_RE.finditer(report)}
+    paths |= {relative(m[1], base, root) for m in NAMED_RE.finditer(report)}
+    return {p for p in paths if p} | {f"art:{h}" for h in ART_RE.findall(report)}
 
 
 def _step_log(run_dir: Path, st: dict) -> str:
@@ -568,18 +798,27 @@ def _suite_log(run_dir: Path, s: dict) -> str:
 
 def step_paths(run_dir: Path, st: dict) -> set[str] | None:
     """The paths one failed step other than pytest and lean-suites points at (`implicated`), None when its log names none."""
-    log = _step_log(run_dir, st)
-    if st.get("step") == "lean-audit" and (lean := lean_errors(log)):
+    return step_named(st.get("step"), _step_log(run_dir, st), tree_root(run_dir))
+
+
+def step_named(step: str | None, log: str, root: str | None = None) -> set[str] | None:
+    """`step_paths` of failed step ``step`` and its log ``log``, the check's tree at ``root`` (`tree_root`)."""
+    if step == "lean-audit" and (lean := lean_errors(log)):
         return lean
     if not (tests := FAILED_RE.findall(log)):
         return None
-    return {os.path.normpath(t) for t in tests} | _named(log, "")
+    return {os.path.normpath(t) for t in tests} | _named(log, "", root)
 
 
 def suite_paths(run_dir: Path, s: dict) -> set[str] | None:
     """The paths one failed suite's record points at (`implicated`), None when it names no failing test and no outside read."""
+    return suite_named(s, _suite_log(run_dir, s), tree_root(run_dir))
+
+
+def suite_named(s: dict, log: str, root: str | None = None) -> set[str] | None:
+    """`suite_paths` of a failed suite's record ``s`` and its log ``log``, the check's tree at ``root`` (`tree_root`)."""
     base, tests = s.get("suite") or "", s.get("failed_tests") or []
-    log = _suite_log(run_dir, s)
+    base = "" if base == "." else base
     if not tests and (errors := ERROR_RE.findall(log)):     # a collection error names no failing test, only its module,
         tests = errors                                       # and blaming the suite's inputs would take every landing
     if not tests:
@@ -590,12 +829,12 @@ def suite_paths(run_dir: Path, s: dict) -> set[str] | None:
             return None
         return {os.path.normpath(p) for p in files} | {os.path.normpath(m) for m in modules if m and m != "*"}
     paths = {os.path.normpath(os.path.join(base, t.split("::")[0])) for t in tests}
-    return paths | (_named(log, base) if log else set())
+    return paths | (_named(log, base, root) if log else set())
 
 
 def implicated(run_dir: Path) -> set[str] | None:
     """The paths a failed check's failure points at: each failed suite's failing test files and the files its log's failures
-    name (`_named`: relative to the repository, or absolute as the log wrote them), and the same of a failed step that runs
+    name (`_named`, relative to the repository), and the same of a failed step that runs
     pytest on the repository's own tests (`preflight-lints`). A suite the read guard failed with no failing test names the
     files its tests (or their children, `child_outside`) read outside its inputs and the test modules that read them (its
     record's `outside`, path -> module), so the PR that added the reading test, or changed the file read, is implicated.
@@ -668,7 +907,7 @@ def shard_steps(groups: list[list[Path]], done: list[bool]) -> list[dict[str, st
         got: dict[str, str | None] = {}
         for d in dirs:
             live = live_steps(d)
-            known = known or any(s.get("step") not in PREFLIGHT for s in live)
+            known = known or any(s.get("step") not in (*PREFLIGHT, PREBUILD_STEP) for s in live)
             mine = {s.get("step") or "": s.get("state") for s in live}
             mine.update({st.get("step") or "": "stopped" if not_run(st) else st.get("status") or "failed" for st in step_records(d)})
             for step, v in mine.items():
@@ -697,7 +936,7 @@ def not_run(st: dict) -> bool:
 
 class Landing:
     """The queue's side of a landing on ``q`` (the module's docstring).  ``on`` is drive.toml's machines at `main`, which its
-    checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_postland`
+    checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_after_landing`
     and `launch_locks` wrap; ``states``, ``evidence`` and ``cancel`` read and stop runs (`run_states`, `evidence`,
     `cancel_runs`); ``post`` posts to the merge thread (`merge_thread_post`); ``now`` is the clock; ``warn_steps`` is
     drive.toml's `warn_steps`, the steps whose failure doesn't hold `main`; ``reviews`` and ``ready_by`` read a PR head's
@@ -705,11 +944,15 @@ class Landing:
 
     def __init__(self, q: Queue, *, on: str,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
-                 states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
+                 states: Callable[[Path, list[str]], dict] | None = None,
+                 post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], dict[str, str] | None] = cancel_runs,
-                 evidence: Callable[[Path, list[str]], list[Path]] = evidence, warn_steps: tuple[str, ...] = (),
+                 evidence: Callable[[Path, list[str]], list[Path]] | None = None, warn_steps: tuple[str, ...] = (),
                  reviews: Callable[[int, str], list] | None = None, ready_by: Callable[[int, str], str | None] | None = None):
         self.q, self.on = q, on
+        #: the runs' reads (`Reads`), which ``states`` and ``evidence`` are unless injected, and whose `tick` `reading` opens
+        self.reads = Reads()
+        states, evidence = states or self.reads.states, evidence or self.reads.evidence
         #: drive.toml's `warn_steps`: the check's steps whose failure doesn't hold `main`
         self.warn_steps = warn_steps
         #: the `reviewed` labels on a PR's head (`StoreLabels.reviews`)
@@ -723,29 +966,39 @@ class Landing:
         self.plan_shards: Callable[..., dict] = plan_shards
         self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: a candidate's check, or the run beside it (`vqueue_slim.start`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
-        #: (`_started`), its check at `POSTLAND_SLOT_RANK`; an injected `launch` launches it too
-        self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
+        #: (`_started`), its check at `AFTER_LANDING_SLOT_RANK`; an injected `launch` launches it too
+        self.launch_after_landing: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
                     shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None,
                     train_from=None, deselect=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
                           cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
-                          ratchet_base=ratchet_base, rank=POSTLAND_SLOT_RANK, script_from=train_from, deselect=deselect))
+                          ratchet_base=ratchet_base, rank=AFTER_LANDING_SLOT_RANK, script_from=train_from, deselect=deselect))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a candidate's records run (`vqueue_records.start`): `train.sh SHA MACHINES --deferred lean-audit`, detached, its check
-        #: at `POSTLAND_SLOT_RANK`, repairing the locks' bookkeeping where train.sh takes `--bookkeeping-warn`
+        #: at `AFTER_LANDING_SLOT_RANK`, repairing the locks' bookkeeping where train.sh takes `--bookkeeping-warn`
         self.launch_locks: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine: train_launch(repo, commit, machine, False, auth=q.auth, deferred=LEAN_STEP,
-                                                        detached=True, rank=POSTLAND_SLOT_RANK,
+                                                        detached=True, rank=AFTER_LANDING_SLOT_RANK,
                                                         bookkeeping_warn=takes_bookkeeping(repo)))
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
+        #: a candidate's quick tier (`vqueue_slim.start_quick`): `quick_launch`, detached
+        self.launch_quick: Callable[[Path, str, str, str], tuple[list[str], str] | dict] = (
+            lambda repo, commit, base, machine: quick_launch(repo, commit, base, machine, auth=q.auth))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
         self.launched: Callable[[dict], tuple[list[str] | None, str]] = launched
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
         self.repo, self.dry_run, self._prs, self._ev = q.workdir, False, None, {}
+
+    def reading(self, ids: list[str]):
+        """A tick's reads of the runs (`Reads.tick`), ``ids`` read at once first, where this Landing reads runs through its
+        `reads`; nothing where both its ``states`` and ``evidence`` are injected."""
+        if self.states != self.reads.states and self.evidence != self.reads.evidence:
+            return contextlib.nullcontext()
+        return self.reads.tick(ids)
 
     def _fetched(self, attempt: str) -> list[Path]:
         """`evidence` of the runs ``attempt`` names (their ids, space-separated), fetched once a tick."""
@@ -755,7 +1008,7 @@ class Landing:
 
     @staticmethod
     def _started(got: tuple[list[str], str] | dict) -> tuple[dict | None, str]:
-        """A launch record's fields from what `launch_locks` or `launch_postland` returned: {"ids"} of a launch that printed
+        """A launch record's fields from what `launch_locks` or `launch_after_landing` returned: {"ids"} of a launch that printed
         them, {"ids": [], "launch"} of one still running detached (`detach`), which `_resolve` reads on later ticks and which
         counts as running until then; None, with train.sh's output's tail, of one that registered no run."""
         if isinstance(got, dict):
@@ -931,7 +1184,8 @@ class Landing:
             r = _git(self.repo, "show", f"origin/main:{REGISTRY}", check=False)
             try:
                 reg = json.loads(r.stdout) if not r.returncode else {}
-            except ValueError:
+            except ValueError as e:
+                print(f"landing: origin/main's {REGISTRY} is not JSON, so no handle owns a path ({e})", file=sys.stderr, flush=True)
                 reg = {}
             self._reg = reg = reg if isinstance(reg, dict) and isinstance(reg.get("handles"), list) else {"handles": []}
         try:
@@ -1023,11 +1277,10 @@ class Landing:
         """The machines the runs of ``states`` ran on: none for a twin that never started or was stopped for a sibling."""
         return sorted({s[4] for s in states.values() if len(s) > 4 and s[4] and s[1] not in (NOT_STARTED, SIGTERM_RC)})
 
-    def _elsewhere(self, states: dict) -> str:
-        """`on` without the machines the runs of ``states`` ran on (`_ran_on`), for a check run again after a machine's fault;
-        all of `on` when that leaves none (`auto`, or one machine)."""
-        ran = self._ran_on(states)
-        return ",".join(m for m in self.on.split(",") if m not in ran) or self.on
+    def _elsewhere(self, states: dict, on: str = "") -> str:
+        """``on`` (else `on`) without the machines the runs of ``states`` ran on (`_ran_on`), for a check run again after a
+        machine's fault; all of it when that leaves none (`auto`, or one machine)."""
+        return elsewhere(on or self.on, self._ran_on(states))
 
     def _open(self) -> dict[int, PR]:
         if self._prs is None:
@@ -1052,7 +1305,8 @@ class Landing:
 
     def _stacked(self, state: dict, members: list[Member], tip: str) -> None:
         """After a landing at ``tip``, tell the owner of each open PR based on `main` or on a landed member's branch whose head
-        contains that member's head (a PR stacked on it) that its base landed, once per (PR, base) (`stacked:P<Q`): not one
+        contains that member's head (a PR stacked on it) that its base landed and how to take `main` (`queue.merge_main`), once
+        per (PR, base) (`stacked:P<Q`): not one
         marked ready at its head, which lands as it is.  A PR based
         on another branch (a long-lived one, as the remote demo's) takes `main` through that branch, and isn't told."""
         from .stale import pull_refs
@@ -1083,11 +1337,12 @@ class Landing:
                 continue
             names = ", ".join(f"#{b}" for b in below)
             self.tell(state, [f"stacked:{n}<{b}" for b in below],
-                      f"#{n}'s base{'s' if len(below) > 1 else ''} {names} landed in main at {tip[:12]}; merge main into #{n}",
+                      f"#{n}'s base{'s' if len(below) > 1 else ''} {names} landed in main at {tip[:12]}: "
+                      f"{merge_main(f'#{n}', rest[n].branch)}",
                       self._handle(n))
 
     def beside_args(self, tip: str, base: str) -> tuple[dict, list[str], str]:
-        """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_postland`'s
+        """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_after_landing`'s
         keywords, the steps it skips by name, its flags as a message gives them).  It sends the upstream build (`--agreement`)
         when the merges above ``base`` change what lean-agreement checks (as check.py finds against that base), and skips
         lean-agreement else; lean-audit fails on a record difference (`--no-regenerate`), since the records it checks are the

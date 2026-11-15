@@ -1,6 +1,11 @@
 """A `verity.circuits.types.Type`'s `repr` read back to the Type (a Program row's port types are written as reprs)."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from verity.circuits.types import Type
+
 __all__ = ["TypeReprError", "parse_type_repr"]
 
 
@@ -8,9 +13,12 @@ class TypeReprError(ValueError):
     pass
 
 
-def parse_type_repr(s: str):
+def parse_type_repr(s: str) -> Type:
     """The `repr` of a `verity.circuits.types.Type` back to a Type: `Value<32>`, `Array<31,Value<32>>`, `(A, B)`, `{name: A, other: B}`."""
-    from verity.circuits.types import Array, RecordType, Tuple as TupleT, Value
+    # inside the function: importing this module does not load the core `verity`
+    from verity.circuits.types import Array, RecordType, Value
+    from verity.circuits.types import Tuple as TupleT
+
     pos = 0
     n = len(s)
 

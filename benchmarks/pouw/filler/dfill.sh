@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # dcap.cu's DRAM-free filler on one leased GPU (cwd = the source tree): its receipts gated bit for bit against the host and
-# CAP's gate first, under the same lease, and nothing is timed unless both pass; then its rate alone over (W, NC), ncu's DRAM
-# and tensor-pipe counters for one chunk, and the decode step beside it on a green split and co-resident at the lowest
-# stream priority. The round's coins are flipped once per run (coins.txt). Clocks are read, never set.
+# dcap's gate first, under the same lease, and nothing timed unless both pass; then its rate alone over (W, NC), ncu's
+# DRAM and tensor-pipe counters for one chunk, and the decode step beside it on a green split and co-resident at the
+# lowest stream priority. The round's coins are flipped once per run (coins.txt). Clocks are read, never set.
 #
 #   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/filler/dfill.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/dfill.sh"'
@@ -15,7 +15,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler
+D=benchmarks/pouw/filler K=verity/protocols/accounting/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/dfill.XXXXXX); trap 'rm -rf "$B"' EXIT
 export DF_ALONE=${DF_ALONE:-"4:1 4:2 4:4 8:1 8:2 8:4"}
 export DF_ARMS=${DF_ARMS-"split:92:8:4 split:60:8:4 split:44:8:4 split:28:8:4 co:0:4:4 co:0:2:4 co:0:4:4:15"}
@@ -26,7 +26,7 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 nvcc --version | tail -2 > "$O/nvcc.txt"
-nvcc -O3 -std=c++17 $DF_NVCC -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+nvcc -O3 -std=c++17 $DF_NVCC -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 grep -B1 -E "spill" "$O/build.log" | grep -A1 dfill | head -12
 cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /dfill_k/} p' > "$O/sass-dfill.txt" 2>&1

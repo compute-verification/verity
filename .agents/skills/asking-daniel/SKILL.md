@@ -26,10 +26,10 @@ the lanes' call. A recorded ruling that covers the case (AGENTS.md, the
 skills, the friction skill's "Standing rulings") stands until he reverses it. A question the system already answers isn't
 an ask (which circuit a templated unit's theorem names: the one its template unrolls to).
 
-A PR that changes a lock record (a guarantee's statement, a definition it reads, a premise, a constant) is not an ask
-(Daniel, 11 Nov: "this should just be like a warning for me, it shouldn't be a gate"). Its owner marks it like any other
-PR, with one line in its body saying what it moves, and the landing DM (`research.spec_alert`) is his notice. Only a
-claim the lane decides ahead of its PR goes on a page, as below.
+A PR that changes a lock record (a guarantee's statement, a definition it reads, a premise, a constant) is not an ask:
+it is a notice to Daniel, never a gate. Its owner marks it like any other PR, with one line in its body saying what it
+moves, and the landing DM (`research.spec_alert`) is his notice. Only a claim the lane decides ahead of its PR goes on a
+page, as below.
 
 An ask that isn't a click only he can make goes on its page decided: Status *Decided by lane*, Choose your pick, Decision
 "Provisionally accepted (standing rule): <option>. Re-check: <why it holds>". Resolve its card with
@@ -41,8 +41,9 @@ a letter it hasn't seen on the page as his, and Approve is his alone to tick.
 ## Write the page
 
 Notion-flavored Markdown: inline math ``$`\gamma \le 0.01`$`` (the inner backticks are required), display math in `$$`
-blocks, tables in `<table header-row="true">`, no Slack mrkdwn. `ask-daniel --page` refuses a missing or reordered
-section and adds the reply callout if absent; a page made with the Notion MCP needs it too.
+blocks with each `$$` on its own line (Notion shows a one-line `$$ x $$` as text; `ask-daniel --page` splits one), tables
+in `<table header-row="true">`, no Slack mrkdwn. `ask-daniel --page` refuses a missing or reordered section and adds the
+reply callout if absent; a page made with the Notion MCP needs it too.
 
 ~~~markdown
 <callout icon="❓" color="gray_bg">

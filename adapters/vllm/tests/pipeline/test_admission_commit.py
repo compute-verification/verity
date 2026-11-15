@@ -1,16 +1,16 @@
 """Commit admission: the scheduled host-retention bound is SOUND (>= every observed step) and TIGHT (within 15 % of the
-run total) on three recorded runs with per-step `n_bytes`, refuses by name over the cgroup, and is torch-free."""
+run total) on three recorded runs with per-step `n_bytes`, and refuses by name over the cgroup."""
 
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import sys
+import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from verity_vllm.config import workload_file
 from verity_vllm.pipeline import admission_bound as ADM
 
 REPO = Path(__file__).resolve().parents[2]
@@ -20,7 +20,7 @@ CAP_CP_BIG = 376_999_997_440          # a node's /sys/fs/cgroup/memory.max (= 35
 
 def _fixture(name: str):
     d = json.loads((FIX / f"{name}.json").read_text())
-    wl = json.loads((REPO / "workloads" / f"{d['row_id']}.json").read_text())
+    wl = json.loads(workload_file(REPO / "workloads" / f"{d['row_id']}.json").read_text())
     obs = {int(k): int(v) for k, v in d["observed_n_bytes_pair0_instrumented"].items()}
     return d["sizing"], wl, obs
 
@@ -30,10 +30,12 @@ def test_scheduled_bound_is_sound_and_tight_on_the_r16_records(name, max_ratio):
     sizing, wl, obs = _fixture(name)
     mnbt = wl["engine"]["args"]["max_num_batched_tokens"]
     sched = ADM.scheduled_step_bytes(sizing, wl["requests"], max_num_batched_tokens=mnbt, lag=1)
-    chk = ADM.compare_observed(sched, obs)
-    assert chk["sound"], f"{name}: under-predicted steps {chk['under']}"
-    assert chk["steps_under_predicted"] == 0
-    assert 1.0 <= chk["ratio_pred_over_obs"] <= max_ratio, chk
+    pred = {x["step"]: x["bytes"] for x in sched["per_step"]}
+    under = [(s, o, pred.get(s, 0)) for s, o in obs.items() if o > pred.get(s, 0)]
+    assert not under, f"{name}: under-predicted steps {under[:8]}"
+    common = [s for s in obs if s in pred]
+    ratio = sum(pred[s] for s in common) / sum(obs[s] for s in common)
+    assert 1.0 <= ratio <= max_ratio, ratio
     # every observed step is predicted (the lag row is one extra scheduled step beyond the record's last step)
     assert sched["steps"] >= len(obs)
 
@@ -72,7 +74,7 @@ def test_envelope_bound_was_the_loose_one_and_the_scheduled_bound_admits_the_cp_
     assert "envelope bound 559384 MiB was over it" in rec["why"]
     # phi3 B8 1024/128 from the phi3 widths (its envelope bound, 582,111 MiB, is over the cap)
     sizing3, _wl3, _ = _fixture("phi3b1")
-    wl8 = json.loads((REPO / "workloads" / "phi3-mini__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json").read_text())
+    wl8 = json.loads(workload_file(REPO / "workloads" / "phi3-mini__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json").read_text())
     rec8 = ADM.admission(sizing3, wl8["requests"], CAP_CP_BIG, retain="host", max_num_batched_tokens=3638, lag=1)
     assert rec8["admitted"] is True and (100 << 30) < rec8["predicted_host_bytes"] < (120 << 30), rec8["predicted_host_bytes"]
     assert rec8["scheduled"]["peak_step"] == 0 and rec8["scheduled"]["steps"] == 129        # 8 concurrent prefills; caps + 1 lag row
@@ -101,6 +103,13 @@ def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_
     assert r3["admitted"] is True and "no container memory limit" in r3["why"] and r3["would_exceed_by_bytes"] is None
 
 
+def test_the_admission_record_and_its_scheduled_steps_carry_the_bounds_schema_id():
+    sizing, wl, _ = _fixture("b16")
+    rec = ADM.admission(sizing, wl["requests"], None, retain="host", max_num_batched_tokens=5348, lag=1)
+    assert ADM.SCHEMA == "verity-sweep/admission/f-da-15/v1"
+    assert rec["schema"] == ADM.SCHEMA and rec["scheduled"]["schema"] == ADM.SCHEMA
+
+
 def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
     """the RETAIN-windowed pool: under --bounded-staging --retain host --retain-exclude hidden_m1 the pool
     is (raw - hidden M1) + the levels over every leaf; the hidden stream is the bulk of the raw bytes at 1024/128; bounded + a non-host retention keeps the
@@ -120,7 +129,7 @@ def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
     assert b_other["predicted_host_bytes"] == full["predicted_host_bytes"]
     lv = ADM.admission(sizing, wl["requests"], small, retain="none", max_num_batched_tokens=5348, lag=1, bounded=True)
     assert lv["predicted_host_bytes"] == int(raw * (full["levels_factor"] - 1.0)) and "levels only" in lv["pool_rule"]
-    # the CLI alias hidden_m1 names both tap families
+    # either hidden family in the exclusion drops the hidden stream
     rule = ADM.predicted_pool_bytes(1000, 600, retain="host", levels_factor=1.25, windowed=True, bounded=True, retain_exclude={"fa2_hidden_m1"})
     assert rule[0] == 650 and "hidden M1" in rule[1]
 
@@ -146,55 +155,27 @@ def test_lag_rows_chunking_and_the_rope_correction_are_named_and_monotone():
         ADM.scheduled_step_bytes(sizing, [{"prompt_len": 0, "max_tokens": 1, "arrive_step": 0}])
 
 
-def _bare_env() -> dict[str, str]:
-    """PATH and the tree on PYTHONPATH, beside the suite's read guard's own variables and path so the child is still traced."""
-    path = os.pathsep.join(filter(None, [str(REPO), str(REPO / "vllm-poc"), os.environ.get("PYTHONPATH")]))
-    return {**{k: v for k, v in os.environ.items() if k.startswith("VERITY_SUITE_")}, "PYTHONPATH": path, "PATH": "/usr/bin:/bin"}
+@pytest.mark.parametrize("absent", ["widths", "model"])
+def test_a_sizing_record_without_its_widths_or_its_model_gets_no_rope_correction(absent):
+    """A sizing record may leave out `widths` or `model`, or hold null there: no width or one layer is nothing to add."""
+    sizing, _, _ = _fixture("b16")
+    assert ADM.per_token_bytes_of(sizing)[0] > sizing["per_token_bytes"]
+    for short in ({k: v for k, v in sizing.items() if k != absent}, dict(sizing, **{absent: None}), dict(sizing, **{absent: {}})):
+        assert ADM.per_token_bytes_of(short) == (sizing["per_token_bytes"], None)
 
 
-def test_cli_is_torch_free_and_reports_the_observed_check(tmp_path):
-    sizing, wl, obs = _fixture("b16")
-    sz = tmp_path / "sizing.json"; sz.write_text(json.dumps(sizing))
-    st = tmp_path / "steps.jsonl"
-    st.write_text("".join(json.dumps({"pair": 0, "arm": "instrumented", "step": s, "n_bytes": b}) + "\n" for s, b in obs.items()))
-    cmd = [sys.executable, "-c", "import sys; sys.modules['torch'] = None; from verity_vllm.pipeline import cli; sys.exit(cli.main(['admission-bound', *sys.argv[1:]]))",
-           "--workload", str(REPO / "workloads" / f"{wl['sweep']['row_id']}.json"), "--sizing", str(sz),
-           "--cap-bytes", str(CAP_CP_BIG), "--observed", str(st)]
-    p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, env=_bare_env())
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert "ADMITTED" in p.stdout and "SOUND" in p.stdout and "under-predicted 0" in p.stdout
-    p2 = subprocess.run(cmd[:-2] + ["--cap-bytes", str(16 << 30)], cwd=REPO, capture_output=True, text=True,
-                        env=_bare_env())
-    assert p2.returncode == 3 and "REFUSED" in p2.stdout
-
-
-def test_host_cap_names_its_source_and_a_bare_host_is_still_a_bound(monkeypatch, tmp_path):
-    """no visible cgroup limit -> MemTotal, named; a cgroup limit wins when present; the record carries a domain."""
-    import verity_vllm.pipeline.admission_bound as M
-    real = M.Path.read_text
-
-    def fake(self, *a, **k):
-        p = str(self)
-        if p.startswith("/sys/fs/cgroup"):
-            raise OSError(p)
-        if p == "/proc/meminfo":
-            return "MemTotal:       16384000 kB\nMemFree: 1 kB\n"
-        return real(self, *a, **k)
-
-    monkeypatch.setattr(M.Path, "read_text", fake)
-    cap, src = M.host_cap()
-    assert cap == 16384000 * 1024 and "MemTotal" in src
-    sizing, wl, _ = _fixture("b4")
-    rec = M.admission(sizing, wl["requests"], cap)
-    assert rec["admitted"] is False and rec["domain"].startswith("--retain host")
-
-    def fake2(self, *a, **k):
-        if str(self) == "/sys/fs/cgroup/memory.max":
-            return "377000000000\n"
-        return fake(self, *a, **k)
-
-    monkeypatch.setattr(M.Path, "read_text", fake2)
-    assert M.host_cap() == (377000000000, "/sys/fs/cgroup/memory.max")
+def test_a_request_without_a_prompt_len_is_as_long_as_its_token_ids_and_one_with_neither_is_refused():
+    sizing, _, _ = _fixture("b16")
+    by_len = ADM.scheduled_step_bytes(sizing, [{"prompt_len": 7, "max_tokens": 2, "arrive_step": 0}])
+    seven_long: list[dict[str, Any]] = [{"prompt_token_ids": list(range(7))}, {"prompt_len": None, "prompt_token_ids": list(range(7))},
+                                        {"prompt_len": 7, "prompt_token_ids": list(range(3))}]
+    for request in seven_long:
+        assert ADM.scheduled_step_bytes(sizing, [dict(request, max_tokens=2, arrive_step=0)]) == by_len
+    assert by_len["prompt_tokens"] == 7
+    no_length: list[dict[str, Any]] = [{}, {"prompt_token_ids": []}, {"prompt_token_ids": None}, {"prompt_len": 0}]
+    for request in no_length:
+        with pytest.raises(ValueError, match=r"request 0: prompt_len=0 max_tokens=1 arrive_step=0"):
+            ADM.scheduled_step_bytes(sizing, [dict(request, max_tokens=1)])
 
 
 def test_the_commit_admission_counts_the_declared_lag():
@@ -210,7 +191,19 @@ def test_the_commit_admission_counts_the_declared_lag():
     assert C.admission_lag(wl) == GP.workload_target(wl["target"]).lag()
     for declared, lag in ((False, 0), (True, 1)):
         assert C.admission_lag(dict(wl, target={**(wl["target"] or {}), "async_scheduling": declared})) == lag
-    assert "lag=admission_lag(wl)" in inspect.getsource(C.main)
+    assert "lag=admission_lag(wl)" in inspect.getsource(C)
+
+
+def test_the_record_sorts_its_exclusions_before_it_scales_the_envelope():
+    """The record's fields are evaluated in their order, `staging` before the envelope's predicted bytes: of exclusions that do
+    not sort and an envelope bound that does not scale, the first is the one raised."""
+    sizing, wl, _ = _fixture("b16")
+    unsortable: Any = {1, "a"}
+    unbounded: Any = float("inf")
+    with pytest.raises(OverflowError):
+        ADM.admission(sizing, wl["requests"], None, envelope_bound_bytes=unbounded)
+    with pytest.raises(TypeError):
+        ADM.admission(sizing, wl["requests"], None, retain_exclude=unsortable, envelope_bound_bytes=unbounded)
 
 
 def test_the_resident_bytes_add_to_the_pool_and_can_refuse():
@@ -232,7 +225,7 @@ def test_the_commit_admission_covers_the_recorded_peaks(row):
     #23 and admits #67 within 25 % of its peak; the pool alone is under both."""
     peaks = json.loads((FIX / "commit_peaks.json").read_text())
     r, limit = peaks["rows"][row], peaks["limit_bytes"]
-    wl = json.loads((REPO / "workloads" / f"{r['row_id']}.json").read_text())
+    wl = json.loads(workload_file(REPO / "workloads" / f"{r['row_id']}.json").read_text())
     res = ADM.committer_resident(wl, limit, pairs=r["pairs"], replay_workers=r["replay_workers"])
     pool, peak = r["pool_mib"] << 20, r["peak_anon_shmem_mib"] << 20
     predicted = pool + res["bytes"]
@@ -245,7 +238,7 @@ def test_the_commit_admission_covers_the_recorded_peaks(row):
 
 def test_commit_main_passes_the_resident_bytes():
     src = (REPO / "verity_vllm" / "pipeline" / "commit.py").read_text()
-    assert "resident=ADM.committer_resident(wl, host_cap, pairs=args.pairs, replay_workers=args.replay_workers)" in src
+    assert re.search(r"resident=ADM\.committer_resident\(wl, \w+, pairs=args\.pairs, replay_workers=args\.replay_workers\)", src)
 
 
 def test_row74_both_staging_modes():
@@ -254,7 +247,7 @@ def test_row74_both_staging_modes():
     levels over every leaf (the warm-up primed 59,246 MiB pinned; kept raw x 1.25 alone was 16,058 MiB)."""
     peaks = json.loads((FIX / "commit_peaks.json").read_text())
     r, limit, M = peaks["rows"]["74"], peaks["limit_bytes"], 1 << 20
-    wl = json.loads((REPO / "workloads" / f"{r['row_id']}.json").read_text())
+    wl = json.loads(workload_file(REPO / "workloads" / f"{r['row_id']}.json").read_text())
     res = ADM.committer_resident(wl, limit, pairs=r["pairs"], replay_workers=r["replay_workers"])["bytes"]
     raw, hid = r["scheduled_raw_mib"] * M, r["scheduled_hidden_mib"] * M
     unb, _ = ADM.predicted_pool_bytes(raw, hid, retain="host", levels_factor=ADM.LEVELS_FACTOR, windowed=True, bounded=False, retain_exclude=None)

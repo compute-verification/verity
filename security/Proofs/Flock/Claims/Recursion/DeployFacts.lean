@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Flock.Claims.Recursion
 public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Flock.Claims.Recursion.DeployScope
 public import Proofs.Flock.Claims.Recursion.Inner
@@ -40,6 +39,11 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Std.Tactic.BVDecide.Normalize.Prop
+public import Proofs.Flock.Claims.KS.PlainAcc
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.Recursion.Gap
+public import Proofs.Flock.Claims.Recursion.KSLin
+public import Proofs.Flock.Claims.Recursion
 
 /-!
 # The compiled verifier's structural code facts
@@ -194,7 +198,7 @@ theorem sessionNums (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) 
   obtain ⟨s, hs⟩ := s
   dsimp only [deployRec, numsZk]
   rw [vstar_getD b.st x ms hs, ← numsOf_vstarAt b.st x ms s]
-  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+  exact ⟨rfl, rfl, rfl, (N₀Oq_cast _).symm, rfl, rfl⟩
 
 theorem sum_range_le (f : ℕ → ℕ) {a b : ℕ} (h : a ≤ b) :
     ((List.range a).map f).sum ≤ ((List.range b).map f).sum := by

@@ -21,6 +21,9 @@ from __future__ import annotations
 
 from typing import Any
 
+__all__ = ["DEFAULT_BLOCK_SIZE", "cached_of", "cached_rows", "declares", "plan", "prefix_caching", "request_shape",
+           "shape", "shape_key", "shape_name", "with_cached"]
+
 #: vLLM's block size when the row does not set `engine.args.block_size` (the FlashAttention backends).
 DEFAULT_BLOCK_SIZE = 16
 
@@ -58,9 +61,9 @@ def plan(workload: dict[str, Any]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = [{"cached": 0, "producers": []} for _ in reqs]
     for k, r in enumerate(order):
         ids = reqs[r]["prompt_token_ids"]
-        cap = (len(ids) - 1) // bs
+        whole = (len(ids) - 1) // bs
         producers: list[int] = []
-        for b in range(cap):
+        for b in range(whole):
             hi = (b + 1) * bs
             q = next((q for q in order[:k] if len(reqs[q]["prompt_token_ids"]) >= hi
                       and _common(reqs[q]["prompt_token_ids"][:hi], ids[:hi]) == hi), None)
@@ -103,10 +106,6 @@ def shape_name(s: tuple[int, ...]) -> str:
 def shape_key(s: tuple[int, ...]) -> str:
     """`"LP,T"`, or `"LP,T,C"`: the key GP-01 and the Build's records file a shape under."""
     return ",".join(str(int(x)) for x in shape(*s))
-
-
-def parse_shape_key(k: str) -> tuple[int, ...]:
-    return shape(*(int(x) for x in k.split(",")))
 
 
 def cached_rows(s: tuple[int, ...]) -> int:

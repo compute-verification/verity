@@ -1,14 +1,9 @@
-"""pv's coin-row cross rank in a sequence's first block is (q + 1) + min(q + 1, r), not P6's (q + 1) + r."""
+"""theory/checked_strip.py: pv's coin-row cross rank in a sequence's first block is (q + 1) + min(q + 1, r), not P6's
+(q + 1) + r."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "theory"))
-
 import checked_strip as cs
+import numpy as np
 
 
 def test_pv_coin_rank_in_the_first_block():

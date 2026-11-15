@@ -5,7 +5,7 @@
 
 * the ``workload_fingerprint`` fields a campaign number must carry (:data:`REQUIRED_FIELDS`), with the
   :data:`IDENTITY_FIELDS` two results must agree on before any of their numbers may be compared
-  (``archive/AGENTS.md``: never compare across ``proof_class``; the same batch size, hardware and soundness target);
+  (never compare across ``proof_class``; the same batch size, hardware and soundness target);
 * the measurement names: the six disjoint timing buckets ``t.<bucket>`` (seconds), ``t.total``, joint stages
   ``t.joint.<a>+<b>`` for a kernel that fuses buckets it cannot split (never double-counted against a standalone
   bucket or another joint), and the rest of the decision's columns (VU throughput, peak memory, bytes moved,
@@ -20,7 +20,7 @@ Envelope (``research/result/v0.1``, ``tools/research/src/research/result.py``)::
 
 Fingerprint fields (all required; a sub-field whose value is not known is ``null``, never a guess)::
 
-    profile         the name of the target actually proved (one of :data:`PROFILES`, ``verity.definitions.circuits.targets.target.TARGETS``);
+    profile         the name of the target actually proved (one of :data:`PROFILES`, ``verity.circuits.targets.target.TARGETS``);
                     the campaign target is FIRST.name (:data:`PROFILE`); results of different profiles are never compared
     domain          the operand domain the proved statement covers, one of :data:`DOMAINS` (the vocab key ``domain``): ``total``
                     (every encoding) or ``finite-only`` (non-finite operands asserted away), from the statement, never assumed
@@ -39,7 +39,7 @@ Fingerprint fields (all required; a sub-field whose value is not known is ``null
     preprocessing   what was amortised offline and is therefore not in the buckets (a string or an object)
     retention       retained | streamed | recomputed   (how the witness was held during proving)
     instances       which frozen instances were proved: {"dataset": "bench-instances/v1", "tier": "vu-k1536",
-                    "range": [lo, hi), "manifest_sha256"} (``fixtures/bench-instances/v1``; hi - lo = B_real if present
+                    "range": [lo, hi), "manifest_sha256"} (``benchmarks/numerical/bench-instances/v1``; hi - lo = B_real if present
                     else B; sub-batches are contiguous sub-ranges of it) or null = not measured on the shared set.  Two
                     results whose non-null ``instances`` disagree are never compared (:func:`compare_instances`); the
                     judge warns when either is null or absent.  Every A-GKR/B number at K=1536 carries it.
@@ -79,15 +79,17 @@ workload's own names (``prove_seconds``, ``cycles.parse``) pass through untouche
 
 from __future__ import annotations
 
+import logging
 import os
 import re
+import shutil
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.definitions.silicon.instructions import INSTRUCTIONS
-from verity.definitions.circuits.targets.target import FIRST, TARGETS, Target
+from verity.circuits.silicon.instructions import INSTRUCTIONS
+from verity.circuits.targets.target import FIRST, TARGETS, Target
 from verity_numerical.bench import census
 
 __all__ = [
@@ -131,6 +133,7 @@ __all__ = [
     "RETENTION",
     "TOLERANCE",
     "T_TOTAL",
+    "T_TOTAL_LIVE",
     "UNITS",
     "ZK_CLASSES",
     "ZK_NONE",
@@ -157,9 +160,11 @@ __all__ = [
     "verifier_rates",
 ]
 
+log = logging.getLogger(__name__)
+
 RESULT_SCHEMA = "research/result/v0.1"
 
-#: The campaign target's profile name (``archive/AGENTS.md``: the target is fixed), and the domain of the FIRST relations,
+#: The campaign target's profile name (the target is fixed), and the domain of the FIRST relations,
 #: whose circuits assert their operands finite.  A backend proving a total statement records ``total``.
 PROFILE = FIRST.name
 DOMAIN = "finite-only"
@@ -167,7 +172,7 @@ DOMAIN = "finite-only"
 DOMAINS = ("total", "finite-only")
 #: What older registered results wrote: every writer hardcoded ``finite``, whatever its statement's domain.
 LEGACY_DOMAINS = {"finite": "finite-only"}
-#: Every profile a result may name: the targets of ``verity.definitions.circuits.targets.target.TARGETS`` (FIRST and the FP8 drafts).
+#: Every profile a result may name: the targets of ``verity.circuits.targets.target.TARGETS`` (FIRST and the FP8 drafts).
 #: ``profile`` is an identity field, so a result of one profile is never compared with a result of another.
 PROFILES = tuple(TARGETS)
 
@@ -185,7 +190,7 @@ AUTHENTICATION = ("included", "included-hash", "included-hash-shared", "excluded
 RETENTION = ("retained", "streamed", "recomputed")
 ZK_NONE = "none"
 
-#: Two results whose values differ on any of these are never compared; the judge refuses (``benchmarks/judge.py``).
+#: Two results whose values differ on any of these are never compared; the judge refuses (``bench/judge.py``).
 #: Two results must agree on every one of these before any of their numbers may be compared: same proof class and
 #: authentication, same target and domain, same K **and batch size**, the **same hardware** (the whole probed object:
 #: a 4090 run is never compared with a CPU run, nor with another pod's driver), and the same soundness target
@@ -196,7 +201,7 @@ REQUIRED_FIELDS = (
     "profile", "domain", "K", "B", "proof_class", "authentication", "zk_mode", "security", "hardware", "software",
     "preprocessing", "retention", "instances",
 )
-#: The frozen input set every K=1536 number is measured on (``fixtures/bench-instances/v1``, ``verity_numerical.bench.instances``).
+#: The frozen input set every K=1536 number is measured on (``benchmarks/numerical/bench-instances/v1``, ``verity_numerical.bench.instances``).
 INSTANCES_DATASET = census.INPUT_SETS["bench-instances-v1"].dataset
 INSTANCES_FIELD = "instances"
 INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
@@ -303,7 +308,7 @@ RATE_TOLERANCE = 1e-6
 def native_reference(profile: str = PROFILE) -> Any:
     """The native peak the headline overhead of a ``profile`` divides by: :func:`native_peak_of` its target -- the
     datasheet dense tensor-core peak of the instruction's conformance anchor for the target's operand dtype at FP32
-    accumulate, no sparsity (``verity.definitions.circuits.targets.target``, "Native peak"; the census line).  A GemmCoordinate<K> is K MACs = 2K FLOP,
+    accumulate, no sparsity (``verity.circuits.targets.target``, "Native peak"; the census line).  A GemmCoordinate<K> is K MACs = 2K FLOP,
     so the native time of one VU at peak is 2K / rate: 9.85 ps at K=1536 for FIRST (A100 BF16, ~1.0e11 VU/s).  Peak is
     the conservative choice (a real decode step runs below peak, so the true overhead is *lower* than this number); it
     is also the only reference every result can share without a runtime capture.  The prover's own hardware is in the
@@ -399,27 +404,34 @@ def parse_joint(name: str) -> tuple[str, ...] | None:
     return _joint_parts(name[len(_JOINT_PREFIX):].split(_JOINT_SEP))
 
 
-def _joint_parts(parts: Iterable[str]) -> tuple[str, ...]:
-    parts = tuple(parts)
+def _joint_fault(parts: tuple[str, ...]) -> str | None:
+    """Why ``parts`` name no joint stage; ``None`` when they name one."""
+
     unknown = [p for p in parts if p not in BUCKETS]
     if unknown:
-        raise ValueError(f"joint stage names buckets from {BUCKETS}, not {unknown}")
+        return f"joint stage names buckets from {BUCKETS}, not {unknown}"
     if len(parts) < 2:
-        raise ValueError("a joint stage fuses at least two buckets; a single bucket is t.<bucket>")
+        return "a joint stage fuses at least two buckets; a single bucket is t.<bucket>"
     if len(set(parts)) != len(parts):
-        raise ValueError(f"a joint stage lists each bucket once, got {parts}")
+        return f"a joint stage lists each bucket once, got {parts}"
+    return None
+
+
+def _joint_parts(parts: Iterable[str]) -> tuple[str, ...]:
+    parts = tuple(parts)
+    if (fault := _joint_fault(parts)) is not None:
+        raise ValueError(fault)
     return tuple(b for b in BUCKETS if b in parts)
 
 
 def unit_of(name: str) -> str | None:
-    """The contract's unit for ``name``; ``None`` for a name the contract does not define."""
+    """The contract's unit for ``name``; ``None`` for a name the contract does not define, a malformed joint among them."""
 
     if name in UNITS:
         return UNITS[name]
-    try:
-        return "s" if parse_joint(name) else None
-    except ValueError:
+    if not name.startswith(_JOINT_PREFIX):
         return None
+    return "s" if _joint_fault(tuple(name[len(_JOINT_PREFIX):].split(_JOINT_SEP))) is None else None
 
 
 def measurement(name: str, value: float | int, unit: str | None = None) -> dict[str, Any]:
@@ -505,7 +517,7 @@ def fingerprint(
     fp.update(extra)
     problems = validate_fingerprint(fp)
     if domain in LEGACY_DOMAINS:
-        problems.append(f"domain {domain!r} is the pre-2026-09-27 hardcode; record the statement's domain, one of {DOMAINS}")
+        problems.append(f"domain {domain!r} is what older results hardcoded; record the statement's domain, one of {DOMAINS}")
     if problems:
         raise ValueError("fingerprint does not conform: " + "; ".join(problems))
     return fp
@@ -530,8 +542,7 @@ def non_gemm_subcircuit(fp: Any) -> str | None:
     sid = fp.get("subcircuit") if isinstance(fp, Mapping) else None
     if not isinstance(sid, str):
         return None
-    from . import census          # data only: the renderer's environment (the steward) has no numpy for bench.templates
-
+    # the templates' names are read from the census, which is data only: what renders a result has no numpy for bench.templates
     template = sid.split("/", 1)[0]
     return sid if template in census.SUBCIRCUIT_TEMPLATES and template != "gemm-coordinate" and "/" in sid else None
 
@@ -554,7 +565,7 @@ def validate_fingerprint(fp: Any) -> list[str]:
             present.pop(field, None)
 
     if "profile" in present and present["profile"] not in PROFILES:
-        p.append(f"profile must be a target of verity.definitions.circuits.targets.target, one of {PROFILES} (the campaign target is {PROFILE!r}), got {present['profile']!r}")
+        p.append(f"profile must be a target of verity.circuits.targets.target, one of {PROFILES} (the campaign target is {PROFILE!r}), got {present['profile']!r}")
     if "domain" in present and present["domain"] not in (*DOMAINS, *LEGACY_DOMAINS):
         p.append(f"domain must be one of {DOMAINS} (the statement's operand domain), got {present['domain']!r}")
     if "K" in present and not (_is_int(present["K"]) and present["K"] > 0 and present["K"] % 16 == 0):
@@ -905,24 +916,26 @@ def compare_instances(baseline: Mapping[str, Any] | None, candidate: Mapping[str
 
 def probe_hardware(timeout: float = 10.0) -> dict[str, Any]:
     """``{"gpu": {...} | None, "cpu": {...} | None}`` from ``nvidia-smi`` and ``/proc/cpuinfo`` (or ``sysctl`` on
-    macOS) when present.  Whatever cannot be observed is ``None``; nothing is guessed."""
+    macOS) when present.  Whatever cannot be observed is ``None``; nothing is guessed.  A tool that is on the path and
+    cannot be run, or answers what cannot be read, is ``None`` too, with a warning on this module's logger."""
 
     gpu = None
-    try:
-        q = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"],
-                           capture_output=True, text=True, timeout=timeout)
-        rows = [r for r in q.stdout.splitlines() if r.strip()] if q.returncode == 0 else []
-        if rows:
-            name, driver, mem = (s.strip() for s in (rows[0].split(",") + ["", ""])[:3])
-            cuda = None
-            head = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=timeout)
-            m = re.search(r"CUDA Version:\s*([0-9][0-9.]*)", head.stdout) if head.returncode == 0 else None
-            if m:
-                cuda = m.group(1)
-            gpu = {"name": name, "driver": driver or None, "cuda": cuda, "count": len(rows),
-                   "memory_total_bytes": int(mem) << 20 if mem.isdigit() else None}
-    except (OSError, subprocess.TimeoutExpired, ValueError):
-        gpu = None
+    if shutil.which("nvidia-smi") is not None:
+        try:
+            q = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"],
+                               capture_output=True, text=True, timeout=timeout)
+            rows = [r for r in q.stdout.splitlines() if r.strip()] if q.returncode == 0 else []
+            if rows:
+                name, driver, mem = (s.strip() for s in (rows[0].split(",") + ["", ""])[:3])
+                cuda = None
+                head = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=timeout)
+                m = re.search(r"CUDA Version:\s*([0-9][0-9.]*)", head.stdout) if head.returncode == 0 else None
+                if m:
+                    cuda = m.group(1)
+                gpu = {"name": name, "driver": driver or None, "cuda": cuda, "count": len(rows),
+                       "memory_total_bytes": int(mem) << 20 if mem.isdigit() else None}
+        except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+            log.warning("nvidia-smi is on the path and gave no reading (%s: %s): the gpu is recorded as None", type(e).__name__, e)
     cpu = None
     try:
         text = Path("/proc/cpuinfo").read_text()
@@ -930,11 +943,12 @@ def probe_hardware(timeout: float = 10.0) -> dict[str, Any]:
         if models:
             cpu = {"model": models[0].strip(), "count": len(models)}
     except OSError:
-        try:
-            q = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string", "hw.logicalcpu"], capture_output=True, text=True, timeout=timeout)
-            lines = q.stdout.splitlines() if q.returncode == 0 else []
-            if lines and lines[0].strip():
-                cpu = {"model": lines[0].strip(), "count": int(lines[1]) if len(lines) > 1 and lines[1].strip().isdigit() else None}
-        except (OSError, subprocess.TimeoutExpired):
-            cpu = None
+        if shutil.which("sysctl") is not None:
+            try:
+                q = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string", "hw.logicalcpu"], capture_output=True, text=True, timeout=timeout)
+                lines = q.stdout.splitlines() if q.returncode == 0 else []
+                if lines and lines[0].strip():
+                    cpu = {"model": lines[0].strip(), "count": int(lines[1]) if len(lines) > 1 and lines[1].strip().isdigit() else None}
+            except (OSError, subprocess.TimeoutExpired) as e:
+                log.warning("sysctl is on the path and gave no reading (%s: %s): the cpu is recorded as None", type(e).__name__, e)
     return {"gpu": gpu, "cpu": cpu}

@@ -3,10 +3,10 @@
 Checked today, against ``allowlists/p09_layering.json``:
 
 * ``layer``: an import from a lower layer into a higher one, with every module placed in the layer of its package
-  (``_imports.LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` > ``observe|commit`` > ``engine`` >
+  (``_imports.LAYER``; order ``pipeline`` > ``check`` > ``acquire`` > ``observe|commit`` > ``engine`` >
   ``query|correspondence`` > ``program`` > ``collectives`` > ``config`` > core).  One entry per (importer, imported)
   module pair.
-* ``package-cycle``: two top-level packages importing each other (``engine.hooks``, ``engine.env``, ``engine.makers`` and
+* ``package-cycle``: two top-level packages importing each other (``engine.hooks``, ``engine.env`` and
   ``engine.profiles.layer_classes``, which import nothing, count apart from ``engine``).
 * ``module-cycle``: a strongly connected component of the module import graph.  The entry names its members, so a
   cycle that gains a member fails too.
@@ -28,7 +28,7 @@ Checked today, against ``allowlists/p09_layering.json``:
 from __future__ import annotations
 
 import ast
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from . import _imports as I
@@ -58,10 +58,10 @@ def layer_violations() -> list[R.Violation]:
     return out
 
 
-#: Engine modules every layer calls (the patch owner, the env-pin writer, a seam's parts and the value check's layer-class
-#: table); they import nothing from the package.
+#: Engine modules every layer calls (the patch owner, the env-pin writer and the value check's layer-class table); they
+#: import nothing from the package.
 LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS) | {
-    "verity_vllm.engine.env", "verity_vllm.engine.makers", "verity_vllm.engine.profiles.layer_classes"}
+    "verity_vllm.engine.env", "verity_vllm.engine.profiles.layer_classes"}
 
 
 #: The unit a package cycle counts these modules and subpackages in (longest prefix wins), whatever package they sit in:
@@ -69,9 +69,10 @@ LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_
 PACKAGE_OF = {
     "verity_vllm.protocols": "protocol_options",
     "verity_vllm.protocols.linear": "linear",
-    "verity_vllm.protocols.remote_bandwidth": "store",
+    "verity_vllm.protocols.poub": "store",
     "verity_vllm.program.predict": "predict",
     "verity_vllm.engine.collectives": "collectives",
+    "verity_vllm.engine.runner_step": "runner_step",
     "verity_vllm.engine.served_seed": "served_seed",
     "verity_vllm.engine.spec": "pipeline",
     "verity_vllm.llm": "pipeline",
@@ -81,7 +82,7 @@ PACKAGE_OF = {
 def _package(m: str) -> str:
     if m in LEAF_MODULES:
         return _short(m)          # imports nothing from the package (test_leaf_modules_import_nothing): closes no cycle
-    if I.in_group(m, ("verity.definitions",)):
+    if I.in_group(m, ("verity_vllm.definitions",)):
         return "program"          # moved from program/, and held to its package cycles as they stood
     if hit := max((p for p in PACKAGE_OF if m == p or m.startswith(p + ".")), key=len, default=None):
         return PACKAGE_OF[hit]
@@ -222,7 +223,7 @@ def file_violations(src: str, rel: str, module: str = "", is_package: bool = Fal
                 tgt = node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else None
                 emit("repo-path", node, symbol, tgt.id if isinstance(tgt, ast.Name) else type(node).__name__.lower())
         # runtime patches
-        targets: list[ast.AST] = []
+        targets: list[ast.expr] = []
         value = None
         if isinstance(node, ast.Assign):
             targets, value = list(node.targets), node.value
@@ -262,7 +263,7 @@ def file_violations(src: str, rel: str, module: str = "", is_package: bool = Fal
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out = layer_violations() + cycle_violations()
     for p in R.library_files():
@@ -296,7 +297,7 @@ def test_layer_map_names_existing_modules() -> None:
 
 
 def test_detectors_on_examples() -> None:
-    assert I.RANK["pipeline"] > I.RANK["check|properties"] > I.RANK["acquire"] > I.RANK["observe|commit"] \
+    assert I.RANK["pipeline"] > I.RANK["check"] > I.RANK["acquire"] > I.RANK["observe|commit"] \
         > I.RANK["engine"] > I.RANK["query|correspondence"] > I.RANK["program"] > I.RANK["collectives"] \
         > I.RANK["config"] > I.RANK["core"]
     assert I.layer_of("verity_vllm.engine.vllm_adapter") == "engine"

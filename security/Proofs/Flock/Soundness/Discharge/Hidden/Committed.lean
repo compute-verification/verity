@@ -33,7 +33,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 In a satisfying witness of an untyped hidden-output statement, at block `o`, template instance `g` and output row `j`:
 * the 128 bytes at the row's `hm96` output are the population's `b ‖ c` of the sampled proof block there: `HmOut.regions`' region
   `p` pins them (`bc_pinned'`, `Layout.bc_pinned` at the region `regions_get` gives), and `HmOut.drawn` is `HmRow.drawn`
-  on the circuit without output ports (`Layout.bcChunk_drawn`): `bc_drawnH`, at every row;
+  on the circuit without output ports (`Layout.bcChunk_sampled`): `bc_sampledH`, at every row;
 * they are the commit string of the row prefix and the row's message bytes under its salt: the witness satisfies the flat
   twin (`sat_flat`), where `Hm.row_bc_flat` holds;
 * the row's message bytes are the output words the template instance computes (`msg_bytes`): each message bit is a copy
@@ -110,7 +110,7 @@ theorem bytesAt_bc {st : Stmt} (L : FlockSoundness.Layout st) (R : RowRanges st.
     (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
-      bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) := by
+      bytesOf (chunkBit (L.model regs) z o) 128 (bcCol st.c g p) := by
   unfold Binding.bytesAt Binding.bitsAt bytesOf
   congr 1
   funext j
@@ -125,17 +125,17 @@ theorem bytesAt_bc {st : Stmt} (L : FlockSoundness.Layout st) (R : RowRanges st.
   show FlockSoundness.bit ((L.model regs).block z o
     (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) = _
   rw [hin]
-  exact (blockBit_of_lt _ z o hy).symm
+  exact (chunkBit_of_lt _ z o hy).symm
 
 /-- **The `b ‖ c` a satisfying witness of a sampled hidden-output statement holds at a proved unit's `hm96` slot** is the
-unit's `b ‖ c` in the registered population's public file, at every row `p`, input or output (`Layout.bc_drawn` at
+unit's `b ‖ c` in the registered population's public file, at every row `p`, input or output (`Layout.bc_sampled` at
 `Stmt.setupHidden`'s statement): region `p` of `HmOut.regions` pins it (`regions_get`, `bc_pinned'`), and
 `HmOut.drawn` is `HmRow.drawn` on the circuit without output ports. -/
-theorem bc_drawnH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
+theorem bc_sampledH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
-    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) (hpt : pop.tables = none) {D : Draw.UnitDraw}
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
+    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) (hpt : pop.tables = none) {D : Draw.UnitSample}
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
@@ -152,13 +152,13 @@ theorem bc_drawnH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Li
   have hload := loadPublic_nil hpop
   have hsz := (Layout.loadPublic_digests hload hpt).1
   have hpopn : D.population = pop.n := by
-    obtain ⟨D', hD', hpn, -⟩ := Layout.drawn_spec hdrawn
+    obtain ⟨D', hD', hpn, -⟩ := Layout.sampled_spec hdrawn
     rw [hD] at hD'
     cases hD'
     exact hpn
   have hchunk : ∀ g' (hr' : o.val * st.c.g + g' < D.proved.size),
       Layout.bcChunk st.c st.pub o.val g' p = pop.digest D.proved[o.val * st.c.g + g'] p st.c.ports.size :=
-    fun g' hr' => Layout.bcChunk_drawn hdrawn hD hpt hsz hlt hr' hp
+    fun g' hr' => Layout.bcChunk_sampled hdrawn hD hpt hsz hlt hr' hp
   have hsz128 : ∀ g' ≤ g, (Layout.bcChunk st.c st.pub o.val g' p).size = 128 := fun g' hg' => by
     have hr' : o.val * st.c.g + g' < D.proved.size := by omega
     rw [hchunk g' hr']
@@ -184,19 +184,19 @@ include L L0 F0 hv1 hda hrows
 of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
 theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
-    (hzero : blockBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)
+    (hzero : chunkBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) :
-    bytesOf (blockBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
+    bytesOf (chunkBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
         (Typed.msgCol st.c g (HmOut.nIn st.c + j)) =
-      outBytes (blockBit (L.model regs) z o) st.c g j := by
+      outBytes (chunkBit (L.model regs) z o) st.c g j := by
   have hG := outGroup_single hrows.2.1 hj
   unfold bytesOf outBytes
   congr 1
   funext b
   have hb := b.isLt
   have hcopy : ∀ t : Fin 8,
-      blockBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val) =
-        blockBit (L.model regs) z o (outSrc st.c g j (b.val / 2) (8 * (b.val % 2) + t.val)) := fun t => by
+      chunkBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val) =
+        chunkBit (L.model regs) z o (outSrc st.c g j (b.val / 2) (8 * (b.val % 2) + t.val)) := fun t => by
     have ht := t.isLt
     have e1 : 2 * (b.val / 2) + (8 * (b.val % 2) + t.val) / 8 = b.val := by omega
     have e2 : (8 * (b.val % 2) + t.val) % 8 = t.val := by omega
@@ -212,7 +212,7 @@ theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     rw [hcopy t, outSrc, hG]
     simp only [hk, ↓reduceIte, Nat.add_assoc]
   · simp only [hk, ↓reduceIte]
-    have h0 : (fun t : Fin 8 => blockBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val)) =
+    have h0 : (fun t : Fin 8 => chunkBit (L.model regs) z o (Typed.msgCol st.c g (HmOut.nIn st.c + j) b.val t.val)) =
         fun _ => false := by
       funext t
       rw [hcopy t, outSrc, hG]
@@ -236,18 +236,18 @@ theorem outputs_committed' : OutputsCommitted := by
   have hrows : OutRows st.c := out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
   have hz0 := sat_flat L L0 F0 hv1 hda hrows hz
   have hupv := upv_pos F0.check ho
-  have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false := zero_bit L0 F0 hupv (show 0 < st.c.g by omega) hz0 o
+  have hzero : chunkBit (L.model regs) z o (zeroCol st.c) = false := zero_bit L0 F0 hupv (show 0 < st.c.g by omega) hz0 o
   obtain ⟨hpl, -⟩ := hrows.2.2 j hj
-  have hbc : bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g (HmOut.nIn st.c + j)) =
+  have hbc : bytesOf (chunkBit (L.model regs) z o) 128 (bcCol st.c g (HmOut.nIn st.c + j)) =
       Binding.commitString
         ((HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words).data.toList ++
-          bytesOf (blockBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
+          bytesOf (chunkBit (L.model regs) z o) (2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words)
             (Typed.msgCol st.c g (HmOut.nIn st.c + j)))
-        (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g (HmOut.nIn st.c + j))) := by
+        (bytesOf (chunkBit (L.model regs) z o) 192 (saltCol st.c g (HmOut.nIn st.c + j))) := by
     have := row_bc_flat L0 F0 rfl hupv hv1 hz0 o hg hpl
     rw [getElem!_eq_getD'] at this
     exact this
   rw [← msg_bytes L L0 F0 hv1 hda hrows hz o hzero hg hj, ← hbc, ← bytesAt_bc L R regs z o hg hpl]
-  exact (bc_drawnH h hpop hpt hD hlt L regs hregs hz o hg hg2 hpl hr).symm
+  exact (bc_sampledH h hpop hpt hD hlt L regs hregs hz o hg hg2 hpl hr).symm
 
 end FlockSoundness.Discharge.Hidden

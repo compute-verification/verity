@@ -1,9 +1,9 @@
 {
  "schema": "verity-vllm/records-index/v1",
- "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.program.predict.aot`), its pins the predicted Programs, and its rebuild the trace.",
+ "about": "Per row of record: `record`, its config record's art: id, and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `record` is null, or a PASS record whose Programs are the pins: `verity-vllm records publish` writes the two together, and a row whose pins move names no record until it is published again.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`, which clears its `record`).  A switched row's `aot` names the comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.program.predict.aot`), its pins the predicted Programs, and its rebuild the trace.",
  "rows": {
   "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
-   "record": "art:b70ee40e853da7b1096e2e3186c1ae03ebf6545e049ea225fc07f9e29de02090",
+   "record": null,
    "tier": "heavy",
    "pinned_from": {
     "build": "art:74ceaf98a4ac4151cd17456f458deb4ccf02f6fe5e06334e4965c2c4e8cd6f5b",
@@ -75,7 +75,7 @@
    }
   },
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
-   "record": "art:74c6c3ccd452e00ba6d2215c4282d9ae75a44b7da6d6d96861bdef5b1d661d69",
+   "record": null,
    "tier": "heavy",
    "pinned_from": {
     "build": "art:dd003620a71721950fd7c02c115fbf2ef9cacf76efaafc756f05300934bcf827",
@@ -723,14 +723,14 @@
    }
   },
   "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
-   "record": "art:686315c20aaa5e1c7479f34c0308a74c0b5974bfc59ba694f30cdcd086b7ffe2",
+   "record": null,
    "tier": "fast",
    "pinned_from": {
     "build": "/workspace/research/runs/r20261108-103407-e804/out/n/llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager",
     "run": "r20261108-103407-e804",
     "tree": "8fdc4bdc23f5c392f1964cfbe974becdd48321e3"
    },
-   "manifest_digest": "2aa3cb85601ca112180de6b8bf999c1c14c33cd92a3d829a36f6b92e9a7d9064",
+   "manifest_digest": "2d1592bdbe897f76d70e5d70b7fe0693844699849c5b5a31d2b1ffff5196a31ac19fcf29183946c6ed927b512099e0d2357293905f93adc38a12a085e2d719c0",
    "programs": {
     "0": {
      "step": "066d195019143484d9e09275dc847939e3c435ed2674dd1f3a6ec05abd9a869530cc7a7f9e6e6087fde47291cac9e1bacc193c13afae781a89f6c89310760ce0",
@@ -749,7 +749,7 @@
     "run": "r20261108-091426-d7df",
     "tree": "e5c19917f0d5757193a979aa1a502576e60102cb"
    },
-   "manifest_digest": "1bd6210f4e89ec9671c634b476dc234b569d6e1147773f51745cd3bef9f0761f",
+   "manifest_digest": "224eee8e45189552a291df78eee5843474d413c8543c572820b4f4d5c1d3175eac8070dcdf445ce07da4c41b2c6d2cc8016a42477d717433998a7571433c5fa5",
    "programs": {
     "0": {
      "step": "146d26cbbd1f171763354e6747e606fef42fad1c338d774c181be9b567ffcd30564700447822b019d7921966c776120dceac9b7443c477ed0905a12d27450b5c",
@@ -768,7 +768,7 @@
     "run": "r20261108-091446-fb0a",
     "tree": "e5c19917f0d5757193a979aa1a502576e60102cb"
    },
-   "manifest_digest": "e71d2e77ae18efe2744f255bcd988a8031d192af8e1175fa5f3619b6e1391264",
+   "manifest_digest": "c3d4cf7792061c0a2da32e49cbb106d7538e86b20bce29eb0cbf60bc7eb337e25b9d0437d939a7a0f4a40afe997bcb9e12462f47c55b2f86f8e48189821d26fc",
    "programs": {
     "0": {
      "step": "7241b2a88dec6e47ac2855d1df207a95405ad2a86f6baeafe6feabc07af9bf9cee1af315c1fbae0f1aa1b6eb3d6d8cee1932bc421ab44566de1dbeb46d2d4149",

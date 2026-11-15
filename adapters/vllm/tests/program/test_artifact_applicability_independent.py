@@ -20,11 +20,12 @@ Run (pod, venv with the pinned vLLM, SmolLM2 snapshot under $HF_HOME):
       python -m pytest tests/program/test_artifact_applicability_independent.py -q -rA
 Env: CBTEST_OUT (build outputs; default a tmp dir), CBTEST_REUSE=1 (reuse finished builds under CBTEST_OUT), CBTEST_JOBS (parallel
 builds, default 6), CBTEST_GPU_HOST=1 (also run the GPU-visible host-mismatch build), CBTEST_SKIP_BUILDS=1 (static tests only).
-The reference hosts' recorded manifests are `test_artifact_applicability_independent_of_record`.
+The reference hosts' recorded manifests (`R9_REFERENCE_MANIFESTS`) are read only where a checkout holds them.
 """
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import pathlib
@@ -33,6 +34,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import tokenize
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
@@ -120,8 +122,6 @@ def _source_files() -> list[pathlib.Path]:
 
 def _strip_comments_and_docstrings(src: str) -> str:
     """Code-only view: literals in comments/docstrings are documentation, not duplicated construction inputs."""
-    import io
-    import tokenize
     out = []
     try:
         toks = list(tokenize.generate_tokens(io.StringIO(src).readline))
@@ -153,7 +153,7 @@ def literal_sites(patterns) -> dict[str, list[str]]:
 
 def test_static_capability_literal_has_one_authoritative_site():
     """Contract bullet 1. The declared compute capability (8.9 / sm_89) must be spelled in ONE module. On a base without the contract it is spelled
-    twice: `cb_a/export_compat.py:71` (applied by the shim) and `frontend/rules/vllm_bindings.py:206` (written into the manifest) —
+    twice: `frontend/export_compat.py` (applied by the shim) and `frontend/rules/vllm_bindings/observations.py` (written into the manifest) —
     the two copies are what let the manifest go stale (a1)."""
     sites = literal_sites(CAP_LITERAL_PATTERNS)
     report = json.dumps(sites, indent=1)
@@ -193,8 +193,8 @@ def _can_build() -> tuple[bool, str]:
     if os.environ.get("CBTEST_SKIP_BUILDS") == "1":
         return False, "CBTEST_SKIP_BUILDS=1"
     try:
-        import vllm  # noqa: F401
         import torch  # noqa: F401
+        import vllm  # noqa: F401
     except Exception as e:  # noqa: BLE001
         return False, f"vllm/torch not importable here ({type(e).__name__}); run on the pod venv"
     if not _hf_snapshot_present():
@@ -300,13 +300,13 @@ class Harness:
     def _load(self, b: Build) -> None:
         for attr, fn in (("result", "result.json"), ("manifest", "construction_manifest.json")):
             try:
-                setattr(b, attr, json.load(open(b.out / fn)))
+                setattr(b, attr, json.loads((b.out / fn).read_text()))
             except Exception:  # noqa: BLE001
                 setattr(b, attr, {})
         if b.rc == -1:  # reused build: recover rc / mutations / log from the files the first run left behind
             b.rc = 0 if b.result.get("ok") else 1
             try:
-                b.mutations = json.load(open(self.work / b.name / "mutations.json"))
+                b.mutations = json.loads((self.work / b.name / "mutations.json").read_text())
                 b.log = (self.work / b.name / "build.log").read_text()
             except Exception:  # noqa: BLE001
                 pass
@@ -480,7 +480,7 @@ def identity_of(b: Build):
 
 def identity_targets(ident) -> dict:
     """The target/profile-fact part of an identity (so a code-version component cannot mask an unchanged target)."""
-    t = {}
+    t: dict[str, object] = {}
     if ident is None:
         return t
     for path, v in walk(ident):
@@ -541,7 +541,7 @@ def test_v_program_digest_unchanged_by_the_patch(builds):
     refs = []
     for p in R9_REFERENCE_MANIFESTS:
         if p.exists():
-            d = (json.load(open(p)).get("program") or {}).get("digest")
+            d = (json.loads(p.read_text()).get("program") or {}).get("digest")
             refs.append((str(p.relative_to(REPO)), d))
             assert d == b.digest, f"reference host manifest {p} has digest {d} != {b.digest}"
     print(f"\n[cb-test] digest {b.digest} == {len(refs)} reference host manifests: {refs}")
@@ -694,7 +694,7 @@ def test_iii_two_hosts_same_profile_same_identity(builds):
     # the baseline hosts (one with a GPU, one without) built the same Program; their pre-fix manifests carry only the digest
     for p in R9_REFERENCE_MANIFESTS:
         if p.exists():
-            assert (json.load(open(p)).get("program") or {}).get("digest") == a.digest
+            assert (json.loads(p.read_text()).get("program") or {}).get("digest") == a.digest
 
 
 @needs_builder
@@ -1078,7 +1078,7 @@ def test_vii_construction_on_a_mismatched_host_never_mislabels(builds):
 # host != target is acceptable iff (c) construction on an L40S (142 SMs, GPU visible) with the 128-SM/8.9 profile yields the SAME
 # Program digest AND the same artifact identity as the baseline constructions (no GPU; a 4090)
 # ---------------------------------------------------------------------------------------------------------------------------------
-def _wrapper_doc(b: "Build") -> dict | None:
+def _wrapper_doc(b: Build) -> dict | None:
     for g in ADAPTER["identity_file_globs"]:
         for p in sorted(b.out.glob(g)):
             try:
@@ -1129,10 +1129,10 @@ def _r9_recorded_applicability(m: dict) -> dict:
         out["numerics_profile"] = m["profile"]
     pkgs = ((m.get("inputs_trace") or {}).get("site_packages_by_package") or {})
     for name in pkgs:
-        for pkg, field in (("torch-", "torch_version"), ("triton-", "triton_version"), ("vllm-", "vllm_version")):
+        for pkg, key in (("torch-", "torch_version"), ("triton-", "triton_version"), ("vllm-", "vllm_version")):
             if name.startswith(pkg) and name.endswith(".dist-info"):
                 ver = name[len(pkg):-len(".dist-info")]
-                out[field] = ver[:-len(".cu129")] if field == "vllm_version" and ver.endswith(".cu129") else ver
+                out[key] = ver[:-len(".cu129")] if key == "vllm_version" and ver.endswith(".cu129") else ver
     return out
 
 
@@ -1158,7 +1158,7 @@ def test_gpu_visible_construction_equals_the_baseline_hosts(builds):
         pytest.skip("baseline reference manifests not in this checkout")
     unrecorded = None
     for p in refs:
-        m = json.load(open(p))
+        m = json.loads(p.read_text())
         assert (m.get("program") or {}).get("digest") == gpu.digest, (str(p), (m.get("program") or {}).get("digest"))
         rec = _r9_recorded_applicability(m)
         assert rec.get("vllm_flash_attn_version") and rec.get("torch_version"), f"{p}: recorded facts too thin: {rec}"

@@ -12,10 +12,11 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace as NS
+from typing import Any
 
 import numpy as np
 import pytest
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.engine.served_seed import derived
 from verity_vllm.pipeline import launch_context as LC
@@ -43,12 +44,12 @@ from verity_vllm.program.predict.steps import (
     trace_commands,
     trace_dir,
 )
-from verity_vllm.program.prune import dead_free_versions
-from verity.definitions.registry import io_shell as IO
-from verity.definitions.registry import stop_check as SC
-from verity.definitions.registry.topp_geometry import registered_splits
+from verity_torch.prune import dead_free_versions
+from verity_vllm.definitions.registry import io_shell as IO
+from verity_vllm.definitions.registry import stop_check as SC
+from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
-import verity.protocols.certifier.verifier.advice as I1
+import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.partition_object import calls
@@ -73,9 +74,9 @@ CLASS_G_ENGINE = {"max_model_len": 131072, "max_num_batched_tokens": 2048, "long
 
 
 def _registered(cfg: dict = TINY, **kw) -> Registered:
-    cap = kw.pop("cap_bits", None)
+    cap_bits = kw.pop("cap_bits", None)
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTXPRO6000), **kw)
-    return Registered.of(phi, default_seed=7) if cap is None else Registered.of(phi, default_seed=7, cap_bits=cap)
+    return Registered.of(phi, default_seed=7) if cap_bits is None else Registered.of(phi, default_seed=7, cap_bits=cap_bits)
 
 
 def _prompt(i: int, lp: int) -> list[int]:
@@ -178,7 +179,7 @@ def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_t
 
 def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_window_seed_salt_or_refused_by_name():
     """A seed is its certified body's or derived from the request's id and the window's seed salt, never one serving fills in
-    or draws: with no seed salt, or for a request the window carries in (whose admitting window's seed salt this compile doesn't
+    or samples: with no seed salt, or for a request the window carries in (whose admitting window's seed salt this compile doesn't
     read), an unseeded stochastic request is refused by name. The derived seed is the request's alone and in its batch."""
     unseeded = {**STOCH, "seed": None}
     assert policy_of(0, unseeded, 188, request_id="q1", salt=SALT) == (STOCH_POLICY, derived(SALT, "q1"))
@@ -186,7 +187,7 @@ def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_win
     assert policy_of(0, {**unseeded, "seed": 5}, 188, request_id="q1", salt=SALT) == (STOCH_POLICY, 5)
     with pytest.raises(Unexpressible, match=r"request 0 \('q1'\): stochastic with no seed in its certified body, and the compile has "
                                             r"no window seed salt to derive one from: a seed serving fills in \(`served_seed.DEFAULT_SEED`\) "
-                                            r"or draws"):
+                                            r"or samples"):
         policy_of(0, unseeded, 188, request_id="q1")
     with pytest.raises(Unexpressible, match="request 0 \\('a'\\): stochastic with no seed in its certified body, and the window carries "
                                             "it in, so its seed derives from its admitting window's seed salt"):
@@ -263,7 +264,7 @@ def test_the_compiler_is_total_on_every_truncation_and_bit_flip_of_an_advice():
     inputs += [rng.randbytes(rng.randrange(64)) for _ in range(200)]
     planned = 0
     for x in inputs:
-        outcomes = []
+        outcomes: list[tuple[Any, ...]] = []
         for _ in range(2):
             try:
                 plan = plan_steps(reg, x, ingress, partial=False)
@@ -301,7 +302,7 @@ def _stops(body: dict = GREEDY) -> tuple[I1.Advice, dict]:
 def _spec(LP: int, T: int, m: int, finish: int | None = None, stops: tuple[int, ...] = (255,), M: int = 64) -> dict:
     """The length rule's config of a TINY request Program with outputs 1..T + 1 under max_tokens `m`, finishing as `_session` has
     it (on a stop id below `m` outputs, on length at `m`) unless `finish` (a `stop_rule.FINISH` code) says."""
-    f = finish if finish is not None else 2 if T + 1 == m else 1
+    f = finish if finish is not None else 2 if m == T + 1 else 1
     return SR.spec(stops, max_tokens=m, prompt_len=LP, max_model_len=M, outputs=T + 1, finish=f)
 
 
@@ -339,8 +340,8 @@ def test_each_request_program_returns_its_length_rule_as_its_last_check():
     (2, [11, 12, 13], 1),         # an honest length finish
     (1, [11, 12, 13], 0),         # cut short before its first stop
     (1, [11, 255, 255], 0),       # run past a stop to finish on another
-    (2, [11, 255, 13], 0),        # run past a stop to its cap
-    (2, [11, 12, 255], 0),        # a stop at its cap read as a length finish
+    (2, [11, 255, 13], 0),        # run past a stop to its length limit
+    (2, [11, 12, 255], 0),        # a stop at its length limit read as a length finish
 ])
 def test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop(finish, ids, ok):
     """The rule each Program carries, evaluated on the streams its 3 outputs could hold: 1 only for the stream that ends the way
@@ -363,9 +364,9 @@ def test_a_body_with_stops_of_its_own_is_refused_naming_the_fix(body, why):
         compile_steps(reg, advice, ingress)
 
 
-def test_ignore_eos_leaves_a_request_no_stop_ids_and_a_rule_over_its_length_caps():
+def test_ignore_eos_leaves_a_request_no_stop_ids_and_a_rule_over_its_length_limits():
     """Under ignore_eos vLLM stops a request only on its own stop_token_ids (`SamplingParams.update_from_generation_config`), which
-    are refused, so it has none: its rule reads the length caps alone, and a finish on a stop id is refused.  Empty stops are none,
+    are refused, so it has none: its rule reads the length limits alone, and a finish on a stop id is refused.  Empty stops are none,
     and compile as without them."""
     reg, (advice, ingress) = _registered(), _stops()
     plain = compile_steps(reg, advice, ingress)
@@ -381,7 +382,7 @@ def test_ignore_eos_leaves_a_request_no_stop_ids_and_a_rule_over_its_length_caps
         compile_steps(reg, advice, {**ingress, "q1": {**ingress["q1"], "ignore_eos": "yes"}})
 
 
-def test_a_model_that_states_no_stop_ids_has_a_rule_over_its_length_caps_and_refuses_a_finish_on_one():
+def test_a_model_that_states_no_stop_ids_has_a_rule_over_its_length_limits_and_refuses_a_finish_on_one():
     bare = _registered({k: v for k, v in TINY.items() if k != "eos_token_id"})
     advice, ingress = _stops()
     with pytest.raises(Unexpressible, match="request 0: finished on a stop id, and the registered model states none"):
@@ -573,6 +574,7 @@ def test_a_resume_reads_its_own_kv_past_its_prompt():
     """Request 0 (LP 20) is preempted at position 33 and resumes on a hit of 32 tokens of its own KV, past its prompt: I1's replay
     holds that run (the request computed those positions), its resume recomputes position 32 and computes 33 anew."""
     reg = _registered()
+    rows: list[list[tuple[Any, ...]]]
     rows = [[(0, 0, 20)]] + [[(0, 20 + k, 1)] for k in range(13)] + [[(0, 32, 2, {"cache_hit": 32, "preempted": True,
                                                                                "sources": (I1.Source(0, 32),)})], [(0, 34, 1)]]
     c = compile_steps(reg, *_session([(20, 16, {**GREEDY, "max_tokens": 16})], rows))
@@ -603,7 +605,7 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
 def test_an_aborted_request_compiles_as_one_stopped_at_its_last_kept_output():
     """Request 0's client aborted it after 3 outputs, and the endpoint freed it after the step in flight, whose row (step 3) ran past
     them: it compiles to the rows of a stop at 3 outputs, that row discarded, with ignore_eos set or not. Its length rule runs on
-    past its last output (finish 0) where the stop's ends there on a stop id (1), under ignore_eos over its length caps alone. At its
+    past its last output (finish 0) where the stop's ends there on a stop id (1), under ignore_eos over its length limits alone. At its
     max_tokens vLLM has finished it on length, so an abort there is refused."""
     reg = _registered()
     stopped, ingress = _session([(8, 3, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]])
@@ -682,7 +684,8 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
     `_dead_gates` counts them as circuit-check does and says under which definitions. The second session's prefill has a row of
     16 keys, where `Attention_v5` has 2 dead gates a head."""
     from verity.circuits.liveness import dead_gates
-    from verity_vllm.program.prune import dead_units
+
+    from verity_torch.prune import dead_units
     sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
     for advice, ingress in (_mixed(), sixteen):
         c = compile_steps(_registered(), advice, ingress)
@@ -711,7 +714,7 @@ def test_a_tensor_parallel_rank_compiles_to_its_dead_free_rank_programs(tmp_path
     in the registered compiler's form, which the TP2 Build of record isn't: there the last layer's rows before the prefill's last end
     in units no output reads, its reduces among them. The rows are the one-rank compilation's, and the traces are the rank's
     `--dead-free` Builds."""
-    from verity_vllm.program.prune import dead_units
+    from verity_torch.prune import dead_units
     advice, ingress = _mixed()
     one = compile_steps(_registered(), advice, ingress)
     digests = []
@@ -742,10 +745,10 @@ def test_a_target_without_batch_invariance_outside_class_g_is_refused():
 
 
 def _class_g(hf_home: Path, rank: int = 0, engine: dict | None = None, layers: int | None = None, **edit: dict) -> Registered:
-    """GLM-5.3's B8 row of record at `rank` as `score.phi_of` makes its φ (the checkpoint's config.json the package's byte copy, or
+    """GLM-5.3's B8 workload of record at `rank` as `score.phi_of` makes its φ (the checkpoint's config.json the package's byte copy, or
     with `layers` its first `layers` decoder layers), registered with class G's engine limits (`engine` over them, None dropping
     one; `edit` over φ's other parts)."""
-    w = json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text())
     cp = Path(S.hf_config_path(str(hf_home), w["model"], RowEngine.of(w).revision))
     cp.parent.mkdir(parents=True, exist_ok=True)
     cfg = (HF_CONFIG_DIR / "GLM53.config.json").read_bytes()
@@ -760,7 +763,7 @@ def _b8_window() -> tuple[I1.Advice, dict, dict]:
     """The B8 row's recorded schedule as one window's advice and certified bodies, and the launch context its Build traced each
     request shape at (`launch_context.shape_contexts`): its requests at their realized arrivals, each engine step's rows in
     admission order (the scheduler's, which the launch keeps for its decodes), each request to its max_tokens (ignore_eos), greedy."""
-    w = json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text())
     reqs = LC._requests(w)
     order = sorted(range(len(reqs)), key=lambda i: reqs[i]["arrive_step"])
     steps = [[(i, LC.start_at(reqs[i], e), LC.rows_at(reqs[i], e)) for i in order if LC.rows_at(reqs[i], e)]
@@ -777,6 +780,7 @@ def _scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, se
     left; a request leaves once it has its max_tokens outputs. Steps with nothing to run are dropped, as the idle engine brings the
     next arrival forward."""
     done, outs = [0] * len(reqs), [0] * len(reqs)
+    running: list[int]
     waiting, running, steps, e = sorted(range(len(reqs)), key=lambda i: reqs[i][0]), [], [], 0
     while waiting or running:
         left, rows = budget, []
@@ -801,7 +805,7 @@ def _scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, se
 def _chunked_b8(budget: int, threshold: int) -> tuple[I1.Advice, dict, list]:
     """The B8 row's requests (their realized arrivals, prompts and max_tokens, greedy, ignore_eos) as one window's advice under a
     scheduler of `budget` tokens a step and a long-prefill threshold of `threshold` (`_scheduled`), its bodies and its steps."""
-    reqs = LC._requests(json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text()))
+    reqs = LC._requests(json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text()))
     steps = _scheduled([(r["arrive_step"], r["prompt_len"], r["max_tokens"]) for r in reqs], budget, threshold)
     advice, ingress = _session([(r["prompt_len"], r["max_tokens"], {**GREEDY, "max_tokens": r["max_tokens"], "ignore_eos": True})
                                 for r in reqs], steps)
@@ -830,6 +834,7 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
         assert B._unit(a) == B._unit(u) and len(a.launch) == len(u.launch)
     assert cut and [u.chunks for u in plan.requests] == [(), (), (64, 64, 64, 39), (64, 1), (64, 64, 59), (), (22, 64, 64, 64, 42),
                                                          (33, 64, 4)]
+    summary: dict[str, Any]
     summary = {"compiler": "c", "requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(),
                                               "chunks": list(u.chunks), "digest": f"d{u.request}", "stop": u.stop} for u in plan.requests]}
     (long,) = trace_commands({"requests": [{**summary["requests"][0], "LP": 2300, "T": 16}]}, reg, "/t")
@@ -875,9 +880,10 @@ def test_the_builds_chunked_request_wrapper_runs_drives_forwards_at_its_launch_s
     chunk at its launch step and positions, the sample after the last chunk only, then each decode at the step after, as `drive`
     builds it; a chunked request with a cached prefix or another policy is refused by name."""
     import torch
+
     from verity_vllm.program.frontend import vllm_meta as vm
     from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
-    seen = []
+    seen: list[tuple[Any, ...]] = []
 
     class Toy(torch.nn.Module):
         def forward(self, ids, positions):
@@ -956,8 +962,9 @@ def test_class_g_samples_by_the_selects_circuit_check_binds_at_its_vocabulary(tm
     `prune`'s dead-free versions of the two at its vocabulary are the bindings `dead_free.circuit-check.py` holds for it."""
     import runpy
 
+    from verity_vllm.definitions.registry import dead_free as DF
+
     from verity_vllm.program.predict.common import kind
-    from verity.definitions.registry import dead_free as DF
 
     reg = _class_g(tmp_path)
     V = reg.phi.hf_config["vocab_size"]
@@ -1019,6 +1026,8 @@ def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discar
 @pytest.mark.parametrize("engine,edit,fact", [
     ({"max_num_batched_tokens": 16384}, {}, "engine arg max_num_batched_tokens 16384, not a stated value of at most 8192"),
     ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 131072"),
+    ({"max_model_len": -1}, {}, "engine arg max_model_len -1, not a stated value of at most 131072"),
+    ({"max_model_len": 262144}, {}, "engine arg max_model_len 262144, not a stated value of at most 131072"),
     ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256"),
     ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 256"),
     ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not stated True or False"),
@@ -1074,8 +1083,8 @@ def _past_its_outputs() -> tuple[WA.Advice, dict]:
      "step 0 runs 3 sequences, over the registered max_num_seqs 2"),
     (_session([(300, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 300)]]), {},
      "request 0: step 0 runs 300 of its rows, over the registered long_prefill_token_threshold 256"),
-    (_past_its_outputs(), CACHE_ON, "request 1: its cache hit reads request 0's KV, which has no Program in the window (its rows here "
-                                    "are past its last kept output)"),
+    (_past_its_outputs(), CACHE_ON, ("request 1: its cache hit reads request 0's KV, which has no Program in the window (its rows here "
+                                     "are past its last kept output)")),
 ])
 def test_class_g_refuses_a_request_whose_program_misses_a_launch_it_ran_in(session, engine, fact, tmp_path):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
@@ -1146,10 +1155,10 @@ def _two_producers(split: bool) -> tuple[I1.Advice, dict]:
 
 
 @pytest.mark.parametrize("session,fact", [
-    (_two_producers(False), "request 2: its hit's positions 16 … 31 are request 1's rows from position 0 at step 0, a row that starts "
-                            "before them"),
-    (_two_producers(True), "request 2: its hit's positions 16 … 31 are request 1's rows at step 1, computed over a history of other "
-                           "rows than the hit holds"),
+    (_two_producers(False), ("request 2: its hit's positions 16 … 31 are request 1's rows from position 0 at step 0, a row that starts "
+                             "before them")),
+    (_two_producers(True), ("request 2: its hit's positions 16 … 31 are request 1's rows at step 1, computed over a history of other "
+                            "rows than the hit holds")),
     (_past_its_outputs(), "request 0's KV at positions below 16 has no row of the window that computed it (the window carries it in)"),
 ])
 def test_class_g_refuses_a_hit_no_one_chain_of_its_rows_recomputes(session, fact, tmp_path):
@@ -1300,11 +1309,19 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
     advice, ingress = _session([(20, 3, {**GREEDY, "max_tokens": 3, "ignore_eos": True}),
                                 (6, 2, {**GREEDY, "max_tokens": 2, "ignore_eos": True})], steps)
     reg = _class_g(tmp_path, engine={"long_prefill_token_threshold": 8, "max_num_batched_tokens": 16})
+    seen: list[tuple[Any, ...]]
     seen, tokens, keys = [], CM._Launch.tokens, CM._Launch.keys
-    monkeypatch.setattr(CM._Launch, "tokens", lambda self, own, sampled=False: (
-        seen.append((self.step, own, sampled)), tokens(self, own, sampled))[1])
-    monkeypatch.setattr(CM._Launch, "keys", lambda self, own, without=(): (
-        seen.append((self.step, tuple(own), "keys")), keys(self, own, without))[1])
+
+    def seen_tokens(self, own, sampled=False):
+        seen.append((self.step, own, sampled))
+        return tokens(self, own, sampled)
+
+    def seen_keys(self, own, without=()):
+        seen.append((self.step, tuple(own), "keys"))
+        return keys(self, own, without)
+
+    monkeypatch.setattr(CM._Launch, "tokens", seen_tokens)
+    monkeypatch.setattr(CM._Launch, "keys", seen_keys)
     c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
     u = c.requests[0]
     assert (u.chunks, u.T, sorted(c.refused), c.batch_rule) == ((8, 8, 4), 2, [1], None)
@@ -1368,6 +1385,7 @@ def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
     got = compare(s, str(tmp_path))
     assert (got["equal"], got["different"], got["no_trace"], got["mismatches"]) == (1, 0, 1, 1)
     assert got["units"][1]["trace_error"] == "boom"
+    assert (s["schema"], got["schema"]) == ("verity-vllm/compiled-steps/v2", "verity-vllm/compiled-steps/v2/comparison")
 
 
 @pytest.mark.slow

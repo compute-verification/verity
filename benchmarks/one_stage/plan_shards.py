@@ -1,6 +1,7 @@
-"""The sharded plan unit (`PlanShard_v1`, `verity.definitions.circuits.requirement_units`) on a recorded remote session: each pass's
+"""The sharded plan unit (`PlanShard_v1`, `verity.circuits.requirement_units`) on a recorded remote session: each pass's
 plan cut into the store's shards, one instance a shard a pass, every instance held to the unit's reference, each distinct one
-to the circuit, and one staged by Flock's `UnitStager` for its fit in M0's block.
+to the circuit, and one staged by Flock's `UnitStager` for its fit in M0's block. The session is vllm's
+``remote_session.json`` and the record the remote verifier's ``verifier.json``. A CPU job; it builds nothing.
 
     uv run python benchmarks/one_stage/plan_shards.py --session remote_session.json --record verifier.json --out DIR \\
         [--S 32768] [--gaps 0] [--no-circuit] [--no-stage]
@@ -10,7 +11,7 @@ to the circuit, and one staged by Flock's `UnitStager` for its fit in M0's block
   only where that fixes it: nothing appended or released and a plan of every block below the stale bound, N of N, is every
   block in store order. Any other pass is refused here.
 * **The blocks each step reads.** The session's registered layout (``remote_session.json``'s ``layout``, one region a
-  registration, weights or filler; its registration digest the record's): every weight block, a gathered table (the
+  docket, weights or filler; its docket digest the record's): every weight block, a gathered table (the
   embedding) counted whole. That is each instance's ``regmask`` at every step, a superset of the step's registered reads,
   which is what the one-sided clause needs; the circuit's other reads (its KV) are outside this store.
 * **What it writes.** ``$OUT/plan_shards.json``: the binding, the shards (full, weight, mixed, filler), instances a pass and in
@@ -31,7 +32,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from verity.definitions.circuits import requirement_units as RU
+from verity.circuits import requirement_units as RU
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 

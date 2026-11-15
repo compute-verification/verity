@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from research import notes
+from research import notes, settings
 
-NOW = dt.datetime(2026, 9, 23, 21, 0, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 23, 21, 0, tzinfo=dt.UTC)
 FRONT = "---\nlane: {lane}\nkind: report\ncreated: 2026-09-23T17:00Z\nstatus: {status}\n---\n\n"
 
 
@@ -295,7 +295,7 @@ def test_the_pod_probe_reports_the_busiest_gpu_even_at_zero_percent(tmp_path, gp
     fake.parent.mkdir()
     fake.write_text(f"#!/bin/sh\ncase \"$*\" in *query-gpu*) printf '{gpus}';; *query-compute-apps*) printf '{apps}';; esac\n")
     fake.chmod(0o755)
-    out = subprocess.run(["sh", "-c", notes.POD_PROBE], capture_output=True, text=True, env={**os.environ, "PATH": f"{fake.parent}:{os.environ['PATH']}"})
+    out = subprocess.run(["sh", "-c", notes.POD_PROBE], capture_output=True, text=True, env={**os.environ, "PATH": f"{fake.parent}:{settings.need('PATH')}"})
     p = notes.parse_pod_probe(out.stdout)
     assert (p["gpu_util"], p["gpu_mem_mb"], p["gpu_apps"], p["serve"]) == (*want, 0)
 
@@ -441,7 +441,7 @@ def test_finish_checks_custody_pod_worktree_and_handoffs_never_named(tmp_path, r
     assert notes.finish(root, "fin", repo, keep_pod="x", custody=lambda arts: (True, "ok"))[1] == 0
 
 
-def test_snapshot_commits_the_notes_repo_except_files_over_the_cap(tmp_path):
+def test_snapshot_commits_the_notes_repo_except_files_over_the_limit(tmp_path):
     root = tmp_path / "notes"
     _touch(root / "lanes" / "a" / "20260923T1700Z-report-a.md", 5, "# a\n")
     _touch(root / "lanes" / "a" / "tools" / "odd [name]*.md", 5, "glob characters are literal\n")
@@ -586,7 +586,8 @@ def test_the_reaper_takes_only_pods_of_final_lanes_past_the_grace_that_are_not_k
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted)
     assert lines == ["21:00Z FINAL-POD done vy-done p1 $0.74/h (final 15m ago): --reap terminates it, checkpoint --keep-pod WHY keeps it"]
     assert notes.reap_lines(tmp_path, rows, NOW, 10, noted) == [] and killed == []     # said once; nothing terminated
-    ok = lambda lane, p: asked.append((lane, p["id"])) or (True, "2 cited art(s) preserved")
+    def ok(lane, p):
+        return asked.append((lane, p["id"])) or (True, "2 cited art(s) preserved")
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=ok)
     assert killed == ["p1"] and asked == [("done", "p1")]      # custody asked only for the reapable pod; kept/fresh/open untouched
     assert lines == ["21:00Z REAPED done vy-done p1 $0.74/h (final 15m ago); custody: 2 cited art(s) preserved"]
@@ -599,7 +600,8 @@ def test_the_reaper_leaves_a_pod_started_after_the_final_it_means_the_lane_was_r
             {"id": "nots", "name": "vy-red-team-flock", "usd_h": 0.48}]                     # no start time in the listing: same
     rows = [{"lane": "red-team-flock", "state": "final", "done_ts": done, "pods": pods}]
     noted, killed, state = set(), [], {}
-    never = lambda lane, p: pytest.fail("no custody check for a resumed pod")
+    def never(lane, p):
+        return pytest.fail("no custody check for a resumed pod")
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=never, state=state)
     assert killed == [] and lines == [
         "21:00Z RESUMED-POD red-team-flock vy-red-team-flock fzs8 (created 20:58Z, after FINAL 19:56Z): not reaped",
@@ -610,7 +612,8 @@ def test_the_reaper_leaves_a_pod_started_after_the_final_it_means_the_lane_was_r
 
 def test_the_reaper_says_nothing_about_a_pod_runpod_no_longer_knows(tmp_path):
     pod = {"id": "gone", "name": "vy-done", "usd_h": 0.48, "started_ts": NOW.timestamp() - 3600, "idle": True, "idle_min": 60}
-    gone = lambda lane, p: (False, "its run dirs' custody is unknown: PodError: GET /pods/gone -> HTTP 404: not found (terminated, or never existed)")
+    def gone(lane, p):
+        return (False, "its run dirs' custody is unknown: PodError: GET /pods/gone -> HTTP 404: not found (terminated, or never existed)")
     final = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]}]
     stale = [{"lane": "slow", "state": "open", "stale": True, "age_min": 90, "pods": [pod]}]
     killed: list = []
@@ -623,7 +626,8 @@ def test_the_reaper_blocks_a_final_lanes_pod_that_fails_custody_and_rechecks_aft
     pod = {"id": "p1", "name": "vy-done", "usd_h": 0.74, "started_ts": NOW.timestamp() - 3600}
     rows = [{"lane": "done", "state": "final", "done_ts": NOW.timestamp() - 900, "pods": [pod]}]
     noted, killed, state = set(), [], {}
-    blocked = lambda lane, p: (False, "art:deadbeef not preserved: 404")
+    def blocked(lane, p):
+        return (False, "art:deadbeef not preserved: 404")
     lines = notes.reap_lines(tmp_path, rows, NOW, 10, noted, reap=True, terminate=killed.append, custody=blocked, state=state)
     assert killed == [] and lines == ["21:00Z REAP-BLOCKED done vy-done: art:deadbeef not preserved: 404"]
     assert (tmp_path / "reaper.log").read_text() == lines[0] + "\n"
@@ -633,7 +637,8 @@ def test_the_reaper_blocks_a_final_lanes_pod_that_fails_custody_and_rechecks_aft
     lines = notes.reap_lines(tmp_path, rows, later, 10, noted, reap=True, terminate=killed.append,
                              custody=lambda lane, p: (True, "ok"), state=state)
     assert killed == ["p1"] and lines == ["21:31Z REAPED done vy-done p1 $0.74/h (final 46m ago); custody: ok"]
-    boom = lambda lane, p: 1 / 0
+    def boom(lane, p):
+        return 1 / 0
     rows[0]["pods"] = [{**pod, "id": "p2"}]
     assert notes.reap_lines(tmp_path, rows, later, 10, noted, reap=True, terminate=killed.append, custody=boom, state=state) == [
         "21:31Z REAP-BLOCKED done vy-done: custody not checked (ZeroDivisionError: division by zero)"] and killed == ["p1"]
@@ -948,7 +953,7 @@ def test_reap_custody_wants_the_cited_arts_preserved_and_every_run_on_the_pod_fe
     assert notes.reap_custody(root, "empty", "p9", arts=arts, runs=runs_ok) == (True, "no art: cited; 0 run(s) on it fetched or registered")
 
 
-def test_art_custody_is_the_preserved_check_and_caps_what_it_would_read_back(tmp_path, monkeypatch):
+def test_art_custody_is_the_preserved_check_and_limits_what_it_would_read_back(tmp_path, monkeypatch):
     from research.store.local import LocalStore
 
     (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
@@ -1005,7 +1010,7 @@ def test_overdue_fires_once_thirty_minutes_after_the_bindings_final_unless_the_l
     _set_mtime(tmp_path / "lanes" / "late" / "binding.json", NOW + dt.timedelta(minutes=10))
     assert notes.overdue_lines(tmp_path, rows, NOW + dt.timedelta(minutes=89), state) == []
     assert notes.overdue_lines(tmp_path, rows, NOW + dt.timedelta(minutes=91), state)[0].startswith("22:31Z OVERDUE late FINAL 22:00Z passed 31m")
-    assert notes.final_deadline(tmp_path, "overnight", "06:30Z") == dt.datetime(2026, 9, 24, 6, 30, tzinfo=dt.timezone.utc)
+    assert notes.final_deadline(tmp_path, "overnight", "06:30Z") == dt.datetime(2026, 9, 24, 6, 30, tzinfo=dt.UTC)
 
 
 def test_budget_accumulates_each_lanes_pod_dollars_per_pass_and_alerts_once_over_the_binding(tmp_path):

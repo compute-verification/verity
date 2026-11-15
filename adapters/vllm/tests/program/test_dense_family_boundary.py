@@ -1,6 +1,5 @@
 """The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity`, other Definition
-modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/circuits/` as they are. Their twins and vocabulary live in the integration package:
-`properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
+modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/circuits/` as they are. Their vocabulary lives in the integration package:
 `program.frontend.gemm_targets`."""
 from __future__ import annotations
 
@@ -12,25 +11,29 @@ from pathlib import Path
 
 import pytest
 
-REGISTRY = "verity.definitions.registry"
-REGISTRY_DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
+from tests.lint._imports import core_less_definitions as _core
+
+REGISTRY = "verity_vllm.definitions.registry"
+_SPEC = importlib.util.find_spec(REGISTRY)
+assert _SPEC is not None and _SPEC.origin is not None
+REGISTRY_DIR = Path(_SPEC.origin).parent
 FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms", "boolean_activation", "boolean_silu",
           "boolean_rope", "boolean_tanh", "cuda_rmsnorm", "gemm_bias", "layer_norm", "gelu_erf_table", "traced_parts")
 #: other families' Definition modules the family reads: the primitives, the b1 composites, `sampling.bit_at` (`UnpackF32_v1`),
 #: `value_inputs`' word views of the norms and scalar rows with their f32 word an input, and `tables`' `tanh_rn` region
 READS = ("prims", "b1", "sampling", "value_inputs", "tables")
 THIRD_PARTY = ("numpy",)
-#: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.definitions.ops", "verity.definitions.silicon")
+#: the catalog, where the layout move put core's Definitions, silicon models and targets: not all of `verity.circuits`,
+#: which holds the kernels and the private circuits too
+CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.definitions.evidence"
-MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
-         "verity_vllm.program.frontend.gemm_targets")
+EVIDENCE = "verity_vllm.definitions.evidence"
+MOVED = ("verity_vllm.program.frontend.gemm_targets",)
 
 
 def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
     """(line, module, names) of every import in the file, at any depth, relative ones resolved against the registry."""
-    out = []
+    out: list[tuple[int, str, tuple[str, ...]]] = []
     for n in ast.walk(ast.parse(path.read_text())):
         if isinstance(n, ast.Import):
             out += [(n.lineno, a.name, ()) for a in n.names]
@@ -39,19 +42,6 @@ def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
             mod = ".".join(p for p in (base, n.module or "") if p)
             out.append((n.lineno, mod, tuple(a.name for a in n.names)))
     return out
-
-
-def _core(name: str) -> bool:
-    """`name` is core as it was before the platform move: under `verity`, except what moves since put there from outside it
-    (the catalog, the kernels, Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
-    protocols and claims, which are under `verity.core` now."""
-    def under(prefix: str) -> bool:
-        return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.definitions.private_circuits", "verity.definitions.ops",
-                "verity.definitions.silicon", "verity.definitions.circuits.targets", "verity.definitions.kernels", "verity.ml.flock",
-                "verity.definitions")
-    return under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.core.protocols", "verity.claims"))))
 
 
 def _foreign(mod: str, names: tuple[str, ...]) -> list[str]:
@@ -86,3 +76,13 @@ def test_the_boundary_names_a_foreign_import():
     assert _foreign(f"{REGISTRY}.gemm_targets", ("GemmTarget",)) == [f"{REGISTRY}.gemm_targets"]
     assert _foreign("torch", ()) == ["torch"]
     assert _foreign(f"{REGISTRY}.prims", ("BF16",)) == [] and _foreign("verity.circuits.defs", ("bind",)) == []
+
+
+@pytest.mark.parametrize("mod", ["verity.circuits.ops", "verity.circuits.ops.prims", "verity.circuits.silicon", "verity.circuits.targets.target"])
+def test_the_catalog_is_let_through(mod):
+    assert _foreign(mod, ()) == []
+
+
+@pytest.mark.parametrize("mod", ["verity.circuits.kernels", "verity.circuits.kernels.tc", "verity.circuits.private_circuits.universal"])
+def test_the_kernels_and_the_private_circuits_are_not_the_catalog(mod):
+    assert _foreign(mod, ()) == [mod]

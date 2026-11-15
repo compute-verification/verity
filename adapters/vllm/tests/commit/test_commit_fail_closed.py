@@ -184,7 +184,7 @@ def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
     why = v["first_fail_reason"] or ""
     assert "opening" in why, why                                                # openings / openings after release verified N != checked 64
     assert "COMMIT FAIL" in p.stdout
-    runs = [json.loads(l) for l in (tmp_path / "out" / "runs.jsonl").read_text().splitlines() if l.strip()]
+    runs = [json.loads(line) for line in (tmp_path / "out" / "runs.jsonl").read_text().splitlines() if line.strip()]
     faulted = [r for r in runs if ((r.get("commit") or {}).get("extra") or {}).get("windows", {}).get("fault_lifetime_windows", 0) > 0]
     assert faulted, "the fault never materialised (no window was copied after its slot was reused): the negative did not test the lifetime path"
 

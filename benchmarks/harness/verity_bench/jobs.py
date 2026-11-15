@@ -12,7 +12,7 @@ import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +20,7 @@ from verity_config import dumps, sha256, value
 
 from verity_bench import settings
 from verity_bench.steady_spec import SteadyPoint, SteadySpec
-from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, resolve_spec
+from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, former_name, resolve_spec
 
 
 @dataclass(frozen=True)
@@ -33,12 +33,14 @@ class Toolchain:
 @dataclass(frozen=True)
 class PlannedPoint:
     """A point of a spec with its identity and its passing run. `why`: for a point with none, why the runs that could
-    have been it aren't (a steady-state point's; a vLLM point's runs either passed or aren't found)."""
+    have been it aren't (a steady-state point's; a vLLM point's runs either passed or aren't found). `again`: named by
+    `--again` (`again`), so `run` launches it though a passing run stands for it."""
 
     point: SweepPoint | SteadyPoint
     identity: str
     passing_run: str | None
     why: str | None = None
+    again: bool = False
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,8 @@ class Plan:
 
 CompletionLookup = Callable[[str, str], str | None]
 Executor = Callable[[Sequence[str], Path], int]
+#: a direct point's launch: the plan, the spec's source, the point, the root and the node to its `research run` argv
+DirectCommand = Callable[[Plan, str | Path, PlannedPoint, Path, str], list[str]]
 
 
 def repository_root(start: str | Path | None = None) -> Path:
@@ -231,16 +235,30 @@ def plan_json(plan: Plan) -> dict[str, Any]:
         "toolchain": value(plan.toolchain),
         "points": [
             {"point": item.point.to_json(), "identity": item.identity, "passing_run": item.passing_run,
-             **({"why": item.why} if item.why else {})}
+             **({"why": item.why} if item.why else {}),
+             **({"again": f"passed by {item.passing_run}"} if item.again and item.passing_run else {})}
             for item in plan.points
         ],
     }
 
 
+def again(plan: Plan, names: Sequence[str]) -> Plan:
+    """The plan with the points `names` names (`--again`, each by its id) launched again by `run`, though a passing run
+    stands for one: a labelled row timed before the harness, or a run at another closure that the point's identity
+    doesn't tell apart. Only named points: there is no form that launches every passed point again. The new run labels
+    and supersedes nothing; the passing run stays the record until a run is labelled on purpose."""
+
+    ids = [item.point.id for item in plan.points]
+    if unknown := [name for name in names if name not in ids]:
+        raise ValueError(f"--again {', '.join(unknown)}: not a point of spec {plan.spec.id!r}, whose points are "
+                         f"{', '.join(ids)}")
+    return replace(plan, points=tuple(replace(item, again=item.point.id in names) for item in plan.points))
+
+
 def _relative_spec(source: str | Path, root: Path) -> str:
     path = Path(source)
     if not path.is_file():
-        path = root / "benchmarks" / "specs" / f"{source}.toml"
+        path = root / "benchmarks" / "harness" / "specs" / f"{former_name(source) or source}.toml"
     try:
         return path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
@@ -282,9 +300,11 @@ def check_point_environment(spec: ResolvedSpec | SteadySpec, environ: Mapping[st
                          "launch points with `verity-bench run SPEC`, which forwards them")
 
 
-#: the GPU nodes whose GPUs `--direct` may take: each has one slot per GPU in GPU_SLOTS (the nebius nodes g0-g7, the
-#: single-GPU DC VMs g0)
-DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200", "vy-dc-h200-2", "vy-dc-b200")
+#: the GPU nodes whose GPUs `--direct` may take: each has its GPU slots in GPU_SLOTS, one per GPU (the nebius nodes and
+#: the eight-card H200 node g0-g7, the single-GPU DC VMs g0). A slot gives a run its CPUs and no GPU: the run takes
+#: its GPUs from the node's gpu-lease
+DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200", "vy-dc-h200-2", "vy-dc-h200-3", "vy-dc-b200",
+                "vy-spot-glm53")
 GPU_SLOTS = "/workspace/research/locks/gpu/slots"
 
 
@@ -306,8 +326,16 @@ def _point_command(source: str | Path, item: PlannedPoint, root: Path) -> list[s
     ]
 
 
+def vllm_spec(plan: Plan) -> ResolvedSpec:
+    """A vLLM plan's spec; TypeError on a steady-state plan's, whose points `steady_plan` runs."""
+
+    if not isinstance(plan.spec, ResolvedSpec):
+        raise TypeError(f"{plan.spec.id} is a steady-state spec: steady_plan runs its points")
+    return plan.spec
+
+
 def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
-    spec = plan.spec
+    spec = vllm_spec(plan)
     command = [
         "research", "run",
         "--queue",
@@ -341,33 +369,48 @@ def direct_minutes(spec: ResolvedSpec | SteadySpec, node: str) -> float:
     return spec.admission.max_minutes
 
 
-def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str) -> list[str]:
-    """The point as a `research run --on NODE` through one of the node's GPU slots, its GPUs from the node's gpu-lease:
-    the queued point's tool, identity and environment, for a node whose launcher takes only slot runs."""
+def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign: str, tool: str,
+             env: Sequence[str], job: Sequence[str], store_read: bool = False, cores: str | None = None) -> list[str]:
+    """`job` as a recorded `research run --on NODE` through one of the node's GPU slots, for a node whose launcher takes
+    only slot runs: the one form of a direct point's launch, whatever the point's spec. The spec's admission
+    `max_minutes` bounds the run and its slot; `tool` records it; `env` is its `--env` flags; `store_read` gives the
+    job a read-only key to the store for the run's length (`research run --store-read`), for a job that fetches from it.
+    `cores` (`34-43`), a booked slot's: the slot taker runs under `taskset -c CORES`, and takes only a slot within its
+    own CPUs, so it takes that slot or waits for it; without it, the first free slot."""
 
-    spec = plan.spec
     minutes = direct_minutes(spec, node)
     return [
         "research", "run",
         "--on", node,
         "--project", "verity",
-        "--campaign", "vllm-bench",
+        "--campaign", campaign,
         "--source", str(root),
         "--cwd", "source",
         "--timeout", f"{minutes:g}m",
         "--require-result",
-        "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
-        *_env_flags(spec),
+        "--tool", tool,
+        *(["--store-read"] if store_read else []),
+        *env,
         "--",
-        "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
+        *(["taskset", "-c", cores] if cores else []),
+        "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
         "--run-max", f"{minutes * 60:g}",
         "--",
-        # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU
-        # job is preemptible, as the queued point's is.
-        "gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible",
-        "--",
-        *_point_command(source, item, root),
+        *job,
     ]
+
+
+def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path, node: str) -> list[str]:
+    """The point as a `research run --on NODE` through one of the node's GPU slots (`slot_run`), its GPUs from the node's
+    gpu-lease: the queued point's tool, identity and environment."""
+
+    spec = vllm_spec(plan)
+    minutes = direct_minutes(spec, node)
+    # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU job is
+    # preemptible, as the queued point's is.
+    lease = ["gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible", "--"]
+    return slot_run(spec, root, node, campaign="vllm-bench", tool="verity_bench.tool:VLLM_BENCH_POINT",
+                    env=_env_flags(spec), job=[*lease, *_point_command(source, item, root)])
 
 
 def _execute(command: Sequence[str], root: Path) -> int:
@@ -375,18 +418,21 @@ def _execute(command: Sequence[str], root: Path) -> int:
 
 
 def dispatch(plan: Plan, source: str | Path, *, root: Path | None = None, execute: Executor = _execute,
-             direct: str | None = None) -> int:
-    """Launch one recorded research run for each incomplete point: queued, or with `direct` on that node's GPU slots."""
+             direct: str | None = None, command: DirectCommand = direct_command) -> int:
+    """Launch one recorded research run for each incomplete point and each point named again (`again`), in the spec's
+    order: queued, or with `direct` on that
+    node's GPU slots, each as `command` gives it (a vLLM point's `direct_command`; a steady-state point's is
+    `steady_plan.direct_command`). Each launch returns once its run has started on the node, where the runs take the
+    slots in turn. The first launch that fails stops the rest; its exit code, or 0."""
 
     root = root or repository_root()
     if direct is not None:
         direct_minutes(plan.spec, direct)
     for item in plan.points:
-        if item.passing_run is not None:
+        if item.passing_run is not None and not item.again:
             continue
-        command = (research_command(plan, source, item, root) if direct is None
-                   else direct_command(plan, source, item, root, direct))
-        rc = execute(command, root)
+        argv = research_command(plan, source, item, root) if direct is None else command(plan, source, item, root, direct)
+        rc = execute(argv, root)
         if rc:
             return rc
     return 0

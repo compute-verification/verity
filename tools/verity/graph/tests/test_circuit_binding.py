@@ -41,7 +41,7 @@ def _core_roots(): ...
 def _registered(): ...
 TEMPLATE_PARAMS = {"rope-head": {}}
 '''
-X, FLOCK = "verity/ml/x.circuit-check.py", "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py"
+X, FLOCK = "verity/ml/x.circuit-check.py", "verity/protocols/proofs/flock/prover/python/verity_flock/rec.circuit-check.py"
 BINDINGS = {"<registered>": (F.TARGETS, "_registered"), "TEMPLATE_PARAMS": (F.TARGETS, "TEMPLATE_PARAMS"),
             "_core_roots": (F.TARGETS, "_core_roots"), "_kernel_roots": (F.TARGETS, "_kernel_roots"),
             **{f"verity.ml.x.circuit-check#{e}": (X, e) for e in (
@@ -64,8 +64,8 @@ TOY = {"pyproject.toml": '[tool.uv.workspace]\nmembers = ["tools/config", "adapt
        "verity/ml/x.circuit-check.json": "{}\n", "verity/ml/pkg/__init__.py": "",
        "verity/ml/pkg/__init__.circuit-check.py": NEVER_RUN + "def _p_roots(): ...\n",
        "verity/ns/y.circuit-check.py": NEVER_RUN + "def _y_roots(): ...\n",
-       "verity/protocols/flock/prover/python/verity_flock/__init__.py": "",
-       "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
+       "verity/protocols/proofs/flock/prover/python/verity_flock/__init__.py": "",
+       "verity/protocols/proofs/flock/prover/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
        "other/__init__.py": "", "other/z.circuit-check.py": NEVER_RUN + "def _z_roots(): ...\n",
        "stacks/s/pk/__init__.py": "", "stacks/s/pk/__init__.circuit-check.py": NEVER_RUN + "def _q_roots(): ...\n",
        "stacks/s/pk/in/__init__.py": "", "stacks/s/pk/in/w.circuit-check.py": NEVER_RUN + "def _w_roots(): ...\n",
@@ -105,6 +105,7 @@ def test_each_binding_is_a_task_named_as_circuit_check_names_it_from_the_files_s
     assert cat["outputs"] == [F.RECORDS, F.SHARED, *sorted((F.slice_of(n) for n in BINDINGS), key=lambda o: o["name"])]
     assert cat["reads"] == [] and cat["key"] and cov["reads"] == reads
     assert cat["vars"] == {"lookups": seen} and cov["vars"]["lookups"] == seen
+    assert cat["resources"] == F.CATALOG_SLOT
     pieces = [F.slice_of(name)["path"] for name in BINDINGS]
     assert len(set(pieces)) == len(pieces) and F.SHARED["path"] not in pieces
     assert all(p.rpartition("/")[0] == F.SLICES for p in [*pieces, F.SHARED["path"]])
@@ -112,6 +113,12 @@ def test_each_binding_is_a_task_named_as_circuit_check_names_it_from_the_files_s
     assert f"{graph.RUNNERS}/circuit_binding.py" in cat["inputs"] and f"{graph.RUNNERS}/circuit_binding.py" in cov["inputs"]
     paths = [F.failures(name)["path"] for name in BINDINGS]
     assert len(set(paths)) == len(paths) and all(p.rpartition("/")[0] == F.FAILURES for p in paths)
+
+
+def test_the_catalog_asks_no_more_than_the_largest_slot_an_executor_leases():
+    """Every binding task reads the catalog's records, so a catalog no slot takes leaves the whole family queued."""
+    slot = graph.spec(ROOT)["slot"]
+    assert all(F.CATALOG_SLOT[k] <= slot[k] for k in graph.SLOT), (F.CATALOG_SLOT, slot)
 
 
 def test_the_listing_is_the_same_bytes_in_another_checkout_of_the_commit(tmp_path):
@@ -228,7 +235,7 @@ def test_the_runners_say_what_circuit_check_and_check_say():
     assert '"bindings": sets' in cli and '"incomplete": missing' in cli and '"loaded": sorted(' in cli
     assert CB.PINS == f"{F.SUFFIX}.json" and 'return base.parent / f"{base.name}{SUFFIX}.{kind}"' in (
         ROOT / F.SIDECARS).read_text()
-    check = (ROOT / "tools" / "verity" / "check" / "check.py").read_text()
+    check = (ROOT / "tools" / "check" / "check.py").read_text()
     assert f'CC_RECORDS = "{F.RECORDS["path"]}"' in check and f't.add(d / "cache", "{CB.TOP}")' in check
     assert f'print(f"{CB.REFUSED}{{e}}", file=sys.stderr)' in (ROOT / F.SOURCE / "cli.py").read_text()
     assert F.slice_of("n")["name"] == f"{circuit_catalog.SLICE}n"
@@ -544,7 +551,9 @@ def test_the_catalog_s_run_builds_every_record_into_a_fresh_cache_tars_it_and_gi
     assert (res["status"], res["detail"]) == (status, detail), res
     (c,) = calls
     assert c["argv"][3:9] == ["--all", "--records-only", "--cache", str(work / "cache"), "--slices", str(work / "slices")]
-    assert c["env"] == {**os.environ, **circuit_catalog.THREADS} and c["env"]["OMP_NUM_THREADS"] == "1", \
+    wanted = {**os.environ, **circuit_catalog.THREADS}
+    differ = sorted(k for k in c["env"].keys() | wanted.keys() if c["env"].get(k) != wanted.get(k))
+    assert differ == [] and c["env"]["OMP_NUM_THREADS"] == "1", \
         "each of its builds, one per core at once, has one-thread pools"
     assert not c["cache"] and not (work / "cache").exists() and not (work / "slices").exists(), "both are the task's scratch"
     if status == "pass":

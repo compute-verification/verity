@@ -10,7 +10,6 @@ from the engine's `vllm_config` and checked against the declaration.
 from __future__ import annotations
 
 import json
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,8 +17,15 @@ from typing import Any
 
 import torch
 
-from verity_vllm.engine import env as engine_env, handle, served
+from verity_vllm import settings
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import handle, served
+from verity_vllm.log import init_logger
 
+__all__ = ["Engine", "build_engine", "flash_attn_versions", "register_int8_parts", "resolved_async_scheduling",
+           "target_mismatches"]
+
+logger = init_logger(__name__)
 
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); `build_engine(case="B1")` serves Qwen2.5-1.5B
 
@@ -42,7 +48,13 @@ class Engine:
     target: Any = None   # the declared `TargetProfile` the engine was built under (None = none declared: vLLM's own selection)
     execution: str | None = None   # the workload's declared execution label the engine was built FOR (bi-eager / bi-compiled / ...), None = undeclared
     effective: dict | None = None  # the execution the built engine actually realises (effective_execution_doc), None before LLM()
-    environ: dict | None = None    # the process environment keys its build set or changed (`engine_env.set_since`), None when not built here
+    rope_cache: dict | None = None  # the fused rope and KV-cache write installed at the build (`rope_cache`), None when none
+    fused_producers: dict | None = None  # the int8 linears' fused producers installed at the build (`int8_producers`), None when none
+
+    @property
+    def vllm_config(self) -> Any:
+        """The built engine's ``VllmConfig`` (`handle.engine_of`), for a reader that can't import `engine.handle`."""
+        return handle.engine_of(self.llm).vllm_config
 
 
 # the workload's execution label decides `enforce_eager`; it is never a literal of the harness.  Labels are the
@@ -72,20 +84,20 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
     except Exception as e:  # noqa: BLE001
         doc["compilation_error"] = repr(e)[:200]
     try:
-        vc = llm.llm_engine.vllm_config
+        vc = handle.engine_of(llm).vllm_config
         cc, sc, mc = vc.cache_config, vc.scheduler_config, vc.model_config
         doc["enable_prefix_caching"] = bool(getattr(cc, "enable_prefix_caching", None)) if getattr(cc, "enable_prefix_caching", None) is not None else None
         doc["enable_chunked_prefill"] = bool(getattr(sc, "enable_chunked_prefill", None)) if getattr(sc, "enable_chunked_prefill", None) is not None else None
-        doc["max_num_batched_tokens"] = int(getattr(sc, "max_num_batched_tokens")) if getattr(sc, "max_num_batched_tokens", None) is not None else None
-        doc["long_prefill_token_threshold"] = (int(getattr(sc, "long_prefill_token_threshold"))
+        doc["max_num_batched_tokens"] = int(sc.max_num_batched_tokens) if getattr(sc, "max_num_batched_tokens", None) is not None else None
+        doc["long_prefill_token_threshold"] = (int(sc.long_prefill_token_threshold)
                                                if getattr(sc, "long_prefill_token_threshold", None) is not None else None)
         tp = getattr(getattr(vc, "parallel_config", None), "tensor_parallel_size", None)
         doc["tensor_parallel_size"] = int(tp) if tp is not None else None
-        doc["max_num_seqs"] = int(getattr(sc, "max_num_seqs")) if getattr(sc, "max_num_seqs", None) is not None else None
-        doc["max_model_len"] = int(getattr(mc, "max_model_len")) if getattr(mc, "max_model_len", None) is not None else None
+        doc["max_num_seqs"] = int(sc.max_num_seqs) if getattr(sc, "max_num_seqs", None) is not None else None
+        doc["max_model_len"] = int(mc.max_model_len) if getattr(mc, "max_model_len", None) is not None else None
         doc["dtype"] = str(getattr(mc, "dtype", None))
-        doc["block_size"] = int(getattr(cc, "block_size")) if getattr(cc, "block_size", None) is not None else None
-        doc["gpu_memory_utilization"] = float(getattr(cc, "gpu_memory_utilization")) if getattr(cc, "gpu_memory_utilization", None) is not None else None
+        doc["block_size"] = int(cc.block_size) if getattr(cc, "block_size", None) is not None else None
+        doc["gpu_memory_utilization"] = float(cc.gpu_memory_utilization) if getattr(cc, "gpu_memory_utilization", None) is not None else None
         doc["async_scheduling"] = resolved_async_scheduling(llm)      # resolved, not the CLI default
         import vllm.envs as envs
         doc["batch_invariant"] = bool(envs.VLLM_BATCH_INVARIANT)
@@ -187,7 +199,8 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     kw["max_num_seqs"] = int(max_num_seqs)
     if target is not None:
         kw.update(target.engine_args())
-    kc = dict(kw.get("kernel_config") or {})
+    held = kw.get("kernel_config")
+    kc = dict(held) if held else {}
     kc.setdefault("enable_flashinfer_autotune", False)
     kw["kernel_config"] = kc
     kw.update(engine_args or {})
@@ -213,7 +226,6 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     # `kernel_config.enable_flashinfer_autotune=False` by construction (the autotune dummy run must not depend on the shell's PATH);
     # explicit CLI engine args override last and are recorded in versions.json/run.json.  All of it in
     # `engine_kwargs_for`.
-    env0 = engine_env.snapshot()
     kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target,
                                           execution=execution, env=env)
     from vllm import LLM  # after apply_env
@@ -237,7 +249,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     build_s = time.perf_counter() - t0
     runner = handle.model_runner(llm) if world == 1 else None
     model = runner.get_model() if runner is not None else None
-    eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, None, engine_env.set_since(env0))
+    eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution)
     eng.effective = effective_execution_doc(llm, model)      # read back from vllm_config: what this engine really executes
     if execution is not None and eng.effective.get("enforce_eager") is not None and bool(eng.effective["enforce_eager"]) != want_eager:
         raise RuntimeError(f"execution mismatch after build: the row declares {execution!r} but vllm_config.model_config.enforce_eager="
@@ -247,6 +259,16 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
         bad = target_mismatches(eng)
         if bad:
             raise RuntimeError("engine does not realise the declared TargetProfile: " + "; ".join(bad))
+    if model is not None:  # the fused rope patches the in-process model's layers; a tensor-parallel world's are in its ranks
+        from verity_vllm.engine import rope_cache
+        eng.rope_cache = rope_cache.install(model)
+        if eng.rope_cache is not None:
+            logger.info("%s: %s", rope_cache.ENV, json.dumps(eng.rope_cache))
+    if model is not None:  # as the fused rope: the producers are patched on the in-process model's layers
+        from verity_vllm.engine import int8_producers
+        eng.fused_producers = int8_producers.install(model)
+        if eng.fused_producers is not None:
+            logger.info("%s: %s", int8_producers.ENV, json.dumps(eng.fused_producers))
     return eng
 
 
@@ -256,7 +278,8 @@ def vllm_has_flashinfer() -> bool | None:
     try:
         from vllm.utils.flashinfer import has_flashinfer
         return bool(has_flashinfer())
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.debug("vLLM's has_flashinfer gave no verdict: %r", e)
         return None
 
 
@@ -267,7 +290,7 @@ def flash_attn_versions(model: Any) -> set:
     for _, mod in model.named_modules():
         impl = getattr(mod, "impl", None)
         if impl is not None and hasattr(impl, "vllm_flash_attn_version"):
-            vs.add(getattr(impl, "vllm_flash_attn_version"))
+            vs.add(impl.vllm_flash_attn_version)
     return vs
 
 
@@ -343,7 +366,7 @@ def resolved_async_scheduling(llm: Any) -> bool | None:
     value the harness passed -- usually nothing -- says nothing about execution.  Read back from `llm.llm_engine.vllm_config.scheduler_config`
     after the build; None means the engine did not expose a resolved bool (unattested), never "off"."""
     try:
-        v = llm.llm_engine.vllm_config.scheduler_config.async_scheduling
+        v = handle.engine_of(llm).vllm_config.scheduler_config.async_scheduling
     except AttributeError:
         return None
     return None if v is None else bool(v)
@@ -357,7 +380,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
     from verity_vllm.engine import engine_profile as prof
     out: dict[str, Any] = {}
     try:
-        vc = llm.llm_engine.vllm_config
+        vc = handle.engine_of(llm).vllm_config
         cc = vc.compilation_config
         mode = getattr(cc, "mode", getattr(cc, "level", None))
         out["mode"] = getattr(mode, "name", None) or str(mode)
@@ -371,7 +394,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
         out["backend"] = str(getattr(cc, "backend", None) or ("inductor" if out["mode_value"] == 3 else None))
         out["enforce_eager"] = bool(vc.model_config.enforce_eager)
         out["breakable_cudagraph"] = prof.breakable_cudagraph()
-        out["compile_cache"] = "disabled" if os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
+        out["compile_cache"] = "disabled" if settings.raw("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
         # the Inductor config the pieces were compiled with: emulate_precision_casts makes the compiled kernels
         # perform the bf16 roundings the Program specifies at every module/op boundary (Inductor otherwise carries fp32 through fused
         # regions) -- the fact that decides whether a materialised boundary value can change the computation

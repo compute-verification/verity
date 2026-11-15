@@ -83,7 +83,7 @@ ALLOW = (
          "its own threads); vy-sudo: own pids only"),
     Rule("/usr/local/sbin/vy-sudo", "taskset *", "journal n2 491 + n1 217 `taskset -pc|-apc CPUS PID`; vy-sudo: own pid only"),
     Rule("/usr/local/sbin/vy-sudo", "systemd-run *", "journal n1 43 + n2 31 `systemd-run --scope ... --slice=`, n1 6 `--uid= --pipe` "
-         "(jobuser.py:196, benchmarks/pouw/hidden_zk/scope.sh:14); vy-sudo: runs as the caller or a job user"),
+         "(jobuser.py unit_argv, benchmarks/pouw/hidden_zk/scope.sh:14); vy-sudo: runs as the caller or a job user"),
     Rule("/usr/local/sbin/vy-sudo", "env *", "journal n2 48 `env PATH=* systemd-run --quiet --scope` (provers.sh:8, pous_quiet.sh:8, "
          "device.sh:17, fill_runner.py:472)"),
     Rule("/usr/local/sbin/vy-sudo", "systemctl *", "journal n2 2 `systemctl stop hidden-zk-*.scope` (scope.sh:18), fill_runner.py:399 "
@@ -207,7 +207,8 @@ def expiry(text: str) -> float | None:
         return None
     try:
         return float(calendar.timegm(time.strptime(m.group(1), TS)))
-    except ValueError:
+    except ValueError as e:
+        print(f"vy-lockout: the expiry {m.group(1)} is not a time, so it reads as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -330,8 +331,10 @@ def tmux_command(unit_text: str, unit: str) -> str:
     name = unit.rsplit(".", 1)[0]
     inst = name.partition("@")[2]
     lines = [ln.strip() for ln in unit_text.splitlines()]
-    get = lambda k: [ln.split("=", 1)[1] for ln in lines if ln.startswith(k + "=")]
-    res = lambda s: s.replace("%N", name).replace("%i", inst).replace("$$", "$").replace("%%", "%")
+    def get(k):
+        return [ln.split("=", 1)[1] for ln in lines if ln.startswith(k + "=")]
+    def res(s):
+        return s.replace("%N", name).replace("%i", inst).replace("$$", "$").replace("%%", "%")
     envs = [res(e.lstrip("-")) for e in get("EnvironmentFile")]
     start = res(get("ExecStart")[0].lstrip("-@+!"))
     wd = res((get("WorkingDirectory") or ["/"])[0])
@@ -424,7 +427,8 @@ ACCEPTED = re.compile(r"^(\d+(?:\.\d+)?) .*Accepted publickey for vy-admin ")
 
 def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Callable[[], int | None] = login_uid) -> list[Check]:
     """What the sudoers step needs, each as a Check."""
-    at = lambda p: root / str(p).lstrip("/")
+    def at(p):
+        return root / str(p).lstrip("/")
     out: list[Check] = []
     keys = at("/home/vy-admin/.ssh/authorized_keys")
     admin_sudo = at(SUDOERS_D / ADMIN)
@@ -450,12 +454,13 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Ca
                      "account that keeps it"))
     try:
         g = groups_of("ubuntu", str(at("/etc/group")))
-    except OSError:
+    except OSError as e:
+        print(f"vy-lockout: {at('/etc/group')} unread, so ubuntu's groups read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         g = set()
     out.append(Check("ubuntu-unprivileged", not g & {"lxd", "docker", "disk"}, f"ubuntu's groups: {', '.join(sorted(g)) or 'none'}",
                      "vy-lockout harden --apply (lxd is root for its members, and research may act as ubuntu)"))
-    cap = run(["getcap", PY_SPY])
-    out.append(Check("py-spy", "cap_sys_ptrace" not in cap.stdout, cap.stdout.strip() or f"{PY_SPY}: no capability",
+    getcap = run(["getcap", PY_SPY])
+    out.append(Check("py-spy", "cap_sys_ptrace" not in getcap.stdout, getcap.stdout.strip() or f"{PY_SPY}: no capability",
                      "vy-lockout harden --apply (cap_sys_ptrace lets anyone read any process's memory)"))
     admin = [str(p) for p in sorted(at(RESEARCH_KUBE).glob("*")) if p.is_file() and kubeconfig_admin(p.read_text(errors="replace"))] \
         if at(RESEARCH_KUBE).is_dir() else []
@@ -612,6 +617,7 @@ def step_roots(ctx: Ctx, back: bool, backup: Path = BACKUP) -> None:
         try:
             st = os.lstat(p)
         except FileNotFoundError:
+            print(f"vy-lockout: {p} does not exist, so it is not taken over", file=sys.stderr, flush=True)
             continue
         saved[p] = {"uid": st.st_uid, "gid": st.st_gid, "mode": f"{stat.S_IMODE(st.st_mode):o}"}
         ctx.do(["chown", "root:root", p])
@@ -716,7 +722,8 @@ def fallback(ctx: Ctx, action: str, now: float, hours: float = FALLBACK_HOURS, s
     if action == "expire":
         try:
             exp = expiry(path.read_text())
-        except OSError:
+        except OSError as e:
+            print(f"vy-lockout: {path} unread, so its expiry reads as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             exp = None
         if exp is not None and exp > now:
             return f"fallback holds until {time.strftime(TS, time.gmtime(exp))}"

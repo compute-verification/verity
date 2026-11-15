@@ -5,11 +5,12 @@
 #   launch.sh --max-hours H --yes [--register] [--deadline UTC]
 #                                                find or create each piece below, start the VM, arm its lease for H hours; --deadline
 #                                                (e.g. 2026-10-07T15:00:00Z, the end of the spend authorization) writes the VM's
-#                                                /etc/research/deadline, a hard cap no lease extension or restart passes (vm_setup.sh)
+#                                                /etc/research/deadline, a hard limit no lease extension or restart passes (vm_setup.sh)
 #
 # Idempotent: every resource is looked up by name first, so a rerun after a failure (or on a stopped VM) resumes; nothing is
-# ever deleted here (teardown.sh).  In order, in project NEBIUS_PROJECT_ID (default-project-uk-south2; set it empty to look up or
-# create NEBIUS_PROJECT_NAME, which needs tenant rights the launching service account doesn't have):
+# ever deleted here (teardown.sh).  In order, in project NEBIUS_PROJECT_ID (the environment's, the id of the region's default
+# project: without it nothing is looked up or created; set it empty to look up or create NEBIUS_PROJECT_NAME, which needs tenant
+# rights the launching service account doesn't have):
 #   network + subnet   the project's first subnet, else vy-net / vy-subnet
 #   security group     <vm>-ssh: ingress TCP 22 from NEBIUS_SSH_CIDRS (default any), egress any.  The VM has a static public IP:
 #                      the research tooling reaches machines over ssh from agent VMs, the laptop and the control pod, and with no
@@ -20,9 +21,10 @@
 #   VM                 platform gpu-rtx6000* with preset 8gpu-192vcpu-1744gb; the service account NEBIUS_VM_SA_ID (default the
 #                      launching one; `none` for no lease) is attached so the VM's lease can stop the VM itself
 # Other shapes and regions come from the environment: NEBIUS_VM_NAME, NEBIUS_REGION, NEBIUS_PROJECT_ID, NEBIUS_PLATFORM_PREFIX (cpu-d3,
-# gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_DATA_DISK names the data disk
+# gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB, NEBIUS_DATA_TYPE (network_ssd, or network_ssd_non_replicated
+# and network_ssd_io_m3 in multiples of 93 GiB) and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_DATA_DISK names the data disk
 # (default <vm>-data), so a VM can boot on another one's kept data disk, its filesystem untouched; NEBIUS_FILESYSTEM_ID attaches an
-# existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour cap of
+# existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour limit of
 # the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000.
 # Billing starts when the VM is Running and is per second; --yes is required for anything that starts it.
 set -euo pipefail
@@ -42,7 +44,10 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-[ $((DATA_GIB % 93)) -eq 0 ] || [ "$DATA_TYPE" != network_ssd_non_replicated ] || die "NEBIUS_DATA_GIB=$DATA_GIB is not a multiple of 93"
+case $DATA_TYPE in   # refused here, before the boot disk is created: Nebius would refuse the data disk after it
+  network_ssd_non_replicated|network_ssd_io_m3)
+    [ $((DATA_GIB % 93)) -eq 0 ] || die "NEBIUS_DATA_GIB=$DATA_GIB is not a multiple of 93, the unit $DATA_TYPE disks come in: $((DATA_GIB / 93 * 93)) is the next size down" ;;
+esac
 if [ "$dry" = 0 ]; then
   [ "$yes" = 1 ] || die "this starts billing at \$$RATE_USD_PER_HOUR/h: pass --yes (or --dry-run)"
   [[ $max_hours =~ ^[0-9]+$ ]] && [ "$max_hours" -ge 1 ] || die "--max-hours H (whole hours >= 1): the VM stops itself after it"
@@ -61,9 +66,9 @@ ssh_pubkey() {
 
 # render_user_data PUBKEY LEASE_EPOCH: the cloud-init document (scripts gzip+base64 so no YAML quoting can bend them)
 render_user_data() {
-  VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch VY_FS=${FS_ID:+vy-fs} \
+  VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_NAME=$VM_NAME VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch VY_FS=${FS_ID:+vy-fs} \
     VY_CLOCKS=$([ "$PLATFORM_PREFIX" = gpu-rtx6000 ] && echo 1 || echo 0) python3 - "$here" "$src/research/pods/sh" <<'PY'
-import base64, gzip, os, re, sys
+import base64, gzip, os, re, sys, tomllib
 nebius, sh = sys.argv[1], sys.argv[2]
 LIMIT = 32768  # Nebius refuses a longer spec.cloud_init_user_data
 def shipped(path):
@@ -97,6 +102,9 @@ files = [("/etc/vy/vy.env", "0644", base64.b64encode(gzip.compress(env.encode(),
          ("/usr/local/share/vy/lease.sh", "0755", blob(f"{sh}/lease.sh")),
          ("/usr/local/share/vy/gpu_adopt.py", "0755", blob(f"{nebius}/gpu_adopt.py")),
          ("/usr/local/bin/gpu-lease", "0755", blob(f"{sh}/gpu_lease.sh"))]
+userns = next(f for f in tomllib.load(open(f"{nebius}/deploy.toml", "rb"))["file"] if f["path"] == "/etc/sysctl.d/61-vy-userns.conf")
+if os.environ["VY_NAME"] in userns["nodes"]:  # what deploy installs there, from the same source; vm_setup.sh applies it
+    files.append((userns["path"], "0644", blob(os.path.join(nebius, "../../../../../..", userns["src"]))))
 out = ["#cloud-config", "users:", f"  - name: {os.environ['VY_USER']}", "    sudo: ALL=(ALL) NOPASSWD:ALL", "    shell: /bin/bash",
        "    ssh_authorized_keys:", f"      - {os.environ['VY_PUBKEY']}", "write_files:"]
 for path, mode, data in files:
@@ -252,3 +260,7 @@ cat <<EOF
 READY $MACHINE $IP vm=$VM_ID project=$PROJECT_ID data=$DATA_ID sg=$SG_ID
 next: research run --on $MACHINE --project $PROJECT --source . --cwd source -- python3 tools/research/src/research/pods/nebius/check.py
 EOF
+# The register holds the machine's address now, and no file of the tree does: each list that names it is made from the register
+if [ "$register" = 1 ]; then
+  echo "next: research deploy roll /etc/vy/peers --by WHO   # a shared node, once the vy-cluster key pair is on it: a dry run of its own list, the key each node takes from it and its line in every other node's list; --apply does it, one node at a time"
+fi

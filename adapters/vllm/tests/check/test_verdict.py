@@ -4,7 +4,7 @@ What is pinned here: (1) the schema round-trips (dumps -> load -> the same docum
 (2) the old -> new MAPPING is complete with no loss -- every compat field a check names is documented in OLD_TO_NEW and every
 documented old fact lands on a check that exists, every group has rules and a claim; (3) DECISION EQUIVALENCE with v1 -- over a PASS
 record and one-fault mutations of it, `run_outcome(run_checks(...)) == PASS` iff `commit_verdict(...)[0]`; (4) a MISSING INPUT is
-INSUFFICIENT_EVIDENCE, not FAIL: the Match account leg(s) absent beside the Commit (`account_missing`) grade
+INSUFFICIENT_EVIDENCE, not FAIL: the Match account file(s) absent beside the Commit (`account_missing`) grade
 `execution_extent` INSUFFICIENT_EVIDENCE while the overall verdict is still not PASS (v1 fails the same record by name); (5) X-03's
 per-layer uniformity finding is carried as the named difference `fa2_layers_bad` under `program_source_identity/identity_layout`;
 (6) `from_record` over a row dir reads the execution configuration from the Commit's own evidence (`execution_of_record`; an older
@@ -16,20 +16,25 @@ from __future__ import annotations
 
 import copy
 import json
+from typing import Any
 
 import pytest
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
-from verity_vllm.check.codes import VerificationCode as VC
-
-from verity_vllm.check.commit_pass import commit_verdict
-from verity_vllm.check.verdict_names import OLD_TO_NEW, mapping_markdown
 from verity_vllm.check import verdict as V
-from verity_vllm.pipeline import cli
+from verity_vllm.check.codes import VerificationCode as VC
+from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.commit_rules import REJECT
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
+from verity_vllm.check.verdict_names import OLD_TO_NEW
+from verity_vllm.pipeline import cli
+from verity_vllm.records.property_record import (
+    REGISTRY,
+    PropertyRecord,
+    digest_of,
+    seal,
+)
 
 RUN_ROOT = "71f69377" + "ab" * 28
 SEED_ROOT = int.from_bytes(bytes.fromhex(RUN_ROOT)[:8], "big")
@@ -201,7 +206,6 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     # every group has at least one rule check and a one-sentence claim
     for g, spec in V.GROUPS.items():
         assert spec["claim"].endswith(".") and any(c.name.startswith(g + "/") for c in checks), g
-    assert "| `commit_pass` |" in mapping_markdown()
 
 
 # ---------------------------------------------------------------------------------------------------------------- (3) equivalence
@@ -209,31 +213,67 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
 def _mutations():
     b = _base
     yield "tokens differ", b(), False
-    c = b(); c["extra"]["committed_tensors"] = 571; yield "reference integrity", c, True
-    c = b(); c["extra"]["errors_n"] = 2; yield "collector errors", c, True
-    c = b(); c["extra"]["collector_failure"] = "worker failed on windowed step 0: transient host budget"; yield "collector failure", c, True
-    c = b(); c["openings"] = {"n": 60, "verified": 60}; yield "openings < min", c, True
-    c = b(); c["openings"] = {"n": 64, "verified": 63}; yield "an opening failed", c, True
-    c = b(); c["binding"]["context"] = {"ok": False, "why": "root differs"}; yield "binding context", c, True
-    c = b(); c["binding"]["coverage"] = {"ok": False, "missing_n": 3, "expected_n": 572, "bound_n": 569, "missing": [{"step": 1, "op_path": "layers.0.mlp", "output_member": "y", "invocation": 0, "request_id": "r0", "rank": 0}]}
+    c = b()
+    c["extra"]["committed_tensors"] = 571
+    yield "reference integrity", c, True
+    c = b()
+    c["extra"]["errors_n"] = 2
+    yield "collector errors", c, True
+    c = b()
+    c["extra"]["collector_failure"] = "worker failed on windowed step 0: transient host budget"
+    yield "collector failure", c, True
+    c = b()
+    c["openings"] = {"n": 60, "verified": 60}
+    yield "openings < min", c, True
+    c = b()
+    c["openings"] = {"n": 64, "verified": 63}
+    yield "an opening failed", c, True
+    c = b()
+    c["binding"]["context"] = {"ok": False, "why": "root differs"}
+    yield "binding context", c, True
+    c = b()
+    c["binding"]["coverage"] = {"ok": False, "missing_n": 3, "expected_n": 572, "bound_n": 569, "missing": [{"step": 1, "op_path": "layers.0.mlp", "output_member": "y", "invocation": 0, "request_id": "r0", "rank": 0}]}
     yield "identity coverage", c, True
-    c = b(); c["extra"]["coverage"] = {"ok": False, "checked": 500, "missing_n": 72, "missing_by_family": {"fa2_hidden_m1_stream": 72}, "families_missing_entirely": ["fa2_hidden_m1_stream"],
+    c = b()
+    c["extra"]["coverage"] = {"ok": False, "checked": 500, "missing_n": 72, "missing_by_family": {"fa2_hidden_m1_stream": 72}, "families_missing_entirely": ["fa2_hidden_m1_stream"],
                                        "missing": [{"step": 0, "op_path": "layers.0.attn", "output_member": "m1", "request_id": "r0"}], "manifest_digest": "cd" * 32}
     yield "manifest coverage", c, True
-    c = b(); c["extra"]["identity_check"] = {"ok": False, "steps_checked": 4, "violations_n": 2, "manifest": {"sampler_ids": 1},
+    c = b()
+    c["extra"]["identity_check"] = {"ok": False, "steps_checked": 4, "violations_n": 2, "manifest": {"sampler_ids": 1},
                                              "violations": [{"step": 1, "fa2_layers_bad": {"0": 48}, "sampler_ids": 1}, {"step": 2, "fa2_layers_bad": {"0": 42}, "sampler_ids": 1}]}
     yield "X-03 identity layout", c, True
-    c = b(); c["weights_pin"] = {"result": False, "why": "1 mismatched", "mismatched": ["model.layers.0.q_proj"]}; yield "checkpoint binding", c, True
-    c = b(); c["boundary_linkage"] = {"result": False, "why": "1 unlinked", "unlinked_n": 1}; yield "boundary linkage", c, True
-    c = b(); c["sampled_replay"]["result"] = False; c["sampled_replay"]["why"] = "a VU differs"; yield "replay mismatch", c, True
-    c = b(); c["sampled_replay"]["sample"]["seed"] = 12345; c["oracle_compare"] = {"result": True, "complete": False}; yield "prover-chosen seed, no form (B)", c, True
-    c = b(); c["sampled_replay"]["population"]["query_checks"] = _checks(ok=False, vus_outside_query={"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]})
+    c = b()
+    c["weights_pin"] = {"result": False, "why": "1 mismatched", "mismatched": ["model.layers.0.q_proj"]}
+    yield "checkpoint binding", c, True
+    c = b()
+    c["boundary_linkage"] = {"result": False, "why": "1 unlinked", "unlinked_n": 1}
+    yield "boundary linkage", c, True
+    c = b()
+    c["sampled_replay"]["result"] = False
+    c["sampled_replay"]["why"] = "a VU differs"
+    yield "replay mismatch", c, True
+    c = b()
+    c["sampled_replay"]["sample"]["seed"] = 12345
+    c["oracle_compare"] = {"result": True, "complete": False}
+    yield "prover-chosen seed, no form (B)", c, True
+    c = b()
+    c["sampled_replay"]["population"]["query_checks"] = _checks(ok=False, vus_outside_query={"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]})
     yield "population scope", c, True
-    c = b(); del c["weights_pin"]; yield "weights unpinned", c, True
-    c = b(); c["classes"] = {k: v for k, v in CLASSES.items() if k != "weights"}; yield "required class undeclared", c, True
-    c = b(); c["classes"] = dict(CLASSES, weights={"how": "registered-input", "tensors": 0}); yield "declared leaf class bound 0", c, True
-    c = b(); c["openings_after_release"] = {"n": 64, "verified": 60, "source": "host"}; yield "openings after release", c, True
-    c = b(); c["oracle_compare"] = {"result": False, "mismatch_n": 3}; yield "oracle mismatch", c, True
+    c = b()
+    del c["weights_pin"]
+    yield "weights unpinned", c, True
+    c = b()
+    c["classes"] = {k: v for k, v in CLASSES.items() if k != "weights"}
+    yield "required class undeclared", c, True
+    c = b()
+    c["classes"] = dict(CLASSES, weights={"how": "registered-input", "tensors": 0})
+    yield "declared leaf class bound 0", c, True
+    c = b()
+    c["openings_after_release"] = {"n": 64, "verified": 60, "source": "host"}
+    yield "openings after release", c, True
+    c = b()
+    c["oracle_compare"] = {"result": False, "mismatch_n": 3}
+    yield "oracle mismatch", c, True
     yield "cuBLAS route pin", _routed(None), True
 
 
@@ -244,6 +284,26 @@ def test_decisions_equal_v1_on_one_fault_mutations(label, commit, tokens_equal):
     assert out != V.PASS, f"{label}: v2 PASS where v1 FAILS ({why}); checks {[(c.name, c.outcome) for c in checks if c.outcome != V.PASS]}"
     graded = [c for c in checks if c.outcome in (V.FAIL, V.INSUFFICIENT)]
     assert graded and all(c.differences or c.reason for c in graded), f"{label}: a non-PASS check without a named difference"
+
+
+def test_a_count_the_record_does_not_state_reads_as_zero_in_both():
+    commit = dict(_base(), openings={})
+    (ok, why), out, checks = _both(commit)
+    failed = {c.name: c.reason for c in checks if c.outcome == V.FAIL}
+    assert not ok and out == V.FAIL and failed == {"runtime_match/openings": why} and why == "openings checked 0 < 64"
+    (ok, _), out, checks = _both(dict(_base(), fa2_zero_rows=0))
+    assert ok is True and out == V.PASS and {c.name: c.outcome for c in checks}["runtime_match/fa2_zero_rows"] == V.PASS
+
+
+def test_an_openings_setting_asks_for_at_most_64_and_for_64_where_the_command_states_none():
+    run = {"arm": "instrumented", "pair": 0, "tokens_equal_ref": True, "commit": dict(_base(), openings={"n": 8, "verified": 8}, commit_pass=True)}
+    doc = {"commit_pass": True, "required_classes": list(CLASSES)}
+    by = {c.name: c for c in V.build([run], doc, execution={"engine_settings": {"openings": 8}}).checks}
+    assert by["runtime_match/openings"].outcome == V.PASS and by["runtime_match/openings"].scope["min_openings"] == 8
+    by = {c.name: c for c in V.build([run], doc, execution={"engine_settings": {"openings": 512}}).checks}
+    assert by["runtime_match/openings"].outcome == V.FAIL and by["runtime_match/openings"].scope["min_openings"] == 64
+    by = {c.name: c for c in V.build([run], doc, execution={"engine_settings": {}}).checks}
+    assert by["runtime_match/openings"].scope["min_openings"] == 64
 
 
 def test_pass_record_passes_in_both_and_names_its_scope():
@@ -298,7 +358,7 @@ def test_a_deferred_tp1_replay_is_decided_on_the_commit_engines_facts(tmp_path, 
     stamps the route pin on the Commit engine's, which `engine_of_record` puts on the replay first."""
     from verity_vllm.pipeline import cpu_replay
 
-    row = {"tokens_equal_ref": True, "commit": _routed({"cublas": {"device": "unavailable: no CUDA device"}}, stamped=False)}
+    row: dict[str, Any] = {"tokens_equal_ref": True, "commit": _routed({"cublas": {"device": "unavailable: no CUDA device"}}, stamped=False)}
     row["commit"]["value_correspondence"]["components"] = {}
     art = tmp_path / "sampled_replay_p0.json"
     art.write_text(json.dumps({"sampled_replay": copy.deepcopy(row["commit"]["sampled_replay"])}))
@@ -327,13 +387,13 @@ def test_account_missing_is_insufficient_evidence_not_fail():
     assert link.outcome == V.INSUFFICIENT and link.differences[0] == {"name": "account_missing", "legs": ["tokens.json"]}
     assert by["local_replay/population_scope"].outcome == V.INSUFFICIENT and out != V.PASS
     # the cause is read from the facts of record (`account_missing`), never the fault's text: a reworded fault grades the same
-    c["sampled_replay"]["population"]["query_checks"]["executed_prefix_rule"]["faults"][0]["faults"] = ["the tokens.json leg is gone"]
+    c["sampled_replay"]["population"]["query_checks"]["executed_prefix_rule"]["faults"][0]["faults"] = ["the tokens.json file is gone"]
     reworded = {c_.name: c_.outcome for c_ in _both(c)[2]}
     assert reworded == {c_.name: c_.outcome for c_ in checks}
     groups = V.group_checks(V.aggregate_runs([(0, checks)]))
     g = {x.name: x.outcome for x in groups}
     assert g["execution_extent"] == V.INSUFFICIENT, g
-    # the SAME missing legs on a record where no request stopped before its cap: recorded, not gating (v1 passes it too)
+    # the SAME missing files on a record where no request stopped before its cap: recorded, not gating (v1 passes it too)
     c2 = _base()
     c2["sampled_replay"]["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 8, "cap": 8, "linked": False, "account_missing": ["tokens.json"]}}}
     c2["binding"]["coverage"]["match_account_link"] = _link(ok=False, required=False, problems=["tokens.json: not beside the Commit"])
@@ -456,14 +516,14 @@ def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
     d, ex = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
     assert ex["committer"] == "native_collect_v2b" and ex["engine_settings"]["openings"] == 64 and ex["engine_settings"]["required_manifest"] is True
     assert not (d / "commit_summary.json").exists()                     # nothing writes the old summary
-    v = V.from_record(d, rc=0, stage_ok="PASS")
-    assert v.outcome == V.PASS and v.compat["commit_pass"] is True and v.compat["stage_ok"] == "PASS" and not v.notes
+    v = V.from_record(d, rc=0)
+    assert v.outcome == V.PASS and v.compat["commit_pass"] is True and not v.notes
     assert v.inputs["commit/verdict.json"] and v.inputs["commit/runs.jsonl"] and "global_match.json" in v.inputs
     assert v.correspondence_digest is None and v.correspondence_digest_source == "absent" and v.correspondence_digests == {}   # a v1-frontend row: never a stand-in hash
     assert v.check("required_value_coverage/manifest_of_record_verified").outcome == V.PASS
     assert v.runs == {"instrumented": 1, "failed": 0, "control": 1, "not_pass_by_reconstruction": 0, "pairs": [0]}
     assert v.execution["engine_settings"]["openings"] == 64 and v.execution["committer"] == "native_collect_v2b"
-    out = cli.main(["verdict", "from-record", str(d), "--rc", "0", "--stage-ok", "PASS", "--quiet"])
+    out = cli.main(["verdict", "from-record", str(d), "--rc", "0"])
     assert out == 0 and V.CommitChecks.load(d / "verdict.json").outcome == V.PASS
 
 
@@ -474,14 +534,14 @@ def test_from_record_pre_p5_row_takes_rc_and_execution_from_its_commit_summary(t
     (d / "commit_summary.json").write_text(json.dumps({"rc": 0, "pass": True, "committer": "native_collect_v2b", "collector_variant": "windowed",
                                                        "retention": "host", "engine_settings": {"openings": 64, "pairs": 1, "required_manifest": True},
                                                        "cmd": "python -m verity_vllm.pipeline.commit --openings 64", "deprecated": "F-r19-int-21; see verdict.json"}))
-    v = V.from_record(d, stage_ok="PASS")
+    v = V.from_record(d)
     assert v.outcome == V.PASS and v.compat["rc"] == 0 and v.compat["commit_summary_pass"] is True
     assert v.execution["committer"] == "native_collect_v2b" and v.execution["engine_settings"]["openings"] == 64
 
 
 def test_from_record_manifest_verify_fail_is_required_value_coverage_fail(tmp_path):
     d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0, manifest_verify_ok=False)
-    v = V.from_record(d, rc=0, stage_ok="FAIL")
+    v = V.from_record(d, rc=0)
     assert v.outcome == V.FAIL and v.groups()["required_value_coverage"] == V.FAIL
     mv = v.check("required_value_coverage/manifest_of_record_verified")
     assert mv.outcome == V.FAIL and mv.differences[0]["name"] == "manifest_of_record_differs" and "manifest_verify.ok" in mv.compat[0]
@@ -514,28 +574,28 @@ def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
     (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": step},
                                                       "request": {"ok": True, "program_digest": "p2" * 32, "correspondence_digest": req},
                                                       "build_request_LP9_T1": {"ok": True, "program_digest": "p3" * 32, "correspondence_digest": shape}}))
-    v = V.from_record(d, rc=0, stage_ok="PASS")
+    v = V.from_record(d, rc=0)
     assert v.correspondence_digest == step and v.correspondence_digest_source == "build_summary.json:step"
     assert v.correspondence_digests == {"build_request_LP9_T1": shape, "request": req, "step": step}
     assert v.inputs["build_summary.json"] and v.correspondence_digest != v.inputs["global_match.json"]
     assert V.CommitChecks.from_dict(json.loads(v.dumps())).correspondence_digest == step
     # a build_summary.json of a v1-frontend Build (no correspondence_digest per wrapper): absent, null
     (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": None}, "request": {"ok": True, "program_digest": "p2" * 32}}))
-    v = V.from_record(d, rc=0, stage_ok="PASS")
+    v = V.from_record(d, rc=0)
     assert v.correspondence_digest is None and v.correspondence_digest_source == "absent" and v.correspondence_digests == {}
     # no build_summary.json: the wrappers' own result.json
     (d / "build_summary.json").unlink()
     for w, dg in (("build_step", step), ("build_request", req)):
         (d / w).mkdir()
         (d / w / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": dg}}))
-    v = V.from_record(d, rc=0, stage_ok="PASS")
+    v = V.from_record(d, rc=0)
     assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step" and v.correspondence_digests == {"request": req, "step": step}
     assert V.correspondence_of_build(None) == (None, "absent", {})
     assert V.correspondence_of_build({"step": {"ok": True}, "request": {"correspondence_digest": req}}) == (req, "build_summary.json:request", {"request": req})
     # a summary its record refuses: a note, and the wrappers' own result.json
     (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": "zz" * 32, "digest": "x"},
                                                       "request": {"ok": True}}))
-    v = V.from_record(d, rc=0, stage_ok="PASS")
+    v = V.from_record(d, rc=0)
     assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step"
     assert any("build_summary.json not read" in n and "'step.digest'" in n for n in v.notes)
 
@@ -546,13 +606,13 @@ def test_from_record_cites_property_records_by_digest(tmp_path):
     """The registry test: every property the verdict cites is in REGISTRY, by a digest that recomputes from the cited file.  A record
     that does not hold, was edited, or does not parse is a note, never a changed decision; a row without records has no `properties` key."""
     d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
-    bare = V.from_record(d, rc=0, stage_ok="PASS")
+    bare = V.from_record(d, rc=0)
     assert bare.properties == [] and "properties" not in json.loads(bare.dumps())
     held = PropertyRecord(seal({"schema": REGISTRY["noninterference"].schema, "world": 1, "run": "row"}, True))
     broke = PropertyRecord(seal({"schema": REGISTRY["census"].schema, "steps": 3}, False))
     held.write(d)
     broke.write(d)
-    v = V.from_record(d, rc=0, stage_ok="PASS")
+    v = V.from_record(d, rc=0)
     assert v.outcome == bare.outcome == V.PASS
     assert [(c["name"], c["digest"], c["ok"], c["source"], c["problems"]) for c in v.properties] == [
         ("census", broke.digest, False, "properties/census.json", []), ("noninterference", held.digest, True, "properties/noninterference.json", [])]
@@ -564,7 +624,7 @@ def test_from_record_cites_property_records_by_digest(tmp_path):
     doc = json.loads((d / "properties" / "noninterference.json").read_text())
     (d / "properties" / "noninterference.json").write_text(json.dumps({**doc, "world": 2}))
     (d / "properties" / "junk.json").write_text("{not json")
-    v = V.from_record(d, rc=0, stage_ok="PASS")
+    v = V.from_record(d, rc=0)
     by = {c["source"]: c for c in v.properties}
     assert v.outcome == V.PASS and len(v.notes) == 3
     assert by["properties/noninterference.json"]["problems"] == ["digest does not match the record"]

@@ -1,32 +1,38 @@
 """Summarize psched.sh runs (dcap pfill rows): per (B, L) and arm, decode slowdown, filler share and coverage.
 
-  python3 psum.py RUN_OUT_DIR [RUN_OUT_DIR ...] [--limit 1.05]
+  uv run python3 benchmarks/pouw/filler/psum.py RUN_OUT_DIR [RUN_OUT_DIR ...] [--limit 1.05]
 
 Coverage at a decode point is read as the filler scorer reads a decode entry (benchmarks/pouw/filler/scoring.py,
 filler-scorer/v1): the step plus the non-GEMM kernels, max(1.09 ms, 4.684 µs × B), those stretched by the step's
 slowdown; (0.225 × serving MACs + 0.99 × filler MACs) ÷ (the int8 peak at the serving-alone clock × that time), the filler
 running through the whole stretched step at its measured rate. "base" is FILL v1's partitioned filler in the same
 invocation; "sched" adds the phase filler. A point's best is the arm with the largest coverage among those whose slowdown
-is ≤ --limit.
+is ≤ --limit. The GPU's SMs and its int8 MACs a SM-clock are its card's (`sm.count`, `rate.tensor`), read through
+`verity.device`, so the command runs in the workspace's environment.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
 import pathlib
 
+from verity.device import load_card, number
+
 CERT_SERVING, CERT_FILLER = 0.225, 0.99
-SMS, PER_SM = 188, 1024
+CARD = load_card("rtx-pro-6000-server")  # the GPU psched.sh's runs are on
+SMS, PER_SM = int(number(CARD["sm"]["count"])), int(number(CARD["rate"]["tensor"]))
 H, LAYERS, NQ, NKV, HD, INTER, VOCAB = 4096, 32, 32, 8, 128, 14336, 128256
 LIN_TOK = LAYERS * (H * (NQ + 2 * NKV) * HD + H * H + H * 2 * INTER + INTER * H)
 LM_TOK = H * VOCAB
 ATT_TOK_L = LAYERS * NQ * HD * 2
 
 
-def other_ms(b):
+def other_ms(b: int) -> float:
     return max(1.09, 38.37 / 8192 * b)
 
 
-def rows(dirs):
+def rows(dirs: list[str]) -> list[dict]:
     out = []
     for d in dirs:
         p = pathlib.Path(d) / "pfill.jsonl"
@@ -38,7 +44,7 @@ def rows(dirs):
     return out
 
 
-def cov(r, arm):
+def cov(r: dict, arm: str) -> tuple[float, float, float] | None:
     """(coverage, slowdown, filler share of the GPU's peak) of an arm: none | base | sched."""
     a = r["arms"]
     t0 = (a["full"]["ms"] + a["full2"]["ms"]) / 2
@@ -53,13 +59,13 @@ def cov(r, arm):
         slow, share = r["sched"]["slowdown"], r["sched"]["fill_share"]
     b, l = r["B"], r["L"]
     t1 = t0 * slow + other_ms(b) * slow
-    cap = PER_SM * SMS * mhz * 1e6 * t1 * 1e-3
+    window = PER_SM * SMS * mhz * 1e6 * t1 * 1e-3
     n = b * (LIN_TOK + LM_TOK + ATT_TOK_L * l)
     f = share * PER_SM * SMS * mhz * 1e6 * t1 * 1e-3
-    return (CERT_SERVING * n + CERT_FILLER * f) / cap, slow, share
+    return (CERT_SERVING * n + CERT_FILLER * f) / window, slow, share
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("dirs", nargs="+")
     ap.add_argument("--limit", type=float, default=1.05)

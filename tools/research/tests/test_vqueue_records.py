@@ -6,16 +6,20 @@ records commit of what it regenerated, a lock commit (`lock_message`) vouched fo
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 
 import pytest
 
 from research import merge
 from research.landing import CI, LAUNCH_LOST_S, LEAN_STEP, LOST_AFTER_S, NOT_STARTED
+from research.queue import IDENTITY, QueueError, Rules
 from research.vqueue import FAIL, INFRA, PASS, PENDING, RecordsRun
-from research.vqueue_records import LOCK_SUBJECT, commit, judge, lock_message, start
+from research.vqueue_records import LOCK_SUBJECT, commit, judge, lock_message, same_inputs, start
+from research.vqueue_slim import lean_key
 from test_landing import Harness, _live_run, _steps_run
-from test_queue import World, _git
+from test_queue import AUTHORED, NAMED, OWN, World, _git, _who
 
 #: the candidate's lock: two guarantees and a named assumption, each with its owner, and a guarantee with none
 LOCKED = {"guarantees": {"T": {"owner": "@proofs"}, "U": {"owner": "@memory-accounting"}, "V": {}},
@@ -153,6 +157,23 @@ def test_a_records_run_its_machine_failed_runs_again_once_elsewhere_and_its_rese
     h.run_state[again] = ("failed", -9, None, None, "m2")
     got = judge(h.d, rec)
     assert got.state == FAIL and again in got.why and len(h.launched) == 2
+
+
+@pytest.mark.parametrize("on, again", [("big", "big"), ("big1,big2", "big2")])
+def test_a_records_run_on_given_machines_launches_there_and_its_resend_after_a_machines_fault_stays_there(world, monkeypatch,
+                                                                                                         on, again):
+    """``on`` (a heavy candidate's machines): the records run launches on them and not on the queue's, its record keeps them,
+    and its resend after its machine failed it goes on those it didn't run on, or on its one machine again, never on the
+    queue's."""
+    h, sha = _harness(world, monkeypatch)
+    h.d.on = "m1,m2"
+    rec = start(h.d, sha, on=on)
+    (rid,) = rec["ids"]
+    assert rec == {"ids": [rid], "tip": sha, "at": h.clock, "on": on} and h.launched == [(sha, on, False)]
+    assert any(x.startswith(f"research queue vqueue: train.sh {sha[:12]} {on} --deferred") for x in world.logs), world.logs
+    h.run_state[rid] = ("failed", -9, None, None, on.split(",")[0])
+    rec = json.loads(json.dumps(rec))
+    assert judge(h.d, rec) == RecordsRun(PENDING) and h.launched[1:] == [(sha, again, False)] and rec["resend"]
 
 
 @pytest.mark.parametrize("rows, log, why", [
@@ -323,18 +344,86 @@ def test_the_records_commit_is_a_lock_commit_on_the_candidate_which_the_merge_ga
     assert body.startswith(f"Lock records regenerated for #1 #2\n\nChecked: {rid} (the lock run of `queue/{sha[:12]}` "
                            f"{sha[:12]}, passed by regenerating them)\nRegenerated: pkg/lean-audit.json"), body
     assert re.search(rf"^Checked: {rid} ", body, re.M) and re.search(r"^Regenerated: \S", body, re.M)
-    assert _git(wd, "log", "-1", "--format=%an <%ae>", made) == "research queue <queue@research.invalid>"
+    assert _who(wd, made) == OWN == "research queue <queue@research.invalid> | research queue <queue@research.invalid>"
     assert _vouched(h, made, rid) == rid
     assert (_git(wd, "rev-parse", "HEAD"), _git(wd, "status", "--porcelain"), _git(wd, "for-each-ref")) == (head, status, refs)
+
+
+def _on(repo, parent: str, files: dict[str, str]) -> str:
+    """A commit on ``parent`` writing ``files``, made in a scratch index."""
+    index = {**os.environ, "GIT_INDEX_FILE": str(repo.parent / "scratch-index"), **IDENTITY}
+    run = lambda *a, **kw: subprocess.run(["git", "-C", str(repo), *a], env=index, check=True, capture_output=True,  # noqa: E731
+                                          text=True, **kw).stdout.strip()
+    run("read-tree", parent)
+    for path, text in files.items():
+        run("update-index", "--add", "--cacheinfo", f"100644,{run('hash-object', '-w', '--stdin', input=text)},{path}")
+    return run("commit-tree", run("write-tree"), "-p", parent, "-m", "another member")
+
+
+def test_lean_key_is_one_across_trees_differing_outside_their_lean_inputs_only(world, monkeypatch):
+    """A file outside every Lean input leaves the key as it is; one in a Lean package's directory, or a Lean file, changes it."""
+    h, sha = _harness(world, monkeypatch)
+    wd = h.q.workdir
+    plain, lean, notes = (_on(wd, sha, f) for f in ({"b.txt": "b\n"}, {"other/B.lean": "-- b\n"}, {"pkg/notes.txt": "n\n"}))
+    assert lean_key(wd, sha) == lean_key(wd, plain) and same_inputs(wd, sha, plain)
+    assert len({lean_key(wd, c) for c in (sha, lean, notes)}) == 3 and not same_inputs(wd, sha, notes)
+    assert lean_key(wd, "0" * 40) is None and not same_inputs(wd, "0" * 40, "0" * 40)
+
+
+def test_a_records_commit_carried_onto_another_base_holds_the_same_records_on_it_and_none_onto_other_lean_inputs(world,
+                                                                                                             monkeypatch):
+    """The records commit is made on the staged tree and vouched for there, then its files, byte for byte, are committed on
+    top of ``onto``, whose Lean inputs are the staged tree's, its message saying where they were regenerated; onto a tree
+    whose Lean inputs differ it raises, carrying nothing."""
+    h, sha = _harness(world, monkeypatch)
+    rid = start(h.d, sha)["ids"][0]
+    _passes(h, rid, sha)
+    wd = h.q.workdir
+    onto = _on(wd, sha, {"b.txt": "b\n"})
+    made, files, told = commit(h.d, sha, rid, (1,), onto=onto)
+    assert files == ["pkg/lean-audit.json"] and _git(wd, "rev-parse", f"{made}^@") == onto and told is None
+    assert _git(wd, "diff", "--name-only", onto, made) == "pkg/lean-audit.json"
+    assert _git(wd, "show", f"{made}:pkg/lean-audit.json") == REGENERATED.strip()
+    body = _git(wd, "log", "-1", "--format=%B", made)
+    assert body == lock_message("#1", rid, f"queue/{sha[:12]}", sha, [], files, onto=onto).strip(), body
+    assert f"Carried from {sha[:12]} onto {onto[:12]}" in body and re.search(rf"^Checked: {rid} ", body, re.M)
+    with pytest.raises(QueueError, match="Lean inputs aren't"):
+        commit(h.d, sha, rid, (1,), onto=_on(wd, sha, {"pkg/notes.txt": "n\n"}))
+
+
+def _but_who(repo, made: str) -> str:
+    """Commit ``made`` as git stores it, without who made it and when: its tree, its parents and its message."""
+    return re.sub(r"^(author|committer) .*\n", "", _git(repo, "cat-file", "commit", made), flags=re.M)
+
+
+def test_a_records_commit_and_its_carry_are_made_as_the_author_the_rules_name_and_vouched_for_whoever_made_them(world,
+                                                                                                               monkeypatch):
+    """Where the queue's rules name an author (`Rules.author`) the records commit and its carry onto another base are that
+    author's and committer's, and otherwise the commits the queue makes as `IDENTITY`: the same tree, parent and message.  The
+    merge gate vouches for a records commit by its trailers and its records' bytes (`unvouched`, `merge.regenerated_parent`),
+    so for the named author's, and still for one made as `IDENTITY` once the rules name another author."""
+    h, sha = _harness(world, monkeypatch)
+    rid = start(h.d, sha)["ids"][0]
+    _passes(h, rid, sha)
+    wd, onto = h.q.workdir, _on(h.q.workdir, sha, {"b.txt": "b\n"})
+    assert h.q.identity is IDENTITY
+    own, files, _ = commit(h.d, sha, rid, (1,))
+    own_carried, _, _ = commit(h.d, sha, rid, (1,), onto=onto)
+    h.q._rules = Rules.parse(AUTHORED)                                # as the loop reads them at `main` (`World.at_main`)
+    named, named_files, _ = commit(h.d, sha, rid, (1,))
+    carried, _, _ = commit(h.d, sha, rid, (1,), onto=onto)
+    assert [_who(wd, c) for c in (own, own_carried, named, carried)] == [OWN, OWN, NAMED, NAMED]
+    assert files == named_files and _but_who(wd, own) == _but_who(wd, named) and _but_who(wd, own_carried) == _but_who(wd, carried)
+    assert _vouched(h, named, rid) == _vouched(h, own, rid) == rid
 
 
 def test_a_records_commit_carries_the_bookkeeping_its_records_run_repaired_and_tells_its_owners(world, monkeypatch):
     h, sha = _harness(world, monkeypatch)
     rid = start(h.d, sha)["ids"][0]
     d = _passes(h, rid, sha)
-    caps = "UNWITNESSED = {\"pkg\": 2}\n"
+    packages = "UNWITNESSED = {\"pkg\": 2}\n"
     (d / "lean-audit" / "repaired" / "tests").mkdir(parents=True)
-    (d / "lean-audit" / "repaired" / "tests" / "test_lean_packages.py").write_text(caps)
+    (d / "lean-audit" / "repaired" / "tests" / "test_lean_packages.py").write_text(packages)
     warned = ["pkg: bookkeeping: H (@lean): listed under `open` on LEAN-1, due 2026-11-14 (open.unlisted)"]
     doc = json.loads((d / merge.AUDIT).read_text())
     (d / merge.AUDIT).write_text(json.dumps(doc | {"bookkeeping": warned, "repaired": {

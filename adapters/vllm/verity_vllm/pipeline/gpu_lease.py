@@ -11,7 +11,7 @@ after the process has closed the lease's descriptors, stays inside its lease.
 
 A leased Commit's weights registration hashes on its leased GPU (``VERITY_WEIGHTS_HASH=device`` unless the item sets it: the same
 leaves, tree and root as the host path, ``commit.committer.weights_rows``), where the host path holds the GPU idle while it copies and
-hashes every tensor (79 to 91 s for a 7B or 8B model in cov-gm186, gm177 and gm178, against 0.1 s on the device).
+hashes every tensor.
 
 After its last run the Commit gives the GPU back (``release``): the engine shut down, the device's CUDA context destroyed with every
 allocation in it (as at the process's exit), nvidia-smi showing nothing left on the leased GPU (the node's stray probe reads the
@@ -49,10 +49,15 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, Callable, MutableMapping
+from collections.abc import Callable, MutableMapping
+from typing import Any
 
+from verity_vllm.engine.handle import core_in_process
+from verity_vllm.records.schema_ids import GPU_LEASE_SCHEMA
+
+SCHEMA = GPU_LEASE_SCHEMA
 RECORD = "gpu_lease.json"
-MATCH_LEG_KEPT = "a Match stage holds its GPUs to its exit: its engine is its last work"
+MATCH_STAGE_KEPT = "a Match stage holds its GPUs to its exit: its engine is its last work"
 HEARTBEAT_S = 60
 WATCH_S = 0.2                      # after the release, how often the Commit checks that no CUDA context reappeared
 STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease
@@ -177,11 +182,9 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None, wai
     """Take the leased Commit's GPUs now (``VERITY_LEASE_STARTED`` set in ``environ``, default the CLI's; else nothing): wait for the
     lease and for any other process to leave its GPUs (`_foreign`), then see only its devices. Nothing before this call may initialise
     CUDA (the process sees no device until it returns). The lease's locks are this process's from here to its ``release`` or its exit;
-    the holder ending first (the lease tool's --max-min) kills this process. A process that holds its lease already keeps it."""
+    the holder ending first (the lease tool's --max-min) kills this process."""
     environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
     if environ is None or not environ.get(STARTED) or not leased(environ):
-        return
-    if _HELD:
         return
     if cuda_initialised():
         raise SystemExit("GPU lease: CUDA was initialised before the lease (with no device visible); nothing may touch CUDA before "
@@ -236,17 +239,16 @@ def kept_reason(args: Any, coms: list[Any], eng: Any, environ: MutableMapping[st
     openings after release opened from host and the committed bytes and tree levels in host memory that outlives the CUDA context
     (the pool's registered shared mappings; torch's pinned blocks die with it); one GPU, and vLLM's engine core in this process (its
     shutdown frees it)."""
-    core = getattr(getattr(getattr(eng, "llm", None), "llm_engine", None), "engine_core", None)
     gpus = [d for d in environ.get("CUDA_VISIBLE_DEVICES", "").split(",") if d]
     return ("the C2 replay runs in this process, on the engine's weights (no --replay-deferred)" if not getattr(args, "replay_deferred", False) else
             "the replay bundle reads the model's buffers at the C2 site (--replay-bundle-overlap 0)" if not getattr(args, "replay_bundle_overlap", 1) else
             "the replay bundle is written at the C2 site or the C2 replay runs in this process (replay_bundle.start began no write: a slim "
-            "bundle, a live-only replay, a retention other than host, or a store over the cap)" if not bundle else
+            "bundle, a live-only replay, a retention other than host, or a store over its bound)" if not bundle else
             "--serving-rows commits its window at the C2 site, from the engine's weights (c2_replay.serving_rows)"
             if getattr(args, "serving_rows", None) else
             "--tensor-digests reads the retained bytes after the run" if getattr(args, "tensor_digests", False) else
             next((why for why in (_kept_by(args, c) for c in coms) if why), None) or
-            ("vLLM's engine core is not in this process" if getattr(core, "engine_core", None) is None else
+            ("vLLM's engine core is not in this process" if not core_in_process(getattr(eng, "llm", None)) else
              f"a lease of {len(gpus)} GPUs" if len(gpus) != 1 else None))
 
 
@@ -563,7 +565,7 @@ def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[st
     t1 = clock()
     rel = _read(_released(started))
     t_rel = float(rel["t"]) if rel.get("released") else t1
-    rec: dict[str, Any] = {"schema": "verity-vllm/gpu-lease/v1", "tool": environ["GPU_LEASE"], "max_min": max_min(timeout_s),
+    rec: dict[str, Any] = {"schema": SCHEMA, "tool": environ["GPU_LEASE"], "max_min": max_min(timeout_s),
                            "process_started": _utc(t0), "requested": None, "released": _utc(t_rel),
                            "released_at": rel.get("released_at") or "process.end", "process_ended": _utc(t1),
                            "kept": rel.get("kept") or (None if rel.get("released") else kept or "the Commit ended before its release (its last "

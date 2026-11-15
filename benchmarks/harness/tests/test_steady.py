@@ -1,7 +1,7 @@
 """`verity_bench.steady` on made-up files: a run whose files show all ten checks, each check failing alone, each check the
 files can't show, a value that isn't a number passing nothing, a run's rows read from its rate file and from a directory,
-the window and its thirds on stated numbers, a window cut at whole bursts where a row declares its sessions' period, with
-no session of it left unjudged, and the four conditions the reader of these rows still holds itself."""
+the window and its thirds on stated numbers, and a window cut at whole bursts where a row declares its sessions' period,
+with no session of it left unjudged."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import math
 
 import pytest
 
-from verity_bench import prove_records as R
 from verity_bench import steady as S
 
 TYPE, K, WARM, CARD = "gemm64", 2, 2, "3"
@@ -99,12 +98,12 @@ FAILS = [
     ("level", {"gaps": (2.0,) * 9 + (2.75,) * 6},
      "its window isn't level: a statement took 2, 2, 2.75 s in its thirds, the slowest over 1.25 times the fastest"),
     ("level", {"changes": {"period": 2}, "gaps": (2.0,) * 9 + (2.75,) * 6},
-     "its window isn't level: a statement took 2, 2, 2.75 s in its parts of whole bursts of 4 sessions, the slowest "
-     "over 1.25 times the fastest"),
+     ("its window isn't level: a statement took 2, 2, 2.75 s in its parts of whole bursts of 4 sessions, the slowest "
+      "over 1.25 times the fastest")),
     # 31 sessions in bursts of 8: three whole bursts at 2 s a statement, then seven sessions at 10 s
     ("level", {"changes": {"period": 4}, "gaps": (1.0, *(2.0,) * 24, *(10.0,) * 7, 1.0, 1.0)},
-     "its window isn't level: a statement took 2, 2, 9 s in its parts of whole bursts of 8 sessions counted back from "
-     "its end, the slowest over 1.25 times the fastest"),
+     ("its window isn't level: a statement took 2, 2, 9 s in its parts of whole bursts of 8 sessions counted back from "
+      "its end, the slowest over 1.25 times the fastest")),
     ("every_prover_warmed", {"changes": {"warm_per_prover": {"prover-gpu3-0": 4}}},
      "1 of its 2 provers finished a warm session before the timed ones"),
     ("every_prover_warmed", {"changes": {"idle_provers": 1}}, "1 of its 2 provers filed no session in the window"),
@@ -155,8 +154,8 @@ UNTOLD = [
     ("card_clear_start_end", {"rates": None},
      "the run holds no `out/rate/rate.json`: it would say whether the record of its card is this row's alone"),
     ("card_clear_start_end", {"rates": "[{"},
-     "the run's `out/rate/rate.json` isn't JSON (Expecting property name enclosed in double quotes): it would say whether "
-     "the record of its card is this row's alone"),
+     ("the run's `out/rate/rate.json` isn't JSON (Expecting property name enclosed in double quotes): it would say whether "
+      "the record of its card is this row's alone")),
     ("card_clear_start_end", {"start": NODE + "app GPU ? pid 15 1MiB\n"},
      "`out/cotenants-k2-start.txt` names a compute process on a card it couldn't name (pid 15 1MiB)"),
     ("level", {"sessions": None}, "the run holds no `out/rate/gemm64-k2/sessions.jsonl`"),
@@ -458,18 +457,3 @@ def test_no_session_of_a_window_is_left_out_of_its_cut(period):
             row, files = made({} if period is None else {"period": period}, gaps=around(tuple(gaps)))
             got = S.verdict(row, files)
             assert [(c.name, c.status) for c in got.checks if not c.ok] == [("level", S.FAIL)], (sessions, slow)
-
-
-def test_the_reader_holds_four_of_the_checks_itself_and_gives_the_same_reasons():
-    """`prove_records.row_why` reads the same rows and holds `accepted`, `not_void`, `exits` and `flat` as conditions of
-    its own. Until it calls this module's, the two must give one answer and one reason on a row."""
-
-    row, _ = made()
-    assert R.RATES == S.RATES and R.row_why(row) is None
-    assert all(check(row).ok for check in (S.accepted, S.not_void, S.exits, S.flat))
-    for check, change in ((S.accepted, {"accepted": 19}), (S.accepted, {"refused_n": 2}),
-                          (S.not_void, {"void": ["2 of 20 sessions refused", "exited nonzero: prover-gpu3-0 rc 1"]}),
-                          (S.exits, {"exits": {"prover-gpu3-0": 0, "prover-gpu3-1": 137}}),
-                          (S.exits, {"exits": [0, 1]}), (S.flat, {"flat": False}), (S.flat, {"flat": None})):
-        got = check(row | change)
-        assert got.status == S.FAIL and got.why == R.row_why(row | change), change

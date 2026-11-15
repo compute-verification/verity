@@ -1,7 +1,7 @@
 # tools/verity/lean: the Lean audit
 
 One audit for every Lake package (`python tools/verity/lean/check.py --all --build`), which `check` runs on the packages
-whose inputs changed (`check.py --build PKG...`), and Lean's jobs in `check`. This file is an outline: what the audit is,
+whose inputs changed (`check.py --build PKG...`), and Lean's job in `check`. This file is an outline: what the audit is,
 its commands, what it checks, the lock's sections, and one line per module. The detail is in the docstring each line
 names, and new detail goes there: here it gets one line at most.
 
@@ -45,11 +45,14 @@ python tools/verity/lean/upstream.py PKG [--lean]
 python tools/verity/lean/unread.py --out DIR --build
   the Lean nothing reads; lean-audit runs its ratchet on the audits' facts (its docstring: the seeds, the caps, the
   Properties gap)
+uv run tools/verity/lean/claim_ids.py [--write]
+  the claim ids' table from the ids the locks' premise entries carry: exit 1 naming each row it would change, or write it
 python tools/verity/lean/merge.py --install
   once per clone: git merges lean-audit.json with merge.py, by origin/main's copy of it (fetch main first)
 verity lean try FILE [--siblings] [--on NODE]
   the edit loop: `lake env lean FILE` in FILE's package against its built imports, the axiom probe's line last; neither
-  runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`)
+  runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`). `--siblings` checks each sibling
+  as it is built: one built against an older build of an import is rebuilt when a refusal names it, and not otherwise
 research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
   the fast path (the lean-proofs skill): PKG's records and its requirers'
@@ -58,8 +61,9 @@ research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --c
   a full record, left at lean-audit/audit-TAG/lean-audit.json
 ~~~
 
-`check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--artifacts`, `--regenerate`,
-`--bookkeeping warn`, `--facts`, the facts stages); `lean_audit.py`'s and `lean_changed.py`'s have the jobs' own.
+`check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--program-cache`, `--artifacts`,
+`--regenerate`, `--bookkeeping warn`, `--facts`, the facts stages); `lean_audit.py`'s and `lean_changed.py`'s have the jobs'
+own.
 `check.py` exits 0 when every package passes, 1 when one fails, and 2 on a usage error or a refusal.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
@@ -90,8 +94,9 @@ of `check.py` unless it says otherwise, or the lock's section below.
 - **The kernel accepts every declaration again** (`replay_step`, `Replay.lean`), and the axioms the replay finds are
   the ones the `.olean` files recorded; a replay killed by a signal is a kill, not a verdict (`killed`). `--closure`
   checks the whole import closure the same way, reusing each module that passed under its key, whichever package
-  checked it (`closure_plan`, `replay_keys`, `build_roots_over`); the audit prints `closure: N modules checked, M
-  reused` under each package's line.
+  checked it, wherever it was compiled: a key reads a module's `.olean` files without the source's path a message keeps
+  (`closure_plan`, `replay_keys`, `replay_digest`, `olean_graph.canonical`, `build_roots_over`); the audit prints
+  `closure: N modules checked, M reused` under each package's line.
 - **`--build` recompiles a sample** of the modules the build didn't compile and compares the outputs
   (`sampled_recompile`, `olean_graph.py`).
 - **Each test under `runs` passes** on the data whose SHA-256 the record holds (`tests`, `run_paths`).
@@ -99,8 +104,9 @@ of `check.py` unless it says otherwise, or the lock's section below.
   the `.olean` files of a package audited earlier while the audit runs: the Lean files run from a copy taken before the
   first build, and everything is sealed and checked after each package (`tampered`, `Seals`).
 
-Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), after taking
-one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
+Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), which reads
+the tree at one fixed path, so a module compiles to the same bytes wherever the tree is (`FIXED`, `--tree`, `bound`),
+after taking one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
 `MEM_FLOOR_GIB`, `SPEC_FLOOR_GIB`), with threads as its memory holds (`build_threads`, `replay_threads`). Packages are
 audited side by side, each build after those of the packages it requires by path (`setup`, `writing`, `Seals`). `--all`
 first runs the controls, which test the auditor on fixtures that must pass clean and fail once per violation
@@ -142,7 +148,7 @@ keeps or drops from and never adds to.
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
   under `data` (`tests`, `run_paths`; `--no-runs` skips them). Generated data stays out of Git and out of the key of
   `check`'s audit step, so a test of the package's own checks that the generator still writes the recorded data
-  (PoUW's `verity/protocols/pouw/verifier/tests/test_lean_package.py`).
+  (PoUW's `verity/protocols/accounting/pouw/verifier/tests/test_lean_package.py`).
 - `axioms` (optional): the allowed axioms.
 - `assumptions_module`, `assumptions`, `domain`, `open`: the premises the guarantees take, by kind
   (`assumption_records`, `unfolding`, `read_props`). A named assumption is declared in a module `assumptions_module`
@@ -150,13 +156,24 @@ keeps or drops from and never adds to.
   `Properties.Assumptions` beside `Definitions.Assumptions`, for an assumption stated over the code), each a module of
   the build or of a package it requires. A domain hypothesis is part of what its guarantee says, with a one-line
   `why`, or `cites` the listed guarantee whose statement it is; every other premise is open, with the Linear `issue`
-  that discharges it and its `due` date, written by hand. Each has an `owner` and a `digest`, so a change to a premise
-  or to what it reads fails under its own name. `open_seed`, `open_default_issue` and `default_owner` are what
-  `--update` and the records run fill an entry from (`bookkeeping_ticket`).
+  that discharges it and its `due` date, written by hand. A `Prop` a statement reads without taking it is open only by
+  an entry that gives a `why`, for each guarantee that reads it (`on_read`). Each has an `owner` and a `digest`, so a
+  change to a premise or to what it reads fails under its own name. An entry may carry `id`, the claim id that names
+  it (`trusted-device`, `cr/sha-512`), written by hand and never renamed; `claim_ids.py` writes the table from each id
+  to its Lean names, `verity/commitments/claim_ids.json`, from these. `open_seed`, `open_default_issue` and
+  `default_owner` are what `--update` and the records run fill an entry from (`bookkeeping_ticket`).
+- `ids`: {premise: its claim id}, the id `verity.claims` cites it by; every named assumption and every premise `trust`
+  names has one, written by hand, and `--update` drops an entry whose premise the lock no longer lists (`id_failures`).
+  `claim_ids.py --write` writes `verity.claims`' table of each id's premises (`LEAN`) from every lock's.
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
   {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
-  from; the report prints each gap (`trust_failures`, `trust_gaps`).
+  from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
+  deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
+  `posture.py` prints one line per deployed guarantee, each premise marked against Daniel's trust list
+  (`trust-list.json`), which `tests/test_trust_list.py` holds every deployed guarantee to, outside its gap; a
+  definition still by choice that its record's `premises.choosing` names (the lock's `choosing`) is one of its open
+  premises.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside (`record_scope`).
 - `escapes`: every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`,
@@ -188,11 +205,6 @@ keeps or drops from and never adds to.
   registry handle of the lane that answers for it. `--update` fills each record, and the `reads` section, from the
   build (`judge`, `read_groups`, `PREMISE_KINDS`); without it the audit fails on any difference. A record holds the
   statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it.
-- An unowned lock (`unowned_lock`): one that lists a guarantee or a premise and holds no lane field (`LANE_FIELDS`,
-  `LANE_SECTIONS`), the lock of a tree with no lanes; no flag makes a lock unowned. No entry owes an owner (a premise
-  the lock doesn't list still fails); its `AUDIT` line ends with `unowned`, and its report holds `"unowned": true`.
-  One lane field, or `--owner` for that run, makes it owned and held to every rule. Every lock of this tree is owned
-  (`tests/test_lean_packages.py`).
 - `shape`: the shape every guarantee has (the lean-proofs skill, "One shape"): `properties`, `premises`, `frozen`,
   `statements`, `events`, `conjectures` (`shape`, `part_refusals`, `reordered`, `shares`), and `inline`, the inline
   hypotheses still allowed, which only shrinks (`inline_failures`).
@@ -223,6 +235,10 @@ One line per mechanism; a new one gets its line here and its detail in the docst
   the lock `--update` would among its reports (`regenerated`, `changes`). A candidate's records run runs with
   `--regenerate`, and the verified queue commits those records on top of the candidate, whose check passes
   `--no-regenerate`, so a record difference that reaches it fails there (`research.vqueue_records`).
+- **An allowance is no pass.** A lane's fast path takes a finding ruled open as known, by its code and entry
+  (`lean_changed.py --records --allow CODE:ENTRY`; `failure_codes` and `failure_entries` in `report.json`): the run
+  exits 3 and keeps no pass, and the record it regenerates stays outside `record/` (`lean_changed.py`'s `ALLOWABLE`,
+  `conclude` and `withheld`). `check.py` takes none.
 - **Bookkeeping warns in a records run.** A candidate's records run (`--bookkeeping warn`) repairs a lock that fails
   only on bookkeeping, and the caps beside it, and warns each owner (`BOOKKEEPING`, `repaired`, `bookkeeping_repairs`;
   `lean_audit.py`'s `held_caps` and `raised_unread`; `research.merge.REPAIRED`).
@@ -242,7 +258,7 @@ One line per mechanism; a new one gets its line here and its detail in the docst
 
 Each line says what the module is; its docstring (a Lean file's `/-! -/`, a script's header comment) has the detail.
 Other tools run the commands here, and load `headers.py`, `module_keys.py`, `modules.py`, `lean_audit.py`,
-`axiom_probe.py` and `siblings.py`, by path (`tools/verity/check/`, the task graph, the queue, the `verity` command).
+`axiom_probe.py` and `siblings.py`, by path (`tools/check/`, the task graph, the queue, the `verity` command).
 They import only `tool.py`, as `tools.verity.lean.tool` (the run store's registry). `tests/test_gate_paths.py` fails
 on a gate tool's path constant or a registered tool that no longer resolves.
 
@@ -252,33 +268,48 @@ The auditor:
   replay and its cache, the report.
 - `Facts.lean`: the facts `check.py` judges, from the `.olean` files as data; the canonical texts the hashes are of.
 - `Replay.lean`: the kernel replay of a package's declarations, and of its import closure.
+- `replay-first.json`: the modules a package's replay checks first, each in a step of its own at its stated threads
+  (`replay_first`).
 - `Graph.lean`: the import graph of some modules, from their `.olean` headers.
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.
 - `settings.py`: the environment variables the Lean tools read. `moved.py`: where a path of an earlier layout is now
-  (`setup.sh` runs it). `public_lock.py`: a lock as the public export ships it.
+  (`setup.sh` runs it).
 - `headers.py`: the one reading of a Lean file's import header. `modules.py`: the module-system codemod.
 - `module_keys.py`: a Lake module's key, under which the node's artifact cache, which every sandboxed build fills,
   restores it.
 - `olean_graph.py`: whether two builds of one module differ only in where its source was.
 - `upstream.py`, `Upstream.lean`: the watch on what a pinned dependency proves about what a package assumes.
 - `merge.py`: git's merge drivers for `lean-audit.json`, import lines, lakefile lists and the caps.
+- `claim_ids.py`: the claim ids' table, `verity/commitments/claim_ids.json`, from the ids the locks' premise entries
+  carry (`--write`; `tests/test_claim_ids_table.py` holds the table to it).
 - `cache.py`: the build cache: main's compiled modules, published on merge and restored sha256-checked; the audit
   never reads it. `run_daily.py`: its daily publish.
 
-Lean's jobs in `check` and the tools around the audit:
+Lean's job in `check` and the tools around the audit:
 
 - `lean_audit.py`: the lean-audit step: which packages miss (the key of a pass; `--explain PKG` says what a miss
   changed), their scratch tree, the warm dependencies and builds, the replay cache, the unread ratchet.
-- `lean_changed.py`: the lean-changed step, a lane's fast path to its records (`--records`) and the edit loop on a
+- `lean_changed.py`: no step of `check`: a lane's fast path to its records (`--records`) and the edit loop on a
   node (`--try`).
 - `lean-deps.json`: the pinned dependency bundles (`lean_audit.py --pin`).
 - `warm.py`: the Lean audit of a ready mark's merge, which builds a Lean change before a candidate holds it.
 - `siblings.py`, `axiom_probe.py`: what `verity lean try` runs beside lean: the sibling check and the axiom probe.
   The sibling check leaves out, and counts as unchecked, a module whose build, or an import's, is not of its source
-  as it is (by the hash Lake's trace states).
+  as it is (by the hash Lake's trace states). It leaves out uncounted, FILE's own module aside, what no root loads
+  beside the rest: the other executables' roots, and every module under an `exempt` prefix of the package's lock (the
+  name or below it, as the audit matches it), so two scripts that each declare `main` don't clash. It never fails on
+  the lock: with none, or one that can't be read (which it says on stderr), it leaves out the executables' roots alone.
+  A sibling is checked as it is built. One built against an older build of an import is rebuilt when a refusal names
+  it, and not otherwise: the stub's first refusal has Lake rebuild the siblings it names, once, with a line that says
+  so, and what the stub says once more is the verdict. That is the step's limit, and the full check, which builds
+  every module, has none.
 - `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and the queue's
-  landing gate on its seeds (drive.toml's `landing_gates`).
+  landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
+  its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each
+  module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`, whose failure prints
+  the entry). Two PRs that each raise an area merge without a conflict: `merge.py --limits` sums their changes
+  (`unread_caps`).
 - `trusted_size.py`: the size of a package's spec, per area.
 - `tool.py`: the store's declarations of the scheduled runs.
 - `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.
@@ -289,7 +320,7 @@ The audit needs the standard library, `lake` and the toolchain's `lean` and `lea
 here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`, `Graph.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `olean_graph.py`,
 `module_keys.py` with the task graph's `contract.py` it loads, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
-own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with
+own packages. The two jobs use `check`'s helpers (`tools/check/common.py`, `lean_slot.py`), so they stay with
 this repository.
 
 Copy this directory at a commit of Verity's `main` and record the commit beside it. Write a `lean-audit.json` for each

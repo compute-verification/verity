@@ -7,16 +7,15 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions import boolean as SW
-from verity.definitions.numerics import dsv4_indices_twin as T
-from verity.definitions.registry import boolean_dsv4_indices as BX
-from verity.definitions.registry import dsv4_indexer as I
-from verity.definitions.registry import dsv4_indices as X
+from verity.circuits.ops.boolean import versions as SW
+from verity_vllm.definitions.numerics import dsv4_indices_twin as T
+from verity_vllm.definitions.registry import boolean_dsv4_indices as BX
+from verity_vllm.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.registry import dsv4_indices as X
 
 U = np.uint32
 DEFS = {d.id: d for d in X.DSV4_INDICES_COMPOSITES}
@@ -118,7 +117,7 @@ def test_the_ratio_128_prefill_row_is_the_short_context_fill(K):
                          ids=["ratio-3", "ratio-1", "topk-0", "window-0", "narrow", "wide"])
 def test_bad_statics_are_refused_by_name(kw):
     with pytest.raises(ValueError, match="Dsv4CombineTopkSwa"):
-        bind(X.Dsv4CombineTopkSwa, **kw).body
+        _ = bind(X.Dsv4CombineTopkSwa, **kw).body
 
 
 # --- the Boolean Definition ---------------------------------------------------------------------------------------------------------
@@ -129,8 +128,8 @@ def test_the_boolean_definition_is_its_word(st):
     word = word_of(target)
     assert SW.boolean_version(word).id == target.id
     sweep = _args(st, _sweep(st), 3)
-    drawn = T._sample(np.random.default_rng(4), 64, None, **st)
-    for args in (sweep, drawn):
+    sampled = T._sample(np.random.default_rng(4), 64, None, **st)
+    for args in (sweep, sampled):
         n = len(args[1])
         got = np.asarray(evaluate_words(target, *args), dtype=np.uint64).reshape(n, -1)
         assert np.array_equal(got, _reference(st, args).reshape(n, -1))

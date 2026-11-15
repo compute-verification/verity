@@ -1,4 +1,4 @@
-"""`record`: the record entry's form, its message and its chain, and the auditor's ledger written and read through it.
+"""`Record`: the record entry's form, its message and its chain, and the auditor's ledger written and read through it.
 
 The pinned digests are the auditor's ledger's bytes (`verity/challenger-auditor/v2`): a change to the form, the message's
 framing or a line's text moves them."""
@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from verity.hardware import record
-from verity.protocols.spot.device import challenger as Ch
+from verity.channel import Record
+from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.commitments.identity import identity_digest_sha512
 
 I = bytes(range(16))
@@ -33,21 +33,21 @@ def _ledger() -> list[str]:
 def test_the_message_frames_role_identifier_and_digest():
     d = bytes(64)
     role = Ch.LEDGER_ROLE.encode()
-    assert record.message(Ch.LEDGER_ROLE, I, d) == hashlib.sha512(
+    assert Record.message(Ch.LEDGER_ROLE, I, d) == hashlib.sha512(
         len(role).to_bytes(8, "big") + role + I + (64).to_bytes(8, "big") + d).digest()
 
 
 def test_the_ledger_is_written_as_record_entries_chained_from_zero():
     lines = _ledger()
-    entries = [record.of_json(json.loads(x)) for x in lines]
+    entries = [Record.of_json(json.loads(x)) for x in lines]
     assert [e["seq"] for e in entries] == [0, 1]
-    assert entries[0]["prev"] == record.ZERO and entries[1]["prev"] == record.prev_of(lines[0])
+    assert entries[0]["prev"] == Record.ZERO and entries[1]["prev"] == Record.prev_of(lines[0])
     assert entries[1]["session"] is None
-    assert [record.line(e) for e in entries] == lines == [Ch.ledger_text(e) for e in entries]
+    assert [Record.line(e) for e in entries] == lines == [Ch.ledger_text(e) for e in entries]
     assert all(x.isascii() for x in lines)
     for e in entries:
         tag = Ch.LEDGER_TAGS[e["schema"]]
-        m = record.message(Ch.LEDGER_ROLE, I, identity_digest_sha512(tag, record.unsigned(e)))
+        m = Record.message(Ch.LEDGER_ROLE, I, identity_digest_sha512(tag, Record.unsigned(e)))
         assert Ch.ledger_message(I, e) == m and e["sig"] == _sign(m).hex()
 
 
@@ -84,11 +84,11 @@ def test_of_json_refuses_an_entry_off_the_form(change):
     e = _entry()
     change(e)
     with pytest.raises(ValueError, match="a record entry is"):
-        record.of_json(e)
+        Record.of_json(e)
     assert Ch._ledger_entry(Ch.ledger_text(e)) is None
 
 
 def test_of_json_refuses_what_is_no_object():
     for x in (None, [], "x", 1):
         with pytest.raises(ValueError, match="a record entry is"):
-            record.of_json(x)
+            Record.of_json(x)

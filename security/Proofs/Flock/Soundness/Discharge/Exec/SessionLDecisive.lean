@@ -112,7 +112,7 @@ theorem rx_recv {M : Type} {f : M → Game β} {Q : β → Prop} (m : M) (h : �
     ∃ b, Reaches (recv M >>= f) b ∧ Q b :=
   rx_bind (P := (· = m)) ⟨m, reaches_send_iff.2 ⟨m, rfl⟩, rfl⟩ fun _ ha => ha ▸ h
 
-theorem rx_draw {C : Type} [Fintype C] [Nonempty C] {f : C → Game β} {Q : β → Prop} (c : C)
+theorem rx_sample {C : Type} [Fintype C] [Nonempty C] {f : C → Game β} {Q : β → Prop} (c : C)
     (h : ∃ b, Reaches (f c) b ∧ Q b) : ∃ b, Reaches (draw C >>= f) b ∧ Q b :=
   rx_bind (P := (· = c)) ⟨c, reaches_coin_iff.2 ⟨c, rfl⟩, rfl⟩ fun _ ha => ha ▸ h
 
@@ -128,7 +128,7 @@ theorem productive_pure (a : α) : Productive (pure a : Game α) := trivial
 theorem productive_recv (M : Type) [Nonempty M] : Productive (recv M) :=
   productive_send_iff.2 ⟨inferInstance, fun _ => trivial⟩
 
-theorem productive_draw (C : Type) [Fintype C] [Nonempty C] : Productive (draw C) :=
+theorem productive_sample (C : Type) [Fintype C] [Nonempty C] : Productive (draw C) :=
   productive_coin_iff.2 fun _ => trivial
 
 /-- A productive game has a run. -/
@@ -255,15 +255,15 @@ theorem residualRounds_productive : ∀ (n : ℕ) (req : Fin n → F) (c : F), P
   | 0, _, _ => trivial
   | n + 1, req, c => by
       rw [residualRounds]
-      refine pb (productive_recv _) fun g => pb (productive_draw _) fun ρ =>
+      refine pb (productive_recv _) fun g => pb (productive_sample _) fun ρ =>
         pb (residualRounds_productive n _ _) fun x => ?_
       obtain ⟨_, _⟩ := x
       exact trivial
 
 theorem zerocheck_productive (A : Arith F K) (m : ℕ) : Productive (Model.zerocheck A m) := by
   unfold Model.zerocheck
-  refine pb (productive_draw _) fun _ => pb (productive_draw _) fun _ => pb (productive_recv _) fun _ =>
-    pb (productive_draw _) fun _ => pb (residualRounds_productive _ _ _) fun x => ?_
+  refine pb (productive_sample _) fun _ => pb (productive_sample _) fun _ => pb (productive_recv _) fun _ =>
+    pb (productive_sample _) fun _ => pb (residualRounds_productive _ _ _) fun x => ?_
   obtain ⟨_, _⟩ := x
   exact pb (productive_recv _) fun _ => trivial
 
@@ -271,7 +271,7 @@ theorem lincheckRounds_productive : ∀ (n : ℕ) (c : F), Productive (lincheckR
   | 0, _ => trivial
   | n + 1, c => by
       rw [lincheckRounds]
-      refine pb (productive_recv _) fun _ => pb (productive_draw _) fun _ =>
+      refine pb (productive_recv _) fun _ => pb (productive_sample _) fun _ =>
         pb (lincheckRounds_productive n _) fun x => ?_
       obtain ⟨_, _⟩ := x
       exact trivial
@@ -279,28 +279,28 @@ theorem lincheckRounds_productive : ∀ (n : ℕ) (c : F), Productive (lincheckR
 theorem lincheck_productive (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
     Productive (Model.lincheck A S zc) := by
   unfold Model.lincheck
-  refine pb (productive_draw _) fun _ => pb (productive_draw _) fun _ =>
+  refine pb (productive_sample _) fun _ => pb (productive_sample _) fun _ =>
     pb (lincheckRounds_productive _ _) fun x => ?_
   obtain ⟨_, _⟩ := x
-  exact pb (productive_recv _) fun _ => pb (productive_draw _) fun _ => trivial
+  exact pb (productive_recv _) fun _ => pb (productive_sample _) fun _ => trivial
 
 theorem opening_productive (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m)) :
     Productive (Model.opening A hm claims) := by
   unfold Model.opening
-  refine pb (productive_mapM _ (fun _ => ?_) _) fun _ => pb (productive_draw _) fun _ => ?_
-  · exact pb (productive_recv _) fun _ => pb (productive_draw _) fun _ => trivial
+  refine pb (productive_mapM _ (fun _ => ?_) _) fun _ => pb (productive_sample _) fun _ => ?_
+  · exact pb (productive_recv _) fun _ => pb (productive_sample _) fun _ => trivial
   · exact trivial
 
-theorem drawK_productive (A : Arith F K) : Productive (drawK A) := by
+theorem sampleK_productive (A : Arith F K) : Productive (drawK A) := by
   unfold drawK
-  exact pb (productive_draw _) fun _ => trivial
+  exact pb (productive_sample _) fun _ => trivial
 
 theorem foldRoundsC_productive (A : Arith F K) :
     ∀ (k : ℕ) (s : Opens F D → K) (q : Opens F D → Quad K), Productive (foldRoundsC A k s q)
   | 0, _, _ => trivial
   | k + 1, s, q => by
       rw [foldRoundsC]
-      refine pb (drawK_productive A) fun _ => pb (productive_recv _) fun _ =>
+      refine pb (sampleK_productive A) fun _ => pb (productive_recv _) fun _ =>
         pb (foldRoundsC_productive A k _ _) fun x => ?_
       obtain ⟨_, _, _⟩ := x
       exact trivial
@@ -308,18 +308,18 @@ theorem foldRoundsC_productive (A : Arith F K) :
 theorem twoOodC_productive (A : Arith F K) (dim split : ℕ) (s : Opens F D → K) (q : Opens F D → Quad K) :
     Productive (twoOodC A dim split s q) := by
   unfold twoOodC
-  exact pb (productive_draw _) fun _ => pb (productive_recv _) fun _ => pb (productive_recv _) fun _ =>
-    pb (productive_draw _) fun _ => pb (productive_draw _) fun _ => pb (productive_recv _) fun _ =>
-    pb (productive_recv _) fun _ => pb (productive_draw _) fun _ => trivial
+  exact pb (productive_sample _) fun _ => pb (productive_recv _) fun _ => pb (productive_recv _) fun _ =>
+    pb (productive_sample _) fun _ => pb (productive_sample _) fun _ => pb (productive_recv _) fun _ =>
+    pb (productive_recv _) fun _ => pb (productive_sample _) fun _ => trivial
 
 theorem queryAndBatchC_productive (A : Arith F K) (r : ℕ) (lv : Level) (ch : List K) (start : ℕ)
     (st : LigStateC F K D) (wm : Bool) : Productive (queryAndBatchC A r lv ch start st wm) := by
   unfold queryAndBatchC
-  refine pb (productive_draw _) fun _ => pb (productive_draw _) fun _ => ?_
+  refine pb (productive_sample _) fun _ => pb (productive_sample _) fun _ => ?_
   dsimp only
   split
-  · exact pb (productive_recv _) fun _ => pb (productive_pure _) fun _ => pb (productive_draw _) fun _ => trivial
-  · exact pb (productive_pure _) fun _ => pb (productive_draw _) fun _ => trivial
+  · exact pb (productive_recv _) fun _ => pb (productive_pure _) fun _ => pb (productive_sample _) fun _ => trivial
+  · exact pb (productive_pure _) fun _ => pb (productive_sample _) fun _ => trivial
 
 theorem recursiveRoundsC_productive (A : Arith F K) (r n : ℕ) (b : ℕ → F) (initial : List K) (ext : ℕ) :
     ∀ (lvs : List Level) (st : LigStateC F K D), Productive (recursiveRoundsC A r n b initial ext lvs st)
@@ -344,7 +344,7 @@ theorem ligeritoC_productive (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) 
   dsimp only
   split
   · exact trivial
-  · refine pb (productive_draw _) fun _ => pb (productive_recv _) fun _ => pb (productive_draw _) fun _ =>
+  · refine pb (productive_sample _) fun _ => pb (productive_recv _) fun _ => pb (productive_sample _) fun _ =>
       pb (productive_recv _) fun _ => pb (foldRoundsC_productive A _ _ _) fun x => ?_
     obtain ⟨_, _, _⟩ := x
     split
@@ -386,7 +386,7 @@ theorem residualRounds_zero : ∀ (n : ℕ) (req : Fin n → F) (c : F), c = 0 �
   | n + 1, req, c, hc => by
       subst hc
       rw [residualRounds]
-      refine rx_recv (0, 0) (rx_draw 0 (rx_bind (residualRounds_zero n _ _ (residualStep_zero _ _))
+      refine rx_recv (0, 0) (rx_sample 0 (rx_bind (residualRounds_zero n _ _ (residualStep_zero _ _))
         fun x hx => ?_))
       obtain ⟨_, _⟩ := x
       exact rx_pure hx
@@ -395,7 +395,7 @@ theorem residualRounds_zero : ∀ (n : ℕ) (req : Fin n → F) (c : F), c = 0 �
 theorem zerocheck_zero (A : Arith F K) (m : ℕ) :
     ∃ x, Reaches (Model.zerocheck A m) x ∧ ∃ zc, x = some zc ∧ zc.va = 0 ∧ zc.vb = 0 ∧ zc.vc = 0 := by
   unfold Model.zerocheck
-  refine rx_draw 0 (rx_draw 0 (rx_recv (0, 0) (rx_draw 0 (rx_bind (residualRounds_zero _ _ _ (by simp))
+  refine rx_sample 0 (rx_sample 0 (rx_recv (0, 0) (rx_sample 0 (rx_bind (residualRounds_zero _ _ _ (by simp))
     fun x hx => ?_))))
   obtain ⟨_, c⟩ := x
   refine rx_recv (0, 0) (rx_pure ?_)
@@ -407,7 +407,7 @@ theorem zerocheck_zero (A : Arith F K) (m : ℕ) :
 theorem zerocheck_reject (A : Arith F K) (m : ℕ) : Reaches (Model.zerocheck A m) none := by
   obtain ⟨x, hx, rfl⟩ : ∃ x, Reaches (Model.zerocheck A m) x ∧ x = none := by
     unfold Model.zerocheck
-    refine rx_draw 0 (rx_draw 0 (rx_recv (0, 0) (rx_draw 0 (rx_bind (residualRounds_zero _ _ _ (by simp))
+    refine rx_sample 0 (rx_sample 0 (rx_recv (0, 0) (rx_sample 0 (rx_bind (residualRounds_zero _ _ _ (by simp))
       fun x hx => ?_))))
     obtain ⟨_, c⟩ := x
     refine rx_recv (1, 1) (rx_pure ?_)
@@ -421,7 +421,7 @@ theorem lincheckRounds_zero : ∀ (n : ℕ) (c : F), c = 0 → ∃ x, Reaches (l
   | n + 1, c, hc => by
       subst hc
       rw [lincheckRounds]
-      refine rx_recv (0, 0) (rx_draw 0 (rx_bind (lincheckRounds_zero n _ (by simp)) fun x hx => ?_))
+      refine rx_recv (0, 0) (rx_sample 0 (rx_bind (lincheckRounds_zero n _ (by simp)) fun x hx => ?_))
       obtain ⟨_, _⟩ := x
       exact rx_pure hx
 
@@ -429,9 +429,9 @@ theorem lincheckRounds_zero : ∀ (n : ℕ) (c : F), c = 0 → ∃ x, Reaches (l
 theorem lincheck_zero (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (ha : zc.va = 0) (hb : zc.vb = 0) :
     ∃ x, Reaches (Model.lincheck A S zc) x ∧ ∃ ab, x = some ab ∧ ab.value = 0 := by
   unfold Model.lincheck
-  refine rx_draw 0 (rx_draw 0 (rx_bind (lincheckRounds_zero _ _ (by simp [ha, hb])) fun x hx => ?_))
+  refine rx_sample 0 (rx_sample 0 (rx_bind (lincheckRounds_zero _ _ (by simp [ha, hb])) fun x hx => ?_))
   obtain ⟨_, c⟩ := x
-  refine rx_recv 0 (rx_draw 0 (rx_pure ?_))
+  refine rx_recv 0 (rx_sample 0 (rx_pure ?_))
   simp only at hx
   subst hx
   simp
@@ -461,7 +461,7 @@ theorem opening_zero (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Cl
       reaches_bind _ (sOf c) (reaches_send_iff.2 ⟨sOf c, rfl⟩)
         (reaches_bind _ 0 (reaches_coin_iff.2 ⟨0, rfl⟩) rfl)), rfl⟩ fun x hx => ?_
   subst hx
-  refine rx_draw 0 (rx_pure ?_)
+  refine rx_sample 0 (rx_pure ?_)
   split_ifs with hok
   · exact ⟨_, rfl, by simp⟩
   · exfalso
@@ -671,7 +671,7 @@ theorem walk_unode (x : D) : ∀ d k idx : ℕ,
   | 0, _, _ => rfl
   | d + 1, k, idx => by
       have hup : Merkle.up H E idx (unode H E x k) (unode H E x k) = unode H E x (k + 1) := by
-        unfold Merkle.up
+        unfold Merkle.up Merkle.upIn
         split_ifs <;> rfl
       rw [List.range'_succ, List.map_cons, Merkle.walk, hup, walk_unode x d (k + 1) (idx / 2)]
       congr 1
@@ -736,7 +736,7 @@ theorem foldRoundsC_zero (A : Arith F K) : ∀ (k : ℕ) (s : Opens F D → K) (
   | 0, _, _, hs, hq => ⟨_, rfl, rfl, hs, hq⟩
   | k + 1, s, q, _, hq => by
       rw [foldRoundsC]
-      refine rx_bind (rx_any (drawK_productive A)) fun r _ => rx_recv (0, 0)
+      refine rx_bind (rx_any (sampleK_productive A)) fun r _ => rx_recv (0, 0)
         (rx_bind (foldRoundsC_zero A k _ _ (fun o => ?_) (fun o => ?_)) fun x hx => ?_)
       · simp [Quad.eval, hq o]
       · simp [fromMsg, Quad.eval, hq o]
@@ -747,7 +747,7 @@ theorem twoOodC_zero (A : Arith F K) (dim split : ℕ) (s : Opens F D → K) (q 
     (hs : ∀ o, s o = 0) (hq : ∀ o, q o = 0) :
     ∃ x, Reaches (twoOodC A dim split s q) x ∧ (∀ o, x.1 o = 0) ∧ ∀ o, x.2.1 o = 0 := by
   unfold twoOodC
-  exact rx_draw 0 (rx_recv 0 (rx_recv (0, 0) (rx_draw 0 (rx_draw 0 (rx_recv 0 (rx_recv (0, 0) (rx_draw 0
+  exact rx_sample 0 (rx_recv 0 (rx_recv (0, 0) (rx_sample 0 (rx_sample 0 (rx_recv 0 (rx_recv (0, 0) (rx_sample 0
     (rx_pure ⟨fun o => by simp [hs o], fun o => by simp [Quad.addScaled, fromMsg, hq o]⟩))))))))
 
 theorem queryAndBatchC_zero (A : Arith F K) (r : ℕ) (lv : Level) (ch : List K) (start : ℕ)
@@ -756,12 +756,12 @@ theorem queryAndBatchC_zero (A : Arith F K) (r : ℕ) (lv : Level) (ch : List K)
       st'.levels = st.levels ∧ st'.level = st.level ∧ st'.caps = st.caps ∧
       ∃ pos, st'.reqs = st.reqs ++ [⟨st.level, pos, ch.length, pathLen lv⟩] := by
   unfold queryAndBatchC
-  refine rx_draw 0 (rx_draw 0 ?_)
+  refine rx_sample 0 (rx_sample 0 ?_)
   dsimp only
   split
-  · exact rx_recv (0, 0) (rx_pure_bind (rx_draw 0 (rx_pure ⟨fun o => by simp [hs o],
+  · exact rx_recv (0, 0) (rx_pure_bind (rx_sample 0 (rx_pure ⟨fun o => by simp [hs o],
       fun o => by simp [Quad.addScaled, hq o], rfl, rfl, rfl, _, rfl⟩)))
-  · exact rx_pure_bind (rx_draw 0 (rx_pure ⟨fun o => by simp [hs o], hq, rfl, rfl, rfl, _, rfl⟩))
+  · exact rx_pure_bind (rx_sample 0 (rx_pure ⟨fun o => by simp [hs o], hq, rfl, rfl, rfl, _, rfl⟩))
 
 theorem flatten_tail_length (L : List (List K)) :
     (L.map List.tail).flatten.length = (L.map fun l => l.length - 1).sum := by
@@ -875,7 +875,7 @@ theorem ligeritoC_accept (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b :
   dsimp only
   rw [hlev]
   dsimp only
-  refine rx_draw 0 (rx_recv 0 (rx_draw 0 (rx_recv (0, 0)
+  refine rx_sample 0 (rx_recv 0 (rx_sample 0 (rx_recv (0, 0)
     (rx_bind (foldRoundsC_zero A _ _ _ (fun _ => ?_) (fun _ => ?_)) fun x hx => ?_))))
   · simp
   · simp [fromMsg]
@@ -1032,26 +1032,26 @@ theorem batchedSessionL_decisive (H : List UInt8 → D) (E : Merkle.Enc (List �
 /-! ## The one-stage audit over it -/
 
 /-- **The audit can accept**, on every registration and every sample. -/
-theorem audit_reaches_accept (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_reaches_accept (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (R : Reg) (ω : L.Ω) :
     Reaches (audit L Reg (batchedSessionL H E Lf plan)) (true, L.draw ω) :=
   ⟨R, ω, reaches_map (fun ok => (ok, L.draw ω)) (batchedSessionL_reaches_true H E Lf plan (L.draw ω) R)⟩
 
 /-- **The audit can reject**, on every registration and every sample where the plan has a table. -/
-theorem audit_reaches_reject (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_reaches_reject (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (R : Reg) (ω : L.Ω)
     (hne : plan (L.draw ω) R ≠ []) :
     Reaches (audit L Reg (batchedSessionL H E Lf plan)) (false, L.draw ω) :=
   ⟨R, ω, reaches_map (fun ok => (ok, L.draw ω)) (batchedSessionL_reaches_false H E Lf plan (L.draw ω) R hne)⟩
 
 /-- **The audit is productive** when registrations exist. -/
-theorem audit_productive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_productive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) :
     Productive (audit L Reg (batchedSessionL H E Lf plan)) :=
   ⟨inferInstance, fun R ω => productive_map _ (batchedSessionL_productive H E Lf plan (L.draw ω) R)⟩
 
 /-- **The audit is decisive** when registrations exist and the plan has a table on every sample. -/
-theorem audit_decisive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_decisive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (hne : ∀ S R, plan S R ≠ []) :
     Decisive (audit L Reg (batchedSessionL H E Lf plan)) := by
@@ -1061,13 +1061,13 @@ theorem audit_decisive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Me
     audit_reaches_accept L H E Lf plan R ω, audit_reaches_reject L H E Lf plan R ω (hne _ _)⟩
 
 /-- **A tile's audit is decisive**: the one-stage audit over the salted batched session of a one-table plan. -/
-theorem audit_tile_decisive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_tile_decisive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (T : Finset (Fin n) → Reg → TabSpec mPts) :
     Decisive (audit L Reg (batchedSessionL H E Lf fun S R => [T S R])) :=
   audit_decisive L H E Lf _ fun _ _ => List.cons_ne_nil _ _
 
 /-- **A tile's audit verdict is decisive**: `audit_tile_decisive` on the verdict alone. -/
-theorem audit_tile_decisive_verdict [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_tile_decisive_verdict [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (T : Finset (Fin n) → Reg → TabSpec mPts) :
     Decisive ((audit L Reg (batchedSessionL H E Lf fun S R => [T S R])).map Prod.fst) := by
   obtain ⟨R⟩ := ‹Nonempty Reg›

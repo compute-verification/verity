@@ -30,7 +30,7 @@
      "kept_width": 0
     },
     "epsilon_macs": "3000000001/3",
-    "over_cap_macs": "0",
+    "over_bound_macs": "0",
     "rho_macs": "9884901887/1200",
     "credited_macs": "1314691950971/400"
    },
@@ -58,7 +58,7 @@
      "kept_width": 0
     },
     "epsilon_macs": "0",
-    "over_cap_macs": "0",
+    "over_bound_macs": "0",
     "rho_macs": "260046848/25",
     "credited_macs": "103758692352/25"
    },
@@ -86,7 +86,7 @@
      "kept_width": 0
     },
     "epsilon_macs": "0",
-    "over_cap_macs": "0",
+    "over_bound_macs": "0",
     "rho_macs": "3145728/25",
     "credited_macs": "1255145472/25"
    },
@@ -114,7 +114,7 @@
      "kept_width": 0
     },
     "epsilon_macs": "1767116275089/133",
-    "over_cap_macs": "0",
+    "over_bound_macs": "0",
     "rho_macs": "2612315854563/10640",
     "credited_macs": "7836947563689/80"
    }
@@ -127,7 +127,7 @@
    "voluntary": 0,
    "kept_width": 0,
    "epsilon_macs": "5700348825400/399",
-   "over_cap_macs": "0",
+   "over_bound_macs": "0",
    "rho_macs": "210898255873/798",
    "credited_macs": "210898255873/2",
    "credited": 105449127936

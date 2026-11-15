@@ -27,7 +27,7 @@ to run the same words through another architecture's instruction of the same sha
                                                                        seed 20260922, HOPPER_E4M3_K32 accumulators, bare FP32 word
 
 ``bench-instances/v1`` is loaded from ``--root`` (the built arrays; ``python -m verity_numerical.bench.instances build``) after every
-array's sha256 is checked against the pinned ``--manifest`` (default the repository's ``fixtures/bench-instances/v1/manifest.json``);
+array's sha256 is checked against the pinned ``--manifest`` (default the repository's ``benchmarks/numerical/bench-instances/v1/manifest.json``);
 the manifest's own sha256 is the recorded ``manifest_sha256``.  The synthetic sets have no files: their ``manifest_sha256`` is
 ``instances_digest(n)`` (a digest of the recipe: relation, seed, n, K), as the chain benches record it.
 
@@ -35,7 +35,7 @@ One instance per tile at position ``(r % M, (r // M) % 8)`` with the rest of the
 other output word must come back ``+0`` (``other_positions_nonzero``).  Step ``s`` of every instance is one launch; the hardware's own
 D of step ``s`` is the C of step ``s + 1`` -- a mismatch propagates, as it would in a real chain, and is located at its first step.
 
-Domain check (``verity.definitions.circuits.targets.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
+Domain check (``verity.circuits.targets.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
 transition is a valid output, D8): instances with a non-finite operand word or a non-finite hardware accumulator before the last step
 are ``out of domain``.  Positive tiers must have none; the negative tier's ``reject`` rows must trip it (its ``wrong`` rows must
 have ``hardware != claimed`` and ``hardware == correct``).
@@ -70,9 +70,9 @@ from verity_config.settings import SHARED
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
-from verity.definitions.silicon import models as S
-from verity.definitions.silicon.cast import f32_to_bf16_word
-from verity.definitions.circuits.targets import target as T
+from verity.circuits.targets import target as T
+from verity.circuits.silicon import models as S
+from verity.circuits.silicon.cast import f32_to_bf16_word
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -96,7 +96,7 @@ EPILOGUE_BF16 = "f32_to_bf16"
 
 
 @dataclass
-class InstanceSet:
+class ProbeInputSet:
     """A tier of one dataset as tiles-to-be: ``a``/``b`` are ``(n, steps, k)`` operand words in the instruction's format, ``c0`` the
     ``(n,)`` incoming FP32 words of step 0, ``acc`` the ``(n, steps)`` expected accumulator after every step (``None`` when the set
     records none), ``y`` the ``(n,)`` expected final word after ``epilogue`` (``None``: the bare FP32 accumulator).  ``negative``
@@ -148,7 +148,7 @@ def _slice(lo: int | None, hi: int | None, n: int) -> tuple[int, int]:
 
 
 def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: int | None = None, hi: int | None = None,
-                         only_ids: list[int] | None = None) -> InstanceSet:
+                         only_ids: list[int] | None = None) -> ProbeInputSet:
     """``bench-instances/v1`` tier from the built arrays under ``root`` (committed files may also be read from the manifest's own
     directory), every array digest-checked against the pinned manifest first."""
 
@@ -192,7 +192,7 @@ def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: 
         b = np.frombuffer(data.b.tobytes(), np.uint16).reshape(n_total, 1, k)[ids]
         c = np.frombuffer(data.c.tobytes(), np.uint32)[ids]
         out = np.frombuffer(data.out.tobytes(), np.uint32)[ids]
-        return InstanceSet(tier=tier, a=a, b=b, c0=c, acc=out[:, None].copy(), y=out.copy(), epilogue=None, **common)
+        return ProbeInputSet(tier=tier, a=a, b=b, c0=c, acc=out[:, None].copy(), y=out.copy(), epilogue=None, **common)
     k, steps = I.STEP, I.STEPS
     x = np.frombuffer(data.x.tobytes(), np.uint16).reshape(n_total, steps, k)[ids]
     w = np.frombuffer(data.w.tobytes(), np.uint16).reshape(n_total, steps, k)[ids]
@@ -200,12 +200,12 @@ def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: 
     c0 = np.zeros(ids.size, np.uint32)
     if tier == "vu-k1536":
         acc = np.frombuffer(data.acc.tobytes(), np.uint32).reshape(n_total, steps)[ids]
-        return InstanceSet(tier=tier, a=x, b=w, c0=c0, acc=acc.copy(), y=y.copy(), epilogue=EPILOGUE_BF16, **common)
+        return ProbeInputSet(tier=tier, a=x, b=w, c0=c0, acc=acc.copy(), y=y.copy(), epilogue=EPILOGUE_BF16, **common)
     # vu-k1536-neg: y = the claimed (wrong) word; the index carries verdict and the correct word (the reference for the compare)
     cols = data.columns
     rows = [dict(zip(cols, r)) for r in data.index]
     neg = {"columns": cols, "rows": [rows[int(i)] for i in ids]}
-    return InstanceSet(tier=tier, a=x, b=w, c0=c0, acc=None, y=y.copy(), epilogue=EPILOGUE_BF16, negative=neg, **common)
+    return ProbeInputSet(tier=tier, a=x, b=w, c0=c0, acc=None, y=y.copy(), epilogue=EPILOGUE_BF16, negative=neg, **common)
 
 
 def fp8_random_finite_operands(rng: np.random.Generator, shape: tuple[int, ...]) -> np.ndarray:
@@ -244,7 +244,7 @@ class Synthetic:
     relation: str          # the digest prefix
     target: str
     instruction: str
-    model: object          # verity.definitions.silicon.models.GroupSum
+    model: object          # verity.circuits.silicon.models.GroupSum
     operands: object       # (rng, shape) -> int64 words
     dtype: object          # the operand word dtype
     epilogue: str | None
@@ -323,8 +323,8 @@ def _synthetic_worker(job: tuple[str, int]) -> tuple[int, np.ndarray, np.ndarray
 
 
 def load_synthetic(syn: Synthetic, lo: int | None = None, hi: int | None = None, only_ids: list[int] | None = None,
-                   total_n: int = SYNTHETIC_N, procs: int = 1) -> InstanceSet:
-    """Generate the chosen instances of a synthetic set (``procs`` processes) as an ``InstanceSet``."""
+                   total_n: int = SYNTHETIC_N, procs: int = 1) -> ProbeInputSet:
+    """Generate the chosen instances of a synthetic set (``procs`` processes) as an ``ProbeInputSet``."""
 
     if only_ids is not None:
         ids = np.array(sorted(set(only_ids)), dtype=np.int64)
@@ -350,7 +350,7 @@ def load_synthetic(syn: Synthetic, lo: int | None = None, hi: int | None = None,
         a[r] = ai.reshape(steps, k)
         b[r] = bi.reshape(steps, k)
         acc[r] = acci
-    return InstanceSet(
+    return ProbeInputSet(
         dataset=syn.dataset, tier=syn.tier, instruction=syn.instruction, target=syn.target, model=syn.model.name,
         manifest_sha256=syn.digest(total_n), source=f"generated: rng = default_rng([{SYNTHETIC_SEED}, i]); {syn.recipe}",
         ids=ids, a=a, b=b, c0=np.zeros(ids.size, np.uint32), acc=acc, y=epilogue_words(syn.epilogue, acc[:, -1]), epilogue=syn.epilogue,
@@ -359,7 +359,7 @@ def load_synthetic(syn: Synthetic, lo: int | None = None, hi: int | None = None,
 
 
 def load_fp8_ada(lo: int | None = None, hi: int | None = None, only_ids: list[int] | None = None, total_n: int = FP8_ADA_N,
-                 procs: int = 1) -> InstanceSet:
+                 procs: int = 1) -> ProbeInputSet:
     return load_synthetic(FP8_ADA_SYNTHETIC, lo, hi, only_ids, total_n, procs)
 
 
@@ -373,7 +373,7 @@ DATASETS = {
 }
 
 
-def load_instances(spec: str, args: argparse.Namespace) -> InstanceSet:
+def load_instances(spec: str, args: argparse.Namespace) -> ProbeInputSet:
     if spec not in DATASETS:
         raise SystemExit(f"unknown input set {spec!r}; known: {', '.join(DATASETS)}")
     dataset, _, tier = spec.rpartition("/")
@@ -383,7 +383,7 @@ def load_instances(spec: str, args: argparse.Namespace) -> InstanceSet:
         lo, hi = int(lo_s), int(hi_s)
     only = [int(t) for t in args.only_ids.split(",") if t] if args.only_ids else None
     if dataset == BENCH_INSTANCES:
-        manifest = Path(args.manifest) if args.manifest else REPO / "fixtures" / "bench-instances" / "v1" / "manifest.json"
+        manifest = Path(args.manifest) if args.manifest else REPO / "benchmarks" / "numerical" / "bench-instances" / "v1" / "manifest.json"
         return load_bench_instances(tier, Path(args.root) if args.root else None, manifest, lo, hi, only)
     if spec in SYNTHETIC:
         return load_synthetic(SYNTHETIC[spec], lo, hi, only, procs=args.procs)
@@ -405,7 +405,7 @@ def epilogue_words(name: str | None, acc: np.ndarray) -> np.ndarray:
     raise ValueError(f"unknown epilogue {name!r}")
 
 
-def replay(probe: P.Probe, ins: P.Instruction, inst: InstanceSet, log: Callable[[str], None] = print) -> dict:
+def replay(probe: P.Probe, ins: P.Instruction, inst: ProbeInputSet, log: Callable[[str], None] = print) -> dict:
     """Run every instance of ``inst`` through ``probe`` (one instruction per step per tile) and compare every word."""
 
     M, K, fmt = ins.m, ins.k, ins.fmt
@@ -509,7 +509,7 @@ def replay(probe: P.Probe, ins: P.Instruction, inst: InstanceSet, log: Callable[
     return report
 
 
-def negative_verdicts(inst: InstanceSet, y_hw: np.ndarray, out_of_domain: np.ndarray) -> dict:
+def negative_verdicts(inst: ProbeInputSet, y_hw: np.ndarray, out_of_domain: np.ndarray) -> dict:
     """The claimed-wrong tier: a ``wrong`` row is detected when the hardware word differs from the claimed word (and the hardware
     word is the row's correct word); a ``reject`` row (out of the supported domain) is detected by the domain check."""
 
@@ -553,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--instruction", default=None, help="instruction id (default: the set's target's; see tc_probe.INSTRUCTIONS)")
     ap.add_argument("--arch", default=None, help="override the instruction's nvcc arch")
     ap.add_argument("--root", default=None, help="bench-instances/v1 directory holding the built arrays (default: the manifest's directory)")
-    ap.add_argument("--manifest", default=None, help="the pinned bench-instances/v1 manifest (default fixtures/bench-instances/v1/manifest.json)")
+    ap.add_argument("--manifest", default=None, help="the pinned bench-instances/v1 manifest (default benchmarks/numerical/bench-instances/v1/manifest.json)")
     ap.add_argument("--range", default=None, metavar="LO:HI", help="instance ids [LO, HI) (default: the whole tier)")
     ap.add_argument("--only-ids", default=None, metavar="ID,ID,...", help="re-run these instances alone")
     ap.add_argument("--repeat", type=int, default=1, help="run the replay this many times and count words that differ between repetitions")

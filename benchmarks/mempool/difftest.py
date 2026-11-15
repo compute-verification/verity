@@ -20,7 +20,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "network_e2e" / "encodings" / "
 
 
 def load(path: Path) -> tuple[RP.Engine, list[RP.RequestIO], list[int]]:
-    """A step trace, or a derived-format one (`*.json.gz`), as replay input (`cache_pool_vectors.replay_input`'s)."""
+    """A step trace, or a derived-format one (`*.json.gz`), as replay input (the encodings' `replay_input`'s)."""
     if path.suffix != ".gz":
         tr = RP.read_any(path)
         return tr.engine, list(tr.requests), list(tr.before_step)

@@ -1367,6 +1367,14 @@
    "ValueError: root 'Root[TProg_v1]_v1': the root is a composite without parameters"
   ],
   [
+   "a composite with a parameter name twice",
+   "ValueError: definition 'TPair_v1': parameters: a name twice"
+  ],
+  [
+   "a primitive with a parameter name twice",
+   "ValueError: primitive TAdd32_v1 signature differs from the registry"
+  ],
+  [
    "an Input node inside a Definition",
    "ValueError: definition 'TPair_v1' node 1: an input node (Input32_v1) appears only in the root's body"
   ],

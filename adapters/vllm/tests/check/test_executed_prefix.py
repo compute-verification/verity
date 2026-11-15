@@ -1,5 +1,5 @@
-"""The Commit's B>=2 population is placed over each request's EXECUTED PREFIX OF RECORD -- cap on a
-length stop, served + LAG on an EOS stop under the DECLARED lag -- never over the Program's cap shape and never by a lag read from the trace.
+"""The Commit's B>=2 population is placed over each request's EXECUTED PREFIX OF RECORD -- max_tokens on a
+length stop, served + LAG on an EOS stop under the DECLARED lag -- never over the Program's full-length shape and never by a lag read from the trace.
 
 The record that found it: OLMoE B2 i32/o32 mixedstop: r0 served 11 (EOS 50279 at output index 10) / executed 12 under LAG 1, r1 32 / 32;
 GM-01 G6 PASS with the lag exercised; the Commit required r0's steps 12..31 (bound 13808/19988, composition
@@ -7,12 +7,25 @@ GM-01 G6 PASS with the lag exercised; the Commit required r0's steps 12..31 (bou
 test_binding_negatives)."""
 from __future__ import annotations
 
-import pytest
+import json
+from collections.abc import Set
+from typing import Any
 
-from tests.commit.test_binding_negatives import B8_CAP, B8_LP, PD, b8_engine_rows, b8_manifest, b8_stream, commit
-from verity_vllm.commit import binding as B, executed_prefix as EP
+from tests.commit.test_binding_negatives import (
+    B8_CAP,
+    B8_LP,
+    PD,
+    b8_engine_rows,
+    b8_manifest,
+    b8_stream,
+    commit,
+)
 from verity_vllm.check import executed_prefix as EPL
+from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay.linkage import linkage_horizon
+from verity_vllm.commit import binding as B
+from verity_vllm.commit import executed_prefix as EP
+from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 EOS = 50279
@@ -20,14 +33,14 @@ EOS = 50279
 COVERED = {"ok": True, "expected_n": 64, "bound_n": 64, "missing_n": 0, "ambiguous_n": 0}
 
 
-def _served(lens: dict[str, int], eos_last: set[str] = frozenset()) -> dict[str, list[int]]:
+def _served(lens: dict[str, int], eos_last: Set[str] = frozenset()) -> dict[str, list[int]]:
     return {r: ([7] * (n - 1) + [EOS]) if r in eos_last else [7] * n for r, n in lens.items()}
 
 
 def test_the_mixedstop_record_two_lengths_per_request():
-    """The first real record's numbers: r0 served 11 with a declared EOS last, cap 32, LAG 1 -> executed 12 (lag row = step 11); r1 32/32."""
-    caps = {"r0": 32, "r1": 32}
-    e = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 11, "r1": 32}, {"r0"}), caps=caps, eos_of_record=[EOS], lag=1)
+    """The first real record's numbers: r0 served 11 with a declared EOS last, max_tokens 32, LAG 1 -> executed 12 (lag row = step 11); r1 32/32."""
+    max_tokens = {"r0": 32, "r1": 32}
+    e = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 11, "r1": 32}, {"r0"}), caps=max_tokens, eos_of_record=[EOS], lag=1)
     assert e["ok"] and e["any_eos_stop"] and e["problems"] == []
     r0, r1 = e["requests"]["r0"], e["requests"]["r1"]
     assert (r0["served_output_len"], r0["executed_prefix_len"], r0["cap_exhausted"], r0["eos_stop"]) == (11, 12, False, True)
@@ -35,39 +48,39 @@ def test_the_mixedstop_record_two_lengths_per_request():
     assert (r1["served_output_len"], r1["executed_prefix_len"], r1["cap_exhausted"], r1["eos_stop"]) == (32, 32, True, False)
     assert EP.request_steps_of_record(e, {"r0": 0, "r1": 0}) == {"r0": list(range(12)), "r1": list(range(32))}
     # the same stop under a DECLARED LAG 0: executed == served (no placeholder row); the lag is the declaration, not the trace
-    e0 = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 11, "r1": 32}, {"r0"}), caps=caps, eos_of_record=[EOS], lag=0)
+    e0 = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 11, "r1": 32}, {"r0"}), caps=max_tokens, eos_of_record=[EOS], lag=0)
     assert e0["ok"] and e0["requests"]["r0"]["executed_prefix_len"] == 11 and e0["requests"]["r0"]["lag_steps"] == []
-    # an EOS served exactly at the cap is a length stop for the scheduler: executed == cap, no lag row
+    # an EOS served exactly at max_tokens is a length stop for the scheduler: executed == max_tokens, no lag row
     ec = EP.executed_prefix_of_record(["r0"], _served({"r0": 32}, {"r0"}), caps={"r0": 32}, eos_of_record=[EOS], lag=1)
     assert ec["requests"]["r0"]["executed_prefix_len"] == 32 and ec["requests"]["r0"]["cap_exhausted"] is True and not ec["any_eos_stop"]
 
 
-def test_an_early_stop_the_declared_rule_cannot_place_is_refused_by_name_and_keeps_the_cap():
-    caps = {"r0": 32, "r1": 32}
+def test_an_early_stop_the_declared_rule_cannot_place_is_refused_by_name_and_keeps_max_tokens():
+    max_tokens = {"r0": 32, "r1": 32}
     served = _served({"r0": 11, "r1": 32}, {"r0"})
-    # no declared LAG (undeclared Program / unattested engine): refused, never default 0 or 1; the population stays the cap's
-    e = EP.executed_prefix_of_record(["r0", "r1"], served, caps=caps, eos_of_record=[EOS], lag=None)
+    # no declared LAG (undeclared Program / unattested engine): refused, never default 0 or 1; the population stays max_tokens'
+    e = EP.executed_prefix_of_record(["r0", "r1"], served, caps=max_tokens, eos_of_record=[EOS], lag=None)
     assert not e["ok"] and e["requests"]["r0"]["executed_prefix_len"] == 32 and "declares no LAG" in e["problems"][0] and "never default" in e["problems"][0]
     # no declared stop rule
-    e = EP.executed_prefix_of_record(["r0", "r1"], served, caps=caps, eos_of_record=None, lag=1)
+    e = EP.executed_prefix_of_record(["r0", "r1"], served, caps=max_tokens, eos_of_record=None, lag=1)
     assert not e["ok"] and "declares no stop rule" in e["problems"][0] and "fail closed" in e["problems"][0]
     # the last served token is not a declared EOS id (a request that stopped for no declared reason)
-    e = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 11, "r1": 32}), caps=caps, eos_of_record=[EOS], lag=1)
+    e = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 11, "r1": 32}), caps=max_tokens, eos_of_record=[EOS], lag=1)
     assert not e["ok"] and "is not a declared EOS id" in e["problems"][0] and e["requests"]["r0"]["executed_prefix_len"] == 32
-    # a LAG outside {0, 1}; served over the cap; no driver tokens for a request
+    # a LAG outside {0, 1}; served past max_tokens; no driver tokens for a request
     assert not EP.executed_prefix_of_record(["r0"], _served({"r0": 11}, {"r0"}), caps={"r0": 32}, eos_of_record=[EOS], lag=2)["ok"]
     assert "over the declared cap" in EP.executed_prefix_of_record(["r0"], _served({"r0": 33}), caps={"r0": 32}, eos_of_record=[EOS], lag=1)["problems"][0]
-    e = EP.executed_prefix_of_record(["r0", "r1"], {"r1": [7] * 32}, caps=caps, eos_of_record=[EOS], lag=1)
+    e = EP.executed_prefix_of_record(["r0", "r1"], {"r1": [7] * 32}, caps=max_tokens, eos_of_record=[EOS], lag=1)
     assert not e["ok"] and "no served tokens" in e["problems"][0]
-    # no driver tokens at all (an older caller): every prefix is the cap, nothing refused, served_known False
-    e = EP.executed_prefix_of_record(["r0", "r1"], None, caps=caps, eos_of_record=[EOS], lag=1)
-    assert e["ok"] and not e["served_known"] and {k: v["executed_prefix_len"] for k, v in e["requests"].items()} == caps
+    # no driver tokens at all (an older caller): every prefix is max_tokens, nothing refused, served_known False
+    e = EP.executed_prefix_of_record(["r0", "r1"], None, caps=max_tokens, eos_of_record=[EOS], lag=1)
+    assert e["ok"] and not e["served_known"] and {k: v["executed_prefix_len"] for k, v in e["requests"].items()} == max_tokens
 
 
 def test_served_past_the_first_eos_fails_by_name_f_r17_14():
-    """The Program's rule stops at the FIRST declared EOS.  Served [EOS, x, EOS] (cap 5, LAG 1) is NOT an EOS stop
+    """The Program's rule stops at the FIRST declared EOS.  Served [EOS, x, EOS] (max_tokens 5, LAG 1) is NOT an EOS stop
     at 3 with executed 4 -- it was served past an EOS at index 0 (Continuation_v1 stops there: served [EOS], executed [1, 2]).  FAIL by name;
-    the prefix stays the cap (nothing accepted).  The same for an EOS mid-list on a length stop ([x, EOS, y] at the cap) and for an
+    the prefix stays max_tokens (nothing accepted).  The same for an EOS mid-list on a length stop ([x, EOS, y] at max_tokens) and for an
     EOS-then-more under LAG 0.  An EOS ONLY at the last served index is the EOS stop it always was."""
     e = EP.executed_prefix_of_record(["r0"], {"r0": [EOS, 3, EOS]}, caps={"r0": 5}, eos_of_record=[EOS], lag=1)
     assert not e["ok"] and not e["any_eos_stop"], e
@@ -75,7 +88,7 @@ def test_served_past_the_first_eos_fails_by_name_f_r17_14():
     assert r0["first_eos_index"] == 0 and r0["executed_prefix_len"] == 5 and r0["eos_stop"] is None and "lag_steps" not in r0
     assert e["problems"] == [f"r0: {r0['why']}"] and r0["why"].startswith("served past an EOS at index 0: served token 50279 is a declared EOS id but 2 more token(s) were served after it (served 3, cap 5)")
     assert "stops at the FIRST EOS -- served_output_len would be 1" in r0["why"]
-    # an EOS in the middle of a list that reached the cap: also served past the stop (the cap does not launder it)
+    # an EOS in the middle of a list that reached max_tokens: also served past the stop (max_tokens does not launder it)
     ec = EP.executed_prefix_of_record(["r0"], {"r0": [7, EOS, 9]}, caps={"r0": 3}, eos_of_record=[EOS], lag=1)
     assert not ec["ok"] and "served past an EOS at index 1" in ec["problems"][0] and ec["requests"]["r0"]["cap_exhausted"] is None
     # LAG 0: the same rule (the lag is not what is being checked here)
@@ -90,7 +103,7 @@ def test_served_past_the_first_eos_fails_by_name_f_r17_14():
 
 
 def _mixed_b8(tmp_path, executed: dict[str, int], committed: dict[str, int] | None = None):
-    """The B8 fixture as a mixed-stop record: the manifest declares the Program's CAP shape (every request active at [0, cap)); the engine
+    """The B8 fixture as a mixed-stop record: the manifest declares the Program's full-length shape (every request active at [0, max_tokens)); the engine
     committed request k over [0, committed_k) (default = executed_k) -- the rows past the stop exist only when the test plants them."""
     committed = committed or executed
     declared = {e: [(f"r{k}", B8_LP[k] if e == 0 else 1) for k in range(8) if e < B8_CAP[k]] for e in range(max(B8_CAP))}
@@ -98,41 +111,41 @@ def _mixed_b8(tmp_path, executed: dict[str, int], committed: dict[str, int] | No
     ran = {e: m for e, m in ran.items() if m}
     rows = b8_engine_rows(ran)
     _c, _run, bmap = commit(b8_stream(rows), request_rows=rows)
-    caps = {f"r{k}": B8_CAP[k] for k in range(8)}
+    max_tokens = {f"r{k}": B8_CAP[k] for k in range(8)}
     arrivals = {f"r{k}": 0 for k in range(8)}
-    epr = EP.executed_prefix_of_record(sorted(caps), _served(executed, {r for r, n in executed.items() if n < caps[r]}), caps=caps, eos_of_record=[EOS], lag=0)
+    epr = EP.executed_prefix_of_record(sorted(max_tokens), _served(executed, {r for r, n in executed.items() if n < max_tokens[r]}), caps=max_tokens, eos_of_record=[EOS], lag=0)
     assert epr["ok"], epr["problems"]
     rsteps = EP.request_steps_of_record(epr, arrivals)
     man = b8_manifest(tmp_path, declared)
-    return bmap, man, caps, arrivals, rsteps, epr
+    return bmap, man, max_tokens, arrivals, rsteps, epr
 
 
-def test_b8_mixed_stop_population_over_the_executed_prefix_passes_and_the_cap_shape_fails_by_name(tmp_path):
-    """r1 declared cap 4 stops by EOS after 2 served (LAG 0 -> executed 2), r3 cap 5 after 3; the others run to their caps."""
+def test_b8_mixed_stop_population_over_the_executed_prefix_passes_and_the_full_length_shape_fails_by_name(tmp_path):
+    """r1 declared max_tokens 4 stops by EOS after 2 served (LAG 0 -> executed 2), r3 max_tokens 5 after 3; the others run to their max_tokens."""
     executed = {f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 2, "r3": 3}
-    bmap, man, caps, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed)
-    # the older placement (every request over its cap): missing = r1's 2 + r3's 2 unexecuted steps, composition fails at step 2
-    pop_cap, hdr_cap = B.load_required_manifest(man, PD, requests=sorted(caps), steps=max(B8_CAP), arrivals=arrivals)
-    cov_cap = B.coverage_check(pop_cap, bmap)
-    comp_cap = B.composition_check(hdr_cap, bmap)
-    assert not cov_cap["ok"] and cov_cap["missing_n"] > 0 and {m["request_id"] for m in cov_cap["missing"]} <= {"r1", "r3"}
-    assert not comp_cap["ok"] and comp_cap["problems"][0]["engine_step"] == 2 and "r1 x1" in comp_cap["problems"][0]["missing"]
-    # the executed-prefix placement: the requirement is each request's executed prefix; the manifest stays the Program's (cap shape)
-    pop, hdr = B.load_required_manifest(man, PD, requests=sorted(caps), steps=max(B8_CAP), arrivals=arrivals, request_steps=rsteps)
-    assert hdr["programmed_not_executed_n"] == len(pop_cap) - len(pop) > 0 and hdr["request_steps_of_record"]["r1"] == [0, 1]
+    bmap, man, max_tokens, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed)
+    # the older placement (every request over its max_tokens): missing = r1's 2 + r3's 2 unexecuted steps, composition fails at step 2
+    pop_full, hdr_full = B.load_required_manifest(man, PD, requests=sorted(max_tokens), steps=max(B8_CAP), arrivals=arrivals)
+    cov_full = B.coverage_check(pop_full, bmap)
+    comp_full = B.composition_check(hdr_full, bmap)
+    assert not cov_full["ok"] and cov_full["missing_n"] > 0 and {m["request_id"] for m in cov_full["missing"]} <= {"r1", "r3"}
+    assert not comp_full["ok"] and comp_full["problems"][0]["engine_step"] == 2 and "r1 x1" in comp_full["problems"][0]["missing"]
+    # the executed-prefix placement: the requirement is each request's executed prefix; the manifest stays the Program's (full-length shape)
+    pop, hdr = B.load_required_manifest(man, PD, requests=sorted(max_tokens), steps=max(B8_CAP), arrivals=arrivals, request_steps=rsteps)
+    assert hdr["programmed_not_executed_n"] == len(pop_full) - len(pop) > 0 and hdr["request_steps_of_record"]["r1"] == [0, 1]
     cov = B.coverage_check(pop, bmap)
     comp = B.composition_check(hdr, bmap, request_steps=rsteps)
     assert cov["ok"] and cov["missing_n"] == 0 and cov["extra_n"] == 0, cov["missing"][:3]
     assert comp["ok"] and comp["executed_prefix_restriction"]["members_dropped"] == 4 and comp["steps_not_executed"] == 0, comp
     assert EP.rows_past_the_stop(bmap, rsteps)["ok"]
-    # every step still has its composition checked (no step was dropped: r2's cap 1 already ended at step 1 in the declaration)
+    # every step still has its composition checked (no step was dropped: r2's max_tokens 1 already ended at step 1 in the declaration)
     assert comp["checked_steps"] == max(B8_CAP)
     # the classification is on the record by family / request / kind, and the manifest of record is untouched (rows_n, digest)
     ne = hdr["not_executed_by_rule"]
     assert ne["n"] == hdr["programmed_not_executed_n"] and sum(ne["by_family"].values()) == ne["n"] and set(ne["by_request"]) == {"r1", "r3"}
     assert ne["by_request"]["r1"] == ne["by_request"]["r3"] and sum(ne["by_request"].values()) == ne["n"]     # 2 unexecuted steps each, every family per step
     assert set(ne["kind_by_family"].values()) <= {EP.KIND_ROW, EP.KIND_BATCH, EP.KIND_INPUT} and ne["rule"] == EP.RULE
-    assert hdr["rows_n"] == hdr_cap["rows_n"] and hdr["manifest_digest"] == hdr_cap["manifest_digest"]
+    assert hdr["rows_n"] == hdr_full["rows_n"] and hdr["manifest_digest"] == hdr_full["manifest_digest"]
 
 
 def _population_block(epr: dict, by_family: dict[str, int], *, applied: bool = True, n_exec: dict[str, int] | None = None) -> dict:
@@ -145,8 +158,8 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     """One mechanism on the record: n_exec per request equal, the count per ROW family equal; a batch-level
     or named-input family (outside the population split's reach) is named, never a FAIL and never read as equal."""
     executed = {f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 2, "r3": 3}
-    bmap, man, caps, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed)
-    _pop, hdr = B.load_required_manifest(man, PD, requests=sorted(caps), steps=max(B8_CAP), arrivals=arrivals, request_steps=rsteps)
+    bmap, man, max_tokens, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed)
+    _pop, hdr = B.load_required_manifest(man, PD, requests=sorted(max_tokens), steps=max(B8_CAP), arrivals=arrivals, request_steps=rsteps)
     cc = hdr["not_executed_by_rule"]
     row_fams = {f: n for f, n in cc["by_family"].items() if cc["kind_by_family"][f] == EP.KIND_ROW}
     assert row_fams, cc
@@ -191,7 +204,7 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
     rec = EP.reconcile_not_executed(cc2, pb3, epr)
     assert rec["ok"] and rec["by_family"]["fa2_hidden_m1_stream"]["population"] == 320 and rec["outside_population_reach"] == {}
     # with the manifest's engine-step-annotated identities the two families are checked ARITHMETICALLY from the
-    # population's own n_exec: r1 executed 2 of cap 4 -> its named input at steps 2,3 = 2 cells; a plane row listing (r0, r1) at steps 2,3
+    # population's own n_exec: r1 executed 2 of max_tokens 4 -> its named input at steps 2,3 = 2 cells; a plane row listing (r0, r1) at steps 2,3
     # = 2 (request, plane) cells of r1 while the plane identity itself stays required (r0 executes there): N_excluded 0 is right
     ids = ([{"request_id": "r1", "step": s, "engine_step": s, "family": "input_token_ids", "op_path": "prompt"} for s in range(4)]
            + [{"request_id": "*", "requests": ["r0", "r1"], "engine_step": s, "family": "fa2_hidden_m1_stream", "op_path": "h"} for s in range(4)])
@@ -244,19 +257,19 @@ def test_the_commits_classification_and_the_populations_third_bucket_are_reconci
 
 
 def test_b8_rows_committed_past_the_stop_fail_by_name(tmp_path):
-    """The engine committed r1 for 4 steps (its cap) while the driver served 2 = execution past the stop: the identity population is
+    """The engine committed r1 for 4 steps (its max_tokens) while the driver served 2 = execution past the stop: the identity population is
     covered (extras are allowed there), so the NAMED checks are composition `unexpected` and rows_past_the_stop."""
     executed = {f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 2}
-    bmap, man, caps, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed, committed={f"r{k}": B8_CAP[k] for k in range(8)})
-    pop, hdr = B.load_required_manifest(man, PD, requests=sorted(caps), steps=max(B8_CAP), arrivals=arrivals, request_steps=rsteps)
+    bmap, man, max_tokens, arrivals, rsteps, epr = _mixed_b8(tmp_path, executed, committed={f"r{k}": B8_CAP[k] for k in range(8)})
+    pop, hdr = B.load_required_manifest(man, PD, requests=sorted(max_tokens), steps=max(B8_CAP), arrivals=arrivals, request_steps=rsteps)
     assert B.coverage_check(pop, bmap)["ok"]                                       # the executed rows are all there ...
     comp = B.composition_check(hdr, bmap, request_steps=rsteps)
     assert not comp["ok"] and comp["problems"][0]["engine_step"] == 2 and comp["problems"][0]["unexpected"] == ["r1 x1"], comp["problems"][0]
     past = EP.rows_past_the_stop(bmap, rsteps)
     assert not past["ok"] and past["requests"] == {"r1": [2, 3]} and "execution past the stop" in past["error"] and "r1" in past["error"]
     # a request that committed FEWER rows than its executed prefix is still missing (unchanged rule)
-    bmap2, man2, caps2, arr2, rsteps2, _ = _mixed_b8(tmp_path, {f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 3}, committed={f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 2})
-    pop2, hdr2 = B.load_required_manifest(man2, PD, requests=sorted(caps2), steps=max(B8_CAP), arrivals=arr2, request_steps=rsteps2)
+    bmap2, man2, max_tokens2, arr2, rsteps2, _ = _mixed_b8(tmp_path, {f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 3}, committed={f"r{k}": B8_CAP[k] for k in range(8)} | {"r1": 2})
+    pop2, hdr2 = B.load_required_manifest(man2, PD, requests=sorted(max_tokens2), steps=max(B8_CAP), arrivals=arr2, request_steps=rsteps2)
     cov2 = B.coverage_check(pop2, bmap2)
     assert not cov2["ok"] and {(m["request_id"], m["step"]) for m in cov2["missing"]} == {("r1", 2)}
 
@@ -278,17 +291,16 @@ def test_restrictions_of_the_flat_manifest_and_the_linkage_horizon():
     # both stopped -> the tail steps have no executing request: dropped (the engine ran no such step)
     res2, info2 = EP.restrict_engine_steps(es, {"r0": list(range(12)), "r1": list(range(20))})
     assert len(res2) == 20 and info2["steps_dropped"] == 12
-    # the linkage horizon at B>=2: the Program of record has the cap's steps (GP-01 composed); the executed prefix bounds it
+    # the linkage horizon at B>=2: the Program of record has max_tokens' steps (GP-01 composed); the executed prefix bounds it
     assert linkage_horizon(0, 32, 32, executed=12) == list(range(12)) and linkage_horizon(0, 32, 32) == list(range(32))
     assert linkage_horizon(3, 32, 12, executed=12) == list(range(3, 15)) and linkage_horizon(0, 32, 32, executed=40) == list(range(32))
 
 
-def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_path):
+def test_a_missing_match_account_file_is_named_on_the_facts_and_faults_first(tmp_path):
     """#39 (qwen25-15b i4096, l40s4): match/capture/ was moved to /vault to free the disk while
-    the Commit was queued; tokens.json went with it, a_r fell to the G6 leg and the class faulted 'a_r is not linked' / 'LAG rule not
-    attested' after 47 min -- a missing INPUT read as a verdict.  The facts name the missing leg(s) (a_r_source suffix + account_missing),
+    the Commit was queued; tokens.json went with it, a_r fell to the G6 record and the class faulted 'a_r is not linked' / 'LAG rule not
+    attested' after 47 min -- a missing INPUT read as a verdict.  The facts name the missing file(s) (a_r_source suffix + account_missing),
     and the population's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
-    from verity_vllm.check.replay import population as POP
     e = _mixed_epr()
     # tokens.json absent, global_match.json present: exactly #39's record after the move
     acct = EPL.load_match_account(_match_account(tmp_path, write_tokens=False))
@@ -303,10 +315,10 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     facts = EP.facts_accepted_by(POP.executed_prefix_of_record, f)
     assert "account_missing" in facts["r0"]
     rec = POP.executed_prefix_of_record("r0", **facts["r0"])
-    assert rec["faults"][0].startswith("Match account leg(s) missing beside the Commit: tokens.json") and "not a verdict on the Program" in rec["faults"][0]
+    assert rec["faults"][0].startswith("Match account file(s) missing beside the Commit: tokens.json") and "not a verdict on the Program" in rec["faults"][0]
     assert any("a_r is not linked" in x for x in rec["faults"]) and any("LAG rule not attested" in x for x in rec["faults"])   # still fail-closed
     assert rec["account_missing"] == ["tokens.json"] and rec["mechanism"].startswith("not classified")
-    # no Match record at all: both legs named; a complete record: none, and no such fault
+    # no Match record at all: both files named; a complete record: none, and no such fault
     none = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)}},
                                     {"result": True}, {"r0": 0}, {"eos": [EOS], "lag": 1, "declared_lag": 1})
     assert none["r0"]["account_missing"] == ["tokens.json", "global_match.json"]
@@ -320,7 +332,7 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
 def test_the_commit_supplies_reqvals_not_executed_class_with_named_record_facts_only(tmp_path):
     """ONE mechanism for the class (sampled_replay.population.not_executed_by_rule): commit_delta is
     its CALLER -- _executed_prefix_facts derives every flag from a named record fact: a_r from the Match record's tokens.json (path + sha256
-    in a_r_source), served_len_commit from this run, linked = Match-account link AND C2 boundary linkage, lag_attested from the link's legs,
+    in a_r_source), served_len_commit from this run, linked = Match-account link AND C2 boundary linkage, lag_attested from the link's files,
     eos_declared from the stop rule, rows_past_stop from coverage.  With no Match record: a_r = the Commit's own count LABELLED so, linked False."""
     e = _mixed_epr()
     link = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
@@ -374,8 +386,7 @@ def _mixed_epr(lag: int = 1):
 
 
 def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_lens=None, g6_lag=None, write_gm=True, write_tokens=True):
-    """A row directory shaped like row_pod's: <row>/match/capture/tokens.json (m1_capture's fields) + <row>/global_match.json (GM-01's)."""
-    import json
+    """A row directory shaped like row_pod's: <row>/match/capture/tokens.json (match_capture's fields) + <row>/global_match.json (GM-01's)."""
     served = served if served is not None else _served({"r0": 11, "r1": 32}, {"r0"})
     row = tmp_path / "row"
     (row / "match" / "capture").mkdir(parents=True, exist_ok=True)
@@ -397,6 +408,16 @@ def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_len
     return str(row / "match")
 
 
+def _linked_facts(tmp_path, rid: str = "r0") -> dict:
+    """The facts of record the Commit hands the population for one request of the mixed-stop record, linked to its Match account:
+    r0 served eleven tokens of thirty-two, the last a declared EOS, under LAG 1; r1 served all thirty-two."""
+    e = _mixed_epr()
+    link = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path)), order=ORDER, declared_lag=1)
+    facts = EP.executed_prefix_facts(e, {"coverage": COVERED | {"match_account_link": link}}, {"result": True}, {"r0": 0, "r1": 0},
+                                     {"eos": [EOS], "lag": 1, "declared_lag": 1})
+    return EP.facts_accepted_by(POP.executed_prefix_of_record, facts)[rid]
+
+
 def test_a_reduced_prefix_is_accepted_only_linked_to_the_match_account_of_the_same_attempt(tmp_path):
     """The Commit's served count is linked: tokens.json served == Commit served, the same two lengths, GM-01 PASS, G6 agrees."""
     e = _mixed_epr()
@@ -407,7 +428,9 @@ def test_a_reduced_prefix_is_accepted_only_linked_to_the_match_account_of_the_sa
     assert L["tokens_equal"] is True and L["tokens_json"]["tokens_equal"] == {"r0": True, "r1": True} and L["tokens_json"]["lag"] == 1
     # with the Commit's served lists the equality is the FULL generated_token_ids list: the same length + last token but
     # one interior id different -> not one serving transcript, first differing position named
-    same_len = _served({"r0": 11, "r1": 32}, {"r0"}); same_len["r0"] = list(same_len["r0"]); same_len["r0"][4] = 99
+    same_len = _served({"r0": 11, "r1": 32}, {"r0"})
+    same_len["r0"] = list(same_len["r0"])
+    same_len["r0"][4] = 99
     Lf = EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=same_len)
     assert not Lf["ok"] and Lf["tokens_json"]["tokens_equal"] == {"r0": False, "r1": True} and Lf["tokens_json"]["tokens_equal_rule"] == "full generated_token_ids list"
     assert any("first differing position 4" in p and "not one serving transcript" in p for p in Lf["problems"]), Lf["problems"]
@@ -425,7 +448,7 @@ def test_the_committers_own_count_is_never_sufficient_by_itself(tmp_path):
     # tokens.json present but no global_match.json: linked to the served output only, not to the Match account -> problem
     L2 = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path, write_gm=False)), order=ORDER, declared_lag=1)
     assert not L2["ok"] and any("GM-01's account (global_match.json) is not beside" in p for p in L2["problems"]), L2["problems"]
-    # every request ran its cap: nothing was placed on the committer's word -> a missing account is a note, ok stays True
+    # every request ran to its max_tokens: nothing was placed on the committer's word -> a missing account is a note, ok stays True
     full = EP.executed_prefix_of_record(["r0", "r1"], _served({"r0": 32, "r1": 32}), caps={"r0": 32, "r1": 32}, eos_of_record=[EOS], lag=1)
     L3 = EPL.link_to_match_account(full, EPL.load_match_account(None), order=ORDER, declared_lag=1)
     assert L3["ok"] and not L3["required"] and L3["notes"] == ["no --match-dir: the Match record of this attempt is not beside the Commit"]
@@ -469,7 +492,8 @@ def test_a_padded_records_rows_past_the_stop_are_the_required_padding_and_paddin
     past = EP.rows_past_the_stop(unpadded, rsteps)
     assert not past["ok"] and past["requests"] == {"r0": [3, 4]} and past["entries_n"] == 2 and past["padding_entries_n"] == 0
     assert past["padded_record"] is False and "execution past the stop" in past["error"] and "inactive fallback" not in past["error"]
-    # the same rows on a PADDED record: r0's steps 3..5 are bot-by-enablement (the full cap population), r1's are all active
+    # the same rows on a PADDED record: r0's steps 3..5 are bot-by-enablement (the full-length population), r1's are all active
+    padded: dict[str, Any]
     padded = {"schema": "padded-binding-map/1",
               "entries": [leaf("r0", s, activity="active") for s in range(3)] + [leaf("r0", s, activity=EP.ACTIVITY_PADDING) for s in range(3, 6)]
               + [leaf("r1", s, activity="active") for s in range(6)] + [{"kind": "leaf", "identity": {"family": "input_token_ids", "request_id": "r0", "step": None}, "activity": "registered-input"}]}
@@ -485,3 +509,36 @@ def test_a_padded_records_rows_past_the_stop_are_the_required_padding_and_paddin
     fb = EP.rows_past_the_stop(fallback, rsteps)
     assert not fb["ok"] and fb["requests"] == {} and fb["padding_inside_prefix"] == {"r1": [4]} and "inactive fallback" in fb["error"] and "r1" in fb["error"]
     assert fb["padding_entries_n"] == 3 and fb["padded_record"] is True
+
+
+def test_an_attention_rows_stratum_key_reads_its_statics_as_int_reads_them():
+    """`spec_statics` keeps a static that is not digits as its text.  The stratum key reads T and BN with `int`, which takes a sign,
+    spaces and underscores too, and the key is the spec itself where `int` refuses one."""
+    def key(bn: str) -> str:
+        spec = f"Attention_v3{{T=20,NH=32,KVH=8,D=64,BN={bn}}}"
+        return POP._stratum_spec("Attention_v3", spec, RM.spec_statics(spec))
+
+    for bn in ("16", "+16", " 16", "1_6"):
+        assert key(bn) == f"Attention_v3{{NB=2,last=partial,NH=32,KVH=8,D=64,BN={bn}}}"
+    for bn in ("x", "1.5", ""):
+        assert key(bn) == f"Attention_v3{{T=20,NH=32,KVH=8,D=64,BN={bn}}}"
+    for fam, spec in (("Gemm_v1", "Gemm_v1{K=4,N=8}"), ("Attention_v3", "Attention_v3{T=20,NH=32}"), ("Attention_v3", "Attention_v3{NH=32,BN=16}")):
+        assert POP._stratum_spec(fam, spec, RM.spec_statics(spec)) == spec          # no rows of blocks, or a spec that states no T or no BN
+
+
+def test_a_served_list_of_another_length_than_the_record_s_faults_and_the_rule_s_count_over_it_is_not_taken(tmp_path):
+    """Ten served tokens, the last the EOS, beside a record that says eleven were served: the rule finds nothing wrong with the
+    list it is handed and counts eleven executed steps over it; the arithmetic over the record's length counts twelve."""
+    facts = _linked_facts(tmp_path)
+
+    def prefix(served: int) -> dict:
+        return POP.executed_prefix_of_record("r0", **facts, served=_served({"r0": served}, {"r0"})["r0"], eos_ids=[EOS])
+
+    other = prefix(10)
+    assert other["by_rule"]["problems"] == [] and other["by_rule"]["executed_prefix_len"] == 11
+    assert other["faults"] == [f"served list of 10 token(s) != a_r 11 ({facts['a_r_source']}): the recurrence would run over another prefix than the record's"]
+    assert (other["n_exec"], other["steps_not_executed"], other["r3_one_mechanism"]) == (12, [12, 32], False)
+    assert other["mechanism"] == "not classified: 1 fault(s) -- the class is not applicable to this request"
+    same = prefix(11)
+    assert (same["faults"], same["n_exec"], same["steps_not_executed"], same["r3_one_mechanism"]) == ([], 12, [12, 32], True)
+    assert same["mechanism"] == POP.MECH_RECURRENCE

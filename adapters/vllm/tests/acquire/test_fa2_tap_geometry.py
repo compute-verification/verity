@@ -4,27 +4,25 @@
    window (and dropout 0, D % 8 == 0, no alibi).  A mirror of `max_seqlen_q == 1 and H > Hk` alone declares the swapped geometry for
    Gemma-2's sliding layers at decode, which the kernel refuses (arm check b*h <= vt.H) -> named COMMIT FAIL, never a wrong binding.
 2. The oracle's softcap parameters are the kernel's (flash_api.cpp:156-159) and `apply_softcap` follows the measured MUFU.TANH rules
-   (identity below 2^-8, saturation at |x| >= 8) -- the GPU bit-exactness itself is fa2_tap_xcheck.py --cases gemma on a pod.
+   (identity below 2^-8, saturation at |x| >= 8).  Nothing in the tree runs the oracle against a GPU.  Two GPU runs check the softcap
+   kernel itself: `tests/properties/fa2_softcap_capture_gpu.py` (`tanh.approx.f32` on every word against `MufuTanh_v1`, and every
+   output row of the installed softcap kernel against `AttentionSoftcap_v2`) and `tests/properties/fa_tap_exactness_gpu.py` (the tap
+   build's output against the installed kernel's on the softcap and sliding-window cases).
 """
 from __future__ import annotations
 
 import importlib.util
 import os
-import sys
 
 import numpy as np
 import pytest
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-for p in (REPO, os.path.join(REPO, "vllm-poc")):
-    if p not in sys.path:
-        sys.path.insert(0, p)
-
-from verity_vllm.acquire.sources.hidden_source import fa2_kblock_n, fa2_swapped  # noqa: E402
+from verity_vllm.acquire.sources.hidden_source import fa2_kblock_n, fa2_swapped
 
 
 def _oracle():
     spec = importlib.util.spec_from_file_location("fa2_attn_oracle", os.path.join(os.path.dirname(__file__), "fa2_attn_oracle.py"))
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -61,9 +59,9 @@ def test_kblock_n_hd256_is_64():
 
 
 def test_softcap_params_match_flash_api():
-    O = _oracle()
-    P = O.P
-    cap_bits, sl2 = O.softcap_params(256, 50.0)
+    oracle = _oracle()
+    P = oracle.P
+    cap_bits, sl2 = oracle.softcap_params(256, 50.0)
     # params.softcap = softmax_scale / softcap (f32 / f32)
     assert P.f32_of(cap_bits) == np.float32(np.float32(256 ** -0.5) / np.float32(50.0))
     # params.scale_softmax_log2 = softcap * M_LOG2E (double product narrowed to f32)
@@ -73,19 +71,19 @@ def test_softcap_params_match_flash_api():
 
 
 def test_apply_softcap_follows_mufu_tanh_rules():
-    O = _oracle()
-    P = O.P
-    cap_bits, _ = O.softcap_params(256, 50.0)
+    oracle = _oracle()
+    P = oracle.P
+    cap_bits, _ = oracle.softcap_params(256, 50.0)
     # tiny score: s * c below 2^-8 -> identity: word == FTZ f32 product bits
     s = P.bits_of(np.float32(0.5))
     prod = P.F32MulFtz.evaluate(s, cap_bits)
-    assert abs(P.f32_of(prod)) < 2 ** -8 and O.apply_softcap(s, cap_bits) == prod
+    assert abs(P.f32_of(prod)) < 2 ** -8 and oracle.apply_softcap(s, cap_bits) == prod
     # zero (padded key column) -> +0 exactly
-    assert O.apply_softcap(0, cap_bits) == 0
+    assert oracle.apply_softcap(0, cap_bits) == 0
     # huge score: s * c >= 8 -> saturates at exactly +1.0 / -1.0
     big = P.bits_of(np.float32(50.0 * 16 * 9))     # (s * scale / cap) = 9 >= 8
-    assert O.apply_softcap(big, cap_bits) == 0x3F800000
-    assert O.apply_softcap(big | 0x80000000, cap_bits) == 0xBF800000
+    assert oracle.apply_softcap(big, cap_bits) == 0x3F800000
+    assert oracle.apply_softcap(big | 0x80000000, cap_bits) == 0xBF800000
     # a table word (0.6): equals the measured MUFU.TANH, which is NOT RN32(tanh)
     x = P.bits_of(np.float32(0.6))
     y = P.MufuTanh.evaluate(x)

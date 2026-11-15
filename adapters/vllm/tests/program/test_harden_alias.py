@@ -1,5 +1,5 @@
 """Mutation / alias effects of the Bet A registered compiler (`torch.export(strict=False)` training IR ->
-`verity_vllm.program.frontend.derive`).
+`verity_torch.frontend.derive`).
 
 What is under test. `derive` translates the pre-dispatch export graph WITH in-place ops kept in place (no functionalisation):
 a rule-owned mutating op (`rotary_embedding`, `fused_add_rms_norm`, `rms_norm`, `silu_and_mul`) rebinds the mutated fx node
@@ -47,14 +47,14 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-
-from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.rules import vllm_iface as vi
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 PROF = dict(mode="profile", profile="b1-eager")
-C = dict(T=3, NH=2, KVH=1, D=8, H=16, MAX_POS=16, EPS=1e-5, POS0=2)
+C = dict(T=3, NH=2, KVH=1, D=8, H=16, MAX_POS=16, POS0=2)
+EPS = 1e-5
 QKV = (C["NH"] + 2 * C["KVH"]) * C["D"]
 NHD, KVHD = C["NH"] * C["D"], C["KVH"] * C["D"]
 BF = torch.bfloat16
@@ -190,7 +190,8 @@ def _dump():
     out = os.environ.get("HARDEN_OUT")
     if out:
         os.makedirs(out, exist_ok=True)
-        json.dump(RESULTS, open(os.path.join(out, "alias_results.json"), "w"), indent=1)
+        with open(os.path.join(out, "alias_results.json"), "w") as f:
+            json.dump(RESULTS, f, indent=1)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -281,7 +282,7 @@ class H_FusedBoth(_Norm):
     def forward(self, x, y, r):
         h = x + y
         res = r + y
-        torch.ops.vllm_iface.fused_add_rms_norm(h, res, self.weight, C["EPS"])
+        torch.ops.vllm_iface.fused_add_rms_norm(h, res, self.weight, EPS)
         return h, res
 
 
@@ -290,7 +291,7 @@ class I_FusedResView(_Norm):
         h = x + y
         res = r + y
         rv = res.view(-1)  # alias of residual taken before
-        torch.ops.vllm_iface.fused_add_rms_norm(h, res, self.weight, C["EPS"])
+        torch.ops.vllm_iface.fused_add_rms_norm(h, res, self.weight, EPS)
         return h, rv.view(x.shape[0], C["H"])  # eager: post-mutation residual
 
 
@@ -299,7 +300,7 @@ class J_AllocViewBase(_Norm):
         h = x + y
         out = torch.empty_like(h)
         ov = out.view(x.shape[0], C["H"])
-        torch.ops.vllm_iface.rms_norm(ov, h, self.weight, C["EPS"])
+        torch.ops.vllm_iface.rms_norm(ov, h, self.weight, EPS)
         return out  # eager: the written values (through the view)
 
 
@@ -308,7 +309,7 @@ class J0_AllocViewReturned(_Norm):
         h = x + y
         out = torch.empty_like(h)
         ov = out.view(x.shape[0], C["H"])
-        torch.ops.vllm_iface.rms_norm(ov, h, self.weight, C["EPS"])
+        torch.ops.vllm_iface.rms_norm(ov, h, self.weight, EPS)
         return ov  # the conventional pattern (the written view is what is read)
 
 
@@ -317,7 +318,7 @@ class K_AllocViewBefore(_Norm):
         h = x + y
         out = torch.empty_like(h)
         ov = out.view(-1)  # alias of the allocation taken BEFORE the write
-        torch.ops.vllm_iface.rms_norm(out, h, self.weight, C["EPS"])
+        torch.ops.vllm_iface.rms_norm(out, h, self.weight, EPS)
         return ov.view(x.shape[0], C["H"])
 
 
@@ -332,15 +333,15 @@ class L_AllocReSliced(_Norm):
     def forward(self, x, y):
         h = x + y
         out = torch.empty(x.shape[0], 2 * C["H"], dtype=BF)
-        torch.ops.vllm_iface.rms_norm(out[:, :C["H"]], h, self.weight, C["EPS"])
+        torch.ops.vllm_iface.rms_norm(out[:, :C["H"]], h, self.weight, EPS)
         if self.writes == 2:
-            torch.ops.vllm_iface.rms_norm(out[:, C["H"]:], x, self.weight, C["EPS"])
+            torch.ops.vllm_iface.rms_norm(out[:, C["H"]:], x, self.weight, EPS)
         return out[:, :self.read_h]
 
 
 class X_UserInputMutation(_Norm):
     def forward(self, x, r):
-        torch.ops.vllm_iface.fused_add_rms_norm(x, r, self.weight, C["EPS"])  # writes two prescribed inputs
+        torch.ops.vllm_iface.fused_add_rms_norm(x, r, self.weight, EPS)  # writes two prescribed inputs
         return x, r
 
 
@@ -362,7 +363,7 @@ def _eager(m: nn.Module, inputs):
 
 def _alloc_view_rules():
     """`DEFAULT_RULES` + `AllocView` (the vLLM-bindings rule that lets `output = torch.empty(...); output.view(...)` be written by a
-    kernel — vLLM's `Attention.forward` pattern). It lives in `rules/vllm_bindings.py`, i.e. only the vLLM ruleset has it."""
+    kernel — vLLM's `Attention.forward` pattern). It lives in `rules/vllm_bindings/views.py`, i.e. only the vLLM ruleset has it."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.vllm_bindings import AllocViewRule
     return DEFAULT_RULES.extended("default+AllocView", [AllocViewRule()])
@@ -719,8 +720,8 @@ def _test_Y(cls):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# T: Bet A's PRODUCTION carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
-# tensor argument as mutated (over-declared). The vLLM binding rules (`rules/vllm_bindings.py`) decide from the pinned kernel
+# T: Bet A's SERVING carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
+# tensor argument as mutated (over-declared). The vLLM binding rules (`rules/vllm_bindings/triton_launches.py`) decide from the pinned kernel
 # (name + source sha256 + constexprs + geometry) which operand the kernel actually writes: input_ptr /
 # weight_ptr must stay readable after a launch; a kernel that is not the pinned one (another body, another name) must refuse.
 # ---------------------------------------------------------------------------------------------------------
@@ -740,7 +741,7 @@ def _rms_pins():
 def _rms_meta(R: int, N: int, *, kernel: str | None = None, src_sha256: str | None = None) -> str:
     pins = _rms_pins()
     meta = {"kernel": kernel or pins["kernel"], "src_sha256": src_sha256 or pins["src_sha256"], "triton": "test", "grid": [R],
-            "scalars": {"input_row_stride": N, "output_row_stride": N, "n_cols": N, "eps": C["EPS"], **pins["constexprs"]},
+            "scalars": {"input_row_stride": N, "output_row_stride": N, "n_cols": N, "eps": EPS, **pins["constexprs"]},
             "tensor_args": ["input_ptr", "weight_ptr", "output_ptr"], "constexprs": list(pins["constexprs"]), "geometry": {"num_warps": pins["num_warps"]},
             "tensor_meta": [None, None, None]}
     return _json.dumps(meta)

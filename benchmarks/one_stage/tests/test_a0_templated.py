@@ -1,5 +1,5 @@
-"""a0 hands a templated statement to both sides and to the verifier (`a0.session`, `a0.lean_verify`, `a0.firewall_env`):
-the server and the prover read its placed unit (``st["tmpl_unit"]``, `--tmpl-unit`), and the verifier and a firewalled
+"""a0 hands a templated statement to both sides and to the verifier (`a0.session`, `a0.lean_verify`, `a0.zk_server_env`):
+the server and the prover read its placed unit (``st["tmpl_unit"]``, `--tmpl-unit`), and the verifier and a zk_served
 prover set up its statement (``st["statement"]``); a flat stage passes no placed unit and keeps `a0.STATEMENT_ID`. The
 server, prover and verifier are one stand-in that records each call's argv."""
 from __future__ import annotations
@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import a0  # noqa: E402
+sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
+import a0
 
 TMPL = "verity/flock-circuit/tmpl"
 
-#: a stand-in for flock-circuit and flock-verify: each call appends its argv to ``calls``; ``serve`` records an accepted
+#: a stand-in for flock-circuit and verity-verify-proof: each call appends its argv to ``calls``; ``serve`` records an accepted
 #: session, ``prove`` prints its LIVE line, ``archive-put`` keys each file by its name and ``verify`` accepts
 FAKE = '''#!{python}
 import json, pathlib, sys
@@ -58,7 +58,7 @@ def test_a_templated_stage_reaches_both_sides_and_the_verifier(tmp_path, monkeyp
         assert got == (str(d / "unit.placed") if templated else None)
     want = TMPL if templated else a0.STATEMENT_ID
     assert argv["verify"][argv["verify"].index("--statement") + 1] == want
-    assert a0.firewall_env(st)["FC_FIREWALL_STATEMENT"] == want
+    assert a0.zk_server_env(st)["FC_ZK_SERVER_STATEMENT"] == want
 
 
 #: a stand-in for flock-tmpl-unit: appends its argv to ``calls`` and writes the placed unit at ``--out``

@@ -48,14 +48,10 @@ ROOT = Path(__file__).resolve().parents[1]
 #: (file, the command as parsed) -> "owner: why", each a documented command line that didn't parse when this test landed
 KNOWN = {
     ("benchmarks/commitments/README.md", "verity bench commitments"): "proofs: says it doesn't apply (no run.py or run.sh)",
-    ("archive/examples/dither_full_util/README.md", "verity demo dither_full_util"):
-        "compute-accounting: archived with its demo, which ran nothing",
     ("tools/research/README.md", "research keeper set NAME --on NODE"):
         "infra: names set, stop and status at once, and `set` takes its command after `--`",
     ("tools/research/src/research/slack.py", "research msg router"): "comms: a subcommand to come, named as one",
-    ("verity/protocols/remote/verifier/README.md", "verity demo h200"): "soundness: names an archived demo (no demos/h200)",
-    ("verity/protocols/remote/verifier/README.md", "verity verify proof"): "soundness: a command to come, named as one",
-    ("verity/protocols/remote/verifier/README.md", "verity verify remote"): "soundness: a command to come, named as one",
+    ("verity/protocols/compose/verifier/remote/README.md", "verity verify remote"): "soundness: a command to come, named as one",
 }
 
 SPAN = re.compile(r"`([^`\n]+)`")
@@ -479,8 +475,8 @@ def test_a_verdict_reads_the_tree_alone(tmp_path):
     (tmp_path / "refuses.py").write_text("import sys\nopen(sys.argv[1]).read()\nsys.exit('none of its slots is within these cores')\n")
     (tmp_path / "bad.py").write_text("import sys\nsys.exit('bad: no such option')\n")
     probe = "".join(json.dumps({"file": "-", "line": 0, "argv": a, "block": True}) + "\n" for a in (
-        ["tools/verity/check/check.py", "--record", "--on", "auto", "--pool", "research"],
-        ["tools/verity/check/check.py", "--agreement-files"], ["tools/verity/check/check.py", "--preflight"],
+        ["tools/check/check.py", "--record", "--on", "auto", "--pool", "research"],
+        ["tools/check/check.py", "--agreement-files"], ["tools/check/check.py", "--preflight"],
         ["research", "notes", "sync", "--path", "kb"], [str(tmp_path / "refuses.py"), str(tmp_path / "slots")],
         [str(tmp_path / "bad.py")]))
     bare = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path),

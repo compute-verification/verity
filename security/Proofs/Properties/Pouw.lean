@@ -2,14 +2,14 @@ module
 
 public import Properties.Pouw
 public import Proofs.Properties.Pouw.Grid
-public import Proofs.Properties.Pouw.Draw
+public import Proofs.Properties.Pouw.Sample
 import Std.Data.DTreeMap.Internal.Operations
 
 /-!
 # Proofs of PoUW's window properties (`Properties.Pouw`)
 
 The served numbers, by evaluation in the kernel (`decide +kernel`: no compiled code, only the kernel's reduction), and
-the refusals, by unfolding. The grid's properties are in `Proofs.Properties.Pouw.Grid` and K′'s in `Proofs.Properties.Pouw.Draw`.
+the refusals, by unfolding. The grid's properties are in `Proofs.Properties.Pouw.Grid` and K′'s in `Proofs.Properties.Pouw.Sample`.
 -/
 
 @[expose] public section
@@ -128,7 +128,7 @@ theorem kPrimeLeast : KPrimeLeast := by
   cases hk'
   exact hr
 
-theorem drawMisses : DrawMisses := fun eps δ credited n w B k hk =>
+theorem sampleMisses : DrawMisses := fun eps δ credited n w B k hk =>
   draw_misses eps δ credited n w B k (kPrimeRefuses eps δ credited n w k hk) hk
 
 /-! ## Completeness

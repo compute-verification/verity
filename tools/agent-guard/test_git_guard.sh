@@ -144,4 +144,33 @@ if [ -n "$subcommands" ]; then
   check "edit off a terminal shows no credential either" '! GIT_EDITOR=cat g config edit --global 2>&1 | secret'
 fi
 
+# push: the hooks directory's pre-push runs on every push, through --no-verify and a caller's own core.hooksPath, told the
+# hooks directory the push would have run (AGENT_GUARD_CHAIN_HOOKS); a git before 2.31, whose rev-parse echoes the
+# --path-format it doesn't know, still pushes, judged, with none chained
+"$REAL" init -q --bare "$t/up.git" && mkdir "$t/hooks"
+printf '#!/bin/sh\necho "chain=$AGENT_GUARD_CHAIN_HOOKS" >> "%s/hook.log"\n' "$t" > "$t/hooks/pre-push"
+printf '#!/bin/sh\necho own >> "%s/hook.log"\n' "$t" > "$t/r/.git/hooks/pre-push"
+chmod +x "$t/hooks/pre-push" "$t/r/.git/hooks/pre-push"
+"$REAL" -c user.name=t -c user.email=t@t commit -q --allow-empty -m a
+export AGENT_GUARD_GIT_HOOKS="$t/hooks"
+g push -q "$t/up.git" HEAD:refs/heads/a 2>/dev/null; rc=$?
+check "a push runs the guard's pre-push, told the checkout's hooks" \
+  '[ $rc = 0 ] && [ "$(cat "$t/hook.log")" = "chain=$t/r/.git/hooks" ]'
+: > "$t/hook.log"
+g -c core.hooksPath=/dev/null push -q --no-verify "$t/up.git" HEAD:refs/heads/b 2>/dev/null; rc=$?
+check "and so does one with --no-verify or core.hooksPath=/dev/null, with nothing chained" \
+  '[ $rc = 0 ] && [ "$(cat "$t/hook.log")" = "chain=" ]'
+cat > "$t/oldgit" <<EOF
+#!/bin/bash
+args=()
+for a in "\$@"; do if [ "\$a" = --path-format=absolute ]; then echo "\$a"; else args+=("\$a"); fi; done
+exec "$REAL" "\${args[@]}"
+EOF
+chmod +x "$t/oldgit"
+: > "$t/hook.log"
+VERITY_REAL_GIT="$t/oldgit" g push -q "$t/up.git" HEAD:refs/heads/c 2>/dev/null; rc=$?
+check "a git before 2.31 still pushes, judged, with no hook chained" \
+  '[ $rc = 0 ] && [ "$(cat "$t/hook.log")" = "chain=" ] && "$REAL" --git-dir="$t/up.git" rev-parse -q --verify refs/heads/c >/dev/null'
+unset AGENT_GUARD_GIT_HOOKS
+
 [ $fails = 0 ] && echo "git guard: all checks pass" || { echo "git guard: $fails check(s) failed"; exit 1; }

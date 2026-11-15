@@ -118,6 +118,43 @@ def test_a_route_error_other_than_400_is_one_line_with_its_code(monkeypatch):
     assert e.value.status == 403 and "HTTP 403 identity_refused" in str(e.value)
 
 
+def test_a_site_key_reads_the_page_without_an_identity_and_writes_nothing(monkeypatch):
+    import io
+    import urllib.error
+
+    sent = []
+
+    def answer(method, url, data, headers):
+        sent.append((method, headers["Authorization"]))
+        return {"goals": [GOAL]}
+
+    monkeypatch.setattr(goals, "http_json", answer)
+    monkeypatch.setattr(goals._Identity, "send", lambda *a: pytest.fail("a read with a site key asks for no identity"))
+    route = goals.Route(key="a-dummy-site-key")
+    assert route.call() == [GOAL] and sent == [("GET", "Bearer a-dummy-site-key")]
+    with pytest.raises(goals.SlackError, match="a site key only reads"):
+        route.call({"remove": "demos/both"})
+    assert len(sent) == 1
+
+    def refuse(*a, **k):
+        raise urllib.error.HTTPError(goals.GOALS, 401, "Unauthorized", {}, io.BytesIO(b'{"error": "invalid_key"}'))
+
+    monkeypatch.setattr(goals, "http_json", refuse)
+    with pytest.raises(RouteError, match="rejected the site key") as e:
+        route.call()
+    assert e.value.status == 401
+
+
+def test_a_saved_write_prints_the_sites_warnings_and_a_read_prints_none(monkeypatch, capsys):
+    warned = 'written, with warnings: this goal was saved\ndemos/both:\n  - [step] "The verdicts come back.": a run. Fix: name the outcome'
+    monkeypatch.setattr(goals, "http_json", lambda *a, **k: {"goals": [GOAL], "message": warned})
+    route = goals.Route()
+    monkeypatch.setattr(route._oidc, "send", lambda fn: fn("t"))
+    assert route.call({"set": GOAL}) == [GOAL]
+    assert capsys.readouterr().err == f"research goals: {warned}\n"
+    assert route.call() == [GOAL] and capsys.readouterr().err == ""
+
+
 @pytest.mark.parametrize("argv", [["set", "x", "--status", "maybe"], ["set", "x", "--wait", "goal:a", "--no-wait"],
                                   ["set", "x", "--tier", "2", "--no-tier"], ["set", "x", "--tier", "12"]])
 def test_the_command_line_refuses_what_the_site_would(argv):

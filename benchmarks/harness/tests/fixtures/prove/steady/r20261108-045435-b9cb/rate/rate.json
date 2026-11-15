@@ -17,12 +17,21 @@
   },
   "accepted": 9,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": false,
   "void": [
    "exited nonzero: prover-gpu0 rc -15"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "gq-k6144",
@@ -42,12 +51,21 @@
   },
   "accepted": 9,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": false,
   "void": [
    "exited nonzero: prover-gpu0 rc -15"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "dsa-logits-v3",
@@ -67,9 +85,18 @@
   },
   "accepted": 19,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.25968629895086737,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 3.1149
  },
  {
@@ -90,9 +117,18 @@
   },
   "accepted": 24,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.24566402987274605,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.2184
  },
  {
@@ -113,9 +149,18 @@
   },
   "accepted": 49,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.2327692558366891,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.2414
  },
  {
@@ -136,9 +181,18 @@
   },
   "accepted": 11,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.2136021872863978,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 5.055
  },
  {
@@ -159,9 +213,18 @@
   },
   "accepted": 13,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.2622675653701907,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 3.1157
  },
  {
@@ -182,9 +245,18 @@
   },
   "accepted": 10,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.2592957527355702,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 3.4063
  },
  {
@@ -206,9 +278,19 @@
   },
   "accepted": 29,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.6597176408497163,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 1.7916
  },
  {
@@ -230,9 +312,19 @@
   },
   "accepted": 61,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.6899882701994066,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 2.9594
  },
  {
@@ -254,9 +346,19 @@
   },
   "accepted": 77,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.6605019815059445,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 2.9811
  },
  {
@@ -278,9 +380,19 @@
   },
   "accepted": 28,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.5735260380821289,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 3.8276
  },
  {
@@ -302,9 +414,19 @@
   },
   "accepted": 33,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.6948787436592314,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 1.7382
  },
  {
@@ -326,9 +448,19 @@
   },
   "accepted": 16,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.6520605112154407,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 2.0563
  },
  {
@@ -352,12 +484,24 @@
   },
   "accepted": 72,
   "refused_n": 1,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1,
+   "prover-gpu2": 1,
+   "prover-gpu3": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "void": [
    "1 of 73 sessions refused"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "fr-w13",
@@ -380,12 +524,24 @@
   },
   "accepted": 66,
   "refused_n": 1,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1,
+   "prover-gpu2": 1,
+   "prover-gpu3": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "void": [
    "1 of 67 sessions refused"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "fr-w2",
@@ -408,12 +564,24 @@
   },
   "accepted": 64,
   "refused_n": 1,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1,
+   "prover-gpu2": 1,
+   "prover-gpu3": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "void": [
    "1 of 65 sessions refused"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "residual-add",
@@ -436,12 +604,24 @@
   },
   "accepted": 30,
   "refused_n": 1,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1,
+   "prover-gpu2": 1,
+   "prover-gpu3": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "void": [
    "1 of 31 sessions refused"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "sm-fp8-k2048",
@@ -464,12 +644,24 @@
   },
   "accepted": 35,
   "refused_n": 1,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1,
+   "prover-gpu2": 1,
+   "prover-gpu3": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "void": [
    "1 of 36 sessions refused"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "sm-fp8-k6144",
@@ -492,12 +684,24 @@
   },
   "accepted": 36,
   "refused_n": 1,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1,
+   "prover-gpu2": 1,
+   "prover-gpu3": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "void": [
    "1 of 37 sessions refused"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "ar-multimem",
@@ -517,12 +721,21 @@
   },
   "accepted": 34,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "void": [
    "exited nonzero: prover-gpu0 rc -15"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "rmsnorm-v8",
@@ -542,12 +755,21 @@
   },
   "accepted": 38,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "void": [
    "exited nonzero: prover-gpu0 rc -15"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "ar-multimem",
@@ -568,12 +790,22 @@
   },
   "accepted": 15,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": false,
   "void": [
    "exited nonzero: prover-gpu0 rc -15, prover-gpu1 rc -15"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  },
  {
   "type": "rmsnorm-v8",
@@ -594,11 +826,21 @@
   },
   "accepted": 18,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1,
+   "prover-gpu1": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": false,
   "void": [
    "exited nonzero: prover-gpu0 rc -15, prover-gpu1 rc -15"
   ],
-  "statements_per_s": null
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
  }
 ]

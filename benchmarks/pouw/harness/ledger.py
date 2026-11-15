@@ -2,7 +2,7 @@
 ``kernel-attempt/v1``, so what was tried, on which kernel, with what result and why it was kept or dropped is a query, not
 prose.
 
-A record's meta is everything the run knows, numbers included: the kernel variant (`verity.protocols.pouw.verifier.serving.KernelVariant`'s
+A record's meta is everything the run knows, numbers included: the kernel variant (`verity.protocols.accounting.pouw.verifier.serving.KernelVariant`'s
 id, ``{family}-{device}/{source_sha256[:12]}``), the parent attempt, the tier, the harness commit and gate version, the
 metrics and the per-step time split, the gap at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
 that change after the run are labels on it (`KERNEL_OUTCOME`, `KERNEL_REASON`), since a record is immutable.
@@ -18,8 +18,9 @@ is kept as ``arm_claim`` and never published.
 
 `verify.py` builds the records (`records`), writes them under the run's ``ledger/`` (so they are preserved with the run's
 files wherever the store isn't reachable) and publishes them with ``--publish``. `rows` is what `panel.py` reads beside
-``attempts.jsonl``. Stdlib only; `research.store` and `verity.protocols.pouw.verifier.serving` are imported when present (from this checkout's
-``tools/research/src`` and ``verity/protocols/pouw/verifier`` otherwise), so a node-2 job without them still writes its records.
+``attempts.jsonl``. `verity.protocols.accounting.pouw.verifier.serving` is imported outright, so a job where `verity` doesn't import
+stops there; `research.store` is imported when present (from this checkout's ``tools/research/src`` otherwise), so a node-2
+job without it still writes its records.
 """
 
 from __future__ import annotations
@@ -31,12 +32,23 @@ import json
 import os
 import re
 import sys
+from collections.abc import Iterable
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import price_twins as P
 from verity_config.settings import of
+
+from verity.protocols.accounting.pouw.verifier import serving
+
+#: what `verify.py`, the filler's `arms.py` and `score.py`, and the tests read
+__all__ = [
+    "CONFIG_PATH", "GATES", "KERNEL_OUTCOME", "KERNEL_REASON", "KIND", "LedgerError", "OUTCOMES", "P", "TIERS",
+    "attempts", "eps", "main", "measured_refusal", "now", "one_line", "open_store", "outcome", "panel_rows", "publish",
+    "read", "records", "serving", "source_sha256", "store_module", "typed_gamma", "variant_record", "write",
+    "write_outputs",
+]
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -52,8 +64,6 @@ TIERS = ("1", "2a", "2b", "3")
 OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 #: label keys (`research.store.vocab`): the producing lane about its own attempt
 KERNEL_OUTCOME, KERNEL_REASON = "kernel_outcome", "kernel_reason"
-#: a call's step groups, as `verity.protocols.pouw.verifier.serving.GROUPS` names them; checked against it when it is importable
-GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 PHASES = ("before", "gemm", "after")
 ONE_LINE = 240
 
@@ -66,15 +76,6 @@ def _import_path(rel: str) -> None:
     p = str(REPO / rel)
     if (REPO / rel).is_dir() and p not in sys.path:
         sys.path.append(p)
-
-
-def serving():
-    """`verity.protocols.pouw.verifier.serving` when importable, else None."""
-    try:
-        from verity.protocols.pouw.verifier import serving as S
-    except ImportError:
-        return None
-    return S if hasattr(S, "KernelVariant") else None
 
 
 def store_module():
@@ -142,7 +143,7 @@ def variant_id(family: str, device: str, source_digest: str) -> str:
 def variant_record(*, family: str, device: str, schemes: Iterable[str], sources: Iterable[Path], root: Path,
                    binaries: Iterable[Path] = (), schedules: Iterable[str] = ("serial",), loader: str = "cubin-ctypes",
                    prices: str | None = None, config: dict[str, str] | None = None) -> dict:
-    """What an arm's `build` returns as ``variant``: `verity.protocols.pouw.verifier.serving.KernelVariant`'s fields (its shape rule and step
+    """What an arm's `build` returns as ``variant``: `verity.protocols.accounting.pouw.verifier.serving.KernelVariant`'s fields (its shape rule and step
     IO aside) and its id. ``binary_sha256`` is the one binary's digest, or the digest of the sorted digests of several.
     `config` names every run-time choice that selects code from the binary (environment knobs such as
     ``PEARLC_A_FORMS``): it is part of the source digest, so the id tells the forms apart, and serving must pin it."""
@@ -152,13 +153,12 @@ def variant_record(*, family: str, device: str, schemes: Iterable[str], sources:
     rec = {"id": variant_id(family, device, src), "family": family, "device": device, "schemes": sorted(set(schemes)),
            "schedules": sorted(set(schedules)), "source_sha256": src, "binary_sha256": binary, "loader": loader,
            "prices": prices, "config": dict(sorted((config or {}).items())) or None}
-    S = serving()
-    if S is not None and binary is not None:
-        v = S.KernelVariant(family=family, device=device, schemes=frozenset(rec["schemes"]),
-                            schedules=frozenset(rec["schedules"]), shapes=S.ShapeRule(), source_sha256=src,
-                            binary_sha256=binary, loader=loader, prices=prices)
+    if binary is not None:
+        v = serving.KernelVariant(family=family, device=device, schemes=frozenset(rec["schemes"]),
+                                  schedules=frozenset(rec["schedules"]), shapes=serving.ShapeRule(), source_sha256=src,
+                                  binary_sha256=binary, loader=loader, prices=prices)
         if v.id != rec["id"]:
-            raise LedgerError(f"variant id {rec['id']} disagrees with verity.protocols.pouw.verifier.serving's {v.id}")
+            raise LedgerError(f"variant id {rec['id']} disagrees with verity.protocols.accounting.pouw.verifier.serving's {v.id}")
     return rec
 
 
@@ -177,7 +177,7 @@ def typed_gamma(result: dict) -> dict[str, str]:
     return out
 
 
-#: `verity.protocols.pouw.verifier.serving.SchemeId`'s FP8 grammar, where the device names the record: sm120 (G = 4) is the panel's v1,
+#: `verity.protocols.accounting.pouw.verifier.serving.SchemeId`'s FP8 grammar, where the device names the record: sm120 (G = 4) is the panel's v1,
 #: sm120-unpromoted its v2; an older name (``pearl-c-sm120-v2-hot-h3``) isn't checked
 _SCHEME = re.compile(r"pearl-c-(?P<device>sm120|sm120-unpromoted)-(?:v0|v1)(?:-h[0-9]+)?(?:@[a-z0-9_]+)?")
 
@@ -220,13 +220,6 @@ def eps(gap: Fraction) -> Fraction:
     return gap / (1 - gap)
 
 
-def _twins() -> list[dict] | None:
-    try:
-        return P.load()
-    except (OSError, ValueError, KeyError):
-        return None
-
-
 # ---- one record per (arm, shape) ------------------------------------------------------------------------------------------------
 
 
@@ -251,12 +244,12 @@ def _clocks(p: dict, side: str) -> list[float]:
     raw = p.get(f"sm_clock_{side}") or ""
     try:
         return [float(x) for x in str(raw).split(",") if x.strip()]
-    except ValueError:
-        return []
+    except ValueError as ex:
+        raise LedgerError(f"sm_clock_{side} is {raw!r}, not MHz joined by commas") from ex
 
 
 def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: dict, run_id: str) -> dict:
-    """`verity.protocols.pouw.verifier.serving.GateRecord`'s fields for this (arm, shape), from what the run checked: every device gate of the
+    """`verity.protocols.accounting.pouw.verifier.serving.GateRecord`'s fields for this (arm, shape), from what the run checked: every device gate of the
     arm at the shape passed (``exact``), the transcript the harness dumped from poisoned buffers verified
     (``poisoned_accepted``: an arm that dumps its own gets False), every control of the arm rejected (the harness's
     known-bad variants and the verifier's negative control), the SASS gate held. ``schedules_equal`` holds trivially for a
@@ -295,7 +288,7 @@ def _metrics(r: dict, p: dict) -> dict:
 
 def _steps(r: dict, chain: dict | None, lineage: dict) -> dict:
     """The call's time split: hashing against the hash-free call, extra flag roles, and at decode the chain's phases
-    (before, during, after the GEMM, and on a side stream), each mapped to `GROUPS` when the lineage says how."""
+    (before, during, after the GEMM, and on a side stream), each mapped to `serving.GROUPS` when the lineage says how."""
     g = r.get("graph") or {}
     out: dict = {"hashing_ms": g.get("hashing_ms"), "extra_roles_x": g.get("extra_roles_x") or None, "phases": None,
                  "phase_groups": None}
@@ -306,10 +299,9 @@ def _steps(r: dict, chain: dict | None, lineage: dict) -> dict:
                          "derive": s.get("derive_ms"), "side": s.get("side_ms"), "hidden_by_side": s.get("hidden_by_side_ms")}
     pg = lineage.get("phase_groups")
     if pg:
-        groups = serving().GROUPS if serving() else GROUPS
-        bad = sorted({x for v in pg.values() for x in v} - set(groups)) + sorted(set(pg) - set(PHASES))
+        bad = sorted({x for v in pg.values() for x in v} - set(serving.GROUPS)) + sorted(set(pg) - set(PHASES))
         if bad:
-            raise LedgerError(f"phase_groups names {bad}: phases are {PHASES}, groups {groups}")
+            raise LedgerError(f"phase_groups names {bad}: phases are {PHASES}, groups {serving.GROUPS}")
         out["phase_groups"] = {k: list(v) for k, v in pg.items()}
     return {k: v for k, v in out.items() if v is not None}
 
@@ -331,7 +323,7 @@ def records(result: dict, *, run_id: str, commit: str | None, tier: str = "2a", 
     verification = {(v["arm"], v["shape"]): v for v in (result.get("verification") or {}).get("rows", [])}
     versions = result.get("versions") or {}
     refused = typed_gamma(result)
-    table = _twins() if twins == "table" else twins
+    table = P.load() if twins == "table" else twins
     out = []
     for shape in result.get("shapes", []):
         for name, r in (shape.get("arms") or {}).items():
@@ -497,10 +489,8 @@ def attempts(store=None) -> list[tuple[str, dict, dict]]:
 def measured_refusal(meta: dict) -> str | None:
     """Why a tier-2b record can't stand as a measured panel row, as `panel.py append` would refuse it, or None."""
     v, run = meta.get("verify") or {}, meta.get("run") or ""
-    try:
-        gates = int(str((meta.get("gates") or {}).get("version", "")).rsplit("/", 1)[-1])
-    except ValueError:
-        gates = 0
+    tail = str((meta.get("gates") or {}).get("version", "")).rsplit("/", 1)[-1]
+    gates = int(tail) if tail.isdecimal() else 0
     if gates < GATES_REQUIRED:
         return f"gate version {gates} predates {GATES_REQUIRED}"
     if not v.get("accepted") or "accept" not in (v.get("accept") or "").lower():

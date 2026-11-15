@@ -43,7 +43,7 @@ Each is a `def … : Prop` over `Bridge.Defs` and `Bridge.Deployed`, so a proof 
   string, their value in the evaluation on `Xr`'s inputs (`RightRegZ`'s second conjunct), and each of whose registered
   openings at a wire the constants `κ` don't fix opens its wire's claims position under `Cm` (`TransportsLive`'s
   conclusion), and whose evaluation is `κ`'s constant at each constant wire, is not faulty in `witDep Xr`, at every
-  design and every strata of the population. So `faulty ⊆ wrongRegZ`.
+  design and every strata of the population. So `faulty ⊆ incorrectRegZ`.
 * `PartBlocksTarget`: `partOf P κ ns` has `n` slots, one per unit, each the unit's proof block with the input rows it
   owns, at strata `ns` that sum to `n`.
 * `PaTarget` (M4): on `partOf P κ ns`, a one-stage design `r` misses a set `B` of population slots with `r`'s own miss on
@@ -118,14 +118,14 @@ is `Spot.FilePart.ofCircuit`'s blocks in the registration's strata (`Bridge.relD
 def RelDeployTarget : Prop :=
   ∀ {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (cd : SamplingDeploy.Code)
     {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
-    (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ) (ns : List ℕ) (r : Claims.Sampling.OneStage)
-    (κ : Fin C.N → Option Bool) (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg)
-    (Xr : Fin C.N → Bool) (δ : ℝ) (x : Claims.Msg),
-    LayoutIs C rows c nl roots cd →
+    (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) (ns : List ℕ)
+    (r : Claims.Sampling.OneStage) (κ : Fin C.N → Option Bool) (desc : Claims.Msg) (q : Claims.Sampling.Query)
+    (roots : List Claims.Msg) (Xr : Fin C.N → Bool) (δ : ℝ) (x : Claims.Msg),
+    LayoutIs C rows c pub nl roots cd →
     cd.parse x = some (stmtOf P κ r desc q roots) → cd.partition (stmtOf P κ r desc q roots) = some (partOf P κ ns) →
-    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep C rows c nl roots) δ (stmtOf P κ r desc q roots)
-      (partOf P κ ns) (witDep C (commitDep C rows c nl roots) Claims.Sampling.sha512Msg roots Xr) →
+    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep C rows c pub nl roots) δ (stmtOf P κ r desc q roots)
+      (partOf P κ ns) (witDep C (commitDep C rows c pub nl roots) Claims.Sampling.sha512Msg roots Xr) →
     ¬ Claims.Sampling.R Claims.Sampling.sha512Msg (SamplingDeploy.deployOf F cd).commit cd.parse cd.partition δ x
-      (witDep C (commitDep C rows c nl roots) Claims.Sampling.sha512Msg roots Xr)
+      (witDep C (commitDep C rows c pub nl roots) Claims.Sampling.sha512Msg roots Xr)
 
 end Flock.Bridge

@@ -1,7 +1,7 @@
 """`engine.int8_checkpoint`: the offline int8 recipe (`verity-int8-channel127/v1`) on `fp8_checkpoint`'s container.
 
 The row rule is checked against its definition (|q| <= 127, every nonzero row reaching 127, within half a step) and against
-`benchmarks/ppl/steps.py`'s own `quant_rows(w.float(), 127)` (`ppl_oracle.int8_weights`), and the recipe's bytes are pinned by
+the registered Definition's row quantizer (`ppl_oracle.int8_weights`), and the recipe's bytes are pinned by
 a golden vector on the fp8 test's synthetic two-shard checkpoint: a change to the rule or the container changes it, and needs a
 new recipe id."""
 from __future__ import annotations
@@ -13,14 +13,18 @@ import numpy as np
 import pytest
 import torch
 
+from tests.engine import ppl_oracle as O
+from tests.engine.test_fp8_checkpoint import (
+    _base_checkpoint,
+    _bf16,
+    _one_tensor_base,
+    _write_base_shard,
+)
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
 from verity_vllm.program import model as M
 
-from tests.engine import ppl_oracle as O
-from tests.engine.test_fp8_checkpoint import _base_checkpoint, _bf16, _one_tensor_base, _write_base_shard
-
-FLOOR = np.float32(np.float32(1e-30) / np.float32(127))                          # an all-zero row's scale (steps.py's clamp)
+FLOOR = np.float32(np.float32(1e-30) / np.float32(127))                          # an all-zero row's scale (the Definition's floor)
 
 
 def _rows(n: int, k: int, seed: int) -> np.ndarray:
@@ -52,7 +56,7 @@ def test_ties_round_to_even():
 
 
 @pytest.mark.parametrize("scale", [1e-6, 0.05, 40.0])
-def test_the_recipe_is_steps_py_quant_rows(scale):
+def test_the_recipe_is_the_definitions_row_quantizer(scale):
     w = _rows(128, 256, 11) * np.float32(scale / 0.05)
     w[0] = 0
     w[1, :8] = np.float32(1e-30)
@@ -110,8 +114,8 @@ def test_recipe_container_and_config(tmp_path):
     for kept in ("model.layers.0.self_attn.q_proj.bias", "model.layers.0.self_attn.rotary_emb.inv_freq", "lm_head.weight",
                  "model.embed_tokens.weight"):
         assert names[kept][0] not in ("I8",) and kept + "_scale" not in names
-    q = np.frombuffer(data["model.layers.0.mlp.down_proj.weight"], dtype=np.int8).reshape(128, 256)
-    s = np.frombuffer(data["model.layers.0.mlp.down_proj.weight_scale"], dtype="<f4").reshape(128, 1)
+    q: np.ndarray = np.frombuffer(data["model.layers.0.mlp.down_proj.weight"], dtype=np.int8).reshape(128, 256)
+    s: np.ndarray = np.frombuffer(data["model.layers.0.mlp.down_proj.weight_scale"], dtype="<f4").reshape(128, 1)
     w = (_bf16(128 * 256, 7, 0.05).reshape(128, 256).astype(np.uint32) << 16).view(np.float32)
     assert np.array_equal(q, I.quantize(w, I.channel_scales(w))) and np.array_equal(s, I.channel_scales(w))
     cfg = json.loads((out / "config.json").read_text())
@@ -144,6 +148,16 @@ def test_base_entry_refuses_another_recipe():
     entry = {"role": "X_INT8", "recipe": {"id": F.RECIPE, "base_repo": "o/m", "base_revision": "0" * 40}}
     with pytest.raises(F.UsageError, match="is not 'verity-int8-channel127/v1'"):
         F.base_entry(entry, [], I.INT8)
+
+
+@pytest.mark.parametrize("entry", [{"role": "X"}, {"role": "X", "recipe": None}, {"role": "X", "recipe": {}}, {"role": "X", "recipe": 0},
+                                   {"role": "X", "recipe": ""}, {"role": "X", "recipe": False}, {"role": "X", "recipe": []}],
+                         ids=["absent", "null", "empty", "zero", "empty text", "false", "empty list"])
+def test_an_entry_without_a_recipe_is_refused_by_its_role(entry):
+    with pytest.raises(F.UsageError, match="^X: recipe None is not 'verity-int8-channel127/v1'$"):
+        F.base_entry(entry, [], I.INT8)
+    with pytest.raises(F.UsageError, match="^X: recipe None is none of the int8 recipes "):
+        I.recipe_of(entry)
 
 
 # ---------------------------------------------------------------- v2: the LM head too

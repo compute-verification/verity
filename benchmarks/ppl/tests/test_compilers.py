@@ -1,9 +1,12 @@
 """The format steps: the formats' plain quantization (`fp`), Dither's coins on a format's integer grid (`native`) and
 int8 run exactly by limb splitting (`emulate`)."""
+import types
+
 import numpy as np
 import pytest
 import torch
 
+import gates as G
 import matmul
 import spec
 import steps
@@ -150,8 +153,6 @@ def test_native_gptq_stays_on_the_grid_and_beats_rounding(grid, scale):
                                                   ("e4m3i104", "channel", "e4m3i120"), ("e2m1x2", "nvi9", "")])
 @pytest.mark.parametrize("coin", [0.0, 1.0])
 def test_g1_serves_the_centred_product_of_the_nearest_levels(grid, scale, act_grid, coin, monkeypatch):
-    import types
-    import gates as G
     g = torch.Generator().manual_seed(5)
     x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
     step = spec.parse({"linear": [{"step": "native", "grid": grid, "scale": scale, "act": "g1", "weight": "g1",
@@ -189,8 +190,6 @@ def test_dither3_moves_the_nearest_level_by_its_gap_onto_three_levels(grid):
 
 
 def test_dither3_activations_beside_dithered_weights_serve_the_dithered_product(monkeypatch):
-    import types
-    import gates as G
     g = torch.Generator().manual_seed(8)
     x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
     step = spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "channel", "act": "dither3"}]},
@@ -198,23 +197,21 @@ def test_dither3_activations_beside_dithered_weights_serve_the_dithered_product(
     gates = G.Gates()
     run = matmul.Run(types.SimpleNamespace(name="t"), 0, 0, types.SimpleNamespace(li=0), gates, {}, {}, None)
     mm = matmul.MM("linear", "mlp.up_proj", run, x, w).enter(step)
-    drawn = [torch.randint(0, 2, x.shape, generator=g).float(), torch.randint(0, 2, x.shape, generator=g).float(),
+    bits = [torch.randint(0, 2, x.shape, generator=g).float(), torch.randint(0, 2, x.shape, generator=g).float(),
              torch.randint(0, 2, w.shape, generator=g).float()]
-    calls = iter(drawn)
+    calls = iter(bits)
     monkeypatch.setattr(matmul.MM, "coins", lambda self, shape, levels=2: next(calls))
     y = step.defn.fn(mm, matmul.terminal, **step.kw)
     v, sa, _ = steps.native_parts(x, "e4m3i", "channel", coined=False)
     u, sw, _ = steps.native_parts(w, "e4m3i", "channel", coined=True)
-    xq = steps.dither3(v, "e4m3i", drawn[0], drawn[1]) * sa
-    wq = steps.to_grid(u, "e4m3i", "dither", drawn[2]) * sw
+    xq = steps.dither3(v, "e4m3i", bits[0], bits[1]) * sa
+    wq = steps.to_grid(u, "e4m3i", "dither", bits[2]) * sw
     assert torch.allclose(y.double(), xq.double() @ wq.double().T, rtol=1e-6, atol=1e-5)
     assert gates.passed
 
 
 @pytest.mark.parametrize("coin", [0.0, 1.0])
 def test_g1_weights_beside_int8_activations_centre_only_the_weights(coin, monkeypatch):
-    import types
-    import gates as G
     g = torch.Generator().manual_seed(6)
     x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
     step = spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "nvi10", "act": "dither",
@@ -260,8 +257,6 @@ def test_row_chunks_change_no_bit(llama, ids, calib, monkeypatch):
 
 
 def test_a_native_weight_is_cached_once_across_seeds():
-    import types
-    import gates as G
     step = next(s for s in spec.load("pc-c2-nvfp4-2s").linear if s.defn.name == "native")
     store = {}
     for seed in (0, 1, 2):

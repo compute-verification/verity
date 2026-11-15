@@ -3,20 +3,23 @@ of each rank, sized with ``--estimate``) cut into proof blocks, and the proof bl
 step (step 0) and the decode steps, per token and per request.
 
 A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):
-a ``CUT`` row's batched members, a ``PARTS`` row's parts, a ``CHAINS`` row's key blocks, ends, column ends and combines and
-a ``STAGES`` row's stages are a slot each; a
-``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, and a ``KCHUNKS`` row's slot is its
-coordinate or its K-chunks of one width. A unit template fits when it binds, Flock has a piece for every leaf, its block
-(`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
-row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` or ``WIDE_COORDS`` row, and a
+a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``STAGES`` row's stages are a slot each; a
+``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, a ``KCHUNKS`` row's slot is its
+coordinate or its K-chunks of one width, and a ``CHAINS`` row's one slot is a way its key blocks are served
+(`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns and its key rows'
+writers, the way the served partition names, before whole key blocks. A unit template fits when it binds, Flock has a piece for every leaf, its block
+(`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.size_class`). The
+row itself is taken when it fits and is no longer than its family's `WHOLE_UP_TO`, else each slot's coarsest fitting
+option (a fitting row past `WHOLE_UP_TO` whole when no option fits). A ``COLS`` or ``WIDE_COORDS`` row, and a
 split's ``COLS`` or ``WIDE_COORDS`` slot (the block-scaled FP8 GEMM's coordinates of c outputs), instead take the fitting
 width of least leakage-weighted proving cost (`width_pick`, the row's own width among them). A row
 with a slot that has none is a gap, with its finest option's reason. A row whose Definition has no gate (a gather) or no
 input (a constant) is no proof block.
 
-Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (an upper
-bound, `m1_families.estimate`), its served MACs and the bytes of the rows it opens (a row per parameter and per returned
-field). Beside them, every row's own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
+Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (its leaves'
+ANDs lowered alone, table reads counted apart: not a statement's ``ands`` with its reads inline, as `m1_families` says),
+its served MACs and the bytes of the rows it opens (a row per parameter and per returned field). Beside them, every row's
+own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
 
     python benchmarks/one_stage/block_census.py --sized sized-rank0.json [sized-rank1.json ...] --out DIR
 """
@@ -29,8 +32,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from m1_families import K_MAX
-from verity.protocols.spot.optimize import row_ands, unit_class
-from verity.definitions.call_scope import spec_base, spec_statics
+from verity.protocols.proofs.spot.prover.optimize import row_ands, size_class
+from verity.circuits.call_scope import spec_base, spec_statics
 from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
 
@@ -42,6 +45,13 @@ LOCATION_BITS = 80
 #: width fits: below it a block is mostly its rows' hashing slots (Flock's 2^18-row slots), so a narrower one proves about as
 #: much and adds a hiding leaf a row to every token's commitments
 WIDTH_FLOOR = 22
+#: the columns of a values unit where a ``CHAINS`` row's key blocks are served as scores and values units: the served
+#: partition's width, the combine's column block, so a split's end reads one values unit's row whole
+CHAIN_COLS = 64
+#: the longest row of a family taken whole, by a static of its spec: past it a row's whole statement, though its block is at
+#: most `K_MAX`, stages past a staging job's memory while its family's units stage, so it is cut like the family's longer
+#: rows (each slot's coarsest fitting option), and taken whole only when no option fits
+WHOLE_UP_TO = {"SparseMlaSplit_v1": ("T", 3), "DsaMqaLogits_v3": ("N", 36)}
 
 
 def misfit(e: dict) -> str | None:
@@ -55,7 +65,7 @@ def misfit(e: dict) -> str | None:
         return f"its rows alone need a 2^{b['rows_log']} block"
     if b["est_log"] > K_MAX:
         return f"a 2^{b['est_log']} block at {e['ands']:,} ANDs"
-    if unit_class(sum(b["out_bits"])) is None:
+    if size_class(sum(b["out_bits"])) is None:
         return f"{sum(b['out_bits']):,} output bits, past the widest size class"
     return None
 
@@ -63,14 +73,19 @@ def misfit(e: dict) -> str | None:
 def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     """The slots of a split of row ``spec`` over its sized units (``units``, the row's unit templates past itself): each a
     list of options coarse to fine, an option the units it takes.  A ``PARTS`` row's split is its ``PARTS`` cut when every part
-    has units, else its ``FINAL`` cut (the norm whole: the census names no op_path to tell a layer's norm from the final one)."""
+    has units, else its ``FINAL`` cut (the norm whole: the census names no op_path to tell a layer's norm from the final one).
+    A ``CHAINS`` row's options are its key blocks as scores and values units of `CHAIN_COLS` columns with their key rows'
+    writers, then whole."""
     base = spec_base(spec)
     if base in ST.PARTS:
         for c in (ST.PARTS[base], ST.FINAL.get(base, ())):
             got = [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in c]
             if all(got):
                 return got
-    if base in ST.CUT or base in ST.CHAINS or base in ST.STAGES:
+    if base in ST.CHAINS:
+        by, ways = {u["spec"]: u for u in units}, dict(ST.chain_ways(spec))
+        return [[[by[u] for u, _n in ways[g]] for g in (CHAIN_COLS, None) if g in ways and all(u in by for u, _n in ways[g])]]
+    if base in ST.CUT or base in ST.STAGES:
         return [[[u]] for u in units]
     if base in ST.KCHUNKS:
         whole, chunks = [], defaultdict(list)
@@ -83,10 +98,16 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     return [[[u] for u in units]] if units else []
 
 
+def past_whole(spec: str) -> bool:
+    """Whether row ``spec`` is longer than its family's `WHOLE_UP_TO`."""
+    bound = WHOLE_UP_TO.get(spec_base(spec))
+    return bound is not None and spec_statics(spec)[bound[0]] > bound[1]
+
+
 def leak_cost(units: list[dict]) -> float:
-    """What the sampled-proofs planner pays to prove ``units`` (each taken ``n`` times), up to one factor: a type's samples
+    """What the SPOT planner pays to prove ``units`` (each taken ``n`` times), up to one factor: a type's samples
     grow with its blocks' outputs at their size class plus `LOCATION_BITS`, and each sample's proving with its block's rows."""
-    return sum(u["n"] * (unit_class(sum(u["block"]["out_bits"])) + LOCATION_BITS) * 2 ** u["block"]["est_log"] for u in units)
+    return sum(u["n"] * (size_class(sum(u["block"]["out_bits"])) + LOCATION_BITS) * 2 ** u["block"]["est_log"] for u in units)
 
 
 def widths(spec: str) -> bool:
@@ -117,13 +138,15 @@ def cut(spec: str, f: dict) -> tuple[str, list[dict], str | None]:
     ss = slots(spec, e.get("units", []))
     if widths(spec) and (pick := width_pick([whole, *(ss[0] if ss else [])])) is not None:
         return ("row" if pick == whole else "split"), pick, None
-    if why is None:
+    if why is None and not (ss and past_whole(spec)):
         return "row", whole, None
     got = []
     for opts in ss:
         wide = all(widths(u["spec"]) for o in opts for u in o)
         pick = width_pick(opts) if wide else next((o for o in opts if all(misfit(u) is None for u in o)), None)
         if pick is None:
+            if why is None:
+                return "row", whole, None
             worst = next((u for u in (opts[-1] if opts else []) if misfit(u) is not None), None)
             return "gap", [], f"{why}; finest split {worst['spec']}: {misfit(worst)}" if worst else why
         got += pick
@@ -134,7 +157,7 @@ def _per_unit(u: dict) -> dict:
     b = u["block"]
     out = sum(b["out_bits"])
     nbytes = [-(-x // 8) for x in b["in_bits"]] + [2 * -(-x // 16) for x in b["out_bits"]]
-    return {"out_bits": out, "class_bits": unit_class(out), "in_bits": sum(b["in_bits"]), "ands": u["ands"],
+    return {"out_bits": out, "class_bits": size_class(out), "in_bits": sum(b["in_bits"]), "ands": u["ands"],
             "macs": u.get("macs", 0), "reads": u.get("reads", 0), "asserts": u.get("asserts", 0), "rows": nbytes,
             "row_bytes": sum(nbytes), "open_ands": sum(row_ands(x) for x in nbytes), "k_log": b["est_log"],
             "rows_log": b["rows_log"]}
@@ -266,7 +289,7 @@ def table(c: dict) -> str:
 
 
 def card(c: dict) -> dict:
-    """The planner's card (`benchmarks/sampling_plan/glm53.py` reads it): per proof-block Definition its counts in one
+    """The planner's card (`verity/protocols/proofs/spot/prover/cost/glm53.py` reads it): per proof-block Definition its counts in one
     request, output bits, ANDs, MACs, opened rows' bytes and staged block log2, and the gaps by row family
     (`gap_families`)."""
     keep = ("family", "prefill", "decode", "out_bits", "ands", "macs", "rows", "k_log")

@@ -1,5 +1,6 @@
 """`edge`: a window's edge holds the requests it must leave to the next that have computed a row, in close order, with a field in
-`edge.kv` each, in `edge.ik` and `edge.iks` where its rows read past INDEX_TOPK and in `edge.last` once past its prompt; the next
+`edge.kv` each (over an fp8_ds_mla cache in `edge.scale` and `edge.rope` too), in `edge.ik` and `edge.iks` where its rows read
+past INDEX_TOPK and in `edge.last` once past its prompt; the next
 window's carried requests read their fields only when their counters follow from the close, and are refused by name when they
 don't."""
 from __future__ import annotations
@@ -32,8 +33,8 @@ def test_the_edge_holds_the_requests_that_must_carry_in_close_order():
 
 
 def test_each_port_has_a_field_per_member_holding_it_and_edge_last_only_past_the_prompt():
-    assert [(v.name, v.history) for v in E.VALUES] == [("edge.kv", "prefix"), ("edge.ik", "prefix_ik"), ("edge.iks", "prefix_iks"),
-                                                       ("edge.last", "last_token")]
+    assert [(v.name, v.history) for v in E.VALUES] == [("edge.kv", "prefix"), ("edge.scale", "prefix_scale"), ("edge.rope", "prefix_rope"),
+                                                       ("edge.ik", "prefix_ik"), ("edge.iks", "prefix_iks"), ("edge.last", "last_token")]
     assert E.fields(W) == {"edge.kv": (0, 1, 2), "edge.last": (0, 1)}
     assert E.fields(NEXT) == {"edge.kv": (0, 1, 2), "edge.last": (0, 1, 2)}
     assert E.fields(WA.Advice((C,), (_step((0, 0, 3)),), (0,))) == {"edge.kv": (), "edge.last": ()}
@@ -51,6 +52,18 @@ def test_the_indexer_s_keys_and_scales_are_carried_for_a_request_whose_rows_read
     assert E.fields(W, 7) == {"edge.kv": (0, 1, 2), "edge.ik": (), "edge.iks": (), "edge.last": (0, 1)}
     assert [s.fields for s in E.carried(W, NEXT, 5)] == [{"edge.kv": 0, "edge.ik": 0, "edge.iks": 0, "edge.last": 0},
                                                          {"edge.kv": 1, "edge.last": 1}, {"edge.kv": 2, "edge.ik": 1, "edge.iks": 1}]
+
+
+def test_over_an_fp8_cache_every_member_holding_edge_kv_holds_its_rows_scales_and_k_pe():
+    """An fp8_ds_mla cache's rows are three parts: every member with a field in `edge.kv` has one in `edge.scale` and `edge.rope`,
+    in the same order, and a carried request reads all three; the default cache's edge has neither port."""
+    held = {"edge.kv": (0, 1, 2), "edge.scale": (0, 1, 2), "edge.rope": (0, 1, 2)}
+    assert E.fields(W, fp8=True) == {**held, "edge.last": (0, 1)}
+    assert E.fields(W, 5, fp8=True) == {**held, "edge.ik": (0, 2), "edge.iks": (0, 2), "edge.last": (0, 1)}
+    assert E.fields(W) == {"edge.kv": (0, 1, 2), "edge.last": (0, 1)}
+    assert [s.fields for s in E.carried(W, NEXT, fp8=True)] == [
+        {"edge.kv": 0, "edge.scale": 0, "edge.rope": 0, "edge.last": 0}, {"edge.kv": 1, "edge.scale": 1, "edge.rope": 1, "edge.last": 1},
+        {"edge.kv": 2, "edge.scale": 2, "edge.rope": 2}]
 
 
 def test_a_request_idle_in_a_window_stays_in_its_edge_at_the_state_it_was_carried_in():

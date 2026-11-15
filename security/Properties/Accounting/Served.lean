@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Served
-public import Properties.Accounting.Compose
+public import Properties.Compose.Compose
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The served window's units and sample are the service's, per call (`Spot.Slots.layout`, `Draw.drawUnits`)
+# The served window's units and sample are the service's, per call (`Spot.Slots.layout`, `Draw.sampleUnits`)
 
 The served replacement of `Properties.Compose.UnitsOfLayout` for a window of per-call Programs
 (`Accounting.Served.Shape`, `Accounting.Served.Tie`). `UnitsOfLayout` reads one Program's partition and puts every
@@ -45,15 +45,15 @@ the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of i
 
 * **units** (`CallUnits`): call site `c` is a run of linear `linearOf c`'s Program (`VllmInt8LinearH1{K, N, M = T}`, in
   the form's variant: with each unit's `z` words for `zTree`, its `y` words and the `dequant(z) = y` check for `yOpen`,
-  neither variant written yet) on the gates `[start c, start (c + 1))` of the declared circuit; each non-input gate lies
+  neither variant written yet) on the gates `[start c, start (c + 1))` of the registered circuit; each non-input gate lies
   in the gate span of a proof block of that Program's layout, and its declared unit is that proof block's number
   shifted by the call's first position (`Shape.base`); each input slot's gate is an input; and every proof block's
   number is below the call's unit count (`Shape.unitsOf`), so the calls' units tile the window's positions without
   overlap (W-a);
-* **population** (`ServedUnits`): each linear's Program has the shape's unit count, and the declared circuit's units are
+* **population** (`ServedUnits`): each linear's Program has the shape's unit count, and the registered circuit's units are
   the window's `population`;
 * **the sample** (`SampleMissesSubset`): the verifier's `subset:K_d` sample over the window's population from `L` uniform bytes
-  (`Spot.Draw.drawUnits`, what `flock-verify draw --population N --k K` runs) misses a set `U` no more often
+  (`Spot.Draw.sampleUnits`, what `verity-verify-proof draw --population N --k K` runs) misses a set `U` no more often
   than `Pouw.Window.subsetDraw K_d` of a uniform permutation does. It is over the code alone, like
   `Properties.Spot.DrawMisses`.
 
@@ -62,7 +62,7 @@ seed.
 
 These are stated, not proved. The units and population conjuncts are facts of four compiled Programs a form, checkable
 once by evaluation; the forms' Programs differ in each unit's spans, never in the unit count, so `population` is one for
-all three. The sample conjunct is a property of `drawUnits`, with no premise.
+all three. The sample conjunct is a property of `sampleUnits`, with no premise.
 -/
 
 @[expose] public section
@@ -78,7 +78,7 @@ open Accounting.Compose Accounting.Served
 non-input gates `i` (its gates are `[start c, start (c + 1))`) lies in the gate span of a proof block of `l`, read as
 the Program's root gate `i − start c`, and its declared unit is `base (stepOf c) (linearOf c)` plus that proof block's
 number; each input slot's gate is an input of the call; and every proof block's number is below the call's units. -/
-def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : Spot.Slots.Layout) :
+def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : Spot.Slots.SlotOrder) :
     Prop :=
   (∀ i, start c ≤ i → i < start (c + 1) → i < Cd.dag.length → Cd.binding i = none →
     ∃ b ∈ l.blocks.toList, ∃ u, b.unit = some u ∧ Cd.unit i = L.base (L.stepOf c) (L.linearOf c) + u ∧
@@ -87,8 +87,8 @@ def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (
       start c + b.gates.1 < start (c + 1) ∧ (Cd.binding (start c + b.gates.1)).isSome) ∧
     (∀ b ∈ l.blocks.toList, ∀ u, b.unit = some u → u < L.unitsOf (L.linearOf c))
 
-/-- **The declared circuit's units are the served window's, call by call**: linear `w`'s Program `prog w` under
-`query w` has `unitsOf w` units; the declared circuit has the window's `population` of units; each gate lies in its
+/-- **The registered circuit's units are the served window's, call by call**: linear `w`'s Program `prog w` under
+`query w` has `unitsOf w` units; the registered circuit has the window's `population` of units; each gate lies in its
 call site's gate range `[start c, start (c + 1))`; and every call site's gates are its Program's (`CallUnits`), wherever
 that Program's layout is defined. -/
 def ServedUnits {ι : Type} (L : Shape) (Cd : Declared ι) (prog : ℕ → Spot.Program) (query : ℕ → Json)
@@ -100,26 +100,26 @@ def ServedUnits {ι : Type} (L : Shape) (Cd : Declared ι) (prog : ℕ → Spot.
       CallUnits L Cd start c l
 
 /-- **The verifier's subset sample over a population misses no more often than a uniform `K`-subset**: for every `K ≤ N`,
-number `L` of uniform bytes and set `U`, `drawUnits (subset K) N` is accepted on the bytes and samples no unit of `U` with
+number `L` of uniform bytes and set `U`, `sampleUnits (subset K) N` is accepted on the bytes and samples no unit of `U` with
 probability at most the probability that `Pouw.Window.subsetDraw K` of a uniform permutation of `Fin N` misses `U`. -/
 def SampleMissesSubset : Prop :=
   ∀ (K N L : ℕ) (U : Finset ℕ), K ≤ N →
     prob (fun src : Fin L → Fin 256 => ∃ r,
-        Spot.Draw.drawUnits (.subset K) N (Properties.Spot.bytesOf src) = .ok r ∧
+        Spot.Draw.sampleUnits (.subset K) N (Properties.Spot.bytesOf src) = .ok r ∧
           ∀ u ∈ U, u ∉ r.1) ≤
       prob (fun β : Equiv.Perm (Fin N) => ∀ t ∈ Pouw.Window.subsetDraw K β, t.val ∉ U)
 
-/-- **`UnitsOfLayout`'s seeded schedule and `LayerCommitted` exclude each other** on a well-formed declared circuit with
+/-- **`UnitsOfLayout`'s seeded schedule and `LayerCommitted` exclude each other** on a well-formed registered circuit with
 a run input that some gate reads: `UnitsOfLayout` commits the run input at the sample, and `LayerCommitted` needs it by
 its first reader's round, which is a round of the window. So no circuit with an activation meets both, and the live
 statements can't take `UnitsOfLayout` as written. -/
 def SeededScheduleNotLive : Prop :=
   ∀ (ι : Type) (Cd : Declared ι) (Np Kd : ℕ) (p : Spot.Program) (query : Json)
-    (l : Spot.Slots.Layout),
+    (l : Spot.Slots.SlotOrder),
     Spot.Slots.layout p query = .ok l → Properties.Compose.UnitsOfLayout Cd Np Kd p query → Cd.Wf →
       (∃ ℓ j, Cd.binding ℓ = some .run ∧ j < Cd.dag.length ∧ Cd.Reads j ℓ) → ¬ LayerCommitted Cd
 
-/-- **The served hypothesis**: declared circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
+/-- **The served hypothesis**: registered circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
 units are the per-call Programs' (`ServedUnits`), and the verifier's sample over its population misses as a uniform
 subset does (`SampleMissesSubset`). With `TieCommits` and `TieLive` it gives `Scope`'s two protocol conjuncts
 (`LayerCommitted`, `Declared.Live`; `TieScope`), and it carries `UnitsOfLayout`'s units and sample, per call. -/

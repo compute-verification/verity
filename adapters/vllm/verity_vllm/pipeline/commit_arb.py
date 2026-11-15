@@ -12,14 +12,13 @@ taps, with serve-openai's step-input port)
 committing every step, values retained on host, with a `served_record.SamplerInputsSource` attached and each request seeded as
 serve-openai seeds it (`engine.served_seed.served`: an unseeded stochastic one from its window's seed coin and its request id,
 each window's line naming its coin, ``seed_coin``). It is
-stepped here, without HTTP, under seeded varied traffic: CERT-VARLEN's (``varied_requests`` in
-`benchmarks/network_traces/certifier_serve.py`: chat-turn prompts cut to a length log-uniform in ``--prompt-range``,
-``max_tokens`` uniform in 1 … ``--tokens``, the model's own EOS), arriving as a Poisson process of ``--rate`` requests an
-engine step, and on top of it what that generator leaves at its defaults: a quarter at temperature 0.7 with top-p 0.9 and
-a quarter at temperature 1.0 with top-k 50, half of those with a client seed, a fifth with a stop string, a tenth with
-``min_tokens``. A smaller ``--max-num-batched-tokens`` cuts prompts into chunks, a smaller ``--kv-cache-mb`` makes the
-scheduler preempt and recompute. Nothing here constrains the scheduler: it batches, chunks, preempts and (under async
-scheduling, as the engine resolves it) runs past a finish as it would serving.
+stepped here, without HTTP, under seeded varied traffic: CERT-VARLEN's (chat-turn prompts cut to a length log-uniform in
+``--prompt-range``, ``max_tokens`` uniform in 1 … ``--tokens``, the model's own EOS), arriving as a Poisson process of
+``--rate`` requests an engine step, and on top of it what that generator leaves at its defaults: a quarter at
+temperature 0.7 with top-p 0.9 and a quarter at temperature 1.0 with top-k 50, half of those with a client seed, a fifth
+with a stop string, a tenth with ``min_tokens``. A smaller ``--max-num-batched-tokens`` cuts prompts into chunks, a
+smaller ``--kv-cache-mb`` makes the scheduler preempt and recompute. Nothing here constrains the scheduler: it batches,
+chunks, preempts and (under async scheduling, as the engine resolves it) runs past a finish as it would serving.
 
 ``--prefix-caching`` serves with vLLM's prefix cache, which `verity_vllm.LLM` otherwise keeps off, and traffic that shares
 long prefixes gives it hits: ``--system-prompts N`` opens each request with one of N system prompts, and ``--turns N`` goes
@@ -39,9 +38,11 @@ I3 record, `RequestRecord.to_json`) and ``summary.json`` (with each request's ca
 """
 from __future__ import annotations
 
+import copy
 import json
 import operator
 import shutil
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,7 +50,10 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.commit.challenge import stream
+from verity_vllm.commit.served_record import BlockValues, window_commit
 from verity_vllm.config import UsageError, option
+from verity_vllm.engine.handle import Steps
+from verity_vllm.pipeline import serve_release as SL
 from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
 
@@ -121,7 +125,7 @@ class Options:
 def committer_opts(opts: Options) -> SimpleNamespace:
     """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row."""
     return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, commit=True, seal=False,
-                           retention=SS.RetentionOptions())
+                           retention=SL.RetentionOptions())
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
@@ -188,7 +192,7 @@ def sampling_of(rng: Any, max_tokens: int) -> dict[str, Any]:
 def traffic(encode: Any, n: int, *, seed: int, prompt_tokens: tuple[int, int], max_tokens: int, rate: float,
             chat: bool = True, frame: tuple[str, str] | None = None, system_prompts: int = 0, system_tokens: int = 384,
             turns: int = 0) -> list[dict[str, Any]]:
-    """``n`` requests in arrival order: CERT-VARLEN's prompts and caps (the module docstring) arriving at Poisson engine
+    """``n`` requests in arrival order: CERT-VARLEN's prompts and max_tokens (the module docstring) arriving at Poisson engine
     steps, each with the sampling it asks for. ``encode(text)`` is the tokenizer's (special tokens added); ``frame`` the
     text around a user turn in place of CERT-VARLEN's (`template_frame`).
 
@@ -201,7 +205,8 @@ def traffic(encode: Any, n: int, *, seed: int, prompt_tokens: tuple[int, int], m
     head, tail = frame or ((CHAT_HEAD, CHAT_TAIL) if chat else ("", "\n\nAnswer: "))
     bos = encode("")
     tail_ids = encode(tail)[len(bos):]
-    filler, k = [], 1
+    filler: list[int] = []
+    k = 1
     while len(filler) < hi:
         filler, k = encode(VARIED_FILLER * k)[len(bos):], 2 * k
     heads = [encode(head + q) for q in QUESTIONS]
@@ -269,7 +274,8 @@ class Windows:
 
     def __init__(self, com: Any, record: Any, out: Path, window_steps: int, coins: Any) -> None:
         self.com, self.record, self.out, self.window_steps, self.coins = com, record, out, int(window_steps), coins
-        self.window, self.is_open, self.records, self.seed_coin = -1, False, [], None
+        self.window, self.is_open, self.seed_coin = -1, False, None
+        self.records: list[dict[str, Any]] = []
 
     def before_step(self) -> None:
         if self.is_open and int(self.com._step_index) >= self.window_steps:
@@ -282,17 +288,15 @@ class Windows:
             self.is_open = True
 
     def close(self) -> None:
-        from verity_vllm.commit.served_record import window_commit
-
         if not self.is_open:
             return
         rc = self.com.finalize() if int(self.com._step_index) else None
         readback = self.record.absorb(self.com, self.window) if rc is not None else None
         self.com.uninstall()
         self.is_open = False
-        rec = {"window": self.window, "commit": window_commit(rc) if rc is not None else {"passed": True, "steps": 0, "empty": True},
-               "seed_coin": self.seed_coin, "readback": readback}
-        rec["passed"] = rec["commit"]["passed"] and (readback is None or readback["passed"])
+        commit: dict[str, Any] = window_commit(rc) if rc is not None else {"passed": True, "steps": 0, "empty": True}
+        rec = {"window": self.window, "commit": commit, "seed_coin": self.seed_coin, "readback": readback}
+        rec["passed"] = commit["passed"] and (readback is None or readback["passed"])
         self.records.append(rec)
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")
@@ -314,8 +318,6 @@ def prefix_negative(record: Any, checks: list[tuple[dict, dict | None, dict]], s
     """The negative control on the run's own records: in the first request that read a prefix from the cache, the middle
     position of its first span flipped in the record of the request that committed it; both requests' checks must then fail.
     None when no request read from the cache."""
-    import copy
-
     hit = next(((q, c) for q, _f, c in checks if c.get("prefix_spans")), None)
     if hit is None:
         return None
@@ -339,10 +341,9 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
     from vllm import SamplingParams
     from vllm.sampling_params import RequestOutputKind
 
-    from verity_vllm.commit.served_record import BlockValues
     from verity_vllm.engine import served_seed
 
-    engine = llm.vllm.llm_engine
+    engine: Steps = llm.vllm.llm_engine
     coins = served_seed.SeedCoins()
     by_id = {q["request_id"]: q for q in requests}
     record = BlockValues(known=by_id)
@@ -422,8 +423,6 @@ def summarize(checks: list[tuple[dict, dict | None, dict]], windows: list[dict],
               prefix_caching: bool = False, negative: dict[str, Any] | None = None, skipped: Sequence[str] = ()) -> dict[str, Any]:
     """The run's counts and verdict. With ``prefix_caching``, it passes only when some request read a prefix from the cache
     and the negative control on the records (`prefix_negative`) was caught."""
-    from collections import Counter
-
     failed = [q["request_id"] for q, _f, c in checks if not c["passed"]]
     finishes = Counter(("stop-string" if isinstance(f.get("stop_reason"), str) else str(f.get("reason"))) if f else "unfinished"
                        for _q, f, _c in checks)
@@ -456,7 +455,7 @@ def summarize(checks: list[tuple[dict, dict | None, dict]], windows: list[dict],
             "passed": bool(checks) and not failed and not bad_windows and not prefix_problems}
 
 
-def scheduler_config(engine: Any) -> dict[str, Any]:
+def scheduler_config(engine: Steps) -> dict[str, Any]:
     """What the engine resolved of the settings that decide its schedules (async scheduling is vLLM's to resolve)."""
     vc = engine.vllm_config
     sc, cc = vc.scheduler_config, vc.cache_config

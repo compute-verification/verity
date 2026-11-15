@@ -9,33 +9,34 @@ five tokens and then a decode step of one, and in each window long rows of TOPK 
   window's from the first's, and each read opens its table's root at its key, to the latent row there (the placeholder past
   the table's length);
 * the reads' roots, domain ids and verdicts are committed by reference to the tables' supplied values, the writer's rows as
-  their table's strings (hashed once), and the verifier's pins recompute each table's root from the writer's public strings,
-  the second window's after the first window's held strings, the root the window registers.
+  their table's strings (hashed once), and the verifier recomputes each table's root from the writer's public
+  strings, the second window's after the first window's held strings, and holds the root the window registers to it.
 """
 from __future__ import annotations
 
 import json
 import os
 from types import SimpleNamespace
+from typing import TypedDict
 
 import numpy as np
 import pytest
-from verity.protocols.spot.verifier.one_stage import draw as D
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.definitions.registry import boolean_dsa_norm as BDN
-from verity.definitions.registry import dsa_norm as DN
-from verity.commitments.windows import history as HW
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity_vllm.definitions.registry import boolean_dsa_norm as BDN
+from verity_vllm.definitions.registry import dsa_norm as DN
+from verity.commitments.periods import history as HW
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.commit import history_tables as H
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import history_rows as HR
 from verity_vllm.pipeline import serving_rows as SRW
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
 KVL, R, EPS, TOPK, WORDS = 512, 64, 1e-5, 4, 576
 LATENT = bind(DN.DsaLatentRow, KVL=KVL, R=R, EPS=EPS)
@@ -43,8 +44,14 @@ LAT = descriptor_id(bind(BDN.DsaLatentRowV2, KVL=KVL, R=R, EPS=EPS))
 READ = descriptor_id(EMB.read(HT.CAPACITY, WORDS))
 TMPLS, CAPS = [LAT, READ], {LAT: 4, READ: 3}
 PROGRAM, RUN = "ab" * 64, "cd" * 32
+class Window(TypedDict):
+    step: int
+    tokens: int
+    reads: list[tuple[int, int, list[int]]]
+
+
 #: each window's steps: its latent rows' tokens, and its long rows, each (layer, its token, its keys)
-WINDOWS = [
+WINDOWS: list[Window] = [
     {"step": 0, "tokens": 5, "reads": [(3, 3, [0, 2, 3, 9]), (3, 4, [1, 3, 4, 0]), (5, 3, [3, 2, 1, 0]), (5, 4, [4, 4, 0, 7])]},
     {"step": 1, "tokens": 1, "reads": [(5, 0, [5, 0, 3, 2])]},
 ]
@@ -64,7 +71,9 @@ def build(monkeypatch) -> SimpleNamespace:
     store of their served latent rows (each its `LATENT` on its kv, the layer's norm weight and its cache row) and every latent
     row by (layer, position); the serving rows read their operands from here on."""
     rng = np.random.default_rng(0xD5A)
-    ops, held, latent, windows, i = {}, {}, {}, [], 0
+    held: dict[tuple[int, str, int], np.ndarray] = {}
+    latent: dict[tuple[int, int], np.ndarray] = {}
+    ops, windows, i = {}, [], 0
     norm = {layer: _bf16(rng, KVL, 0.05, 1.0) for layer in LAYERS}
     for layer in LAYERS:
         ops[json.dumps([["p", layer, 0, KVL]])] = norm[layer]
@@ -181,13 +190,15 @@ def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:
 def windows(served, commit=None):
     """Both windows over one committer's tables, each window's members and what it commits (`serving_rows.window_values`),
     checked as the module docstring says; ``commit`` (members, values) -> what else to check of the window."""
-    hs, held = H.Histories(PROGRAM), {}
+    hs = H.Histories(PROGRAM)
+    held: dict[str, list[bytes]] = {}
     for k, rows in enumerate(served.windows):
         plan, ms = cut(rows)
-        edges = {key: hs.edge(*key) for key in plan.keys()}
+        tables = plan.keys()
+        edges = {key: hs.edge(*key) for key in tables}
         got = SRW.window_values((commit or {}).get("window", light)(ms), rows, served.store, None, histories=hs, on=True)
         data, entries, roots, salts_of, strings_of, _idx, hreg = got
-        assert {key: hs.edge(*key) for key in plan.keys()} == {key: edges[key] + WINDOWS[k]["tokens"] for key in edges}
+        assert {key: hs.edge(*key) for key in tables} == {key: edges[key] + WINDOWS[k]["tokens"] for key in edges}
         for key, t in hs.tables.items():
             assert all(np.array_equal(t.rows[p], served.latent[(key[1], p)]) for p in range(len(t.rows)))
         base = min(x.base for x in ms if x.template == READ)
@@ -205,9 +216,9 @@ def windows(served, commit=None):
                 assert d["outs"]["o0"][i].tolist() == want.tolist()
         writers = sorted((m for m in ms if m.template == LAT), key=lambda m: m.base)
         assert b"".join(strings_of[m.port("o0")] for m in writers) == b"".join(
-            hs.strings("r0", key[1], range(edges[key], hs.edge(*key))) for key in plan.keys())
-        assert roots == {H.name(*key): hs.tables[key].root.hex() for key in plan.keys()}
-        assert [h.name for h in hreg.histories] == [H.name(*key) for key in plan.keys()]
+            hs.strings("r0", key[1], range(edges[key], hs.edge(*key))) for key in tables)
+        assert roots == {H.name(*key): hs.tables[key].root.hex() for key in tables}
+        assert [h.name for h in hreg.histories] == [H.name(*key) for key in tables]
         assert [h.runs[0].get("held") for h in hreg.histories] == [h.name if k else None for h in hreg.histories]
         for h in hreg.histories:
             bcs = recomputed(h, ms, strings_of, held)
@@ -225,10 +236,12 @@ def test_every_latent_row_is_appended_from_its_edge_and_each_read_opens_its_tabl
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_HISTORY_E2E"),
                     reason="VERITY_VLLM_HISTORY_E2E=1: about 5 minutes on a CPU, building the Boolean DsaLatentRow_v2 and the "
                            "V = 2^17 read's population program")
+@pytest.mark.slow
 def test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root(served):
     """The cheaper test recomputes each root from the declared runs over the strings `window_values` gives `rows.commit`;
-    this one commits the window (`rows.commit`, its strings given and not) and pins each table from its public bodies and
-    circuit record (`ml.windows.history.pins`), as the verifier does."""
+    this one commits the window (`rows.commit`, its strings given and not), pins each table at the root the window
+    registers (`history.pins`) and holds that root to the one over its writers' public bodies and the strings held of its
+    earlier windows (`history.params`, `history.roots_of`), as the verifier does."""
     held: dict[str, list[bytes]] = {}
 
     def check(rows, ms, data, roots, salts_of, strings_of, hreg):
@@ -239,9 +252,12 @@ def test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verif
         assert full.roots == c.roots and full.bc == c.bc
         publics = {m.key: c.public_body(i) for i, m in enumerate(ms)}
         doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows, None, hreg)))
-        pins, held = HW.pins(doc, w, publics, roots, held)
+        pins = HW.pins(doc, roots)
         assert pins == {h.name: {"value": h.name, "root": roots[h.name], "leaves": HT.CAPACITY, "words": WORDS,
                                  "domain": HT.domain(PROGRAM, h.name, WORDS, HT.CAPACITY).domain_id.hex()} for h in hreg.histories}
+        checked = HT.roots_of(CS.leaf_layer(publics), HW.params(doc, w, publics, pins, held))
+        assert {name: root.hex() for name, (root, _domain) in checked.items()} == roots
+        held = {h.name: HW.strings(h, w, publics, held) for h in hreg.histories}
 
     windows(served, {"window": binding, "check": check})
 

@@ -84,6 +84,8 @@ class BlockPool:
         self.B = engine.block_size
         self.L = engine.max_model_len
         self.caching = engine.enable_prefix_caching
+        # with a draft: every allocation takes slots for this many tokens past its row, and a hit drops its last block
+        self.lookahead = engine.num_speculative_tokens
         self.watermark_blocks = int(engine.watermark * engine.num_gpu_blocks)
         self.free: _Free | _FreeFork = _Free(range(1, engine.num_gpu_blocks))  # block 0 is the null block
         self.ref = [0] * engine.num_gpu_blocks
@@ -99,6 +101,7 @@ class BlockPool:
         assert isinstance(self.free, _Free)
         k = object.__new__(BlockPool)
         k.B, k.L, k.caching, k.watermark_blocks = self.B, self.L, self.caching, self.watermark_blocks
+        k.lookahead = self.lookahead
         k.free, k.ref, k.block_hash, k.owner = _FreeFork(self.free), list(self.ref), list(self.block_hash), list(self.owner)
         k.by_hash, k.mine = dict(self.by_hash), set()
         k.req_blocks = {i: list(bs) for i, bs in self.req_blocks.items()}
@@ -147,7 +150,8 @@ class BlockPool:
             self.free.push(b, front=False)
 
     def hit(self, r: RequestState) -> list[int]:
-        """`find_longest_cache_hit` over the request's full-block hashes, at most `num_tokens - 1` tokens."""
+        """`find_longest_cache_hit` over the request's full-block hashes, at most `num_tokens - 1` tokens; with a draft,
+        less its last block (the drafter reads the hidden states just before the first token computed)."""
         if not self.caching:
             return []
         out = []
@@ -156,6 +160,8 @@ class BlockPool:
             if not blocks:
                 break
             out.append(next(iter(blocks)))
+        if self.lookahead and out:
+            out.pop()
         return out
 
     def blocks_to_allocate(self, r: RequestState, num_tokens: int, hit: Sequence[int]) -> int:
@@ -170,7 +176,7 @@ class BlockPool:
         wm = self.watermark_blocks if has_scheduled_reqs and r.status in (WAITING, PREEMPTED) else 0
         if full_sequence_must_fit and self.blocks_to_allocate(r, min(r.num_tokens, self.L), hit) + wm > len(self.free):
             return False
-        need_slot = min(total + n, self.L)
+        need_slot = min(total + n + self.lookahead, self.L)
         if self.blocks_to_allocate(r, need_slot, hit) + wm > len(self.free):
             return False
         if dry:

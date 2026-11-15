@@ -1,4 +1,4 @@
-"""h1_prove's window and the verifier's view of it (`h1_prove/window.py`, `run.py`, `h1unit.py`, `stage.py`), without the
+"""h1_prove's window and the verifier's view of it (`h1_prove/window.py`, `recorded.py`, `h1unit.py`, `stage.py`), without the
 unit's circuit: the window's public Program and template-instance partition derive exactly the tiles it commits and the
 rows each reads, its registered values (each call's A table and z table, its tiles' z/y records, `scaled_mm_zy`'s, and
 the weights' b/<K>) are read where the window's own reads say, every per-window value's domain binds the window's open
@@ -12,39 +12,32 @@ opened ``b || c`` and paths is Flock's own over the rows."""
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
+
+import h1form as F
+import layer as L
 import numpy as np
 import pytest
+import recorded as RN
+import window as W
+from conftest import load
 
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 H1 = Path(__file__).resolve().parents[1] / "h1_prove"
-sys.path.insert(0, str(H1))
-import h1unit as U  # noqa: E402
-
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
-
-
-def _module(name: str, file: str):
-    spec = importlib.util.spec_from_file_location(name, H1 / file)
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    return m
-
-
-RN = _module("h1_prove_run", "run.py")
-W = _module("h1_prove_window", "window.py")
-ST = _module("h1_prove_stage", "stage.py")
+#: by `load`: hidden_zk holds a ``stage.py`` too
+ST = load("h1_prove/stage.py")
 
 K = 64
 R, C = U.TILE
@@ -112,7 +105,7 @@ def reference(z: dict, i: int) -> tuple[list[int], int]:
 
 @pytest.fixture(scope="module")
 def win():
-    """`run.program_of` the tests' window shape (`SHAPE`), which every commitment registers under: the tile's Program
+    """`recorded.program_of` the tests' window shape (`SHAPE`), which every commitment registers under: the tile's Program
     traces its seed and noise circuits, about 35 s at any K, and its partition about 14 s more."""
     return RN.program_of(K, *SHAPE)
 
@@ -151,7 +144,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     assert RN.check_registration(win, dict(com, window_root=U.open_root("v", bytes(64)))) != []
     why = RN.check_registration(win, RN.unrooted(com))
     assert len(why) == 1 and why[0].startswith("its registered entries")
-    port = {p.name: p for p in U.Shape(K).ports()}
+    port = {p.name: p for p in F.shape(K).ports()}
     assert [bytes(x) for x in priv["bcb"]] == U.commit_strings(port["b0"], U.row_words(priv["b"], priv["scale_b"]),
                                                                [bytes(s) for s in priv["sb"]])
     assert [bytes(x) for x in priv["bczy"]] == U.commit_strings(port["zy"], priv["zyw"], [bytes(s) for s in priv["szy"]])
@@ -174,7 +167,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     assert U.window_roots(com) == (hashlib.sha512(U.A_TABLES_TAG + a_roots).digest(), bytes.fromhex(reg[f"b/{K}"][1]))
 
     assert T == 2 * (8 // R) * (16 // C) == win.tp.population
-    assert win.query["params"]["templates"] == [P.template_instance_query(U.Shape(K).definition())["params"]["template"]]
+    assert win.query["params"]["templates"] == [P.template_instance_query(F.shape(K).definition())["params"]["template"]]
     assert [(t, first, n) for _k, t, first, n in win.tp.ranges] == [(win.query["params"]["templates"][0], c["tile0"], c["tiles"])
                                                                     for c in com["calls"]]
     assert [n for n, _t in win.program.fn.signature()[0]] == [f"a/{K}", f"b/{K}", "zy", "salt", "position", "roots"]
@@ -211,7 +204,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     params = {port: key for key, port in U.window_ports(win.program).items() if port != key}
     for c, (first, n) in enumerate(U.HW.call_units(win.program)):
         reads = U.registered_reads(win.program, win.tp, c, roots, "w", wr, win.obj["program"])
-        assert sorted(reads["ports"]) == sorted([*U.Shape(K).in_rows, "o1"])
+        assert sorted(reads["ports"]) == sorted([*F.shape(K).in_rows, "o1"])
         for p, e in reads["ports"].items():
             v = U.unit_reads(win.program, win.tp, first)[p][0]
             assert e.get(G.PARAM_KEY) == params.get(p), "a renamed A or B row names the parameter it reads"
@@ -233,7 +226,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         assert wrote["roots"]["ok"] == okr.root.hex() and "o1" in wrote["ports"]
         docs[c] = doc
 
-    # flock-verify holds ok's root to its known rows (Registered.checkKnown): a root with one unit's row 0 is refused, as
+    # the Lean verifier holds ok's root to its known rows (Registered.checkKnown): a root with one unit's row 0 is refused, as
     # are known rows of another window's salts, too few of them, or a wider row
     o1 = docs[0]["ports"]["o1"]
     kr = RN.ok_known_root(tmp_path / "ok-known-root.registered.json", win, com, docs[0], 3)
@@ -252,35 +245,35 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     # the window root, and another window's root
     desc, calls = RN.credit_descriptor(win), U.HW.call_units(win.program)
     assert hashlib.sha512(desc).hexdigest() == win.obj["program"]
-    drawn = [calls[0][0] + 1, calls[1][0]]
-    found = {u: RN.findings_of(docs[c]) for c, u in enumerate(drawn)}
-    assert found[drawn[1]]["o1"] == {"value": "ok", "root": okr.root.hex()}
+    sampled = [calls[0][0] + 1, calls[1][0]]
+    found = {u: RN.findings_of(docs[c]) for c, u in enumerate(sampled)}
+    assert found[sampled[1]]["o1"] == {"value": "ok", "root": okr.root.hex()}
     entries, ok = com["registered"], {"value": "ok", "root": okr.root.hex()}
-    assert RN.credit_registration(desc, drawn, entries, found, wr, ok) is None
+    assert RN.credit_registration(desc, sampled, entries, found, wr, ok) is None
     okd = G.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
-    assert RN.credit_registration(desc, drawn, [*entries, dict(okr.entry(), domain=okd)], found, wr, ok) is None, (
+    assert RN.credit_registration(desc, sampled, [*entries, dict(okr.entry(), domain=okd)], found, wr, ok) is None, (
         "the ok rows are the verifier's own, which credit builds and `_verified` holds each session to: registration "
         "reads no entry of them")
     # ok-unrooted: the sessions opened ok at its rows registered without the window root (the domain a file states
-    # without it, which flock-verify roots its known rows at), and credit's step-5 rule refuses them
+    # without it, which the Lean verifier roots its known rows at), and credit's step-5 rule refuses them
     oku = RN.unrooted_ok(win, com)
     assert oku.root != okr.root and oku.domain.domain_id.hex() == okd
     assert oku.root == G.Registered.commit(win.obj["program"], "ok", [[1]] * T, [U.ok_salt("w", u) for u in range(T)],
                                            16, U.V2, None).root
     bad_found = {u: dict(f, o1=dict(f["o1"], root=oku.root.hex())) for u, f in found.items()}
-    for bad, why in ((bad_found, f"call 0's session of unit {drawn[0]} opened the ok rows at another port, value or root"),
-                     ({drawn[0]: found[drawn[0]], drawn[1]: {p: e for p, e in found[drawn[1]].items() if p != "o1"}},
-                      f"call 1's session of unit {drawn[1]} opened the ok rows"),
+    for bad, why in ((bad_found, f"call 0's session of unit {sampled[0]} opened the ok rows at another port, value or root"),
+                     ({sampled[0]: found[sampled[0]], sampled[1]: {p: e for p, e in found[sampled[1]].items() if p != "o1"}},
+                      f"call 1's session of unit {sampled[1]} opened the ok rows"),
                      ({u: dict(f, o2=f["o1"]) for u, f in found.items()}, "opened the ok rows at another port")):
-        got = RN.credit_registration(desc, drawn, entries, bad, wr, ok)
+        got = RN.credit_registration(desc, sampled, entries, bad, wr, ok)
         assert got is not None and got[0] == "registration" and why in got[1], got
     for bad_entries, root, why in (
             (RN.unrooted(com)["registered"], wr, f"registered value a/{K}@0's domain is not"),
             (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
             ([e for e in entries if e["value"] != f"b/{K}"], wr, f"against b/{K}, which the window registers not")):
-        got = RN.credit_registration(desc, drawn, bad_entries, found, root, ok)
+        got = RN.credit_registration(desc, sampled, bad_entries, found, root, ok)
         assert got is not None and got[0] == "registration" and why in got[1], got
-    assert RN.credit_registration(desc, [*drawn, 0], entries, found, wr, ok)[0] == "missing"
+    assert RN.credit_registration(desc, [*sampled, 0], entries, found, wr, ok)[0] == "missing"
 
     salt = U.unit_salt(U.stand_in_reveal(b"\x09" * 32), 1)
     served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
@@ -288,12 +281,12 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     units = list(range(T))
     assert all(RN.check_opening(win, com, served, op, u) == [] for u, op in zip(units, opened(tmp_path, "w", salt, units, "all")))
     with pytest.raises(ValueError, match="power of two"):
-        U.Shape(K).window(U.window_shape(com)[0], 6)
+        F.shape(K).window(U.window_shape(com)[0], 6)
     assert [U.slot(n) for n in (1, 4, 5, 8, 9, 16, 17)] == [4, 4, 8, 8, 16, 16, 32]
 
 
 @pytest.mark.slow
-def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
+def test_sampled_proof_blocks_open_to_their_window_and_no_other(tmp_path, win):
     """A sampled proof block's opening passes its own window's roots and no other's (a flipped record's, a receipt of another salt's,
     another window's), its ok row is the one word 1 under its public salt and row u of the verifier's registered ``ok``
     (a 0 row there opens no root; ``--unregistered-ok`` states no ok registration), a prover's rows with a tampered A row
@@ -314,7 +307,7 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
     assert all(np.array_equal(w, U.OK) for w in rows["w_o1"])
     assert [bytes(s) for s in rows["s_o1"]] == [U.ok_salt("w1", u) for u in units]
     assert [reference(rows, i)[1] for i in range(3)] == [1, 1, 1]
-    prog, T, o1, wr = win.obj["program"], com["tiles"], U.Shape(K).ports()[-1], U.window_open_root(com)
+    prog, T, o1, wr = win.obj["program"], com["tiles"], F.shape(K).ports()[-1], U.window_open_root(com)
     okr = U.register_ok(prog, "w1", T, wr)
     assert (rows["v_o1"].tolist(), rows["r_o1"].tolist()) == (["ok"] * 3, units)
     for i, u in enumerate(units):
@@ -324,21 +317,21 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
             assert U.verify_registered(prog, "ok", T, okr.root, u, bc, [str(rows["p_o1"][i])], wr) is opens
         assert not U.verify_registered(prog, "ok", T, okr.root, u, U.commit_strings(o1, rows["w_o1"][i][None, :],
                                        [bytes(rows["s_o1"][i])])[0], [str(rows["p_o1"][i])], U.open_root("v", bytes(64)))
-    st = U.statement_tables(dict(rows), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
+    st = U.statement_tables(dict(rows), [*F.shape(K).in_rows, "pub"], ["o0", "o1"])
     assert st["registered"]["o1"] == {"value": "ok", "positions": units, "paths": [okr.path(u).hex() for u in units]}
     opened(tmp_path, "w1", salt, units, "ok-unregistered", "--unregistered-ok")
     loose = dict(np.load(tmp_path / "ok-unregistered" / "rows.npz"))
     assert not {"v_o1", "r_o1", "p_o1"} & set(loose) and np.array_equal(loose["w_o1"], rows["w_o1"])
-    assert "o1" not in U.statement_tables(loose, [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])["registered"]
+    assert "o1" not in U.statement_tables(loose, [*F.shape(K).in_rows, "pub"], ["o0", "o1"])["registered"]
 
-    a0 = U.Shape(K).ports()[0]
+    a0 = F.shape(K).ports()[0]
     ops = opened(tmp_path, "w1", salt, units, "tampered", "--tamper-a")
     assert [RN.check_opening(win, com, served, op, u) for u, op in zip(units, ops)] == [[]] * 3
     bad = np.load(tmp_path / "tampered" / "rows.npz")
     assert [int(np.count_nonzero(x != y)) for x, y in zip(bad["w_a0"], rows["w_a0"])] == [1, 1, 0]
     assert bytes(bad["s_a0"][0]) == bytes(bad["s_a0"][1]) != bytes(rows["s_a0"][0])
     assert np.array_equal(bad["w_a1"], rows["w_a1"]) and np.array_equal(bad["p_a0"], rows["p_a0"])
-    st = U.statement_tables(dict(bad), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
+    st = U.statement_tables(dict(bad), [*F.shape(K).in_rows, "pub"], ["o0", "o1"])
     assert st["registered"]["a0"]["positions"] == [0, 4] and st["registered"]["a0"]["value"] == f"a/{K}@1"
     reg = U.registered_of(com)
     for z, opens in ((rows, True), (bad, False)):
@@ -347,7 +340,7 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
                                    [str(z["p_a0"][0])], wr) is opens
     opened(tmp_path, "w1", salt, [0, 5], "two-calls")
     with pytest.raises(ValueError, match="one call's units a statement"):
-        U.statement_tables(dict(np.load(tmp_path / "two-calls" / "rows.npz")), [*U.Shape(K).in_rows, "pub"], ["o0", "o1"])
+        U.statement_tables(dict(np.load(tmp_path / "two-calls" / "rows.npz")), [*F.shape(K).in_rows, "pub"], ["o0", "o1"])
 
     for flag, port, value in (("--zy-word", "zy", "zy@1"), ("--receipt", "o0", "receipt")):
         served_t, com_t = tampered(tmp_path, "w1", flag, "5")
@@ -371,7 +364,7 @@ def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
 
 @pytest.mark.slow
 def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its_record_moved(tmp_path, win):
-    """Each in-proof negative's tampered window (`window.py tamper`, `run.IN_PROOF`) opens to its own registration and
+    """Each in-proof negative's tampered window (`window.py tamper`, `recorded.IN_PROOF`) opens to its own registration and
     not the honest one, and changes exactly the value it names: the receipt word 0 plus one, a record's y of cell 0 plus
     one, its z of cell 0 plus one with y that z's dequant, two units' records exchanged, the record of the same tile in the
     other call, a record of z alone, a D_1 word one too large, a changed record re-registering its call's z table alone.
@@ -434,24 +427,24 @@ def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its
 
 
 def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
-    """`h1unit.layout`, the form every H1 stager takes (`h1unit.stager`): unset, empty or ``flat`` the flat statement,
-    ``structural`` the templated statement at `h1unit.LAYOUT`, another mode the templated one at it, and anything else
-    refused by name."""
+    """`h1unit.layout`, the form every H1 stager takes (`h1unit.stager`), as ``H1_TMPL`` hands it in (`h1form.layout`):
+    unset, empty or ``flat`` the flat statement, ``structural`` the templated statement at `h1unit.LAYOUT`, another mode
+    the templated one at it, and anything else refused by name."""
     monkeypatch.delenv("H1_TMPL", raising=False)
-    assert U.layout() is None
+    assert F.layout() is None and U.layout() is None
     for value, want in (("", None), ("flat", None), ("structural", U.LAYOUT), ("iv/hybrid/4", "iv/hybrid/4"), ("iv", "iv")):
         monkeypatch.setenv("H1_TMPL", value)
-        assert U.layout() == want
+        assert F.layout() == U.layout(value) == want
     monkeypatch.setenv("H1_TMPL", "hybrid/4")
     with pytest.raises(ValueError, match="'hybrid/4' is not a layout mode"):
-        U.layout()
+        F.layout()
 
 
 @pytest.mark.slow
-def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
+def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch):
     """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
     statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as
-    for an assertion), the flat statement, said on stderr."""
+    for an assertion), the flat statement, said in a warning."""
     from verity.circuits.boolean import BIT
     from verity.circuits.boolean.forms import add
     from verity.circuits.boolean.trace import definition
@@ -473,18 +466,17 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
         raise NotImplementedError(f"{definition.id}: an assertion is not laid out: its row reads its own column")
 
     monkeypatch.setattr(SL, "lower", refuse)
-    capsys.readouterr()
-    fell = U.stager(d, "unit/toy", rows, outs, U.LAYOUT)
+    with pytest.warns(UserWarning, match="the flat statement: struct_lower refuses H1StagerToy"):
+        fell = U.stager(d, "unit/toy", rows, outs, U.LAYOUT)
     assert not hasattr(fell.low, "template") and fell.pin == flat.pin
-    assert "the flat statement: struct_lower refuses H1StagerToy" in capsys.readouterr().err
 
 
 def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public
     row 100), and by default `window_ports`' A and B ports, which credit's registered file reads, with the rest unchanged."""
-    from verity.protocols.pouw.prover.circuit import h1window as HW
-    for shape in (U.Shape(64), U.Shape(128)):
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+    for shape in (F.shape(64), F.shape(128)):
         t = shape.definition()
         bits = {p.name: p.bits for p in shape.ports()}
         reads = {port: key for key, port in U.ports(t).items()}
@@ -529,13 +521,13 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     """Three units of a window, units 0 and 2 reading the same A rows and units 0 and 1 the same B rows, each its own
     record: the prover's shared-row statement (`h1unit.statement_tables` through Flock's `circuit.write`, as `stage.py`
     stages it) and the verifier's own file (`h1unit.verifier_pub`, from the units' ``b || c``, positions and paths alone)
-    are one file byte for byte, every A, B, record and ok table row opening its registered root (`run.registered_opens`,
-    flock-verify --registered's check; ok's the verifier's own, `h1unit.register_ok`). An ok row of 0 opens none, ok rows
+    are one file byte for byte, every A, B, record and ok table row opening its registered root (`recorded.registered_opens`,
+    the Lean verifier's check under --registered; ok's the verifier's own, `h1unit.register_ok`). An ok row of 0 opens none, ok rows
     committed afresh state no ok registration, a prover's A row the registration does not hold opens none, two rows at one
     position are refused, and a forged statement (`h1unit.forge_statement`) is the verifier's file of a window with the
     wrong output row."""
     from verity_flock import circuit as FC
-    ports = U.Shape(K).ports()
+    ports = F.shape(K).ports()
     names = [p.name for p in ports]
     ins, outs, reg_ports = names[:-2], names[-2:], names[:-3]
     assert reg_ports[-1] == "zy" and ins[-1] == "pub"
@@ -666,7 +658,6 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
 
 def test_vllm_quant_puts_each_rows_absmax_at_127_rounding_to_nearest():
     """vLLM's quantizer (and H1's) give each row's codes and its f32 scale, the one the window commits beside them."""
-    L = _module("h1_prove_layer", "layer.py")
     x = np.array([[0.5, -2.0, 1.1, 0.26, 9.0], [-4.0, 1.0, 0.016, -0.015, 3.0]], np.float32)
     q, s = L.quant_vllm(x)
     assert q.tolist() == [[7, -28, 16, 4, 127], [-127, 32, 1, 0, 95]]
@@ -682,6 +673,31 @@ def test_vllm_quant_puts_each_rows_absmax_at_127_rounding_to_nearest():
     qw, sw = L.quant_w(x)
     assert sa.tolist() == [np.float32(9.0) / np.float32(126), np.float32(4.0) / np.float32(126)] and qa.max() == 125
     assert sw.tolist() == [np.float32(9.0) / np.float32(110), np.float32(4.0) / np.float32(110)] and qw.max() == 110
+
+
+def test_a_layers_tokens_come_from_the_seed_or_the_models_tokenizer_and_a_tokenizer_that_fails_raises(tmp_path, monkeypatch):
+    """`layer.tokens_of` gives the seed's ids where a seed is given and a fresh seed's where the model has no tokenizer;
+    where it has one, the prompt's ids are the tokenizer's, and a tokenizer that doesn't load raises instead of
+    falling back to a fresh seed."""
+    seeded = L.tokens_of(tmp_path, 6, b"\x01" * 16)
+    assert seeded == L._seeded(6, b"\x01" * 16) != L._seeded(6, b"\x02" * 16) and seeded[0] == 128000
+    fresh = L.tokens_of(tmp_path, 6, None)
+    assert len(fresh) == 6 and fresh[0] == 128000 and all(0 <= t < 128000 for t in fresh[1:])
+
+    class Tokenizer:
+        @staticmethod
+        def from_file(path):
+            if Path(path).read_text() != "{}":
+                raise ValueError(f"{path} is no tokenizer")
+            return SimpleNamespace(encode=lambda text, add_special_tokens: SimpleNamespace(ids=list(range(len(text)))))
+
+    monkeypatch.setitem(sys.modules, "tokenizers", SimpleNamespace(Tokenizer=Tokenizer, __spec__=object()))
+    assert L.tokens_of(tmp_path, 6, None)[1:] != [0, 1, 2, 3, 4]
+    (tmp_path / "tokenizer.json").write_text("{}")
+    assert L.tokens_of(tmp_path, 6, None) == [128000, 0, 1, 2, 3, 4]
+    (tmp_path / "tokenizer.json").write_text("truncated")
+    with pytest.raises(ValueError, match="is no tokenizer"):
+        L.tokens_of(tmp_path, 6, None)
 
 
 def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_path, monkeypatch):
@@ -762,7 +778,7 @@ def test_the_window_open_root_is_pouws_of_the_weights_and_a_stand_in_request_tab
 
 def test_the_verifiers_frame_is_c_flocks():
     from verity_flock import circuit as FC
-    ports = U.Shape(K).ports()
+    ports = F.shape(K).ports()
     rng = np.random.default_rng(3)
     n = 3
     rows = {p.name: rng.integers(0, 1 << 16, (n, p.words)).astype(np.uint16) for p in ports}

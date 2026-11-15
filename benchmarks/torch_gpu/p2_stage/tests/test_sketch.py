@@ -16,6 +16,7 @@ import torch
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((Path(__file__).resolve().parents[4] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
 sys.path.insert(0, str(HERE.parents[1] / "pous"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_p2_stage as T  # noqa: E402
@@ -121,7 +122,7 @@ def test_full_receipts_on_the_toy_store_give_the_fixture_root_and_bw_ref_checks_
     (tmp_path / "layout.json").write_text(json.dumps(padded))
     (tmp_path / "m.json").write_text(json.dumps(manifest))
     (tmp_path / "w.bin").write_bytes(stream)
-    setup = {"commitment": doc["commitment"], "manifest": padded["params"],
+    setup = {"commitment": doc["commitment"], "manifest": padded["params"], "program": manifest["model"],
              "layout_sha512": hashlib.sha512((tmp_path / "layout.json").read_bytes()).hexdigest()}
     root = tmp_path / "store"
     c_star = np.frombuffer((T.TOY / "c-star.bin").read_bytes(), dtype=np.uint8).reshape(-1, L.ROW)

@@ -68,8 +68,8 @@ def write_table(gate: Path) -> list[Path]:
     out = []
     for binary, rs in rows.items():
         f = HERE / "probes" / f"{binary}.cu"
-        f.write_text(re.sub(r"(PROBES\[\] = \{\n).*?(\n\};)", lambda m: m[1] + "\n".join(rs) + m[2], f.read_text(),
-                            count=1, flags=re.S))
+        f.write_text(re.sub(r"(PROBES\[\] = \{\n).*?(\n\};)", lambda m, rs=rs: m[1] + "\n".join(rs) + m[2],
+                            f.read_text(), count=1, flags=re.S))
         out.append(f)
     return out
 
@@ -274,15 +274,15 @@ def analyze(outs: list[Path], fam: str, census: Path, rows_csv: Path) -> dict:
 
 
 def text(res: dict) -> str:
-    L = [f"{res['family']}: UP {res['up']['rate']:.4f} uniform instructions a SMSP-cycle ({res['up']['by']}), "
-         f"{res['up']['cycles']:.4f} SMSP-cycles each with the 2% margin"]
+    L = [(f"{res['family']}: UP {res['up']['rate']:.4f} uniform instructions a SMSP-cycle ({res['up']['by']}), "
+          f"{res['up']['cycles']:.4f} SMSP-cycles each with the 2% margin")]
     L.append("alone: " + ", ".join(f"{k} {v:.3f}" for k, v in sorted(res["uniform_alone"].items())))
     L.append("UNI on each row, SMSP-cycles (the largest every point allows, and the point that sets it): " +
              ", ".join(f"{r} {v['c']:.4f}" + (f" ({v['limit']:.4f} {v['set_by']})" if "limit" in v else "")
                        for r, v in res["rows"].items()))
     L.append("facets exceeded: " + ("; ".join(res["violations"]) or "none"))
     sat = res["sat"]
-    L.append(f"issue-saturated streams (baseline issue, then ΔT a uniform instruction added, at the loop's issue):")
+    L.append("issue-saturated streams (baseline issue, then ΔT a uniform instruction added, at the loop's issue):")
     for k, s in sorted(sat["streams"].items()):
         L.append(f"  {k}: issue {s['issue0']:.3f}{'' if s['issue0'] >= sat['min_issue'] else ' (below ' + str(sat['min_issue']) + ', not read)'}  " +
                  "  ".join(f"{n[3:]} {v['dT']:+.3f} ({v['issue']:.3f})" for n, v in sorted(s["points"].items())))
@@ -365,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(map(str, write_table(g))))
         return 0
     fam = a.family or ("sm100" if any(any((o / "sass").glob("sm100_*.sass")) for o in a.out) else "sm90")
-    dev = a.device or Path(__file__).resolve().parents[1] / "machine_model" / "data" / "devices" / f"sm_{fam[2:]}"
+    dev = a.device or Path(__file__).resolve().parents[2] / "machine_model" / "data" / "devices" / f"sm_{fam[2:]}"
     res = analyze(a.out, fam, dev / "census.csv", dev / "rows.csv")
     if a.json:
         a.json.write_text(json.dumps(res, indent=1) + "\n")

@@ -18,12 +18,14 @@ def read_record(log_path: str) -> dict:
         s = int(d["step"])
         if s in steps:
             raise ValueError(f"two StepStart records for step {s}")
-        steps[s] = {"rows": [(r, int(p)) for r, p in d["rows"]], "input_token_ids": [int(x) for x in d.get("input_token_ids") or []],
+        ids = d.get("input_token_ids")   # a StepStart that carries none reads as no input tokens
+        steps[s] = {"rows": [(r, int(p)) for r, p in d["rows"]], "input_token_ids": [int(x) for x in ids] if ids else [],
                     "logits_rows": [(r, int(p)) for r, p in d["logits_rows"]]}
 
     def sample_end(d: dict) -> None:
         samples[int(d["step"])] = [int(x) for x in d["sampled_token_ids"]]
-        lv = (d.get("logits_view") or {}).get("$v") if isinstance(d.get("logits_view"), dict) else None
+        view = d.get("logits_view")
+        lv = view.get("$v") if isinstance(view, dict) else None
         if isinstance(lv, list) and len(lv) > 2 and isinstance(lv[2], list) and lv[2]:
             sampler_batch[int(d["step"])] = int(lv[2][0])
 
@@ -79,11 +81,12 @@ def canonicalize_record(rec: dict, tokens: dict | None, oracle_rows: list[dict] 
         st["logits_rows"] = [(m(r), p) for r, p in st["logits_rows"]]
     for lk in rec["links"]:
         lk["request_id"] = m(lk.get("request_id"))
-    wl = rec["header"].get("workload") or {}
-    for r in wl.get("requests") or []:
+    wl = rec["header"].get("workload")   # the driver's record of the manifest it served; a header without it names no request to rename
+    served, children = (wl.get("requests"), wl.get("children")) if wl else (None, None)
+    for r in served if served else ():
         r["workload_request_id"] = r.get("request_id")
         r["request_id"] = m(r.get("request_id"))
-    for c in wl.get("children") or []:
+    for c in children if children else ():
         c["request_id"], c["parent"] = m(c.get("request_id")), m(c.get("parent"))
     for r in (tokens or {}).get("requests", []) if tokens else []:
         r["workload_request_id"] = r.get("request_id")

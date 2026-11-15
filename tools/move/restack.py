@@ -14,7 +14,7 @@ the root of a checkout of its parent B. Because the move is a deterministic, ide
 same script rather than by rename detection:
 
 1. merge B into the branch (skipped when the branch already contains B). A conflict here is an ordinary one with the tree
-   before the move: the owner merges main first, as without the move.
+   before the move: the owner merges B into the branch first and resolves it, as without the move.
 2. check that merge out in a scratch worktree, run B's `tools/move/layout.py` at its root, and commit what it changed. Files
    the branch added are moved and rewritten too, which rename detection can't do. Where the branch edited `tools/move/`
    itself, B's copy runs and the branch's is put back before the commit. B's script runs with no limit on the text it
@@ -23,7 +23,7 @@ same script rather than by rename detection:
    script run on B, so against it the branch's side holds only the branch's own changes, in moved paths and names, and the
    other side only what landed after the move: what conflicts here is real content. (Against B instead, a line the script
    rewrote next to one the branch edited would conflict.)
-4. run the result's own `tools/verity/check/pins.py --regen` at its root, which runs each stale pin's command, and commit what it
+4. run the result's own `pins.py --regen` (`PINS_FILES`) at its root, which runs each stale pin's command, and commit what it
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
 Before the steps, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
@@ -32,12 +32,35 @@ and the same for every branch. With `--kept`, a check that passed is kept as a f
 restack across a move pays for the check and the rest don't. The file's key is everything that decides the check
 (`generated_key`); a file that is unreadable, malformed or of another key counts for nothing, and the script runs.
 
+A move commit's record is corrected in `tools/move/move_lines.toml` (`MOVE_LINES`), under the commit's full id, which every
+reader of a move line reads before the commit's message: `line`, the move line it ran by, and `hand`, the paths where its
+tree is, by hand, not what that script writes on B (a word put back in prose, the map the script rewrote left as it was),
+each entry with its `reason`; a malformed entry stops everything. A move with `hand`
+passes the check only where it differs from the script's tree in exactly those paths, and after step 2 its hand changes are
+merged into the branch's moved tree with the script's tree on B as the merge base (step `hand`; a hand change to a line the
+branch changed is `conflicted` there). Without that merge, step 3, with M as its base, would undo them. Nothing is skipped:
+the script still runs on the branch's own lines and `stale-words` reads them, as for any move. An entry `move = false`
+(alone, with its `reason`) says no script writes the commit, though its message has a move line (a rename run by a copy
+of its map narrowed by hand, which no commit holds): no reader takes it as a move, `check_generated` vouches for nothing
+in it, and a crossing merges it as it merges any commit without a move line.
+
+A move commit that adds the map its move line names, which B lacks, runs by its own copy (`git show M:MAP`, in the scratch
+checkout the script runs in, where a rows file the branch commits beside it is read, and gone from the tree the script
+leaves): the map is M's own change, as a `hand` path is, with no entry in `MOVE_LINES`, and reaches the branch in the step
+`hand`. A map in neither B nor M refuses, as the script fails without it.
+
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
 (default origin/main) is `based-after` M: step 3 would bring main's commits since B in a second time and still report
 clean (duplicate imports and lock entries), so M's script never runs on it. A `--move-commit` it is based after refuses
-it, and so does the last of the moves found on `--main`: there is no result, and its owner merges main instead (`git merge
-origin/main`); the restack is for branches based at or before B. An earlier one of the moves found is skipped where a
-later one's base contains it, and named (`skipped`, and a line of the output): that later move's step 1 merges it in on
+it, and so does the last of the moves found on `--main`: there is no result. A plain `git merge origin/main` is no way
+out: it is clean and wrong, since M's script never runs on the branch's own lines, so the files it adds stay at their old
+paths and its added lines keep the old names. That is a line stacked on a pull request's old head, once the head has
+crossed M and landed: main holds the old head's commits. The refusal gives the command that carries the branch against
+M's own commit as `--main` (`carry`: `restack.py BRANCH --main M`, or each `--move-commit` up to M where they were named),
+which it shares no commit after B with; its owner then merges today's main into that result, a merge inside the new
+layout, and checks that the merge's tree holds the branch's own files at the new paths (where the moves go on past M, it
+carries the result across those with restack.py first). An earlier one of the moves found is skipped where a later one's
+base contains it, and named (`skipped`, and a line of the output): that later move's step 1 merges it in on
 main's side, as its owner's merge of main would, so M's script is not run on the branch's own lines, and its owner looks
 for M's map's old names in what the branch adds. A carry that skipped a move never ends `clean`: it ends `clean-skipped`
 (or `locks-stale`), pushes nothing and exits 1, and its output gives the command that crosses the same moves named, with
@@ -49,9 +72,15 @@ id), `up-to-date`, `clean-skipped` (the result's id; a move was skipped), `confl
 (the branch holds tracked files under a path the move's map retires, and no row moves them: each file, and the fix, a row
 for it in the rows file the branch commits beside the map, `NAME.rows.toml`, which `layout.py` reads after the map and
 deletes, so no result holds one), `script-failed` (the script's exit code and the tail of its output), `locks-stale` (the
-last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
-and its owner regenerates them with `check.py --update`; `--push-to` pushes it; a pinned `TRUSTED.sha256` in
-conflict there likewise takes `--onto`'s and the pins step regenerates it) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
+last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s whole, which drops the
+branch's own entries in them, and its owner re-adds those by hand and leaves the records to the candidate's records run
+(`LOCKS_READD`); `--push-to` pushes it; a pinned `TRUSTED.sha256` in
+conflict there likewise takes `--onto`'s and the pins step regenerates it), `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command) or `stale-words` (the result's id, and
+each line of the branch's own, against what it merged last, that still spells a word a crossed move's map renames only in
+the files a block names, in a file no such block names: rename.py's `[[words_in]]`, layout.py's `[rewrite] words_in`; the
+script left it as written, and the result may not build. `words` gives each one's file, line, word and new word, and the
+owner renames each that means the renamed name; nothing rewrites them, `--push-to` pushes nothing, and it takes the place of
+what the result would otherwise be: `clean`, `up-to-date`, `clean-skipped` or `locks-stale`, whose locks it names too). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
 pushes a clean result of one branch to a new branch on `--remote`, never one that skipped a move, and refuses a name that
 already exists there. Exit 0 when every branch is clean or up to date, 1 otherwise.
 
@@ -64,6 +93,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fcntl
+import fnmatch
 import hashlib
 import json
 import os
@@ -73,6 +103,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 SCRIPT = "tools/move/layout.py"
 #: the arguments the move's script runs with (`--script-arg`; rename.py takes its map as `--map`)
@@ -94,23 +125,33 @@ TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
 #: a move commit's line naming its map, and so its script (`stage.py` writes both kinds, drive's queue `Move:`)
 MOVE_LINE = re.compile(r"^(Move|Layout-move): (tools/move/[\w.-]+\.toml)((?: --no-lock)?)$", re.M)
 LINE_SCRIPT = {"Move": "tools/move/rename.py", "Layout-move": "tools/move/layout.py"}
-#: the result's own list of pins, whose `--regen` runs every stale pin's command
-PINS = "tools/verity/check/pins.py"
-#: a Lean package's lock: where both sides changed it, the result takes `--onto`'s and its owner regenerates it
+#: the result's own list of pins, whose `--regen` runs every stale pin's command: in the check's directory, `tools/check/`,
+#: or `tools/verity/check/` in a tree from before the move that put it there
+PINS_FILES = ("tools/check/pins.py", "tools/verity/check/pins.py")
+PINS = PINS_FILES[0]
+#: a Lean package's lock: where both sides changed it, the result takes `--onto`'s whole
 LOCK = "lean-audit.json"
+#: what the owner of a result whose locks took `--onto`'s side does before marking it. A records run regenerates the records
+#: of the lock it finds (`check.py`'s `regenerated`) and never adds an entry, and a guarantee the lock doesn't list is audited
+#: by nothing, which fails nothing
+LOCKS_READD = ("re-add by hand each entry the branch's own change put in them (`git diff MERGE_BASE BRANCH -- LOCK`: a "
+               "guarantee it lists and its owner, a premise's owner, issue or why, an `exempt`, `escapes`, `layers`, `trees` "
+               "or `except` entry), and leave their records as they are: the candidate's records run regenerates those, so "
+               "no `check.py --update` runs")
 #: a pinned digest list, which the result's own pins step regenerates: where both sides changed it, the result takes
 #: `--onto`'s too
 PINNED = "TRUSTED.sha256"
 #: where `--kept` keeps the moves `check_generated` found generated, a file a key (`kept_path`): in the check's cache, at its
-#: default place (`tools/verity/check/common.cache_dir`). On a node that is the one directory every run shares: a run's
+#: default place (the check's `common.cache_dir`). On a node that is the one directory every run shares: a run's
 #: clone, with its `.git`, is removed when the run ends, so a file kept there would never be read
 KEPT_DIR = "~/.cache/verity-check/restack-generated"
 #: whether `check_generated` reads and writes `KEPT_DIR` (`--kept`). Off, as in drive's jobs and in every test that reaches
 #: this file, it reads nothing of the machine's and leaves nothing on it: the suites give each test a `$CHECK_CACHE` of its
 #: own, which this file doesn't read
 KEEP = False
-#: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
-#: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
+#: the clone's worktree lock, in its git directory, under the name `research.gates.WORKTREES_LOCK` gives it: a scratch
+#: worktree is added and forgotten holding it alone, and every fetch the queue and `research merge` run holds it shared.
+#: Nothing here takes train.lock, which `research.queue.worktrees_locked` takes before this lock, never after
 WORKTREES_LOCK = "research-worktrees.lock"
 #: the options the command that confirms a skip takes from its run, where given (`confirming`): every one that names no move
 CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", "json")
@@ -118,6 +159,19 @@ CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", 
 #: (`research.clone.set_drivers`): without them a lock, a Lean import list or a test list merges as text, and a branch stops
 #: at a merge its owner's clone would make clean
 DRIVERS = "import pathlib, research.clone as c; c.set_drivers(pathlib.Path.cwd())"
+#: git's own merge drivers, which no clone defines: `.gitattributes` gives every `.gitignore` `merge=union`
+GIT_OWN = frozenset({"text", "binary", "union"})
+#: the map a `Layout-move` line's script reads with no `--map` (layout.py's default)
+LAYOUT_MAP = "tools/move/layout_map.toml"
+#: corrections to move commits' own records, each under the commit's full id, which `move_line`, `moves_on` and
+#: `check_generated` read before the commit (`corrections`)
+MOVE_LINES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "move_lines.toml")
+#: an entry's keys: at least one of `line` and `hand`, or `move = false` alone, and always `reason`
+ENTRY_KEYS = {"line", "hand", "move", "reason"}
+#: a hunk's header in `git diff -U0`: the old side's line count, the new side's first line and its count
+HUNK = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+#: the most `stale_words` lines `line` prints; the JSON holds every one
+WORDS_SHOWN = 40
 
 
 class ScriptFailed(Exception):
@@ -185,11 +239,11 @@ def out(*args: str, cwd: str | None = None) -> str:
 
 def missing_drivers(cwd: str | None = None) -> list[str]:
     """The merge drivers the checkout's `.gitattributes` names (`merge=NAME`) that its clone's config defines no
-    `merge.NAME.driver` for."""
+    `merge.NAME.driver` for. Git's own (`GIT_OWN`) need none."""
     attrs, names = os.path.join(out("rev-parse", "--show-toplevel", cwd=cwd), ".gitattributes"), []
     if os.path.isfile(attrs):
         with open(attrs) as f:
-            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())))
+            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())) - GIT_OWN)
     have = git("config", "--get-regexp", r"^merge\..*\.driver$", cwd=cwd, ok=(0, 1)).stdout.decode().splitlines()
     got = {key.split(".")[1] for key, _, _ in (line.partition(" ") for line in have) if key.count(".") == 2}
     return [n for n in names if n not in got]
@@ -299,26 +353,47 @@ def swap(path: str, old: bytes, new: bytes) -> None:
         f.write(text.replace(old, new))
 
 
-def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str], list[str]]:
+def map_of(args: tuple[str, ...] | list[str]) -> str | None:
+    """The map a move's arguments name (`--map MAP`), or None."""
+    i = args.index("--map") + 1 if "--map" in args else None
+    return args[i] if i is not None and i < len(args) else None
+
+
+def own_map(move: str, base: str, args: tuple[str, ...] | list[str], cwd: str | None) -> str | None:
+    """The map ``move``'s arguments name where ``move`` adds it and its base ``base`` lacks it, or None: the move's script
+    runs by ``move``'s own copy of it, and the map is the commit's own change, as a `hand` path is, not the script's."""
+    if not (path := map_of(args)) or not git("cat-file", "-e", f"{base}:{path}", cwd=cwd, ok=(0, 128)).returncode:
+        return None
+    return path if not git("cat-file", "-e", f"{move}:{path}", cwd=cwd, ok=(0, 128)).returncode else None
+
+
+def run_script(merged: str, base: str, python: str, cwd: str | None,
+               own: tuple[str, str] | None = None) -> tuple[str, list[str], list[str]]:
     """Check `merged` out in a scratch worktree, run `base`'s layout script at its root with no limit on the text it reads
     (`LIMIT`), and return the tree it leaves (every change staged, ignored files left out), the `tools/move/` paths whose
     branch copy was put back, and the tail of the script's output. A rows file the script deleted is spent, and the branch's
-    copy of it is not put back."""
+    copy of it is not put back. With ``own`` (a move and the map it adds, `own_map`), that map, as the move holds it, is in
+    the checkout the script runs in (beside it a rows file the branch commits is read), and not in the tree returned."""
     script, mine = blobs_under(base, SCRIPT_DIR, cwd), blobs_under(merged, SCRIPT_DIR, cwd)
     if SCRIPT not in script:
         raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
     restored = sorted(p for p in script.keys() | mine.keys() if script.get(p) != mine.get(p))
     limit = LIMIT.search(git("show", f"{base}:{LIMIT_IN}", cwd=cwd, ok=(0, 128)).stdout)
+    lent = own[1] if own and own[1] not in mine else None
     with tempfile.TemporaryDirectory(prefix="restack-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))  # a unique worktree name, so restacks can run side by side
         add_worktree(wt, merged, cwd)
         try:
-            if restored or limit:
+            if restored or limit or lent:
                 # committed, so that the script sees a clean checkout (layout.py refuses a dirty one)
                 git("checkout", base, "--", SCRIPT_DIR, cwd=wt)
                 if limit:
                     swap(os.path.join(wt, LIMIT_IN), limit[0], NO_LIMIT)
                     git("add", "--", LIMIT_IN, cwd=wt)
+                if lent:
+                    with open(os.path.join(wt, lent), "wb") as f:
+                        f.write(git("show", f"{own[0]}:{lent}", cwd=cwd).stdout)
+                    git("add", "--", lent, cwd=wt)
                 overlay = commit_tree(out("write-tree", cwd=wt), [merged], f"restack: {SCRIPT_DIR}/ as at {base}\n", wt)
                 git("reset", "-q", "--soft", overlay, cwd=wt)
             p = subprocess.run([python, SCRIPT, *BRANCH_ARGS.get(SCRIPT, ()), *SCRIPT_ARGS], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
@@ -327,9 +402,15 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                 raise NoRow(p.stderr.decode(errors="replace").strip())
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
-            if limit and os.path.exists(os.path.join(wt, LIMIT_IN)):
-                swap(os.path.join(wt, LIMIT_IN), NO_LIMIT, limit[0])    # the script's file as it left it, with its limit again
             git("add", "-A", cwd=wt)
+            if limit:
+                # the script's file as it left it, with its limit again, wherever a move of the script's own directory put it
+                hits = git("grep", "-l", "-E", f"^{NO_LIMIT.decode()}$", "--", "*.py", cwd=wt, ok=(0, 1)).stdout.decode()
+                for path in hits.split():
+                    swap(os.path.join(wt, path), NO_LIMIT, limit[0])
+                git("add", "-A", cwd=wt)
+            if lent:
+                git("rm", "-q", "-f", "--ignore-unmatch", "--", lent, cwd=wt)
             restored = [f for f in restored if not f.endswith(ROWS_SUFFIX) or os.path.lexists(os.path.join(wt, f))]
             for path in restored:
                 if path in mine:
@@ -344,13 +425,14 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
 def regen_pins(result: str, python: str, cwd: str | None) -> tuple[str | None, list[str], bool]:
     """Check `result` out in a scratch worktree and run its own `pins.py --regen` at the root: (the tree it leaves, or None when
     it changed nothing, the tail of its output, whether every pin is fresh after). A tree without the list has no pins to run."""
-    if git("cat-file", "-e", f"{result}:{PINS}", cwd=cwd, ok=(0, 128)).returncode:
+    pins = next((p for p in PINS_FILES if not git("cat-file", "-e", f"{result}:{p}", cwd=cwd, ok=(0, 128)).returncode), None)
+    if pins is None:
         return None, [], True
     with tempfile.TemporaryDirectory(prefix="restack-pins-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))
         add_worktree(wt, result, cwd)
         try:
-            p = subprocess.run([python, PINS, "--regen"], cwd=wt, capture_output=True)
+            p = subprocess.run([python, pins, "--regen"], cwd=wt, capture_output=True)
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
             git("add", "-A", cwd=wt)
             tree = out("write-tree", cwd=wt)
@@ -429,35 +511,91 @@ def keep_generated(key: dict, tree: str) -> None:
                 os.unlink(tmp)
 
 
-def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
+def corrections() -> dict[str, dict]:
+    """`MOVE_LINES`'s entries by commit id (none without the file). Refused, with the fix, unless every key is a full 40-hex
+    id and every entry holds a `reason` and a `line` that is a move line (`MOVE_LINE`), a `hand` that lists paths, or both,
+    or `move = false` alone, and nothing else. A clone without an entry's commit never looks it up (every lookup is by a commit the clone has), and a
+    toy clone runs this file too, so only the suite holds each id to a commit of the repository's."""
+    if not os.path.isfile(MOVE_LINES):
+        return {}
+    with open(MOVE_LINES, "rb") as f:
+        try:
+            data = tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            raise SystemExit(f"{MOVE_LINES} doesn't parse ({e}): fix it") from None
+    bad = []
+    for sha, e in data.items():
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            bad.append(f'["{sha}"] is no full commit id: key the entry by the commit\'s 40-hex id (git rev-parse SHA)')
+        elif not isinstance(e, dict) or set(e) - ENTRY_KEYS or not set(e) & {"line", "hand", "move"} \
+                or "move" in e and (e["move"] is not False or set(e) & {"line", "hand"}):
+            bad.append(f'["{sha}"] holds {sorted(e) if isinstance(e, dict) else e!r}: give it a `line`, a `hand` or both, '
+                       "or `move = false` alone (no script writes it: it crosses as a plain commit), and a `reason`, "
+                       "and nothing else")
+        elif not isinstance(e.get("reason"), str) or not e["reason"].strip():
+            bad.append(f'["{sha}"] has no `reason`: say in one sentence why the commit\'s own record is not what it did')
+        elif "line" in e and not (isinstance(e["line"], str) and MOVE_LINE.fullmatch(e["line"])):
+            bad.append(f'["{sha}"] line {e["line"]!r} is no move line: `Move: tools/move/MAP.toml` or `Layout-move: '
+                       "tools/move/MAP.toml`, with ` --no-lock` where the move ran so")
+        elif "hand" in e and not (isinstance(e["hand"], list) and e["hand"]
+                                  and all(isinstance(p, str) and p for p in e["hand"])):
+            bad.append(f'["{sha}"] hand {e["hand"]!r} is no list of paths: list each path where the commit\'s tree is not '
+                       "what its script writes on its base")
+    if bad:
+        raise SystemExit(f"{MOVE_LINES}: " + "\n  ".join(bad))
+    return data
+
+
+def hand_of(move: str, cwd: str | None) -> list[str]:
+    """The paths where ``move``'s tree is, by hand, not what its script writes on its base (`MOVE_LINES`' `hand`)."""
+    return sorted(corrections().get(move, {}).get("hand", []))
+
+
+def check_generated(move: str, base: str, python: str, cwd: str | None) -> str:
     """Refuse a `move` whose tree isn't what `base`'s layout script writes: a later commit (the move branch's head, with its hand
-    fixups) taken as the move would make the third merge undo them, while every branch still reported clean.
+    fixups) taken as the move would make the third merge undo them, while every branch still reported clean. A move whose
+    `MOVE_LINES` entry lists `hand` paths passes only when it differs from the script's tree in exactly those. Returns the
+    script's tree, which `restack` merges the hand changes in against.
 
     With `KEEP`, a check that passed is kept (`kept_path`) under everything that decides it (`generated_key`), so a later
     restack of another branch across the same move, in another process, doesn't run the script on the base again. Only a
     pass is kept, and a kept file counts only when it records this very key and the move's own tree: anything else runs
-    the script."""
-    key = (move, base, python, SCRIPT, SCRIPT_ARGS)
+    the script. A move with `hand` paths is never kept: its crossing needs the script's own tree.
+
+    A move that adds the map it runs by, which `base` lacks (`own_map`), runs by its own copy, and the map is one more
+    `hand` path; a map in neither refuses, as the script fails without it."""
+    own = own_map(move, base, SCRIPT_ARGS, cwd)
+    key, hand = (move, base, python, SCRIPT, SCRIPT_ARGS), sorted({*hand_of(move, cwd), *([own] if own else [])})
     if key not in _GENERATED:
-        want, full = tree_of(move, cwd), generated_key(move, base, python, cwd) if KEEP else None
+        want, full = tree_of(move, cwd), generated_key(move, base, python, cwd) if KEEP and not hand else None
         if full and kept_generated(full, want):
             print(f"restack.py: {move[:12]} is what {SCRIPT} writes on {base[:12]}, as checked before ({kept_path(full)})",
                   file=sys.stderr)
             _GENERATED[key] = want
         else:
             try:
-                _GENERATED[key] = run_script(base, base, python, cwd)[0]
+                _GENERATED[key] = run_script(base, base, python, cwd, (move, own) if own else None)[0]
             except ScriptFailed as e:
                 raise SystemExit(f"{SCRIPT} fails on the move's base {base[:12]}: {e}") from None
             if full and _GENERATED[key] == want:
                 keep_generated(full, want)
-    if _GENERATED[key] != (want := tree_of(move, cwd)):
-        differ = out("diff", "--name-only", "--no-renames", want, _GENERATED[key], cwd=cwd).splitlines()
+    want = tree_of(move, cwd)
+    differ = sorted(out("diff", "--name-only", "--no-renames", want, _GENERATED[key], cwd=cwd).splitlines()
+                    if _GENERATED[key] != want else [])
+    if hand and differ != hand:
+        raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]} but by hand in the paths its "
+                         f"entry in {MOVE_LINES} lists as `hand`" + (f" (with {own}, the map it adds)" if own else "") +
+                         ": make the list these paths, where they are the hand "
+                         f"changes the commit made beside its script.\n  differ, unlisted: {sorted(set(differ) - set(hand))}"
+                         f"\n  listed, not differing: {sorted(set(hand) - set(differ))}")
+    if differ and not hand:
         raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]}: pass the commit the script "
                          "generated, and a later commit on the move's branch as --onto (the script runs here with no limit "
                          f"on the text it reads: a text file of {base[:12]} over the script's own limit, which the move left "
-                         f"as it was, is one more cause). The {len(differ)} paths that differ"
-                         + (", the first 20" if len(differ) > 20 else "") + ":\n  " + "\n  ".join(differ[:20]))
+                         f"as it was, is one more cause). Where the move's own commit holds hand changes beside its script's "
+                         f"output, list these paths as its `hand` in {MOVE_LINES}, with a `reason`. The {len(differ)} paths "
+                         "that differ" + (", the first 20" if len(differ) > 20 else "") + ":\n  " + "\n  ".join(differ[:20]))
+    return _GENERATED[key]
 
 
 def based_after(head: str, base: str, refs: list[str], cwd: str | None) -> str | None:
@@ -470,6 +608,36 @@ def based_after(head: str, base: str, refs: list[str], cwd: str | None) -> str |
     return None
 
 
+def named_flags(move: str, script: str, args: tuple[str, ...] | list[str], cwd: str | None) -> list[str]:
+    """`--move-commit` ``move``, with `--script` and its `--script-arg`s where they aren't what `main` reads from its move line
+    (or, with none, `layout.py`)."""
+    if (move_line(move, cwd) or (LINE_SCRIPT["Layout-move"], ())) == (script, tuple(args)):
+        return ["--move-commit", move]
+    return ["--move-commit", move, "--script", script, *(f"--script-arg={a}" for a in args)]
+
+
+def carried_against(branch: str, move: str, named: list[tuple[str, str, tuple[str, ...]]], cwd: str | None) -> list[str]:
+    """The command that carries ``branch`` across ``named`` (each move's (commit, script, arguments)), or with none across the
+    moves `--main` finds, with ``move``'s own commit as `--main` (and so as `--onto`): its only parent is the move's base, so
+    the branch shares no commit after that base with it, and isn't `based-after` there."""
+    return ["python3", f"{SCRIPT_DIR}/restack.py", branch, *(f for m, s, a in named for f in named_flags(m, s, a, cwd)),
+            "--main", move]
+
+
+def refused_after(branch: str, late: str, base: str, move: str, command: list[str], later: list[str]) -> str:
+    """A `based-after` refusal's error: why neither a restack nor a plain merge of main will do, and ``command``
+    (`carried_against`), then the merge of main, or with ``later`` the restack across those moves first."""
+    then = (f"then carry the result across the later move{'s' if len(later) > 1 else ''} "
+            f"{', '.join(m[:12] for m in later)} with restack.py too, and only then merge today's main into it"
+            if later else "then merge today's main into the carried result")
+    return (f"{branch} has {late[:12]}, which came after the move's base {base[:12]}: a restack would bring the commits since "
+            "then in a second time and report clean (duplicate imports and lock entries), and a plain `git merge` of main is "
+            "clean and wrong\n(the move's script never runs on the branch's own lines, so the files it adds stay at their old "
+            "paths and its added lines keep the old names). Carry it against the move's own commit "
+            f"{move[:12]}, which it shares no commit after the base with:\n  {shlex.join(command)}\n{then}, a merge inside "
+            "the new layout, and check that the merge's tree holds the branch's own files at the new paths")
+
+
 def restack(branch: str, move: str, onto: str | None = None, base: str | None = None, python: str = sys.executable,
             cwd: str | None = None, pins: bool = True, main: str | None = None) -> dict:
     head, move = rev(branch, cwd), rev(move, cwd)
@@ -477,7 +645,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     onto = rev(onto, cwd) if onto else move
     if not contains(move, onto, cwd):
         raise SystemExit(f"--onto {onto[:12]} doesn't contain the move {move[:12]}")
-    check_generated(move, base, python, cwd)
+    generated = check_generated(move, base, python, cwd)
     r = {"branch": branch, "head": head, "move": move, "base": base, "onto": onto, "steps": []}
     _, plain = merge_trees(head, onto, cwd)
     r["plain"] = {"status": "conflicted" if plain else "clean", "files": plain}
@@ -486,11 +654,9 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
         return {**r, "status": "up-to-date", "result": head}
     main_sha = git("rev-parse", "--verify", "-q", f"{main}^{{commit}}", cwd=cwd, ok=(0, 1)).stdout.decode().strip() if main else ""
     if not contains(move, head, cwd) and (late := based_after(head, base, [onto, *([main_sha] if main_sha else [])], cwd)):
-        return {**r, "status": "based-after", "error": (
-            f"{branch} has {late[:12]}, which came after the move's base {base[:12]}: restacking it would bring main's commits "
-            f"since then in a second time, and report clean (duplicate imports and lock entries). Merge instead: "
-            f"`git merge {main or onto[:12]}` once the move has landed, and resolve what that leaves; restack.py is only for "
-            f"branches based at or before {base[:12]}")}
+        command = carried_against(branch, move, [(move, SCRIPT, SCRIPT_ARGS)], cwd)
+        return {**r, "status": "based-after", "late": late, "carry": command,
+                "error": refused_after(branch, late, base, move, command, [])}
     tip, ran = head, False
     if not contains(move, head, cwd):
         if not contains(base, head, cwd):
@@ -500,18 +666,33 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             tip = commit_tree(tree, [head, base], f"Merge {base[:12]}, the layout move's base, into {branch}\n", cwd)
             r["steps"].append({"step": "base", "commit": tip})
         try:
-            tree, restored, output = run_script(tip, base, python, cwd)
+            own = own_map(move, base, SCRIPT_ARGS, cwd)
+            tree, restored, output = run_script(tip, base, python, cwd, (move, own) if own else None)
         except NoRow as e:
             return {**r, "status": "no-row", "step": "script", "files": e.files, "error": str(e)}
         except ScriptFailed as e:
             return {**r, "status": "script-failed", "step": "script", "error": str(e)}
-        ran = True
+        ran = r["ran"] = True
         if tree != tree_of(tip, cwd):
             msg = (f"restack: rerun {shlex.join([SCRIPT, *SCRIPT_ARGS])} from {move[:12]} on {branch}\n\n"
                    f"The layout move's codemod, run at the root of this tree as {move[:12]} was made from {base[:12]}.\n\n"
                    f"{TRAILER_MOVE}: {move}\n{TRAILER_OF}: {head}\n")
             tip = commit_tree(tree, [tip], msg, cwd)
             r["steps"].append({"step": "script", "commit": tip, "restored": restored, "output": output})
+        if generated != tree_of(move, cwd):
+            hand = sorted({*hand_of(move, cwd), *([own] if own else [])})
+            script_on_base = commit_tree(generated, [], f"restack: what {SCRIPT} writes on {base[:12]}\n", cwd)
+            tree, conflicts = merge_trees(tip, move, cwd, base=script_on_base)
+            if conflicts:
+                return {**r, "status": "conflicted", "step": "hand", "files": conflicts}
+            if tree != tree_of(tip, cwd):
+                msg = (f"restack: the hand changes {move[:12]} made beside its script, on {branch}\n\n"
+                       + "; ".join([*([f"{', '.join(listed)}, as {SCRIPT_DIR}/{os.path.basename(MOVE_LINES)} lists them"]
+                                      if (listed := hand_of(move, cwd)) else []),
+                                    *([f"{own}, the map the move adds"] if own else [])]) + ".\n\n"
+                       f"{TRAILER_MOVE}: {move}\n{TRAILER_OF}: {head}\n")
+                tip = commit_tree(tree, [tip], msg, cwd)
+                r["steps"].append({"step": "hand", "commit": tip, "files": hand})
     if contains(onto, tip, cwd):
         return with_pins(r, tip, python, cwd, pins)
     tree, conflicts = merge_trees(tip, onto, cwd, base=move if ran else None)
@@ -522,34 +703,129 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     if conflicts:
         tree = with_blobs_of(tree, onto, conflicts, cwd)
     result = commit_tree(tree, [tip, onto], f"Merge {onto[:12]} (the layout move) into {branch}, restacked\n"
-                         + (f"\nThe Lean locks take {onto[:12]}'s side, to be regenerated (`check.py --update`): "
-                            f"{', '.join(locks)}\n" if locks else "")
+                         + (f"\nThe Lean locks take {onto[:12]}'s side whole, the branch's own entries in them to be "
+                            f"re-added by hand: {', '.join(locks)}\n" if locks else "")
                          + (f"\nThe pinned digests take {onto[:12]}'s side, regenerated by the pins step: "
                             f"{', '.join(pinned)}\n" if pinned else ""), cwd)
     r["steps"].append({"step": "moved", "commit": result})
     r = with_pins(r, result, python, cwd, pins)
     if locks and r["status"] == "clean":
         return {**r, "status": "locks-stale", "files": locks,
-                "error": f"the Lean locks {', '.join(locks)} take {onto[:12]}'s side: regenerate them on the result "
-                         "(tools/verity/lean/check.py --update) before marking it"}
+                "error": f"the Lean locks {', '.join(locks)} take {onto[:12]}'s side whole: before marking the result, "
+                         f"{LOCKS_READD}"}
     return r
 
 
 def move_line(commit: str, cwd: str | None) -> tuple[str, tuple[str, ...]] | None:
-    """The script and arguments ``commit``'s move line names, or None when it has none."""
-    m = MOVE_LINE.search(out("log", "-1", "--format=%B", commit, cwd=cwd))
+    """The script and arguments ``commit``'s move line names, its `MOVE_LINES` entry's where it has one, or None when it has
+    none or its entry says `move = false`."""
+    entry = corrections().get(rev(commit, cwd), {})
+    if entry.get("move") is False:
+        return None
+    m = MOVE_LINE.search(entry.get("line") or out("log", "-1", "--format=%B", commit, cwd=cwd))
     return (LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) if m else None
 
 
 def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple[str, ...]]]:
-    """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line."""
+    """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line,
+    its `MOVE_LINES` entry's where it has one; none whose entry says `move = false`."""
     log = out("log", "--topo-order", "--reverse", "--no-merges", "--format=%H%x00%B%x1e", ref, f"^{head}", cwd=cwd)
-    found = []
+    found, lines = [], corrections()
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
         commit, body = rec.split("\x00", 1)
-        if m := MOVE_LINE.search(body):
+        if lines.get(commit, {}).get("move") is False:
+            continue
+        if m := MOVE_LINE.search(lines.get(commit, {}).get("line") or body):
             found.append((commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())))
     return found
+
+
+def _glob(path: str, glob: str) -> bool:
+    return fnmatch.fnmatchcase(path, glob) or (glob.startswith("**/") and fnmatch.fnmatchcase(path, glob[3:]))
+
+
+def scoped_words(move: str, script: str, args: tuple[str, ...], cwd: str | None) -> list[tuple[str, str, list[str], re.Pattern]]:
+    """(old word, new word, the globs of the files it is renamed in, its pattern) for each word ``move``'s map, at the move's
+    base, renames only in the files a block names: rename.py's `[[words_in]]`, as the whole word it renames there, and
+    layout.py's `[rewrite] words_in`, a moved directory's name alone between quotes or backticks. A word several blocks rename
+    is one entry, with every block's globs, and the first block's new word, as rename.py takes it. Such a word means another
+    thing in other files, so the script leaves it in a file the branch adds or changes outside its block, where it may mean
+    the renamed name. A word the map renames everywhere ([words], [rewrite] words) that still stands after the script ran was
+    kept on purpose, and a prose map (`scope = "prose"`) renames no code: neither is here."""
+    path = map_of(args) or (LAYOUT_MAP if script == LINE_SCRIPT["Layout-move"] else None)
+    held = move if path and own_map(move, f"{move}^1", args, cwd) else f"{move}^1"
+    shown = git("show", f"{held}:{path}", cwd=cwd, ok=(0, 128)) if path else None
+    data = tomllib.loads(shown.stdout.decode()) if shown and not shown.returncode else {}
+    if data.get("scope") == "prose":
+        return []
+    found: dict[str, tuple[str, list[str], re.Pattern]] = {}
+    for block in data.get("words_in", []):
+        for old, new in block.get("words", {}).items():
+            left = (r"(?<![\w.])" if old.endswith(".") else r"(?<!\w)") if re.match(r"\w", old) else ""
+            right = r"(?!\w)" if re.match(r"\w", old[-1]) else ""
+            found.setdefault(old, (new, [], re.compile(left + re.escape(old) + right)))[1].extend(block.get("files", []))
+    dirs = {k.rstrip("/").rsplit("/", 1)[-1]: v.rstrip("/").rsplit("/", 1)[-1]
+            for k, v in data.get("paths", {}).items() if k.endswith("/")}
+    for glob, names in data.get("rewrite", {}).get("words_in", {}).items():
+        for old in (n.rstrip("/") for n in names):
+            quoted = re.compile(rf"(?<=[\"'`]){re.escape(old)}(?=[\"'`])")
+            found.setdefault(old, (dirs.get(old, "its directory's new name"), [], quoted))[1].append(glob)
+    return [(old, new, globs, pattern) for old, (new, globs, pattern) in found.items()]
+
+
+def own_lines(onto: str, result: str, cwd: str | None):
+    """(path, line number, text) of each line ``result`` adds or changes against ``onto``, the side it merged last: the
+    branch's own lines, in moved paths and names."""
+    p = git("-c", "core.quotePath=false", "diff", "-U0", "-M", "--no-color", "--no-ext-diff", "--no-textconv", onto, result,
+            cwd=cwd)
+    path, n, left = None, 0, 0
+    for raw in p.stdout.decode(errors="replace").splitlines():
+        if left:
+            if raw.startswith("\\"):
+                continue
+            left -= 1
+            if raw.startswith("+"):
+                if path:
+                    yield path, n, raw[1:]
+                n += 1
+        elif raw.startswith("+++ "):
+            path = raw[6:] if raw.startswith("+++ b/") else None
+        elif m := HUNK.match(raw):
+            n, left = int(m[2]), int(m[1] or 1) + int(m[3] or 1)
+
+
+def stale_words(result: str, onto: str, moves: list[tuple[str, str, tuple[str, ...]]], cwd: str | None) -> list[dict]:
+    """Each line of the branch's own in ``result`` (`own_lines`) that still spells a word one of ``moves``, those whose script
+    ran on it, renames only in the files a block of its map names (`scoped_words`), in a file outside every block that renames
+    it: its file, line, word, new word, map and move. A Lean lock's records are its check's to rewrite (`check.py --update`),
+    and `tools/move/`, which the script leaves as the branch has it, holds maps that spell old words by design."""
+    words = [(w, m, args) for m, script, args in moves for w in scoped_words(m, script, args, cwd)]
+    if not words:
+        return []
+    found, seen = [], set()
+    for path, n, text in own_lines(onto, result, cwd):
+        if path.startswith(SCRIPT_DIR + "/") or path.rsplit("/", 1)[-1] == LOCK:
+            continue
+        for (old, new, globs, pattern), move, args in words:
+            if old in text and pattern.search(text) and not any(_glob(path, g) for g in globs) and (path, n, old) not in seen:
+                seen.add((path, n, old))
+                found.append({"file": path, "line": n, "word": old, "new": new, "move": move,
+                              "map": args[args.index("--map") + 1] if "--map" in args else LAYOUT_MAP})
+    return found
+
+
+def stale_error(words: list[dict], result: str) -> str:
+    """What `stale-words` says: the first line counts and names the first word, as one line of a report reads it; then each
+    line, at most `WORDS_SHOWN`, and the fix."""
+    w = words[0]
+    more = f", and {len(words) - 1} more" if len(words) > 1 else ""
+    shown = "".join(f"\n  {x['file']}:{x['line']}: {x['word']} -> {x['new']} ({x['map']}, the move {x['move'][:12]})"
+                    for x in words[:WORDS_SHOWN])
+    return (f"{len(words)} of the branch's own lines still spell a word a crossed move renames only in the files its map "
+            f"names, which its script left as written: {w['file']}:{w['line']} {w['word']} (-> {w['new']}){more}" + shown
+            + (f"\n  and {len(words) - WORDS_SHOWN} more (--json lists every one)" if len(words) > WORDS_SHOWN else "")
+            + f"\nwhere one means the renamed name, rename it on the result {result[:12]} and push that; nothing here rewrote "
+              "them, and nothing is pushed")
 
 
 def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str | None = None, base: str | None = None,
@@ -561,11 +837,12 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
 
     With ``found`` (the moves are `moves_on`'s, none of them named), a move the branch is `based-after` is skipped, and
     named in `skipped`, where a later move's base contains it: crossing that later move starts by merging its base, which
-    is the merge of main the refusal asks of the owner, up to that base. A skipped move is then in the base of a move that
+    is what a merge of main brings in, up to that base. A skipped move is then in the base of a move that
     is crossed, or the carry stops before a result: the later move is crossed, or skipped under the same rule, or stops it.
-    The last move has no later one, so it still refuses."""
+    The last move has no later one, so it still refuses, with `carry`, the command that carries ``branch`` against the move's
+    own commit (`carried_against`: the moves found, or each named up to it)."""
     global SCRIPT, SCRIPT_ARGS
-    head, tip, crossed, skipped, locks = rev(branch, cwd), branch, [], [], []
+    head, tip, crossed, skipped, locks, ran = rev(branch, cwd), branch, [], [], [], []
     if not moves:
         return {"branch": branch, "head": head, "crossed": [], "skipped": [], "status": "no-moves",
                 "plain": {"status": "clean", "files": []}, "error": f"no move to cross: merge {main or onto} as usual"}
@@ -575,22 +852,33 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
         r = restack(tip, move, onto if last else None, base if len(moves) == 1 else None, python, cwd,
                     pins=pins and last, main=main)
         r = {**r, "branch": branch, "head": head, "crossed": crossed, "skipped": skipped}
+        scripted = r.pop("ran", False)
         if found and r["status"] == "based-after" and any(contains(move, move_base(m, cwd), cwd) for m, *_ in moves[i + 1:]):
             skipped = [*skipped, {"move": r["move"], "script": script, "args": list(args)}]
             continue
+        if r["status"] == "based-after":
+            named = [] if found else [(rev(m, cwd), s, a) for m, s, a in moves[:i + 1]]
+            command = carried_against(branch, r["move"], named, cwd)
+            r = {**r, "carry": command, "error": refused_after(branch, r["late"], r["base"], r["move"], command,
+                                                               [rev(m, cwd) for m, *_ in moves[i + 1:]])}
         if r["status"] not in ("clean", "up-to-date", "locks-stale"):
             return r
         crossed = [*crossed, move]
+        ran += [(move, script, tuple(args))] if scripted else []
         locks += [f for f in r.get("files", []) if r["status"] == "locks-stale" and f not in locks]
         if last:
             break
         tip = r["result"]
     if locks and r["status"] != "locks-stale":
         r = {**r, "status": "locks-stale", "files": locks,
-             "error": f"the Lean locks {', '.join(locks)} took the moves' side: regenerate them on the result "
-                      "(tools/verity/lean/check.py --update) before marking it"}
+             "error": f"the Lean locks {', '.join(locks)} took the moves' side whole: before marking the result, "
+                      f"{LOCKS_READD}"}
     if skipped and r["status"] in ("clean", "up-to-date"):
         r = {**r, "status": "clean-skipped"}
+    if ran and (words := stale_words(r["result"], r["onto"], ran, cwd)):
+        stale = stale_error(words, r["result"])
+        r = {**r, "status": "stale-words", "words": words,
+             "error": stale + (f"\n{r['error']}" if r["status"] == "locks-stale" else "")}
     return {**r, "crossed": crossed, "skipped": skipped}
 
 
@@ -617,7 +905,7 @@ def line(r: dict) -> str:
     if len(r.get("crossed", [])) > 1 or r["status"] not in ("clean", "up-to-date", "no-moves") and r.get("crossed"):
         plain += (f"; crossed {len(r['crossed'])} move{'s' if len(r['crossed']) != 1 else ''}: "
                   f"{', '.join(c[:12] for c in r['crossed'])}")
-        if r["status"] not in ("clean", "clean-skipped", "up-to-date", "locks-stale"):
+        if r["status"] not in ("clean", "clean-skipped", "up-to-date", "locks-stale", "stale-words"):
             plain += f"; stopped at the move {r['move'][:12]}"
     skipped = "".join(
         f"\n    skipped the move {s['move'][:12]} ({shlex.join([s['script'], *s['args']])}): {r['branch']} is based after its "
@@ -628,7 +916,7 @@ def line(r: dict) -> str:
                     f"with the moves named, which skips none:\n    {shlex.join(r['confirm'])}")
     if r["status"] in ("clean", "clean-skipped", "up-to-date"):
         return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]" + skipped
-    if r["status"] in ("script-failed", "no-row", "pins-stale", "locks-stale", "based-after", "no-moves"):
+    if r["status"] in ("script-failed", "no-row", "pins-stale", "locks-stale", "stale-words", "based-after", "no-moves"):
         at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "no-row", "based-after", "no-moves") else ""
         return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ") + skipped
     return (f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n"

@@ -14,20 +14,16 @@ complement element flips three words' low bits; at 32 bits the same flips leave 
 from __future__ import annotations
 
 import ctypes
-import importlib.util
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
+import pfill_ref as R
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("pfill_ref", HERE / "pfill_ref.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
+KERNEL = HERE.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/filler"
 
 C0, C1 = 0x0123456789ABCDEF, 0xFEDCBA9876543210
 INT_KINDS = (R.S8, R.BITS, R.BU)
@@ -47,7 +43,7 @@ def host(tmp_path_factory):
     for fold in (None, R.LI, R.XIN13):
         so = d / f"pfill_host{len(libs)}.so"
         subprocess.run([gxx, "-O2", "-std=c++17", "-shared", "-fPIC", "-Wall", "-Wextra", "-Werror", "-Wno-unknown-pragmas",
-                        *([FLAG[fold]] if fold else []), "-o", str(so), str(HERE / "pfill_host.cpp")], check=True)
+                        *([FLAG[fold]] if fold else []), "-o", str(so), str(KERNEL / "pfill_host.cpp")], check=True)
         cdll = ctypes.CDLL(str(so))
         cdll.pfill_ref.restype = ctypes.c_uint64
         cdll.pfill_ref.argtypes = [ctypes.c_uint64] * 3 + [ctypes.c_int] * 4

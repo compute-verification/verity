@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Bridges
+public import Definitions.Pouw.Guarantees.Bridges
 public import Definitions.Pouw.Assumptions.Deadline
 public import Proofs.Accounting.Actual.Physical
 public import Proofs.Pouw.Deadline
@@ -17,8 +17,8 @@ public import Proofs.Pouw.Break
 itself as the program, at every deadline from `t_d` on, with equality (`honestClock`): its cost, the work in
 `[tₛ + ℓ, t_d − ℓ)`, is what the run spends after the salt (`timedRun_spentIn`). So the deadline theorem at `CM_A`, at
 the deadline `t_d`, is PoUW's row from B1 (`pouwRow`). Causality is what puts the work that matters in that window: a
-gate off `V` that depends on the salt and that `V` reads before `t_d` lies in it (`cost_window`,
-`prover_cost_window`).
+gate off `V` that depends on the salt and that `V` reads before `t_d` lies in it (`cost_serverBlock`,
+`prover_cost_serverBlock`).
 
 What the outside `O = (X ∪ cert)ᶜ` does during `[a, b)` is part of what it does before `b` (`acts_restrict`), which
 causality's global form makes a function of what it reads from outside before `b`, its inputs being fixed. That is
@@ -98,8 +98,8 @@ theorem mem_uncertified {L E : Type*} [Fintype E] {ends : E → L × L} {cert X 
     e ∈ uncertified ends cert X ↔ e ∈ boundary ends X ∧ (ends e).1 ∉ cert ∧ (ends e).2 ∉ cert :=
   mem_filter
 
-theorem uncertifiedCapacity_eq {L E : Type*} [Fintype E] (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) :
-    uncertifiedCapacity ends β cert X = ∑ e ∈ uncertified ends cert X, β e := rfl
+theorem uncertifiedLinkCapacity_eq {L E : Type*} [Fintype E] (ends : E → L × L) (β : E → ℕ) (cert X : Finset L) :
+    uncertifiedLinkCapacity ends β cert X = ∑ e ∈ uncertified ends cert X, β e := rfl
 
 /-- Under `Links`, what crosses from `X` to the leaves in neither `X` nor `cert` is the signals the uncertified links
 across `X`'s boundary deliver at their ends outside `X`: runs alike in those signals are alike in it. -/
@@ -202,7 +202,7 @@ theorem workIn_empty {L : Type*} (ρ : Actual.Run L) (π : Fin ρ.A.N → ℕ) (
 
 /-- `CM_A`'s programs reach the oracle only through counted queries, the hash's gates: a prover carries it. -/
 theorem costModel_queries (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (𝓕 : Set (Actual.Run L))
-    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
+    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ) :
     (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).Queries :=
   fun P U act σ s => P.queries U act σ s
@@ -210,7 +210,7 @@ theorem costModel_queries (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] 
 /-- **The cost window** (B1): if what the outside of `V` can tell at `tₛ + ℓ` is the same in `ρ` and `ρ'`, and
 latencies into `V` are at least `ℓ`, a gate off `V` that no gate of `ρ'` looks like (it depends on what tells the two
 apart) and that `V` reads before `t_d` lies in `[tₛ + ℓ, t_d − ℓ)`. -/
-theorem cost_window {L : Type*} [DecidableEq L] [Fintype L] {ρ ρ' : Actual.Run L} {V : Finset L} {tₛ t_d ℓ : ℕ}
+theorem cost_serverBlock {L : Type*} [DecidableEq L] [Fintype L] {ρ ρ' : Actual.Run L} {V : Finset L} {tₛ t_d ℓ : ℕ}
     (ℓ' : L → L → ℕ) (hfresh : ρ.history Vᶜ (tₛ + ℓ) = ρ'.history Vᶜ (tₛ + ℓ)) (hc : ρ.A.Causal ℓ')
     (hℓ : ∀ y v, y ∉ V → v ∈ V → ℓ ≤ ℓ' y v) {g v : Fin ρ.A.N} (hg : ρ.A.x g ∉ V)
     (hdep : ∀ h, ρ'.seen h ≠ ρ.seen g) (hv : g ∈ ρ.A.reads v) (hvV : ρ.A.x v ∈ V) (hvt : ρ.A.t v < t_d) :
@@ -227,7 +227,7 @@ theorem cost_window {L : Type*} [DecidableEq L] [Fintype L] {ρ ρ' : Actual.Run
 
 /-- At `CM_A`: in a prover's run, a gate off `V` that depends on the salt and that `V` reads before `t_d` lies in the
 cost window, the prover's history at `tₛ + ℓ` not depending on the salt (`fresh`). -/
-theorem prover_cost_window {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)}
+theorem prover_cost_serverBlock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)}
     {V : Finset L} {tₛ t_d ℓ : ℕ} {read hash} (P : Actual.Prover Q R S 𝓕 V tₛ t_d ℓ read hash) (H U act σ)
     (s s' : S) (ℓ' : L → L → ℕ) (hc : (P.strategy (H, U, act, σ, s)).A.Causal ℓ')
     (hℓ : ∀ y v, y ∉ V → v ∈ V → ℓ ≤ ℓ' y v) {g v : Fin (P.strategy (H, U, act, σ, s)).A.N}
@@ -236,12 +236,12 @@ theorem prover_cost_window {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L]
     (hv : g ∈ (P.strategy (H, U, act, σ, s)).A.reads v) (hvV : (P.strategy (H, U, act, σ, s)).A.x v ∈ V)
     (hvt : (P.strategy (H, U, act, σ, s)).A.t v < t_d) :
     (P.strategy (H, U, act, σ, s)).A.t g ∈ Set.Ico (tₛ + ℓ) (t_d - ℓ) :=
-  cost_window ℓ' (P.fresh H U act σ s s') hc hℓ hg hdep hv hvV hvt
+  cost_serverBlock ℓ' (P.fresh H U act σ s s') hc hℓ hg hdep hv hvV hvt
 
 /-- What an adversary's timed run spends from the salt's release to a deadline `td` at or after `t_d` is its cost at
 `CM_A`, the prover's work in `[tₛ + ℓ, t_d − ℓ)`. -/
 theorem timedRun_spentIn {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)}
-    {V : Finset L} {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript}
+    {V : Finset L} {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ} (U : Pouw.Workload)
     (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) (H : Q → R) (s : S) {td : ℝ}
     (htd : (t_d : ℝ) ≤ td) :
@@ -259,11 +259,12 @@ theorem timedRun_spentIn {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {
 itself is the program `HonestClock` asks for, with equality: its cost, the prover's work in `[tₛ + ℓ, t_d − ℓ)`, is
 what the run spends in `(tₛ, td]` (`timedRun_spentIn`). -/
 theorem honestClock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)} {V : Finset L}
-    {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript}
+    {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ}
     (U : Pouw.Workload) (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) {td : ℝ}
     (htd : (t_d : ℝ) ≤ td) :
-    Pouw.Assumptions.HonestClock (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) U A (Actual.timedRun A U) td :=
+    Pouw.Assumptions.HonestClock ((Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).adversaries U) A
+      (Actual.timedRun A U) td :=
   ⟨A, rfl, fun H s => ⟨fun _ => ⟨rfl, fun _ hm => hm⟩, (timedRun_spentIn U A H s htd).ge, le_rfl⟩⟩
 
 end Actual
@@ -358,13 +359,13 @@ theorem B4 : Guarantees.B4 := by
     ENat.card_eq_coe_fintype_card, Fintype.card_fun, Fintype.card_fin, Fintype.card_prod, Fintype.card_coe,
     Fintype.card_coe]
   have hsig : ∏ i, (Set.range (sig i)).encard ≤
-      ((2 ^ (uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞) := by
+      ((2 ^ (uncertifiedLinkCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞) := by
     refine (Finset.prod_le_prod fun i _ => hα i.1.1 (Actual.outer ends X i.1.1) i.2.1).trans (le_of_eq ?_)
-    rw [← Nat.cast_prod, Finset.prod_pow_eq_pow_sum, Fintype.sum_prod_type, Actual.uncertifiedCapacity_eq,
+    rw [← Nat.cast_prod, Finset.prod_pow_eq_pow_sum, Fintype.sum_prod_type, Actual.uncertifiedLinkCapacity_eq,
       ← Finset.sum_coe_sort B, Finset.sum_mul]
     simp only [Finset.sum_const, Finset.card_univ, Fintype.card_coe, Nat.card_Ico, smul_eq_mul, mul_comm]
   calc _ ≤ (Set.range rec_).encard * ((((2 ^ jitter) ^ (cert.card * K.card) : ℕ) : ℕ∞) *
-        ((2 ^ (uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)) := by
+        ((2 ^ (uncertifiedLinkCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)) := by
         gcongr
     _ = _ := by
       rw [← Nat.cast_mul, ← pow_mul, ← pow_add, show jitter * (cert.card * K.card) = jitter * K.card * cert.card by
@@ -374,7 +375,7 @@ theorem B4 : Guarantees.B4 := by
 theorem B4Covered : Guarantees.B4Covered := by
   intro L E Ω _ _ _ S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec hcov
   have h := B4 S ℓ ends β link 𝒱 cert X spec record bucket jitter a b hcs hdl hT hsec
-  have hc0 : Accounting.uncertifiedCapacity ends β cert X = 0 := hcov
+  have hc0 : Accounting.uncertifiedLinkCapacity ends β cert X = 0 := hcov
   rwa [hc0, Nat.zero_mul, Nat.add_zero] at h
 
 end Accounting.SecurityProofs

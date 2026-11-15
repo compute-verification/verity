@@ -15,7 +15,7 @@ import shutil
 import stat
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -35,7 +35,7 @@ CALLER, CALLER_GID = (ME, MY_GID) if ME else (1000, 1000)   # vy-sudo refuses ro
 T0 = 1_600_000_000.0                     # every file's mtime: quiet, and before VERIFIED_FROM
 VERIFIED_FROM = 4102444800.0
 ART = "art:" + "a" * 64
-NOW = datetime(2026, 10, 1, 19, 30, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 1, 19, 30, tzinfo=UTC)
 not_root = pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a read-only directory")
 
 
@@ -121,7 +121,7 @@ def test_the_seal_rule_is_custodys_own(roots):
     assert [d.name for d in sorted(r.iterdir()) if SR.not_ended(d) is None] == ["a", "f", "g", "j"]
 
 
-def test_a_pass_seals_ended_quiet_runs_up_to_its_cap_and_a_dry_run_changes_nothing(roots, tmp_path):
+def test_a_pass_seals_ended_quiet_runs_up_to_its_limit_and_a_dry_run_changes_nothing(roots, tmp_path):
     ended = [run(roots[0], n) for n in ("r1", "r2")] + [run(roots[1], "r3")]
     live = run(roots[0], "r0", state="running")
     fresh = run(roots[0], "r4")
@@ -136,7 +136,7 @@ def test_a_pass_seals_ended_quiet_runs_up_to_its_cap_and_a_dry_run_changes_nothi
     assert all(os.stat(d).st_mode & 0o200 for d in ended) and not ledger.exists(), "a dry run changes nothing"
 
     rep = SR.seal_pass([str(r) for r in roots], dry_run=False, max_dirs=2, **kw)
-    assert rep["sealed"] == [str(ended[0]), str(ended[1])] and any("cap of 2" in ln for ln in lines)
+    assert rep["sealed"] == [str(ended[0]), str(ended[1])] and any("limit of 2" in ln for ln in lines)
     for d in ended[:2]:
         for base, dirs, fs in os.walk(d):
             assert stat.S_IMODE(os.stat(base).st_mode) == 0o555
@@ -341,7 +341,8 @@ def test_systemd_run_runs_a_scope_as_the_caller_and_a_unit_only_as_a_job_user(tm
     env = tmp_path / "job.env"
     env.write_text("A=1\n")
     os.chown(env, CALLER, CALLER_GID)
-    job = lambda n: (_ for _ in ()).throw(VS.Refused("privileged")) if n in ("root", "0") else type("pw", (), {"pw_gid": 1000})()
+    def job(n):
+        return (_ for _ in ()).throw(VS.Refused("privileged")) if n in ("root", "0") else type("pw", (), {"pw_gid": 1000})()
     unit = ["--unit=job-1", "--uid=ubuntu", "--wait", "--pipe", "--collect", "--quiet", "--service-type=exec", "--expand-environment=no",
             "--working-directory=/workspace", "-p", f"EnvironmentFile={env}", "-p", "CapabilityBoundingSet=", "-p", "NoNewPrivileges=yes",
             "--", "python3", "job.py"]
@@ -384,7 +385,8 @@ def test_systemctl_stops_only_a_scope_whose_processes_are_all_the_callers(proc, 
     (cg / "x.slice" / "fill-timing-1.scope" / "sub").mkdir(parents=True)
     (cg / "x.slice" / "fill-timing-1.scope" / "cgroup.procs").write_text("123\n")
     (cg / "x.slice" / "fill-timing-1.scope" / "sub" / "cgroup.procs").write_text("777\n")   # exited: no /proc entry
-    show = lambda u: "/x.slice/fill-timing-1.scope"
+    def show(u):
+        return "/x.slice/fill-timing-1.scope"
     assert VS.systemctl(["stop", "fill-timing-1.scope"], ME, show, cg, proc) == [VS.SYSTEMCTL, "stop", "fill-timing-1.scope"]
     assert VS.systemctl(["kill", "--signal=SIGTERM", "fill-timing-1.scope"], ME, show, cg, proc)[2] == "--signal=SIGTERM"
     for args, uid in ((["stop", "fill-timing-1.scope"], ME + 1), (["stop", "vy-custody.service"], ME), (["start", "x.scope"], ME),
@@ -546,6 +548,37 @@ def test_vy_sudo_and_both_allowlists_take_a_unit_that_may_make_the_namespaces_it
     assert out.count("-p") == argv.count("-p"), "every property of the unit reaches systemd-run"
     for p in LO.PROFILES:
         assert LO.allowed("research", "root", " ".join(argv[2:]), p), p.file
+
+
+def _unit_ns(*props: str) -> list[str]:
+    """vy-sudo's arguments for a job's unit carrying each `RestrictNamespaces=<value>` of `props`, each as its own `-p`."""
+    head = ["--unit=research-job-r1", "--uid=vyjob", "--wait", "--pipe"]
+    return [*head, *(x for v in props for x in ("-p", f"RestrictNamespaces={v}")), "--", "true"]
+
+
+def test_vy_sudo_refuses_a_restrict_namespaces_value_that_would_widen_the_unit():
+    """RestrictNamespaces= only narrows at `yes` (no namespace) or a space-separated list out of NAMESPACES (only those); `no`, a
+    `~` list, a type outside the set, or anything else widens the unit, so vy-sudo refuses it. The set is the launcher's
+    (jobuser.check_namespaces), held equal here because vy-sudo is a lone `python3 -I` script on the node and can't import it."""
+    assert set(VS.NAMESPACES) == set(jobuser.NAMESPACES)
+    job = _pw(pw_gid=990)
+    allowed = ("yes", "user", "mnt", "net", "user mnt", "net user", "user mnt net", "user user", "  user   mnt ")
+    for value in allowed:
+        out = VS.systemd_run(_unit_ns(value), CALLER, CALLER_GID, user=job)
+        assert [a for a in out if a.startswith("RestrictNamespaces=")] == [f"RestrictNamespaces={value}"], value
+    widening = ("", "no", "false", "0", "off", "~", "~user", "~user mnt", "yes mnt", "YES", "Yes", "User", "MNT",
+                "user,mnt", "user,net", "pid", "cgroup", "uts", "ipc", "user pid", "bogus", "all")
+    for value in widening:
+        with pytest.raises(VS.Refused, match="RestrictNamespaces"):
+            VS.systemd_run(_unit_ns(value), CALLER, CALLER_GID, user=job)
+    # a property repeated with different values: vy-sudo checks each occurrence, so a widening one is caught wherever it sits,
+    # whichever systemd would take last
+    assert VS.systemd_run(_unit_ns("user", "mnt"), CALLER, CALLER_GID, user=job).count("RestrictNamespaces=user") == 1
+    for pair in (("user", "no"), ("no", "user"), ("yes", "~net")):
+        with pytest.raises(VS.Refused, match="RestrictNamespaces"):
+            VS.systemd_run(_unit_ns(*pair), CALLER, CALLER_GID, user=job)
+    with pytest.raises(VS.Refused, match="widen the unit: only .* mnt, net, user"):
+        VS.systemd_run(_unit_ns("no"), CALLER, CALLER_GID, user=job)
 
 
 def test_job_user_is_never_root_or_a_privileged_account():
@@ -1220,7 +1253,8 @@ def test_admin_setup_takes_only_public_keys_from_its_file_and_prints_fingerprint
     subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "dan@laptop", "-f", str(tmp_path / "k")], check=True)
     pub = (tmp_path / "k.pub").read_text().strip()
     script = LOCKOUT / "admin_setup.sh"
-    sh = lambda f, *a: subprocess.run(["bash", str(script), str(f), *a], capture_output=True, text=True)
+    def sh(f, *a):
+        return subprocess.run(["bash", str(script), str(f), *a], capture_output=True, text=True)
     keys = tmp_path / "keys"
     keys.write_text(f"# Dan\n{pub}\n\n")
     r = sh(keys, "--check")

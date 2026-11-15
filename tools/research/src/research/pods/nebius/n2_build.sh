@@ -81,10 +81,10 @@ submit() {
   { read -r tree; read -r row; read -r repo; read -r rev; read -r mem; read -r max_min; } < <(item_get "$item" tree ROW REPO REVISION mem max_min)
   [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("template"))' "$item")" = config-run ] \
     || { echo "ITEM: a config-run item" >&2; exit 2; }
-  # node 2 caps a guest with MemoryMax at the item's request, in 64-256: node 1's Builds peak far under their requests
+  # node 2 limits a guest's MemoryMax to the item's request, in 64-256: node 1's Builds peak far under their requests
   # (container_memory_working_set_bytes)
   # A node-1 request is no limit there, so an MoE item's request is too small on node 2 (Qwen3-30B-A3B's Build at 66 GB is
-  # OOM-killed): MoE checkpoints take the cap, the class table's moe row
+  # OOM-killed): MoE checkpoints take the top of that range, the class table's moe row
   [[ $repo =~ -A[0-9]+B|OLMoE|[Mm]o[Ee] ]] && mem=256
   mem=${VY_N2_MEM_GB:-$(( ${mem:-96} < 64 ? 64 : ${mem:-96} > 256 ? 256 : ${mem:-96} ))} max_min=${VY_MAX_MIN:-${max_min:-130}}
   # the queue's placement on node 2, with the item's research question (n2_commit.sh's `place`): a refusal keeps the Build on
@@ -155,7 +155,6 @@ run() {
   export HF_HOME=/workspace/jobs/hf HF_HUB_OFFLINE=1 SWEEP_DIR=/workspace/cp/sweep CUDA_HOME=/workspace/jobs/cuda-12.9 \
     TORCH_EXTENSIONS_DIR=/workspace/jobs/torch-extensions PY=/workspace/jobs/venv312/bin/python PY312=/workspace/jobs/venv312/bin/python \
     RESEARCH_PY=/workspace/jobs/bin/py312 RESEARCH_RUNS=/workspace/jobs/runs RESEARCH_STORE=/workspace/jobs/store \
-    HOT_ROOT=/workspace/jobs/hot HOT_RELEASING_MARKER=/workspace/jobs/hot/releasing HOT_RELEASE_JSON=/workspace/jobs/hot/release.json \
     GUARD_PRESERVE_FILE=/workspace/jobs/dm/guard.preserve BUILD_JOBS=auto \
     VERITY_UNIT_RULE_CACHE=/workspace/jobs/cache/unit-rules UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python \
     CAMPAIGN=nebius-sweep

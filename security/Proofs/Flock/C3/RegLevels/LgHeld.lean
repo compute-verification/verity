@@ -30,7 +30,7 @@ sparse phases', the list `stageStarts` sums.
 `stageHeld_stacked`: a stage whose coins are `stacked/rep0`'s recorded rounds from `k` on is `StageHeld` at the map's
 selector (`holoSelOne`) from `k` past the four streams' rounds. Its coins are the verifier's hold of `stacked/rep0`
 (`heldStage_of_lgCoins`); R's round `k` is history round `k` past the four streams' since every round of R's flips
-coins (`stackedRounds_coins`), so `drawn_stacked` samples them in order; and it ends by `r` (`hr`).
+coins (`stackedRounds_coins`), so `sampled_stacked` samples them in order; and it ends by `r` (`hr`).
 `lgCoins_of_weave`: a weave's coins are a prefix of the coins it is given (`weave_coins_prefix`), so at `MapsLeft`'s
 weave R's Ligerito's coins are `rep0`'s rounds from `k₂`, as many as it takes.
 `le_size_of_ringSwitch`: ring switching's `k₂` rounds are recorded rounds.
@@ -64,7 +64,7 @@ the map's selector `holoSelOne`): where the verifier holds `cs` (`hh`) and build
 shape has the reps' rounds `rep`, a sparse shape and R's, at R's two claims, with as many rounds of coins held of
 `stacked/rep0` as R's rounds (`hcsz`), a stage whose coin steps are `stacked/rep0`'s `n` rounds from `k` (`hts`), all
 recorded (`hn`), is `StageHeld` from `k` past the four streams' rounds (`J`, `stageStarts`' sum): R's round `k` is
-history round `J + k` since every round of R's flips coins (`stackedRounds_coins`), so `drawn_stacked` samples them in
+history round `J + k` since every round of R's flips coins (`stackedRounds_coins`), so `sampled_stacked` samples them in
 order, and they end by `r` (`hr`). -/
 theorem stageHeld_stacked {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))}
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
@@ -95,7 +95,7 @@ theorem stageHeld_stacked {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List 
     rw [Nat.zero_add] at e
     rw [e]
     simp [heldBefore]
-  have hd := drawn_stacked (n := n) hS hL (hf tbl htbl) (fun p' hp' => hpos (k + p') (by omega)) p q hp
+  have hd := sampled_stacked (n := n) hS hL (hf tbl htbl) (fun p' hp' => hpos (k + p') (by omega)) p q hp
   rw [hk] at hd
   subst hJ
   exact hd
@@ -137,7 +137,7 @@ round count, its last sample (the batching coins, where there are claims) a reco
 theorem le_size_of_ringSwitch {M : Flock.RecAlgebra.Messages Flock.F128}
     {a : Array (Flock.RecAlgebra.AClaim Flock.F128)} {c : Array (Array Flock.F128)} {rsr : Array Flock.F128}
     {rs : Flock.RecAlgebra.RsPts Flock.F128} {k₂ : ℕ} (hne : Flock.RecAlgebra.NoEmpty c)
-    (h : Flock.RecAlgebra.ringSwitch M a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂)) :
+    (h : Flock.RecAlgebra.ringSwitch M a 0 (Flock.RecAlgebra.RoundCoins.ofRounds c) = .ok ((rsr, rs), k₂)) :
     k₂ ≤ c.size := by
   unfold Flock.RecAlgebra.ringSwitch at h
   obtain ⟨⟨outs, betas, pts⟩, k₁, h1, h⟩ := Flock.RecAlgebra.cm_bind h
@@ -171,7 +171,7 @@ theorem stagesHeld_of_run {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List 
     (hts : ∀ i : Fin 2, nCoins (u.ts i) = heldBefore (.rep i) rep rep.size)
     (hss : ∀ x : Fin 2, ∃ w cw, u.sp x = FlockC3.Sparse.stepsOf (FlockC3.Compose.sparseOf sp) w cw)
     (hrun : Flock.RecOpening.run osh (msgsO osh w (opsAt (readMaps M osh.sched) osh Lb kap c3 unit w))
-      (FlockC3.Opening.claimsO osh w c3 unit) 0 (Flock.RecAlgebra.CoinSource.ofRounds (FlockC3.Opening.rep0 c3 unit)) =
+      (FlockC3.Opening.claimsO osh w c3 unit) 0 (Flock.RecAlgebra.RoundCoins.ofRounds (FlockC3.Opening.rep0 c3 unit)) =
         .ok (res, k₁))
     (hz : ∀ y ∈ res, y = 0) (hleft : MapsLeft M zs Lb osh unit c3 w kap e0 sb e cap₀ u)
     (htot : 1 + nCoins (u.ts 0) + nCoins (u.ts 1) + nCoins (u.sp 0) + nCoins (u.sp 1) + nCoins u.op + nCoins u.lg ≤ r) :

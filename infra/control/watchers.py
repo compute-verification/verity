@@ -4,6 +4,10 @@ stopped whenever a VM was suspended: suspending any agent VM stops nothing that 
 
     watchers.py run [--config PATH]      supervise every loop (watchers.sh runs it; one at a time: it holds the config's `lock`)
     watchers.py check [--config PATH]    each loop resolved: its argv, the environment names it gets, what it waits for
+        [--replaces LIVE.toml [--allow-drop NAME ...]]
+                                         and what the config changes of LIVE.toml, the one it is about to be copied over: each
+                                         loop that is new, that goes, or whose argv, env, env_files or needs differ. A loop
+                                         only LIVE.toml has is refused (exit 1) unless --allow-drop names it
     watchers.py exec NAME [-- CMD...]    CMD (else the loop's argv) once, in loop NAME's environment and directory: a seed or a
                                          dry run sees what the loop sees
 
@@ -43,6 +47,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
+
+from research import settings as research_settings
 
 SCHEMA = "verity/watchers-status/v1"
 RESTART_S = 60.0
@@ -153,8 +159,9 @@ def _die_with_parent() -> None:
     os.setsid()
     try:
         ctypes.CDLL(None, use_errno=True).prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
-    except (OSError, AttributeError):
-        pass
+    except (OSError, AttributeError) as e:
+        os.write(2, f"watchers: this loop will not stop with its supervisor: prctl(PR_SET_PDEATHSIG) failed "
+                    f"({type(e).__name__}: {e})\n".encode())
 
 
 class Supervisor:
@@ -221,13 +228,15 @@ class Supervisor:
     def status(self, now: float) -> dict:
         commit = self.cfg["src"] + "/COMMIT"
         try:
-            commit = Path(commit).read_text().strip()
-        except OSError:
+            commit = Path(commit).read_text().strip() if Path(commit).exists() else None
+        except OSError as e:
+            self.log(f"status: {commit} unreadable, so the commit is reported as none ({type(e).__name__}: {e})")
             commit = None
         cw = self.cfg.get("cloud_watch_state")
         try:
-            cw_t = iso(Path(cw).stat().st_mtime) if cw else None
-        except OSError:
+            cw_t = iso(Path(cw).stat().st_mtime) if cw and Path(cw).exists() else None
+        except OSError as e:
+            self.log(f"status: {cw} unreadable, so the cloud watch's time is reported as none ({type(e).__name__}: {e})")
             cw_t = None
         return {"schema": SCHEMA, "t": iso(now), "host": self.cfg.get("host") or socket.gethostname(), "commit": commit,
                 "all_up_t": iso(self.all_up_t) if self.all_up_t else None, "cloud_watch_t": cw_t,
@@ -247,7 +256,7 @@ class Supervisor:
                 try:
                     os.killpg(lp.proc.pid, signal.SIGTERM)
                 except ProcessLookupError:
-                    pass
+                    self.log(f"{lp.name}: process group {lp.proc.pid} was gone before SIGTERM")
         for lp in self.loops.values():
             if lp.state == "running":
                 try:
@@ -323,8 +332,33 @@ def cmd_run(ns: argparse.Namespace) -> int:
     return 0
 
 
+def replaced(new: list[Loop], live: list[Loop], allow: set[str]) -> tuple[list[str], list[str]]:
+    """What a supervisor started on `new` runs differently from one on `live`, as lines to print, and the names of the loops
+    only `live` has that `allow` doesn't name. A differing environment is given by its names, never its values."""
+    now, was = {lp.name: lp for lp in new}, {lp.name: lp for lp in live}
+    lines, dropped = [], []
+    for name, old in was.items():
+        lp = now.get(name)
+        if lp is None:
+            lines.append(f"    {name}: dropped{' (--allow-drop)' if name in allow else ''}\n        live  {' '.join(old.argv)}")
+            if name not in allow:
+                dropped.append(name)
+            continue
+        for what, a, b in (("argv", old.argv, lp.argv), ("env_files", old.env_files, lp.env_files), ("needs", old.needs, lp.needs)):
+            if a != b:
+                lines.append(f"    {name}: {what} differs\n        live  {' '.join(a) or '(none)'}\n"
+                             f"        new   {' '.join(b) or '(none)'}")
+        if env := sorted(k for k in {*old.env, *lp.env} if old.env.get(k) != lp.env.get(k)):
+            lines.append(f"    {name}: env differs in {', '.join(env)}")
+    lines += [f"    {name}: new\n        new   {' '.join(lp.argv)}" for name, lp in now.items() if name not in was]
+    lines += [f"    --allow-drop {name}: " + ("the config keeps that loop" if name in now else "the live config has no such loop")
+              for name in sorted(allow) if name in now or name not in was]
+    return lines, dropped
+
+
 def cmd_check(ns: argparse.Namespace) -> int:
     cfg, loops = load(ns.config)
+    own = list(loops)
     loops += extra_loops(Path(expand(cfg.get("extra", "{dir}/extra.d"), {"dir": cfg["dir"], "src": cfg["src"]})),
                          cfg["_base_env"], {lp.name for lp in loops})
     bad = 0
@@ -333,9 +367,27 @@ def cmd_check(ns: argparse.Namespace) -> int:
         miss = lp.missing()
         print(f"{lp.name}: {' '.join(lp.argv)}\n    env {', '.join(names)}" + (f"\n    waits for {', '.join(miss)}" if miss else ""))
         if not Path(lp.argv[0]).is_absolute() and not any((Path(p) / lp.argv[0]).exists()
-                                                           for p in lp.env.get("PATH", os.environ["PATH"]).split(":")):
+                                                           for p in lp.env.get("PATH", research_settings.need("PATH")).split(":")):
             print(f"    {lp.argv[0]} is not on its PATH")
             bad = 1
+    if ns.replaces is None:
+        return bad
+    try:
+        was, live = load(ns.replaces)
+    except (OSError, ValueError, KeyError) as e:
+        print(f"{ns.replaces} can't be read as a watchers config ({type(e).__name__}: {e}), so nothing says which of its loops "
+              f"{ns.config} would drop: compare the two by hand; where no config is deployed yet, check without --replaces")
+        return 2
+    lines, dropped = replaced(own, live, set(ns.allow_drop))
+    if settings := sorted(k for k in {*cfg, *was} if k not in ("loop", "env", "_base_env") and cfg.get(k) != was.get(k)):
+        lines.insert(0, f"    settings differ: {', '.join(settings)}")
+    print(f"replacing {ns.replaces}:\n" + ("\n".join(lines) if lines else "    the same loops, none of them changed"))
+    if dropped:
+        print(f"refused: {ns.config} lacks {', '.join(dropped)}, which {ns.replaces} runs: copied over it, the supervisor's next "
+              "start stops " + ("that loop" if len(dropped) == 1 else "those loops") + ". To keep a loop, add it to "
+              "infra/control/watchers.toml in a PR and deploy that commit; to stop one on purpose, pass "
+              + " ".join(f"--allow-drop {n}" for n in dropped))
+        return 1
     return bad
 
 
@@ -357,10 +409,17 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("run", "check", "exec"):
         p = sub.add_parser(name)
         p.add_argument("--config", type=Path, default=Path("/data/watchers/watchers.toml"))
+        if name == "check":
+            p.add_argument("--replaces", type=Path, metavar="LIVE.toml",
+                           help="the config this one is about to be copied over: print what changes, and refuse a loop only it has")
+            p.add_argument("--allow-drop", action="append", default=[], metavar="NAME",
+                           help="with --replaces: a loop of LIVE.toml this config stops on purpose (repeatable)")
         if name == "exec":
             p.add_argument("loop")
             p.add_argument("argv", nargs=argparse.REMAINDER)
     ns = ap.parse_args(argv)
+    if ns.cmd == "check" and ns.allow_drop and ns.replaces is None:
+        ap.error("--allow-drop goes with --replaces LIVE.toml")
     if ns.cmd == "exec" and ns.argv[:1] == ["--"]:
         ns.argv = ns.argv[1:]
     return {"run": cmd_run, "check": cmd_check, "exec": cmd_exec}[ns.cmd](ns)

@@ -1,7 +1,7 @@
 """IntegrityProfile: what verification established, and the worst case a consumer's utility reads off it.
 
-The two consumer utilities below stand in for PoUW's incorrect-unit bound and the KV touched-unit bound, which live
-with their consumers, not in core.  `two_level` is sampled proofs' shape (n_r units sampled with p, then k of the n_v
+The two consumer utilities below stand in for PoUW's incorrect-block bound and the KV touched-unit bound, which live
+with their consumers, not in core.  `two_level` is SPOT's shape (n_r units sampled with p, then k of the n_v
 inside each), and `_before_levels` is the profile's arithmetic as it stood in those four numbers (every pair of m tried), kept as the
 oracle the level form must reproduce: `accept` exactly, and `worst_case` from above, within its directed margin.
 `_exact_rhos` and `_exact_lp` are the high-precision reference (60-digit `Decimal`): `worst_case` is never below it."""
@@ -19,9 +19,9 @@ import pytest
 from verity.circuits import Program, bind
 from verity.circuits import query_ast as G
 from verity.circuits.partition import Level, validate_partition
-from verity.definitions.ops import gemm
-from verity.protocols.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
-                                                    Stratum, Subset, neg_log_escape)
+from verity.circuits.ops import gemm
+from verity.protocols.proofs.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
+                                                    Stratum, Subset, Work, WorkStratum, neg_log_escape)
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:
@@ -54,7 +54,7 @@ def _before_levels(n_r, n_v, p, k, delta):
     return accept, worst_case
 
 
-def incorrect_units(profile: IntegrityProfile) -> float:
+def incorrect_blocks(profile: IntegrityProfile) -> float:
     return profile.worst_case(lambda m: m)
 
 
@@ -66,18 +66,18 @@ TOY = two_level(n_r=512, n_v=4, p=Fraction(1, 2), k=2, delta=0.01)
 
 def test_the_prototype_toy_numbers():
     """The protocol prototype's composed toy: 26.6 incorrect VUs for PoUW, 16.0 touched RUs for a KV claim."""
-    assert round(incorrect_units(TOY), 1) == 26.6
+    assert round(incorrect_blocks(TOY), 1) == 26.6
     assert round(touched_units(TOY), 1) == 16.0
-    assert TOY.worst_case(lambda m: 4 * m) == pytest.approx(4 * incorrect_units(TOY))
+    assert TOY.worst_case(lambda m: 4 * m) == pytest.approx(4 * incorrect_blocks(TOY))
 
 
 def test_consumers_are_maximised_by_different_strategies():
     a = two_level(n_r=10_000, n_v=4, p=Fraction(1, 4), k=2, delta=0.01)
     ratio = {m: m / a.rho(m) for m in range(1, 5)}
     touched = {m: 1 / a.rho(m) for m in range(1, 5)}
-    assert max(ratio, key=ratio.get) == 4      # free compute concentrates into fully incorrect replay units
-    assert max(touched, key=touched.get) == 1  # KV laundering spreads one incorrect verification unit per replay unit
-    assert incorrect_units(a) == pytest.approx(ratio[4] * log(100))
+    assert max(ratio, key=ratio.get) == 4      # free compute concentrates into fully incorrect replay blocks
+    assert max(touched, key=touched.get) == 1  # KV laundering spreads one incorrect proof block per replay block
+    assert incorrect_blocks(a) == pytest.approx(ratio[4] * log(100))
     assert touched_units(a) == pytest.approx(touched[1] * log(100))
 
 
@@ -87,14 +87,14 @@ def test_accept_is_exact():
 
 
 def test_full_check_admits_nothing_and_no_check_admits_everything():
-    assert incorrect_units(two_level(n_r=100, n_v=4, p=Fraction(1), k=4, delta=0.01)) == 0
-    assert incorrect_units(two_level(n_r=100, n_v=4, p=Fraction(0), k=4, delta=0.01)) == 400
+    assert incorrect_blocks(two_level(n_r=100, n_v=4, p=Fraction(1), k=4, delta=0.01)) == 0
+    assert incorrect_blocks(two_level(n_r=100, n_v=4, p=Fraction(0), k=4, delta=0.01)) == 400
     assert touched_units(two_level(n_r=100, n_v=4, p=Fraction(1, 2), k=0, delta=0.01)) == 100
 
 
 def test_the_bound_uses_n_r_when_it_binds():
     few = two_level(n_r=3, n_v=4, p=Fraction(1, 100), k=1, delta=0.01)
-    assert incorrect_units(few) == pytest.approx(12)
+    assert incorrect_blocks(few) == pytest.approx(12)
 
 
 @pytest.mark.parametrize("n_r, n_v, p, k, delta", [(3, 3, Fraction(1, 2), 1, 0.3), (4, 2, Fraction(1, 3), 1, 0.2),
@@ -115,12 +115,12 @@ def test_the_bound_covers_every_admitted_integer_strategy(n_r, n_v, p, k, delta,
     assert bound <= n_r * max(utility(m) for m in range(1, n_v + 1)) + 1e-9
 
 
-def test_a_bernoulli_law_is_the_single_unit_case():
+def test_a_bernoulli_sampling_design_is_the_single_unit_case():
     rate = Fraction(1, 10)
     a = two_level(n_r=10_000, n_v=1, p=rate, k=1, delta=0.01)
     assert a.accept(1) == 1 - rate
-    assert incorrect_units(a) == pytest.approx(log(100) / -log(0.9))
-    assert exp(-a.rho(1) * incorrect_units(a)) == pytest.approx(0.01)
+    assert incorrect_blocks(a) == pytest.approx(log(100) / -log(0.9))
+    assert exp(-a.rho(1) * incorrect_blocks(a)) == pytest.approx(0.01)
 
 
 @pytest.mark.parametrize("kw", [dict(n_v=0), dict(k=5), dict(p=Fraction(3, 2)), dict(delta=0.0), dict(delta=1.0), dict(n_r=-1)])
@@ -129,14 +129,14 @@ def test_ill_formed_profiles_are_refused(kw):
         two_level(**{**dict(n_r=1, n_v=4, p=Fraction(1, 2), k=2, delta=0.01), **kw})
 
 
-def test_json_carries_the_law_and_the_exhaustive_facts():
+def test_json_carries_the_sampling_design_and_the_exhaustive_facts():
     assert TOY.to_json() == {"programs": [], "prescribed": [], "linked": False, "covered": [],
                              "levels": [{"name": "replay", "query": None, "size": 512, "draw": {"bernoulli": "1/2"}},
                                         {"name": "check", "query": None, "size": 4, "draw": {"subset": 2}}],
                              "delta": 0.01, "drawn": {}}
 
 
-def test_exhaustive_facts_travel_with_the_law():
+def test_exhaustive_facts_travel_with_the_sampling_design():
     p = two_level(8, 4, Fraction(1, 2), 2, 0.01, programs=["ab", "cd"], prescribed=["weights", "noise"], linked=True,
                   covered=["TcDot16_v1"], drawn={"replay": 3, "check": 6})
     assert p.programs == ("ab", "cd") and p.prescribed == {"weights", "noise"} and p.linked and p.covered == {"TcDot16_v1"}
@@ -165,14 +165,14 @@ def test_undrawn_levels_only_group():
                                {"replay": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
     for a in (above, between):
         assert [a.accept(m) for m in range(5)] == [TOY.accept(m) for m in range(5)]
-        assert incorrect_units(a) == incorrect_units(TOY) and touched_units(a) == touched_units(TOY)
+        assert incorrect_blocks(a) == incorrect_blocks(TOY) and touched_units(a) == touched_units(TOY)
     assert above.count("request") == 32 and above.count("replay") == 512 and above.count("check") == 2048
     assert above.count("check", within="replay") == 4 and above.count("replay", within="request") == 16
     assert between.count("tile", within="replay") == 2 and between.count("replay", within="replay") == 1
 
 
 def test_the_cap_bounds_a_touched_utility_read_above_the_replay_level():
-    """16 replay units may be touched, but 8 requests of 64 replay units each hold at most 8 touched requests."""
+    """16 replay blocks may be touched, but 8 requests of 64 replay blocks each hold at most 8 touched requests."""
     a = IntegrityProfile(("request", "replay", "check"), (8, 64, 4),
                          {"replay": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
     assert round(touched_units(a), 1) == 16.0
@@ -186,7 +186,7 @@ def test_the_cap_bounds_a_touched_utility_read_above_the_replay_level():
 def test_one_bernoulli_level_and_one_subset_level_are_the_degenerate_chains():
     rate = Fraction(1, 10)
     single = IntegrityProfile(("unit",), (10_000,), {"unit": Bernoulli(rate)}, 0.01)
-    assert single.accept(1) == 1 - rate and incorrect_units(single) == incorrect_units(two_level(10_000, 1, rate, 1, 0.01))
+    assert single.accept(1) == 1 - rate and incorrect_blocks(single) == incorrect_blocks(two_level(10_000, 1, rate, 1, 0.01))
     whole = IntegrityProfile(("call",), (100,), {"call": Subset(3)}, 0.01)
     assert [whole.accept(m) for m in range(101)] == [two_level(1, 100, Fraction(1), 3, 0.01).accept(m) for m in range(101)]
 
@@ -264,7 +264,7 @@ def test_the_one_stage_audit_bounds(run):
 
 def _largest_admitted(n, k, delta) -> int:
     """The largest K with C(n - K, k)/C(n, k) >= delta, in exact rationals: `audit_count` (`Audit/OneStage.lean`)
-    bounds Pr[accept and at least K wrong] by that ratio (`Law.subset_miss`) plus the per-unit terms."""
+    bounds Pr[accept and at least K wrong] by that ratio (`SamplingDesign.subset_miss`) plus the per-unit terms."""
     d, top = Fraction(delta), comb(n, k)
     lo, hi = 0, n + 1
     while hi - lo > 1:
@@ -276,7 +276,7 @@ def _largest_admitted(n, k, delta) -> int:
 @pytest.mark.parametrize("run", sorted(E2E))
 def test_the_count_bound_is_the_lean_curve(run):
     """For one level sampled Subset(k), `accept(K)` is the Lean count curve's sampling term C(n - K, k)/C(n, k)
-    (`Law.subset_miss`), and the integer bound is the largest count it does not exclude at delta."""
+    (`SamplingDesign.subset_miss`), and the integer bound is the largest count it does not exclude at delta."""
     n, k, delta, _, at_most = E2E[run]
     a = one_level(n, k, delta)
     top = comb(n, k)
@@ -316,7 +316,7 @@ def test_worst_case_is_the_convex_threshold_for_one_subset_level():
 
 def _exact_rhos(a: IntegrityProfile) -> list:
     """rho(0..n) in 60-digit Decimal, None for inf: -ln of `accept`'s exact ratio."""
-    _, n, p, k = a._law()
+    _, n, p, k = a._design()
     num, den, top = p.numerator, p.denominator, comb(n, k)
     with localcontext() as ctx:
         ctx.prec = 60
@@ -329,7 +329,7 @@ def _exact_lp(a: IntegrityProfile, utility, rhos=None) -> Decimal:
     """The relaxation's exact optimum, independently of the envelope: members times the best value, at mean risk at most
     t = ln(1/delta)/members, of a single point or of a chord between a point below t and one above (brute force), in
     60-digit Decimal."""
-    members, n, _, _ = a._law()
+    members, n, _, _ = a._design()
     rhos = _exact_rhos(a) if rhos is None else rhos
     with localcontext() as ctx:
         ctx.prec = 60
@@ -419,7 +419,7 @@ A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused
             "gemm8192": 587_776}
 
 
-def a4_law(ks: dict) -> Stratified:
+def a4_sampling_design(ks: dict) -> Stratified:
     return Stratified(tuple(Stratum(name, size, ks[name]) for name, size in A4_SIZES.items()))
 
 
@@ -488,7 +488,7 @@ def test_stratified_harm_bound_brackets_the_integer_optimum(law):
 
 @pytest.mark.parametrize("run", sorted(E2E))
 def test_one_stratum_is_the_uniform_subset(run):
-    """One stratum sampled k of n is the one-stage audits' law: the same count bound as the profile and the Lean curve."""
+    """One stratum sampled k of n is the one-stage audits' sampling design: the same count bound as the profile and the Lean curve."""
     n, k, delta, _, at_most = E2E[run]
     law = Stratified.uniform(n, k)
     assert law.count_bound(delta) == at_most == _largest_admitted(n, k, delta)
@@ -496,7 +496,7 @@ def test_one_stratum_is_the_uniform_subset(run):
 
 
 def test_a4_uniform_leaves_the_norms_undrawn():
-    """A4 P6's law: at most 91,051 incorrect proof blocks at 2^-20 (the audit's own bound), but a template of 287 units that is
+    """A4 P6's sampling design: at most 91,051 incorrect proof blocks at 2^-20 (the audit's own bound), but a template of 287 units that is
     wrong in every unit escapes with probability 0.958."""
     law = Stratified.uniform(sum(A4_SIZES.values()), 1024)
     assert law.count_bound(2.0 ** -20) == 91_051
@@ -506,7 +506,7 @@ def test_a4_uniform_leaves_the_norms_undrawn():
 def test_a4_one_unit_floor_per_template():
     """Proportional allocation with one unit per template, at A4's proving cost: every template is exercised, a
     template wrong in every unit is always caught, and the count bound moves by 3%."""
-    law = a4_law({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
+    law = a4_sampling_design({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
     assert law.k == 996 and law.count_bound(2.0 ** -20) == 93_892
     worst = law.worst_counts(93_892)
     assert worst["rms_triton"] == worst["rms_fused"] == worst["silu_mul"] == worst["rope"] == 0
@@ -517,12 +517,12 @@ def test_a4_one_unit_floor_per_template():
 
 def test_a4_proportional_to_output_bits():
     """Inclusion proportional to output bits at the same proving cost: the count bound rises to 11.4% of the units."""
-    law = a4_law({"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10})
+    law = a4_sampling_design({"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10})
     assert law.count_bound(2.0 ** -20) == 773_981
 
 
 def test_the_count_bound_is_the_unit_harm_bound_rounded_down():
-    law = a4_law({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
+    law = a4_sampling_design({"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul": 1, "gemm8192": 86})
     for delta in (2.0 ** -10, 2.0 ** -20, 2.0 ** -40):
         K = law.count_bound(delta)
         assert K <= law.harm_bound({s.name: 1 for s in law.strata}, delta) < K + 1 + 1e-6 * K
@@ -667,7 +667,7 @@ AT_ONCE = [[(3348 * 10 ** 18, 6_974_586, 262_144.0)], [(10 ** 19, 300, 3.0), (10
 def test_the_last_blocks_taken_at_once_are_the_blocks_one_by_one(rows, monkeypatch):
     """With `HARM_WHOLE` out of reach every block left is taken by itself: the same bound to the floats' resolution
     (one by one, a block under half the sum's last place adds nothing to it, so at once is never the smaller)."""
-    from verity.protocols.spot.verifier import profile
+    from verity.protocols.proofs.spot.verifier import profile
 
     law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
     harm = {f"s{i}": v for i, (_, _, v) in enumerate(rows)}
@@ -689,7 +689,7 @@ def test_harm_bound_holds_where_the_search_cannot_close(rows, delta):
 
 
 @pytest.mark.parametrize("strata", [(), (Stratum("a", 3, 1), Stratum("a", 2, 1)), ("a",)])
-def test_ill_formed_stratified_laws_are_refused(strata):
+def test_ill_formed_stratified_sampling_designs_are_refused(strata):
     with pytest.raises(ValueError):
         Stratified(strata)
 
@@ -713,7 +713,7 @@ def test_stratified_queries_name_known_strata():
     assert law.worst_counts(law.population) is None and law.miss(law.population) == 0
 
 
-def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
+def test_a_profile_sampled_by_strata_reads_its_bounds_off_the_sampling_design():
     """A Stratified sample of the checked level: the profile's bound is the sampling design's exact count bound, its stratum bounds each
     stratum's own, and its weighted bound the sampling design's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
     for law in SMALL:
@@ -730,7 +730,7 @@ def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
         one = one_level(n, k, delta)
         assert one.strata() == Stratified.uniform(n, k) and one.bound() == Stratified.uniform(n, k).count_bound(delta)
         assert one.bound() == int(one.worst_case(lambda m: m)) and one.stratum_bounds() == {"unit": one.bound()}
-    assert TOY.strata() is None and TOY.stratum_bounds() == {} and TOY.bound() == incorrect_units(TOY)
+    assert TOY.strata() is None and TOY.stratum_bounds() == {} and TOY.bound() == incorrect_blocks(TOY)
     assert TOY.harm_bound(4) == TOY.worst_case(lambda m: 4 * m)
     with pytest.raises(ValueError):
         TOY.harm_bound({"check": 4.0})
@@ -766,7 +766,49 @@ def test_ill_formed_stratified_profiles_are_refused(levels, sizes, draws):
         IntegrityProfile(levels, sizes, draws, 0.01)
 
 
-def test_stratified_json_is_the_profile_law():
+def test_stratified_json_is_the_profile_sampling_design():
     assert SMALL[0].to_json() == {"law": "stratified", "strata": [{"name": "a", "size": 4, "k": 2},
                                                                   {"name": "b", "size": 3, "k": 1},
                                                                   {"name": "c", "size": 3, "k": 0}]}
+
+
+#: `work:3` over a (4 units, work 3) and b (6 units, work 1): W = 18, so k_a = ⌈3·3·4/18⌉ = 2 and k_b = ⌈3·1·6/18⌉ = 1.
+WORK = Work(3, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("b", 6, 1, 1, 1)))
+
+
+def test_a_work_design_is_the_stratified_one_at_its_k():
+    """A `Work` sample of the checked level reads its bounds off the stratified design at its k_s, and writes the profile's
+    `work` case (Lean `Core.SamplingDesign.work`), its existing cases unchanged."""
+    a = IntegrityProfile((Level("unit", "q"),), (10,), {"unit": WORK}, 0.1, drawn={"unit": 3})
+    law = Stratified((Stratum("a", 4, 2), Stratum("b", 6, 1)))
+    assert WORK.stratified == law and a.strata() == law and a.bound() == law.count_bound(0.1)
+    assert a.stratum_bounds() == {s.name: law.stratum_bound(s.name, 0.1) for s in law.strata}
+    assert a.to_json()["levels"][0]["draw"] == {"law": "work", "k": 3, "strata": [
+        {"name": "a", "size": 4, "k": 2, "work": 3, "floor": 1}, {"name": "b", "size": 6, "k": 1, "work": 1, "floor": 1}]}
+    with pytest.raises(ValueError):
+        IntegrityProfile((Level("unit", "q"),), (9,), {"unit": WORK}, 0.1)
+
+
+@pytest.mark.parametrize("k, strata", [
+    (3, ()),                                                                             # no strata
+    (0, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("b", 6, 1, 1, 1))),                   # k < 1
+    (11, (WorkStratum("a", 4, 4, 3, 1), WorkStratum("b", 6, 6, 1, 1))),                  # k > population
+    (3, (WorkStratum("a", 4, 1, 0, 1),)),                                                # no work
+    (3, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("a", 6, 1, 1, 1))),                   # a name twice
+    (3, (WorkStratum("a", 4, 2, 3, 0), WorkStratum("b", 6, 1, 1, 1))),                   # a floor of 0
+    (3, (Stratum("a", 4, 2),)),                                                          # not a work stratum
+])
+def test_ill_formed_work_designs_are_refused(k, strata):
+    with pytest.raises(ValueError):
+        Work(k, strata)
+
+
+def test_a_work_design_keeps_each_k_as_recorded():
+    """`Work` holds no stratum's `k` to the work rule (Lean `Core.WorkStratum.problem`): `WORK` with stratum a's `k` at
+    1, where the rule gives 2, is a work design, written with that `k`, and its sample is the stratified one at it.  The
+    rule is the draw's own check's (`one_stage.draw.strata_problem`)."""
+    off = Work(3, (WorkStratum("a", 4, 1, 3, 1), WorkStratum("b", 6, 1, 1, 1)))
+    assert off.stratified == Stratified((Stratum("a", 4, 1), Stratum("b", 6, 1)))
+    assert [s["k"] for s in off.to_json()["strata"]] == [1, 1]
+    a = IntegrityProfile((Level("unit", "q"),), (10,), {"unit": off}, 0.1, drawn={"unit": 2})
+    assert a.strata() == off.stratified and a.bound() == off.stratified.count_bound(0.1)

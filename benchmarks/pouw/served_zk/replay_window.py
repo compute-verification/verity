@@ -1,5 +1,5 @@
 """Replay recorded served_zk windows through the window's Lean port (`pouw-window-difftest`) and its Python mirror
-(`verity.protocols.pouw.verifier.window`), each against what the run recorded.
+(`verity.protocols.accounting.pouw.verifier.window`), each against what the run recorded.
 
   python replay_window.py OUT [--runs DIR ...] [--add DIR ...]    OUT/replay-window.json and one line on stdout
 
@@ -30,20 +30,22 @@ import hashlib
 import json
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import asdict
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import verity_difftest as D
+from replay_core import store_runs
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import window as Wd
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import window as Wd
 
 REPO = Path(__file__).resolve().parents[3]
-LEAN = REPO / "verity/protocols/pouw/verifier/lean/window"
+LEAN = REPO / "verity/protocols/accounting/pouw/verifier/lean/window"
 EXE = "pouw-window-difftest"
 SIDES = ("request", "other")
 NULL = ("output", "null")
@@ -271,7 +273,7 @@ class SideReplay:
         self.control("root-sibling", not up(0, leaf(0, rows[0], salts[0]), [sib, *paths[0][1:]]))
         self.control("root-index", not up(1, leaf(0, rows[0], salts[0], at=1), paths[1]))
 
-    def draw(self, rows: list[str]) -> None:
+    def sampled(self, rows: list[str]) -> None:
         if self.side != "request":
             return
         summary = load(self.out / "summary.json") if (self.out / "summary.json").is_file() else {}
@@ -296,7 +298,7 @@ class SideReplay:
             rows = list(base["rows"])
             self.breaks(base)
             self.root(rows)
-            self.draw(rows)
+            self.sampled(rows)
         return {"layout": "entry rows" if current else "older", "checks": self.checks, "controls": self.controls}
 
 
@@ -347,12 +349,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
-        if a.runs is None:
-            sys.path.insert(0, str(Path(__file__).resolve().parent))
-            from replay_core import store_runs
-            runs = store_runs(Path(tmp) / "runs")
-        else:
-            runs = list(a.runs)
+        runs = store_runs(Path(tmp) / "runs") if a.runs is None else list(a.runs)
         runs = [*runs, *(r for r in a.add if r.name not in {x.name for x in runs})]
         sides = Sides()
         try:
@@ -363,6 +360,8 @@ def main(argv: list[str] | None = None) -> int:
     print(report["totals"]["line"])
     return 0 if passed(report) else 1
 
+
+__all__ = ["REASONS", "Sides", "passed", "replay"]
 
 if __name__ == "__main__":
     sys.exit(main())

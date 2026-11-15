@@ -12,10 +12,12 @@ from __future__ import annotations
 import sys
 import types
 from contextlib import nullcontext
+from typing import Any
 
 import pytest
 import torch
 
+from tests import fake_vllm
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.pipeline.tp import match as M
 
@@ -43,9 +45,11 @@ def _unfused(hidden_states, residual, norm):
 
 @pytest.fixture
 def mods(monkeypatch):
-    home, user = types.ModuleType(FN.FAR_MODULE), types.ModuleType("fake_dsv32_model")
-    home.fused_allreduce_rms_norm = user.fused_allreduce_rms_norm = _fused
-    monkeypatch.setitem(sys.modules, FN.FAR_MODULE, home)
+    far = f"{FN.FAR_MODULE}:{FN.FAR_NAME}"        # read from `sys.modules`, not imported: the surface doesn't hold it
+    fake = fake_vllm.install(monkeypatch, extra=[far])
+    fake.set(far, _fused)
+    home, user = fake[FN.FAR_MODULE], types.ModuleType("fake_dsv32_model")
+    user.__dict__.update(fused_allreduce_rms_norm=_fused)
     monkeypatch.setitem(sys.modules, "fake_dsv32_model", user)
     return home, user
 
@@ -65,7 +69,7 @@ def test_targets_are_the_home_module_and_the_models_importers(mods):
 
 
 def _recorder():
-    st = {"cur": None, "records": [], "handles": []}
+    st: dict[str, Any] = {"cur": None, "records": [], "handles": []}
 
     def record(orig, kind):
         def w(x):

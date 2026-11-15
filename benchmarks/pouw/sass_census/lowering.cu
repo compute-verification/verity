@@ -1,5 +1,5 @@
 // The lowering probe's cases (lowering.sh): one kernel a case, each the PTX whose SASS a coverage row
-// (benchmarks/pouw/machine_model/data/cover/rows.toml) cites. Compiled, never run.
+// (benchmarks/machine_model/data/cover/rows.toml) cites. Compiled, never run.
 #include <cstdint>
 typedef uint32_t u32;
 

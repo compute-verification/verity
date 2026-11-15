@@ -7,7 +7,7 @@ Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Pro
 * :func:`from_instances` -- the Build's instance sequence (`instances.json.gz`, `derive_step._instance_sequence`): the same nodes
   written one row per Call (`i`, `spec`, `form`, `name`, `args` = operand runs) -- a projection of the descriptor body plus the
   name annotation, produced by the same derivation on meta tensors (nothing executed).  The output type is not in a row: it is
-  the registered Definition's signature bound to the row's statics (`verity.definitions.registry`), read once per distinct spec.
+  the registered Definition's signature bound to the row's statics (`verity_vllm.definitions.registry`), read once per distinct spec.
 
 Both yield the same :class:`ProgramView`: Calls with ports, reads and names; prescribed inputs as Values of negative ids
 (`-(k + 1)` for parameter `k`; a record parameter has one port per field, anything else the port `out`); outputs as the reader
@@ -38,16 +38,25 @@ import gzip
 import json
 import operator
 from array import array
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, Sequence
+from typing import Any
 
-from verity.definitions.call_scope import spec_base, spec_statics
+from verity.circuits import codec, refs
+from verity.circuits.defs import DefinitionTable
+from verity.circuits.program import is_input
+from verity.circuits.types import RecordType, Type
+from verity.circuits.types import Tuple as TupleT
+from verity.circuits.call_scope import spec_base, spec_statics
+
+from verity_vllm.program.compact import expanded_file_args
 from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 
 __all__ = ["Port", "CallView", "ProgramView", "InputView", "from_instances", "from_descriptor", "definition_ports", "parse_type_repr",
-           "spec_base", "spec_statics", "ports_of_type", "param_reads", "reads_any_of", "iter_instance_rows"]
+           "spec_base", "spec_statics", "ports_of_type", "param_reads", "reads_any_of", "iter_instance_rows",
+           "specialization"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +140,7 @@ class ProgramView:
         raise KeyError(iid)
 
     @property
-    def columns(self) -> "_Columns | None":
+    def columns(self) -> _Columns | None:
         """The columnar body when the view was read from a Build (None for a hand-built tuple of CallViews)."""
         return self.calls._cols if isinstance(self.calls, _Calls) else None
 
@@ -186,7 +195,7 @@ class _Columns:
         self.pread_port = array("H")
         self.views: list[CallView | None] = []
 
-    def call(self, k: int) -> "CallView":
+    def call(self, k: int) -> CallView:
         views = self.views
         if len(views) < self.n:
             views.extend([None] * (self.n - len(views)))
@@ -400,7 +409,8 @@ class _Builder:
             if len(pidx) == 1:
                 if idx not in seen:
                     seen.add(idx)
-                    rc.append(idx); rp.append(pidx[0])
+                    rc.append(idx)
+                    rp.append(pidx[0])
                 return
             hit = False
             for p, pi in zip(port_tables[s], pidx):
@@ -408,19 +418,21 @@ class _Builder:
                     hit = True
                     if (idx, pi) not in seen:
                         seen.add((idx, pi))
-                        rc.append(idx); rp.append(pi)
+                        rc.append(idx)
+                        rp.append(pi)
             if not hit and forms[c.form_idx[idx]] == "batch":  # a batch member beyond the single-instance signature: one port
                 pi = pidx[0]
                 if (idx, pi) not in seen:
                     seen.add((idx, pi))
-                    rc.append(idx); rp.append(pi)
+                    rc.append(idx)
+                    rp.append(pi)
 
         def param(idx: int, lo: int, hi: int, step: int = 0, count: int = 1) -> None:
             """The ports of `count` runs `[lo + k*step, hi + k*step)` of parameter `idx`, in first-touch order (ascending for a
             disjoint ascending table and step > 0, the order the runs one by one give)."""
             pv, pidx, los = params[idx], param_pidx[idx], self._param_lo[idx]
             if len(pidx) == 1:
-                sel = pidx
+                sel: list[int] | tuple[int, ...] = pidx
             elif los is None:
                 sel = [pi for p, pi in zip(pv.port_table, pidx) if p.lo < hi and lo < p.hi]
             else:                       # a weights struct has thousands of ports: the overlapping ones by bisection
@@ -433,8 +445,10 @@ class _Builder:
             for pi in sel:
                 if (pv.id, pi) not in seen:
                     seen.add((pv.id, pi))
-                    rc.append(pv.id); rp.append(pi)
-                    prc.append(pv.id); prp.append(pi)
+                    rc.append(pv.id)
+                    rp.append(pi)
+                    prc.append(pv.id)
+                    prp.append(pi)
 
         param_lo, param_hi = self._param_lo, self._param_hi
         p_idx = p_lo = p_hi = -1                 # [p_lo, p_hi): the port of parameter p_idx the last one-port progression read
@@ -445,7 +459,10 @@ class _Builder:
                     for key in ports:
                         if key not in seen:
                             seen.add(key)
-                            rc.append(key[0]); rp.append(key[1]); prc.append(key[0]); prp.append(key[1])
+                            rc.append(key[0])
+                            rp.append(key[1])
+                            prc.append(key[0])
+                            prp.append(key[1])
                     continue
             for run in operand:
                 space = run[0]
@@ -464,8 +481,10 @@ class _Builder:
                             pid, pi = params[idx].id, param_pidx[idx][k]
                             if (pid, pi) not in seen:
                                 seen.add((pid, pi))
-                                rc.append(pid); rp.append(pi)
-                                prc.append(pid); prp.append(pi)
+                                rc.append(pid)
+                                rp.append(pi)
+                                prc.append(pid)
+                                prp.append(pi)
                             continue
                         param(idx, lo, hi, dL, cnt)
                         continue
@@ -509,11 +528,9 @@ class _Builder:
 # spec ids and types
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def ports_of_type(t) -> tuple[Port, ...]:
+def ports_of_type(t: Type) -> tuple[Port, ...]:
     """The output ports of a `verity.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
-    from verity.circuits.types import RecordType, Tuple as TupleT
-
-    def one(name: str, lo: int, ty) -> Port:
+    def one(name: str, lo: int, ty: Type) -> Port:
         n = ty.leaves
         return Port(name, lo, lo + n, n, ty.homogeneous_width())
 
@@ -541,14 +558,14 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     hit = _PORTS_CACHE.get(spec)
     if hit is not None:
         return hit
-    from verity.circuits.codec import lookup_primitive
-    from verity.definitions.registry.catalog import load
+    # importing the registry registers the on-demand primitive families, so it stays in the functions that read it
+    from verity_vllm.definitions.registry.catalog import load
     reg, errors = load()
     base = spec_base(spec)
     d = reg.defs.get(base)
     if d is None:
         try:
-            d = lookup_primitive(reg, base)
+            d = codec.lookup_primitive(reg, base)
         except KeyError:
             raise KeyError(f"{base} is not a registered Definition" + (f" (registry import errors: {'; '.join(errors)})" if errors else "")) from None
     if hasattr(d, "bind"):
@@ -564,9 +581,23 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     return ports
 
 
+def specialization(fam: str, statics: dict[str, Any]) -> Any:
+    """`call_scope.specialization` over the catalog, every module loaded (`registry.catalog.load`): the registered Definition
+    `fam` bound to `statics`."""
+    from verity.circuits.call_scope import specialization as bound
+    from verity_vllm.definitions.registry.catalog import load
+    return bound(fam, statics, load()[0])
+
+
 # ---------------------------------------------------------------------------------------------------------------------------------
 # readers
 # ---------------------------------------------------------------------------------------------------------------------------------
+
+def _params_of(head: Mapping[str, Any]) -> Iterable[tuple[str, Any]]:
+    """An instance sequence's `params`, its Program's (name, type) pairs; none where its head holds none."""
+    params = head.get("params")
+    return params if params else []
+
 
 def _params_view(params: Iterable[tuple[str, Any]]) -> tuple[InputView, ...]:
     out = []
@@ -604,7 +635,6 @@ def iter_instance_rows(path: str, *, expand: bool = True) -> Iterator[dict[str, 
     The document's key order (`schema`, `digest`, `params`, `rows`) is the writer's (`derive_step._instance_sequence`).  A v2 row's
     stored argument progressions are expanded to the v1 per-leaf run lists, bit-identically (`compact.expanded_file_args`), so every
     reader of this iterator sees the record form whatever the file carries."""
-    from verity_vllm.program.compact import expanded_file_args
     dec = json.JSONDecoder()
     with _open_text(path) as f:
         buf = f.read(_CHUNK)
@@ -684,7 +714,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
     whose rows are not in body order (never written by `derive_step`) is read again as a document; a document's rows are sorted."""
     if isinstance(path_or_doc, str):
         hdr = _read_instance_header(path_or_doc)
-        params = _params_view(hdr.get("params") or [])
+        params = _params_view(_params_of(hdr))
         try:
             b = _instances_columns(params, iter_instance_rows(path_or_doc, expand=False))
         except _OutOfOrder:
@@ -693,7 +723,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
             return from_instances(doc)
         return b.view((), hdr.get("digest"), "instances", check_cids=_check_calls(hdr))
     doc = path_or_doc
-    params = _params_view(doc.get("params") or [])
+    params = _params_view(_params_of(doc))
     rows = sorted(doc["rows"], key=lambda r: int(r["i"]))
     try:
         b = _instances_columns(params, rows, memo=True)
@@ -702,7 +732,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
     return b.view((), doc.get("digest"), "instances", check_cids=_check_calls(doc))
 
 
-def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) -> ProgramView:
+def from_descriptor(desc: dict[str, Any] | str, registry: DefinitionTable | None = None, checks: int = 0) -> ProgramView:
     """A Program descriptor (dict, or a path to `descriptor.json[.gz]`), decoded by `codec.decode_program` -> ProgramView of its
     program function's body, or of the root's body when the program function is inlined into the root (a request Build's
     descriptor).  Names from the decoded annotations' `node_hints` (node index -> hint); ports from each node's own output type;
@@ -711,13 +741,10 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) 
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
-    from verity.circuits.codec import decode_program, descriptor_id
-    from verity.circuits.refs import runs
     if registry is None:
-        from verity.definitions.registry.catalog import load
+        from verity_vllm.definitions.registry.catalog import load
         registry, _errors = load()
-    from verity.circuits.program import is_input
-    decoded = decode_program(desc, registry)
+    decoded = codec.decode_program(desc, registry)
     hints = {int(k): str(v) for k, v in decoded.annotations.get("node_hints", {}).items()}
     fn = decoded.defs.get(decoded.program_fn_id)
     if fn is not None:
@@ -736,11 +763,10 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) 
         remap = lambda r: (("p", inputs[r[1]], *r[2:]) if r[1] in inputs else ("n", pos[r[1]], *r[2:])) if r[0] == "n" else r  # noqa: E731
     b = _Builder(params)
     for i, (k, n) in enumerate(rows):
-        b.add(i, descriptor_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
-              ([remap(r) for r in runs(a.refs)] for a in n.args))
-    ret = [remap(r) for r in runs(body.ret)]
-    from verity.circuits.codec import program_digest
-    return b.view(b.outputs(ret), program_digest(desc), "descriptor", b.outputs(_last_leaves(ret, checks)) if checks else ())
+        b.add(i, codec.descriptor_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
+              ([remap(r) for r in refs.runs(a.refs)] for a in n.args))
+    ret = [remap(r) for r in refs.runs(body.ret)]
+    return b.view(b.outputs(ret), codec.program_digest(desc), "descriptor", b.outputs(_last_leaves(ret, checks)) if checks else ())
 
 
 def _last_leaves(ret: list, n: int) -> list:

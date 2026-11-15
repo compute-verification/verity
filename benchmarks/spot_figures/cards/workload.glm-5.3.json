@@ -4,11 +4,9 @@
  "model": "GLM-5.3",
  "status": "measured",
  "provisional": true,
- "source": "art:cdef90831b5febd5308ec0f81cc2b5f20901197a94acad0779352d9bef53411b: benchmarks/one_stage/block_census.py's census of GLM-5.3's served circuit, every Program row of its Commit's Build on all 8 ranks and every step of one request (256 prompt tokens, 32 generated), cut into proof blocks; blocks, output bits and MACs counted from the circuit, ANDs the estimator's upper bound, except FlashInfer's FP8 linear coordinates', the MoE router's and DSA's indexer query's: each its Boolean _v2 block as benchmarks/served_units/stage.py builds it (fi, router-row, dsa-q-row), its MUFU reads in gates; rows no cut fits (SparseMlaSplit_v1, TokenSelect_v1) are in no stratum and in served_macs_per_token; the weights' bytes and parameters as the checkpoint's manifest and safetensors metadata give them",
+ "source": "art:471350fa6bf26f5e2e149c4f084b195ba03fdf8018d02960b9ad6a5e4bf5a138: benchmarks/one_stage/block_census.py's census of GLM-5.3's served circuit, every Program row of its Commit's Build on all 8 ranks and every step of one request (256 prompt tokens, 32 generated), cut into proof blocks; blocks, output bits and MACs counted from the circuit, ANDs the estimator's upper bound; rows no cut fits (TokenSelect_v1) are in no stratum and in served_macs_per_token; the weights' bytes and parameters as the checkpoint's manifest and safetensors metadata give them",
  "runs": [
-  "r20261106-070310-502e",
-  "r20261110-015720-2c17",
-  "r20261110-015748-da59"
+  "r20261109-031946-2a90"
  ],
  "owner": "@proofs",
  "value": {
@@ -23,19 +21,9 @@
   "params": 753329940480,
   "strata": [
    {
-    "block": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"},FIRST=false,LAST=false}",
+    "block": "MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}",
     "kind": "MoeExpertFp8Gemm_v1",
-    "per_token": 21921449.477351915,
-    "macs": 512,
-    "out_bits": 32,
-    "in_bits": 1085632,
-    "ands": 1238988,
-    "k_log": 27
-   },
-   {
-    "block": "ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}",
-    "kind": "DeepGemmFp8Linear_v1",
-    "per_token": 1800299.038327526,
+    "per_token": 2192144.947735192,
     "macs": 6144,
     "out_bits": 16,
     "in_bits": 101376,
@@ -43,14 +31,24 @@
     "k_log": 24
    },
    {
-    "block": "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}",
-    "kind": "DeepGemmFp8Linear_v1",
-    "per_token": 5173462.076655053,
-    "macs": 2048,
-    "out_bits": 16,
-    "in_bits": 33792,
-    "ands": 583181,
-    "k_log": 23
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}",
+    "kind": "DeepGemmFp8Linear_v1, FlashInferFp8Linear_v1",
+    "per_token": 504576.0,
+    "macs": 24576,
+    "out_bits": 64,
+    "in_bits": 248832,
+    "ands": 6646484,
+    "k_log": 25
+   },
+   {
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}",
+    "kind": "DeepGemmFp8Linear_v1, FlashInferFp8Linear_v1",
+    "per_token": 1449984.0,
+    "macs": 8192,
+    "out_bits": 64,
+    "in_bits": 82944,
+    "ands": 2215700,
+    "k_log": 24
    },
    {
     "block": "MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}",
@@ -63,63 +61,23 @@
     "k_log": 26
    },
    {
-    "block": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v1\"},FIRST=false,LAST=false}",
+    "block": "MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v1\"}}",
     "kind": "MoeExpertFp8Gemm_v1",
-    "per_token": 2654550.5226480835,
-    "macs": 512,
-    "out_bits": 32,
-    "in_bits": 1085632,
-    "ands": 1286828,
-    "k_log": 27
-   },
-   {
-    "block": "FlashInferFp8Linear_v1{K=6144,N=1}",
-    "kind": "FlashInferFp8Linear_v1",
-    "per_token": 218004.96167247387,
+    "per_token": 265455.0522648084,
     "macs": 6144,
     "out_bits": 16,
-    "in_bits": 148992,
-    "ands": 13300905,
-    "k_log": 25
-   },
-   {
-    "block": "FlashInferFp8Linear_v1{K=2048,N=1}",
-    "kind": "FlashInferFp8Linear_v1",
-    "per_token": 626473.9233449477,
-    "macs": 2048,
-    "out_bits": 16,
-    "in_bits": 49664,
-    "ands": 4433033,
+    "in_bits": 101376,
+    "ands": 2323469,
     "k_log": 24
    },
    {
-    "block": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"},FIRST=false,LAST=true}",
-    "kind": "MoeExpertFp8Gemm_v1",
-    "per_token": 2192144.947735192,
-    "macs": 512,
-    "out_bits": 16,
-    "in_bits": 1085632,
-    "ands": 1239065,
-    "k_log": 27
-   },
-   {
-    "block": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"},FIRST=true,LAST=false}",
-    "kind": "MoeExpertFp8Gemm_v1",
-    "per_token": 2192144.947735192,
-    "macs": 512,
-    "out_bits": 32,
-    "in_bits": 1085600,
-    "ands": 1238988,
-    "k_log": 27
-   },
-   {
-    "block": "ScaledMmFp8BlockSharedScale_v1{K=256,N=1,G=128}",
-    "kind": "DeepGemmFp8Linear_v1",
-    "per_token": 3288217.4216027874,
-    "macs": 256,
-    "out_bits": 16,
-    "in_bits": 4224,
-    "ands": 72965,
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=256,N=4,G=128}",
+    "kind": "DeepGemmFp8Linear_v1, FlashInferFp8Linear_v1",
+    "per_token": 921600.0,
+    "macs": 1024,
+    "out_bits": 64,
+    "in_bits": 10368,
+    "ands": 277232,
     "k_log": 22
    },
    {
@@ -163,14 +121,24 @@
     "k_log": 21
    },
    {
-    "block": "ScaledMmFp8BlockSharedScale_v1{K=1536,N=1,G=128}",
-    "kind": "DeepGemmFp8Linear_v1",
-    "per_token": 131528.6968641115,
-    "macs": 1536,
-    "out_bits": 16,
-    "in_bits": 25344,
-    "ands": 437405,
-    "k_log": 23
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 6679.191637630662,
+    "macs": 69632,
+    "out_bits": 16544,
+    "in_bits": 615584,
+    "ands": 37568903,
+    "k_log": 27
+   },
+   {
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=1536,N=8,G=128}",
+    "kind": "DeepGemmFp8Linear_v1, FlashInferFp8Linear_v1",
+    "per_token": 18432.0,
+    "macs": 12288,
+    "out_bits": 128,
+    "in_bits": 111360,
+    "ands": 3294448,
+    "k_log": 24
    },
    {
     "block": "CublasSplitKGemm_v1{K=6144,N=1,SPLIT_K=4,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
@@ -183,33 +151,13 @@
     "k_log": 25
    },
    {
-    "block": "SparseMlaSplitPart_v1{T=64,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
     "kind": "SparseMlaSplit_v1",
-    "per_token": 2156.822299651568,
+    "per_token": 2226.397212543554,
     "macs": 69632,
-    "out_bits": 16416,
+    "out_bits": 16544,
     "in_bits": 599040,
-    "ands": 37557429,
-    "k_log": 27
-   },
-   {
-    "block": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v1\"},FIRST=false,LAST=true}",
-    "kind": "MoeExpertFp8Gemm_v1",
-    "per_token": 265455.0522648084,
-    "macs": 512,
-    "out_bits": 16,
-    "in_bits": 1085632,
-    "ands": 1286905,
-    "k_log": 27
-   },
-   {
-    "block": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v1\"},FIRST=true,LAST=false}",
-    "kind": "MoeExpertFp8Gemm_v1",
-    "per_token": 265455.0522648084,
-    "macs": 512,
-    "out_bits": 32,
-    "in_bits": 1085600,
-    "ands": 1286828,
+    "ands": 36251588,
     "k_log": 27
    },
    {
@@ -223,16 +171,6 @@
     "k_log": 25
    },
    {
-    "block": "FlashInferFp8Linear_v1{K=256,N=1}",
-    "kind": "FlashInferFp8Linear_v1",
-    "per_token": 398182.57839721255,
-    "macs": 256,
-    "out_bits": 16,
-    "in_bits": 6208,
-    "ands": 553339,
-    "k_log": 22
-   },
-   {
     "block": "DsaMqaLogits_v3{N=1,H=32,D=128}",
     "kind": "DsaMqaLogits_v3",
     "per_token": 23121.365853658535,
@@ -243,244 +181,634 @@
     "k_log": 23
    },
    {
-    "block": "FlashInferFp8Linear_v1{K=1536,N=1}",
-    "kind": "FlashInferFp8Linear_v1",
-    "per_token": 15927.303135888502,
-    "macs": 1536,
-    "out_bits": 16,
-    "in_bits": 37248,
-    "ands": 3324549,
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 69056,
+    "out_bits": 16544,
+    "in_bits": 589824,
+    "ands": 35948590,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 68480,
+    "out_bits": 16544,
+    "in_bits": 580608,
+    "ands": 35645592,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 67904,
+    "out_bits": 16544,
+    "in_bits": 571392,
+    "ands": 35342594,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 67328,
+    "out_bits": 16544,
+    "in_bits": 562176,
+    "ands": 35039596,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 66752,
+    "out_bits": 16544,
+    "in_bits": 552960,
+    "ands": 34736598,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 66176,
+    "out_bits": 16544,
+    "in_bits": 543744,
+    "ands": 34433600,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 65600,
+    "out_bits": 16544,
+    "in_bits": 534528,
+    "ands": 34130602,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 65024,
+    "out_bits": 16544,
+    "in_bits": 525312,
+    "ands": 33827604,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 64448,
+    "out_bits": 16544,
+    "in_bits": 516096,
+    "ands": 33524606,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 63872,
+    "out_bits": 16544,
+    "in_bits": 506880,
+    "ands": 33221608,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 63296,
+    "out_bits": 16544,
+    "in_bits": 497664,
+    "ands": 32918610,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 62720,
+    "out_bits": 16544,
+    "in_bits": 488448,
+    "ands": 32615612,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 62144,
+    "out_bits": 16544,
+    "in_bits": 479232,
+    "ands": 32312614,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 61568,
+    "out_bits": 16544,
+    "in_bits": 470016,
+    "ands": 32009616,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 60992,
+    "out_bits": 16544,
+    "in_bits": 460800,
+    "ands": 31706618,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 52224,
+    "out_bits": 16544,
+    "in_bits": 451584,
+    "ands": 27188324,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 51648,
+    "out_bits": 16544,
+    "in_bits": 442368,
+    "ands": 26885326,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 51072,
+    "out_bits": 16544,
+    "in_bits": 433152,
+    "ands": 26582328,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 50496,
+    "out_bits": 16544,
+    "in_bits": 423936,
+    "ands": 26279330,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 49920,
+    "out_bits": 16544,
+    "in_bits": 414720,
+    "ands": 25976332,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 49344,
+    "out_bits": 16544,
+    "in_bits": 405504,
+    "ands": 25673334,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 48768,
+    "out_bits": 16544,
+    "in_bits": 396288,
+    "ands": 25370336,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 48192,
+    "out_bits": 16544,
+    "in_bits": 387072,
+    "ands": 25067338,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 47616,
+    "out_bits": 16544,
+    "in_bits": 377856,
+    "ands": 24764340,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 47040,
+    "out_bits": 16544,
+    "in_bits": 368640,
+    "ands": 24461342,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 46464,
+    "out_bits": 16544,
+    "in_bits": 359424,
+    "ands": 24158344,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 45888,
+    "out_bits": 16544,
+    "in_bits": 350208,
+    "ands": 23855346,
+    "k_log": 27
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 45312,
+    "out_bits": 16544,
+    "in_bits": 340992,
+    "ands": 23552348,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 44736,
+    "out_bits": 16544,
+    "in_bits": 331776,
+    "ands": 23249350,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 44160,
+    "out_bits": 16544,
+    "in_bits": 322560,
+    "ands": 22946352,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 43584,
+    "out_bits": 16544,
+    "in_bits": 313344,
+    "ands": 22643354,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 34240,
+    "out_bits": 16544,
+    "in_bits": 294912,
+    "ands": 17822062,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 33664,
+    "out_bits": 16544,
+    "in_bits": 285696,
+    "ands": 17519064,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 33088,
+    "out_bits": 16544,
+    "in_bits": 276480,
+    "ands": 17216066,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 32512,
+    "out_bits": 16544,
+    "in_bits": 267264,
+    "ands": 16913068,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 31936,
+    "out_bits": 16544,
+    "in_bits": 258048,
+    "ands": 16610070,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 31360,
+    "out_bits": 16544,
+    "in_bits": 248832,
+    "ands": 16307072,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 30784,
+    "out_bits": 16544,
+    "in_bits": 239616,
+    "ands": 16004074,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 30208,
+    "out_bits": 16544,
+    "in_bits": 230400,
+    "ands": 15701076,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 29632,
+    "out_bits": 16544,
+    "in_bits": 221184,
+    "ands": 15398078,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 29056,
+    "out_bits": 16544,
+    "in_bits": 211968,
+    "ands": 15095080,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 28480,
+    "out_bits": 16544,
+    "in_bits": 202752,
+    "ands": 14792082,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 27904,
+    "out_bits": 16544,
+    "in_bits": 193536,
+    "ands": 14489084,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 34816,
+    "out_bits": 16544,
+    "in_bits": 304128,
+    "ands": 18125060,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 27328,
+    "out_bits": 16544,
+    "in_bits": 184320,
+    "ands": 14186086,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 26752,
+    "out_bits": 16544,
+    "in_bits": 175104,
+    "ands": 13883088,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 26176,
+    "out_bits": 16544,
+    "in_bits": 165888,
+    "ands": 13580090,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 17408,
+    "out_bits": 16544,
+    "in_bits": 156672,
+    "ands": 9061796,
+    "k_log": 26
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 16832,
+    "out_bits": 16544,
+    "in_bits": 147456,
+    "ands": 8758798,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 16256,
+    "out_bits": 16544,
+    "in_bits": 138240,
+    "ands": 8455800,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 15680,
+    "out_bits": 16544,
+    "in_bits": 129024,
+    "ands": 8152802,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 15104,
+    "out_bits": 16544,
+    "in_bits": 119808,
+    "ands": 7849804,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 14528,
+    "out_bits": 16544,
+    "in_bits": 110592,
+    "ands": 7546806,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 86.96864111498257,
+    "macs": 13952,
+    "out_bits": 16544,
+    "in_bits": 101376,
+    "ands": 7243808,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 13376,
+    "out_bits": 16544,
+    "in_bits": 92160,
+    "ands": 6940810,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 12800,
+    "out_bits": 16544,
+    "in_bits": 82944,
+    "ands": 6637812,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 12224,
+    "out_bits": 16544,
+    "in_bits": 73728,
+    "ands": 6334814,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 11648,
+    "out_bits": 16544,
+    "in_bits": 64512,
+    "ands": 6032760,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 11072,
+    "out_bits": 16544,
+    "in_bits": 55296,
+    "ands": 5729762,
+    "k_log": 25
+   },
+   {
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 69.57491289198606,
+    "macs": 10496,
+    "out_bits": 16544,
+    "in_bits": 46080,
+    "ands": 5427708,
     "k_log": 24
    },
    {
-    "block": "SparseMlaSplitPart_v1{T=31,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
     "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 34240,
-    "out_bits": 16416,
-    "in_bits": 294912,
-    "ands": 19127903,
-    "k_log": 26
+    "per_token": 69.57491289198606,
+    "macs": 9920,
+    "out_bits": 16544,
+    "in_bits": 36864,
+    "ands": 5124710,
+    "k_log": 24
    },
    {
-    "block": "SparseMlaSplitPart_v1{T=30,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
     "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 33664,
-    "out_bits": 16416,
-    "in_bits": 285696,
-    "ands": 18824905,
-    "k_log": 26
+    "per_token": 69.57491289198606,
+    "macs": 9344,
+    "out_bits": 16544,
+    "in_bits": 27648,
+    "ands": 4822656,
+    "k_log": 24
    },
    {
-    "block": "SparseMlaSplitPart_v1{T=29,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "block": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
     "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 33088,
-    "out_bits": 16416,
-    "in_bits": 276480,
-    "ands": 18521907,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=28,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 32512,
-    "out_bits": 16416,
-    "in_bits": 267264,
-    "ands": 18218909,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=27,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 31936,
-    "out_bits": 16416,
-    "in_bits": 258048,
-    "ands": 17915911,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=26,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 31360,
-    "out_bits": 16416,
-    "in_bits": 248832,
-    "ands": 17612913,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=25,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 30784,
-    "out_bits": 16416,
-    "in_bits": 239616,
-    "ands": 17309915,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=24,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 30208,
-    "out_bits": 16416,
-    "in_bits": 230400,
-    "ands": 17006917,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=23,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 29632,
-    "out_bits": 16416,
-    "in_bits": 221184,
-    "ands": 16703919,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=22,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 29056,
-    "out_bits": 16416,
-    "in_bits": 211968,
-    "ands": 16400921,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=21,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 28480,
-    "out_bits": 16416,
-    "in_bits": 202752,
-    "ands": 16097923,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=20,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 27904,
-    "out_bits": 16416,
-    "in_bits": 193536,
-    "ands": 15794925,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=19,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 27328,
-    "out_bits": 16416,
-    "in_bits": 184320,
-    "ands": 15491927,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=18,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 26752,
-    "out_bits": 16416,
-    "in_bits": 175104,
-    "ands": 15188929,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=17,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 26176,
-    "out_bits": 16416,
-    "in_bits": 165888,
-    "ands": 14885931,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=16,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 17408,
-    "out_bits": 16416,
-    "in_bits": 156672,
-    "ands": 10367637,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=15,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 16832,
-    "out_bits": 16416,
-    "in_bits": 147456,
-    "ands": 10064639,
-    "k_log": 25
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=14,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 16256,
-    "out_bits": 16416,
-    "in_bits": 138240,
-    "ands": 9761641,
-    "k_log": 25
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=13,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 15680,
-    "out_bits": 16416,
-    "in_bits": 129024,
-    "ands": 9458643,
-    "k_log": 25
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=12,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 15104,
-    "out_bits": 16416,
-    "in_bits": 119808,
-    "ands": 9155645,
-    "k_log": 25
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=11,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 14528,
-    "out_bits": 16416,
-    "in_bits": 110592,
-    "ands": 8852647,
-    "k_log": 25
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=10,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 13952,
-    "out_bits": 16416,
-    "in_bits": 101376,
-    "ands": 8549649,
-    "k_log": 25
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=9,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 13376,
-    "out_bits": 16416,
-    "in_bits": 92160,
-    "ands": 8246651,
-    "k_log": 25
+    "per_token": 69.57491289198606,
+    "macs": 8768,
+    "out_bits": 16544,
+    "in_bits": 18432,
+    "ands": 4519658,
+    "k_log": 24
    },
    {
     "block": "SparseMlaSplit_v1{T=9,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
@@ -493,16 +821,6 @@
     "k_log": 27
    },
    {
-    "block": "SparseMlaSplitPart_v1{T=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 12800,
-    "out_bits": 16416,
-    "in_bits": 82944,
-    "ands": 7943653,
-    "k_log": 25
-   },
-   {
     "block": "SparseMlaSplit_v1{T=8,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
     "kind": "SparseMlaSplit_v1",
     "per_token": 2.1742160278745644,
@@ -511,16 +829,6 @@
     "in_bits": 147456,
     "ands": 63797552,
     "k_log": 27
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=7,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 12224,
-    "out_bits": 16416,
-    "in_bits": 73728,
-    "ands": 7640655,
-    "k_log": 25
    },
    {
     "block": "SparseMlaSplit_v1{T=7,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
@@ -533,16 +841,6 @@
     "k_log": 27
    },
    {
-    "block": "SparseMlaSplitPart_v1{T=6,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 11648,
-    "out_bits": 16416,
-    "in_bits": 64512,
-    "ands": 7338601,
-    "k_log": 25
-   },
-   {
     "block": "SparseMlaSplit_v1{T=6,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
     "kind": "SparseMlaSplit_v1",
     "per_token": 2.1742160278745644,
@@ -551,16 +849,6 @@
     "in_bits": 129024,
     "ands": 58957136,
     "k_log": 27
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=5,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 11072,
-    "out_bits": 16416,
-    "in_bits": 55296,
-    "ands": 7035603,
-    "k_log": 25
    },
    {
     "block": "SparseMlaSplit_v1{T=5,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
@@ -573,16 +861,6 @@
     "k_log": 27
    },
    {
-    "block": "SparseMlaSplitPart_v1{T=4,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 10496,
-    "out_bits": 16416,
-    "in_bits": 46080,
-    "ands": 6733549,
-    "k_log": 24
-   },
-   {
     "block": "SparseMlaSplit_v1{T=4,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
     "kind": "SparseMlaSplit_v1",
     "per_token": 2.1742160278745644,
@@ -591,16 +869,6 @@
     "in_bits": 110592,
     "ands": 54116720,
     "k_log": 27
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=3,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 9920,
-    "out_bits": 16416,
-    "in_bits": 36864,
-    "ands": 6430551,
-    "k_log": 24
    },
    {
     "block": "SparseMlaSplit_v1{T=3,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
@@ -613,16 +881,6 @@
     "k_log": 27
    },
    {
-    "block": "SparseMlaSplitPart_v1{T=2,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 9344,
-    "out_bits": 16416,
-    "in_bits": 27648,
-    "ands": 6128497,
-    "k_log": 24
-   },
-   {
     "block": "SparseMlaSplit_v1{T=2,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
     "kind": "SparseMlaSplit_v1",
     "per_token": 2.1742160278745644,
@@ -631,16 +889,6 @@
     "in_bits": 92160,
     "ands": 49276304,
     "k_log": 27
-   },
-   {
-    "block": "SparseMlaSplitPart_v1{T=1,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 17.393728222996515,
-    "macs": 8768,
-    "out_bits": 16416,
-    "in_bits": 18432,
-    "ands": 5825499,
-    "k_log": 24
    },
    {
     "block": "SparseMlaSplit_v1{T=1,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
@@ -1243,6 +1491,26 @@
     "k_log": 24
    },
    {
+    "block": "AllReduceMultimem_v1{WORLD=8,SIZE=96,TREES=[[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7]],FTZ=false}",
+    "kind": "AllReduceMultimem_v1",
+    "per_token": 71701.40766550522,
+    "macs": 0,
+    "out_bits": 1536,
+    "in_bits": 12288,
+    "ands": 560448,
+    "k_log": 22
+   },
+   {
+    "block": "MoeSum_v1{TOPK=8,H=96}",
+    "kind": "MoeSum_v1",
+    "per_token": 38400.0,
+    "macs": 0,
+    "out_bits": 1536,
+    "in_bits": 12288,
+    "ands": 663264,
+    "k_log": 22
+   },
+   {
     "block": "LlBf16DotprodGemm_v1{N=1,K=6144,BS=128,VEC=8,FMA=1}",
     "kind": "LlBf16DotprodGemm_v1",
     "per_token": 16590.940766550524,
@@ -1251,6 +1519,26 @@
     "in_bits": 196608,
     "ands": 27745024,
     "k_log": 26
+   },
+   {
+    "block": "ResidualAdd_v1{N=384}",
+    "kind": "ResidualAdd_v1",
+    "per_token": 9600.0,
+    "macs": 0,
+    "out_bits": 6144,
+    "in_bits": 12288,
+    "ands": 289536,
+    "k_log": 22
+   },
+   {
+    "block": "AllReduceResidualMnnvl_v1{WORLD=8,N=96,SHOT=1}",
+    "kind": "AllReduceRmsNormMnnvl_v1",
+    "per_token": 8627.289198606271,
+    "macs": 0,
+    "out_bits": 1536,
+    "in_bits": 13824,
+    "ands": 829344,
+    "k_log": 22
    },
    {
     "block": "EmbeddingShard_v1{VS=19360,H=1,START=0}",
@@ -1363,14 +1651,104 @@
     "k_log": 22
    },
    {
-    "block": "AllReduceMultimem_v1{WORLD=8,SIZE=3072,TREES=[[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7]],FTZ=false}",
-    "kind": "AllReduceMultimem_v1",
-    "per_token": 2240.668989547038,
+    "block": "SparseMlaCombine_v1{NSPLIT=5,DV=64,INV={\"fn\":\"Fa3InvSum_v1\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 4313.644599303136,
     "macs": 0,
-    "out_bits": 49152,
-    "in_bits": 393216,
-    "ands": 17934336,
-    "k_log": 27
+    "out_bits": 1024,
+    "in_bits": 10400,
+    "ands": 1560795,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaHeadEnd_v1{DV=512,INV={\"fn\":\"Fa3InvSum_v1\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 4296.250871080139,
+    "macs": 0,
+    "out_bits": 8192,
+    "in_bits": 16512,
+    "ands": 1336882,
+    "k_log": 23
+   },
+   {
+    "block": "SparseMlaSplitEndCols_v1{DV=512,G=64,C=0,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2696.02787456446,
+    "macs": 0,
+    "out_bits": 2080,
+    "in_bits": 16544,
+    "ands": 173297,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaSplitEndCols_v1{DV=512,G=64,C=1,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2696.02787456446,
+    "macs": 0,
+    "out_bits": 2080,
+    "in_bits": 16544,
+    "ands": 173297,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaSplitEndCols_v1{DV=512,G=64,C=2,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2696.02787456446,
+    "macs": 0,
+    "out_bits": 2080,
+    "in_bits": 16544,
+    "ands": 173297,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaSplitEndCols_v1{DV=512,G=64,C=3,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2696.02787456446,
+    "macs": 0,
+    "out_bits": 2080,
+    "in_bits": 16544,
+    "ands": 173297,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaSplitEndCols_v1{DV=512,G=64,C=4,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2696.02787456446,
+    "macs": 0,
+    "out_bits": 2080,
+    "in_bits": 16544,
+    "ands": 173297,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaSplitEndCols_v1{DV=512,G=64,C=5,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2696.02787456446,
+    "macs": 0,
+    "out_bits": 2080,
+    "in_bits": 16544,
+    "ands": 173297,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaSplitEndCols_v1{DV=512,G=64,C=6,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2696.02787456446,
+    "macs": 0,
+    "out_bits": 2080,
+    "in_bits": 16544,
+    "ands": 173297,
+    "k_log": 22
+   },
+   {
+    "block": "SparseMlaSplitEndCols_v1{DV=512,G=64,C=7,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "kind": "SparseMlaSplit_v1",
+    "per_token": 2696.02787456446,
+    "macs": 0,
+    "out_bits": 2080,
+    "in_bits": 16544,
+    "ands": 173297,
+    "k_log": 22
    },
    {
     "block": "Fp8GroupQuantUe8m0_v1{K=6144,G=128}",
@@ -1391,16 +1769,6 @@
     "in_bits": 32768,
     "ands": 8619872,
     "k_log": 25
-   },
-   {
-    "block": "MoeSum_v1{TOPK=8,H=3072}",
-    "kind": "MoeSum_v1",
-    "per_token": 1200.0,
-    "macs": 0,
-    "out_bits": 49152,
-    "in_bits": 393216,
-    "ands": 21224448,
-    "k_log": 27
    },
    {
     "block": "RMSNormFusedCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}",
@@ -1439,38 +1807,8 @@
     "macs": 0,
     "out_bits": 512,
     "in_bits": 16384,
-    "ands": 8313579,
-    "k_log": 24
-   },
-   {
-    "block": "ResidualAdd_v1{N=6144}",
-    "kind": "ResidualAdd_v1",
-    "per_token": 600.0,
-    "macs": 0,
-    "out_bits": 98304,
-    "in_bits": 196608,
-    "ands": 4632576,
-    "k_log": 26
-   },
-   {
-    "block": "SparseMlaCombine_v1{NSPLIT=5,DV=512,INV={\"fn\":\"Fa3InvSum_v1\"}}",
-    "kind": "SparseMlaSplit_v1",
-    "per_token": 539.205574912892,
-    "macs": 0,
-    "out_bits": 8192,
-    "in_bits": 82080,
-    "ands": 12011291,
+    "ands": 12379040,
     "k_log": 25
-   },
-   {
-    "block": "AllReduceResidualMnnvl_v1{WORLD=8,N=3072,SHOT=1}",
-    "kind": "AllReduceRmsNormMnnvl_v1",
-    "per_token": 269.602787456446,
-    "macs": 0,
-    "out_bits": 49152,
-    "in_bits": 442368,
-    "ands": 26539008,
-    "k_log": 27
    },
    {
     "block": "DsaIndexerKRow_v1{D=128,ROPE=64,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
@@ -1489,7 +1827,7 @@
     "macs": 0,
     "out_bits": 33792,
     "in_bits": 67072,
-    "ands": 21268704,
+    "ands": 29662560,
     "k_log": 26
    },
    {
@@ -1503,6 +1841,26 @@
     "k_log": 23
    },
    {
+    "block": "FlashInferFp8Quant1x128_v1{K=2048}",
+    "kind": "FlashInferFp8Linear_v1",
+    "per_token": 152.94773519163763,
+    "macs": 0,
+    "out_bits": 16896,
+    "in_bits": 32768,
+    "ands": 6768864,
+    "k_log": 24
+   },
+   {
+    "block": "FlashInferFp8Quant1x128_v1{K=6144}",
+    "kind": "FlashInferFp8Linear_v1",
+    "per_token": 134.801393728223,
+    "macs": 0,
+    "out_bits": 50688,
+    "in_bits": 98304,
+    "ands": 20306592,
+    "k_log": 26
+   },
+   {
     "block": "RmsNormMnnvl_v1{N=6144,SHOT=1,CLUSTER=8,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},FMA=true}",
     "kind": "AllReduceRmsNormMnnvl_v1",
     "per_token": 134.801393728223,
@@ -1511,6 +1869,26 @@
     "in_bits": 196608,
     "ands": 48307434,
     "k_log": 27
+   },
+   {
+    "block": "FlashInferFp8Quant1x128_v1{K=256}",
+    "kind": "FlashInferFp8Linear_v1",
+    "per_token": 64.80836236933798,
+    "macs": 0,
+    "out_bits": 2112,
+    "in_bits": 4096,
+    "ands": 846108,
+    "k_log": 22
+   },
+   {
+    "block": "AllReduceMnnvl_v1{WORLD=8,N=96,SHOT=1}",
+    "kind": "AllReduceMnnvl_v1",
+    "per_token": 55.30313588850174,
+    "macs": 0,
+    "out_bits": 1536,
+    "in_bits": 12288,
+    "ands": 756960,
+    "k_log": 22
    },
    {
     "block": "SiluMul_v2{I=1536}",
@@ -1543,14 +1921,14 @@
     "k_log": 27
    },
    {
-    "block": "AllReduceMnnvl_v1{WORLD=8,N=3072,SHOT=1}",
-    "kind": "AllReduceMnnvl_v1",
-    "per_token": 1.7282229965156795,
+    "block": "FlashInferFp8Quant1x128_v1{K=1536}",
+    "kind": "FlashInferFp8Linear_v1",
+    "per_token": 2.592334494773519,
     "macs": 0,
-    "out_bits": 49152,
-    "in_bits": 393216,
-    "ands": 24222720,
-    "k_log": 27
+    "out_bits": 12672,
+    "in_bits": 24576,
+    "ands": 5076648,
+    "k_log": 24
    },
    {
     "block": "RMSNormCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=768}",
@@ -1565,8 +1943,8 @@
   ],
   "served_macs_per_token": 51256693435.31707,
   "boundaries": {
-   "every_block": 293301923.5679442
+   "every_block": 219113316.90592334
   }
  },
- "art": "art:ef0e4af863fc2bbc1c41c1d54384526ec1f94c14fced9b44f5292709a9d181fa"
+ "art": "art:be39ec1ff595f1de7955bdc747ffcf7bdbf41f425fa37139c9e71c443ee765e1"
 }

@@ -15,9 +15,10 @@ Rankin's `θ`, `δ` and its replay blocks' classes. These properties say that nu
   block (`[subset Q, all]`) with `q N ≤ Q`;
 * `ClassesCover`: each replay block `ρ` is in a class `cls ρ` whose cells cover it (`Covers`), and class `i` holds at
   most its `count` replay blocks;
-* `RequestsCover`, the patterns' form: each request reads in one replay block, no two read one proof block, and at most
-  a class's `N` requests read in each of its replay blocks, each serving the point's `S` bits and reading at most the
-  class's `reads` (`ReadsCover`);
+* `RequestsCover`, the patterns' form: no two requests read one proof block, and at most a class's `N` requests read in
+  each of its replay blocks, each serving at most the point's `S` bits and reading at most the class's `reads`
+  (`ReadsCover`);
+  a request may read in several replay blocks;
 * `ServedCover`, the capped form: no two requests read one proof block, and the requests reading in each replay block
   serve at most its class's `N` times the point's `S` bits together;
 * `TwoStageCheckSound`: a sets' point's bits `b` bound `Σ_{T admissible} 2^{b(T)} ≤ 2^b`;
@@ -38,7 +39,9 @@ open _root_.Spot.TwoStageCheck (Point Form checkTwoStage)
 
 /-- **The registered first stage samples each replay block at a rate at least `q`**: `bernoulli:NUM/DEN` with
 `q ≤ NUM/DEN`, or `[subset Q, all]` over the replay partition's two classes, the population `c` and the inputs, with
-`Q ≤ |c|` and `q |c| ≤ Q`. -/
+`Q ≤ |c|` and `q |c| ≤ Q`. In the subset form `q` reads the two-stage rule's replay design, a `rate:NUM/DEN` design:
+`Select.Rule.over` names a count `Q` with `NUM · n ≤ DEN · Q` over the `n` replay blocks it is given (`RuleAtRate`),
+so `q = NUM/DEN` holds where that `n` is `|c|`, which is not stated here. -/
 def FirstStageAt (d : Design.Two) (q : ℝ) : Prop :=
   (∃ num den : ℕ, d.replay.rules = [.bernoulli num den] ∧ q ≤ (num : ℝ) / den) ∨
     ∃ (Q : ℕ) (c ic : List (List (List ℕ))), d.replay.rules = [.subset Q, .all] ∧ d.part.classes = [c, ic] ∧
@@ -50,18 +53,17 @@ def ClassesCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) (D : Poi
   (∀ ρ < d.part.blocks.length, ∃ c, D.classes[cls ρ]? = some c ∧ Covers s Pt d ρ c.cells) ∧
     ∀ i c, D.classes[i]? = some c → ((Finset.range d.part.blocks.length).filter (cls · = i)).card ≤ c.count
 
-/-- **The requests read as the point's classes say**: each request reads in one replay block, no two read one proof
-block, and in each replay block `ρ` at most its class's `N` requests read, each serving `D.S` bits and reading at most
-the class's `reads`. -/
+/-- **The requests read as the point's classes say**: no two requests read one proof block, and in each replay block
+`ρ` at most its class's `N` requests read, each serving at most `D.S` bits and reading at most the class's `reads`. A
+request may read in several replay blocks. -/
 def RequestsCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R] [DecidableEq R]
     (req : Fin s.prog.outs.length → R) (D : Point) (cls : ℕ → ℕ) : Prop :=
-  (∀ r, ∃ ρ, ∀ v ∈ blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r, replayOf Pt d.part v = some ρ) ∧
-    (∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r)
+  (∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r)
       (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r')) ∧
     ∀ ρ < d.part.blocks.length, ∀ c, D.classes[cls ρ]? = some c →
       (Finset.univ.filter fun r => (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty).card ≤ c.N ∧
         ∀ r, (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty →
-          servedBits req r = D.S ∧ ReadsCover s Pt d req ρ c.reads r
+          servedBits req r ≤ D.S ∧ ReadsCover s Pt d req ρ c.reads r
 
 /-- **A sets' point's bits bound the count**: when `checkTwoStage` returns `b` at `D` read in the sets' form, every
 statement in scope whose first stage samples at `D.q` or more and whose replay blocks the classes cover has

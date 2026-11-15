@@ -1,9 +1,11 @@
 """The rebuild's bookkeeping on stand-ins for vLLM's engine: the K/V file's layout, the hits the record forces and when
 their pages load, the blocks a re-added request shares, the start's refusal of async scheduling's extra row, and the
 per-request K/V roots and the mirror's save and load (numpy, skipped without it), and where ``--capture`` is
-refused."""
+refused and which template it takes."""
 from __future__ import annotations
 
+import json
+import re
 import sys
 from dataclasses import dataclass
 from types import ModuleType
@@ -189,6 +191,46 @@ def test_roots_read_each_request_s_computed_tokens_only() -> None:
     moved[1][6, 0] ^= 1
     d = RB.roots_diff(want, RB.roots(moved, {"a": ([5, 6], 6), "b": ([5, 7], 4)}, 4))
     assert d["differing"] == 1 and d["first"] == ["a"] and not d["roots_equal"]
+
+
+@pytest.mark.parametrize("dtype, row", [("bfloat16", 576 * 2), ("uint8", 656)])
+def test_the_one_gpu_pool_fills_nan_by_byte_in_a_bf16_cache_and_in_an_fp8_one(dtype: str, row: int, monkeypatch: Any) -> None:
+    """`LocalKv`'s NaN (a dummy page, a tail past a prefix, the rest of the pool) is `FILL_BYTE`'s byte in every byte:
+    bf16 words read it as NaN, and so does each part of an FP8 cache's 656-byte row (512 e4m3, four f32 scales, 64
+    bf16), which a NaN written through the layer's dtype could not hold."""
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("numpy")
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
+    bs, blocks = 4, 6
+    cache = torch.ones(blocks, bs, row // getattr(torch, dtype).itemsize, dtype=getattr(torch, dtype))
+    rows = [cache.view(torch.int8).view(blocks, bs * row)]
+    kv = RB.LocalKv(rows, bs, None, {"views": [{"shape": list(cache.shape)}]})
+    assert (kv.slot, kv.block_bytes) == (row, bs * row)
+
+    def nan(slots: Any) -> bool:
+        """Whether every value of the slots ``slots`` (k x row bytes, int8) is NaN, in each part of the row."""
+        b = slots.contiguous().view(torch.uint8)
+        if dtype == "bfloat16":
+            return bool(b.view(torch.bfloat16).float().isnan().all())
+        # e4m3's NaN is the byte S.1111.111
+        return bool(((b[:, :512] | 0x80) == 0xFF).all() and b[:, 512:528].view(torch.float32).isnan().all()
+                    and b[:, 528:].view(torch.bfloat16).float().isnan().all())
+
+    flat = rows[0].view(blocks * bs, row)
+    kv.fill_blocks([1, 4], "nan")
+    kv.fill_slots([2 * bs + 3], "nan")
+    assert nan(flat[bs:2 * bs]) and nan(flat[4 * bs:5 * bs]) and nan(flat[2 * bs + 3:2 * bs + 4])
+    untouched = [i for i in range(blocks * bs) if i // bs not in (1, 4) and i != 2 * bs + 3]
+    assert bool((cache.view(blocks * bs, -1)[untouched] == 1).all())
+    kv.fill_blocks([1], "zero")
+    assert not flat[bs:2 * bs].any() and nan(flat[4 * bs:5 * bs])
+    # a NaN tail past block 3's first slot leaves every slot of the pool NaN; a zero tail touches that tail only
+    kv.fill_blocks([3], "zero")
+    kv.load([], [(3, 1)], "nan")
+    assert nan(flat) and bool((rows[0].view(torch.uint8) == RB.FILL_BYTE["nan"]).all())
+    cache.fill_(1)
+    kv.load([], [(3, 1)], "zero")
+    assert not flat[3 * bs + 1:4 * bs].any() and bool((cache.view(blocks * bs, -1)[3 * bs] == 1).all())
 
 
 def test_mirror_save_and_saved_read_back_rows_and_pages(tmp_path: Any) -> None:
@@ -485,3 +527,16 @@ def test_a_served_preempted_request_is_resumed_and_any_other_stays_new() -> None
 def test_capture_takes_only_a_served_shape_only_target_s_rows(args: list[str]) -> None:
     with pytest.raises(SystemExit, match="--capture takes the sampler rows of --served's --shape-only target"):
         RB.main([*args, "--capture", "TokenSelect_v4{V=8}", "--out", "O"])
+
+
+@pytest.mark.parametrize("given", [None, "TokenSelect_v4{V=8}"])
+def test_capture_without_a_template_takes_the_check_the_serve_committed_under(tmp_path, monkeypatch, given) -> None:
+    (tmp_path / "meta.json").write_text(json.dumps({"model_id": "glm53"}))
+
+    def template(meta, t):
+        raise SystemExit(f"capture of {meta['model_id']} under {t}")
+
+    monkeypatch.setattr(RB.RP, "capture_template", template)
+    with pytest.raises(SystemExit, match=re.escape(f"capture of glm53 under {given}")):
+        RB.main(["--served", str(tmp_path), "--scratch", "D", "--shape-only", "r0", "--capture",
+                 *([given] if given else []), "--out", "O"])

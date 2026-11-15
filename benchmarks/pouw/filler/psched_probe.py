@@ -1,6 +1,8 @@
 """Summarize psched_probe.sh's rows (dscore/pscore) with the locked scoring.point_stats and the scorer's per-entry coverage
 for a decode point or the prefill step: `python3 benchmarks/pouw/filler/psched_probe.py OUT_DIR ...`."""
 
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
@@ -9,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scoring as S
 
 
-def main(dirs):
+def main(dirs: list[str]) -> None:
     print("| run | kind | B | L | place | step/fill SMs | phase | slowdown (rounds max) | coverage | filler share | beside/alone "
           "| receipts (bad) |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|")

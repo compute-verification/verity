@@ -25,8 +25,8 @@ an accepted run, at the port the address names in that unit's session (`Address.
   those round 2 reads the value under (`readRoots`), and the address's slot names the entry round 2 reads the value off
   (`readKeyAt`), at the read's schema, its leaf the session header's position for the row; at a one-table session's
   other ports (`ReadsInterior`), the gate is one its replay block doesn't commit, and the slot names the template's port
-  of the interior record, sized, at the published tree's schema, its units the tree's leaves and its leaf the drawn
-  unit's row.
+  of the interior record, sized, at the published tree's schema, its units the tree's leaves and its leaf the sampled
+  proof block's row.
 
 A slot reads its row off the roots, so one slot fits every replay sample: under a replay block's roots, a slot at unit
 `p` with stride `n` reads unit `i·n + p` of a tree of `q·n` units, at the `i`-th of `q` sampled replay blocks
@@ -46,7 +46,7 @@ it can't hold:
   through the session circuit's copy rows, and the place must be one for every unit that needs the gate;
 * the row (`Counted` and the slots' leaves): round 2 doesn't hold a session's population to the layout a slot reads
   off the roots, and bounds a registered read's row only to its unit's range of rows; and the unit's instance
-  (`rankAt`) is a drawn unit's, which an always-checked unit needn't have;
+  (`rankAt`) is a sampled proof block's, which an always-checked unit needn't have;
 * the entry (`ReadsRegistered`): round 2 holds a session's registered reads to its template's reference statement's but
   for the run's fields, and which entry it reads a value off (`readKeyAt`) still reads the round-1 record's port names;
 * one tree a gate: a gate one unit writes and another reads is needed by both, and the frame checks both openings at
@@ -118,7 +118,7 @@ end Columns
 
 namespace CheckedRun
 
-variable (r : CheckedRun)
+variable (r : CheckedRun h.stage)
 
 /-- **The unit's instance is one of its session's first table's instances.** -/
 def Counted : Prop := r.n h < r.sts[0]!.pub.n
@@ -142,7 +142,7 @@ def ReadsRegistered (S : Address) (g : ℕ) : Prop :=
 /-- **The address's port reads the interior record**: no registered read is named like the unit's port, the session has
 one table, the gate is one the unit's replay block doesn't commit, and the address's slot names the template's port of
 the interior record, sized; over any population the session's public file loads, the slot has the published tree's
-schema, and under the replay block's roots its units are the tree's leaves and its leaf (`leafAt`) the drawn unit's
+schema, and under the replay block's roots its units are the tree's leaves and its leaf (`leafAt`) the sampled proof block's
 row. -/
 def ReadsInterior (S : Address) (g : ℕ) : Prop :=
   regNamed r.ins r.sts (S.port r.u) = none ∧ r.ins.read.I.count ≤ 1 ∧ S.port r.u < r.sts[0]!.c.ports.size ∧
@@ -166,7 +166,7 @@ def slotsOf (addr : ℕ → Option Address) (g : ℕ) : Option Slot := (addr g).
 
 namespace CheckedRun
 
-variable {h} {r : CheckedRun}
+variable {h} {r : CheckedRun h.stage}
 
 /-- **An accepted run's checked unit's session has a table** (`zkOk_sound`). -/
 theorem sts_pos (hr : r.Ok h) : 0 < r.sts.size := by
@@ -309,7 +309,7 @@ end CheckedRun
 /-- **`SlotsAt` at any address map whose addresses hold**: where each gate a checked unit of an accepted run needs has
 an address that holds there (`CheckedRun.slotsAtGate`). -/
 theorem slotsAt_of {addr : ℕ → Option Address}
-    (hS : ∀ r : CheckedRun, r.Ok h → ∀ g, r.s.prog.Needs r.b g → ∃ S, addr g = some S ∧ r.AddressHolds h S g)
+    (hS : ∀ r : CheckedRun h.stage, r.Ok h → ∀ g, r.s.prog.Needs r.b g → ∃ S, addr g = some S ∧ r.AddressHolds h S g)
     (c₀ : Code) : SlotsAt h (slotsOf addr) (revealCode h addr c₀) (layoutFor h) := by
   intro x s Pt d m₀ m₁ m₂ c₀' c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
   have hr : CheckedRun.Ok h ⟨x, s, m₀, m₁, m₂, c₀', c₁, rest, wF, u, b, ρ, rb, ins, sts⟩ :=
@@ -320,19 +320,20 @@ theorem slotsAt_of {addr : ℕ → Option Address}
 /-- **Every gate's value has one address**, fixed before the run, that holds at every accepted run's checked unit that
 needs the gate (`CheckedRun.AddressHolds`). The premise `SlotsAt` rests on (the module's docstring). -/
 def Addresses : Prop :=
-  ∀ g, ∃ S : Address, ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g
+  ∀ g, ∃ S : Address, ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g
 
 open Classical in
 /-- **The address map**: each gate's address where it has one that holds at every run that needs it. -/
 noncomputable def addressMap (g : ℕ) : Option Address :=
-  if hx : ∃ S : Address, ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g then some hx.choose
+  if hx : ∃ S : Address, ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g then
+    some hx.choose
   else none
 
 /-- **The slot map**: each gate's address's slot. -/
 noncomputable def slotMap : ℕ → Option Slot := slotsOf (addressMap h)
 
 theorem addressMap_spec (hS : Addresses h) (g : ℕ) :
-    ∃ S, addressMap h g = some S ∧ ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g :=
+    ∃ S, addressMap h g = some S ∧ ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g :=
   ⟨(hS g).choose, dite_eq_left (hS g), (hS g).choose_spec⟩
 
 /-- **`SlotsAt` at the slot map** (the module's docstring). -/

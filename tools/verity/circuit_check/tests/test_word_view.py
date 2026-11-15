@@ -12,7 +12,7 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
     Boolean version that flips one bit of every output word is caught."""
     import verity.circuits.evaluation.bits as EB
     from verity.circuits.defs import bind
-    from verity.definitions.registry import boolean_dsa_topk as BT
+    from verity_vllm.definitions.registry import boolean_dsa_topk as BT
 
     t = bind(BT.DsaWaksmanOrderV2, N=9, TOPK=8)
     F = CK.Findings()
@@ -57,7 +57,7 @@ def _xor_bits(word: bool | str):
 
 
 def test_a_word_view_past_its_budget_still_compares_random_vectors():
-    """The word view draws 16 x `Options.vectors` within 16 x `Options.reference_budget`; a word Definition too large for that
+    """The word view samples 16 x `Options.vectors` within 16 x `Options.reference_budget`; a word Definition too large for that
     takes as many as the budget pays for, at least `Options.min_vectors`, half of them random; and at least
     `WORD_RANDOM_FLOOR` of them are random whatever the options."""
     t = _xor_bits(word=True)

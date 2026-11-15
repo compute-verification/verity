@@ -2,15 +2,15 @@
 pearl_c_sm120.cu's kernels write, in its row-major layout (A' and B~'s codes and the transposed F lines in K32 order along k,
 `k32`; every product over k is the unpermuted operands'), for forming v1 on `pearl_c_device.SM120` (G = 4) and
 `SM120_UNPROMOTED`, hashing format -h3 (SHA-512 throughout).  Forming, lines and hashes come from
-`verity.protocols.pouw.prover.schemes.pearl_c` on the device record; the products over every cell are batched in
-numpy (the chains window by window, the peel with `verity.definitions.kernels.tc.group_sum_total_batch`
+`verity.protocols.accounting.pouw.prover.schemes.pearl_c` on the device record; the products over every cell are batched in
+numpy (the chains window by window, the peel with `verity.circuits.kernels.tc.group_sum_total_batch`
 on the record's peel step), and one whole 64 x 64 tile per variant is recomputed by the scheme (`encode`, `checked`,
 `digest`) and must agree.  Pearl's tickets are not part of `pearl-c-sm120` (no PoUW check reads them), so nothing here
 computes them.  run.py compares the device's buffers with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c_sm120/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
-The instance is a one-unit epoch as `verity.protocols.pouw.verifier.audit` starts it: B's `audit.HM96` row tree under a
+The instance is a one-unit epoch as `verity.protocols.accounting.pouw.verifier.audit` starts it: B's `audit.HM96` row tree under a
 fixed prover salt key (`SALT_KEY`), the salt from the salt coin of the gate's test challenger (`test_challenger`,
 `Epoch.start`) opened after B's root, A's HM96 row tree, seed_A from A's committed root (so E_A's padding line key is an
 output the device derives, `line_a`) and each row's seed and line key from its SHA-512 row digest.  Writes
@@ -35,21 +35,22 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT / "verity" / "protocols" / "pouw" / "verifier" / "tests"))
+sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "tests"))
 
 
 import pearl_c_vectors as CV  # noqa: E402
 from verity.commitments.merkle import tree_levels  # noqa: E402
-from verity.definitions.silicon import fp32  # noqa: E402
-from verity.definitions.kernels.tc import group_sum_total_batch  # noqa: E402
-from verity.protocols.pouw.verifier.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
+from verity.circuits.silicon import fp32  # noqa: E402
+from verity.circuits.kernels.tc import group_sum_total_batch  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
                                                          Epoch, Workload, activation_binding, commit_rows, hm96_kernel_constants,
                                                          hm96_salt, rows_domain, transcript_domain, weight_binding, weights_root)
-from verity.protocols.pouw.verifier.coins import Challenger, CoinOpening  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_kw as P  # noqa: E402
-from verity.protocols.pouw.prover.schemes.pearl_c_device import (  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinOpening  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c import keys_of, unit_block  # noqa: E402, F401 - the scheme's unit keys, re-exported
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import (  # noqa: E402
     DEVICES,
     SM120,
     SM120_UNPROMOTED,
@@ -78,11 +79,6 @@ def test_challenger() -> Challenger:
     return Challenger(0, entropy)
 
 
-def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
-    """s512_seeds' p3: salt ‖ root_B (64 bytes) ‖ u64 index."""
-    return salt + root_b + index.to_bytes(8, "little")
-
-
 def tree_bytes(domain, values: list[bytes], schema: str, salt_key: bytes, nonce: int) -> bytes:
     """An `audit.HM96` tree's levels as the kernels lay them out: level 0 (each value under its salt, then pads), then each
     level above."""
@@ -92,24 +88,13 @@ def tree_bytes(domain, values: list[bytes], schema: str, salt_key: bytes, nonce:
 
 def epoch_of(matmul: Matmul, b_rows: list[bytes], coins: Challenger, salt_key: bytes
              ) -> tuple[Epoch, CoinOpening, bytes, bytes]:
-    """A one-unit epoch on B's rows as `verity.protocols.pouw.verifier.audit` starts it, from `coins`' salt coin
+    """A one-unit epoch on B's rows as `verity.protocols.accounting.pouw.verifier.audit` starts it, from `coins`' salt coin
     opened after B's root: (epoch, the salt coin's opening, B's tree bytes, its root)."""
     dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), HM96)
     tree_b = tree_bytes(dom_b, b_rows, ROW_SCHEMA, salt_key, HM96_WEIGHTS + matmul.weight)
     roots = {matmul.weight: tree_b[-64:]}
     opening = coins.open("salt", weights_root(roots))
     return Epoch.start(Workload((matmul,)), roots, coins.commitment, opening), opening, tree_b, tree_b[-64:]
-
-
-def keys_of(scheme: C.PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
-    """The pipeline's key inputs for a unit of `epoch` (run.Pipeline's `keys`) but the prover's salt key and the hm96
-    constants, which the caller adds: E_B's line key and the domains in the scheme's tree hash."""
-    s, salt, h = matmul.shape, epoch.salt, scheme.commitment_hash
-    return {"line_b": C.line_key(seed_b),
-            "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, h).domain_id,
-            "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
-            "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
-            "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
 
 
 # ---- layouts and batched pieces -------------------------------------------------------------------------------------

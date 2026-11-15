@@ -7,9 +7,11 @@ sampling parameters, which advice v0 doesn't carry: they come with the request's
 model pin, the device's target profile, the execution label and the server's default seed).  The registration is φ of that
 model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `prove_path.phi_of_serve` reads it) and
 its checkpoint dtype the one that config's `quantization_config` states (`checkpoint_dtype`), on that target at that execution,
-at the engine's tensor-parallel world and `--rank`, with the engine args class G states (`engine_of`; the whole φ is `phi_of`),
-without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose server says it
-filled in another is refused (exit 2, `registered_seed`).  Writes, under `--out`:
+at the engine's tensor-parallel world and `--rank`, with the engine args class G states and the layout of an FP8 KV cache
+(`engine_of`; the whole φ is `phi_of`,
+`predict.phi.served_phi`, the formula a served window's registered compiler reads φ by too, so the Builds written here hold
+the Programs it compiles), without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose
+server says it filled in another is refused (exit 2, `registered_seed`).  Writes, under `--out`:
 
     compiled.json     `Compiled.summary()`: the compiler digest, each request's Program digest and shape, each step's row refs
     traces/           one `verity-vllm build --wrapper request` per distinct request Program (`steps.trace_commands`)
@@ -21,7 +23,8 @@ compiled.json and exits 2; `--partial` refuses request by request instead, and c
 `--window K` reads a `verity-vllm serve-openai --seal` run instead: window K's advice (`advice/w<K>/private/advice.bin`, its
 registration's ℓ), the certified body of each of window K's requests from `requests.jsonl` (the records whose ``windows`` hold
 K, by `user`: the sampling fields its ingress record says it brought, and its prompt ids), the model, target,
-execution and default seed from `serve.json`, and window K's seed coin from its `windows.jsonl` line (`window_coin`), from which
+execution (``execution``, else ``engine.execution``) and default seed from `serve.json`, and window K's seed coin from its
+`windows.jsonl` line (`window_coin`), from which
 the compile derives the seed of each unseeded stochastic request, as serving did (`engine.served_seed.derived`), and which the
 manifest names with its source.  A window's advice is `window_advice`'s: a request window K carries in from the
 one before it runs on at its carried state, and `carry_of` holds that state to the endpoint's records, the advice of the last
@@ -41,10 +44,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_vllm import messages as M
+from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_vllm.program.predict import phi as P
+
 MANIFEST = "verity-vllm/served-window-programs/v1"
-#: the engine args the registration carries from the run's engine: the ones class G states (`engine_classes.CLASS_G_LIMITS`, the
-#: prefix cache), none of which a request Program reads
-REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "max_num_seqs", "enable_prefix_caching")
 
 
 def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
@@ -52,8 +56,8 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     body is the sampling fields the request brought (its ingress record) with its prompt ids. Only the window's own records
     count: a run can serve a user again in another window."""
     adv = run / "advice" / f"w{window}"
-    reg = json.loads((adv / "registration.json").read_text())
-    serve = json.loads((run / "serve.json").read_text())
+    reg = json.loads(M.read(adv / "registration.json", "Advice"))
+    serve = json.loads(M.read(run / "serve.json", "ServingConfiguration"))
     bodies = {}
     for line in (run / "requests.jsonl").read_text().splitlines():
         if line.strip():
@@ -64,51 +68,27 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
             if user in bodies:
                 raise ValueError(f"requests.jsonl: user {user!r} has two requests in window {window}")
             bodies[user] = {**((d.get("ingress") or {}).get("brought") or {}), "prompt": list(d["prompt_ids"])}
-    meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"], "execution": serve.get("execution"),
+    meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"],
+            "execution": serve.get("execution") or (serve.get("engine") or {}).get("execution"),
             "default_seed": serve.get("default_seed"), "engine_record": serve.get("engine")}
     return adv / "private" / "advice.bin", meta, bodies, reg
 
 
-def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
-    """The registration's tensor-parallel world at ``rank`` and its engine args (`REGISTERED_ENGINE`), from the run's engine record
-    (`LLM.engine_record`'s ``engine_kwargs``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
-    (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK the engine served in the kernels'
-    own order; a ValueError for a rank the world doesn't have."""
-    from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
-
-    rec = meta.get("engine_record") or {}
-    kw = rec.get("engine_kwargs") or {}
-    world = int(kw.get("tensor_parallel_size") or 1)
-    if not 0 <= rank < world:
-        raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
-    engine = {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
-    if "env_flags" in rec:
-        flags = rec["env_flags"] or {}
-        engine["env"] = {k: flags[k] for k in DSA_TOPK_ENV if k in flags}
-    return {"world": world, "rank": rank}, engine
+def engine_of(meta: dict, rank: int, hf_config: dict | None = None) -> tuple[dict, dict]:
+    """The registration's tensor-parallel world at ``rank`` and its engine args, from the run's engine record, with the layout
+    of an FP8 KV cache for the model of the pinned config ``hf_config`` (`predict.phi.engine_of`, whose ValueError it raises)."""
+    return P.engine_of(meta, rank, hf_config)
 
 
 def checkpoint_dtype(hf_config: dict) -> str | None:
-    """The checkpoint dtype φ states (``model["dtype"]``, in `config.DTYPES`' names, as `predict.score` states a served row's from its
-    id), read from the pinned config's `quantization_config`: a block-FP8 checkpoint (``quant_method: fp8``, ``fmt: e4m3``) is
-    ``float8_e4m3fn``, the dtype `predict.dsa`'s domain requires. Any other config states none, and the decoder takes the dtype its
-    config's shape implies (bfloat16, or int8)."""
-    from verity_vllm.config import DTYPES
-
-    q = hf_config.get("quantization_config") or {}
-    return DTYPES["fp8"] if q.get("quant_method") == "fp8" and q.get("fmt", "e4m3") == "e4m3" else None
+    """The checkpoint dtype φ states, read from the pinned config's `quantization_config` (`predict.phi.checkpoint_dtype`)."""
+    return P.checkpoint_dtype(hf_config)
 
 
 def phi_of(meta: dict, hf_config: dict, rank: int):
-    """The registration's φ (module docstring): the run's model at its pinned config ``hf_config``, with the checkpoint dtype that
-    config states (`checkpoint_dtype`), on the run's target at its execution, at the engine's tensor-parallel world at ``rank`` with
-    the engine args class G states (`engine_of`, whose ValueError it raises)."""
-    from verity_vllm.program.predict.phi import Phi
-
-    tp, engine = engine_of(meta, rank)
-    dtype = checkpoint_dtype(hf_config)
-    return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config, **({"dtype": dtype} if dtype else {})},
-               target=dict(meta["target"]), execution=meta.get("execution") or "eager", tp=tp, engine=engine)
+    """The registration's φ (module docstring): `predict.phi.served_phi`, the one formula of a served engine's φ, which a served
+    window's registered compiler reads too (`prove_path.phi_of_serve`); `engine_of`'s ValueError is raised."""
+    return P.served_phi(meta, hf_config, rank)
 
 
 def window_coin(run: Path, window: int) -> dict | None:
@@ -124,8 +104,6 @@ def window_coin(run: Path, window: int) -> dict | None:
 def registered_seed(meta: dict) -> int:
     """The default seed the registration fixes, `engine.served_seed.DEFAULT_SEED`; a ValueError when the run's server says it
     filled in another (or says none), since a request that sent no seed would be compiled under a seed its sample didn't use."""
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
-
     seed = meta.get("default_seed")
     if type(seed) is not int or seed != DEFAULT_SEED:
         raise ValueError(f"the run's server filled in default seed {seed!r}, and the registered one is "
@@ -141,15 +119,15 @@ def carry_of(run: Path, window: int, data: bytes) -> dict:
     from verity_vllm.pipeline import window_advice as WA
 
     a = WA.decode(data)
-    lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
-    before = [int(d["window"]) for d in map(json.loads, filter(str.strip, lines)) if not d.get("empty") and int(d["window"]) < window]
+    lines = M.lines(run / "windows.jsonl", "Run") if (run / "windows.jsonl").exists() else []
+    before = [int(d["window"]) for d in map(json.loads, lines) if not d.get("empty") and int(d["window"]) < window]
     last = max(before, default=None)
     path = None if last is None else run / "advice" / f"w{last}" / "private" / "advice.bin"
     carry = {"in": [q.id for q in a.requests[:len(a.carried)]], "out": [a.requests[c.request].id for c in WA.close(a) if c.must],
              "follows": None}
     if path is not None and path.exists():
         try:
-            WA.follows(WA.decode(path.read_bytes()), a)
+            WA.follows(WA.decode(M.read(path, "Advice")), a)
         except WA.MalformedAdvice as e:
             raise ValueError(f"window {window} doesn't open where window {last} closed: {e}") from None
         carry["follows"] = last
@@ -196,11 +174,11 @@ def main() -> int:
         try:
             carry = carry_of(run, a.window, data)
         except ValueError as e:
-            (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+            M.write(out / "compiled.json", "RequestProgram", (json.dumps({"refused": str(e)}, indent=1) + "\n").encode())
             print(f"[advice-compile] the advice's carry is refused: {e}", flush=True)
             return 2
     else:
-        data = Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes()
+        data = M.read(Path(a.advice or run / "advice" / "private" / "advice.bin"), "Advice")
         meta = json.loads((run / "run.json").read_text())
         recs = [d for d in map(json.loads, (run / "requests.jsonl").read_text().splitlines()) if d]
         user = {d["request"]: d["user"] for d in recs}
@@ -224,18 +202,18 @@ def main() -> int:
     try:
         seed = registered_seed(meta)
     except ValueError as e:
-        (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        M.write(out / "compiled.json", "RequestProgram", (json.dumps({"refused": str(e)}, indent=1) + "\n").encode())
         print(f"[advice-compile] the run's default seed is refused: {e}", flush=True)
         return 2
     reg = Registered.of(phi, default_seed=seed, cap_bits=cap)
     try:
         compiled = compile_steps(reg, data, ingress, salt=bytes.fromhex(coin["coin"]) if coin else None, partial=a.partial)
     except Unexpressible as e:
-        (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        M.write(out / "compiled.json", "RequestProgram", (json.dumps({"refused": str(e)}, indent=1) + "\n").encode())
         print(f"[advice-compile] compile_steps refuses the advice: {e}", flush=True)
         return 2
     summary = compiled.summary()
-    (out / "compiled.json").write_text(json.dumps(summary, indent=1) + "\n")
+    M.write(out / "compiled.json", "RequestProgram", (json.dumps(summary, indent=1) + "\n").encode())
     traces = out if a.window is not None else out / "traces"
     cmds = trace_commands(summary, reg, str(traces), max_model_len=a.max_model_len)
     print(f"[advice-compile] {len(summary['programs'])} request Programs over {sum(u is not None for u in summary['requests'])} "
@@ -257,7 +235,7 @@ def main() -> int:
                "component_digests": sorted(summary["programs"]), "refused": summary.get("refused") or {},
                "carry": {**carry, "idle": [advice.requests[i].id for i in summary["carry"]["idle"]]},
                "comparison": {k: cmp[k] for k in ("equal", "different", "no_trace", "mismatches") if k in cmp}}
-        (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
+        M.write(out / "manifest.json", "RequestProgram", (json.dumps(man, indent=1) + "\n").encode())
         print(f"[advice-compile] {out / 'manifest.json'}: {len(man['requests'])} request Programs", flush=True)
     return 0 if cmp["mismatches"] == 0 else 1
 

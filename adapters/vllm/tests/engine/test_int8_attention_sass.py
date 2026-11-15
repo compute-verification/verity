@@ -6,6 +6,8 @@ a GPU; skipped without them.  The rules' own cases (an instruction each rule ref
 from __future__ import annotations
 
 import functools
+import sys
+import types
 
 import pytest
 
@@ -17,9 +19,10 @@ def _triton():
     """`int8_attention_triton`, or why the compiled checks skip."""
     try:
         import triton  # noqa: F401
+
         from verity_vllm.engine import int8_attention_triton as T
-        for cap in S.ARCHES:
-            S.tool("ptxas", cap)
+        for arch in S.ARCHES:
+            S.tool("ptxas", arch)
         S.tool("nvdisasm")
     except (ImportError, AttributeError, S.ToolMissing) as e:
         return f"Triton with its bundled ptxas and nvdisasm required ({type(e).__name__}: {e})"
@@ -34,15 +37,15 @@ def _kernels():
 
 
 @functools.cache
-def _compiled(variant: str, cap: int, fusion: bool = False):
-    return S.compile_variant(_kernels(), variant, cap, enable_fp_fusion=fusion)
+def _compiled(variant: str, arch: int, fusion: bool = False):
+    return S.compile_variant(_kernels(), variant, arch, enable_fp_fusion=fusion)
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("cap", S.ARCHES)
+@pytest.mark.parametrize("arch", S.ARCHES)
 @pytest.mark.parametrize("variant", ["kv_rows/paged", "kv_rows/packed", "lut_rows/d128", "lut_rows/d64"])
-def test_each_kernel_as_launched_passes(variant, cap):
-    r = S.gate_compiled(_compiled(variant, cap))
+def test_each_kernel_as_launched_passes(variant, arch):
+    r = S.gate_compiled(_compiled(variant, arch))
     assert r["ok"], r["refused"]
     assert r["fmad"]["same"] and not r["ptx"]["fma"] and not r["ptx"]["unrounded"]
     if variant.startswith("lut_rows"):
@@ -51,19 +54,19 @@ def test_each_kernel_as_launched_passes(variant, cap):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("cap", S.ARCHES)
-def test_lut_rows_compiled_with_contraction_allowed_is_refused(cap):
-    r = S.gate_compiled(_compiled("lut_rows/d128", cap, True))
+@pytest.mark.parametrize("arch", S.ARCHES)
+def test_lut_rows_compiled_with_contraction_allowed_is_refused(arch):
+    r = S.gate_compiled(_compiled("lut_rows/d128", arch, True))
     assert not r["ok"]
     assert r["ptx"]["fma"].get("fma.rn.f32", 0) > 0
     assert any(x.startswith("SASS:") and "a product contracted into its add" in x for x in r["refused"]), r["refused"]
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("cap", S.ARCHES)
-def test_lut_rows_ptx_without_rounding_modes_is_contracted_by_ptxas_and_refused(cap):
-    ptx = S.unrounded(_compiled("lut_rows/d128", cap).asm["ptx"])
-    r = S.gate("lut_rows", ptx, S.ptxas(ptx, cap, True), cap)
+@pytest.mark.parametrize("arch", S.ARCHES)
+def test_lut_rows_ptx_without_rounding_modes_is_contracted_by_ptxas_and_refused(arch):
+    ptx = S.unrounded(_compiled("lut_rows/d128", arch).asm["ptx"])
+    r = S.gate("lut_rows", ptx, S.ptxas(ptx, arch, True), arch)
     assert not r["ok"] and not r["fmad"]["same"]
     assert r["fmad"]["ffma_contraction_allowed"] > r["fmad"]["ffma_fmad_false"]
     assert any(x.startswith("SASS:") and "a product contracted into its add" in x for x in r["refused"]), r["refused"]
@@ -79,9 +82,9 @@ def test_kv_rows_dividing_with_tritons_slash_is_refused(tmp_path):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("cap", S.ARCHES)
-def test_contraction_cannot_change_kv_rows(cap):
-    on, off = _compiled("kv_rows/paged", cap, True), _compiled("kv_rows/paged", cap)
+@pytest.mark.parametrize("arch", S.ARCHES)
+def test_contraction_cannot_change_kv_rows(arch):
+    on, off = _compiled("kv_rows/paged", arch, True), _compiled("kv_rows/paged", arch)
     assert S.instructions(S.listing(on.asm["cubin"])) == S.instructions(S.listing(off.asm["cubin"]))
     assert S.gate_compiled(on)["ok"]
 
@@ -111,5 +114,51 @@ def test_the_sass_rules_refuse_each_class():
         assert want in text, (want, bad["refused"])
     lut = S.sass_rules("lut_rows", _listing("FMUL R1, R2, R3", "FFMA R4, R5, R6, R1", "F2F.BF16.F32 R7, R4", "DMUL R8, R10, R12",
                                             "IMMA.16832.S8.S8.SAT R14, R16, R18, R14"))
-    assert lut["refused"] == ["SASS: 1 FMUL and 0 FADD for 1 bf16 outputs, where Int8LutAttentionRow_v1 rounds three products "
-                              "and one sum per output (3 and 1): a product contracted into its add"]
+    assert lut["refused"] == [("SASS: 1 FMUL and 0 FADD for 1 bf16 outputs, where Int8LutAttentionRow_v1 rounds three products "
+                               "and one sum per output (3 and 1): a product contracted into its add")]
+
+
+def test_the_fmad_rule_compares_ptxas_two_builds_instruction_by_instruction(monkeypatch):
+    """`fmad_rule` on stand-ins for ptxas and nvdisasm: a build is the listing its flag names."""
+    builds = {b"allowed": _listing("FMUL R1, R2, R3", "FADD R4, R1, R5"), b"fmad=false": _listing("FMUL R1, R2, R3", "FADD R4, R1, R5")}
+    asked = []
+
+    def ptxas(ptx, arch, fmad):
+        asked.append((ptx, arch, fmad))
+        return b"allowed" if fmad else b"fmad=false"
+
+    monkeypatch.setattr(S, "ptxas", ptxas)
+    monkeypatch.setattr(S, "listing", lambda cubin: builds[cubin])
+    assert S.fmad_rule("the ptx", 90) == {"same": True, "ffma_contraction_allowed": 0, "ffma_fmad_false": 0, "refused": []}
+    assert asked == [("the ptx", 90, True), ("the ptx", 90, False)]
+    # with contraction allowed ptxas fuses the product into its add: one FFMA where the flag's build has none
+    builds[b"allowed"] = _listing("FFMA R4, R2, R3, R5")
+    assert S.fmad_rule("the ptx", 120) == {
+        "same": False, "ffma_contraction_allowed": 1, "ffma_fmad_false": 0,
+        "refused": ["fmad: ptxas contracts this PTX when allowed (1 FFMA against 0 with --fmad=false)"]}
+
+
+def _stand_in_kernels(monkeypatch, tmp_path, source: str) -> None:
+    """A module in `int8_attention_triton`'s place whose file holds ``source``: `div_full_mutant` reads the file alone."""
+    path = tmp_path / "stand_in_kernels.py"
+    path.write_text(source)
+    stand_in = types.ModuleType("verity_vllm.engine.int8_attention_triton")
+    stand_in.__file__ = str(path)
+    monkeypatch.setitem(sys.modules, "verity_vllm.engine.int8_attention_triton", stand_in)
+    monkeypatch.setattr("verity_vllm.engine.int8_attention_triton", stand_in, raising=False)
+
+
+def test_the_div_full_mutant_is_the_kernels_module_with_one_division_changed(monkeypatch, tmp_path):
+    _stand_in_kernels(monkeypatch, tmp_path, "BLOCK_S = 7\n\n\ndef _q8(tl, x, s):\n    return tl.div_rn(x, tl.broadcast_to(s, x.shape))\n")
+    mutant = S.div_full_mutant(tmp_path)
+    assert mutant.__name__ == "int8_attention_triton_div_full" and mutant.BLOCK_S == 7
+    written = tmp_path / "int8_attention_triton_div_full.py"
+    assert mutant.__file__ == str(written)
+    assert written.read_text() == "BLOCK_S = 7\n\n\ndef _q8(tl, x, s):\n    return x / s\n"
+    assert mutant._q8(None, 6.0, 4.0) == 1.5
+
+
+def test_the_div_full_mutant_is_refused_when_the_division_is_no_longer_there(monkeypatch, tmp_path):
+    _stand_in_kernels(monkeypatch, tmp_path, "def _q8(tl, x, s):\n    return tl.div_rn(x, s)\n")
+    with pytest.raises(RuntimeError, match="_q8 no longer divides by"):
+        S.div_full_mutant(tmp_path)

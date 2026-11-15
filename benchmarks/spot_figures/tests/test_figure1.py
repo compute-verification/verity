@@ -10,7 +10,8 @@ import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
-from verity.protocols.spot.optimize import Cell
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.proofs.spot.prover.optimize import Cell
 
 SCOPES = ("world year", "datacenter week")
 #: the designs every bit charged, which plan in about a second; the capped ones take seconds a point
@@ -75,8 +76,8 @@ def test_a_model_runs_once_its_workload_card_lands(card_dir):
 
 
 def test_sparseloco_goes_as_the_served_models_parameters(out):
-    """rho's syncs are its reference model's: the line is scaled to the served model's parameters, and without them
-    names the model it is sized for; rho's work references name their model."""
+    """The slowdown calculator's syncs are its reference model's: the line is scaled to the served model's parameters, and without them
+    names the model it is sized for; the slowdown calculator's work references name their model."""
     c = out["inputs"]
     syncs = out["panels"]["exfiltration"]["references"][0]
     assert (syncs["label"], syncs["scaled_by"]) == ("1,000 SparseLoCo syncs of GLM-5.3", "params / ref_params")
@@ -96,14 +97,14 @@ def test_every_references_card_adds_its_lines(out):
             assert card["art"] in {r.get("art") for r in out["panels"][panel]["references"]}, (card["art"], panel)
 
 
-def test_a_line_at_zero_is_drawn_on_the_floor_and_captioned_and_coincident_lines_plotted_once():
+def test_a_line_at_zero_is_sampled_on_the_floor_and_captioned_and_coincident_lines_plotted_once():
     refs = [{"label": "a", "value": 100.0}, {"label": "b", "value": 101.0}, {"label": "zero", "value": 0.0},
             {"label": "c", "by_scope": {"world year": 1e4}}, {"label": "elsewhere", "by_scope": {"world week": 1.0}}]
     assert _lines(refs, "world year", 1.0) == [(100.0, "a", "dashed"), (1e4, "c", "dashed")]
     assert _lines([refs[0] | {"style": "solid"}], "world year", 1.0) == [(100.0, "a", "solid")]
     assert f.zero_lines({"exfiltration": refs}, "world year") == {"exfiltration": ["zero"]}
     assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(
-        " At 0, drawn along the axis's floor: zero.")
+        " At 0, sampled along the axis's floor: zero.")
     assert _zeros(refs, "world year") == [("zero", "dashed")] and _zeros(refs, "world week") == [("zero", "dashed")]
 
 
@@ -129,9 +130,10 @@ def test_a_label_wider_than_its_axis_wraps_onto_balanced_lines_inside_it():
 def test_a_capped_caption_says_what_it_rests_on():
     """The capped sentences name each form's status, the patterns' form only in the appendix, beside every panel's own
     sentences."""
-    caps = f.captions(1.0, boundary_hash_share=1e-7, served=(144000.0, 4500, 32, 3.36e11, 1.5e16))
+    caps = f.captions(1.0, boundary_hash_share=1e-7,
+                      served=(144000.0, 4500, 32, "every one of the request's tokens", 3.36e11, 1.5e16))
     assert "Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the " \
-           "144,000 bits it serves (4,500 tokens of 32 bits)" in caps["exfiltration"]
+           "144,000 bits it serves (4,500 tokens of 32 bits, every one of the request's tokens)" in caps["exfiltration"]
     assert "never above the 1.5e+16 bits the scope serves (card_influenceTwo_le_min)" in caps["exfiltration"]
     assert "Patterns" not in caps["exfiltration"]
     assert "Patterns (dash-dot-dot; card_influenceTwo_le_patterns)" in caps["exfiltration_appendix"]
@@ -188,11 +190,11 @@ def test_the_design_card_picks_the_main_panels_lines(out):
     assert all(s["main"] == (s["design"] in f.MAIN["exfiltration"]) for s in out["panels"]["exfiltration"]["series"])
 
 
-def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
+def test_the_infiltration_panel_samples_its_card(card_dir, tmp_path):
     vertical = cards.load("proof_overhead", "GLM-5.3")["value"]["model_overhead"]
     xs = [1.0, vertical, 1e14]
     card = envelope("infiltration", "GLM-5.3", {
-        "design": "layer_of_token", "form": "write", "unit": "bit", "caption": "Deferred interiors at a layer.",
+        "design": "layer_of_token", "form": "write", "unit": "bit", "caption": "Interior commitments at a layer.",
         "consumer": None, "series": [{"scope": s, "budget": b, "x": xs, "y": [1e3, 1e9, 1e15]}
                                      for s in SCOPES for b in (0.001, 0.01, 0.1)]})
     cards.write(card)
@@ -208,10 +210,10 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
     head = next(s for s in out["panels"]["exfiltration"]["series"]
                 if (s["scope"], s["budget"], s["design"]) == ("world year", f.RATIO_BUDGET, "two-stage"))
     ratio = 1e9 / head["y"][head["x"].index(vertical)]
-    assert caption.startswith("Deferred interiors at a layer. At the measured overhead and 1% of compute, this curve "
+    assert caption.startswith("Interior commitments at a layer. At the measured overhead and 1% of compute, this curve "
                               f"is 1e9 bits, {ratio:.2g}× the exfiltration panel's tokens-only two-stage bound")
     assert out["scopes"]["world year"]["captions"]["exfiltration_appendix"].endswith(
-        " At 0, drawn along the axis's floor: no advice.")
+        " At 0, sampled along the axis's floor: no advice.")
     assert "no advice" not in out["scopes"]["world year"]["captions"]["exfiltration"]
     assert {"label": "a steering vector", "input": "references", "value": 98304.0, "main": True,
             "style": "dashed"} in inf["references"]
@@ -223,7 +225,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
 
 
 def test_the_world_fleet_computes_the_census_world(world):
-    """rho's world fleet at serving's MFU over a year computes the census's world, and its requests are that compute at
+    """The slowdown calculator's world fleet at serving's MFU over a year computes the census's world, and its requests are that compute at
     GLM-5.3's FLOP a request."""
     c, _, _, s = world
     flop = s.gpu_seconds * c["mfu_serve"].value * c["peak_flops"].value
@@ -246,7 +248,7 @@ def test_a_point_is_the_least_target_its_budget_buys(world, panel, target):
 def test_a_one_stage_or_request_point_is_what_lean_certifies(world, monkeypatch):
     """Each one-stage and request-level point's design goes to Lean's checker in one run: a leak point becomes the bits
     Lean certifies, a point at the trivial bound has no design, and a design Lean refuses is an error.  Lean's answers
-    are stubbed; the sampled-proofs suite runs the checker on the planner's designs (`test_plancheck.py`)."""
+    are stubbed; the SPOT suite runs the checker on the planner's designs (`test_plancheck.py`)."""
     c, part, fill, s = world
     m = f.model(c, part, s, c["proof_overhead"].value, fill)
     pts = [(m, d, t, f.point(m, d, t, 0.01 * s.gpu_seconds)) for d in ("one-stage", "request") for t in ("leak", "work")]
@@ -274,7 +276,7 @@ def test_lean_two_sends_the_planners_design_in_each_form(monkeypatch):
     replay blocks and the planner's θ): every bit charged, or each replay block at most the bits it serves in the
     capped sets' form or the patterns'.  The count is the bits Lean certifies, rounded up to a float, with the
     planner's bits and Lean's θ beside it; a point Lean refuses is an error.  The checker is stubbed here; the
-    sampled-proofs suite runs it."""
+    SPOT suite runs it."""
     cells = (Cell(3, 16), Cell(1, 64, stratum=64))
     row = {"merged": 64, "k": {0: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
     seen = []
@@ -284,11 +286,28 @@ def test_lean_two_sends_the_planners_design_in_each_form(monkeypatch):
         seen.clear()
         assert f.lean_two(cells, 4, row, .01, served, union) == want
         assert seen == [f.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, served, union, 2.0,
-                                        fanout=f.FANOUT)]
+                                        fanout=f.FANOUT, returned=None if served is None else 80)]
         assert seen[0]["form"] == form
     monkeypatch.setattr(f.plancheck, "check", lambda ds: [(None, Fraction(0))])
     with pytest.raises(f.plancheck.LeanError, match="refuses the planner's two-stage point"):
         f.lean_two(cells, 4, row, .01, 80.0, True)
+
+
+def test_a_design_of_a_stratum_a_width_is_read_in_the_planners_strata(monkeypatch):
+    """A row whose `merged` is None has a stratum a distinct width (`optimize.two_stage_strata`): `split_cells` gives
+    them, Lean's checker is sent the cells in them, and a series' plan names each by its width's place."""
+    cells = (Cell(3, 16), Cell(2, 48), Cell(1, 64))
+    assert [c.stratum for c in f.split_cells(cells, None)] == [0, 1, 2]
+    assert [c.stratum for c in f.split_cells(cells, 16)] == [0, 64, 64]
+    row = {"merged": None, "k": {0: 2, 1: 1, 2: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
+    seen = []
+    monkeypatch.setattr(f.plancheck, "check", lambda ds: seen.extend(ds) or [(Fraction(10**6, 7), Fraction(3))])
+    f.lean_two(cells, 4, row, .01, 80.0, True)
+    assert seen == [f.plancheck.two([Cell(3, 16), Cell(2, 48, stratum=1), Cell(1, 64, stratum=2)], row["k"], 4, .5, .01,
+                                    80.0, True, 2.0, fanout=f.FANOUT, returned=f.returned_bits(80.0))]
+    assert f._plan(row)["k"] == {"w0": 2, "w1": 1, "w2": 1}
+    assert f._plan({"merged": 16, "k": {0: 3, 64: 1}})["k"] == {"<=16": 3, "64": 1}
+    assert f._plan({"merged": 64, "k": {0: 3}})["k"] == {"all": 3}
 
 
 #: the bits the stubbed checker certifies for a two-stage point, and the θ it finds
@@ -328,7 +347,8 @@ def test_a_two_stage_point_is_what_lean_certifies_and_a_tampered_design_is_refus
         assert (got["lean"], got["planner"], got["theta"]) == (True, row["bound"], float(LEAN_THETA)), design
         assert seen == [f.plancheck.two(f.split_cells(m.cells, row["merged"]), row["k"], m.replay.replay_blocks,
                                         row["q"], m.delta, None if form is None else m.served, form == "patterns",
-                                        row["theta"], fanout=f.FANOUT)]
+                                        row["theta"], fanout=f.FANOUT,
+                                        returned=None if form is None else f.returned_bits(m.served))]
         assert (seen[0]["form"], seen[0]["S"]) == forms[form], design
     seen.clear()
     assert f.lean_point(m, "two-stage", p | {"capped": True}) == p | {"capped": True, "lean": None,
@@ -544,6 +564,9 @@ def test_the_capped_curves_charge_at_most_what_a_request_serves(tmp_path):
     caps = out["scopes"]["datacenter week"]["captions"]
     assert (f"Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the "
             f"{out['inputs']['served_bits']['value']:,.0f} bits it serves") in caps["exfiltration"]
+    assert out["served"] == "cap"
+    assert (f"{out['inputs']['max_tokens_cap']['value']:,} tokens of 32 bits, at most the network certifier's "
+            f"registered response cap ({f.CAP_RULE}") in caps["exfiltration"]
     assert "card_influenceTwo_le_patterns" in caps["exfiltration_appendix"] and "Patterns" not in caps["exfiltration"]
     assert all(path.stat().st_size > 0 for path in render(out, "datacenter week", tmp_path)
                + render_appendix(out, "datacenter week", tmp_path))
@@ -555,11 +578,38 @@ def test_a_request_serves_each_token_as_the_token_selects_word():
     word: the census's mean request or, with `request="workload"`, the workload card's; another request is refused."""
     for request, tokens in (("census", f._entry(f.ADVERSARY, f.CENSUS_WORLD)["tokens_per_request"]),
                             ("workload", cards.load("workload", "GLM-5.3")["value"]["tokens"])):
-        c = f.cards("GLM-5.3", request)
-        assert c["tokens_per_request"].value == tokens
+        c = f.cards("GLM-5.3", request, served="request")
+        assert c["tokens_per_request"].value == tokens and "max_tokens_cap" not in c
         assert c["served_bits"].value == tokens * 8 * c["token_bytes"].value == tokens * 32
     with pytest.raises(ValueError, match="a request is one of"):
         f.cards(request="mean")
+
+
+def test_a_request_serves_at_most_the_certifiers_registered_cap(card_dir):
+    """Where the model's certifier card registers a response cap, a request serves at most that many tokens, each the
+    token select's 32-bit word, read through the schedule whose digest every record head binds; `served="request"`
+    keeps every token.  A schedule without a cap, or no certifier card, leaves every token served, and a cap it
+    doesn't register is refused."""
+    card = cards.load("certifier", "GLM-5.3")
+    schedule = NetworkCertifierParams(**card["value"]["schedule"])
+    c, every = f.cards("GLM-5.3"), f.cards("GLM-5.3", served="request")
+    assert c["max_tokens_cap"].value == schedule.max_tokens_cap
+    assert c["served_bits"].value == schedule.max_tokens_cap * 32 < every["served_bits"].value
+    assert schedule.digest.hex() in c["max_tokens_cap"].source and f.CAP_RULE in c["served_bits"].source
+    assert (c["served_bits"].status, c["served_bits"].provisional) == (card["status"], card["provisional"])
+    assert f.served_tokens(c)[:2] == (schedule.max_tokens_cap, 32) and f.CAP_RULE in f.served_tokens(c)[2]
+    assert f.served_tokens(every) == (every["tokens_per_request"].value, 32, "every one of the request's tokens")
+    assert "max_tokens_cap" not in f.cards("DeepSeek-V4-Pro")
+    with pytest.raises(ValueError, match="has no certifier card registering a response cap"):
+        f.cards("DeepSeek-V4-Pro", served="cap")
+    with pytest.raises(ValueError, match="served tokens are one of"):
+        f.cards(served="all")
+    uncapped = {k: v for k, v in card["value"]["schedule"].items() if k != "max_tokens_cap"}
+    cards.write(card | {"value": {"schedule": uncapped}}, force=True)
+    c = f.cards("GLM-5.3")
+    assert "max_tokens_cap" not in c and c["served_bits"].value == every["served_bits"].value
+    with pytest.raises(ValueError, match="has no certifier card registering a response cap"):
+        f.cards("GLM-5.3", served="cap")
 
 
 def test_the_headline_designs_win_at_the_measured_overhead(out):

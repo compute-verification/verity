@@ -27,7 +27,11 @@ def test_a_config_run_skips_the_match_and_word_checks_the_build(tmp_path, monkey
     calls = []
     for name in ("build", "match", "commit", "research_result", "timeline_report"):
         monkeypatch.setattr(r, name, lambda n=name: calls.append(n))
-    monkeypatch.setattr(r, "prepare", lambda: (calls.append("prepare"), setattr(r, "trap", True)))
+
+    def prepare() -> None:
+        calls.append("prepare")
+        r.trap = True
+    monkeypatch.setattr(r, "prepare", prepare)
     monkeypatch.setattr(RC, "word_check", lambda row: calls.append("word_check"))
     monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
     assert r.run() == 0
@@ -36,7 +40,7 @@ def test_a_config_run_skips_the_match_and_word_checks_the_build(tmp_path, monkey
 
 def test_the_word_check_gets_the_row_s_allowed_max_gates(tmp_path):
     from types import SimpleNamespace
-    seen = {}
+    seen: dict = {}
     env = {"VERITY_QWORD_MAX_GATES": "GumbelTopPTokenSelect_v2=30000000", "VERITY_QWORD_MAX_GATES_ALLOWED": "GumbelTopPTokenSelect_v2=30000000"}
     row = SimpleNamespace(env=SimpleNamespace(environ=env), d=str(tmp_path), row=ROW, cli=lambda *a: list(a),
                           run_tl=lambda name, to, log, cmd: seen.setdefault("cmd", cmd) and 0, verdict=lambda *a: None)
@@ -74,7 +78,7 @@ def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(t
     row = _row(tmp_path / "row")
     row.hidden_so, row.B = "/x/verity_fa2_matReqG.so", 1
     plain = row.commit_cmd([])
-    assert "--only-arm" not in plain and plain[plain.index("--pairs") + 1] == "3", "a row of record keeps its pairs"
+    assert "--only-arm" not in plain and plain[plain.index("--pairs") + 1] == "3", "a workload of record keeps its pairs"
 
 
 def test_the_commit_s_own_parser_takes_every_flag_the_config_run_passes(tmp_path):
@@ -188,8 +192,12 @@ def test_the_replay_stage_replays_the_one_bundle_beside_the_row_on_cpu(tmp_path,
     r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
     _pending_commit(r, bundles=1)
     r.ck = str(tmp_path)
-    seen = {}
-    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd: seen.update(st=st, cmd=cmd) or 0)
+    seen: dict = {}
+
+    def run_tl(st, to, lf, cmd) -> int:
+        seen.update(st=st, cmd=cmd)
+        return 0
+    monkeypatch.setattr(r, "run_tl", run_tl)
     RC.replay(r)
     cmd = seen["cmd"]
     assert seen["st"] == "replay.commit_replay" and cmd[cmd.index("commit-replay") + 1] == f"{r.d}/commit/replay_bundle_p1"
@@ -242,14 +250,19 @@ def test_the_tp_path_runs_a_config_run_at_worlds_2_4_and_8(W, tmp_path, monkeypa
     from verity_vllm.pipeline import cli, row
     from verity_vllm.pipeline.row_tp import TpRow
     ran = []
-    monkeypatch.setattr(TpRow, "run", lambda self: ran.append((self.W, self.config_run)) or 0)
+
+    def run(self) -> int:
+        ran.append((self.W, self.config_run))
+        return 0
+    monkeypatch.setattr(TpRow, "run", run)
     o = cli.parse("row", ["run", TP2, "OLMOE", "r", "v", "--sweep-dir", str(tmp_path), "--config-run", "1", "--world", str(W)], {})
     assert row.run_row(o, o.stages) == 0 and ran == [(W, True)]
 
 
 def _tp(tmp_path, *argv):
-    from tests.pipeline.test_row import TP_DENSE, _tp_row
     import os
+
+    from tests.pipeline.test_row import TP_DENSE, _tp_row
     t = _tp_row(tmp_path, TP_DENSE, *argv)
     os.makedirs(t.d, exist_ok=True)
     return t
@@ -260,7 +273,11 @@ def test_a_tp2_config_run_skips_the_match_and_word_checks_the_build(tmp_path, mo
     calls = []
     for name in ("build", "match", "commit", "research_result", "timeline_report"):
         monkeypatch.setattr(t, name, lambda n=name: calls.append(n))
-    monkeypatch.setattr(t, "prepare", lambda: (calls.append("prepare"), setattr(t, "trap", True)))
+
+    def prepare() -> None:
+        calls.append("prepare")
+        t.trap = True
+    monkeypatch.setattr(t, "prepare", prepare)
     monkeypatch.setattr(RC, "word_check", lambda row: calls.append("word_check"))
     monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
     assert t.run() == 0
@@ -273,11 +290,15 @@ def test_a_tp2_config_run_skips_the_match_and_word_checks_the_build(tmp_path, mo
 def test_the_tp2_word_check_counts_the_components_of_both_ranks(tmp_path, monkeypatch):
     t = _tp(tmp_path, "--config-run", "1")
     seen = []
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
+
+    def run_tl(stage, to, log, cmd) -> int:
+        seen.append(cmd)
+        return 0
+    monkeypatch.setattr(t, "run_tl", run_tl)
     RC.word_check(t)
     assert seen[0][seen[0].index("--world") + 1] == "2"
     r = _row(tmp_path / "tp1", "--config-run", "1")
-    monkeypatch.setattr(r, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
+    monkeypatch.setattr(r, "run_tl", run_tl)
     RC.word_check(r)
     assert seen[1][seen[1].index("--world") + 1] == "1"
 
@@ -299,7 +320,7 @@ def test_the_tp2_config_run_s_commit_is_one_instrumented_run_with_no_match(tmp_p
     plain = row.commit_cmd([])
     i = plain.index("--required-manifest")
     assert plain[i + 2:i + 4] == ["--match-dir", row.M] and plain[plain.index("--pairs") + 1:plain.index("--pairs") + 6] == ["3", "--warmup", "2", "--value-check", "--replay-workers"]
-    assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP row of record keeps its Match, pairs and value check"
+    assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP workload of record keeps its Match, pairs and value check"
 
 
 def test_tp_commit_s_own_parser_takes_every_flag_the_tp2_config_run_passes(tmp_path):
@@ -329,8 +350,16 @@ def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pas
     t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")      # never the host's pod-layout build (unreadable to other users on node 1)
     Path(t.hidden_so).touch()
     ran = []
-    monkeypatch.setattr(t, "manifest_global", lambda *a: ran.append("manifest_global") or 0)
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: ran.append(stage) or 0)
+
+    def manifest_global(*a) -> int:
+        ran.append("manifest_global")
+        return 0
+
+    def run_tl(stage, to, log, cmd) -> int:
+        ran.append(stage)
+        return 0
+    monkeypatch.setattr(t, "manifest_global", manifest_global)
+    monkeypatch.setattr(t, "run_tl", run_tl)
     if expect is None:
         t.commit()
         assert "commit PASS" in (Path(t.d) / "stages.txt").read_text()
@@ -387,7 +416,7 @@ def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
 
 
 @pytest.mark.parametrize("gm, outcome, why", [("PASS", "PASS", None), ("FAIL", "PASS", "match FAIL"), ("PASS", "FAIL", "commit FAIL")])
-def test_a_single_gpu_row_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
+def test_a_single_gpu_workload_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
     """GM-01 writes ``verdict`` (`check.match.global_match`), never the ``ok`` the record read, and a single-GPU Commit's summary
     decides nothing (its decision document is the row dir's verdict.json): a row chain is never refused as "match FAIL" or
     "commit FAIL" over a passing Match and Commit."""
@@ -629,7 +658,7 @@ def test_family_strata_draw_k_units_with_every_family_at_least_once():
 def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
     vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"}
            for fam, n in (("Gemm_v1", 900), ("RoPE_v1", 400), ("Embedding_v1", 3)) for i in range(n)]
-    keyed, per = family_strata(vus, 460, draw="uniform")
+    keyed, per = family_strata(vus, 460, design="uniform")
     assert per == 460 and {v["stratum"] for v in keyed} == {"all|all|all|all|all|all"}
     assert {v["family"] for v in keyed} == {"Gemm_v1", "RoPE_v1", "Embedding_v1"}, "each unit keeps its family for the record"
     picked, strata, tgt = sample(keyed, per, seed=11)
@@ -641,11 +670,11 @@ def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
 def test_a_record_that_names_no_draw_keeps_the_family_draw_and_an_unknown_draw_is_refused():
     from types import SimpleNamespace
 
-    from verity_vllm.pipeline.c2_replay import draw_of
+    from verity_vllm.pipeline.c2_replay import sampling_design_of
 
-    assert [draw_of(a) for a in (SimpleNamespace(), SimpleNamespace(replay_draw=None), SimpleNamespace(replay_draw="uniform"))] == [
+    assert [sampling_design_of(a) for a in (SimpleNamespace(), SimpleNamespace(replay_draw=None), SimpleNamespace(replay_draw="uniform"))] == [
         "family", "family", "uniform"]
     vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"} for fam in ("Gemm_v1", "RoPE_v1") for i in range(3)]
-    assert family_strata(vus, 4, draw=draw_of(SimpleNamespace())) == family_strata(vus, 4)
-    with pytest.raises(ValueError, match=r"replay draw 'stratified' is not one of \('family', 'uniform'\)"):
-        family_strata(vus, 4, draw="stratified")
+    assert family_strata(vus, 4, design=sampling_design_of(SimpleNamespace())) == family_strata(vus, 4)
+    with pytest.raises(ValueError, match=r"replay sampling design 'stratified' is not one of \('family', 'uniform'\)"):
+        family_strata(vus, 4, design="stratified")

@@ -7,19 +7,15 @@ static_assert."""
 from __future__ import annotations
 
 import ctypes
-import importlib.util
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
+import pfill_ref as R
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("pfill_ref", HERE / "pfill_ref.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
+KERNEL = HERE.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/filler"
 
 C0, C1 = 0x0123456789ABCDEF, 0xFEDCBA9876543210
 #: the NC 4 folds the dial wraps: ram (no flag), and the r9 LI and XIN13 (each its build flag)
@@ -41,7 +37,7 @@ def build(tmp_path_factory):
         if key not in cache:
             so = d / ("pfill_host_" + ("_".join(f.lstrip("-D") for f in flags) or "default") + ".so")
             subprocess.run([gxx, "-O2", "-std=c++17", "-shared", "-fPIC", "-Wall", "-Wextra", "-Werror",
-                            "-Wno-unknown-pragmas", *flags, "-o", str(so), str(HERE / "pfill_host.cpp")], check=True)
+                            "-Wno-unknown-pragmas", *flags, "-o", str(so), str(KERNEL / "pfill_host.cpp")], check=True)
             lib = ctypes.CDLL(str(so))
             lib.pfill_ref.restype = ctypes.c_uint64
             lib.pfill_ref.argtypes = [ctypes.c_uint64] * 3 + [ctypes.c_int] * 4
@@ -78,5 +74,5 @@ def test_pf_rounds_zero_is_rejected(tmp_path):
     if not gxx:
         pytest.skip("no g++")
     p = subprocess.run([gxx, "-O2", "-std=c++17", "-shared", "-fPIC", "-Wno-unknown-pragmas", "-DPF_ROUNDS=0",
-                        "-o", str(tmp_path / "bad.so"), str(HERE / "pfill_host.cpp")], capture_output=True, text=True)
+                        "-o", str(tmp_path / "bad.so"), str(KERNEL / "pfill_host.cpp")], capture_output=True, text=True)
     assert p.returncode != 0 and "PF_ROUNDS is 1..64" in p.stderr + p.stdout

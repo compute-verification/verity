@@ -135,7 +135,7 @@ class Activation:
 
 
 @dataclass(frozen=True)
-class Placement:
+class UnitPosition:
     """Unit ``index`` of the partition: root-body node ``node`` (a Call), batch member ``member`` (template queries), and
     ``path``, the (body node, member) steps from the Call's Definition down to the flat Definition holding the unit."""
 
@@ -147,7 +147,7 @@ class Placement:
 
 
 @dataclass
-class UnitClass:
+class ProofBlockClass:
     shape: str
     representative: ProofBlockCircuit
     definition: Any                # the flat Definition the representative lives in (to lift inputs through it)
@@ -236,14 +236,14 @@ class PartitionUnits:
             self._counts[fn.id] = got
         return got
 
-    def __iter__(self) -> Iterator[Placement]:
+    def __iter__(self) -> Iterator[UnitPosition]:
         i = 0
         for k, m, fn, cut in self._calls():
             for path, uc in self._expand(cut, fn):
-                yield Placement(i, k, m, path, uc)
+                yield UnitPosition(i, k, m, path, uc)
                 i += 1
 
-    def classes(self) -> dict[str, UnitClass]:
+    def classes(self) -> dict[str, ProofBlockClass]:
         """Every shape with a representative, the flat Definition it lives in, and how many units have it, without expanding
         separable cuts (a Definition's members share their callee's circuits)."""
         total: Counter = Counter()
@@ -257,7 +257,7 @@ class PartitionUnits:
             if key is not None:
                 by_def[key] = c
             total.update(c)
-        return {s: UnitClass(s, *self._reps[s], n) for s, n in total.items()}
+        return {s: ProofBlockClass(s, *self._reps[s], n) for s, n in total.items()}
 
 
-__all__ = ["shape_digest", "ProofBlockCircuit", "Activation", "Placement", "UnitClass", "PartitionUnits"]
+__all__ = ["shape_digest", "ProofBlockCircuit", "Activation", "UnitPosition", "ProofBlockClass", "PartitionUnits"]

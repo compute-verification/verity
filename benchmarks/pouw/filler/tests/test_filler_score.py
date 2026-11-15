@@ -6,25 +6,11 @@ fold reading, modelled served part and the TP score."""
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
+import arms as A
 import pytest
+import score
+import scoring as S
 
-FILLER = Path(__file__).resolve().parents[1]
-
-
-def _load(name):
-    spec = importlib.util.spec_from_file_location(name, FILLER / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-A = _load("arms")
-S = _load("scoring")
 share = S.share
 
 
@@ -352,6 +338,17 @@ def test_clock_gate():
     assert not S.clock_gate(stats, [])["ok"]
 
 
+def test_parse_smi_says_which_rows_it_left_out(caplog):
+    """A row with a field that is no number is left out of the reading and named in the log, never dropped silently."""
+    good = "2092, 3090, 410.5, 600.00, [N/A], 2430, 0x0"
+    with caplog.at_level("WARNING"):
+        assert len(S.parse_smi(good + "\n")) == 1 and not caplog.records
+        assert len(S.parse_smi(f"{good}\n2092, 3090, [N/A], 600.00, 2430, 2430, 0x0\nshort, row\n")) == 1
+    assert [r.getMessage() for r in caplog.records] == [
+        ("parse_smi: 1 row(s) with a field that is no number are left out, the first "
+         "'2092, 3090, [N/A], 600.00, 2430, 2430, 0x0'")]
+
+
 def test_margin_per_point():
     """filler-scorer/v3's margin readout: the limit less each point's slowdown, with its worst and best rounds', so a
     point whose rounds reach the limit shows it has none even where its median passes (decode 32/1K, whose serving alone
@@ -427,8 +424,8 @@ def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
         for noise in ("bits01", "pm1"):
             applies, why = read(noise, K_TILE + [mma])
             assert applies == "unproven" and all(any("not all one of" in w for w in ws) for ws in why.values())
-    assert read("bits01", K_TILE + ["I2F.S32 R9, R28"])[1]["theorem-k"] == ["FP or conversion ops in the filler's "
-                                                                            "kernel: {'I2F.S32': 1}"]
+    assert read("bits01", K_TILE + ["I2F.S32 R9, R28"])[1]["theorem-k"] == [("FP or conversion ops in the filler's "
+                                                                             "kernel: {'I2F.S32': 1}")]
     assert read("pm1", E2M1_TILE + ["FFMA R9, R28, 0.5, RZ"])[1]["theorem-e"][0].startswith("FP or conversion")
     assert S.kernel_facts(sass((DFILL, K_TILE + ["HFMA2.MMA R3, -RZ, RZ, 0, 0"])))["fp_free"]  # a constant load
     for tile in (K_TILE, E2M1_TILE):  # FILL v1's accumulate into the chain's register: chained, whatever it declares
@@ -555,14 +552,14 @@ def test_program_facts_read_the_filler_wherever_it_is_called_from():
     assert pf["violations"] == [] and pf["filler"]["fp_free"] and pf["filler"]["path_helpers"] == [f"fscore: {rem}"]
     pf = S.program_facts({"fscore": nvd(serving(before=[f"CALL.REL.NOINC `({rem})"]), (WARP, False, WARP_BODY),
                                         (rem, False, ["STG.E desc[UR4][R4.64], R6", "RET.REL.NODEC R2 `(x)"]))})
-    assert pf["violations"] == [f"{rem} (fscore), called on the filler warps' path: STG.E at 0000 (a store that can "
-                                "write a receipt)"]
+    assert pf["violations"] == [(f"{rem} (fscore), called on the filler warps' path: STG.E at 0000 (a store that can "
+                                 "write a receipt)")]
     # what dfill_k itself calls is the filler's: its FP ops fail fp_free
     pf = S.program_facts({"fscore": nvd(serving(), (WARP, False, [f"CALL.REL.NOINC `({rem})", *WARP_BODY]),
                                         (rem, False, ["I2F.U64.RP R6, R4", "RET.REL.NODEC R2 `(x)"]))})
     assert not pf["filler"]["fp_free"] and pf["filler"]["helpers"] == [f"fscore: {rem}"]
-    assert S.filler_entry_v4("bits01", pf)["failed"]["theorem-k"] == ["FP or conversion ops in the filler's code: "
-                                                                      "{'I2F.U64.RP': 1}"]
+    assert S.filler_entry_v4("bits01", pf)["failed"]["theorem-k"] == [("FP or conversion ops in the filler's code: "
+                                                                       "{'I2F.U64.RP': 1}")]
     # FILL v1's chain in the clone reads chained; a split filler's kernel reads as v3 reads it
     chain = [x.replace("COL, RZ", "COL, R28") for x in WARP_BODY]
     assert S.filler_entry_v4("bits01", S.program_facts({"f": nvd(serving(), (WARP, False, chain))}))["applies"] == \
@@ -683,7 +680,11 @@ def test_record_limits_are_checked_when_the_arm_loads():
     assert problems(parent="art:" + "0" * 64) == [] and problems(parent="fill-v1") == []
     assert any("lineage.parent 5" in p for p in problems(parent=5))
     assert any("list of tags" in p for p in problems(mechanism="place:split"))
+    for tags in (["place:split", 5], ["place:split", " "]):  # one entry among the tags that is not a tag
+        assert any("list of tags" in p for p in problems(mechanism=tags))
+    assert problems(mechanism=("place:split", "prefill:none")) == []
     assert any("canonical JSON" in p for p in problems(approach={1, 2}))
+    assert any("past the store's meta limit" in p for p in problems(approach="a" * 300 * 1024))
     assert any("don't make a variant" in p for p in problems(sources=v1.sources + v1.sources[:1]))
     assert any("don't make a variant" in p for p in problems(sources=("/etc/hostname",)))
     assert any("filler.noise" in p for p in A.check_arm(dataclasses.replace(v1, filler=A.Filler(noise="gauss"))))
@@ -703,10 +704,39 @@ def test_arms():
     assert A.placed(v1, "decode", 8, 16384).fill_sms == 124  # B 32's longest L ≤ 16K: (32, 8K)
     assert S.honesty(v1, all_points(), S.points())["ok"]
     assert not S.honesty(v1, all_points(), S.points(), has_filler=True)["ok"]  # no positive control
-    with pytest.raises(A.ArmError):
-        A.Colocation("split", 0)
+    assert A.point_lookup({(1, 10): "a", (2, 10): "b", (4, 10): "c"}, 8, 10) == "c"  # past the largest B, the largest B's
+    assert A.Colocation("split", 1).fill_sms == 1 and A.Colocation("split", A.SMS - 1).fill_sms == A.SMS - 1
+    for sms in (0, A.SMS):  # a split's filler SMs are in (0, SMS)
+        with pytest.raises(A.ArmError):
+            A.Colocation("split", sms)
+    with pytest.raises(AttributeError):
+        A.NONE.fill_sms = 4  # the one `NONE` every arm returns can't be changed under them
     with pytest.raises(A.ArmError):
         A.load("no-such-arm")
+
+
+def test_an_arm_outside_its_contract_is_refused(monkeypatch):
+    """`check_arm` names what is wrong with an arm's name, lineage and sources, and `load` refuses the arm with every
+    problem in its message; an arm's module outside the filler's directory is refused before it is run."""
+    import dataclasses
+
+    v1 = A.FillV1()
+
+    def wrong(**kw):
+        return A.check_arm(dataclasses.replace(v1, **kw))
+
+    for name in ("Fill_V1", "-v1", "", 5):
+        assert wrong(name=name) == [f"name {name!r} is not [a-z0-9-]+"]
+    for lin in (None, {**v1.lineage, "hypothesis": ""}, {**v1.lineage, "mechanism": []}):
+        assert wrong(lineage=lin) == ["lineage names a hypothesis and mechanism tags"]
+    for srcs in ((), v1.sources + ("benchmarks/pouw/filler/no_such.cu",)):
+        assert wrong(sources=srcs) == [f"sources {srcs!r} are repository files"]
+    monkeypatch.setitem(A.ARMS, "two-wrong", lambda: dataclasses.replace(v1, name="Fill_V1", choice=None))
+    with pytest.raises(A.ArmError) as ex:
+        A.load("two-wrong")
+    assert str(ex.value) == "arm two-wrong: name 'Fill_V1' is not [a-z0-9-]+; choice is one line"
+    with pytest.raises(A.ArmError, match="an arm's module lives under"):
+        A.load("benchmarks/pouw/harness/ledger.py:Ledger")
 
 
 #: pf_absorb<NC>'s MMA word entries as the sm_120a builds compile them (c259a89b5): one 16832 IMMA's four
@@ -895,12 +925,12 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
         assert e["served_part_modelled"] == pytest.approx(0.9 * e["serving_macs"] / e["capacity_macs"])
     d = next(e for e in sc["entries"] if e["kind"] == "decode")
     v4 = S.decode_entry(stats[("decode", d["B"], d["L"])], d["B"], d["L"])
-    pass_ms = 1.57 * v4["serving_macs"] / (0.71 * S.cap(v4["mhz"])) * 1e3
+    pass_ms = 1.57 * v4["serving_macs"] / (0.71 * S.capacity(v4["mhz"])) * 1e3
     u = max(0.71, S.defer_at(S.DEFER_FIT, "u", 2, d["B"], d["L"]))
     assert d["served_model"]["defer_d"] == pytest.approx(u * (1 - shown)) and d["served_model"]["defer_s"] == shown
     assert d["t1_ms"] == pytest.approx(v4["t1_ms"] + shown * pass_ms)
     assert d["filler_macs"] == pytest.approx(
-        max(0.0, v4["filler_macs"] - u * (1 - shown) * pass_ms * S.cap(v4["mhz"]) * 1e-3))
+        max(0.0, v4["filler_macs"] - u * (1 - shown) * pass_ms * S.capacity(v4["mhz"]) * 1e-3))
     p = next(e for e in by.values() if e["kind"] == "prefill")
     st = stats[("prefill", S.PREFILL_M, 0)]
     assert p["t1_ms"] == pytest.approx(p["t1_measured_ms"] + (0.57 + 0.13) * (st["alone_ms"] + share.FA2_MS_8192))
@@ -919,14 +949,14 @@ def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
     held flat) and its displacement u(1 − s), u the larger of TP 2's r3 fit and the MAC-for-MAC rule; read at B and L
     clamped to the points."""
     def point(tp, b, l, s, u, mhz=2000.0, served=1e12):
-        plain = served / (0.71 * S.cap(mhz)) * 1e3
-        lost = u * (plain - s * plain) * S.cap(mhz) * 1e-3
+        plain = served / (0.71 * S.capacity(mhz)) * 1e3
+        lost = u * (plain - s * plain) * S.capacity(mhz) * 1e-3
         return {"T": 4096, "tp": tp, "B": b, "L": l, "base_ms": 40.0, "defer_ms": 40.0 + s * plain, "dalone_ms": plain,
                 "mhz": mhz, "served_macs": served, "defer_fill_macs": 5e12 - lost, "phase_slowdown": 1.0,
                 "phase_fill_macs": 5e12}
 
-    law = {2: (0.8, 1.1), 4: (0.6, 1.4)}
-    pts = [point(t, b, l, law[t][0] * (b / 32) ** -0.5 * (l / 2048) ** 0.1, law[t][1] * (b / 32) ** -0.2)
+    coef = {2: (0.8, 1.1), 4: (0.6, 1.4)}
+    pts = [point(t, b, l, coef[t][0] * (b / 32) ** -0.5 * (l / 2048) ** 0.1, coef[t][1] * (b / 32) ** -0.2)
            for t in (2, 4) for b, l in ((32, 2048), (64, 2048), (128, 8192), (256, 2048))]
     f = S.defer_fit(4096, pts)
     assert f["s"]["intercept"] == pytest.approx({2: 0.8, 4: 0.6}) and f["u"]["intercept"] == pytest.approx({2: 1.1, 4: 1.4})
@@ -956,7 +986,7 @@ def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
         assert dp["added_ms"] == pytest.approx(m["added_ms"] + r["added_err_ms"])
         assert dp["displaces"] / m["lost_macs"] == pytest.approx(1 + r["d_resid"])
         t1 = p["base_ms"] * p["phase_slowdown"] + dp["added_ms"]
-        share = max(0.0, p["phase_fill_macs"] - dp["displaces"]) / (S.cap(p["mhz"]) * t1 * 1e-3)
+        share = max(0.0, p["phase_fill_macs"] - dp["displaces"]) / (S.capacity(p["mhz"]) * t1 * 1e-3)
         assert 100 * share == pytest.approx(100 * r["fill_share"] + r["fill_err_pts"])
     assert S.defer_rates(2, 1, 1024) == S.defer_rates(2, 32, 2048)
     assert S.defer_rates(4, 1024, 65536) == S.defer_rates(4, 256, 8192)
@@ -997,7 +1027,7 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     assert dp["s"] == pytest.approx(min(1.0, S.DEFER_FIT_TP["s"]["intercept"][2])) and e["served_model"]["defer_s"] == dp["s"]
     assert dp["d"] == pytest.approx(S.DEFER_FIT_TP["d"]["intercept"][2]) and e["served_model"]["defer_d"] == dp["d"]
     assert e["t1_ms"] == pytest.approx(42.0 + dp["added_ms"]) and e["filler_measured_macs"] == 1.5e12
-    c = S.cap(2000.0) * e["t1_ms"] * 1e-3
+    c = S.capacity(2000.0) * e["t1_ms"] * 1e-3
     assert e["filler_part"] == pytest.approx(0.45 * (1.5e12 - dp["displaces"]) / c)
     assert e["served_part_modelled"] == pytest.approx(0.9 * 1e12 / c) and e["time"] == pytest.approx(2 * e["t1_ms"] / 40.0)
     assert e["time_v4"] == pytest.approx(2 * 42.0 / 40.0)  # v4's form weighs by v4's wall time, no modelled pass
@@ -1012,4 +1042,23 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     sc = S.tp_score([e])
     assert "SCORE_TP" not in sc and len(sc["missing"]) == len(S.TP_SUITE) - 1
     assert sc["by_tp"][2]["coverage"] == pytest.approx(e["coverage"])
-    assert e["coverage_v4_form"] == pytest.approx((0.225 * 1e12 + 0.45 * 1.5e12) / (S.cap(2000.0) * 42.0e-3))
+    assert e["coverage_v4_form"] == pytest.approx((0.225 * 1e12 + 0.45 * 1.5e12) / (S.capacity(2000.0) * 42.0e-3))
+
+
+def test_show_tp_prints_each_gate_from_its_own_dict(tmp_path, capsys):
+    """`score.show_tp` prints a line a gate: its verdict, then the detail it reads from that gate's dict of the TP
+    report, here of an out dir whose rank 1 is short of a pf_gate kind and of reps and has a bad receipt."""
+    out = tmp_path / "run" / "out"
+    (out / "set0").mkdir(parents=True)
+    (out / "set0" / "settings.txt").write_text("NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64\n")
+    (out / "set0" / "rank0.jsonl").write_text(tp_log(0) + "\n")
+    (out / "set0" / "rank1.jsonl").write_text(tp_log(1, rec_bad=1, kinds=("fixed", "up"), reps=5) + "\n")
+    score.show_tp(score.tp_report([out], None, None, None))
+    said = dict(ln.removeprefix("  gate ").split(": ", 1) for ln in capsys.readouterr().out.splitlines()
+                if ln.startswith("  gate "))
+    assert said == {
+        "slowdown": "FAIL  worst 1.025 at (2, 32, 2048)",
+        "pf_gate": "FAIL  2 ranks: run/set0 rank 1: kinds ok ['fixed', 'up']",
+        "receipts": "FAIL  32 checked, bad: ['(2, 32, 2048) repeat 0 rank 1', '(2, 32, 2048) repeat 1 rank 1']",
+        "nccl": "pass  ", "filler_paths": "pass  no program facts: the filler reads its floor", "dram": "pass  ",
+        "clocks": "FAIL  ", "honest": "pass  whole kernel ≤ 0.127 of peak"}

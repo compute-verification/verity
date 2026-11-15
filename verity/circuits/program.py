@@ -103,7 +103,7 @@ class Program:
     `registered`: the names of `fn`'s parameters bound at registration; every other parameter is bound per run. `theta`: the
     names of `fn`'s parameters that are the model's weights. `annotations["theta"]` is the Program's own (their input nodes):
     one passed in, which may name another layout's nodes, is dropped.
-    `strict`: a guard (`verity.definitions.circuits.operations.program_data`, root -> the data it holds); the Program is refused when it holds
+    `strict`: a guard (`verity.circuits.operations.program_data`, root -> the data it holds); the Program is refused when it holds
     any. Off by default until programs move their data to inputs."""
 
     def __init__(self, fn: SpecializedDefinition | CompositeDefinition, annotations: dict[str, Any] | None = None,

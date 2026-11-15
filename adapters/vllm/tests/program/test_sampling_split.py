@@ -23,13 +23,17 @@ import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
-REG = Path(importlib.util.find_spec("verity.definitions.registry").origin).parent
+_SPEC = importlib.util.find_spec("verity_vllm.definitions.registry")
+assert _SPEC is not None and _SPEC.origin is not None
+REG = Path(_SPEC.origin).parent
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 REWRITE = ("a change meant to move the family's Definitions rewrites the pins with "
-           "`uv run python tools/verity/check/pins.py --write adapters/vllm/tests/program/data/sampling_split_digests.json`")
-PKG = "verity.definitions.registry"
+           "`uv run python tools/check/pins.py --write adapters/vllm/tests/program/data/sampling_split_digests.json`")
+PKG = "verity_vllm.definitions.registry"
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.circuits"
+#: the served circuits, whose shared modules (`evidence`, `numerics`) a Definition module may read beside `verity`
+SERVED = "verity_vllm.definitions"
 
 DEFINITION_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_word_gates", "topp_keep_builder", "topp_words", "topp_geometry")
 TWIN_MODULES = ("sampling_rows", "sampling_topp_difftest", "topp_split", "sampling_twins")
@@ -60,7 +64,11 @@ SLOW_TRACE = ("GumbelLane_v1", "GumbelLaneTail_v1", "GumbelNoiseGroup_v1{G=1}", 
 
 def defining_module(fn) -> str | None:
     """The module whose code a Definition runs: a primitive's evaluator's, a composite's body's, a traced Boolean one's build's."""
-    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits.defs import (
+        CompositeDefinition,
+        PrimitiveDefinition,
+        SpecializedDefinition,
+    )
 
     d = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     f = d.evaluate if isinstance(d, PrimitiveDefinition) else getattr(d, "build", d.body) if isinstance(d, CompositeDefinition) else None
@@ -73,11 +81,11 @@ def family_definitions() -> dict[str, object]:
     import importlib
 
     from verity.circuits.defs import FunctionDefinition
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
 
     load()
     mods = {f"{PKG}.{m}" for m in FAMILY_MODULES}
-    out = {}
+    out: dict = {}
     for m in sorted(mods):
         if (REG / f"{m.rsplit('.', 1)[1]}.py").exists():
             for v in vars(importlib.import_module(m)).values():
@@ -99,9 +107,10 @@ def _statics(body: str) -> dict:
 
 def resolve(key: str, defs: dict[str, object]):
     """The Definition a spec id names: the registry's binding (`query.call_scope.specialization`), else a family module's own."""
-    from verity.definitions.call_scope import specialization
+    from verity.circuits.call_scope import specialization
 
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", key)
+    assert m is not None, key
     fam, statics = m[1], _statics(m[2] or "")
     try:
         fn = specialization(fam, statics)
@@ -114,7 +123,7 @@ def resolve(key: str, defs: dict[str, object]):
 
 
 def pin(key: str, defs: dict[str, object]) -> dict:
-    from verity.definitions.word import closure_digest
+    from verity.circuits.word import closure_digest
 
     fn = resolve(key, defs)
     return {"id": fn.id, "digest": closure_digest(fn)}
@@ -148,6 +157,16 @@ def spec_keys(defs: dict[str, object]) -> list[str]:
     return out
 
 
+def fixture_text(modules: dict[str, str | None], pins: dict[str, dict]) -> str:
+    """The fixture's text: a line for each Definition's module, then a line for each pin, in the order given."""
+    lines = ["{", '  "modules": {', *[f"    {json.dumps(k)}: {json.dumps(v)}," for k, v in modules.items()]]
+    lines[-1] = lines[-1].rstrip(",")
+    lines += ["  },", '  "pins": {', *[f"    {json.dumps(k)}: {json.dumps(v)}," for k, v in pins.items()]]
+    lines[-1] = lines[-1].rstrip(",")
+    lines += ["  }", "}"]
+    return "\n".join(lines) + "\n"
+
+
 def _load() -> dict:
     return json.loads(FIXTURE.read_text())
 
@@ -179,6 +198,11 @@ def test_the_pins_cover_every_circuit_check_target_of_the_family():
     have = set(_load()["pins"])
     want = {"GumbelTopPTokenSelect_v1{V=128256}", "TopPKeepWord_v1{V=16,S=4}", "GumbelSelectF32_v2{V=2}"}
     assert len(have) > 100 and want <= have, REWRITE
+
+
+def test_the_fixture_is_the_text_its_writer_writes():
+    doc = _load()
+    assert fixture_text(doc["modules"], doc["pins"]) == FIXTURE.read_text(), REWRITE
 
 
 # --- the boundary --------------------------------------------------------------------------------------------------------------
@@ -216,7 +240,7 @@ def test_a_definition_module_imports_only_verity_and_definition_modules(module):
     path = REG / f"{module}.py"
     assert path.exists(), f"{module}: no such module (moved? update DEFINITION_MODULES)"
     bad = sorted({f"{module}.py:{line}: imports {mod}" for mod, line, fn in _imports(path)
-                  if not (_is_stdlib(mod) or mod.split(".")[0] in ("numpy", "verity") or mod in allowed or mod == CATALOG
+                  if not (_is_stdlib(mod) or mod.split(".")[0] in ("numpy", "verity") or mod.startswith(SERVED + ".") or mod in allowed or mod == CATALOG
                           or mod.startswith(CATALOG + ".") or (module, fn, mod) in EXCEPTIONS)})
     assert not bad, "\n".join(bad)
 
@@ -237,11 +261,7 @@ if __name__ == "__main__":
         sys.exit("usage: test_sampling_split.py --write")
     defs = family_definitions()
     keys = spec_keys(defs)
-    data = {"modules": {k: defining_module(d) for k, d in sorted(defs.items())}, "pins": {k: pin(k, defs) for k in keys}}
-    lines = ["{", '  "modules": {', *[f"    {json.dumps(k)}: {json.dumps(v)}," for k, v in data["modules"].items()]]
-    lines[-1] = lines[-1].rstrip(",")
-    lines += ["  },", '  "pins": {', *[f"    {json.dumps(k)}: {json.dumps(v)}," for k, v in data["pins"].items()]]
-    lines[-1] = lines[-1].rstrip(",")
-    lines += ["  }", "}"]
-    FIXTURE.write_text("\n".join(lines) + "\n")
-    print(f"{FIXTURE}: {len(data['modules'])} Definitions, {len(data['pins'])} pins")
+    modules = {k: defining_module(d) for k, d in sorted(defs.items())}
+    pins = {k: pin(k, defs) for k in keys}
+    FIXTURE.write_text(fixture_text(modules, pins))
+    print(f"{FIXTURE}: {len(modules)} Definitions, {len(pins)} pins")

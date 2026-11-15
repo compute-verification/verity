@@ -2,7 +2,7 @@
 # Drive: `research queue drive` ticks, ci's landing automation, from the control pod. Each pass fetches
 # origin/main into /data/drive/verity and runs one tick from that tree's tools/research, checked out at the commit
 # /data/drive/deployed pins (`drive.sh deploy SHA`, a landed commit) or else at main's tip, in that
-# checkout, as lane ci (RESEARCH_LANE), with its flags from tools/verity/check/drive.toml at main (read fresh each tick, their one
+# checkout, as lane ci (RESEARCH_LANE), with its flags from tools/check/drive.toml at main (read fresh each tick, their one
 # source) plus whatever /data/drive/args holds (`#` lines skipped): only flags drive.toml's `command_line` lets override its keys
 # (`--on`), and `--priority-file /data/drive/priority`, drive's priority list, whose order is the landing order (a `--first`
 # there refuses the tick); a `--config FILE` there is refused unless every key it sets has main's value; then sleeps 120 s.
@@ -123,12 +123,13 @@ deploy() {
     || { echo "drive: $sha is on neither checked nor main: deploy only landed code" >&2; return 1; }
   echo "$sha" > "$DIR/deployed.new" && mv "$DIR/deployed.new" "$DIR/deployed" && echo "drive: runs $sha from the next tick"
 }
-# Under the tick lock: each train checkout in $TRAIN_TREES unchanged for an hour and no process's cwd, with its log, and the queue
-# clone's worktree records of what is gone; and $REPO's packs folded into one once they pass 50: each checkout there fetches the
-# blobs it lacks as a pack of its own, and git's auto maintenance never repacks a partial clone's such packs
+# Under the tick lock: each train checkout in $TRAIN_TREES unchanged for an hour and no process's cwd, with its log, and each
+# after-landing tree there as old and as idle (`research-after-land-*`, which a killed job leaves), and the queue clone's worktree
+# records of what is gone; and $REPO's packs folded into one once they pass 50: each checkout there fetches the blobs it lacks as
+# a pack of its own, and git's auto maintenance never repacks a partial clone's such packs
 prune_trees() {
   used=$(for p in /proc/[0-9]*; do readlink "$p/cwd"; done 2>/dev/null | sort -u)
-  for t in $(find "$TRAIN_TREES" -mindepth 1 -maxdepth 1 -type d -name 'train-*' -mmin +60); do
+  for t in $(find "$TRAIN_TREES" -mindepth 1 -maxdepth 1 -type d \( -name 'train-*' -o -name 'research-after-land-*' \) -mmin +60); do
     printf '%s\n' "$used" | grep -q "^$t\(/\|$\)" && continue
     [ -n "$(find "$t" -mmin -60 -print -quit 2>/dev/null)" ] && continue
     rm -rf -- "$t" "$t.log"
@@ -154,7 +155,7 @@ unlocked() {
 }
 # Drive's merged trees (the sync's codemod worktrees) go under --preflight-root, on the container disk: under TMPDIR, on the
 # network volume, each worktree add and remove takes minutes.
-tick() { locked queue drive --config tools/verity/check/drive.toml --preflight-root "$FAST/preflight" $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
+tick() { locked queue drive --config tools/check/drive.toml --preflight-root "$FAST/preflight" $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
 case ${1:-} in
   start) (exec 8> "$TICK"; flock 8; fast_clones) \
           || { echo "drive: not started: seeding $REPO and the queue's clone from $DIR on the volume failed" >&2; exit 1; }

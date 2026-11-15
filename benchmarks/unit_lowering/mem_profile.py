@@ -22,7 +22,9 @@ import threading
 import time
 import tracemalloc
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
 from run import BIND
 
@@ -34,10 +36,11 @@ H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 PHASES = (("unit_lowering", "CS.unit_lowering"), ("ir_lower.lower", "IL.lower"), ("ir_lower.standalone", "IL.standalone"),
           ("ir_lower.lower_gates", "IL.lower_gates"), ("ir_lower.layout", "IL.layout"),
           ("fast_stage.ands_layout", "fast_stage.ands_layout"), ("Program", "CS.Program"), ("program_digest", "CS.program_digest"),
-          ("circuit.compose_to", "FC.compose_to"), ("circuit.compose", "FC.compose"), ("compose.netlist", "FC._write_netlist"),
+          ("circuit.compose_to", "FC.compose_to"), ("circuit.compose", "FC.compose"), ("compose.circuit_description", "FC._write_circuit_description"),
           ("compose.dummy", "FC._dummy"), ("circuit.digests", "FC._file_digests"), ("circuit.meta_of", "FC.meta_of"))
 CENSUS = ("ir_lower.lower_gates", "fast_stage.ands_layout")
 GIB = 1 << 30
+T = TypeVar("T")
 
 
 def status(field: str) -> int:
@@ -64,7 +67,7 @@ class Phases:
     def __init__(self, at_exit):
         self.stack, self.rows, self.at_exit, self.resets, self.entered = [], [], at_exit, True, 0
 
-    def wrap(self, name: str, fn):
+    def wrap(self, name: str, fn: Callable[..., T]) -> Callable[..., T]:
         def wrapped(*a, **k):
             self.enter(name)
             try:
@@ -109,7 +112,7 @@ def census(top: int = 20) -> list[dict]:
     return [{"type": t, "count": n[t], "bytes": b} for t, b in size.most_common(top)]
 
 
-def sites(snapshot, key: str, top: int) -> list[dict]:
+def sites(snapshot: tracemalloc.Snapshot, key: str, top: int) -> list[dict]:
     return [{"bytes": s.size, "count": s.count, "where": [f"{f.filename.replace(str(ROOT) + '/', '')}:{f.lineno}" for f in s.traceback]}
             for s in snapshot.statistics(key)[:top]]
 
@@ -170,9 +173,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.frames:
         tracemalloc.start(a.frames)
     if a.unit == "tile":
-        import h1unit as U
+        import h1form as F
         path = a.scratch / f"k{a.k}.circuit.txt"
-        st = phases.wrap("stager", lambda: U.Shape(a.k, *a.tile).stager(PC.NAME, circuit=path, bind=BIND))()
+        st = phases.wrap("stager", lambda: F.shape(a.k, *a.tile).stager(PC.NAME, circuit=path, bind=BIND,
+                                                                             layout=F.layout()))()
     else:
         import lanes
         st = phases.wrap("stager", lambda: lanes.stage(a.unit, a.k, *a.tile, a.scratch, ROOT))()

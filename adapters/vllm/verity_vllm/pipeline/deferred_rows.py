@@ -18,7 +18,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -28,6 +28,7 @@ from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import cpu_replay as CPU
+from verity_vllm.pipeline import expert_rows as EX
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
 
@@ -131,12 +132,15 @@ def opened_weights(r: SimpleNamespace, checkpoint: Any = None, threads: int = 8)
 
 def from_bundle(bundle: str | os.PathLike, row_dir: str, partition_file: str, out_dir: str | os.PathLike, *, checkpoint: Any = None,
                 weights: Callable | None = None, required_manifest: str | None = None, threads: int = 8,
-                workers: int | None = None) -> dict[str, Any]:
+                workers: int | None = None, tables: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The serving rows of a deferred Commit, from its sealed replay bundle opened against its record (`of_record`), and the weights
     opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
-    without one, only the tensors the bundle carries).  ``weights`` (tests) replaces the opened weights."""
+    without one, only the tensors the bundle carries).  ``weights`` (tests) replaces the opened weights.  ``tables``: the
+    per-expert cut's tables committed under the committer's key and registration (`expert_rows.of_request`), read before the
+    bundle is opened, so a registration without its key is refused first."""
     from verity_vllm.check.oracle_compare import OpenedReader
 
+    tables = EX.of_request(tables)
     r = of_record(bundle, row_dir, required_manifest)
     if weights is None:
         weights = opened_weights(r, checkpoint, threads)
@@ -147,13 +151,13 @@ def from_bundle(bundle: str | os.PathLike, row_dir: str, partition_file: str, ou
                             manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
                             row=(r.ctx.get("args") or {}).get("label"), arrivals=r.arrivals, program_dirs=r.program_dirs,
                             digests=r.digests, committer=committer, workers=workers,
-                            stand_in=stand_in(bytes(r.run.run_root).hex(), r.bundle["manifest_sha256"], r.commitment))
+                            stand_in=stand_in(bytes(r.run.run_root).hex(), r.bundle["manifest_sha256"], r.commitment), tables=tables)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
-    """verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O [--checkpoint-dir CK ...]: a deferred Commit's serving rows
-    and one-stage registration, from its sealed replay bundle (`from_bundle`)."""
+    """verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O [--checkpoint-dir CK ...] [--tables REG --tables-key KEY]:
+    a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle (`from_bundle`)."""
     bundle: str = option("bundle", help="the sealed replay bundle (<commit out>/replay_bundle_p<pair>)")
     row_dir: str = option("--row-dir", help="the row dir holding the Build's Programs of record (and manifest.json)")
     partition: str = option("--partition", help="the verifier's partition file: {templates, law, scope?, partition_digest?}")
@@ -167,6 +171,8 @@ class Options:
                                            help="the Commit's required manifest (default: its recorded path, else <row-dir>/manifest.json)")
     threads: int = option("--threads", type=int, default=8, help="threads opening the weights")
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")
+    tables_key: str | None = option("--tables-key", default=None, help="the committer's key file its per-expert tables are registered under")
+    tables: str | None = option("--tables", default=None, help="the per-expert tables' registration (records.expert_tables)")
 
 
 def main(o: Options) -> int:
@@ -176,7 +182,7 @@ def main(o: Options) -> int:
         ck = WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
     try:
         from_bundle(o.bundle, o.row_dir, o.partition, o.out, checkpoint=ck, required_manifest=o.required_manifest, threads=o.threads,
-                    workers=o.workers)
+                    workers=o.workers, tables={"key": o.tables_key, "registration": o.tables} if o.tables else None)
     except CPU.Refused as e:
         print(f"[serving-rows] REFUSED: {e}", flush=True)
         return 2

@@ -14,7 +14,7 @@ A task is one of:
                 compiled, dependencies included (the distinct `M` of its `lean-audit/**/build*.log` lines `Built M (t)`), against
                 the modules of the packages it audited (each package's `AUDIT P: ... in N modules` line, once), the rest of which it
                 restored or replayed. A records run without that result (cancelled or killed) is unfinished: counted, not timed.
-  lean-audit, lean-suites, lean-build, lean-changed
+  lean-audit, lean-suites, lean-build
                 one such step of a recorded check (`check.py`'s result: `check/v1`, a shard's or a deferred run's), its `seconds`,
                 which for `lean-audit` include its wait for a Lean audit slot. One check.py audits a step's packages together, so a
                 `lean-audit` step counts once in its kind and once under each package it audited (its result's `reuse`, the
@@ -39,6 +39,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
+from .pods.nebius.slot_only import check_file
 from .queue import FAST_KIND, LEAN_AUDIT_STEP
 from .queue_stats import pct, ts
 from .run_times import slot_wait
@@ -48,10 +49,10 @@ HOURS, OVER_MIN = 24.0, 15.0
 LOOKBACK_H = 12.0
 #: run records read at once
 READ_JOBS = 32
-CHECK = "tools/verity/check/check.py"
+CHECK = check_file("check.py")
 RECORDS = re.compile(r"lean_changed\.py --records (\S+)")
 SUITES_STEP = "lean-suites"
-STEPS = (LEAN_AUDIT_STEP, SUITES_STEP, "lean-build", "lean-changed")
+STEPS = (LEAN_AUDIT_STEP, SUITES_STEP, "lean-build")
 KINDS = ("records", *STEPS)
 WORK = re.compile(r"^lean-records: (\S+): check\.py (?:--dev-cache )?exit -?\d+ in (\d+) s", re.M)
 AUDITED = re.compile(r"^AUDIT (\S+): (?:PASS|FAIL)\s+\d+ declarations in (\d+) modules", re.M)
@@ -60,7 +61,7 @@ BUILT = re.compile(rb"\bBuilt ([^\s:]+) \((?:\d+m ?)?[\d.]+m?s\)")
 BUILD_LOG = re.compile(r"^lean-audit/(?:.+/)?build(?:-[a-z]+)?\.log$")
 NONE = "-"
 #: the package column's width: the longest Lake package path's
-W = 44
+W = 57
 ALL = "(all)"
 
 
@@ -246,7 +247,7 @@ def _tasks_of(store, rid: str, doc: dict) -> list[dict]:
     if RECORDS.search(argv):
         files = _record_files(store, out.get("run_record")) if (meta or {}).get("kind") == FAST_KIND else {}
         return [records_task(rid, doc, meta, list(files), lambda p: _bytes(store, files[p]))]
-    if CHECK in argv and meta:
+    if CHECK.search(argv) and meta:
         return check_tasks(rid, doc, meta)
     return []
 
@@ -264,7 +265,7 @@ def collect(store, start: datetime, end: datetime, log: Callable[[str], None] = 
     rows = [(rid, json.loads(doc)) for rid, doc in store.index.sql("SELECT id, manifest_json FROM attempts WHERE id > ? AND id <= ? "
                                                                     "ORDER BY id", (since, f"r{end:%Y%m%d-%H%M%S}~"))
             if doc]
-    rows = [(rid, d) for rid, d in rows if RECORDS.search(a := " ".join(d.get("argv") or [])) or CHECK in a]
+    rows = [(rid, d) for rid, d in rows if RECORDS.search(a := " ".join(d.get("argv") or [])) or CHECK.search(a)]
     log(f"research lean-times: {len(rows)} records run(s) and check(s) started from {since[1:]} on {store.remote.describe()}")
     with concurrent.futures.ThreadPoolExecutor(max_workers=READ_JOBS) as ex:
         each = list(ex.map(lambda r: _tasks_of(store, *r), rows))

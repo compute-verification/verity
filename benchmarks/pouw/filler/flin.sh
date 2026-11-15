@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # dcap.cu's fused filler (flin.cuh) on one leased GPU (cwd = the source tree): the decode linears as a warp-specialized GEMM
 # whose filler warps run the DRAM-free chain while its consumers wait on memory. Under one lease: fgate (every linear's
-# output on every row and the filler's receipts, bit for bit) and CAP's gate first, and nothing is timed unless both pass;
+# output on every row and the filler's receipts, bit for bit) and dcap's gate first, and nothing timed unless both pass;
 # then each linear's 32 layers against cuBLASLt (flin), ncu's DRAM and tensor-pipe counters for a few configurations, and
 # the decode step with its linears through flin (fstep). The round's coins are flipped once per run (coins.txt). Clocks are
 # read, never set.
@@ -18,12 +18,12 @@
 # ("B:L:FW:NC:THR:AFW[:ANC[:APS[:ALZ]]] ...", ncu's tensor-pipe counters over one step's attention blocks and first linear, each with
 # filler warps; FL_NCU_SECTIONS adds those ncu sections over the attention blocks only and keeps the report with its
 # details, raw and SASS pages), FL_REPS,
-# FL_GATE (0 skips CAP's gate), FL_NVCC (more nvcc flags, -DDFILL_V1 unless set: FILL v1's filler; empty builds pfill.cuh's,
-# -DPFILL_BITS its {0,1} tile)
+# FL_GATE (0 skips dcap's gate), FL_NVCC (more nvcc flags, -DDFILL_V1 unless set: FILL v1's filler;
+# empty builds pfill.cuh's, -DPFILL_BITS its {0,1} tile)
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-D=benchmarks/pouw/filler
+D=benchmarks/pouw/filler K=verity/protocols/accounting/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/flin.XXXXXX); trap 'rm -rf "$B"' EXIT
 export FL_FLIN=${FL_FLIN:-"32:4:2:0 32:8:4:0 32:8:4:1 64:4:2:0 64:4:4:0 64:8:4:0 128:4:2:0 128:4:4:0 128:4:4:1 256:2:2:0 256:2:4:0"}
 export FL_STEP=${FL_STEP:-"32:2048:8:4:0:0 32:2048:8:4:0:2 32:2048:8:4:0:4 32:8192:8:4:0:2 128:2048:4:4:0:2 256:2048:2:4:0:2"}
@@ -35,7 +35,7 @@ export DFILL_COINS; DFILL_COINS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 echo "$DFILL_COINS" > "$O/coins.txt"
 nvcc --version | tail -2 > "$O/nvcc.txt"
 # shellcheck disable=SC2086
-nvcc -O3 -std=c++17 ${FL_NVCC--DDFILL_V1} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $D/dcap.cu -lcublasLt -lnvidia-ml -ldl \
+nvcc -O3 -std=c++17 ${FL_NVCC--DDFILL_V1} -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap" $K/dcap.cu -lcublasLt -lnvidia-ml -ldl \
   > "$O/build.log" 2>&1 || { grep -E "error" "$O/build.log" | head -40; tail -20 "$O/build.log"; exit 4; }
 cuobjdump -sass "$B/dcap" | awk '/Function : /{p = /flin_k/} p' > "$O/sass-flin.txt" 2>&1
 echo "flin_k SASS: $(grep -c IMMA "$O/sass-flin.txt") IMMA, $(grep -cE 'LDL|STL' "$O/sass-flin.txt") local memory ops"

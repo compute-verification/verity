@@ -13,7 +13,12 @@ import json
 
 import pytest
 
-from verity_vllm.config import CHECKPOINTS, checkpoint_entries, checkpoints_hf_home, sibling_manifests
+from verity_vllm.config import (
+    CHECKPOINTS,
+    checkpoint_entries,
+    checkpoints_hf_home,
+    sibling_manifests,
+)
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
 from verity_vllm.engine.profiles import dense_generic as dg

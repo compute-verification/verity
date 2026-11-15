@@ -7,8 +7,9 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
-
+from tests.pipeline.test_row import _row, _tp_row
 from verity_vllm import target_family as tf
 
 TREE = Path(__file__).resolve().parents[1]
@@ -101,7 +102,6 @@ def test_the_match_s_cpu_phase_reads_no_device_and_every_gpu_stage_still_refuses
 def test_the_row_hands_its_match_phase_to_the_preflight_so_its_cpu_half_needs_no_gpu(tmp_path):
     """`--match-phase cpu` on a workload's run reaches `target-family`, which then passes on a host with no GPU; the same
     workload's GPU stages (`--match-phase all`) are refused there."""
-    from tests.pipeline.test_row import _tp_row
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")]), "PATH": str(tmp_path),
            "CUDA_VISIBLE_DEVICES": ""}
     for phase, rc, head in (("cpu", 0, "TARGET-FAMILY-OK"), ("all", 3, "PRECHECK_FAIL_TARGET_FAMILY: no GPU visible for a GPU stage")):
@@ -163,9 +163,30 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     assert r3.returncode == 3 and "CUDA_VISIBLE_DEVICES hides" in r3.stderr, "the row's empty CUDA_VISIBLE_DEVICES reaches the check"
 
 
+def _main_reads(tmp_path, option: str) -> list:
+    """The record ``main`` writes when ``option`` names its file in bytes, and then by an open descriptor."""
+    f, out = tmp_path / "f.json", tmp_path / "target_family.json"
+    f.write_text(json.dumps({"engine": {"target": {"compute_capability": [9, 0]}}, "step": {"target": {"compute_capability": [9, 0]}}}))
+    recs = []
+    names: list[Any] = [os.fsencode(f), os.open(f, os.O_RDONLY)]  # the option's annotation promises a str; main opens what it is handed
+    for name in names:
+        assert tf.main(tf.Options(row=ROW_L40S, stages="build", no_device=True, out=str(out), **{option: name})) == 3
+        recs.append(json.loads(out.read_text()))
+    return recs
+
+
+def test_the_cli_opens_the_workload_by_the_name_as_it_is_handed(tmp_path):
+    """``--workload`` is opened as given, not through ``pathlib``, which refuses a name in bytes and a descriptor."""
+    assert [[m["fact"] for m in r["mismatches"]] for r in _main_reads(tmp_path, "workload")] == [["declared"], ["declared"]]
+
+
+def test_the_cli_opens_the_build_summary_by_the_name_as_it_is_handed(tmp_path):
+    """``--build-summary`` is opened as given, not through ``pathlib``, which refuses a name in bytes and a descriptor."""
+    assert [[m["fact"] for m in r["mismatches"]] for r in _main_reads(tmp_path, "build_summary")] == [["built"], ["built"]]
+
+
 def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_path):
     """--snapshot-max-bytes N (MATCH_SNAP_MAX_BYTES) arms the Match's cap; unset -> the argv without it."""
-    from tests.pipeline.test_row import _row
 
     def argv(*flags, environ=None):
         r = _row(tmp_path, *flags, environ=environ)
@@ -177,3 +198,22 @@ def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_
         i = st.index("--snapshot-max-bytes")
         assert st[i + 1] == "33554432" and st[i - 1] == "0,1" and st[i + 2] == "--skip"
         assert [x for x in st if x != "--snapshot-max-bytes" and x != "33554432"] == unset
+
+
+def test_a_builds_target_reads_a_summary_whose_step_target_or_applicability_is_absent_null_or_empty():
+    """`verity_vllm.target_family.built_target`: a Build summary's `step`, its `target` and its `applicability` may each be
+    absent, null or empty, and each then states nothing. A stated compute capability wins; without one, an applicability
+    that names Hopper is 9.0."""
+    hopper = {"tensor_core_family": "Hopper"}
+    summaries: tuple[dict, ...] = ({}, {"step": None}, {"step": {}})
+    targets: tuple[dict, ...] = ({}, {"target": None}, {"target": {}}, {"target": {"num_sms": 132}})
+    for summary in summaries:
+        assert tf.built_target(summary) is None
+    for target in targets:
+        assert tf.built_target({"step": {**target, "num_units": 1}}) is None
+        assert tf.built_target({"step": {**target, "applicability": hopper}}) == (9, 0)
+        assert tf.built_target({"step": {**target, "applicability": {"gemm_target": "hopper"}}}) == (9, 0)
+        for app in (None, {}, {"gemm_target": "ampere"}, {"tensor_core_family": None, "gemm_target": None}):
+            assert tf.built_target({"step": {**target, "applicability": app}}) is None
+    assert tf.built_target({"step": {"target": {"compute_capability": [8, 9]}, "applicability": hopper}}) == (8, 9)
+    assert tf.built_target({"step": {"target": {"compute_capability": "9.0"}}}) == (9, 0)

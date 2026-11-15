@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
-THEORY = Path(__file__).resolve().parents[1] / "theory"
-sys.path.insert(0, str(THEORY))
-
 import fold_opt_fx as fx
+
+THEORY = Path(__file__).resolve().parents[1] / "theory"
 
 
 def test_fold_wide3_matches_fold_opt_fx(tmp_path):
@@ -24,6 +22,6 @@ def test_fold_wide3_matches_fold_opt_fx(tmp_path):
     jobs = fx.wide3_controls(4, {"y": y, "z": z, "w": y, "kx": z, "a": a, "m1": a})
     assert "sel_free" in jobs
     res = fx.width_wide3(exe, 4, inputs, jobs)
-    assert {r["firsts"] for r in res.values()} == {fx._new_word_sets(4, inputs)} == {663}
+    assert {r["firsts"] for r in res.values()} == {fx.new_word_sets(4, inputs)} == {663}
     count = {"ctl": "found", "sel": "sel", "le2": "le2"}
     assert not [lab for lab, r in res.items() if r[count[lab.split("_")[0]]] == 0], res

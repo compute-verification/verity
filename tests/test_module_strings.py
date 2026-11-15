@@ -26,7 +26,7 @@ SCANNED = ("*.py", "*.sh", "*.bash", "*.toml", "*.json", "*.yaml", "*.yml", "*.c
 
 #: what records history rather than naming code that must exist now; nothing here is read to find code to run
 HISTORY_PATHS = (
-    "fixtures/**",                 # shared fixtures: bytes of past runs (`fixtures/artifacts.json`)
+    "fixtures/**",                 # shared fixtures: bytes of past runs (`artifacts.json`)
     "**/fixtures/**",              # a suite's fixtures: captures and the records of the runs that made them
     "**/*vectors*.json",           # pinned vectors: what a run produced, by the names it had then
     "**/ledger/**",                # the frozen overhead ledger
@@ -52,6 +52,8 @@ EXEMPT = {
     ("tools/research/tests/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",
     # a tool declaration the move guards find in a synthetic tree, under its pre-move or post-move path
     ("tools/research/tests/test_store_prov.py", "tools.agree.tool:AGREE"): "a stand-in",
+    # a file of the small tree the import order's checks are held on, which names a module of that tree
+    ("tests/test_boundaries.py", "verity.runtime.toy:run"): "a stand-in",
     # the shell line the one-CLI lint must pass over: a `-m` in a comment
     ("adapters/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
     # the vLLM row tools research's registry names: research_tools computes them from `research` on first read (its
@@ -77,7 +79,7 @@ PATTERNS = (
 
 
 def _suites():
-    spec = importlib.util.spec_from_file_location("suites_for_module_strings", ROOT / "tools" / "verity" / "check" / "suites.py")
+    spec = importlib.util.spec_from_file_location("suites_for_module_strings", ROOT / "tools" / "check" / "suites.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod             # its dataclasses resolve their module by name
     spec.loader.exec_module(mod)
@@ -232,10 +234,10 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     assert dangling("attr", "research.cli", "main") is None
     assert dangling("attr", "benchmarks.tc_probe.tool", "TC_PROBE") is None
     assert dangling("main", "research", None) is None
-    assert dangling("import", "verity.definitions.ops.boolean.gemm", None) is None
-    assert dangling("import", "verity.definitions.ops.no_such_module", None) == "no such module"
+    assert dangling("import", "verity.circuits.ops.boolean.gemm", None) is None
+    assert dangling("import", "verity.circuits.ops.no_such_module", None) == "no such module"
     assert dangling("attr", "research.cli", "no_such_attr") == "tools/research/src/research/cli.py binds no no_such_attr"
-    assert dangling("main", "verity.definitions.ops", None) == "a package without __main__.py"
+    assert dangling("main", "verity.circuits.ops", None) == "a package without __main__.py"
     assert dangling("import", "numpy.linalg", None) is None
     text = ('importlib.import_module("verity.gone")\n"python -m verity_vllm.gone"\n[sys.executable, "-m", "research.gone"]\n'
             'x = "circuit_check.gone:main"\n')
@@ -244,7 +246,7 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
                     ("attr", "circuit_check.gone")}
     seen = {(p, k, m + (f":{a}" if a else "")) for p, k, m, a in scan()}
     registry = "tools/research/src/research/store/tools_registry.py"
-    assert {(registry, "attr", "tools.verity.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
+    assert {(registry, "attr", "tools.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
             ("adapters/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
             ("adapters/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
             ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register")} <= seen

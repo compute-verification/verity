@@ -1,5 +1,5 @@
 """``circuit-check --ambient TARGET..``: each target's flat lowering (`verity_flock.ir_lower.lower`, laid out as
-``flock-ir-unit/v2`` text by `ir_lower.netlist`) is a function of the Definition alone, its builders' operands and statics,
+``flock-ir-unit/v2`` text by `ir_lower.circuit_description`) is a function of the Definition alone, its builders' operands and statics,
 and of nothing else they could read. Two fresh interpreters lower every target:
 
   plain      PYTHONHASHSEED=0, the cwd as given, the targets in the order given, each lowered once;
@@ -16,9 +16,9 @@ where in this tree's code it was made, and is a failure whatever its value. Not 
 file a builder reads, a value an import computed from such state), a perturbation that by chance changes nothing a builder
 reads, and a clock read through `datetime` (which only the changed TZ perturbs).
 
-`ambiguous_words` is the static part: a word primitive that two registered Boolean Definitions build with different builders,
-and that `ir_lower.PIECES` holds no piece of its own for, is lowered by whichever registered first (`ir_lower._boolean_build`),
-so by the order its modules were imported.
+`ambiguous_words` is the static part: a word primitive that two registered Boolean Definitions (not ``opt_in``) build with
+different builders, and that `ir_lower.PIECES` holds no piece of its own for, is refused by Flock's lowering
+(`ir_lower._boolean_build`'s `AmbiguousWord`), here over every registry rather than at the first lowering that reaches it.
 
 This module imports only the standard library until a lowering needs more, so a child installs its recorder first.
 """
@@ -44,11 +44,11 @@ PERTURBED: dict[str, Any] = {"hashseed": "4242", "heap": 100_000, "junk": 37, "r
 
 CLOCKS = ("time", "time_ns", "monotonic", "monotonic_ns", "perf_counter", "perf_counter_ns", "process_time",
           "process_time_ns", "thread_time", "thread_time_ns", "clock_gettime", "clock_gettime_ns")
-DRAWS = ("random", "randint", "randrange", "randbytes", "getrandbits", "choice", "choices", "shuffle", "sample", "uniform",
-         "triangular", "gauss", "normalvariate", "lognormvariate", "expovariate", "vonmisesvariate", "gammavariate",
-         "betavariate", "paretovariate", "weibullvariate", "binomialvariate")
-NUMPY_DRAWS = ("random", "rand", "randn", "randint", "random_sample", "random_integers", "choice", "shuffle", "permutation",
-               "bytes", "uniform", "normal", "standard_normal")
+RANDOM_CALLS = ("random", "randint", "randrange", "randbytes", "getrandbits", "choice", "choices", "shuffle", "sample",
+                "uniform", "triangular", "gauss", "normalvariate", "lognormvariate", "expovariate", "vonmisesvariate",
+                "gammavariate", "betavariate", "paretovariate", "weibullvariate", "binomialvariate")
+NUMPY_RANDOM_CALLS = ("random", "rand", "randn", "randint", "random_sample", "random_integers", "choice", "shuffle",
+                      "permutation", "bytes", "uniform", "normal", "standard_normal")
 
 _reads: list[str] | None = None
 _keep: list = []
@@ -85,13 +85,13 @@ def _install() -> None:
 
     for n in CLOCKS:
         _wrap(time, n, f"time.{n}")
-    for n in DRAWS:
+    for n in RANDOM_CALLS:
         _wrap(random, n, f"random.{n}")
     _wrap(random.Random, "seed", "an unseeded random.Random", lambda self, a=None, *_a, **_k: a is None)
     _wrap(os, "urandom", "os.urandom")
     _wrap(os, "getrandom", "os.getrandom")
     random._urandom = os.urandom  # type: ignore[attr-defined]  (SystemRandom's, so secrets')
-    for n in NUMPY_DRAWS:
+    for n in NUMPY_RANDOM_CALLS:
         _wrap(npr, n, f"numpy.random.{n}")
     _wrap(npr, "default_rng", "an unseeded numpy.random.default_rng", lambda seed=None, *_a, **_k: seed is None)
 
@@ -133,7 +133,7 @@ def text(target: Any, junk: int = 0) -> str:
         del C.inputs["ambient"]
     C, _ins, words = ST._lowered(target, C)
     lay = IL.layout(C, list(C.inputs), [f"o{j}" for j in range(len(words))])
-    return IL.netlist(lay, "unit")
+    return IL.circuit_description(lay, "unit")
 
 
 def _child(opts: dict) -> None:
@@ -215,10 +215,11 @@ def check(targets: list[str], *, path: tuple[str, ...] = ()) -> list[dict]:
 
 
 def ambiguous_words() -> dict[str, list[str]]:
-    """Each word primitive that registered Boolean Definitions build with two or more different builders, and that
-    `ir_lower.PIECES` lowers by one of them (no piece of its own; a piece the Boolean export's tracer wrapped, as it wraps
-    each one once the process exports, is the one it wraps): their ids, in registration order. Every registry is loaded
-    first (`targets.load_registries`)."""
+    """Each word primitive that registered Boolean Definitions (not ``opt_in``) build with two or more different builders
+    (unwrapped), and that `ir_lower.PIECES` refuses (`ir_lower.AmbiguousWord`) or lowers by one of them, resolved before
+    another was registered (no piece of its own; a piece the Boolean export's tracer wrapped, as it wraps each one once the
+    process exports, is the one it wraps): their ids, in registration order. Every registry is loaded first
+    (`targets.load_registries`)."""
     import inspect
 
     from verity_flock import ir_lower as IL
@@ -232,12 +233,19 @@ def ambiguous_words() -> dict[str, list[str]]:
     by: dict[str, list] = {}
     for d in list(REGISTRY.defs.values()):
         w, build = getattr(d, "word", None), getattr(d, "build", None)
-        if callable(build) and getattr(w, "id", None):
+        if callable(build) and getattr(w, "id", None) and not getattr(d, "opt_in", False):
             by.setdefault(w.id, []).append(d)
     out = {}
     for word, ds in by.items():
-        builds = {id(d.build) for d in ds}
-        if len(builds) > 1 and id(inspect.unwrap(IL.PIECES.get(word))) in builds:
+        builds = {id(inspect.unwrap(d.build)) for d in ds}
+        if len(builds) < 2:
+            continue
+        try:
+            piece = IL.PIECES.get(word)
+        except IL.AmbiguousWord:
+            out[word] = [d.id for d in ds]
+            continue
+        if id(inspect.unwrap(piece)) in builds:
             out[word] = [d.id for d in ds]
     return out
 

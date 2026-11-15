@@ -15,16 +15,17 @@ import types
 import numpy as np
 import pytest
 import torch
-
-from tests.acquire.test_glm53_sources import Committer
-from tests.program.test_marlin_moe import _vllm_align
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+
+from tests import fake_vllm
+from tests.acquire.test_glm53_sources import Committer
+from tests.program.test_marlin_moe import _vllm_align
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import moe_align_source as MA
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources import taps
-from verity.definitions.registry import marlin_moe as MM
+from verity_vllm.definitions.registry import marlin_moe as MM
 from verity_vllm.query.manifest.bind import Binder, source_ports
 
 
@@ -151,9 +152,8 @@ def fake_marlin(monkeypatch, *, tamper: str | None = None, seed: int = 0) -> Non
         out = kernel(ids, num_experts, block_size, np.random.default_rng(len(ids) + seed).permutation(len(ids)), unwritten=0)
         return _tamper(*out, ids, num_experts, block_size, tamper) if tamper else out
 
-    m = types.ModuleType(MA.MARLIN_MODULE)
-    m.moe_align_block_size = moe_align_block_size
-    monkeypatch.setitem(sys.modules, MA.MARLIN_MODULE, m)
+    fake = fake_vllm.install(monkeypatch, extra=[f"{MA.MARLIN_MODULE}:{MA.ALIGN}"])     # a module the source reaches by name
+    fake[MA.MARLIN_MODULE].moe_align_block_size = moe_align_block_size
 
 
 def align_rows(layer: int, P: int, step: int = 0) -> list[dict]:
@@ -314,14 +314,14 @@ def test_the_replayed_output_is_the_kernels_for_the_recorded_order(E: int, P: in
         ids = rng.choice([0, 0, 0, E - 1, E - 1, 1, -1, E, 7 - 2**31], P).tolist() if trial % 3 == 2 else rng.integers(0, E, P).tolist()
         topk = torch.tensor(ids, dtype=torch.int32).reshape(-1, 1)
         mine, theirs = kernel(ids, E, BM, rng.permutation(P), unwritten=7), kernel(ids, E, BM, rng.permutation(P), unwritten=3)
-        cap_rank = MA.align_values(topk, *theirs, E, BM)[0]
+        captured_rank = MA.align_values(topk, *theirs, E, BM)[0]
         sorted_ids = mine[0].clone()
-        same, placed = MA.replay_schedule(topk, sorted_ids, E, BM, topk.reshape(-1), cap_rank)
+        same, placed = MA.replay_schedule(topk, sorted_ids, E, BM, topk.reshape(-1), captured_rank)
         assert bool(same) and bool(placed)
         npp = int(mine[2])
         assert sorted_ids[:npp].tolist() == theirs[0][:npp].tolist() and sorted_ids[npp:].tolist() == mine[0][npp:].tolist()
         rank, *_rest, ok = MA.align_values(topk, sorted_ids, mine[1], mine[2], E, BM)
-        assert bool(ok) and rank.tolist() == cap_rank.tolist()
+        assert bool(ok) and rank.tolist() == captured_rank.tolist()
 
 
 def test_a_call_routed_otherwise_or_a_record_that_misplaces_a_pair_is_not_replayed() -> None:
@@ -330,17 +330,17 @@ def test_a_call_routed_otherwise_or_a_record_that_misplaces_a_pair_is_not_replay
     topk = torch.tensor(ids, dtype=torch.int32).reshape(-1, 1)
     rng = np.random.default_rng(3)
     mine, theirs = kernel(ids, E, BM, rng.permutation(P)), kernel(ids, E, BM, rng.permutation(P))
-    cap_rank = MA.align_values(topk, *theirs, E, BM)[0]
+    captured_rank = MA.align_values(topk, *theirs, E, BM)[0]
     other = topk.reshape(-1).clone()
     other[[0, 7]] = other[[7, 0]]
-    dup = cap_rank.clone()
+    dup = captured_rank.clone()
     dup[1] = dup[0]
-    past = cap_rank.clone()
+    past = captured_rank.clone()
     past[7] = 2                                                      # expert 2 has two pairs
-    for cap_ids, rank, want in ((other, cap_rank, (False, True)), (topk.reshape(-1), dup, (True, False)),
-                                (topk.reshape(-1), past, (True, False)), (topk.reshape(-1)[:-1], cap_rank[:-1], (False, False))):
+    for captured_ids, rank, want in ((other, captured_rank, (False, True)), (topk.reshape(-1), dup, (True, False)),
+                                     (topk.reshape(-1), past, (True, False)), (topk.reshape(-1)[:-1], captured_rank[:-1], (False, False))):
         sorted_ids = mine[0].clone()
-        got = MA.replay_schedule(topk, sorted_ids, E, BM, cap_ids, rank)
+        got = MA.replay_schedule(topk, sorted_ids, E, BM, captured_ids, rank)
         assert (bool(got[0]), bool(got[1])) == want and sorted_ids.tolist() == mine[0].tolist()
 
 
@@ -364,7 +364,7 @@ def _capture(monkeypatch, tmp_path, ids: list[torch.Tensor], steps: int = 2) -> 
 
 def _commit(src, c, model, steps: int = 2) -> dict:
     """The Commit's committed witness digests by (step, module, member) over ``steps`` steps."""
-    got = {}
+    got: dict = {}
     for s in range(steps):
         c._cur.step = s
         run_step(src, c, model)
@@ -378,13 +378,13 @@ def test_the_commit_replays_the_captures_schedule_and_commits_the_captures_witne
     armed with the capture's schedule file, every call is replayed and every committed member is the capture's, byte for byte.  A new
     run (the record after a warm-up) counts only its own calls."""
     ids = [ids_of(1), ids_of(2)]
-    cap, _calls = _capture(monkeypatch, tmp_path, ids)
+    captured, _calls = _capture(monkeypatch, tmp_path, ids)
     fake_marlin(monkeypatch, seed=1)
     model, c = model_of(ids), Committer()
     plain = MA.MoeAlignSource(c, model)
     plain.install()
     try:
-        assert _commit(plain, c, model) != cap
+        assert _commit(plain, c, model) != captured
     finally:
         plain.uninstall()
     assert MA.replay_stats([plain]) is None
@@ -393,7 +393,7 @@ def test_the_commit_replays_the_captures_schedule_and_commits_the_captures_witne
     assert MA.arm_replay([object(), src], tmp_path, 0) == {"armed": True, "file": str(tmp_path / OW.schedule_file(0)), "calls": 4}
     src.install()
     try:
-        assert _commit(src, c, model) == cap
+        assert _commit(src, c, model) == captured
     finally:
         src.uninstall()
     assert not c.errors, c.errors
@@ -406,7 +406,7 @@ def test_the_commit_replays_the_captures_schedule_and_commits_the_captures_witne
 def test_a_call_routed_otherwise_runs_its_own_schedule_and_is_counted(monkeypatch, tmp_path) -> None:
     """Layer 1 routes otherwise in the Commit than in the capture: its calls keep the kernel's own order (their witness differs, the
     oracle names it) and are counted with where they are; layer 0 is replayed.  A capture without a schedule file arms nothing."""
-    _cap, _calls = _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
+    _captured, _calls = _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
     fake_marlin(monkeypatch, seed=1)
     model, c = model_of([ids_of(1), ids_of(9)]), Committer()
     src = MA.MoeAlignSource(c, model)
@@ -433,9 +433,14 @@ def test_the_rank_worker_arms_the_replay_once_before_the_committer_installs(monk
     _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
     events: list = []
     arm = MA.MoeAlignSource.arm
-    monkeypatch.setattr(MA.MoeAlignSource, "arm", lambda self, calls: (events.append(("arm", len(calls))), arm(self, calls))[1])
 
-    def worker(capture_dir: str | None) -> tuple[object, MA.MoeAlignSource]:
+    def armed(self, calls):
+        events.append(("arm", len(calls)))
+        return arm(self, calls)
+
+    monkeypatch.setattr(MA.MoeAlignSource, "arm", armed)
+
+    def worker(capture_dir: str | None) -> tuple[RW.TP2CaptureWorkerExtension, MA.MoeAlignSource]:
         src = MA.MoeAlignSource(Committer(), model_of([ids_of(1), ids_of(2)]))
         com = types.SimpleNamespace(sources=[object(), src], reset=lambda: None,
                                     install=lambda: events.append(("install", src.replay is not None)))

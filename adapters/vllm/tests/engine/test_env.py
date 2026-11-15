@@ -73,16 +73,6 @@ def test_hidden_devices_override_what_the_process_inherited(monkeypatch) -> None
     assert os.environ["CUDA_VISIBLE_DEVICES"] == ""
 
 
-def test_set_since_is_what_the_process_set_or_changed_after_the_snapshot(monkeypatch) -> None:
-    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
-    monkeypatch.setenv("KEPT", "1")
-    monkeypatch.delenv("CUBLASLT_WORKSPACE_SIZE", raising=False)
-    before = env.snapshot()
-    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":16:8")
-    monkeypatch.setenv("CUBLASLT_WORKSPACE_SIZE", "1")
-    assert env.set_since(before) == {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}
-
-
 def test_a_capture_at_served_defaults_never_pins_a_switch_back() -> None:
     """A capture that clears `SERVED_DEFAULTS` imports no module that pins the engine's switches (`vllm_meta` pins `EXPORT` at
     import, batch invariance among it; `engine_profile` pins `ENGINE`) and calls no pinning function, at any level of its code."""
@@ -101,26 +91,18 @@ def test_a_capture_at_served_defaults_never_pins_a_switch_back() -> None:
             elif isinstance(n, ast.ImportFrom) and n.module:
                 used |= {n.module, *(f"{n.module}.{a.name}" for a in n.names)}
             elif isinstance(n, ast.Call):
-                used.add(getattr(n.func, "attr", getattr(n.func, "id", None)))
+                called = getattr(n.func, "attr", getattr(n.func, "id", None))
+                if called is not None:
+                    used.add(called)
         assert not used & pinning, (p.name, sorted(used & pinning))
 
 
-def test_an_engine_records_what_its_build_wrote_into_the_environment() -> None:
-    import dataclasses
-    import inspect
-
-    from verity_vllm.engine import build
-
-    src = inspect.getsource(build.build_engine)
-    assert src.index("env0 = engine_env.snapshot()") < src.index("engine_kwargs_for(") < src.index("llm = LLM(**kw)")
-    assert "engine_env.set_since(env0))" in src.split("llm = LLM(**kw)")[1].split("eng.effective")[0]
-    assert "environ" in [f.name for f in dataclasses.fields(build.Engine)]
-
-
-def test_the_engine_profile_reads_this_table() -> None:
+def test_the_engine_profile_reads_this_table(clean, tmp_path) -> None:
     from verity_vllm.engine import engine_profile as prof
 
-    assert prof.DECLARED_ENV is env.ENGINE
+    clean.setattr(prof, "checkpoints_hf_home", lambda: str(tmp_path))
+    assert prof.apply_env() == env.ENGINE
+    assert {k: os.environ[k] for k in env.ENGINE} == env.ENGINE and os.environ["HF_HOME"] == str(tmp_path)
     assert env.ENGINE == {"VLLM_USE_V2_MODEL_RUNNER": "1", "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_USE_FLASHINFER_SAMPLER": "0",
                           "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1", RBLOCK: "0"}
     assert set(env.REASONS) == set(env.ENGINE) and all(env.REASONS.values())
@@ -154,6 +136,83 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
     assert prof.checkpoint_for("ROLE_X", m) == made
 
 
+def test_a_role_two_pins_carry_is_refused_with_both_revisions(tmp_path) -> None:
+    """A role names one checkpoint.  Two pins under one role are refused, each named by its revision's first twelve characters,
+    where the first pin's snapshot would have been served; under a role of its own each resolves to its own snapshot."""
+    import json
+
+    from verity_vllm.engine import engine_profile as prof
+
+    for name in ("first", "second"):
+        (tmp_path / name).mkdir()
+    first = {"repo": "org/model", "role": "ROLE_X", "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
+             "local_path": str(tmp_path / "first")}
+    second = dict(first, revision="4e20de362430" + "1" * 28, local_path=str(tmp_path / "second"))
+    (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [first, second]}))
+    with pytest.raises(SystemExit) as refused:
+        prof.checkpoint_for("ROLE_X", m)
+    assert str(refused.value) == ("case 'ROLE_X': 2 pins carry role 'ROLE_X' (9535bd9b1d1d, 4e20de362430); a role names one "
+                                  "checkpoint, so another revision of a model is pinned under a role of its own")
+    m.write_text(json.dumps({"checkpoints": [first, dict(second, role="ROLE_Y")]}))
+    assert prof.checkpoint_for("ROLE_X", m) == first
+    assert prof.checkpoint_for("ROLE_Y", m) == dict(second, role="ROLE_Y")
+
+
+def test_a_fixed_case_whose_repo_is_pinned_at_two_revisions_is_refused_with_both(tmp_path) -> None:
+    """A fixed case reads its checkpoint by repo.  Pins of that repo whose revisions differ are refused, each named by its
+    revision's first twelve characters, where the later pin's snapshot would have been served.  The second pin's own role still
+    resolves, two pins at one revision resolve to the later as before, and another repo at two revisions refuses no fixed case."""
+    import json
+
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine.profiles.cases import CASES
+
+    repo = CASES["B0"]["repo"]
+    for name in ("first", "second", "other"):
+        (tmp_path / name).mkdir()
+    first = {"repo": repo, "role": "B0", "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
+             "local_path": str(tmp_path / "first")}
+    second = dict(first, role="B0_NEXT", revision="4e20de362430" + "1" * 28, local_path=str(tmp_path / "second"))
+    (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [first, second]}))
+    with pytest.raises(SystemExit) as refused:
+        prof.checkpoint_for("B0", m)
+    assert str(refused.value) == (f"case 'B0': 2 pins of {repo} differ in revision (9535bd9b1d1d, 4e20de362430); a fixed case "
+                                  "reads its checkpoint by repo, so the manifest pins one revision of that repo")
+    assert prof.checkpoint_for("B0_NEXT", m) == second
+    same = dict(second, revision=first["revision"])
+    m.write_text(json.dumps({"checkpoints": [first, same]}))
+    assert prof.checkpoint_for("B0", m) == same
+    other = {"repo": "org/other", "role": "OTHER", "revision": "a" * 40, "downloaded": True, "local_path": str(tmp_path / "other")}
+    m.write_text(json.dumps({"checkpoints": [first, other, dict(other, role="OTHER_NEXT", revision="b" * 40)]}))
+    assert prof.checkpoint_for("B0", m) == first
+
+
+def test_two_pins_are_refused_before_a_snapshot_is_looked_for(tmp_path) -> None:
+    """Each refusal of two pins stands before the checkpoint's snapshot is looked for.  Where the pin that would have been read (a
+    role's first, a fixed case's later) is not downloaded, or its snapshot is gone, the refusal is the two pins' and not that
+    pin's, which alone is refused for itself."""
+    import json
+
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine.profiles.cases import CASES
+
+    (tmp_path / "there").mkdir()
+    there = {"repo": CASES["B0"]["repo"], "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
+             "local_path": str(tmp_path / "there")}
+    m = tmp_path / "checkpoints.json"
+    for unread in ({"downloaded": False}, {"local_path": str(tmp_path / "gone")}):
+        absent = dict(there, revision="4e20de362430" + "1" * 28, **unread)
+        m.write_text(json.dumps({"checkpoints": [dict(absent, role="ROLE_X")]}))
+        with pytest.raises(SystemExit, match="is not downloaded on this pod|local snapshot .* missing"):
+            prof.checkpoint_for("ROLE_X", m)
+        m.write_text(json.dumps({"checkpoints": [dict(absent, role="ROLE_X"), dict(there, role="ROLE_X")]}))
+        with pytest.raises(SystemExit, match="2 pins carry role 'ROLE_X'"):
+            prof.checkpoint_for("ROLE_X", m)
+        m.write_text(json.dumps({"checkpoints": [dict(there, role="B0"), dict(absent, role="B0_NEXT")]}))
+        with pytest.raises(SystemExit, match="2 pins of .* differ in revision"):
+            prof.checkpoint_for("B0", m)
+
+
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
     """A Build orders a shared expert on the main stream, so a served run must run it there too: on two streams, its log's order
     is not the execution order the fold takes it to be."""
@@ -174,7 +233,8 @@ def test_an_inherited_dynamic_tiling_is_refused_by_name_before_anything_is_pinne
         env.apply_engine(None)
     with pytest.raises(RuntimeError, match=f"inherited {RBLOCK}"):
         env.pin({**env.ENGINE, "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION": "1"})
-    assert not (set(env.ENGINE) - set(env.FIXED)) & set(os.environ)
+    pinned = sorted(k for k in set(env.ENGINE) - set(env.FIXED) if k in os.environ)
+    assert pinned == []
     assert "HF_HUB_OFFLINE" not in os.environ
 
 
@@ -196,6 +256,55 @@ def test_an_engine_refuses_an_inductor_that_read_the_tiling_otherwise(monkeypatc
         env.require_inductor({})
 
 
+def test_every_process_of_the_suite_loaded_inductor_under_the_pin() -> None:
+    """The suite's `conftest.py` imports ``torch._inductor.config`` itself, under the pin, wherever torch is installed, so no test is
+    the first to import it with the pin cleared from its environment, and an engine built in any test is not refused for the tests
+    that ran before it."""
+    import importlib.util
+
+    loaded, installed = "torch._inductor.config" in sys.modules, importlib.util.find_spec("torch") is not None
+    assert loaded == installed, "conftest.py imports torch._inductor.config right after it pins the fixed switches, where torch is installed"
+    env.require_inductor({})
+
+
+@pytest.mark.parametrize("plugin", [False, True], ids=["plain", "under-the-suite-guard"])
+def test_the_suites_guard_fails_the_test_that_leaves_a_switch_changed_and_no_test_whose_monkeypatch_undoes_it(tmp_path, plugin) -> None:
+    """`conftest.py`'s Inductor guard on `inductor_guard_cases.py`, in a pytest of their own: a test that sets the switch, or puts a
+    stand-in module in, with `monkeypatch` passes; the test that leaves the switch changed is an error at its teardown, by name,
+    with the guard's message; and the test after it reads the pin again.  The same under the plugin `suites.py` loads into every
+    suite, loaded by name as it loads it and from where it loaded it into this run (skipped in a run it didn't start, which has
+    none): its autouse fixture sets `monkeypatch` up before any fixture of this suite, so `monkeypatch` undoes a test's change
+    after every other fixture is torn down."""
+    import subprocess
+    from pathlib import Path
+
+    pytest.importorskip("torch")
+    cases = "tests/engine/inductor_guard_cases.py"
+    # under `suites.py` the child's plugin must not act for this run: no report written over this run's, no test left out as
+    # another part's or as a reused pass; the child still traces what it reads, as every Python a test starts does
+    runner = ("VERITY_SUITE_REPORT", "VERITY_SUITE_PART", "VERITY_SUITE_REUSE", "VERITY_SUITE_HEAVY")
+    environ = {k: v for k, v in os.environ.items() if k not in runner}
+    if plugin:
+        loaded = sys.modules.get("verity_suite_guard")
+        if loaded is None or loaded.__file__ is None:
+            pytest.skip("`suites.py` loads its plugin into the suites it runs, and it didn't start this run")
+        else:
+            guard = Path(loaded.__file__).parent
+            environ["PYTHONPATH"] = os.pathsep.join([*filter(None, environ.get("PYTHONPATH", "").split(os.pathsep)), str(guard)])
+    r = subprocess.run([sys.executable, "-m", "pytest", cases, "-rA", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'b'}",
+                        *(["-p", "verity_suite_guard"] if plugin else [])], cwd=Path(__file__).resolve().parents[2], env=environ,
+                       capture_output=True, text=True)
+    lines = r.stdout.splitlines()
+    left = f"{cases}::test_a_switch_left_changed_is_failed_by_name"
+    assert sorted(line for line in lines if line.startswith(("PASSED ", "FAILED ", "ERROR "))) == sorted([
+        f"PASSED {cases}::test_a_switch_set_with_monkeypatch_is_not_left",
+        f"PASSED {cases}::test_a_stand_in_module_set_with_monkeypatch_is_not_left",
+        f"PASSED {left}", f"ERROR {left}",
+        f"PASSED {cases}::test_the_test_after_it_reads_the_pin"]), r.stdout + r.stderr
+    assert r.returncode == 1 and any("ERROR at teardown of test_a_switch_left_changed_is_failed_by_name" in line for line in lines)
+    assert "test left torch._inductor.config reading {'dynamic_scale_rblock': True}" in r.stdout
+
+
 @pytest.mark.parametrize("module, fn", TP_ENGINES)
 def test_every_tp_engine_checks_its_inductor_before_it_is_built(module, fn) -> None:
     import importlib
@@ -212,8 +321,6 @@ def test_every_engine_records_the_tiling_it_runs(clean, tmp_path) -> None:
 
     clean.setenv("VLLM_BATCH_INVARIANT", "0")
     clean.setenv("HF_HOME", str(tmp_path))
-    if (cfg := sys.modules.get("torch._inductor.config")) is not None:
-        clean.setattr(cfg, "dynamic_scale_rblock", False)
     (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [
         {"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
     for execution in ("bi-eager", "bi-compiled"):

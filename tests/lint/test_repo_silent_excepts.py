@@ -1,4 +1,4 @@
-"""Except handlers that swallow what they catch, in every tracked Python file outside ``adapters/vllm/`` and ``archive/``,
+"""Except handlers that swallow what they catch, in every tracked Python file outside ``adapters/vllm/``,
 held to ``allowlists/repo_silent_excepts.json``, so no area adds one while its owner turns the ones it has into raises and
 records.
 
@@ -37,8 +37,8 @@ from pathlib import Path
 NAME = "repo_silent_excepts"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
-#: the integration's own lint holds it, and the archive isn't developed
-LEFT_OUT = ("adapters/vllm/", "archive/")
+#: the integration's own lint holds it
+LEFT_OUT = ("adapters/vllm/",)
 WHY = "adapters/vllm/tests/lint/README.md (Recorded outcomes)"
 FIX = ("Re-raise; or record the outcome in your area's typed record or log, saying what was caught and what the code did "
        "instead; or narrow it away: test for the case you expect (`path.exists()`, `d.get(k)`) and let the rest raise, since "
@@ -115,8 +115,10 @@ def parse(doc: object) -> Counter:
 
 
 def files() -> list[str]:
+    """The tracked Python files it reads, outside ``LEFT_OUT``: a tracked symlink is its target's second path, read there."""
     out = subprocess.run(["git", "ls-files", "-z", "--", "*.py"], cwd=ROOT, capture_output=True, check=True).stdout
-    return sorted(p for p in out.decode().split("\0") if p and not p.startswith(LEFT_OUT))
+    return sorted(p for p in out.decode().split("\0")
+                  if p and not p.startswith(LEFT_OUT) and not (ROOT / p).is_symlink())
 
 
 @lru_cache(maxsize=None)
@@ -211,6 +213,9 @@ def test_what_swallows_and_what_does_not() -> None:
 
 
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
+    # The check that reads the tree's list is a bookkeeping test, whose failed assertion only warns: a list that
+    # doesn't parse would switch the scan off with nothing red, so the tree's list is parsed here, where it fails.
+    allowed()
     assert parse({"entries": [{"file": "a.py", "count": 2}]}) == Counter({"a.py": 2})
     for bad in ({"file": "a.py", "count": 0}, {"file": "a.py", "count": True}, {"file": "a.py", "registry": True},
                 {"file": "a.py", "count": 1, "rule": "x"}):

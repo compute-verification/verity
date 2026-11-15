@@ -11,8 +11,9 @@ public import Proofs.Flock.SamplingGeneric.TwoRankin
 `claims.generic` names, each held to an honest and a nontrivial witness.
 
 * `rankinTwo`: `twoStmt`'s two proof blocks in one replay block (`onePart`), its first stage `bernoulli:1/2`, `k = 1`.
-  It is in scope, its first stage meets the rates' hypothesis at `q_ρ = 1/2` (`bernoulli_Pa_le`), and a request reading
-  both outputs reads in that one replay block (`rankinTwo_honest`, `rankinTwoPatterns_honest`).
+  It is in scope and its first stage meets the rates' hypothesis at `q_ρ = 1/2` (`bernoulli_Pa_le`): `rankinTwo_honest`,
+  the honest witness of `AdmissibleTwoRankin` and of `AdmissibleTwoRankinPatterns`, which takes no hypothesis on the
+  requests.
 * `nothingTwo`: `toyStmt`'s one proof block, its first stage `bernoulli:0/1`, which samples nothing, so `P̄_a = 1` at
   every footprint and both sets of proof blocks are admissible at `δ = 9/10`. Claimed at the rate `1/2` it doesn't meet,
   the bound fails at `θ = 1`: the count is `1 + 2 = 3` and `δ^{−1}·G = (10/9)·(1·1 + 2·(1/2)) = 20/9`
@@ -46,24 +47,14 @@ theorem inScopeTwo_rankin : InScopeTwo twoPart rankinTwo twoStmt := by
   subst hp
   simp [OneStage.WellFormed]
 
-/-- **`AdmissibleTwoRankin`'s honest witness**: `rankinTwo` is in scope, and its first stage misses each set of replay
-blocks with probability at most `(1/2)^{|T|}`. -/
+/-- **`AdmissibleTwoRankin`'s honest witness, and `AdmissibleTwoRankinPatterns`'s**, whose premises are the same:
+`rankinTwo` is in scope, and its first stage misses each set of replay blocks with probability at most `(1/2)^{|T|}`. -/
 theorem rankinTwo_honest : InScopeTwo twoPart rankinTwo twoStmt ∧
     ∀ T ⊆ range rankinTwo.part.blocks.length, rankinTwo.replay.Pa rankinTwo.part T ≤ ∏ _ρ ∈ T, (1 - (1 / 2 : ℝ)) := by
   refine ⟨inScopeTwo_rankin, fun T hT => ?_⟩
   have h := (bernoulli_Pa_le inScopeTwo_rankin (num := 1) (den := 2) rfl).1 T hT
   norm_num at h ⊢
   exact h
-
-/-- **`AdmissibleTwoRankinPatterns`'s honest witness**: `rankinTwo_honest`'s, and a request reading both of `twoStmt`'s
-outputs reads in its one replay block. -/
-theorem rankinTwoPatterns_honest : InScopeTwo twoPart rankinTwo twoStmt ∧
-    (∀ T ⊆ range rankinTwo.part.blocks.length, rankinTwo.replay.Pa rankinTwo.part T ≤ ∏ _ρ ∈ T, (1 - (1 / 2 : ℝ))) ∧
-    ∀ r : Unit, ∃ ρ, ∀ v ∈ blocksTo twoStmt.prog twoPart (fun _ => ()) (range twoPart.blocks.length) r,
-      replayOf twoPart rankinTwo.part v = some ρ := by
-  refine ⟨rankinTwo_honest.1, rankinTwo_honest.2, fun r => ⟨0, fun v hv => ?_⟩⟩
-  have hv2 : v < 2 := mem_range.1 (blocksTo_subset _ _ _ _ _ hv)
-  interval_cases v <;> decide
 
 /-! ## The nontrivial instance -/
 

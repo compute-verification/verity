@@ -55,7 +55,7 @@ theorem ref_lt_cntP {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Por
 /-- **The datum that opens a row's bit under the deployed commitment** at a leaf map `L` (`opens_commitDepL`'s): the
 opening's salt `y`, row `r`'s registration path at `L` padded to `L.d` levels, and the row's bits `v`. -/
 def dataAt (c : Flock.Circuit) (L : LeafMap) (r : RowAt) {W : ℕ} (v : BitVal W) (y : List UInt8) : Claims.Msg :=
-  dataOfL y (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf) (L.d - Flock.log2ceil (L.cnt r.port))
+  dataOfL y (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf) (L.d - Flock.log2ceil (L.cnt r.port))
     (List.ofFn fun k : Fin r.width => v.get k.val)
 
 section Game
@@ -66,7 +66,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} (dj : Finset (Fin n) → Lean.Json)
-  {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (ht : I.tags.typed = false)
+  {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (ht : I.tags.typed = false)
   {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
   (hscope : Discharge.Layout.scopeOkH c = true) (hU : Built c.unit) {pi : Flock.HmIn.Ports}
   (hpi : Flock.HmIn.parse c = .ok pi) {pub : Flock.Public}
@@ -225,15 +225,16 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **`Bridge.TransportsLiveV5` holds** (`transports_shapedP`): `dupName` and `RootFixesDomainL` give distinct roots,
+/-- **`Bridge.TransportsLiveV5` holds** (`transports_shapedP`): `dupId` and `RootFixesDomainL` give distinct roots,
 and the verifier's public-file check every proof block's ref below its port's count (`ref_lt_cntP`). -/
 theorem _root_.Flock.Bridge.transportsLiveV5 : Bridge.TransportsLiveV5 := by
-  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hrows hdup hroots law kd hdiv dj S₀ d₀ y₀ wr dg N L hTags hCust hsz
+  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hrows hdup hroots samplingDesign kd hdiv dj S₀ d₀ y₀ wr dg N L hTags hCust hsz
     τ P vb σ Cc Lm rows κ roots Cd u g _ _ o he hcan
   obtain ⟨⟨r, hr, hv, hvw⟩, hy⟩ := hcan
   obtain ⟨p, v, y⟩ := o
   exact Bridge.transports_shapedP (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parseStmt_stmt hD)
-    (hscope := hscope) (hU := hU) (hpi := hpi) (hpub := hpub) _ hrows (Bridge.rootsDistinctL_of_fixes hdup hroots)
+    (hscope := hscope) (hU := hU) (hpi := hpi) (hpub := hpub) _ hrows
+    (Bridge.rootsDistinctL_of_fixes (Bridge.LeafMap.ofPublic_dom _ _ _) hdup hroots)
     (fun u q => Bridge.ref_lt_cntP hpub u.isLt q.isLt) hr p v y hv hvw hy he
 
 end Flock.Guarantees

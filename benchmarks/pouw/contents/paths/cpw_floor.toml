@@ -1,4 +1,4 @@
 order = 344
 path = "`theory/cpw_floor.py`"
 runs_on = "CPU"
-what = "#2482's DS-120 bound from its Lean data (Y, ε, the break line a unit) beside CP-W's per-set checkpoint, which neither ♭ nor the Lean floor has: each route's slots a unit and the cheater floor each implies, with the 64-bit route checked against `segment.warp_checkpoint`"
+what = "The DS-120 bound from its Lean data (Y, ε, the break line a unit) beside CP-W's per-set checkpoint, which neither ♭ nor the Lean floor has: each route's slots a unit and the cheater floor each implies, with the 64-bit route checked against `segment.warp_checkpoint`"

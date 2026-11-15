@@ -24,6 +24,8 @@ slowdown <= the scorer's LIMIT at every point, kfill_k's SASS (IMMA.16832.S8.S8 
 DRAM bytes against the scorer's DRAM_LIMIT with bw_read's 1 GiB control, and clocks read only (application clocks at
 their defaults in every nvidia-smi row).
 """
+from __future__ import annotations
+
 import argparse
 import glob
 import importlib.util
@@ -31,21 +33,24 @@ import json
 import os
 import statistics
 from collections import defaultdict
+from collections.abc import Iterator
 from pathlib import Path
+
+#: what the tests read
+__all__ = ["fold_label", "gates", "main", "proved_fraction", "rows"]
 
 PHI = 0.9  # Theorem K's per-word proved fraction for a word-binding fold (c = 1 at φ 0.9)
 K_FRACTION = PHI  # the fraction of a run with no fold recorded (an old binary): the word-binding reading
 SASS_OK = {"IMMA.16832.S8.S8"}
 
 
-def proved_fraction(nc, xin, S):
+def proved_fraction(nc: int | None, xin: bool, S: int | None) -> float:
     """The fold's proved fill fraction under Theorem K (the filler receipt break). duo (NC 2) binds every
     word: PHI, provisional (binding proved for runs of one to four words, DuoQuadNoKernel; longer runs and the served
-    receipt's projected form open). The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words
-    (PHI/2); round 3's rem fill K, taken at PHI under ram, was 2× this. The r9 XOR-family folds (NC 4 with -DPFILL_LI
-    or -DPFILL_XIN13) read at the same proved half (a run may pick a
-    complement flip from the data, so Theorem K certifies only >= 1/2 of the words); their fuller reading waits on r10's
-    select-charging lemma, so it isn't credited here."""
+    receipt's projected form open). The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies
+    half the words (PHI/2), not PHI. The r9 XOR-family folds (NC 4 with -DPFILL_LI or -DPFILL_XIN13) read at the same
+    proved half (a run may pick a complement flip from the data, so Theorem K certifies only >= 1/2 of the words);
+    their fuller reading waits on the select-charging lemma, so it isn't credited here."""
     if nc is None:
         return PHI
     if nc == 2:
@@ -53,7 +58,7 @@ def proved_fraction(nc, xin, S):
     return PHI * 0.5
 
 
-def fold_label(nc, xin):
+def fold_label(nc: int | None, xin: bool) -> str | None:
     if nc is None:
         return None
     if nc == 2:
@@ -67,17 +72,119 @@ S = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(S)
 
 
-def rows(out_dir):
+def _records(path: str) -> list[str]:
+    """A rank file's record lines: those that start a JSON object."""
+    with open(path) as f:
+        return [ln for ln in f if ln.startswith("{")]
+
+
+def _point_row(sd: str, settings: str, key: tuple, by_arm: dict, gates: list, wrapped: set) -> dict:
+    """The row of one point `key` = (TP, B, L) of the set in the directory `sd`. `by_arm` holds the point's records:
+    arm -> its repeats, each the list of the ranks' records. `gates` is the set's pf_gate verdicts and `wrapped` its
+    points whose KV cache wrapped."""
+    def t(arm):
+        reps = by_arm.get(arm)
+        if not reps:
+            return None
+        meds = []
+        for ranks in reps:
+            n = min(len(x["reps"]) for x in ranks)
+            meds.append(statistics.median(max(x["reps"][j][0] for x in ranks) for j in range(n)))
+        return statistics.median(meds)
+
+    def med(arm, k):
+        """The median of the field `k` over the arm's records that hold it, every repeat's and every rank's, or None."""
+        reps = by_arm.get(arm)
+        if not reps:
+            return None
+        vals = [r[k] for ranks in reps for r in ranks if k in r]
+        return statistics.median(vals) if vals else None
+
+    def fold_of(arm):
+        nc, xin, S = med(arm, "fold_nc"), med(arm, "fold_xin"), med(arm, "fold_s")
+        nc = int(nc) if nc is not None else None
+        return nc, bool(xin), int(S) if S is not None else None
+
+    base, nocomm, comm, phase, commphase = (t(a) for a in ("base", "nocomm", "comm", "phase", "commphase"))
+    row = {"set": os.path.basename(sd), "settings": settings, "tp": key[0], "B": key[1], "L": key[2],
+           "base_ms": base, "nocomm_ms": nocomm, "comm_ms": comm, "phase_ms": phase, "commphase_ms": commphase,
+           "gates_ok": all(gates) if gates else None, "kv_wrapped": key in wrapped}
+    if base:
+        mhz = med("base", "mhz")
+        macs = med("base", "served_macs")
+        row["served"] = macs / (base * 1e-3) / (1024 * 188 * mhz * 1e6)
+        row["idle"] = 1 - row["served"]
+        if nocomm:
+            row["comm_exposed"] = (base - nocomm) / base
+            row["idle_off_comm"] = row["idle"] - row["comm_exposed"]
+        if phase:
+            row["slowdown"] = phase / base
+            fm = med("phase", "fill_macs_rep")
+            pm = med("phase", "mhz")
+            row["fill"] = fm / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
+            nc, xin, Sf = fold_of("phase")
+            frac = proved_fraction(nc, xin, Sf)
+            row["fold"], row["fill_k"] = fold_label(nc, xin), row["fill"] * frac
+            p0 = by_arm["phase"][0][0]
+            unit = "mmas" if "fill_mmas_rep" in p0 else "steps"
+            if p0.get(f"fill_{unit}_full_rep") is not None:
+                row["fill_finished"] = row["fill"] * med("phase", f"fill_{unit}_full_rep") / med("phase", f"fill_{unit}_rep")
+            row["served_phase"] = macs / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
+            cs = S.CERTIFIED["serving"]["fraction"]
+            row["coverage_base"] = cs * row["served"]
+            row["coverage"] = cs * row["served_phase"] + frac * row["fill"]
+            pr = [r for ranks in by_arm["phase"] for r in ranks]
+            row["rec_bad"] = sum(r.get("rec_bad", 0) for r in pr)
+            row["rec_checked"] = sum(r.get("rec_checked", 0) for r in pr)
+            row["whole_checked"] = sum(r.get("whole_checked", 0) for r in pr)
+            row["warps_checked"] = sum(r.get("warps_checked", 0) for r in pr)
+            row["shape_bad"] = sum(r.get("shape_bad", 0) for r in pr)
+            row["cut_warps"] = statistics.median(r["cut_warps"] for r in pr) if "cut_warps" in p0 else None
+    if comm and commphase:
+        row["comm_slowdown"] = commphase / comm
+        fm = med("commphase", "fill_macs_rep")
+        row["fill_in_comm"] = fm / (commphase * 1e-3) / (1024 * 188 * med("commphase", "mhz") * 1e6)
+    # the deferred pass: defer (deferred work in the gaps, overflow drained after the step) and dalone (the
+    # whole step's deferred work drained with no gaps)
+    defer, dalone = t("defer"), t("dalone")
+    row["defer_ms"], row["dalone_ms"] = defer, dalone
+    if defer and base:
+        dm = med("defer", "defer_demand_macs")
+        gap = med("defer", "defer_gap_macs_rep")
+        drain = med("defer", "defer_drain_macs_rep")
+        pm = med("defer", "mhz")
+        row["defer_gap_share"] = gap / dm if dm else None      # the step's deferred work run beside the collectives
+        row["defer_overflow_share"] = drain / dm if dm else None  # the overflow, drained after the step
+        # the true step-time cost is defer_slowdown; a gap share of 1 with a slowdown > 1 means it ran in the gap
+        # windows but did not hide (the DRAM-bound load contends with the step)
+        row["defer_slowdown"] = defer / base
+        fm = med("defer", "fill_macs_rep")
+        row["defer_fill"] = fm / (defer * 1e-3) / (1024 * 188 * pm * 1e6)
+        nc, xin, Sf = fold_of("defer")  # the filler after the deferred quota uses the same fold
+        row["defer_fold"] = fold_label(nc, xin)
+        row["defer_fill_k"] = row["defer_fill"] * proved_fraction(nc, xin, Sf)  # the filler's remaining proved fill
+        store = med("defer", "defer_store_bytes")
+        row["defer_store_gib"] = store / 2**30 if store else None  # per-shard stored operands for the sub-round
+        dr = [r for ranks in by_arm["defer"] for r in ranks]
+        row["dp_whole_bad"] = sum(r.get("dp_whole_bad", 0) for r in dr) + sum(r.get("dp_whole_control_equal", 0) for r in dr)
+        row["dp_whole_checked"] = sum(r.get("dp_whole_checked", 0) for r in dr)
+        # the remaining fill's counters against its records (kf_shape); a record without the field wasn't checked
+        row["defer_fill_bad"] = sum(r.get("fill_shape_bad", 1) for r in dr)
+        row["dcap"], row["dSd"], row["dT"] = med("defer", "dcap"), med("defer", "dSd"), med("defer", "dT")
+    if dalone and base:
+        row["dalone_cost"] = dalone / base  # the deferred pass's decode cost a step without the gaps
+    return row
+
+
+def rows(out_dir: str) -> Iterator[dict]:
     for sd in sorted(glob.glob(os.path.join(out_dir, "set*"))):
-        settings = open(os.path.join(sd, "settings.txt")).read().strip() if os.path.exists(os.path.join(sd, "settings.txt")) else ""
+        settings = _read(os.path.join(sd, "settings.txt")).strip()
         arms = defaultdict(lambda: defaultdict(list))  # (tp, B, L) -> arm -> [per-repeat [rank records]]
         gates = []
         wrapped = set()
         for f in sorted(glob.glob(os.path.join(sd, "rank*.jsonl"))):
             seen = defaultdict(int)
-            for line in open(f):
-                if not line.startswith("{"):
-                    continue
+            for line in _records(f):
                 r = json.loads(line)
                 if r.get("mode") == "pf_gate":
                     gates.append(r["ok"])
@@ -93,108 +200,19 @@ def rows(out_dir):
                     lst.append([])
                 lst[i].append(r)
         for key, by_arm in sorted(arms.items()):
-            def t(arm):
-                reps = by_arm.get(arm)
-                if not reps:
-                    return None
-                meds = []
-                for ranks in reps:
-                    n = min(len(x["reps"]) for x in ranks)
-                    meds.append(statistics.median(max(x["reps"][j][0] for x in ranks) for j in range(n)))
-                return statistics.median(meds)
-
-            def first(arm, k):
-                reps = by_arm.get(arm)
-                if not reps:
-                    return None
-                vals = [r[k] for ranks in reps for r in ranks if k in r]
-                return statistics.median(vals) if vals else None
-
-            def fold_of(arm):
-                nc, xin, S = first(arm, "fold_nc"), first(arm, "fold_xin"), first(arm, "fold_s")
-                nc = int(nc) if nc is not None else None
-                return nc, bool(xin), int(S) if S is not None else None
-
-            base, nocomm, comm, phase, commphase = (t(a) for a in ("base", "nocomm", "comm", "phase", "commphase"))
-            row = {"set": os.path.basename(sd), "settings": settings, "tp": key[0], "B": key[1], "L": key[2],
-                   "base_ms": base, "nocomm_ms": nocomm, "comm_ms": comm, "phase_ms": phase, "commphase_ms": commphase,
-                   "gates_ok": all(gates) if gates else None, "kv_wrapped": key in wrapped}
-            if base:
-                mhz = first("base", "mhz")
-                macs = first("base", "served_macs")
-                row["served"] = macs / (base * 1e-3) / (1024 * 188 * mhz * 1e6)
-                row["idle"] = 1 - row["served"]
-                if nocomm:
-                    row["comm_exposed"] = (base - nocomm) / base
-                    row["idle_off_comm"] = row["idle"] - row["comm_exposed"]
-                if phase:
-                    row["slowdown"] = phase / base
-                    fm = first("phase", "fill_macs_rep")
-                    pm = first("phase", "mhz")
-                    row["fill"] = fm / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
-                    nc, xin, Sf = fold_of("phase")
-                    frac = proved_fraction(nc, xin, Sf)
-                    row["fold"], row["fill_k"] = fold_label(nc, xin), row["fill"] * frac
-                    p0 = by_arm["phase"][0][0]
-                    unit = "mmas" if "fill_mmas_rep" in p0 else "steps"
-                    if p0.get(f"fill_{unit}_full_rep") is not None:
-                        row["fill_finished"] = row["fill"] * first("phase", f"fill_{unit}_full_rep") / first("phase", f"fill_{unit}_rep")
-                    row["served_phase"] = macs / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
-                    cs = S.CERTIFIED["serving"]["fraction"]
-                    row["coverage_base"] = cs * row["served"]
-                    row["coverage"] = cs * row["served_phase"] + frac * row["fill"]
-                    pr = [r for ranks in by_arm["phase"] for r in ranks]
-                    row["rec_bad"] = sum(r.get("rec_bad", 0) for r in pr)
-                    row["rec_checked"] = sum(r.get("rec_checked", 0) for r in pr)
-                    row["whole_checked"] = sum(r.get("whole_checked", 0) for r in pr)
-                    row["warps_checked"] = sum(r.get("warps_checked", 0) for r in pr)
-                    row["shape_bad"] = sum(r.get("shape_bad", 0) for r in pr)
-                    row["cut_warps"] = statistics.median(r["cut_warps"] for r in pr) if "cut_warps" in p0 else None
-            if comm and commphase:
-                row["comm_slowdown"] = commphase / comm
-                fm = first("commphase", "fill_macs_rep")
-                row["fill_in_comm"] = fm / (commphase * 1e-3) / (1024 * 188 * first("commphase", "mhz") * 1e6)
-            # the deferred pass: defer (deferred work in the gaps, overflow drained after the step) and dalone (the
-            # whole step's deferred work drained with no gaps)
-            defer, dalone = t("defer"), t("dalone")
-            row["defer_ms"], row["dalone_ms"] = defer, dalone
-            if defer and base:
-                dm = first("defer", "defer_demand_macs")
-                gap = first("defer", "defer_gap_macs_rep")
-                drain = first("defer", "defer_drain_macs_rep")
-                pm = first("defer", "mhz")
-                row["defer_gap_share"] = gap / dm if dm else None      # the step's deferred work run beside the collectives
-                row["defer_overflow_share"] = drain / dm if dm else None  # the overflow, drained after the step
-                # the true step-time cost is defer_slowdown; a gap share of 1 with a slowdown > 1 means it ran in the gap
-                # windows but did not hide (the DRAM-bound load contends with the step)
-                row["defer_slowdown"] = defer / base
-                fm = first("defer", "fill_macs_rep")
-                row["defer_fill"] = fm / (defer * 1e-3) / (1024 * 188 * pm * 1e6)
-                nc, xin, Sf = fold_of("defer")  # the filler after the deferred quota uses the same fold
-                row["defer_fold"] = fold_label(nc, xin)
-                row["defer_fill_k"] = row["defer_fill"] * proved_fraction(nc, xin, Sf)  # the filler's remaining proved fill
-                store = first("defer", "defer_store_bytes")
-                row["defer_store_gib"] = store / 2**30 if store else None  # per-shard stored operands for the sub-round
-                dr = [r for ranks in by_arm["defer"] for r in ranks]
-                row["dp_whole_bad"] = sum(r.get("dp_whole_bad", 0) for r in dr) + sum(r.get("dp_whole_control_equal", 0) for r in dr)
-                row["dp_whole_checked"] = sum(r.get("dp_whole_checked", 0) for r in dr)
-                # the remaining fill's counters against its records (kf_shape); a record without the field wasn't checked
-                row["defer_fill_bad"] = sum(r.get("fill_shape_bad", 1) for r in dr)
-                row["dcap"], row["dSd"], row["dT"] = first("defer", "dcap"), first("defer", "dSd"), first("defer", "dT")
-            if dalone and base:
-                row["dalone_cost"] = dalone / base  # the deferred pass's decode cost a step without the gaps
-            yield row
+            yield _point_row(sd, settings, key, by_arm, gates, wrapped)
 
 
-def _read(p):
-    return open(p).read() if os.path.exists(p) else ""
+def _read(p: str) -> str:
+    path = Path(p)
+    return path.read_text() if path.exists() else ""
 
 
-def gates(out_dir, rs):
+def gates(out_dir: str, rs: list[dict]) -> dict:
     """The run's gates, each {"ok": bool, ...}, and all_ok."""
     pf = []
     for fn in glob.glob(os.path.join(out_dir, "set*", "rank*.jsonl")):
-        pf += [json.loads(ln) for ln in open(fn) if ln.startswith("{") and '"pf_gate"' in ln]
+        pf += [json.loads(ln) for ln in _records(fn) if '"pf_gate"' in ln]
     out = {"pf_gate": {"ok": bool(pf) and all(r["ok"] for r in pf), "records": len(pf),
                        "kinds": sorted({r.get("kind", "") for r in pf})}}
     ph = [r for r in rs if "fill" in r]
@@ -208,7 +226,7 @@ def gates(out_dir, rs):
     # the deferred pass: the pre-timing dp_gate on every rank, and the deferred receipts after the defer arm
     dp = []
     for fn in glob.glob(os.path.join(out_dir, "set*", "rank*.jsonl")):
-        dp += [json.loads(ln) for ln in open(fn) if ln.startswith("{") and '"dp_gate"' in ln]
+        dp += [json.loads(ln) for ln in _records(fn) if '"dp_gate"' in ln]
     if dp:
         out["dp_gate"] = {"ok": all(r["ok"] for r in dp), "records": len(dp),
                           "bad": sum(r["bad"] + r["control_equal"] + r["q_bad"] for r in dp)}
@@ -245,7 +263,7 @@ def gates(out_dir, rs):
     return out
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("out_dir")
     ap.add_argument("--json", action="store_true")
@@ -257,7 +275,10 @@ def main():
             print(json.dumps(r))
         print(json.dumps({"gates": g}))
         return
-    f = lambda v, p=4: "-" if v is None else (f"{v:.{p}f}" if isinstance(v, float) else str(v))
+
+    def f(v, p=4) -> str:
+        return "-" if v is None else (f"{v:.{p}f}" if isinstance(v, float) else str(v))
+
     print("| set | TP | B | L | base ms | comm exposed | served | idle | off-comm idle | phase ms | slowdown | fill | "
           f"fill K (x{K_FRACTION}) | fill (whole tiles) | coverage base → phase | comm+filler/comm | receipts bad/checked |")
     print("|" + "---|" * 17)

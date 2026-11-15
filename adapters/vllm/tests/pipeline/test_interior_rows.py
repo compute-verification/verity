@@ -18,20 +18,22 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity.definitions.registry import dead_free as DF
-from verity.commitments.windows import rows as CS
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.definitions.registry import dead_free as DF, greedy_stages as GS
+from verity.commitments.periods import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import interior_rows as IR
+from verity_vllm.pipeline import serving_rows as SRW
 
 ROPE = "RoPEHead_v1{D=64}"
 PROMPTS = {"r0": [1, 2], "r1": [5, 3], "r2": [4, 6]}
@@ -169,7 +171,7 @@ def _boundary_window(n: int, block=BLOCK) -> CS.Binding:
 
 
 def _ids(ids) -> np.ndarray:
-    a = np.zeros(64, dtype=np.uint16)
+    a: np.ndarray = np.zeros(64, dtype=np.uint16)
     w = np.asarray(ids, dtype="<u4").view("<u2")
     a[:w.size] = w
     return a
@@ -188,7 +190,7 @@ def _boundary(world, block=BLOCK) -> tuple[dict, dict, str]:
 
 
 def _spec(member: CS.Member, unit=UNIT, block=BLOCK, n_rho: int = N_RHO) -> S.Spec:
-    names = {}
+    names: dict[str, tuple[str, str]] = {}
     for phase, w in (("serve", _boundary_window(len(PROMPTS), block)), ("interior", IR.interior_window(member, n_rho, "00", [0]))):
         names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
     public = (S.Public("population", "structure", "N, the sample's range"),
@@ -218,12 +220,12 @@ def spans(world):
 
 
 def _first(world, spans, unit=UNIT, block=BLOCK, n_rho: int = N_RHO):
-    """A two-stage stream over ``unit`` (RoPE heads), the stand-in boundary registered and its first stage drawn (spans 0
+    """A two-stage stream over ``unit`` (RoPE heads), the stand-in boundary registered and its first stage sampled (spans 0
     and 2)."""
     draws = iter([[0, 2]])
     stream = S.Stream(_spec(spans["r0"].member, unit, block, n_rho), unit, replay=block, budget=1, delta=DELTA,
-                      challenger="challenger-test", clock=_Clock(), sampler=lambda law, n: next(draws) if law["law"] == "subset"
-                      else [i * n_rho for i in range(len(law["strata"]))])
+                      challenger="challenger-test", clock=_Clock(), sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset"
+                      else [i * n_rho for i in range(len(sampling_design["strata"]))])
     rec, ports, layer = _boundary(world, block)
     reg = stream.register(rec, ports, leaf_layer=layer)
     return stream, reg, stream.select(reg)
@@ -244,6 +246,7 @@ def test_the_replay_samples_interior_registers_after_its_boundary_and_the_second
     assert ireg.record["population"] == Q * N_RHO and ireg.record["previous"] == reg.digest and stream.log[-1] == ireg.record
     assert ireg.record["window"] == {"kind": "served", "run": IR.interior_run(reg.digest, [0, 2]), "row": ROW,
                                      "interior": True, "replay_sample": [0, 2], "replay": "replay-test"}
+    assert IR.interior_run(reg.digest, first.units) == SS.interior_root(reg.digest, first.units)
     second = stream.select(ireg)
     assert second.replay_sample == first and [u // N_RHO for u in second.units] == [0, 1]
 
@@ -323,7 +326,8 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     """The GPU replay's dry run: each request's capture, written from its CPU replay's token-select inputs (logits rows,
     ids, steps), reads back as the span `span` reads from its Program, member and words, and the replay sample's
     captured spans register as the interior of a two-stage stream over token selects. A capture whose ids are not the
-    ones served, or whose rows changed after it was written, is refused before any commitment."""
+    ones served, or whose rows changed after it was written, is refused before any commitment, in words that say how
+    many ids differ and carry none of them."""
     replayed = {rid: IR.span(world.inst, _replay(world, rid), TSEL) for rid in PROMPTS}
     served = _tokens(world)
     SC.write(tmp_path, TSEL, {rid: {"logits": s.data["rows"]["in0"], "tokens": served[rid], "steps": [e[3] for e in s.entries],
@@ -332,8 +336,13 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     for rid, s in replayed.items():
         assert got[rid].member == s.member and got[rid].program == s.program
         assert all(np.array_equal(got[rid].data[k][p], a) for k in ("rows", "outs") for p, a in s.data[k].items())
-    with pytest.raises(ValueError, match="didn't reproduce the span"):
+    n = len(served["r1"])
+    with pytest.raises(ValueError, match=f"request r1: the replay selected {n} ids and serving emitted {n}, 1 of them "
+                                         "different: it didn't reproduce the span"):
         IR.captured(tmp_path, "r1", served["r1"][:-1] + [served["r1"][-1] + 1])
+    with pytest.raises(ValueError, match=f"selected {n} ids and serving emitted {n - 1}, 2 of them different") as e:
+        IR.captured(tmp_path, "r1", [served["r1"][0] + 100000, *served["r1"][1:-1]])
+    assert str(served["r1"][0] + 100000) not in str(e.value)
     unit = SRW.template(TSEL).fn
     block = _block(TSEL_RHO, unit, "InteriorRowsTestSelects")
     stream, reg, first = _first(world, got, unit, block, TSEL_RHO)
@@ -359,7 +368,7 @@ NAN, NEG_NAN, NEG_ZERO, NEG_INF, INF, ONE, NEG_ONE = 0x7FC0, 0xFFC0, 0x8000, 0xF
 def _select_rows(V: int) -> np.ndarray:
     """Logits rows of random words, then of edge cases: none above -inf, a NaN logits[0], a tie across chunks, -0 before
     +0, +inf last, and NaNs but one number in the last chunk."""
-    edge = np.full((6, V), NEG_INF, dtype=np.uint16)
+    edge: np.ndarray = np.full((6, V), NEG_INF, dtype=np.uint16)
     edge[1, :], edge[1, 0] = ONE, NAN
     edge[2, [5, V // 2 + 5]] = ONE
     edge[3, 3], edge[3, 4] = NEG_ZERO, 0
@@ -403,10 +412,59 @@ def test_a_token_selects_pieces_are_its_chunks_and_combine_by_their_definitions(
             r[0] for r in s.data["rows"]["in0"].tolist()]
     wrong = s.data["outs"][out].copy()
     wrong[0, 0] ^= 1
-    with pytest.raises(ValueError, match="its chunks and combine select"):
+    with pytest.raises(ValueError, match=f"its chunks and combine select other ids than its span's at 1 of its {s.n} tokens"):
         IR.pieces(replace(s, data={**s.data, "outs": {out: wrong}}), c)
     with pytest.raises(ValueError, match="are not whole chunks"):
         IR.pieces(s, 3)
+
+
+def _greedy_selects(tmp_path, V: int, K: int) -> dict[str, IR.Span]:
+    """Two requests' captured `GreedySelect_v1{V, N=V / K}` spans of five tokens each, each token its Definition's on its
+    row."""
+    t, rows = f"GreedySelect_v1{{V={V},N={V // K}}}", _select_rows(V)
+    fn = SRW.template(t).fn
+
+    def token(r: np.ndarray) -> int:
+        lo, hi = evaluate(fn, r.tolist())
+        return int(lo) | int(hi) << 16
+    SC.write(tmp_path, t, {rid: {"logits": part, "tokens": [token(r) for r in part], "steps": list(range(len(part))),
+                                 "program": "p" * 64}
+                           for rid, part in (("a", rows[:5]), ("b", rows[5:]))})
+    return {rid: IR.captured(tmp_path, rid) for rid in ("a", "b")}
+
+
+@pytest.mark.parametrize("V,K", [(160, 20), (64, 4)])
+def test_a_greedy_selects_pieces_are_one_unit_of_each_of_its_templates_by_their_definitions(tmp_path, V, K):
+    """`pieces` lays a captured `GreedySelect_v1{V, N=V / K}` span out as its body calls its units
+    (`greedy_stages.plan`): a piece a template, in the plan's order, each of one unit a token, so K pieces of the span's
+    own units and entries. A chunk's row is its lanes of the token's logits and its output its Definition's three words
+    of them; the combine's rows are the last chunk's lanes and each other chunk's output row, whole, which its
+    Definition takes to the span's token, on random words and on NaN, ±0, ±inf and ties across chunks. Each piece's
+    member is its template's as an interior window lays it out (`member`). Units that don't select the span's token,
+    and a chunk size given beside the template's own N, are refused."""
+    us, out = GS.plan(V, K), f"out.{SAMPLED_MEMBER}"
+    for s in _greedy_selects(tmp_path, V, K).values():
+        got = IR.pieces(s)
+        assert [x.member for x in got] == [IR.member(u.defn.id, s.n) for u in us]
+        assert all(x.group == 1 and x.entries == s.entries and x.program == s.program for x in got)
+        *chunks, comb = got
+        assert [p for p, _w in comb.member.rows] == ["logits", *(f"r{c}" for c in range(K - 1))]
+        for j, row in enumerate(s.data["rows"]["in0"].tolist()):
+            parts = []
+            for c, (u, piece) in enumerate(zip(us[:-1], chunks, strict=True)):
+                lanes = row[u.lanes[0]:u.lanes[1]]
+                parts.append(list(evaluate(u.defn, lanes)))
+                assert piece.data["rows"]["logits"][j].tolist() == lanes
+                assert piece.data["outs"]["o0"][j].tolist() == comb.data["rows"][f"r{c}"][j].tolist() == parts[-1]
+            lanes = row[us[-1].lanes[0]:us[-1].lanes[1]]
+            assert comb.data["rows"]["logits"][j].tolist() == lanes
+            assert list(evaluate(us[-1].defn, lanes, *parts)) == comb.data["outs"]["o0"][j].tolist() == s.data["outs"][out][j].tolist()
+    wrong = s.data["outs"][out].copy()
+    wrong[0, 0] ^= 1
+    with pytest.raises(ValueError, match=f"its units select other ids than its span's at 1 of its {s.n} tokens"):
+        IR.pieces(replace(s, data={**s.data, "outs": {out: wrong}}))
+    with pytest.raises(ValueError, match="its chunks are its own N"):
+        IR.pieces(s, V // K)
 
 
 @pytest.mark.parametrize("V,c", [(128, None), (64, 16)])
@@ -429,6 +487,35 @@ def test_a_token_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(
             SC.piece_rows(logits, torch.from_numpy(ids ^ 1), c)
         with pytest.raises(ValueError, match="don't pad to a size class of 4"):
             SC.piece_rows(logits, ids, c, pad=4)
+
+
+@pytest.mark.parametrize("V,K", [(160, 20), (64, 4)])
+def test_a_greedy_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(tmp_path, V, K):
+    """`sampler_capture.piece_rows` of `GreedySelect_v1{V, N=V / K}`, on the device the sampler's logits are on (CPU torch
+    here), lays every unit's rows out word for word as `pieces` does from the captured span, NaN, ±0, ±inf and ties
+    across chunks included, and padded to a size class by whole tokens; ids its units don't select, a chunk size beside
+    the template's own N, and a template whose pieces it doesn't lay out are refused."""
+    import torch
+    t = f"GreedySelect_v1{{V={V},N={V // K}}}"
+    for s in _greedy_selects(tmp_path, V, K).values():
+        ids = s.data["outs"][f"out.{SAMPLED_MEMBER}"].view("<u4")[:, 0].astype(np.int64)
+        logits = torch.from_numpy(s.data["rows"]["in0"].view(np.int16).copy()).view(torch.bfloat16)
+        got = SC.piece_rows(logits, torch.from_numpy(ids), template=t)
+        padded = SC.piece_rows(logits, ids, pad=s.n + 3, template=t)
+        pieces = IR.pieces(s)
+        assert list(got) == [p.member.template for p in pieces]
+        for piece in pieces:
+            want = {p: a.tolist() for kind in ("rows", "outs") for p, a in piece.data[kind].items()}
+            assert {p: a.numpy().view(np.uint16).tolist() for p, a in got[piece.member.template].items()} == want
+            whole = piece.padded(s.n + 3)
+            want = {p: a.tolist() for kind in ("rows", "outs") for p, a in whole[kind].items()}
+            assert {p: a.numpy().view(np.uint16).tolist() for p, a in padded[piece.member.template].items()} == want
+        with pytest.raises(ValueError, match="the units select"):
+            SC.piece_rows(logits, torch.from_numpy(ids ^ 1), template=t)
+        with pytest.raises(ValueError, match="its chunks are its own"):
+            SC.piece_rows(logits, ids, V // K, template=t)
+        with pytest.raises(ValueError, match="no token select whose pieces are laid out here"):
+            SC.piece_rows(logits, ids, template=f"TokenSelect_v1{{V={V}}}")
 
 
 def test_a_token_selects_pieces_stage_as_the_second_stage_stages_an_interior_member():

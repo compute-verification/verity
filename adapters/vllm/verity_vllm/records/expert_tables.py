@@ -13,6 +13,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, required
 
+__all__ = ["ExpertTables", "SCHEMA"]
+
 SCHEMA = "verity-vllm/expert-tables/v1"
 #: an entry's fields: core's `registered.Registered.entry()` (``word_bits`` where its words are not 16-bit)
 ENTRY = ("value", "root", "leaves", "words", "word_bits", "domain")
@@ -21,7 +23,9 @@ ROOT = re.compile(r"[0-9a-f]{128}")
 
 @dataclass(frozen=True)
 class ExpertTables:
-    program: str                                      # the rank's program digest, which each entry's domain binds
+    # what each entry's domain binds as its program: the SHA-512 of the model, its revision, the TP world, the rank and the
+    # prefix (`pipeline.expert_tables.program`), not a Program's digest
+    program: str
     repo: str                                         # the model registered, at its revision
     revision: str
     world: int                                        # the TP world, and the rank whose shards the tables hold

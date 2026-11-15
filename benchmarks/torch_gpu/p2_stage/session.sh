@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# One load run on an H200, from build.sh's lib, the weights module, the weights manifest with
-# digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_v1/store.py layout`,
-# and its toy, `p2_v1/store-toy/`); cwd = the source tree's root:
+# One load run on an H200, from build.sh's lib, the tree's weights module, the weights manifest with
+# digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_store/store.py layout`,
+# and its toy, `p2_store/store-toy/`); cwd = the source tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
-#   tar -C benchmarks/pous/p2_v1/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
+#   tar -C verity/protocols/accounting/pous/prover/p2/p2_store/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
 #   research run --on H200_NODE --project verity --source . --cwd source --timeout 240m \
 #     [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
-#     --send /tmp/p2lib.tar --send benchmarks/torch_gpu/p2_stage/served_weights.py --send h200-manifest.json \
+#     --send /tmp/p2lib.tar --send h200-manifest.json \
 #     --send store-layout.json \
 #     --send /tmp/store-toy.tar [--send SLICE/setup.json --send SLICE/00000.c --send SLICE/00000.json ...] \
 #     -- bash benchmarks/torch_gpu/p2_stage/session.sh
 #
-# (served_weights.py writes the seeded stream; h200-manifest.json: its manifest with digests.)
+# (The tree's served_weights.py writes the seeded stream, and inputs.sha256 records that file as it generated;
+# h200-manifest.json: the stream's manifest with digests.)
 #
 # With ENCODED=1 the store is memory-accounting's encoded store, read only: the layer's segment files of it (each
 # segment's `<s>.c` and `<s>.json`, and `setup.json`, copied off the node that holds it), put once into ENC/seg and kept
-# with `research keep`; its salt is `setup.draw_salt(SOURCE, COMMITMENT)`, the deployment's coin and commitment.
+# with `research keep`; its salt is `setup.sample_salt(SOURCE, COMMITMENT)`, the deployment's coin and commitment.
 # Otherwise the development store STORE under the public test salt SALT, which `encode` extends across runs.
 #
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to the fixture's LAYOUT_SHA512, the
@@ -42,7 +43,7 @@ SALT=${SALT:-011feb1ddfe7334099b02f79a43b4d1411bec106975fffe4}
 # the deployment's coin of record and W's commitment under the frozen layout
 SOURCE=${SOURCE:-dd56f549e504fa8a48db829588683baa66d5ab0c8c381665a87c3b53ffeb3ced}
 COMMITMENT=${COMMITMENT:-9aaaf192b1a7c0962b6139b7bad5b6a2abc9809d889ed5da5890628d1799dfe4291ce318bc8ba410b41886e30d52278f89686f429839257eab1728ac5902706a}
-# p2_v1/store.py's LAYOUT_SHA512, and h200-manifest.json's
+# p2_store/store.py's LAYOUT_SHA512, and h200-manifest.json's
 LAYOUT_SHA512=${LAYOUT_SHA512:-45436c2a341cfef20219a071b9b27bd9013535b1de9001ae22d0bf3bd25a825e6aa7c82a60734047d1de59c38e572e126e3c7c64c78f1176e258cb8cb833b783}
 MANIFEST_SHA256=${MANIFEST_SHA256:-28a29668627351e0118b02bbb4dddd0d3f25e2dfa6860b82f3048c0871792f27}
 STEPS=${STEPS:-toy,stage,gemm,check}
@@ -50,7 +51,7 @@ M=${M:-4096,16384}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 LAYOUT=$IN/store-layout.json; MANIFEST=$IN/h200-manifest.json
 export O D PY S SRC STORE ENC SALT LAYER STEPS LAYOUT MANIFEST PATH=$CUDA/bin:$PATH \
-  PYTHONPATH=$PWD:$PWD/benchmarks/pous:$S/tl${PYTHONPATH:+:$PYTHONPATH}
+  PYTHONPATH=$PWD:$PWD/benchmarks/pous${PYTHONPATH:+:$PYTHONPATH}
 : > "$O/rc.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 keep() {  # PATH WHAT: `research keep` PATH under keep.json's owner and expiry, with WHAT's reason
@@ -61,15 +62,15 @@ print(k["owner"], k["expires"], k["why"][sys.argv[2]].format(layer=sys.argv[3]),
   research keep "$1" --owner "$owner" --expires "$expires" --priority normal --why "$why" > /dev/null 2>&1
 }
 
-mkdir -p "$S/lib" "$S/toy" "$S/tl/e2e_h200" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
+mkdir -p "$S/lib" "$S/toy" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
   && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) && tar -C "$S/toy" -xf "$IN/store-toy.tar" \
   && [ "$(sha512sum < "$LAYOUT" | cut -c1-128)" = "$LAYOUT_SHA512" ] \
   && [ "$(sha256sum < "$MANIFEST" | cut -c1-64)" = "$MANIFEST_SHA256" ]
 step ship $?
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/elf.txt" "$S/lib/MANIFEST.sha256" "$O/"
-cp "$IN/served_weights.py" "$S/tl/e2e_h200/served_weights.py" && touch "$S/tl/e2e_h200/__init__.py"
-(cd "$IN" && sha256sum served_weights.py h200-manifest.json store-layout.json store-toy.tar) > "$O/inputs.sha256"
+{ (cd "$IN" && sha256sum h200-manifest.json store-layout.json store-toy.tar) && sha256sum verity/protocols/accounting/pous/prover/served_weights.py; } \
+  > "$O/inputs.sha256"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$O/gpus.txt" 2>&1
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
@@ -100,7 +101,7 @@ print(*L.Weights.of(json.load(open(os.environ["MANIFEST"]))).span(int(os.environ
 EOF
 )
 if [ ! -e "$SRC/w.key" ]; then
-  "$PY" -m benchmarks.torch_gpu.p2_stage.served_weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
+  "$PY" -m verity.protocols.accounting.pous.prover.served_weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
     --workers "$(nproc)" 2>> "$O/prepare.log" && echo "$SEED $LO $HI" > "$SRC/w.key"
   step prepare $?
 else

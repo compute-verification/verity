@@ -1,4 +1,4 @@
-"""`engine.int8_k_scales`: the provisional K-scale rule, the table and its lookup; and `int8_kscale_gpu.Calibrator`'s amax."""
+"""`engine.int8_k_scales`: the provisional K-scale rule, the table and its lookup; and `k_scale_calibrator.Calibrator`'s amax."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import torch
 
-from tests.engine import int8_kscale_gpu as KG
+from tests.engine.k_scale_calibrator import Calibrator
 from verity_vllm.engine import int8_k_scales as K
 
 
@@ -46,7 +46,7 @@ def test_layer_index_refuses_a_name_without_one():
 
 
 def test_a_tensor_parallel_rank_serves_its_consecutive_kv_heads_columns():
-    s = np.arange(80 * 8, dtype=np.float32).reshape(80, 8)
+    s: np.ndarray = np.arange(80 * 8, dtype=np.float32).reshape(80, 8)
     assert K.rank_table(s, 8).tobytes() == s.tobytes()
     parts = [K.rank_table(s, 2, r, 4) for r in range(4)]
     assert all(p.shape == (80, 2) and p.flags.c_contiguous for p in parts)
@@ -68,7 +68,7 @@ def test_the_calibrator_keeps_the_amax_of_every_handed_key():
 
     mods = {f"model.layers.{i}.self_attn.attn": SimpleNamespace(impl=Impl()) for i in range(3)}
     model = SimpleNamespace(named_modules=lambda: list(mods.items()))
-    cal = KG.Calibrator(model)
+    cal = Calibrator(model)
     gen = torch.Generator().manual_seed(0)
     seen = torch.zeros(3, 2)
     for _ in range(4):

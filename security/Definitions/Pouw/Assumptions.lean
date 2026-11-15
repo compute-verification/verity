@@ -30,7 +30,6 @@ public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.GameStatements
-public import Definitions.Pouw.Assumptions.LeadCommit
 public import Definitions.Pouw.Assumptions.NCP.Assumptions
 public import Definitions.Pouw.Assumptions.NCP.Chain
 public import Definitions.Pouw.Assumptions.NCP.GamePinned
@@ -38,11 +37,10 @@ public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 public import Definitions.Pouw.Assumptions.NCP.RouteUGame
 public import Definitions.Pouw.Assumptions.NCP.RouteUWord
 public import Definitions.Pouw.Assumptions.OnsiteFreed
-public import Definitions.Pouw.Assumptions.PearlC.Deadline
-public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
-public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCapKernel
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainInertBound
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainInertBoundKernel
 public import Definitions.Pouw.Assumptions.PearlC.HiddenTile
-public import Definitions.Pouw.Assumptions.PearlC.HonestCap
+public import Definitions.Pouw.Assumptions.PearlC.HonestInertBound
 public import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
 public import Definitions.Pouw.Assumptions.PearlC.TTOut
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
@@ -52,11 +50,15 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
+public import Definitions.Pouw.Assumptions.PearlC.TTOutS8
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.Assumptions.RelativeSecurity
 public import Definitions.Pouw.Assumptions.ServedWork
 public import Definitions.Pouw.Assumptions.ShaRealize
+public import Definitions.Pouw.Game.Deadline
+public import Definitions.Pouw.PearlC.Deadline
+public import Definitions.Pouw.PearlC.Game
 /-!
 # PoUW's named assumptions, and the definitions and statements over them (trusted)
 

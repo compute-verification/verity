@@ -16,15 +16,14 @@ Verity itself knows nothing of vLLM.
   idle and closes when it is idle again or after `--window-steps`. Each window is one Commit, and `--seal` seals it.
   `--protocols pouw:<scheme>` serves PoUW's H1 arm on the endpoint's own Commit, one H1 window per window, and
   `--remote-verifier` proves the engine's store to PoUB's verifier as it serves. Its module docstring documents every
-  flag and record. The public release leaves out this endpoint and the window circuit, which read the network
-  certifier's encoding, and that encoding stays private, so it ships without a runnable served window.
-- **`verity demo vllm`** (`demos/vllm/run.sh`) starts the served-verdicts launcher,
-  `benchmarks/one_stage/served_verdicts.sh`, on the node `demos/vllm/placement.toml` names. It runs the Build of
-  record, then the endpoint with `--seal` under a GPU lease, and a load. Then come sampled proofs on one sealed window:
+  flag and record.
+- **The served run** (`bash adapters/vllm/tools/served_run/run.sh`) starts the served-verdicts launcher,
+  `benchmarks/one_stage/served_verdicts.sh`, on the node `adapters/vllm/tools/served_run/placement.toml` names. It runs
+  the Build of record, then the endpoint with `--seal` under a GPU lease, and a load. Then comes SPOT on one sealed window:
   its advice through the registered compiler (`tools/advice_compile.py`), Flock `--zk` behind the Lean ZK server, and the
   Lean verifier's verdict. PoUW, PoUS, the bandwidth audit and the network certifier follow where each has its piece,
-  and it ends with one record of every verdict. The launcher's header gives each step, and `demos/vllm/README.md`
-  says what the run establishes.
+  and it ends with one record of every verdict. The launcher's header gives each step, and
+  `adapters/vllm/tools/served_run/README.md` says what the run establishes.
 - **`verity-vllm COMMAND`** (`verity_vllm/pipeline/cli.py`, or `python -m verity_vllm.pipeline.cli`): every tool here is a
   subcommand of this one command line. `verity-vllm --help` lists them all. `COMMANDS` maps each to its module, whose
   docstring documents it. The commands to start from:
@@ -74,8 +73,9 @@ finish inside one served window. The parts, in the order they run:
   prompt's token ids) and its egress (how many ids were served, why it finished, the ids). The requests of one size
   class, prompt and output lengths rounded up to powers of two, are one registration. A window closes after its
   length, when no request is running, or at stop, and a thread of its own commits it. A request still running is
-  carried to the next window, so a replay block never crosses one. A scheduler that caches prefixes is refused: a
-  cache hit reads another request's rows.
+  carried to the next window, so a replay block never crosses one. A scheduler that caches prefixes commits the
+  same rows; it is refused only with history tables, which hold a request's latent rows from position 0, where a
+  request served from the cache computes none before its hit's end.
 - **The schedule** (`verity_vllm/engine/step_trace.py`). The in-process engine core records what the scheduler decided
   at every step: each arrival, each step's rows in the model runner's order with their first positions and lengths,
   preemptions, cache hits and finishes. Recording changes nothing the engine does. The schedule reaches an audit as
@@ -102,7 +102,7 @@ finish inside one served window. The parts, in the order they run:
   commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
   challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
   stage. The verifier refuses every two-stage run at its last check (`FORM` in
-  `verity/protocols/spot/verifier/second_stage.py`) until the soundness proof covers that form.
+  `verity/protocols/proofs/spot/verifier/second_stage.py`) until the soundness proof covers that form.
 
 The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` serves with
 the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `REPLAY=LOAD REPLAY_FROM=ARM_DIR
@@ -125,6 +125,10 @@ One line for each subpackage of `verity_vllm/`, and for what sits beside it:
 verity_vllm/
   llm.py             LLM, the pinned engine as a library
   config.py          workload files, checkpoint pins, protocol names; settings.py: every environment variable it reads
+  errors.py, log.py  the one refusal type (Refused); the logger every library module logs through (init_logger)
+  target_family.py   the target-family preflight: a workload's device class, held against its Build and its pod's GPU
+  glue.py            the glue inventory: a model's model-specific code, and its hours from staged checkpoint to record
+  gc_tuning.py       the cyclic collector's thresholds for the offline analysis processes
   engine/            the pinned engine: its build, profiles, served switches (served.py); hooks.py owns every runtime patch
   pipeline/          stage drivers (Build, Match, Commit; tp/ for TP > 1), the endpoint (serve_*.py), cli.py, circuit_db.py
   program/           Programs: the torch frontend (frontend/) lowers the served model onto registered Definitions
@@ -136,11 +140,11 @@ verity_vllm/
   commit/            the Commit: the GPU committer (committer/) and the rows-sha512 scheme (step_rows.py)
   commitments/       the vllm-v1 scheme's hashlib reference, PROTOCOL.md and vectors (vllm_v1/); its leaf tree (leaves.py)
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
-  protocols/         the subprotocols' adapters: sampled proofs, PoUS, PoUB's registered store (remote_bandwidth/)
+  protocols/         the subprotocols' adapters: SPOT, PoUS, PoUB's node store on the engine (poub/)
     pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
-  properties/        property harnesses: non-interference, kernel census, golden and holdout corpora, tap exactness
   records/           typed stage records, one for each kind one stage writes and another reads
-  ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime); each workload's served pin per device
+  ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment
+                     of another build of engine.stock.BUILDS beside it); each workload's served pin per device
 workloads/           workload files, each a fixture in the evidence store, read through config.workload_file
 manifests/           checkpoint pins (checkpoints.json), workloads of record (records.json), Definitions, capture maps
 tests/               the suite verity-vllm, a directory for each subpackage; lint/ holds the ratchets (lint/README.md)
@@ -156,7 +160,7 @@ regression, skipped unless `VERITY_REGRESSION=1`.
 `uv sync --all-packages --extra torch-cpu` installs it with CPU-only torch. The `torch` extra is the CUDA build, and
 vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds. Tests and tools read fixtures
 relative to this directory, so run them from here. The suite runs remotely like every suite
-(`tools/verity/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
+(`tools/check/suites.py`), and `python3 tools/suite_parts.py launch` splits it into parallel `research run` jobs.
 
 ## Vocabulary
 

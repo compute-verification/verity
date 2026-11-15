@@ -1,7 +1,7 @@
 """`verity bench overhead`'s node side: the operating points' sweep and a scheme's timed run, each `bench.py` runs of the
 PoUW harness (`benchmarks/pouw/harness`) on the one GPU the run's lease holds. `overhead_node.sh` runs it in the node's
 Python with torch and vLLM, under the `research run` that `overhead_records` launches; this side writes `$OUT` and the run's
-`result.json`, and the store side reads them.
+`result.json` (its measurements through the kit's writer, under the kit's host stamp), and the store side reads them.
 
     python -m verity_bench.overhead_node points --card h200 --uuid GPU-... --out DIR --run-dir DIR --run-id RUN
     python -m verity_bench.overhead_node run --card h200 --scheme pearl-plus --points FILE --point C|L|all \\
@@ -22,6 +22,8 @@ item no report holds, refuses the run), and writes `overhead.json`: per point, t
 the fastest stock arm by wall time, beside it over the least-SM-time arm, with the weight side as a bound, the A/A control,
 the cross-check, ε from the scheme's function at the same point and card, and why each point's γ isn't of record. A kernel
 point runs no model, so it has no perplexity; nor does it serve requests, so it has no load counts to keep on the node.
+Beside the arm it records whether the arm's timed call commits y (`arm.commits_y`, the scheme's entry), which the table's
+note reads.
 """
 
 from __future__ import annotations
@@ -29,14 +31,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
-from verity_bench import nsys
+from verity_bench import kit, nsys
 from verity_bench import overhead as O
 
 HARNESS = Path("benchmarks/pouw/harness")
@@ -51,9 +55,10 @@ POINTS_BENCH = ("--methods", "graph", "--decode-method", "independent")
 #: a timed run's: the graph method gives each stock kernel's wall time, the burst method the host's enqueue, and the traced
 #: pass beside them each item's busy SM-time
 RUN_BENCH = ("--methods", "graph", "burst", "--decode-method", "independent", "--traced", "--twins")
+#: a timed run's measurement of each point's γ, by the point's name (``C``, ``L``): the metric's id, OWNER/NAME
+GAMMA = "benchmarks/overhead.gamma-{}"
 #: the cubin the run was sent (`run --cubin ART`), which the scheme's arm loads and lists in its build record's `binaries`
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
-RESULT_SCHEMA = "research/result/v0.1"
 
 Runner = Callable[[list[str], Path], int]
 
@@ -91,13 +96,24 @@ def _write(path: Path, doc: dict) -> None:
 
 
 def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, detail: str, fingerprint: dict,
-                 measurements: Sequence[dict] = ()) -> None:
+                 measurements: Sequence[dict] = (), *, measured: Sequence[dict] = ()) -> None:
+    """The run's `result.json`, started afresh and written by the kit's writer, which stamps each measurement with the
+    run, the commit and the host: what ran (`fingerprint`), `record` as its measurement file, each of `measured` (the kit
+    writer's arguments), and last the validation, with `record` as its evidence. `measurements` are entries a caller
+    wrote whole, held as given ahead of the writer's: serving cost's (`benchmarks/serve_tax`), until it writes them
+    through the kit's writer."""
+
     rel = os.path.relpath(out / record, run_dir)
-    _write(run_dir / "result.json", {
-        "schema": RESULT_SCHEMA, "run_id": run_id, "workload_fingerprint": fingerprint,
-        "validation": {"status": "passed" if ok else "failed", "checker": "verity bench overhead", "detail": detail,
-                       "evidence": [rel]},
-        "measurements": list(measurements), "measurement_files": [rel], "artifacts": []})
+    (run_dir / kit.RESULT).unlink(missing_ok=True)
+    if measurements:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write(run_dir / kit.RESULT, {"schema": kit.RESULT_SCHEMA, "run_id": run_id, "measurements": list(measurements)})
+    writer = kit.Writer(run_dir, run_id, kit.host_stamp() if measured else {})
+    writer.fingerprint(**fingerprint)
+    writer.measurement_file(rel)
+    for m in measured:
+        writer.measurement(**m, inputs=[rel], mark="measured")
+    writer.validation("passed" if ok else "failed", "verity bench overhead", detail, [rel])
 
 
 # ---- points ------------------------------------------------------------------------------------------------------------------
@@ -143,20 +159,41 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
         except ValueError as ex:
             why = str(ex)
     if why is None:
-        doc |= {"c": p.c, "l": p.l, "best_flop_per_ms": p.best_flop_per_ms,
+        doc |= {"c": p.c, "l": p.lat, "best_flop_per_ms": p.best_flop_per_ms,
                 "times_ms": {str(m): t for m, t in sorted(times.items())},
                 "tflops": {str(m): O.layer_flop(a.model, m) / t / 1e9 for m, t in sorted(times.items())},
                 "linears": {str(m): v for m, v in sorted(chosen.items())}}
     doc["error"] = why
     _write(out / "points.json", doc)
     said = why or f"C = {doc.get('c')}, L = {doc.get('l')}"
-    write_result(a.run_dir, a.run_id, out, "points.json", why is None, said, fingerprint,
-                 [] if why else [{"name": "C", "value": doc["c"], "unit": "m"}, {"name": "L", "value": doc["l"], "unit": "m"}])
+    write_result(a.run_dir, a.run_id, out, "points.json", why is None, said, fingerprint, measured=[] if why else [
+        {"name": "C", "value": doc["c"], "unit": "m"}, {"name": "L", "value": doc["l"], "unit": "m"}])
     print(f"points: {said}")
     return 0 if why is None else 1
 
 
 # ---- run ---------------------------------------------------------------------------------------------------------------------
+
+
+def _arm_module(arm_path: str | None, name: str) -> Any:
+    """The module `name` of a scheme's `arm_path`, a directory that is no package, loaded by its file's path (as `bench.py
+    --arm-path` takes it); an importable module where the scheme gives no path."""
+
+    if not arm_path:
+        return importlib.import_module(name)
+    if (held := sys.modules.get(name)) is not None and Path(getattr(held, "__file__", "")) == Path(arm_path) / f"{name}.py":
+        return held
+    spec = importlib.util.spec_from_file_location(name, Path(arm_path) / f"{name}.py")
+    if spec is None or spec.loader is None:
+        raise ImportError(f"no module {name} in {arm_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        del sys.modules[name]
+        raise
+    return module
 
 
 def epsilon_at(sch: O.Scheme, card: O.Gpu, m: int, model: str) -> dict:
@@ -166,9 +203,7 @@ def epsilon_at(sch: O.Scheme, card: O.Gpu, m: int, model: str) -> dict:
         return {"why": f"{sch.id} has no ε: it is the A/A control"}
     mod, _, name = sch.epsilon.partition(":")
     try:
-        if sch.arm_path and sch.arm_path not in sys.path:
-            sys.path.insert(0, sch.arm_path)
-        fn = getattr(importlib.import_module(mod), name)
+        fn = getattr(_arm_module(sch.arm_path, mod), name)
         return {linear: fn(m, n, k, card.gpu) for linear, (n, k) in O.MODELS[model].items()}
     except Exception as ex:  # noqa: BLE001 - recorded beside γ: a missing ε is shown, never invented
         return {"why": f"{sch.epsilon}: {type(ex).__name__}: {ex}"}
@@ -214,7 +249,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         return 1
     model = pts["model"]
     at = {p: pts[p.lower()] for p in (O.POINTS if a.point == "all" else (a.point,))}
-    arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm else []
+    arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm and sch.arm_path else []
     prof = scratch / "prof"
     bench_json = out / "bench.json"
     rc = run([*(["env", f"{CUBIN_ENV}={cubin}"] if cubin else []), a.nsys, *NSYS_PROFILE, "-o", str(prof),
@@ -237,7 +272,8 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
                  for b in (result.get("sass_gate") or {}).get("binaries") or []]
         sha = _sha256(cubin) if cubin else None
         doc["arm"] = {"name": arm, "cubin_art": a.cubin_art if cubin else None, "cubin_sha256": sha,
-                      "binaries": build.get("binaries"), "gated": gated, "verifier": rec.get("verifier")}
+                      "binaries": build.get("binaries"), "gated": gated, "verifier": rec.get("verifier"),
+                      "commits_y": sch.commits_y}
         if not str(doc["arm"]["cubin_art"] or "").startswith("art:"):
             whys.append("the run was sent no cubin art (`run --cubin ART`): a cubin built in the run is development only")
         elif bench_json.is_file() and sha not in {b["sha256"] for b in gated if b["ok"]}:
@@ -285,7 +321,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
             p["epsilon"] = epsilon_at(sch, card, m, model)
             p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
             g = (p.get("gamma") or {}).get("gamma")
-            p["gate"] = None if g is None else {"cap": O.GAMMA_CAP, "passes": g <= O.GAMMA_CAP}
+            p["gate"] = None if g is None else {"gamma_max": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
             p["whys"] = O.point_whys(p)
             doc["points"][name] = p
     _write(out / "overhead.json", doc)
@@ -294,8 +330,9 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     write_result(a.run_dir, a.run_id, out, "overhead.json", ok,
                  "; ".join(f"γ at {n} {g:.4f}" if g is not None else f"no γ at {n}" for n, g in gammas.items())
                  or (whys[0] if whys else "nothing timed"),
-                 fingerprint, [{"name": f"gamma_{n}", "value": g, "unit": "ratio"} for n, g in gammas.items()
-                               if g is not None])
+                 fingerprint, measured=[{"name": GAMMA.format(n.lower()), "value": gammas[n], "unit": "ratio",
+                                         "interval": p["gamma"].get("ci95")}
+                                        for n, p in doc["points"].items() if gammas[n] is not None])
     for n, p in doc["points"].items():
         stands = "of record" if not (p["whys"] or whys) else "not of record: " + "; ".join(p["whys"] + whys)
         print(f"run: {sch.id} at {n} (m = {p['m']}): γ {gammas[n]}; {stands}")

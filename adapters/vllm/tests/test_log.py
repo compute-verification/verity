@@ -6,6 +6,8 @@ import ast
 import io
 import logging
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -95,7 +97,7 @@ def test_once_logs_a_message_with_its_arguments_once(caplog) -> None:
 
 
 def test_a_logger_outside_the_package_is_refused() -> None:
-    for name in ("__main__", "verity_vllmx", "verity.ml"):
+    for name in ("__main__", "verity_vllmx", "verity.circuits"):
         with pytest.raises(ValueError, match="pass the `__name__` of a module of verity_vllm"):
             L.init_logger(name)
     assert L.init_logger("verity_vllm") is logging.getLogger("verity_vllm")
@@ -113,3 +115,19 @@ def test_the_logger_imports_nothing_from_the_package() -> None:
     mods = {a.name for n in nodes if isinstance(n, ast.Import) for a in n.names}
     mods |= {"." * n.level + (n.module or "") for n in nodes if isinstance(n, ast.ImportFrom)}
     assert not {m for m in mods if m.startswith((".", "verity_vllm"))}, sorted(mods)
+
+
+def test_write_loads_from_the_bottom_layer_with_nothing_of_pipeline() -> None:
+    """A command in any layer writes its reader output through ``write``, so loading it loads no ``pipeline`` module."""
+    code = ("import sys\nfrom verity_vllm.log import write\n"
+            "print(sorted(m for m in sys.modules if m.startswith('verity_vllm.pipeline')))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
+    assert out == "[]\n"
+
+
+def test_write_puts_the_text_and_its_end_on_stdout_alone_and_is_clis(capsys) -> None:
+    from verity_vllm.pipeline import cli
+
+    L.write('{"ok": true}')
+    L.write("a plan", end="")
+    assert capsys.readouterr() == ('{"ok": true}\na plan', "") and cli.write is L.write

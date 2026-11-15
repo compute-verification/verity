@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.sampling_rows` against the GPU's own words (`test_sampling_rows`): on the GPU fixture's rows
+"""`verity_vllm.definitions.registry.sampling_rows` against the GPU's own words (`test_sampling_rows`): on the GPU fixture's rows
 (`fstoch01_rows.npz`, over a tracked file's limit) the vectorised row and the lane walk equal the device's served token and the
 device kernel's masked row, and the `_v2` logs are the GPUs' words on every input of their probe, fetched from the evidence
 store.
@@ -10,9 +10,9 @@ import os
 
 import numpy as np
 import pytest
+from verity_vllm.definitions.registry import sampling_rows as SR
 
 from tests.program.test_sampling_rows import _gpu_paths, f32b, needs_tables
-from verity.definitions.registry import sampling_rows as SR
 
 FIX = os.path.join(os.path.dirname(__file__), "data", "topp_split_fixture")
 #: the `_v2` logs' probe on the L40S and the H100: each FTZ build's output on every probed input word
@@ -32,7 +32,8 @@ def test_the_v2_logs_are_the_gpus_words_on_every_probed_input(tmp_path):
     runs = sorted(glob.glob(str(root / "*" / "out-*-ftz-true-*.json")))
     assert len(runs) == 4
     for path in runs:
-        d = json.load(open(path))
+        with open(path) as fh:
+            d = json.load(fh)
         for name, key in (("nv_logf", "logf"), ("nv_log1pf", "log1pf")):
             pairs = [(int(x, 16), int(w, 16)) for x, w in zip(d[key]["in"], d[key]["out"])]
             for f in _gpu_paths(name):
@@ -46,10 +47,12 @@ def test_the_r16_gpu_fixture_rows_device_token_masked_row_and_lane_walk_all_agre
     """Three real rows of the llama B8 stochastic record (`fstoch01_rows.npz`, an L40S, vLLM d9105ea80): the device's served token,
     the kernel-consumed masked row, seed / pos / temperature / top_p as the kernel read them.  The vectorised row reproduces the
     served token AND every lane of the masked row; the lane walk is run on one of them (10 s) as the reference beside it."""
-    from verity_vllm.properties.admission import evaluate_spec
-    from verity.definitions.registry import sampling_topp_difftest as D
+    from verity_vllm.definitions.registry import sampling_topp_difftest as D
+
+    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
     z = np.load(os.path.join(FIX, "fstoch01_rows.npz"))
-    meta = json.load(open(os.path.join(FIX, "fstoch01_rows.npz.json")))
+    with open(os.path.join(FIX, "fstoch01_rows.npz.json")) as fh:
+        meta = json.load(fh)
     first = True
     for k, v in meta.items():
         bf = z[f"{k}_bf16_logits_bits"]

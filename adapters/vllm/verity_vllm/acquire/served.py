@@ -29,18 +29,18 @@ uncaptured.  Each step names the Definitions its batch selects:
     device's k16 step, or cc 12.0's M = 1 gemvx `CublasGemv_v1`;
   * a query row i of a request's qlen rows over klen keys sees T = klen - qlen + 1 + i keys in the device's attention launch
     (`served_device.launch`).  FA3's tile (kBlockM, kBlockN) is the batch's max query length's; its scheduler (vllm-flash-attn's
-    `num_splits_heuristic` and its varlen split, statically capped at `split_cap` when the step has at most the largest capture
-    size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with the tile's MASKED_FROM, NS > 1 (decode only)
+    `num_splits_heuristic` and its varlen split, held to the static count a full graph may hold when the step has at most the largest
+    capture size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with the tile's MASKED_FROM, NS > 1 (decode only)
     `Fa3AttentionSplit_v1`.  FA2 splits a decode step `fa2_num_splits` ways (`Attention_v5`, `Fa2AttentionSplit_v1`).
 
-The manifest's identities are compiled.build's: one per (step, request, committed value), the request's rows of the value
+The manifest's identities are one per (step, request, committed value), the request's rows of the value
 (element_range [0, tokens x width); the logits and the sampled id one row per request), `step` request-relative.  program_digest
 is over the Program (every piece's calls with their Definitions and operands, the attention ops, the logits) and the step plans.
 The Build carries the compile artifact it read (`artifact`, `served_artifact.record`), the workload's pin.
 
-    verity-vllm served build --inductor-dir DIR --split-graph computation_graph.py --launch-configs launch_configs.json \\
-        --routes routes.json --workload workload.json --capture-sizes 1,2,4,8,16 --max-num-seqs 8 --cc 9.0 --sms 132 --out manifest.json
-    verity-vllm served routes --needs manifest.json --out routes.json          (on the serving GPU: the GEMM routes a Build lacks)
+`verity-vllm served-match` makes the Build in the serving process (`pipeline.served_match`): `build` without routes, `probe_routes`
+on the serving GPU for the GEMM routes that Build lacks, then `build` with them.
+
     verity-vllm compiled verify --manifest USED --rebuilt REBUILT --out verify.json
 """
 from __future__ import annotations
@@ -50,7 +50,6 @@ import hashlib
 import json
 import os
 import re
-from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -62,16 +61,18 @@ from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
-from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.definitions.registry import b1, cublas_bf16, cublas_gemv
+from verity_vllm.definitions.registry import inductor as IR
 from verity_vllm.program.frontend import targets as TG
-from verity.definitions.registry import b1, cublas_bf16, cublas_gemv
-from verity.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
-from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
-from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
-from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
+from verity_vllm.query.manifest.format import SCHEMA, SERVED_FAMILY, manifest_digest
+from verity_vllm.query.manifest.format import SERVED_IDS as IDS
+from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
+from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
+from verity_vllm.records.schema_ids import SERVED_REQUIRED_MANIFEST_KIND
 
-KIND = "verity/served-required-manifest/v1"
+KIND = SERVED_REQUIRED_MANIFEST_KIND
 FAMILY = SERVED_FAMILY
 #: vllm-flash-attn's `_DEFAULT_MAX_NUM_SPLITS_FOR_CUDA_GRAPH`: the static split count of a step a full graph may hold
 SPLIT_CAP = 32
@@ -161,8 +162,7 @@ class _Piece:
 
     def _register(self, name: str, dims: list[str], strides: list[str]) -> None:
         inner = dims[1:] if self._token(dims) else dims
-        want = ([str(_prod(inner))] if self._token(dims) else []) + _contiguous(inner)
-        if strides != want or any(not d.isdigit() for d in inner):
+        if any(not d.isdecimal() for d in inner) or strides != ([str(_prod(inner))] if self._token(dims) else []) + _contiguous(inner):
             raise self.fail(f"{name} {dims} strides {strides}: not a row-major buffer of token rows or a constant shape")
         self.shape[name] = (dims, strides)
 
@@ -187,7 +187,7 @@ class _Piece:
         bd = self.shape[name][0]
         if self._token(bd):
             W, inner = _prod(bd[1:]), dims[1:]
-            if (not self._token(dims) or any(not d.isdigit() for d in inner) or strides != [str(W)] + _contiguous(inner)
+            if (not self._token(dims) or any(not d.isdecimal() for d in inner) or strides != [str(W)] + _contiguous(inner)
                     or not 0 <= off <= off + _prod(inner) <= W):
                 raise self.fail(f"view {dims} {strides} +{off} of {name} {bd}: not a column range of its rows")
             w = _prod(inner)
@@ -247,7 +247,7 @@ class _Piece:
                 raise self.fail(f"{line!r}: reuse of an unknown buffer")
             if m.group(2):
                 dims, strides = C._dims(m.group(3)), C._dims(m.group(4))
-                if int(m.group(5)) != 0 or _prod(dims[1:]) > _prod(self.shape[old][0][1:]):
+                if int(m.group(5)) != 0 or any(not d.isdecimal() for d in dims[1:]) or _prod(dims[1:]) > _prod(self.shape[old][0][1:]):
                     raise self.fail(f"{line!r}: reuse beyond the dead buffer's rows")
             else:
                 dims, strides = self.shape[old]
@@ -380,7 +380,8 @@ _GRAPH_RETURN = re.compile(r"^\s*return \((\w+),\)\s*$", re.M)
 
 
 def _graph_output(path: str) -> str:
-    top = open(path).read().split("\n    class submod_", 1)[0]
+    with open(path) as f:
+        top = f.read().split("\n    class submod_", 1)[0]
     m = _GRAPH_RETURN.search(top)
     if m is None:
         raise Unmodelled(f"{path}: the split graph returns no single value")
@@ -407,8 +408,8 @@ def _merge(env: dict[str, Any], local: dict[str, Any]) -> dict[str, Any]:
 
 def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str) -> dict[str, Any]:
     """The piece programs through the split graph: global calls over named values, the attention ops, the backbone's output."""
-    att_of_out = {(a["out"]["piece"], a["out"]["ret"]): a for a in graph["attention"]
-                  if (a.get("out") or {}).get("kind") == "piece_ret"}
+    # an attention op's record leaves out an operand its signature does not name (`compiled.split_graph_wiring`)
+    att_of_out = {(to["piece"], to["ret"]): a for a in graph["attention"] if (to := a.get("out")) and to.get("kind") == "piece_ret"}
     if len(att_of_out) != len(graph["attention"]):
         raise Unmodelled("an attention op's output buffer is not a piece's return")
     values: dict[str, dict[str, Any]] = {IDS: {"width": 1, "piece": 0}, POSITIONS: {"width": 1, "piece": 0}}
@@ -419,7 +420,7 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
     attention: list[dict[str, Any]] = []
     for p, (prog, wiring) in enumerate(zip(programs, graph["wiring"])):
         env = []
-        for k, (src, raw) in enumerate(zip(wiring["args"], wiring["raw_args"])):
+        for n, (src, raw) in enumerate(zip(wiring["args"], wiring["raw_args"])):
             kind = src["kind"]
             if kind == "piece_ret":
                 key = (src["piece"], src["ret"])
@@ -434,10 +435,10 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
             elif kind == "layer_name":
                 env.append({"layer_name": True})
             else:
-                raise Unmodelled(f"piece {p} argument {k} ({raw}): a {kind} argument")
+                raise Unmodelled(f"piece {p} argument {n} ({raw}): a {kind} argument")
         names = [f"c{p:02d}.{v['name']}" for v in prog["values"]]
 
-        def g(ref: dict[str, Any]) -> dict[str, Any]:
+        def g(ref: dict[str, Any], env: list[dict[str, Any]] = env, names: list[str] = names) -> dict[str, Any]:
             if "value" in ref:
                 out = {"value": names[ref["value"]], **{k: ref[k] for k in ("width", "cols") if k in ref}}
             elif "arg" in ref:
@@ -467,12 +468,13 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
                 producer[w] = gc
         rets.append([g(r) for r in prog["returns"]])
         for a in graph["attention"]:
-            if (a.get("q") or {}).get("piece") != p:
+            q = a.get("q")
+            if not q or q.get("piece") != p:
                 continue
             ops = {}
             for k in ("q", "k", "v"):
-                s = a.get(k) or {}
-                if s.get("kind") != "piece_ret":
+                s = a.get(k)
+                if not s or s.get("kind") != "piece_ret":
                     raise Unmodelled(f"attention {a['layer']}: its {k} is not a piece's return")
                 ops[k] = rets[s["piece"]][s["ret"]]
                 if "value" not in ops[k]:
@@ -613,7 +615,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
     return assemble(wired, moe_plans, _final_value(split_graph, graph, wired), kernels, SA.winners(inductor_dir),
                     source={"inductor_dir": inductor_dir, "split_graph": split_graph,
                             "piece_wrappers": [os.path.relpath(w["path"], inductor_dir) for w in chosen]},
-                    schedule=schedule, steps=steps, routes=routes.get("routes") or {}, capture_sizes=capture_sizes,
+                    schedule=schedule, steps=steps, routes=probed if (probed := routes.get("routes")) else {}, capture_sizes=capture_sizes,
                     max_num_seqs=max_num_seqs, device=device, split_cap=split_cap, lm_head=lm_head, rank=rank)
 
 
@@ -658,7 +660,8 @@ def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kerne
 def _final_value(split_graph: str, graph: dict[str, Any], wired: dict[str, Any]) -> dict[str, Any]:
     """The backbone's output: the split graph's return, a piece's return that is a value."""
     out = _graph_output(split_graph)
-    src = open(split_graph).read().split("\n    class submod_", 1)[0]
+    with open(split_graph) as f:
+        src = f.read().split("\n    class submod_", 1)[0]
     m = re.search(rf"^\s*{out} = (submod_\d+)\[(\d+)\]", src, re.M)
     pieces = [w["submod"] for w in graph["wiring"]]
     if m is None or m.group(1) not in pieces:
@@ -675,13 +678,15 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     it (W rows past the probe's zero): x all ones against `bf16_gemm_check.splitk_count_probe`'s rows reads the split counts a
     partition could have (`fit_cublas_split_k`); of the routes those leave (`cublas_routes_at`), the one whose twin
     (`cublas_route_rows`) computes every word of `route_probe_rows`' spread and cancelling rows (sampled from the generator of
-    seed (M, K, N)) is the route, and none or more than one is refused, naming each route's missed words."""
+    seed (M, K, N)) is the route, and none or more than one is refused, naming each route's missed words.  A shape
+    `splitk_count_probe` builds no rows for is refused with the builder's reason."""
     import torch
 
     from verity_vllm.commit import challenge as CH
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
-    to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
+    def to(a: np.ndarray) -> torch.Tensor:
+        return torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
 
     def mm(M: int, K: int, N: int, x: np.ndarray, rows: np.ndarray) -> np.ndarray:
         w = torch.zeros((N, K), dtype=torch.bfloat16, device="cuda")
@@ -692,7 +697,11 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
 
     out: dict[str, Any] = {}
     for M, K, N in shapes:
-        probe, x = BC.splitk_count_probe(K, N), np.full((M, K), 0x3F80, np.uint16)
+        try:
+            probe = BC.splitk_count_probe(K, N)
+        except ValueError as e:
+            raise Unmodelled(f"cuBLAS at M={M} K={K} N={N}: {e}") from e
+        x = np.full((M, K), 0x3F80, np.uint16)
         fits = BC.fit_cublas_split_k(x[:1], probe, mm(M, K, N, x, probe)[:1], out="bf16")
         rows = sorted({0, M // 2, M - 1})
         tests = [(xr[rows], w, mm(M, K, N, xr, w)[rows])
@@ -707,65 +716,4 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
             "routes": out}
 
 
-# ------------------------------------------------------------------------------------------------------------- the command
-def _ints(s: str) -> list[int]:
-    return [int(x) for x in s.split(",") if x.strip()]
-
-
-@dataclass(frozen=True, kw_only=True)
-class BuildOptions:
-    inductor_dir: str = option("--inductor-dir", help="the serving process's Inductor output code (one directory per wrapper)")
-    split_graph: str = option("--split-graph", help="vLLM's computation_graph.py (compilation_config.cache_dir/rank_0_0/backbone)")
-    launch_configs: str = option("--launch-configs", help="ServedCompiledSource.launch_configs() of the serving process (json)")
-    routes: str | None = option("--routes", default=None, help="cuBLAS routes of the serving GPU (`served routes`); without, every GEMM is missing")
-    workload: str = option("--workload", type=workload_arg, help="sweep workload json: the request schedule")
-    steps: int | None = option("--steps", type=int, default=None, help="engine steps (default: the workload's expected_engine_steps)")
-    capture_sizes: str = option("--capture-sizes", help="compilation_config.cudagraph_capture_sizes, comma-separated")
-    max_num_seqs: int = option("--max-num-seqs", type=int)
-    cc: str = option("--cc", help="the GPU's compute capability, e.g. 12.0 (served_device: its bindings)")
-    sms: int = option("--sms", type=int, help="the GPU's multiprocessor count (the attention scheduler's)")
-    max_model_len: int | None = option("--max-model-len", type=int, default=None, help="the engine's max_model_len (FA2's full-graph split count)")
-    split_cap: int = option("--split-cap", type=int, default=SPLIT_CAP, help="FA3's static split count under a full graph")
-    backbone: str = option("--backbone", default="model", help="the compiled backbone's module path (the served weights' prefix)")
-    lm_head: str = option("--lm-head", default="lm_head.weight")
-    moe: str | None = option("--moe", default=None, help="the serving process's fused-MoE record (served-match's moe.json)")
-    out: str = option("--out")
-    cmd: str = field(default="build", init=False)
-
-
-@dataclass(frozen=True, kw_only=True)
-class RoutesOptions:
-    needs: str = option("--needs", help="a served Build whose routes_missing to probe")
-    out: str = option("--out")
-    cmd: str = field(default="routes", init=False)
-
-
-COMMANDS = {"build": BuildOptions, "routes": RoutesOptions}
-
-
-def main(a: BuildOptions | RoutesOptions) -> int:
-    if a.cmd == "routes":
-        shapes = json.load(open(a.needs)).get("routes_missing") or []
-        rec = probe_routes(shapes)
-        json.dump(rec, open(a.out, "w"), indent=1)
-        print(f"[served routes] {len(rec['routes'])} routes on {rec['device']} -> {a.out}")
-        return 0
-    wl = json.load(open(a.workload))
-    steps = a.steps or int(wl.get("expected_engine_steps") or 0)
-    if not steps:
-        raise UsageError("--steps (or the workload's expected_engine_steps) is required")
-    try:
-        device = SD.device_of(a.cc.split("."), a.sms, max_model_len=a.max_model_len)
-        m = build(a.inductor_dir, split_graph=a.split_graph, launch_configs=json.load(open(a.launch_configs)),
-                  routes=json.load(open(a.routes)) if a.routes else {}, schedule=C.schedule_of_workload(wl), steps=steps,
-                  capture_sizes=_ints(a.capture_sizes), max_num_seqs=a.max_num_seqs, device=device, split_cap=a.split_cap,
-                  backbone=a.backbone, lm_head=a.lm_head, moe=json.load(open(a.moe)) if a.moe else None)
-    except Unmodelled as e:
-        print(f"[served build] refused: {e}")
-        return 3
-    with open(a.out, "w") as f:
-        json.dump(m, f, indent=1)
-    missing = f" (routes missing: {len(m['routes_missing'])})" if not m["complete"] else ""
-    print(f"[served build] program {m['program_digest'][:16]} manifest {m['manifest_digest'][:16]} identities {len(m['identities'])} "
-          f"steps {len(m['steps_plan'])} kernels {len(m['program']['kernels'])} complete {m['complete']}{missing} -> {a.out}")
-    return 0 if m["complete"] else 4
+__all__ = ["SPLIT_CAP", "assemble", "build", "probe_routes"]

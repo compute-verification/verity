@@ -32,6 +32,8 @@ calls at most `E[c + Σ_{q ∈ classes of the sample} cq(·, q)]`: one term for 
 
 Without `hall` the count by class fails: a run that opens one node of a class and not another leaves the other waited
 for, and the class is paid again.
+
+`classFinderAt` and `clsOf` are defined in `Definitions.Core.FirstHit`, with the by-position finder they are built on.
 -/
 
 @[expose] public section
@@ -188,14 +190,6 @@ theorem ex_costCls_tape_le_ex {T : Type} [Fintype T] [Fintype Ω] [Nonempty Ω] 
     rw [filter_clsChk]
   exact (Ex_mono h1).trans (h2.trans (Ex_mono h3))
 
-/-- **The first-hit finder that pays by class**, with the kept part in its seed: the seed and the output are
-`sampleFinderAt`'s; its cost is the first run's calls and, at each further run, `cq` of each class that holds a node
-still waited for in the run's sample. -/
-noncomputable def classFinderAt {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
-    [DecidableEq Q] (cls : P → Q) (op : T → Ω → P → Option V) (chk : T → Ω → P → Bool) (c : T → Ω → ℕ)
-    (cq : T → Ω → Q → ℕ) (K : ℕ) (out : T × (Ω × (Fin K → Ω)) → Option (Msg × Msg)) : Finder :=
-  sampleFinderAt op chk c (fun t ω J => ∑ q ∈ J.image cls, cq t ω q) K out
-
 /-- **The by-class finder's expected calls**: at most `E[c + Σ_{q ∈ classes of the sample} cq(·, q)]`, whatever it
 outputs and whatever its cap, where a run opens a class whole or not at all. -/
 theorem ex_cost_classFinderAt_le {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
@@ -278,10 +272,6 @@ theorem pr_off_cls_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonem
   le_of_forall_cap fun K => pr_off_cls_le_ex_cap H cls op hv chk hchk hall c cq K coll hc hs (hCR K)
 
 /-! ## The classes of a key -/
-
-/-- **The class of a point under a key**: the least point with its key. -/
-def clsOf {n : ℕ} {Key : Type} [DecidableEq Key] (key : Fin n → Key) (g : Fin n) : Fin n :=
-  (univ.filter fun g' => key g' = key g).min' ⟨g, mem_filter.2 ⟨mem_univ _, rfl⟩⟩
 
 /-- A point's class has its key. -/
 theorem key_clsOf {n : ℕ} {Key : Type} [DecidableEq Key] (key : Fin n → Key) (g : Fin n) :

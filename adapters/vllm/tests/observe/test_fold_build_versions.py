@@ -23,19 +23,19 @@ import ast
 import importlib
 import inspect
 import itertools
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 import pytest
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.hopper import Fa3InvSum
 
 import verity_vllm
-from verity.circuits.defs import CompositeDefinition, SpecializedDefinition
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.registry import b1
-from verity.definitions.registry import prims as P
-from verity_vllm.program.frontend import targets as TG
-from verity.definitions.registry.hopper import Fa3InvSum
 
 PACKAGE = Path(verity_vllm.__file__).parent
 DEFAULT = TargetProfile().numerics_profile
@@ -46,8 +46,8 @@ STATICS = dict(K=64, N=64, I=8, H=64, E=8, TOPK=2, VPT=8, T=4, NH=2, KVH=1, D=64
                VS=8, START=0, NHEADS=2, W=32, BITS=0, CAP=50.0, MASKED_FROM=1, FA2_MASKED_FROM=1, RSF=2.5, KERNEL="block",
                ROPE=32, DR=16, DV=16, SM_SCALE=0.0625, SHOT=1, SIZE=64, TREES=2, FTZ=False, STAGE=1, CLUSTER=2, FMA=True,
                SPLIT_K=2, B=2, BS=32, VEC=8, TILE_K=32, WARPS=4, NS=2, BLOCK=8, HC=4, TN=8, TH=64, REPEAT=2, HC_EPS=1e-6, NHP=2,
-               DN=64, QB=64, ROWS=8, R=4, CHUNKS=2, QG=64, SPLITS=2, NW=2, QT=64, NP=64, LIMIT=10.0, P=6, BM=8, TK=64, GRID=4,
-               CHAIN=(0, 1, 2, 3), KVL=64)
+               DN=128, QB=64, ROWS=8, R=4, CHUNKS=2, QG=64, SPLITS=2, NW=2, QT=64, NP=64, LIMIT=10.0, P=6, BM=8, TK=64, GRID=4,
+               CHAIN=(0, 1, 2, 3), KVL=256, TILE=128)
 #: the statics that select among Definitions, at every registered value
 SELECTING = {"DOT": tuple(TG.DOTS.values()), "INV": (P.Fa2InvSum, Fa3InvSum), "SCALE": TargetProfile.FP8_SCALE_CONSTRUCTIONS,
              "CONSTRUCTION": TargetProfile.SAMPLER_CONSTRUCTIONS,
@@ -99,7 +99,7 @@ def _imported(module: str, node: ast.Import | ast.ImportFrom) -> dict:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def fold_references() -> dict[str, tuple[CompositeDefinition, str]]:
     """Definition id -> (the Definition, `module:line` of its first mention) over every fold pattern module."""
     out: dict[str, tuple[CompositeDefinition, str]] = {}
@@ -114,7 +114,9 @@ def fold_references() -> dict[str, tuple[CompositeDefinition, str]]:
                 ns.update(_imported(module, n))
         ns.update(vars(importlib.import_module(module)))
         for n in ast.walk(tree):
-            c = _chain(n) if isinstance(n, (ast.Name, ast.Attribute)) else None
+            if not isinstance(n, (ast.Name, ast.Attribute)):
+                continue
+            c = _chain(n)
             if not c or c[0] not in ns:
                 continue
             obj = ns[c[0]]
@@ -135,7 +137,7 @@ def _tries(p: inspect.Parameter) -> tuple:
     return (v,) if p.default is inspect.Parameter.empty else (p.default, v)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _binds(profile: str, role: str) -> tuple[tuple[dict, CompositeDefinition], ...]:
     """(statics, the Definition unspecialised) of every combination of `_tries` at which the role binds one."""
     binder = PROFILES[profile].kinds[role]
@@ -151,13 +153,13 @@ def _binds(profile: str, role: str) -> tuple[tuple[dict, CompositeDefinition], .
     return tuple(out)
 
 
-@lru_cache(maxsize=None)
+@cache
 def build_bindings(profile: str) -> dict[str, frozenset]:
     """Role -> the Definitions (unspecialised) the profile's vocabulary binds it to."""
     return {role: frozenset(d for _, d in _binds(profile, role)) for role in PROFILES[profile].kinds}
 
 
-@lru_cache(maxsize=None)
+@cache
 def twin_pairs(profile: str) -> dict[str, frozenset]:
     """Role -> (Definition, its `<role>_value` twin) bound at the same values of the statics the two share: a role whose twin
     exists only on some targets (`rmsnorm_fused_value` under batch invariance) pairs with it only there."""
@@ -215,5 +217,5 @@ def test_a_fold_pattern_naming_the_older_silu_is_a_violation():
     """The dense `SiluAndMul` named `SiluMul_v1` while the b1-eager-v3 Build binds `SiluMul_v2`: exactly what rule 1 reports."""
     refs = {k: v for k, v in fold_references().items() if not k.startswith("SiluMul")}
     refs["SiluMul_v1"] = (b1.SiluMul, "verity_vllm.observe.fold.patterns.activations:37")
-    assert violations(refs, DEFAULT) == ["rule 1: verity_vllm.observe.fold.patterns.activations:37 names SiluMul_v1; the b1-eager-v3 "
-                                         "vocabulary binds SiluMul at ['v2']"]
+    assert violations(refs, DEFAULT) == [("rule 1: verity_vllm.observe.fold.patterns.activations:37 names SiluMul_v1; the b1-eager-v3 "
+                                          "vocabulary binds SiluMul at ['v2']")]

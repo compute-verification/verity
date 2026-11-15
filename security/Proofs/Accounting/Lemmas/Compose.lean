@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.Compose
+public import Definitions.Compose.Guarantees.Compose
 
 /-!
-# PoUW's credit on an arbitrary declared circuit: lemmas
+# PoUW's credit on an arbitrary registered circuit: lemmas
 
-The statements of `Definitions.Accounting.Guarantees.Compose` that are steps of its guarantees' proofs rather than
+The statements of `Definitions.Compose.Guarantees.Compose` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 
@@ -85,7 +85,7 @@ def SplitRateMerged : Prop :=
   ∀ (K : ℕ) (ρ p p0 q a b wmax : ℝ), 1 ≤ K → 0 < ρ → 0 ≤ wmax → ρ * wmax ≤ 1 → 0 ≤ q → p ≤ q → p0 ≤ q → q < 1 →
     0 < a → a ≤ b → SplitRate K ρ p p0 a b wmax (b * (1 + K * ρ * wmax) / (ρ * K * (1 - q)))
 
-/-- **The service's share covers every tile that isn't good.** For a declared circuit's window whose ideal game is the
+/-- **The service's share covers every tile that isn't good.** For a registered circuit's window whose ideal game is the
 service's at share `1` per unit of each skipped tile's late cone (`tileCone`, from the IR) at any joint run `R` of the
 rounds' coins (`jointGame`; a split-stage window's `serviceGame` is one, at `SplitStages.joint`), and its proofs the
 IR's layer (`Declared.layer`, at any run-dependent half `pr`), committed as the layer says (`LayerCommitted`; at
@@ -118,7 +118,8 @@ sample's (`Declared.atSample`) under seeded ones. `SeedLuckAt`'s `δ_b` is read 
 `2·T_q` SHA-512 calls. At the best `δ'`, `|L|·√(ecr(F) + κ)/2`, the bound is `|L|·√(ecr(F) + κ)`, and a seeded
 window prices it at the budget its premium reads (one `T` for the cheater), with `κ = 0` and `E[cost F] = T` (a finder
 that runs the window twice costs `2T`, which is `√2` more): at `2^128` it is `|L|·2^-64` (`2^-44` to `2^-34` at `|L|`
-from `2^20` to `2^30`, not negligible beside `δ_s = 2^-40`), at `2^80` it is `|L|·2^-88` (`2^-68` to `2^-58`). `ecr`
+from `2^20` to `2^30`, not negligible beside `δ_s = 2^-40`), at `2^80` it is `|L|·2^-88` (`2^-68` to `2^-58`). Each
+figure takes `L` as one window's positions. `ecr`
 is the weaker of the two collision claims at a fixed cost (`StrictBirthday` implies it) and the one that applies to
 expected-time finders such as an extractor. -/
 def BindingOfECR : Prop :=

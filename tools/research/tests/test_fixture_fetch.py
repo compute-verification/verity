@@ -140,8 +140,8 @@ def test_the_http_source_waits_out_a_429_and_gets_the_bytes(tmp_path, monkeypatc
 
 # ---- the registry ---------------------------------------------------------------------------------------------------------------
 
-def _repo(tmp_path: Path, origin: LocalStore, remote: FsRemote) -> tuple[Path, dict[str, str]]:
-    """A git repo whose registry holds a tracked entry, a fetched file and a fetched tree (gitignored)."""
+def _repo(tmp_path: Path, origin: LocalStore, remote: FsRemote, place: Path = Path("artifacts.json")) -> tuple[Path, dict[str, str]]:
+    """A git repo whose registry, at `place`, holds a tracked entry, a fetched file and a fetched tree (gitignored)."""
     repo = tmp_path / "repo"
     (repo / "fixtures").mkdir(parents=True)
     small = repo / "pkg" / "tests" / "fixtures" / "small.json"
@@ -157,7 +157,7 @@ def _repo(tmp_path: Path, origin: LocalStore, remote: FsRemote) -> tuple[Path, d
     for art in (big, tset):
         _publish(origin, art, remote)
     doc = {tracked: "pkg/tests/fixtures/small.json", big: "pkg/tests/fixtures/big.proof", tset: "pkg/tests/fixtures/set"}
-    (repo / "fixtures" / "artifacts.json").write_text(F.dump_map(doc))
+    (repo / place).write_text(F.dump_map(doc))
     (repo / ".gitignore").write_text("pkg/tests/fixtures/big.proof\npkg/tests/fixtures/set/\n")
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
@@ -291,10 +291,14 @@ def test_history_stubs_are_restored(tmp_path):
     assert sha256_file(stub) == (m.payload.sha256, m.payload.bytes)
 
 
-def test_the_cli_fetches_through_the_public_url_alone(tmp_path, served):
+@pytest.mark.parametrize("place", [Path("artifacts.json"), Path("fixtures", "artifacts.json")], ids=["at-the-root", "under-fixtures"])
+def test_the_cli_fetches_through_the_public_url_alone(tmp_path, served, place):
+    """`--repo DIR` is a tree other than the code's own, read by a research of another age (a run's launcher's, the mark's
+    preflight's): one from before the registry moved to the root holds it under `fixtures/`, and is fetched into all the same."""
     root, url = served
     origin = _store(tmp_path, "origin")
-    repo, a = _repo(tmp_path, origin, FsRemote(root))
+    repo, a = _repo(tmp_path, origin, FsRemote(root), place)
+    assert [p.relative_to(repo) for p in sorted(repo.rglob("artifacts.json"))] == [place]
     rc = data_main(["fetch-fixtures", "--repo", str(repo), "--store", str(tmp_path / "cli"), "--public-url", url, "--no-private", "--json"])
     assert rc == 0 and F.fixture_id(repo / "pkg/tests/fixtures/big.proof") == a["big"]
     assert data_main(["fetch-fixtures", "--repo", str(repo), "--store", str(tmp_path / "cli"), "--check", "--public-url", ""]) == 0
@@ -350,7 +354,7 @@ def test_export_recovers_superseded_ids_from_history_and_warns_on_lost_ones(tmp_
     doc = F.load_map(repo)
     doc[new] = doc.pop(old)
     doc["previous"] = {new: [lost, old]}
-    (repo / "fixtures" / "artifacts.json").write_text(F.dump_map(doc))
+    (repo / "artifacts.json").write_text(F.dump_map(doc))
     dest = FsRemote(tmp_path / "public")
     rep = F.export(_store(tmp_path, "exporter"), repo, dest, srcs=[private])
     assert rep["ok"] and not rep["errors"] and len(rep["warnings"]) == 1 and lost in rep["warnings"][0]

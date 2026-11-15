@@ -1,6 +1,6 @@
 """On one GPU: Llama served with `TargetProfile.int8_exact` (`--int8-exact linears|attention|all`, default all), checked end
-to end on the CPU: the linears against `benchmarks/ppl/steps.py`, the attention against compute accounting's LUT softmax
-(`benchmarks/pouw/edited_gemm/fattn_ref.py`, `apv_ref.py`).
+to end on the CPU: the linears against the registered Definition's equations, the attention against compute accounting's LUT softmax
+(`verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py`, `apv_ref.py`).
 
 One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, `<out>/pin_entry.json`, the int8 pin's entry):
 
@@ -14,7 +14,7 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
   generate  greedy (temperature 0) on PROMPTS, batched and one by one; the texts, token ids, and which prompts' tokens differ.
   equal     (linears) forward hooks on the first four linears and the last one keep (x, y) of their first calls in the batched
             run and in every solo run (prefill and decode, so the M < 17 padding too).  Each served y, bit for bit, against
-              oracle  steps.py's `int8_linear` on the CPU (`tests/engine/ppl_oracle.int8_linear`) from x and the BF16 base pin's
+              oracle  the Definition's equations on the CPU (`tests/engine/ppl_oracle.int8_linear`) from x and the BF16 base pin's
                       own weight (q, k, v and gate, up concatenated by rows for vLLM's merged modules)
               cpu     `int8_exact.plain_linear` on the CPU on the served int8 weight and scales
               rerun   `int8_exact.plain_linear` again on the GPU
@@ -34,8 +34,6 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
 from __future__ import annotations
 
 import argparse
-import contextlib
-import io
 import json
 import os
 import sys
@@ -47,6 +45,7 @@ import numpy as np
 import torch
 
 from tests.engine import ppl_oracle as O
+from tests.engine.int8_pin import PROMPTS, pin, scratch_checkpoints
 from verity_vllm.config import checkpoint_entries
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
@@ -54,35 +53,7 @@ from verity_vllm.engine import int8_exact as E
 
 SCHEMA = "verity-vllm/int8-exact-gpu/v5"
 RECORD = "int8_exact_gpu.json"
-PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the n-th Fibonacci number.\"\"\"\n",
-           "The three primary colors are", "Water boils at a temperature of", "Once upon a time, in a small village,"]
 MERGED = {"qkv_proj": ("q_proj", "k_proj", "v_proj"), "gate_up_proj": ("gate_proj", "up_proj")}
-
-
-def pin(a: argparse.Namespace) -> tuple[dict[str, Any], str]:
-    """The int8 pin of `a.role`: the registered one (re-made and checked by `int8-checkpoint make` when its snapshot is missing
-    here), else a new one (`int8-checkpoint pin`)."""
-    out = io.StringIO()
-    entry = next((c for c in checkpoint_entries(a.checkpoints) if c.get("role") == a.role), None)
-    if entry is not None and Path(entry["local_path"]).is_dir():
-        return entry, "registered"
-    with contextlib.redirect_stdout(out):
-        rc = I.main(I.MakeOptions(role=a.role, checkpoints=a.checkpoints, hf_home=a.hf_home) if entry is not None else
-                    I.PinOptions(base_role=a.base_role, role=a.role, repo=a.repo, checkpoints=a.checkpoints, hf_home=a.hf_home,
-                                 by=a.by, at=a.at))
-    if rc:
-        raise SystemExit(f"int8-checkpoint exited {rc}: {out.getvalue()[-2000:]}")
-    return (entry, "remade") if entry is not None else (json.loads(out.getvalue()), "made")
-
-
-def scratch_checkpoints(checkpoints: str, entry: dict[str, Any], scratch: Path) -> Path:
-    p = scratch / "checkpoints.json"
-    p.write_text(Path(checkpoints).read_text())
-    sib = Path(checkpoints).with_name("checkpoints-int8.json")
-    doc = json.loads(sib.read_text()) if sib.is_file() else {"checkpoints": []}
-    doc["checkpoints"] = [c for c in doc["checkpoints"] if c.get("role") != entry["role"]] + [{**entry, "downloaded": True}]
-    (scratch / "checkpoints-int8.json").write_text(json.dumps(doc, indent=1) + "\n")
-    return p
 
 
 class BaseWeights:
@@ -101,7 +72,7 @@ class BaseWeights:
         info = header[name]
         lo, hi = info["data_offsets"]
         np_dtype, dtype = self.DTYPES[info["dtype"]]
-        raw = np.fromfile(p, dtype=np.uint8, count=hi - lo, offset=start + lo)
+        raw: np.ndarray = np.fromfile(p, dtype=np.uint8, count=hi - lo, offset=start + lo)
         return torch.from_numpy(raw.view(np_dtype).copy()).view(dtype).reshape(info["shape"])
 
     def weight(self, module: str) -> torch.Tensor:
