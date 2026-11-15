@@ -151,5 +151,5 @@ def test_at_serve_time_is_read_off_the_registration_never_the_job(tmp_path):
     assert g["arms"]["w1 served"]["commit"]["registered"]["at_serve_time"] is True
     assert pp_stub(g) and "w1's advice was registered" not in pp_stub(g)
     assert chain._registered(g["arms"]["w1 served"]["commit"]["registered"]) == (
-        "by the lane at serve time (r-reg), 1.0 s before its Commit window closed, before its draw and 1.7 s before "
+        "by the lane at serve time (r-reg), 1.0 s before its Commit window closed, before its sample and 1.7 s before "
         "the next window closed")

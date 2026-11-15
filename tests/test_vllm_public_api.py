@@ -153,7 +153,7 @@ PUBLIC = {
                                           "verity/protocols/proofs/spot/prover/audit/two_stage.py registers",
     "verity_vllm.pipeline.long_row": "I1: the check template of a two-stage window over one of DSA's long rows "
                                      "(DsaTopKReadRowsCut, at the served statics SERVED and served) and the window's "
-                                     "class over it (layout), which benchmarks/one_stage/two_stage.py registers",
+                                     "class over it (layout), which verity/protocols/proofs/spot/prover/audit/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "

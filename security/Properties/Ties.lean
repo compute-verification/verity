@@ -22,8 +22,8 @@ entry. For the circuit, the parameters name the circuit file and the view holds 
 side is read through the one public map from the first to the second (`Registration.boundProgram`, the circuit file's
 META `program_sha512`), and `f` then projects a declaration to its program.
 
-* `Registration.DeclaredIsParams`: the Program the circuit file the verifier reads binds is the program the prefix
-  declares for the day the window lies in.
+* `Registration.DeclaredIsParams`: the Program each member's circuit file the verifier reads binds is the program the
+  prefix declares for the day the window lies in.
 * `Registration.CertifiedIsParams`: a network certifier check's links, each with its key, are exactly the registered
   boundary links with a certifier at an end, each with the key pinned for its certifier.
 * `Registration.RootIsRegistered`: a θ entry an answer names, root, rows and domain, is the one θ registers for its
@@ -62,7 +62,8 @@ monitoring period `m`'s span into `n` consecutive spans, as in `RunsDeclared`, a
 day `j`'s; the circuit file the verifier reads at the parameters `θ` and the committed files `F` (`Vocab.read`, which
 also gives the statement's tags and tables) binds a Program (`boundProgram`); and that Program's digest is the program
 of the view's declaration of day `j` (`NamesRegistered`, `f` = `Declared.program`). Nothing it reads is free: the tags,
-the tables and the circuit file are the verifier's reading, and the day is the one the window lies in.
+the tables and the circuit file are the verifier's reading, and the day is the one the window lies in. It holds of
+every member of the window (`ExecutionPhaseFiles.members`), each member's tags, circuit file and tables, at the one day.
 
 The two digests are of different objects: `programDigest θ` is the circuit file's SHA-512, and a declaration's
 `program` is the Program descriptor's. `boundProgram` is the public map from the first to the second. The log declares no
@@ -75,8 +76,9 @@ other than the day's declared one, or when the parameters are derived from the l
 def DeclaredIn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (m : MonitoringPeriod) {n : ℕ}
     (cut : m.span.Cut n) (w : TickSpan) (v : View) : Prop :=
   ∃ j : Fin n, w.Within (cut.part j) ∧
-    ∃ p, boundProgram (V.read θ F).tags (V.read θ F).circuitFile (V.read θ F).tables = some p ∧
-      NamesRegistered {e | e ∈ v.declarations ∧ e.day = j} Declared.program p
+    ∀ r ∈ (V.read θ F).members,
+      ∃ p, boundProgram r.tags r.circuitFile r.tables = some p ∧
+        NamesRegistered {e | e ∈ v.declarations ∧ e.day = j} Declared.program p
 
 /-- **The parameters' circuit is the one declared for the window's day at the head `h`**: `DeclaredIn` at the view of
 the prefix of the log `h` heads (`AtHead`, under the digests `D` and the composite `c`). -/

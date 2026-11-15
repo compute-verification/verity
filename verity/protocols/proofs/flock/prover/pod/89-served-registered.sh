@@ -23,6 +23,8 @@
 #      prover build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+for o in DRAW_COINS:SAMPLE_COINS; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "served-registered: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 if [ -z "${SR_PINNED:-}" ]; then
   if mkdir -p "${SLICE_LOCKS:-/workspace/jobs/slices}" 2>/dev/null; then
     . verity/protocols/proofs/flock/prover/pod/cpu-slices.sh

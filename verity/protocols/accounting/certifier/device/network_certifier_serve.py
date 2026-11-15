@@ -296,9 +296,9 @@ def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prom
         words = round(math.exp(rng.uniform(*map(math.log, prompt_tokens))) * 0.75) - len(question.split())
         filler = " ".join(FILLER[j % len(FILLER)] for j in range(max(0, words)))
         most = round(math.exp(rng.uniform(*map(math.log, max_tokens))))
-        drawn = rng.choice(TEMPERATURES)
+        sampled = rng.choice(TEMPERATURES)
         body = {"model": model, "prompt": f"{filler}\n\n{question}" if filler else question,
-                "max_tokens": most, "stream": True, "temperature": drawn if temperature is None else temperature,
+                "max_tokens": most, "stream": True, "temperature": sampled if temperature is None else temperature,
                 "stream_options": {"include_usage": True}} | ({} if top_p is None else {"top_p": top_p})
         if rng.random() < 0.5:
             body["seed"] = rng.randrange(1 << 31)
@@ -322,9 +322,9 @@ def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_t
         length = round(math.exp(rng.uniform(*map(math.log, prompt_tokens))))
         prompt = [rng.randrange(128_256) for _ in range(length)]
         most = round(math.exp(rng.uniform(*map(math.log, max_tokens))))
-        drawn = rng.choice(TEMPERATURES)
+        sampled = rng.choice(TEMPERATURES)
         fields = {"model": model, "user": f"{users}-{i}", "prompt": prompt, "max_tokens": most,
-                  "temperature": drawn if temperature is None else temperature,
+                  "temperature": sampled if temperature is None else temperature,
                   "top_p": 1.0 if top_p is None else top_p, "seed": rng.randrange(1 << 31)}
         out.append({"at": round(at, 3), "ids": fields})
         at += rng.expovariate(rate)
@@ -380,9 +380,9 @@ def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: Netw
     at, out = start_s, []
     G, window_s = group_windows(params, max_tokens), params.window * params.bucket_ms / 1000
     for j in range(n):
-        drawn = rng.choice(TEMPERATURES)
+        sampled = rng.choice(TEMPERATURES)
         fields = {"model": model, "user": f"{users}-{j}", "prompt": list(prompts[j % len(prompts)]),
-                  "max_tokens": max_tokens, "temperature": drawn if temperature is None else temperature,
+                  "max_tokens": max_tokens, "temperature": sampled if temperature is None else temperature,
                   "top_p": 1.0 if top_p is None else top_p, "seed": rng.randrange(1 << 31)}
         when = (j // len(prompts)) * G * window_s + params.bucket_ms / 2000 if window_per_group else at
         out.append({"at": round(when, 3), "ids": fields})

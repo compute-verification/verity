@@ -100,7 +100,7 @@
 #     wrote to the composite's public output, which the record reads (--composite) where the composite ran before it,
 #     and takes only where it is of record, composed on an auditor device off the served node (`compose`; the deferral's
 #     follow-on composes on a prover node, so its composite is a development check), and names the window's
-#     registration record R that the record's SPOT audit sampled against: one of another window, or bound to
+#     docket R that the record's SPOT audit sampled against: one of another window, or bound to
 #     no record, is refused, exit 1; any other server's answer is carried as elsewhere. The certifier's chain files
 #     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
 #     verdicts on the run's cases (`served_composite.sh`'s docstring): a composite that didn't run (a tree without

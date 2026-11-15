@@ -159,7 +159,7 @@ $OUT/composite, `composite_answer`); a Lean rejection there rejects whatever the
 product's check, one whose Lean answered, or with a development one (composed on the served node or on a prover node),
 no Lean answer is the record's, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line
 name ``pending``; each says, as ``lean``, where its answer was read or why there is none. A composite not of the
-record's window is refused (`composite_tie`): its SPOT case must name the digest of the registration record R that
+record's window is refused (`composite_tie`): its SPOT case must name the digest of the docket R that
 the SPOT audit the record reads sampled against (`window_digest`), and its commitment must bind its cases' digests.
 Python accepts nothing here: the exit is 0 only for the Lean's accept, 1 for a reject, a refused composite or a block
 record `block_record.check` refuses, 2 for pending.
@@ -2222,7 +2222,7 @@ class CompositeRefused(ValueError):
 
 
 def window_digest(audit: Path) -> tuple[str | None, str]:
-    """The digest of the window's registration record R, the record SPOT's audit ``audit`` sampled against
+    """The digest of the window's docket R, the record SPOT's audit ``audit`` sampled against
     and every case of the window commits to (`served_cases.window_case`, `served_cases.record_of`), and where it was
     read; or None and why there is none."""
     import served_cases as SC
@@ -2234,7 +2234,7 @@ def window_digest(audit: Path) -> tuple[str | None, str]:
 
 
 def composite_tie(doc: Mapping[str, Any], window: str | None, read: str) -> str | None:
-    """Why the public composite ``doc`` is not of the window whose registration record has digest ``window`` (read
+    """Why the public composite ``doc`` is not of the window whose docket has digest ``window`` (read
     from ``read``), or None when it is: its SPOT case (`served_cases.SAMPLED`) names that digest, and its commitment is
     `composite.bind` of its cases' digests, so the commitment its Lean judged binds that window. The Lean ties the other
     cases to the same record (`Core.Composition.same`, `Core.Remote.windows`), and accepts only where every case names
@@ -2269,7 +2269,7 @@ def composite_answer(public: Path, product: str, window: str | None = None,
     read; or None and why there is no answer to take: a composite.json that doesn't parse, no composite of one of the
     product's checks (`block_record.CHECKS`) or more than one, one whose Lean gave no answer, or one composed as a
     development check, which claims no record. `CompositeRefused` where the composite is not of the window whose
-    registration record has digest ``window`` (`composite_tie`)."""
+    docket has digest ``window`` (`composite_tie`)."""
     from verity_e2e_demo import block_record as BR
 
     found = []

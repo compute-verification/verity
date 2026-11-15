@@ -2,7 +2,6 @@
   "rule": "P8 (model and target facts live in their two homes)",
   "entries": [
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "sm-arch", "symbol": "main", "detail": "sm_80", "count": 6},
-    {"file": "verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_90", "count": 7},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "sm-arch", "symbol": "main", "detail": "sm_90", "count": 3},
     {"file": "verity_vllm/acquire/sources/moe_source.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
     {"file": "verity_vllm/acquire/sources/moe_source.py", "kind": "layer-class", "symbol": "<module>", "detail": "MoERunner"},
@@ -49,7 +48,6 @@
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "rtx4090"},
     {"file": "verity_vllm/observe/fold/patterns/dsv4.py", "kind": "model", "symbol": "<module>", "detail": "deepseek"},
     {"file": "verity_vllm/observe/fold/patterns/fp8.py", "kind": "sm-arch", "symbol": "CutlassScaledMmFp8Block.match", "detail": "sm_90"},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "Options", "detail": "llama", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "c2_programs_forecast", "detail": "qwen"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "layer-class", "symbol": "<module>", "detail": "GPT2Attention"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "layer-class", "symbol": "<module>", "detail": "HFDecoderLayer"},
@@ -176,6 +174,7 @@
     {"file": "verity_vllm/commit/committer/acquired.py", "kind": "layer-class", "symbol": "<module>", "detail": "Sampler"},
     {"file": "verity_vllm/commit/committer/acquired.py", "kind": "layer-class", "symbol": "<module>", "detail": "SiluAndMul"},
     {"file": "verity_vllm/commit/committer/acquired.py", "kind": "layer-class", "symbol": "<module>", "detail": "VocabParallelEmbedding", "count": 2},
-    {"file": "verity_vllm/commit/committer/acquired.py", "kind": "model", "symbol": "<module>", "detail": "gemma"}
+    {"file": "verity_vllm/commit/committer/acquired.py", "kind": "model", "symbol": "<module>", "detail": "gemma"},
+    {"file": "verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py", "kind": "sm-arch", "symbol": "_mainloop", "detail": "sm_90", "count": 7}
   ]
 }

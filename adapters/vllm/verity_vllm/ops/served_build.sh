@@ -45,5 +45,4 @@ rcm=${PIPESTATUS[0]}
 for f in match build facts launch_configs routes moe; do test -f "$S/m/$f.json" && cp "$S/m/$f.json" "$O/"; done
 (cd "$S/m" && find inductor \( -name '*.best_config' -o -name '*.ptx' \) -print0 | xargs -0 -r tar czf "$O/triton_ptx.tgz") 2>/dev/null
 echo "MATCH rc=$rcm"
-[ -f "$O/build.json" ] && python -c "import json,sys; a=json.load(open(sys.argv[1])).get('artifact') or {}; print('artifact', a.get('digest'), len(a.get('winners') or {}), 'winners')" "$O/build.json"
 exit $rcm
