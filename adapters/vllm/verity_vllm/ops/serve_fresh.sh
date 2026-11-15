@@ -61,6 +61,8 @@ if [ "$DRY" = 1 ]; then
   echo "pythonpath $PYTHONPATH"
   echo "path uv and pip caches: $W/.cache/{uv,pip} (the bootstrap's; removed after the install)"
   echo "checks: a card of compute capability 9.0, nvcc under CUDA_HOME ($CUDA_HOME), uv, ${DISK_GB:-35} GB free at $W"
+  echo "build: the FA2 and FA3 taps for head size 64 only (the row's), with MAX_JOBS=${MAX_JOBS:-$(nproc)} (the CPUs this" \
+    "shell may run on); building the taps is the longest step and its time falls with those CPUs, so give it all you can"
 fi
 
 if [ "$DRY" = 0 ]; then

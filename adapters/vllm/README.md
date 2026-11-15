@@ -168,7 +168,9 @@ one request with every value committed, and seals it, all under `./.verity-work`
 the machine: an H100 or H200 (the row is H200's, compute capability 9.0), the CUDA 12.9 toolkit with `nvcc` (where it lacks
 the math headers the script takes them from the environment's NVIDIA wheels), `uv`, 35 GB free (the install holds the
 environment twice until it removes its cache, where the disk can't hardlink), and network access to GitHub, PyPI,
-download.pytorch.org, Hugging Face (no token) and the store's public site. Building the six CUDA taps is the longest step.
+download.pytorch.org, Hugging Face (no token) and the store's public site. Building the six CUDA taps is the longest step:
+it builds the attention taps for the row's head size (64) only, with one compile job per CPU the script may run on
+(`MAX_JOBS`, which the dry run prints), so its time falls with the CPUs you give it.
 
 ## Vocabulary
 
