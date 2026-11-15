@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from verity_bench import (
     lean_verify,
     overhead,
     overhead_records,
+    proof_layers,
     prove_records,
     served_render,
     served_table,
@@ -27,9 +29,9 @@ from verity_bench import (
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
+from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served
 from verity_bench.vllm.result import write
-from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
 
@@ -75,14 +77,26 @@ def _check(args: Any) -> int:
     return 0 if done == len(plan.points) else 1
 
 
+def _end(text: str) -> float:
+    """`--end`'s instant, a UTC time as `2026-11-15T03:30Z`, in seconds since the epoch."""
+
+    try:
+        return datetime.strptime(text, "%Y-%m-%dT%H:%MZ").replace(tzinfo=UTC).timestamp()
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a UTC time as 2026-11-15T03:30Z") from None
+
+
 def _run(args: Any) -> int:
     plan = _make_plan(args)
+    if args.end is not None and args.direct is None:
+        raise ValueError("--end bounds a direct point's wait for its GPU slot: it needs --direct NODE")
     if isinstance(plan.spec, steady_spec.SteadySpec):
-        return steady_plan.dispatch(plan, args.spec, direct=args.direct, card=args.card, cores=args.cores)
+        return steady_plan.dispatch(plan, args.spec, direct=args.direct, card=args.card, cores=args.cores, end=args.end)
     if args.card is not None or args.cores is not None:
         raise ValueError(f"--card and --cores are a steady-state point's: spec {plan.spec.id!r}'s points lease their own "
                          "GPUs")
-    return jobs.dispatch(plan, args.spec, direct=args.direct)
+    return jobs.dispatch(plan, args.spec, direct=args.direct,
+                         command=lambda *point: jobs.direct_command(*point, end=args.end))
 
 
 def _point(args: Any) -> int:
@@ -300,6 +314,11 @@ def _prove_parser(commands: Any) -> None:
     lean_verify.add_arguments(timed)
     timed.set_defaults(run=lean_verify.run, command_parser=timed)
 
+    layers = commands.add_parser("prove-layers", help="the proof system by layer (Flock, with zero knowledge, with "
+                                                      "sampling, with recursion), a row each read from its run's output")
+    proof_layers.add_arguments(layers)
+    layers.set_defaults(run=proof_layers.run, command_parser=layers)
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="verity-bench")
@@ -324,6 +343,10 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--cores", default=None, metavar="CPUS",
                      help="a steady-state point's booked slot, by its cores (34-43): the slot taker runs under "
                           "`taskset -c CPUS`")
+    run.add_argument("--end", type=_end, default=None, metavar="UTC",
+                     help="the booked period's end (2026-11-15T03:30Z), which a direct point's run never passes: it "
+                          "waits for its slot until its max_minutes before it, and one that could not finish by then "
+                          "is not started; default: it waits up to jobs.DIRECT_WAIT_S")
     run.set_defaults(run=_run, command_parser=run)
 
     check = commands.add_parser("check", help="report whether every point has a passing result")

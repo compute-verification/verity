@@ -81,7 +81,7 @@ there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends i
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue drive runs
-(`compute-verification/verity` and `compute-verification/infra`) and no other: the notes' `main` is every agent's to push.
+(`compute-verification/verity` and `compute-verification/platform`, or its old name `infra`) and no other: the notes' `main` is every agent's to push.
 It places a git command by the event's cwd and its own `-C` alone: a `cd` anywhere in the command (`flattened` holds what
 carriers run too) leaves it unplaced unless its `-C` is absolute, a `source` or a `GIT_DIR` the command sets (`git_env`)
 whatever its `-C`, and an unplaced push is judged as theirs.
@@ -1605,22 +1605,22 @@ def main() -> int:
         event, command, conversation, cwd, root = {}, raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
-    except Exception:                                   # a bug here must not allow what the fallback would refuse
+    except Exception:  # noqa: BLE001 (a bug here must not allow what the fallback would refuse)
         deny = (ENVIRONMENT if FALLBACK.search(command) or re.search(r"/proc/\S*environ", command)
                 else ARGV if LISTING_FALLBACK.search(command) else "")
     try:
         low = None if deny else block_reason(command)
-    except Exception:                                   # a bug in the block gate must not stop every command
+    except Exception:  # noqa: BLE001 (a bug in the block gate must not stop every command)
         low = None
     try:
         low = low or (None if deny else local_work_reason(command))
-    except Exception:                                   # a bug in the local-work gate must not stop every command
+    except Exception:  # noqa: BLE001 (a bug in the local-work gate must not stop every command)
         low = None
     try:
         low = low or (None if deny else shell_identity_reason(command) or kept_code_reason(command))
         low = low or (None if deny or ("git" not in command and "worktree_guard" not in command)
                       else checkout_reason(command, conversation, cwd))
-    except Exception:                                   # nor one in the checkout guard, or in the rule for a name left in the shell
+    except Exception:  # noqa: BLE001 (nor one in the checkout guard, or in the rule for a name left in the shell)
         pass
     low = low or (None if deny else kept_session_reason(command))
     low = secret_file_reason(command, stated_cwd(raw)) or low   # ahead of the gates' reasons: the one about a secret is the one to act on

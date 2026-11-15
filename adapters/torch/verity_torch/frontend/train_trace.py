@@ -1,51 +1,35 @@
-"""One training step of ordinary PyTorch code as an ATen graph with shapes and dtypes and no values.
+"""Consecutive training steps of ordinary PyTorch code as one ATen graph with shapes and dtypes and no values: what
+`train_step.export_steps` exports.
 
-    capture_step(model, optimizer, loss_fn, example_batch, *, updated=None, token_dims=None) -> StepGraph
-    capture_steps(step_fns, model, example_batch, *, measured, optimizers=None, token_dims=None) -> StepGraph
-
-`capture_step` runs the standard step: ``zero_grad``, ``loss_fn(model, batch).backward()``, then each optimizer's
-``step()``. `capture_steps` runs several steps in order, consecutive steps of one run, each any step written as
-``step_fn(model, batch, optimizers)`` (a forward-only MeZO step, gradient accumulation, two optimizers), and measures
-one of them. Both trace with `make_fx` under a
-`FakeTensorMode`, so every tensor is a fake carrying only shape, dtype and device, and the graph is post-dispatch ATen:
-autograd's backward and the optimizer's foreach kernels are nodes like the forward's.
+Each step is any step written as ``step_fn(model, batch, optimizers)`` (the standard ``zero_grad``, ``backward`` and
+``step()``, a forward-only step, gradient accumulation, two optimizers), run in order on one model and one set of
+optimizers, each on a batch of its own. The trace is `make_fx` under a `FakeTensorMode`, so every tensor is a fake
+carrying only shape, dtype and device, and the graph is post-dispatch ATen: autograd's backward and the optimizer's
+kernels are nodes like the forward's.
 
 The model and optimizers are never touched. The trace runs on a copy whose parameters and buffers are fakes of theirs,
-under a fresh optimizer of each one's class with the same param groups, so the step traced is that optimizer's first:
-its state is created in the graph, where a later step reads it, with the same products.
+under a fresh optimizer of each one's class with the same param groups, so the first step traced is that optimizer's
+first: its state is created in the graph, where a later step reads it. The parameters and buffers are the graph's
+attributes, and what a step writes to them is an in-place op on the attribute.
 
-A step captured alone shows what it writes, and nothing of the values it was handed or of who reads the ones it makes:
-its graph has the cut between its gradient side and its new values, and no step circuit. `capture_steps` gives the
-measured step both. Its graph holds the steps before it, on batches of their own, so what the measured step reads of
-them (the weights they wrote, the optimizer's state) is in the graph as their values, and the step after it, whose
-forward reads the values it makes. That is a program recorded from its start (`Capture.region`), which `structure`
-measures as a step circuit (`StepGraph.circuit`, `training_slowdown.capture.circuit.measure`): every node carries its
-step (``meta["te_step"]``, from a ``te_capture::step::I`` marker around step I), and each integer tensor of a step's
-batch is a token input, named ``tokens_…``.
+Markers in the graph say what the shapes don't. Phases come from `record_function` markers: torch's own
+``Optimizer.step#…`` and ``Optimizer.zero_grad#…``, and ``te_capture::backward`` (`BACKWARD`) around every
+`torch.autograd.backward` and `torch.autograd.grad` a step calls; a node outside every marker is in the forward. A
+trace that measures one of its steps marks each step (``te_capture::step::I``, `STEP`): every node carries its step
+(``meta["te_step"]``), and each integer tensor of a step's batch is a token input, named ``tokens_…``.
 
-Phases come from `record_function` markers in the graph: torch's own ``Optimizer.step#…`` and ``Optimizer.zero_grad#…``,
-and ``te_capture::backward`` around every `torch.autograd.backward` and `torch.autograd.grad` the step calls. A node
-outside every marker is in the forward.
+Scaled-dot-product attention runs on its math backend, so attention is its matmuls and softmax. That backend computes a
+16-bit call from operands it casts up to float32, so the graph alone does not show the dtype the call was made in. The
+trace states it at the call: everything a call computes, forward and backward, is inside a
+``te_capture::attention::DTYPE`` marker (`ATTENTION`), DTYPE the dtype the call computes in: its query's as autocast
+hands it to the kernel (`_marked_attention`).
 
-Token axes are found by capture, not by propagating shapes through views: the step is captured again with each token
-axis of the example batch doubled (halved if doubling fails), and a node's dimension is indexed by that axis when its
-size changes. `token_dims` names each batch tensor's token dimensions in axis order (default: every dimension of an
-integer tensor, every one but the last of a floating one); axis i of every tensor is varied together. The captures must
-agree node for node, so a step whose graph changes with the batch size is refused.
-
-Scaled-dot-product attention runs on its math backend during capture, so attention is its matmuls and softmax. That
-backend computes a 16-bit call from operands it casts up to float32, so the graph alone does not show the dtype the
-call was made in. The capture states it at the call: everything a call computes, forward and backward, is inside a
-``te_capture::attention::DTYPE`` marker, DTYPE the dtype the call computes in: its query's as autocast hands it to the
-kernel (`_marked_attention`).
-
-`CaptureRefused` names what stops a capture, with the user's source line where there is one: a tensor value read into
+`CaptureRefused` names what stops a trace, with the user's source line where there is one: a tensor value read into
 Python (``aten._local_scalar_dense``: an ``if`` on a tensor, ``.item()``), an output shape set by values
-(``aten.nonzero``), an op with no fake kernel (a custom kernel), a control-flow higher-order op (``torch.cond``), a fused
-op whose products this package doesn't count, a graph that changes with the batch size, or a deep copy of a tensor
-the trace runs on (``copy.deepcopy`` of the model, of a parameter or of an optimizer): a fake has no data to copy, and
-a process that copies one anyway corrupts its heap and dies later. A step that needs the weights as they were
-copies the state dict, ``{k: v.detach().clone() for k, v in model.state_dict().items()}``.
+(``aten.nonzero``), an op with no fake kernel (a custom kernel), a control-flow higher-order op (``torch.cond``), a
+custom op, a step that reads the run's own tensor around the copy it is handed, or a deep copy of a tensor the trace
+runs on (``copy.deepcopy`` of the model, of a parameter or of an optimizer): a fake has no data to copy, and a process
+that copies one anyway corrupts its heap and dies later (`DEEP_COPY`).
 """
 from __future__ import annotations
 
@@ -56,8 +40,7 @@ import linecache
 import os
 import re
 import traceback
-from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any, Callable, Sequence
 
 import torch
 import torch.utils._pytree as pytree
@@ -65,7 +48,7 @@ from torch._subclasses.fake_tensor import (DataDependentOutputException, Dynamic
                                            FakeTensorMode, UnsupportedOperatorException)
 from torch.fx.experimental.proxy_tensor import make_fx
 
-__all__ = ["ATTENTION", "BACKWARD", "Capture", "CaptureRefused", "STEP", "capture_step", "capture_steps"]
+__all__ = ["ATTENTION", "BACKWARD", "CaptureRefused", "DEEP_COPY", "STEP"]
 
 ATTENTION = "te_capture::attention::"
 BACKWARD = "te_capture::backward"
@@ -80,76 +63,14 @@ DEEP_COPY = ("the step deep-copies a tensor of the model's (copy.deepcopy of the
 
 
 class CaptureRefused(Exception):
-    """The step is not one fixed graph this package can count. `reason` is one of ``dynamic_control_flow``,
-    ``data_dependent_shape``, ``custom_kernel``, ``uncounted_op``, ``unpriced_dtype`` (a counted op in a dtype no
-    Definition prices, `gates.Unpriced`), ``batch_dependent``, ``deep_copy`` or ``trace``; `op` the ATen op or
-    construct; `where` the user's source line, if found."""
+    """The steps are not one fixed graph the trace can take. `reason` is one of ``dynamic_control_flow``,
+    ``data_dependent_shape``, ``custom_kernel``, ``uncounted_op``, ``deep_copy`` or ``trace``, or one a reader of the
+    graph raises it with (``unpriced_dtype``, ``batch_dependent``); `op` the ATen op or construct; `where` the user's
+    source line, if found."""
 
     def __init__(self, reason: str, op: str | None, message: str, where: str | None = None) -> None:
         self.reason, self.op, self.where = reason, op, where
         super().__init__(f"{reason}: {message}" + (f" [at {where}]" if where else ""))
-
-
-@dataclass
-class Capture:
-    """One capture: the graph; each graph attribute that is a parameter or buffer, as (kind, name, aliases); the
-    optimizer state after the step; the token-axis sizes the batch was captured at. A capture of several steps (a
-    recorded program's update period) gives each step's tokens by its nodes' ``meta["te_step"]`` (`step_tokens`), and
-    the graph attributes steps before it wrote (`written_before`: the run's own values when the graph reads them). A
-    program recorded from its start names the step it measures (`region`): the graph holds every step before it, which
-    decide what the run produced, and the step after it, whose forward reads the new values. A capture whose first
-    step isn't its run's first says so (`mid_run`): every parameter and buffer it writes then holds the run's own value
-    where the capture first reads it, not θ's."""
-    gm: torch.fx.GraphModule
-    attrs: dict[str, tuple[str, str, tuple[str, ...]]]
-    state: list[dict]
-    axis_sizes: tuple[int, ...] = ()
-    step_tokens: dict | None = None
-    written_before: frozenset = frozenset()
-    region: int | None = None
-    mid_run: bool = False
-
-
-def _default_token_dims(t: torch.Tensor) -> tuple[int, ...]:
-    if t.dim() == 0:
-        return ()
-    if t.dtype.is_floating_point or t.dtype.is_complex:
-        return tuple(range(max(t.dim() - 1, 1)))
-    return tuple(range(t.dim()))
-
-
-def _token_dims(leaves: list, token_dims) -> list[tuple[int, ...]]:
-    if token_dims is None:
-        return [_default_token_dims(x) if isinstance(x, torch.Tensor) else () for x in leaves]
-    td = pytree.tree_leaves(token_dims, is_leaf=lambda v: isinstance(v, tuple) and all(isinstance(i, int) for i in v))
-    tensors = [i for i, x in enumerate(leaves) if isinstance(x, torch.Tensor)]
-    if len(td) != len(tensors):
-        raise ValueError(f"token_dims names {len(td)} tensors, the batch has {len(tensors)}")
-    out: list[tuple[int, ...]] = [()] * len(leaves)
-    for i, dims in zip(tensors, td):
-        out[i] = tuple(int(d) for d in dims)
-    return out
-
-
-def _axis_sizes(leaves: list, dims: list[tuple[int, ...]]) -> tuple[int, ...]:
-    sizes: dict[int, int] = {}
-    for x, ds in zip(leaves, dims):
-        for a, d in enumerate(ds):
-            n = int(x.shape[d])
-            if sizes.setdefault(a, n) != n:
-                raise ValueError(f"token axis {a} is {sizes[a]} in one batch tensor and {n} in another")
-    return tuple(sizes[a] for a in range(len(sizes)))
-
-
-def _resized(leaves: list, dims: list[tuple[int, ...]], axis: int, size: int) -> list:
-    out = []
-    for x, ds in zip(leaves, dims):
-        if isinstance(x, torch.Tensor) and axis < len(ds):
-            shape = list(x.shape)
-            shape[ds[axis]] = size
-            x = torch.empty(shape, dtype=x.dtype, device="meta")
-        out.append(x)
-    return out
 
 
 def _fake_copy(model: torch.nn.Module, optimizers: Sequence[torch.optim.Optimizer], mode: FakeTensorMode, device):
@@ -289,8 +210,8 @@ def _refuse_originals(gm: torch.fx.GraphModule, originals: dict[int, str]) -> No
             raise CaptureRefused("trace", None,
                                  f"the step reads the run's own {name} and not the copy it is traced on: it reached "
                                  f"the tensor around its arguments (a global, a closure). Reach it from the model or "
-                                 f"the optimizers `step` is handed: hold it on the model as a parameter (as routes/"
-                                 f"lora.py holds its adapters), or read it from its optimizer's param_groups")
+                                 f"the optimizers `step` is handed: hold it on the model as a parameter, or read it from its "
+                                 f"optimizer's param_groups")
 
 
 @contextlib.contextmanager
@@ -429,11 +350,13 @@ def _no_deep_copy():
 
 
 def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: torch.nn.Module,
-           optimizers: Sequence[torch.optim.Optimizer], leaves: list, spec, device, measured: int | None = None) -> Capture:
+           optimizers: Sequence[torch.optim.Optimizer], leaves: list, spec, device,
+           measured: int | None = None) -> tuple[torch.fx.GraphModule, list[torch.Tensor], dict, list[dict]]:
     """One `make_fx` capture of `steps` in order, each as ``step(fake_model, batch, fake_optimizers)`` on one fake model
-    and its fake optimizers, ``batch`` the unflattened `leaves` as fakes of its own. With `measured`, the capture is a
-    program recorded from its start that measures that step (module docstring): its nodes carry their step, and each
-    step's integer batch tensors are its token inputs."""
+    and its fake optimizers, ``batch`` the unflattened `leaves` as fakes of its own: the graph, its placeholders' fakes,
+    each graph attribute that is a parameter or buffer as (kind, name, aliases), and the optimizer state after the
+    steps. With `measured`, the capture is a program recorded from its start that measures that step (module
+    docstring): its nodes carry their step, and each step's integer batch tensors are its token inputs."""
     mode = FakeTensorMode(allow_non_fake_inputs=True)
     fake_model, fake_opts, held, originals = _fake_copy(model, optimizers, mode, device)
     with mode:
@@ -479,13 +402,13 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
                 if isinstance(v, torch.Tensor):
                     state.append({"optimizer": oi, "param": pname.get(id(p), "?"), "key": str(k),
                                   "shape": list(v.shape), "dtype": str(v.dtype).removeprefix("torch.")})
-    return Capture(gm, attrs, state, region=measured)
+    return gm, [f[i] for f in fakes for i in tensor_at], attrs, state
 
 
 def _mark_steps(gm: torch.fx.GraphModule, inputs: int) -> None:
     """Each node of a capture of several steps with its step (``meta["te_step"]``): an input by its place among the
-    steps' `inputs` batch tensors each, an integer one renamed ``tokens_…`` (a token input, as `structure` reads a
-    recorded program's), and every other node by the last ``te_capture::step::I`` marker before it."""
+    steps' `inputs` batch tensors each, an integer one renamed ``tokens_…`` (a token input),
+    and every other node by the last ``te_capture::step::I`` marker before it."""
     at, seen = 0, 0
     for n in gm.graph.nodes:
         if n.op == "placeholder":
@@ -501,75 +424,3 @@ def _mark_steps(gm: torch.fx.GraphModule, inputs: int) -> None:
         n.meta["te_step"] = at
 
 
-def _optimizers(optimizer) -> list[torch.optim.Optimizer]:
-    if optimizer is None:
-        return []
-    if isinstance(optimizer, torch.optim.Optimizer):
-        return [optimizer]
-    return list(optimizer)
-
-
-def _axis_name(names: Sequence[str], a: int) -> str:
-    return names[a] if a < len(names) else f"axis{a}"
-
-
-def _capture(steps, model, opts, example_batch, *, updated, token_dims, token_axes, device, name, measured=None,
-             mid_run=False):
-    from training_slowdown.capture.structure import StepGraph
-    leaves, spec = pytree.tree_flatten(example_batch)
-    dims = _token_dims(leaves, token_dims)
-    sizes = _axis_sizes(leaves, dims)
-    base = _trace(steps, model, opts, leaves, spec, device, measured)
-    base.axis_sizes, base.mid_run = sizes, mid_run
-    varied = []
-    for a, n in enumerate(sizes):
-        last: Exception | None = None
-        for size in ((2 * n, n // 2) if n >= 4 else (2 * n,)):
-            try:
-                t = _trace(steps, model, opts, _resized(leaves, dims, a, size), spec, device, measured)
-            except CaptureRefused as e:
-                last = e
-                continue
-            t.axis_sizes, t.mid_run = tuple(size if i == a else s for i, s in enumerate(sizes)), mid_run
-            varied.append(t)
-            break
-        else:
-            raise CaptureRefused("batch_dependent", last.op if isinstance(last, CaptureRefused) else None,
-                                 f"the step captures at {_axis_name(token_axes, a)} = {n} but not at {2 * n}: {last}")
-    names = tuple(_axis_name(token_axes, a) for a in range(len(sizes)))
-    return StepGraph.build(base, varied, names, updated=None if updated is None else frozenset(updated),
-                           name=name or type(model).__name__)
-
-
-def capture_step(model: torch.nn.Module, optimizer, loss_fn: Callable[[torch.nn.Module, Any], torch.Tensor], example_batch, *,
-                 updated: Iterable[str] | None = None, token_dims=None, token_axes: Sequence[str] = ("batch", "seq"),
-                 device=None, name: str | None = None):
-    """Capture one standard training step, ``zero_grad``, ``loss_fn(model, batch).backward()``, each optimizer's
-    ``step()``, as a `StepGraph`. `optimizer` is one optimizer, a list, or None; `updated` the names of the parameters
-    whose values differ from the registered θ when the step reads them (default: the ones the step writes)."""
-    def step(m, batch, opts):
-        for o in opts:
-            o.zero_grad(set_to_none=True)
-        loss_fn(m, batch).backward()
-        for o in opts:
-            o.step()
-    return _capture([step], model, _optimizers(optimizer), example_batch, updated=updated, token_dims=token_dims,
-                    token_axes=token_axes, device=device, name=name)
-
-
-def capture_steps(step_fns: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: torch.nn.Module, example_batch,
-                  *, measured: int, optimizers=None, token_dims=None, token_axes: Sequence[str] = ("batch", "seq"),
-                  device=None, name: str | None = None, mid_run: bool = False):
-    """Capture `step_fns` in order, consecutive steps of one run each written as ``step_fn(model, batch, optimizers)``
-    (one whole training step; ``optimizers`` are fresh copies of `optimizers` over the captured model's parameters), on
-    one model and one set of fresh optimizers, each on a batch of its own of `example_batch`'s shapes, as the `StepGraph`
-    of step `measured` of them, with its step circuit (module docstring). What the measured step reads of the run is
-    what the steps before it wrote, so it takes one before it to read an updated weight; its cut's sinks are the values
-    the step after it reads, so the last of `step_fns` has no cut (0). `mid_run` says the first of `step_fns` isn't the
-    run's first: the parameters and buffers the steps write then hold the run's own values where the first of them
-    reads them, where a run's first step reads θ's (so a weight the measured step reads is the run's own plus an
-    update, not θ plus one, which a block could make from the update alone)."""
-    if not 0 <= measured < len(step_fns):
-        raise ValueError(f"capture_steps: measured is {measured}, and there are {len(step_fns)} steps")
-    return _capture(list(step_fns), model, _optimizers(optimizers), example_batch, updated=None, token_dims=token_dims,
-                    token_axes=token_axes, device=device, name=name, measured=measured, mid_run=mid_run)

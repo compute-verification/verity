@@ -7,11 +7,13 @@ tree builds, which is not served (`built.py`): its policy by the integration's c
 its number, and the record's three divisions. Then both over monitoring periods. Then the served class under the value
 tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW check credits: `--uncredited-share`, which has
 no default, so without it no figure of the tied policy prints, and with it every one prints under a label saying it
-rests on no PoUW verdict. With `--served OUT`, after the stated policy, a served run's record (`record.py`): the
-check's verdicts in their public form (`InferenceOnlyCheck.Record.check`, `InferenceOnlyCheck.RecordCount.check`) and its cost, PoUW's
-share and tie, and the value at the record's share. Then one JSON object, printed last and written to `--out`, where
-the served policy's number is also written into the run's result under the metric's id (`METRIC`), unless a record
-was read.
+rests on no PoUW verdict. With `--served RUN` (or where `record.OF_RECORD` names a served run of record), a served
+run's record (`record.py`) comes first and its number is the command's, with its own mark: the coins and parameters
+the record says it was made with (`record.made_with`), the check's verdicts in their public form
+(`InferenceOnlyCheck.Record.check`, `InferenceOnlyCheck.RecordCount.check`) and its cost, PoUW's share and tie, and the
+value at the record's share; the stated policy's number follows, labelled as not the result. Then one JSON object,
+printed last and written to `--out`, whose `value` is the command's number, also written into the run's result under
+the metric's id (`METRIC`): the record's at its mark, or with no record the served policy's, modeled.
 """
 from __future__ import annotations
 
@@ -34,6 +36,9 @@ from slowdown import lean, min_cut
 from verity_bench import kit
 from verity_config.settings import SHARED
 
+#: the command's first line under its title: what its number is not
+MEASUREMENT = ("A MEASUREMENT, NOT AN AUDIT: this command prices a policy, and reads a served run's record, on whatever "
+               "machine runs it; an audit runs the verifier and its coins as processes on a machine of their own.")
 UNIT = ("the least slowdown of training run inside one inference block of the policy, max(1, N / limit): N the block's "
         "work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
 #: the metric's id (benchmarks/inference_only/metrics.toml), the name the served policy's value is written under in the run's result
@@ -299,21 +304,26 @@ def _said(v: Mapping[str, Any]) -> str:
 
 def served_record(files: R.Files, clock: Callable[[], float], exe: Path | None) -> dict[str, Any]:
     """Run ``files``'s record (`record.py`): the check's public verdicts and cost, PoUW's share and tie, and the value
-    with its reading and mark. A value of 1 (the check refused, or no PoUW accept of record) is measured; one block's
-    limit under the tie is partial; each period's is modeled."""
+    with its reading and mark. A value of 1 (the check refused or couldn't run, or no PoUW accept of record) is measured;
+    one block's limit under the tie is partial; each period's is modeled."""
     got = R.read(files)
-    run, pol = got["run"], got["policy"]
+    run, pol = R.run_of(files, got["verdicts"]), got["policy"]
     pouw = R.share(got["verdicts"], pol, R.previous(files))
-    with tempfile.TemporaryDirectory() as d:
-        said = R.checked(files, got, Path(d), clock, exe)
-    doc = {"run": run, "model": pol["serve"]["model"],
+    said = {x: {} for x in R.PUBLIC} | {"seconds": None, "cost": None}
+    if got["program"]:
+        with tempfile.TemporaryDirectory() as d:
+            said = R.checked(files, got, Path(d), clock, exe)
+    doc = {"run": run, "made_with": R.made_with(got["verdicts"]), "model": pol["serve"]["model"],
            "class": [pol["class"][x] for x in ("slots", "prompt", "outputs")], **{x: pol[x] for x in "ckn"},
-           "files": {"program_bytes": files.program.stat().st_size, "circuit_bytes": files.circuit.stat().st_size,
-                     "log_records": len(files.logs)},
+           "files": {"program_bytes": files.program.stat().st_size if got["program"] else None,
+                     "circuit_bytes": files.circuit.stat().st_size, "log_records": len(R.log_records(files))},
            "check": {x: {"rule": rule, "public_form": fn, **said[x]} for x, (rule, fn) in R.PUBLIC.items()},
            "seconds": said["seconds"], "cost": said["cost"], "pouw": pouw, "tied": None, "tied_why": None}
     of_record = "c, n, the work, the check's accept, PoUW's accept and s are the record's"
-    if refused := [rule for x, (rule, _) in R.PUBLIC.items() if said[x].get("complies") is not True]:
+    if not got["program"]:
+        one = {"value": 1, "mark": "measured", "reading": f"{R.NO_PROGRAM} ({files.program}), so nothing shows its "
+               "blocks within c, k and n", "inputs": "the record's files", "short": "no Program, the check not run"}
+    elif refused := [rule for x, (rule, _) in R.PUBLIC.items() if said[x].get("complies") is not True]:
         which = "both rules" if len(refused) == 2 else refused[0]
         one = {"value": 1, "mark": "measured", "reading": f"the check refused the record ({which}), so nothing shows its "
                "blocks within c, k and n", "inputs": "the check's verdicts, the record's", "short": f"{which} refused"}
@@ -375,20 +385,25 @@ def record_lines(d: Mapping[str, Any]) -> list[str]:
     and the tie."""
     one, pouw, cost = d["block"], d["pouw"], d["cost"]
     value = "none" if one["value"] is None else f"{_n(one['value'])} ({one['mark']})"
-    f, ck, case = d["files"], cost["check"], cost["case"]
+    f = d["files"]
+    program = "no Program" if f["program_bytes"] is None else f"a Program of {f['program_bytes']:,} bytes"
     out = [f"FROM RUN {d['run']}'s RECORD: {value}, {one['reading']}",
-           f"  {d['model']}, class {','.join(map(str, d['class']))}: a Program of {f['program_bytes']:,} bytes, a circuit "
-           f"record of {f['circuit_bytes']:,} bytes and a registration log of {f['log_records']} records",
-           f"  check     {R.CHECK}, in its public form only:",
-           *(f"              {x['rule']} ({x['public_form']}): {_said(x)}" for x in d["check"].values()),
-           f"            the count against the record's c = {d['c']:,}, k = {d['k']:,}, n = {d['n']:,}",
-           f"  cost      in the clear, at the record's size: the check {ck['wall_s']:,.1f} s wall, {ck['cpu_s']:,.1f} s CPU, "
-           f"{ck['peak_mib']:,.0f} MiB peak, on a case of {case['bytes']:,} bytes (by its own clock: read at "
-           f"{d['seconds']['read']} s, the rate rule's verdict at {d['seconds']['check']} s, the count's at "
-           f"{d['seconds']['count']} s); writing the case ({R.SCRIPT.name}) {case['wall_s']:,.1f} s wall, "
-           f"{case['peak_mib']:,.0f} MiB peak",
-           f"  PoUW      of record by {pouw['field']} = {pouw['verdict']!r}"
-           + (f", from {pouw['answer_from']}" if pouw["answer_from"] else "")]
+           f"  {d['model']}, class {','.join(map(str, d['class']))}: {program}, a circuit "
+           f"record of {f['circuit_bytes']:,} bytes and a registration log of {f['log_records']} records"]
+    if cost is None:
+        out.append(f"  check     {R.CHECK}: not run, {R.NO_PROGRAM}")
+    else:
+        ck, case = cost["check"], cost["case"]
+        out += [f"  check     {R.CHECK}, in its public form only:",
+                *(f"              {x['rule']} ({x['public_form']}): {_said(x)}" for x in d["check"].values()),
+                f"            the count against the record's c = {d['c']:,}, k = {d['k']:,}, n = {d['n']:,}",
+                f"  cost      in the clear, at the record's size: the check {ck['wall_s']:,.1f} s wall, "
+                f"{ck['cpu_s']:,.1f} s CPU, {ck['peak_mib']:,.0f} MiB peak, on a case of {case['bytes']:,} bytes (by its "
+                f"own clock: read at {d['seconds']['read']} s, the rate rule's verdict at {d['seconds']['check']} s, the "
+                f"count's at {d['seconds']['count']} s); writing the case ({R.SCRIPT.name}) {case['wall_s']:,.1f} s wall, "
+                f"{case['peak_mib']:,.0f} MiB peak"]
+    out.append(f"  PoUW      of record by {pouw['field']} = {pouw['verdict']!r}"
+               + (f", from {pouw['answer_from']}" if pouw["answer_from"] else ""))
     if pouw["C"] is None:
         out += ["            no accept of record" + (" (a development accept counts as none)" if pouw["development"]
                                                       else "") + f": {pouw['why'][:400]}",
@@ -432,20 +447,41 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
                     help="the share of a block's work that no PoUW check credits, from 0 to 1 or as a percentage with "
                          "%% (no default): print the served class under the value tie (tied.toml) at it, under a "
                          "label saying its figures rest on no PoUW verdict")
-    ap.add_argument("--served", type=Path, metavar="OUT",
-                    help="a served run's out/ (record.OUT_FILES): run the inference-only check on its record and print its "
-                         "value at the share of its blocks' work that no PoUW verdict of record credits; with --program, "
-                         "--circuit and --log, the files the run registered")
+    ap.add_argument("--served", type=Path, metavar="RUN",
+                    help="a served run's directory, or its out/ (record.OUT_FILES): run the inference-only check on its "
+                         "record and print its value at the share of its blocks' work that no PoUW verdict of record "
+                         "credits; the files the run registered are out/'s "
+                         f"{', '.join(R.REGISTERED.values())}, or --program, --circuit and --log (default: the run "
+                         f"{R.OF_RECORD.name} names, else none)")
     ap.add_argument("--program", type=Path, metavar="FILE", help="the served run's Program")
     ap.add_argument("--circuit", type=Path, metavar="FILE", help="the served run's circuit record")
     ap.add_argument("--log", type=Path, nargs="+", metavar="FILE",
-                    help="the served run's registration log, in order, its own registration last")
-    ap.add_argument("--out", type=Path, default=SHARED.OUT, metavar="DIR",
-                    help="write inference_only.json here (default: $OUT; unset: only printed)")
+                    help="the served run's registration log, in order, its own registration last: a record a file, or "
+                         "a .jsonl file of one a line")
+    ap.add_argument(R.CLASS_OPTION, dest="served_class", metavar="CLASS",
+                    help="where the served run's record holds counts of more than one class (block-counts-CLASS.json), "
+                         "the one to read: SLOTS,PROMPT,OUTPUTS, or record")
+    ap.add_argument("--out", type=lambda s: Path(s) if s else None, metavar="DIR",
+                    help="write inference_only.json here (default: the run's out/ under a research run, else $OUT; "
+                         "neither, or empty: only printed)")
     args = ap.parse_args(argv)
     named = [x for x in ("program", "circuit", "log") if getattr(args, x)]
-    if (args.served is None) != (not named) or (args.served and len(named) != 3):
-        ap.error("--served OUT takes --program, --circuit and --log, and they take it")
+    if named and (args.served is None or len(named) != 3):
+        ap.error("--program, --circuit and --log take --served RUN, and come all three or none: without them --served "
+                 f"reads {', '.join(R.REGISTERED.values())} in the run's out/")
+    try:
+        where = args.served or R.of_record()
+    except R.Refused as e:
+        ap.error(str(e))
+    if args.served_class is not None and where is None:
+        ap.error(f"{R.CLASS_OPTION} names a class of a served run's record, and no record is read: name one with --served")
+    files = None if where is None else R.files_of(where, args.program, args.circuit, tuple(args.log or ()),
+                                                  args.served_class)
+    if (record_check is None and files is not None) or (not args.stated_only and check is B.lean_count):
+        try:
+            B.need_lake()
+        except B.NoLake as e:
+            ap.exit(1, f"{ap.prog}: {e}\n")
 
     def say(line: str) -> None:
         print(f"[inference_only] {line}", file=sys.stderr, flush=True)
@@ -455,23 +491,28 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
         ap.error(f"{args.policy.name} is the served class under the value tie, whose number is never printed alone: "
                  "leave --policy out and state --uncredited-share S, which prints it beside its limit at that share")
     served = priced(stated, P.shape(stated.model))
-    print("Inference-only: the least slowdown of training run inside the policy's inference blocks\n")
-    print(f"AS SERVED: {_n(served['value'])}" if stated.label == "served" else f"AS STATED: {_n(served['value'])}")
+    record = None
+    if files is not None:
+        try:
+            record = served_record(files, clock, record_check)
+        except R.Refused as e:
+            ap.error(f"the record is refused: {e}")
+    print("Inference-only: the least slowdown of training run inside the policy's inference blocks")
+    if record is None:
+        print(MEASUREMENT + "\n")
+        print(f"AS SERVED: {_n(served['value'])}" if stated.label == "served" else f"AS STATED: {_n(served['value'])}")
+    else:
+        print(f"{MEASUREMENT} The served run's record read: {files.out}")
+        print(record["made_with"] + "\n")
+        print("\n".join(record_lines(record)) + "\n", flush=True)
+        if record["tied"] is not None:
+            print("\n".join(tied_lines(record["tied"], P.TIED.name, record_words(record))) + "\n", flush=True)
+        print(f"THE {stated.label.upper()} POLICY'S NUMBER, NOT THE RESULT: {_n(served['value'])}")
     print("\n".join("  " + line for line in headline(served, stated)))
     print("  Not checked here: this tree builds no circuit of this class, so no check ran on it, and the number is priced "
           f"from the policy's stated numbers ({args.policy.name}).\n")
     print(f"The {stated.label} policy (stated, not built)")
     print("\n".join(detail(served, stated, P.shape(stated.model))), flush=True)
-    record = None
-    if args.served:
-        try:
-            record = served_record(R.Files(args.served, args.program, args.circuit, tuple(args.log)), clock,
-                                   record_check)
-        except R.Refused as e:
-            ap.error(f"the record is refused: {e}")
-        print("\n" + "\n".join(record_lines(record)), flush=True)
-        if record["tied"] is not None:
-            print("\n" + "\n".join(tied_lines(record["tied"], P.TIED.name, record_words(record))), flush=True)
     policies, divisions = [served], []
     if not args.stated_only:
         cls = args.cls or stated.cls
@@ -542,18 +583,20 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
         tied = T.priced(policy, P.shape(policy.policy.model), args.uncredited_share)
         print("\n" + "\n".join(tied_lines(tied, P.TIED.name)))
 
-    doc = {"benchmark": "inference_only", "value": served["value"], "unit": UNIT, "check": served["check"],
-           "rests_on": served["rests_on"], "work_is": P.WORK_IS, "policies": policies, "divisions": divisions,
-           "periods": periods, "tied": tied, "record": record, "commit": commit()}
-    if run := SHARED.RESEARCH_RUN_ID:
-        doc["run"] = run
-    text = json.dumps(doc, sort_keys=True)
-    if args.out:
-        args.out.mkdir(parents=True, exist_ok=True)
-        (args.out / "inference_only.json").write_text(text + "\n")
-        # the metric reads the stated policy until a data file the command reads names a served run of record
-        if stated.label == "served" and record is None:
-            kit.writer(args.out).measurement(METRIC, doc["value"], UNIT, target=TARGET, mark="modeled",
-                                             verdict=verdict(doc["value"]))
-    print("\n" + text)
+    doc = {"value": served["value"], "unit": UNIT, "commit": commit(), "run": SHARED.RESEARCH_RUN_ID,
+           "benchmark": "inference_only", "check": served["check"], "rests_on": served["rests_on"], "work_is": P.WORK_IS,
+           "policies": policies, "divisions": divisions, "periods": periods, "tied": tied, "record": record}
+    if record is None:
+        mark = "modeled"
+        measured = [{"name": METRIC, "value": doc["value"], "unit": UNIT, "target": TARGET,
+                     "verdict": verdict(doc["value"])}] if stated.label == "served" else []
+    else:
+        one = record["block"]
+        doc["value"], doc["run"] = one["value"], record["run"]
+        # a record with no figure gives no value, and its mark is the one its figure would have had
+        mark = one["mark"] or "partial"
+        measured = [{"name": METRIC, "value": one["value"], "unit": UNIT, "target": TARGET,
+                     **({"verdict": verdict(one["value"])} if one["value"] is not None else {"why": one["reading"]})}]
+    shown = {k: doc[k] for k in ("value", "unit", "commit", "run")} | json.loads(json.dumps(doc, sort_keys=True))
+    kit.report("inference_only", "", shown, measured, mark=mark, out=args.out)
     return doc

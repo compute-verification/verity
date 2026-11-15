@@ -29,12 +29,12 @@ def lease(*cards: int) -> str:
 
 
 def made(changes: dict | None = None, *, gaps=EVEN, **texts: str | None) -> tuple[dict, S.Files]:
-    """A made-up run that passes all ten, and its one row: two provers on card 3 with ten CPUs of one NUMA node, two
+    """A made-up run that passes all ten, and its one row: two provers on card 3 with ten CPUs of its NUMA node, two
     warm sessions each and the timed ones filed `gaps` apart (16 of them unless `gaps` says otherwise), one lease of
     card 3, and the card clear at the row's start and end. The row's window is the sessions' own: from the second timed session's filing to the third
     from last's, or every timed session where that leaves under two. `changes`: fields of the row replaced, or left out
-    (`DROP`); `texts`: a file's text replaced (`rates`, `leases`, `start`, `end`, `sessions`), or the file left out
-    (None)."""
+    (`DROP`); `texts`: a file's text replaced (`rates`, `leases`, `start`, `end`, `sessions`, `point`), or the file left
+    out (None)."""
 
     filed = [100.0]
     for gap in gaps:
@@ -50,13 +50,13 @@ def made(changes: dict | None = None, *, gaps=EVEN, **texts: str | None) -> tupl
            "statements_per_s": round((last - first) / span, 4), "window_sessions": last - first, "window_s": round(span, 2),
            "flat": True, "throttled": {"nr_throttled": 0, "throttled_usec": 0},
            "warm_per_prover": {f"prover-gpu{CARD}-0": WARM, f"prover-gpu{CARD}-1": WARM}, "idle_provers": 0,
-           "cores": {"count": 10, "list": "34-43", "numa_nodes": [1]},
+           "cores": {"count": 10, "list": "34-43", "numa_nodes": [1]}, S.CARD_NUMA: 1,
            "stage": {"definition": "Gemm_v1{K=64}", "k_log": 20, "blocks": 8, "full": 8}} | (changes or {})
     row = {k: v for k, v in row.items() if v is not DROP}
     files = {S.RATES: json.dumps([row]), S.LEASES: lease(int(CARD)), START: NODE, END: NODE,
              SESSIONS: "".join(json.dumps(line) + "\n" for line in lines)}
-    files |= {{"rates": S.RATES, "leases": S.LEASES, "start": START, "end": END, "sessions": SESSIONS}[name]: text
-              for name, text in texts.items()}
+    files |= {{"rates": S.RATES, "leases": S.LEASES, "start": START, "end": END, "sessions": SESSIONS,
+               "point": S.POINT}[name]: text for name, text in texts.items()}
     return row, {path: text for path, text in files.items() if text is not None}.get
 
 
@@ -114,6 +114,12 @@ FAILS = [
                                    "verifier_cpus": "72-73"}}, "its CPUs (34-43,72-73) are on 2 NUMA nodes (1, 3)"),
     ("one_numa_node", {"changes": {"cores": {"count": 96, "numa_nodes": [0, 1, 2, 3]}}},
      "its CPUs are on 4 NUMA nodes (0, 1, 2, 3)"),
+    # its CPUs on one NUMA node and its card across the machine from them
+    ("one_numa_node", {"changes": {S.CARD_NUMA: 0}}, "its card is on NUMA node 0, and its CPUs on NUMA node 1"),
+    # a row timed before the node side wrote `card_numa_node`: its lease was asked of node 0's cards alone
+    ("one_numa_node", {"changes": {S.CARD_NUMA: DROP},
+                       "point": json.dumps({"lease_on": {"numa_nodes": [0], "cards": [0, 1]}})},
+     "its card is on NUMA node 0, and its CPUs on NUMA node 1"),
 ]
 
 
@@ -134,6 +140,10 @@ UNTOLD = [
     ("flat", {"changes": {"flat": DROP}}, "its row lacks `flat`"),
     ("no_throttling", {"changes": {"throttled": DROP}}, "its row lacks `throttled.nr_throttled`"),
     ("no_throttling", {"changes": {"throttled": {}}}, "its row lacks `throttled.nr_throttled`"),
+    # a cgroup with no cpu.stat that counts throttling (none at all, or a host's root cgroup): server_rate writes null
+    ("no_throttling", {"changes": {"throttled": {"nr_throttled": None, "throttled_usec": None, "cgroup": "/sys/fs/cgroup",
+                                                 "own_cgroup": "0::/", "cpu_max": None}}},
+     "its cgroup ('/sys/fs/cgroup', cpu.max None) has no cpu.stat that counts throttling, so its row read none"),
     ("one_lease_own_card", {"changes": {"gpus": DROP}}, "its row lacks `gpus`"),
     ("one_lease_own_card", {"changes": {"gpus": None}}, "`gpus` (None) of its row isn't a count"),
     ("one_lease_own_card", {"leases": None}, "the run holds no `gpu-lease-usage.jsonl`, which gpu-lease writes when a lease ends"),
@@ -188,7 +198,32 @@ UNTOLD = [
      "`cores.numa_nodes` ('1') of its row isn't a list of NUMA nodes"),
     ("one_numa_node", {"changes": {"cores": {"count": 10, "list": "34-43", "numa_nodes": [1, -1]}}},
      "`cores.numa_nodes` ([1, -1]) of its row isn't a list of NUMA nodes"),
+    ("one_numa_node", {"changes": {S.CARD_NUMA: None}},
+     "its node didn't say which NUMA node its card is on (its row's `card_numa_node` is null)"),
+    ("one_numa_node", {"changes": {S.CARD_NUMA: -1}}, "`card_numa_node` (-1) of its row isn't a NUMA node"),
+    ("one_numa_node", {"changes": {S.CARD_NUMA: DROP}},
+     ("its row doesn't say which NUMA node its card is on (`card_numa_node`), and the run holds no `out/point.json` "
+      "naming the cards its lease was asked of")),
+    ("one_numa_node", {"changes": {S.CARD_NUMA: DROP}, "point": json.dumps({"spec": "s"})},
+     ("its row doesn't say which NUMA node its card is on (`card_numa_node`), and the run's `out/point.json` doesn't "
+      "say which cards its lease was asked of")),
+    ("one_numa_node", {"changes": {S.CARD_NUMA: DROP}, "point": "[]"},
+     ("its row doesn't say which NUMA node its card is on (`card_numa_node`), and the run's `out/point.json` doesn't "
+      "say which cards its lease was asked of")),
+    ("one_numa_node", {"changes": {S.CARD_NUMA: DROP}, "point": "{"},
+     ("its row doesn't say which NUMA node its card is on (`card_numa_node`), and the run's `out/point.json` isn't "
+      "JSON (Expecting property name enclosed in double quotes: line 1 column 2 (char 1))")),
+    # a node that maps no card to a NUMA node: the lease took any card
+    ("one_numa_node", {"changes": {S.CARD_NUMA: DROP}, "point": json.dumps({"lease_on": {
+        "numa_nodes": [1], "cards": None, "why": "none of the node's 8 cards says it is on NUMA node 1"}})},
+     ("its row doesn't say which NUMA node its card is on (`card_numa_node`), and its lease was asked of any card "
+      "(none of the node's 8 cards says it is on NUMA node 1)")),
 ]
+
+
+def test_a_row_timed_before_the_node_side_read_its_cards_numa_node_passes_where_its_lease_was_asked_of_its_cpus_node():
+    row, files = made({S.CARD_NUMA: DROP}, point=json.dumps({"lease_on": {"numa_nodes": [1], "cards": [2, 3]}}))
+    assert S.verdict(row, files).passed
 
 
 @pytest.mark.parametrize(("name", "lack", "why"), UNTOLD, ids=[f"{name}-{n}" for n, (name, _, _) in enumerate(UNTOLD)])
@@ -206,7 +241,7 @@ def test_every_check_has_a_case_that_fails_it_and_one_its_files_cannot_show():
 NUMBERS = [("provers",), ("gpus",), ("warm",), ("sessions",), ("accepted",), ("refused_n",), ("unfiled",),
            ("exits", "prover-gpu3-0"), ("statements_per_s",), ("window_sessions",), ("window_s",),
            ("throttled", "nr_throttled"), ("warm_per_prover", "prover-gpu3-1"), ("idle_provers",), ("period",),
-           ("cores", "numa_nodes", 0)]
+           ("cores", "numa_nodes", 0), (S.CARD_NUMA,)]
 #: what isn't a number, though JSON or Python lets it stand where one goes
 NOT_NUMBERS = [math.nan, math.inf, -math.inf, True, "2", [2]]
 

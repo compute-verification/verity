@@ -343,3 +343,16 @@ def test_this_tree_s_locks_read_every_file_their_audit_can():
 def test_trees_that_make_no_graph(tmp_path, changes, refusal):
     with pytest.raises(graph.GraphError, match=refusal):
         listed(tmp_path, **changes)
+
+
+def test_the_auditor_s_fixtures_have_no_task_wherever_check_puts_them(tmp_path, monkeypatch):
+    """The controls' packages (`check.FIXTURES`) are the Lean check's own, built by every run of it, and no lean-module,
+    lean-lock or lean-env task's: also once they sit under the root's tests/, outside the Lean tool."""
+    moved = "tests/tools/verity/lean/fixtures"
+    monkeypatch.setattr(lean_module.la, "lean_check", lambda: type("Check", (), {"ROOT": ROOT, "FIXTURES": ROOT / moved}))
+    old = "tools/verity/lean/tests/fixtures"
+    files = {**{f.replace(old, moved): v for f, v in FILES.items()}, **OTHER_ENVS}
+    tree = toy_tree(tmp_path / "tree", (ROOT / graph.SPEC).read_text(), files)
+    ts = {t["id"] for t in graph.listing(tree, listers=LISTERS)["tasks"]}
+    assert not [i for i in ts if moved in i or "Ctl" in i], sorted(ts)
+    assert sorted(i for i in ts if i.startswith("lean-env:")) == ["lean-env:Ext", "lean-env:Old", "lean-env:Sec"]
