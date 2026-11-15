@@ -4610,6 +4610,7 @@ MOVED = "the same statement under its old names"
 LIFTED = "the same statement, its definition unfolded once"
 MOVED_READS = "definitions read in another module or under another name: the same under their old names"
 OWNED = "who answers for it, not what it says"
+MOVED_ENTRY = "its entry under its new name; its definition is compared in `reads`"
 
 
 class Change(str):
@@ -4900,7 +4901,9 @@ def assumption_changes(old: dict, new: dict, renames: dict[str, str] | None = No
         k = kind(new, a)
         what = {"assumptions": "assumption", "domain": "domain hypothesis", "open": "open premise"}[k]
         if renames and a in was and (o := unrenamed(a, renames)) != a:
-            if a in held or (h and before and as_was(a) == before):
+            if a in held:
+                out.append(f"{what} {a}: moved from {o}: {MOVED_ENTRY}")
+            elif h and before and as_was(a) == before:
                 out.append(f"{what} {a}: moved from {o}: {MOVED}")
             else:
                 out.append(Change(k, a, f"{what} {a}: changed (moved from {o}; its statement or a definition it reads)"))
@@ -4930,7 +4933,8 @@ def statement_changes(notes: list[str]) -> list[str]:
     """The lines of a review that change what a guarantee says: all but the guarantees and read groups whose statements and
     definitions are unchanged (printed differently, rehashed with SHA-256 while the 32-bit hashes still match, moved or
     lifted), and a changed owner."""
-    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, REGROUPED_OWN, MOVED, LIFTED, MOVED_READS, OWNED))]
+    return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED, REGROUPED_OWN, MOVED, LIFTED, MOVED_READS, OWNED,
+                                                 MOVED_ENTRY))]
 
 
 def changes(notes: list[str], old: dict, new: dict) -> list[dict]:

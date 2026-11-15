@@ -2105,7 +2105,8 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
              "load": whole, "dump": whole,                                   # the reader and the writer themselves
                  "packages": whole,                                              # the file's name, among a directory's
                  "controls_of": whole,                                           # a control's copy of a fixture
-                 "moves_refused": whole}                                         # refuses a moves file, before any step
+                 "moves_refused": whole,                                         # refuses a moves file, before any step
+                 "_finish.write": whole}                                         # the judge's writer of the lock it judged
     for name, got in by_path.items():
         if name not in apart:
             reads.setdefault(name, set()).update(A.JUDGED if got is None else got)
@@ -3845,7 +3846,7 @@ def test_the_lock_names_a_moves_file_must_bring_back_are_those_the_move_renames(
     lock = {"guarantees": {"P.t": {}}, "deployed": ["P.t"], "open": {"P.Hyp": {}},
             "witnesses": {"P.t": {"honest": ["P.t_h"], "nontrivial": "P.t_n"}}, "unwitnessed": {"P.u": "00"},
             "shape": {"inline": {"P.t": {"P.Fits n ∧ x.f": WHY}}}}
-    assert A.lock_names(lock) == {"P.t", "P.t_h", "P.t_n", "P.u", "P.Fits", "n", "x.f"}
+    assert A.lock_names(lock) == {"P.t", "P.t_h", "P.t_n", "P.u", "P.Fits", "n", "x.f", "P.Hyp"}
 
 
 def test_a_closed_hypothesis_must_be_a_named_assumption():
@@ -5211,7 +5212,7 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": "P.a_n"}},
                                 "unwitnessed": {"P.b": h}}, {"P": "Q"}) == {
         "witnesses": {"Q.a": {"honest": ["Q.a_h"], "nontrivial": "Q.a_n"}}, "unwitnessed": {"Q.b": h}}
-    assert A.renamed_witnesses(POLICY, {"P": "Q"}) == {"ids": {"Q.Hyp": "p-hyp"}}
+    assert A.renamed_witnesses(POLICY, {"P": "Q"}) == {"ids": {"Q.Hyp": "p-hyp"}, "assumptions": {"Q.Hyp": {"owner": "@lean"}}}
 
 
 def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry_is_held_to_its_witnesses():
