@@ -42,17 +42,18 @@ def spot(verdict: str = "accept", answer_from: str = LEAN, drawn: int | None = 6
             "answer": {"verdict": verdict, "profile": profile if verdict == "accept" else None}}
 
 
-def demo(root: Path, sha: str, row: dict | None, served_node: bool | None = False) -> list[str]:
-    """The served run and the run whose record holds SPOT's row ``row`` (none where None)."""
+def demo(root: Path, sha: str, row: dict | None, served_node: bool | None = False, report: dict | None = None) -> list[str]:
+    """The served run and the run whose record holds SPOT's row ``row`` (no record where None), or is ``report``."""
     for rid in ("r-served", "r-verdicts"):
         d = root / rid
         d.mkdir(parents=True)
         (d / "status.json").write_text(json.dumps({"started_utc": "2026-11-15T06:00:00Z", "ended_utc": "2026-11-15T07:00:00Z"}))
         (d / "job.json").write_text(json.dumps({"computation": {"tree_sha": sha}}))
-    if row is not None:
+    if row is not None or report is not None:
         f = root / "r-verdicts" / M.RECORD
         f.parent.mkdir(parents=True)
-        f.write_text(json.dumps({"protocols": {"integrity": row}, "composed_on": {"host": "auditor", "served_node": served_node}}))
+        f.write_text(json.dumps(report if report is not None else
+                                {"protocols": {"integrity": row}, "composed_on": {"host": "auditor", "served_node": served_node}}))
     return ["r-served", "r-verdicts"]
 
 
@@ -84,7 +85,6 @@ def test_an_accept_recomputed_on_the_auditors_machine_from_main_is_every_drawn_u
 @pytest.mark.parametrize("row, served_node, off, why", [
     (spot(), False, True, "served from .*, not a commit of main"),
     (spot(), True, False, "composed on the served node"),
-    (spot(), None, False, "composed on the served node or nowhere named"),
     (spot(answer_from="as the served node wrote it"), False, False, "not recomputed there by the Lean verifier"),
     (spot(verdict="reject"), False, False, "the Lean verifier's verdict is reject"),
 ])
@@ -93,6 +93,18 @@ def test_anything_short_of_that_accepts_no_unit_and_says_why(tmp_path, repo, row
     m = M.share(demo(tmp_path / "runs", off_sha if off else on, row, served_node), tmp_path / "runs", "main", r)
     assert (m["value"], m["accepted"]) == (0, 0)
     assert re.search(why, m["reason"]), m["reason"]
+
+
+@pytest.mark.parametrize("report, why", [
+    ({"protocols": {}, "composed_on": {"host": "auditor", "served_node": False}}, "holds no SPOT row"),
+    ({"protocols": {"integrity": spot()}}, "names no composed_on.served_node"),
+    ({"protocols": {"integrity": spot()}, "composed_on": {"host": "auditor", "served_node": None}}, "names no composed_on"),
+])
+def test_a_partial_record_is_refused_not_measured_as_0(tmp_path, repo, report, why):
+    """A record without SPOT's row or without where it was composed is no measurement, not a run that failed."""
+    r, on, _ = repo
+    with pytest.raises(M.R.Refused, match=why):
+        M.share(demo(tmp_path / "runs", on, None, report=report), tmp_path / "runs", "main", r)
 
 
 def test_no_record_or_an_accept_drawing_nothing_is_refused(tmp_path, repo):

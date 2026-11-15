@@ -19,7 +19,8 @@ measurement's ``reason``, its value then 0:
 
 So a run's share is 100 or 0 today: the answer holds one verdict over every drawn unit, and a rejection names no count.
 It refuses, with no measurement and the reason (exit 1), a run without its record, a VERDICT_RUN with no
-``out/record/verdicts.json``, and an accepting answer that names no drawn unit.
+``out/record/verdicts.json``, a record with no SPOT row or no ``composed_on.served_node``, and an accepting answer that
+names no drawn unit: a partial record is no measurement, where a complete one that fails a condition measures 0.
 """
 from __future__ import annotations
 
@@ -79,12 +80,16 @@ def share(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> di
     if not f.is_file():
         raise R.Refused(f"{verdicts.name}: no {RECORD}, the record of its verdicts")
     report = json.loads(f.read_text())
-    row = (report.get("protocols") or {}).get("integrity") or {}
+    row = (report.get("protocols") or {}).get("integrity")
+    if not isinstance(row, dict):
+        raise R.Refused(f"{verdicts.name}: its {RECORD} holds no SPOT row (protocols.integrity)")
+    on = report.get("composed_on")
+    if not isinstance(on, dict) or not isinstance(on.get("served_node"), bool):
+        raise R.Refused(f"{verdicts.name}: its {RECORD} names no composed_on.served_node, so where it was composed is unknown")
     n = drawn(row.get("answer") or {})
     reasons = [
         off_main(sha, ref, repo or R.ROOT) and f"served from {sha}, not a commit of {ref}",
-        (report.get("composed_on") or {}).get("served_node") is not False
-        and "composed on the served node or nowhere named, not on the auditor's machine",
+        on["served_node"] and "composed on the served node, not on the auditor's machine",
         not str(row.get("answer_from") or "").startswith(LEAN_HERE)
         and f"SPOT's verdict was not recomputed there by the Lean verifier: {row.get('answer_from') or 'no answer_from'}",
         row.get("verdict") != "accept" and f"the Lean verifier's verdict is {row.get('verdict')}",
