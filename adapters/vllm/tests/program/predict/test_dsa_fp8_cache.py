@@ -1,7 +1,8 @@
 """verity_vllm.program.predict.dsa over an fp8_ds_mla KV cache (φ's engine `kv_cache_dtype`, GLM-5.3 at `--kv-cache-dtype fp8` under
 vLLM's FLASHMLA_SPARSE): each token's latent row is one DsaLatentRowDsMla, which writes its cache row; the launch's sparse rows take
 FlashMlaV32Decode over INDEX_TOPK rows each at the planner's splits for one request of that many query rows; a dense-MHA prefill
-reads its own rows' bf16 latent and its context through Fp8DsMlaUpconvertRow.
+reads its own rows' bf16 latent and its context through Fp8DsMlaUpconvertRow; a history read as Inputs, and a Commit window's edge, is
+every layer's cache rows as three parts: the e4m3 NoPE bytes, their f32 scales and the bf16 k_pe.
 
 GLM-5.3's checkpoint is cut to its first 4 layers (three full indexers, then one that shares the third's top-k), its INDEX_TOPK
 lowered to 64, one block of FlashMLA's, and vLLM's decode threshold at the rank's 8 query heads lowered to 2."""
@@ -82,11 +83,63 @@ def test_a_chunk_with_context_upconverts_its_context_rows(phi):
     assert len(kv_b) == (3 + 3 + 3) * LAYERS
 
 
+def _params(r) -> dict:
+    return dict(r.program.fn.signature()[0])
+
+
+def _shape(t) -> tuple[int, int]:
+    return t.leaves, t.homogeneous_width()
+
+
+def test_a_history_read_as_inputs_over_an_fp8_cache_is_its_cache_rows_three_parts(phi, bf16):
+    """A prompt after a 2-position history (a prefix-cache hit): the history is five Inputs, every layer's e4m3 NoPE bytes
+    `prefix`, their f32 scales `prefix_scale` and bf16 k_pe `prefix_rope`, then the indexer layers' keys and scales as over the
+    default cache.  Its 2 rows decode through FlashMlaV32Decode, whose operands read layer 0's history rows from the three Inputs
+    and then the prompt's own cache row; 4 rows prefill by dense MHA, whose context partial reads each history row through
+    Fp8DsMlaUpconvertRow from the three Inputs.  The default cache's history Inputs are as before."""
+    r = build_program(phi, "request", LP=4, T=0, C=2, with_desc=False)
+    names = [n for n, _ in r.program.fn.signature()[0]]
+    assert names[1:6] == ["prefix", "prefix_scale", "prefix_rope", "prefix_ik", "prefix_iks"]
+    p = _params(r)
+    assert [_shape(p[g]) for g in names[1:6]] == [(LAYERS * 2 * 512, 8), (LAYERS * 2 * 4, 32), (LAYERS * 2 * 64, 16),
+                                                  (INDEXERS * 2 * 128, 8), (INDEXERS * 2, 32)]
+    nodes = r.program.fn.body.nodes
+    first = next(i for i, n in enumerate(nodes) if n.fn.id.startswith("DsaLatentRowDsMla_v1{"))
+    _, nope, scale, rope, _idx = (a.refs for a in next(n for n in nodes if n.fn.id.startswith("FlashMlaV32Decode_v1{")).args)
+    for refs, width, k in ((nope, 512, 1), (scale, 4, 2), (rope, 64, 3)):
+        assert [refs[j * width] for j in range(2)] == [("p", k, 0), ("p", k, width)] and refs[2 * width][:2] == ("n", first)
+    up = _calls(build_program(phi, "request", LP=6, T=0, C=2, with_desc=False), "Fp8DsMlaUpconvertRow_v1")
+    assert len(up) == 2 * LAYERS
+    assert {tuple(a.refs[0][:2] for a in n.args) for n in up} == {(("p", 1), ("p", 2), ("p", 3))}
+    b = build_program(bf16, "request", LP=4, T=0, C=2, with_desc=False)
+    names = [n for n, _ in b.program.fn.signature()[0]]
+    assert names[1:4] == ["prefix", "prefix_ik", "prefix_iks"] and names[4] != "prefix_scale"
+    assert [_shape(_params(b)[g]) for g in names[1:4]] == [(LAYERS * 2 * 576, 16), (INDEXERS * 2 * 128, 8), (INDEXERS * 2, 32)]
+
+
+def test_an_fp8_requests_edge_returns_its_cache_rows_three_parts(phi, bf16):
+    """A request a Commit window leaves, over an fp8 cache: its edge groups are the three parts of its cache rows, and its Program
+    returns, after its samples, every layer's rows so far of each as `prefix_params` lays them out: the DsaLatentRowDsMla Calls'
+    NoPE bytes and scales and the roped k_pe, the prompt's 3 rows then the decode's own.  The default cache's edge is the latent
+    rows alone, as before."""
+    from verity.circuits.types import field_types
+
+    from verity_vllm.program.predict.build import decoder
+    groups = decoder(phi, 1, 0).edge_groups(4)
+    assert groups == ("prefix", "prefix_scale", "prefix_rope") and decoder(bf16, 1, 0).edge_groups(4) == ("prefix",)
+    r = build_program(phi, "request", LP=3, T=1, edge=groups, batch=[[[3, 0]], [[1, 3]]], with_desc=False)
+    ret = field_types(r.program.fn.signature()[1])
+    assert [_shape(t) for t in ret[-3:]] == [(LAYERS * 4 * 512, 8), (LAYERS * 4 * 4, 32), (LAYERS * 4 * 64, 16)]
+    nodes = r.program.fn.body.nodes
+    rows = [i for i, n in enumerate(nodes) if n.fn.id.startswith("DsaLatentRowDsMla_v1{")]
+    body = r.program.fn.body.ret
+    off = sum(t.leaves for t in ret[:-3])
+    nope = [body[off + j * 512][:2] for j in range(4)]
+    assert nope == [("n", k) for k in (*rows[:3], rows[3 * LAYERS])]
+
+
 def test_what_the_fp8_cache_does_not_model_yet_is_refused(phi):
-    """A history read as Inputs (a prefix-cache hit), a row past INDEX_TOPK keys, and an INDEX_TOPK that is not whole 64-row
-    blocks."""
-    with pytest.raises(Unexpressible, match=re.escape("a history of 2 positions over an fp8_ds_mla cache read as Inputs")):
-        build_program(phi, "request", LP=4, T=0, C=2, with_desc=False)
+    """A row past INDEX_TOPK keys, and an INDEX_TOPK that is not whole 64-row blocks."""
     with pytest.raises(Unexpressible, match=re.escape(f"a row of {TOPK + 1} keys, past INDEX_TOPK ({TOPK}), over an fp8_ds_mla cache")):
         build_program(phi, "request", LP=TOPK, T=1, batch=[[[TOPK, 0]], [[1, TOPK]]], with_desc=False)
     with pytest.raises(Unexpressible, match=re.escape("an fp8_ds_mla cache at INDEX_TOPK 16 (FlashMLA reads whole 64-row blocks)")):
