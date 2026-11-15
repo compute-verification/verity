@@ -4250,8 +4250,7 @@
    "kind": "exclusion"
   },
   "Pous.SecurityProofs.ObligationWide320": {
-   "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
-   "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+   "honest": ["Pous.SecurityProofs.ObligationWide320_honest"]
   },
   "Slowdown.SecurityProofs.CapabilityFloor": {
    "honest": ["Slowdown.SecurityProofs.CapabilityFloorHonest"],
@@ -5719,6 +5718,12 @@
   "Verity.SecurityProofs.ServingBlockSum": {
    "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
    "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
+  },
+  "Pous.SecurityProofs.ObligationWide320": {
+   "type_hash": "13eba7d1271f1b1a203a29a5a705cec12bad77b8cacff6abe06439152470f339",
+   "missing": "nontrivial",
+   "why": "its nontrivial lemma, Pous.SecurityProofs.ObligationWide320_nontrivial, stays listed but is a closed statement (¬ pr (fun _ => True) ≤ 2⁻¹ ^ 20) that states nothing headed by Pous.Guarantees.RoundsBound at the term the guarantee fixes, RoundsBound p ε₀ 320 (2⁻¹ ^ 20), so it shows no instance the guarantee speaks of; a nontrivial lemma that builds one, tying RoundsBound at 320 rounds and 2⁻²⁰ through P2RingRoundSecureWide and the responder to the probability it negates, is owed by @memory-accounting under MEM-354 by Fri 20 Nov",
+   "unfolded_hash": "7dcea540da02da5e0afc1f05a0ae7f7395c6c8bc3bb698ecb13482417041d948"
   }
  },
  "witnesses_assumed": {
