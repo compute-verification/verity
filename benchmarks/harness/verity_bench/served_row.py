@@ -248,6 +248,7 @@ def verdict_record(doc: Mapping) -> dict | None:
     if final["final"] == "none":
         return None
     proved = doc["verdict"]["mark"] == PROVED
+    waits: str | None
     if final["final"] == "withheld":
         word = WITHHELD
         waits = "; ".join([final["withheld"]["why"], *([AFTER_SAMPLE] if doc["covered"].get("registered") else [])])
@@ -261,7 +262,7 @@ def verdict_record(doc: Mapping) -> dict | None:
         word, waits = ACCEPT if final["complete"] else NOT_COMPLETE, None if proved else "; ".join(filter(None, (
             "no Lean theorem is cited for its verifier" if reads["theorem"] is None else
             n and f"{reads['theorem']} takes {n} open premise{'s' * (n != 1)}",
-            opened and f"not closed at the run's commit: {', '.join(opened)}",
+            f"not closed at the run's commit: {', '.join(opened)}" if opened else None,
             *(item["said"] for item in doc["to_fully_proved"]))))
     return {"piece": PIECE, "control": None, "run": doc["run"],
             "verifier": {"module": final["verifier"], "commit": doc["commit"]}, "verdict": word,
@@ -351,8 +352,8 @@ def _prover_said(p: Mapping) -> list[str]:
     by_card = [f"- card {card}" + (f" of {p['machine']}" if p["machine"] else "") + ": "
                + ("a session names it" if c["sessions"] is None else f"{c['sessions']} sessions, {_s(c['seconds'])} busy")
                + (f". **{c['note'][0].upper()}{c['note'][1:]}.**" if c["note"] else ".") for card, c in p["cards"].items()]
-    return [f"- the sessions' proving: {'at most ' if p['at_most'] else ''}{_s(p['seconds'])} over {p['sessions']} "
-            f"sessions, {which}. {where}.",
+    return [(f"- the sessions' proving: {'at most ' if p['at_most'] else ''}{_s(p['seconds'])} over {p['sessions']} "
+             f"sessions, {which}. {where}."),
             f"- as the files hold them, summed over the sessions: `session_s` {_s(held['session_s'])}; `busy_s` "
             f"{_s(held['busy_s'])}; the prover's own timer over its tables (`timing.prove_total_s`) "
             f"{_s(held['prove_total_s'])}; the Lean verifier (`lean_verify_s`) {_s(held['lean_verify_s'])}"
@@ -398,9 +399,9 @@ def render(doc: Mapping[str, Any]) -> str:
               for t in doc["ties"]]
     lines += _prover_said(doc["prover"])
     if (record := doc["verdict_record"]) is not None:
-        lines += ["", f"The verdict as a record of the stop class's verdicts of record (a line of `{E.VERDICTS_FILE}`, the "
-                  f"piece `{PIECE}`):", "", "    " + json.dumps(record, ensure_ascii=False)]
+        lines += ["", (f"The verdict as a record of the stop class's verdicts of record (a line of `{E.VERDICTS_FILE}`, "
+                       f"the piece `{PIECE}`):"), "", "    " + json.dumps(record, ensure_ascii=False)]
         if lacks := [f"`{k}`" for k in NAMES if record[k] is None]:
-            lines += ["", f"The record names no {E._listed(lacks)}: the served run's files give none, so a reader that "
-                      "holds four verdicts to one class of one serve under one registration cannot count it."]
+            lines += ["", (f"The record names no {E._listed(lacks)}: the served run's files give none, so a reader that "
+                           "holds four verdicts to one class of one serve under one registration cannot count it.")]
     return "\n".join(lines)
