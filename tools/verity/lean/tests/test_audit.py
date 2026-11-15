@@ -2747,7 +2747,7 @@ def test_a_record_deleted_by_hand_before_a_move_still_holds_its_name_on_a_real_b
     assert "Control.A.t, Control.X.t (in the base's lock) all land on Control.X.t in guarantees" in capsys.readouterr().err
     assert (pkg / A.POLICY).read_text() == before and not (tmp_path / "main").exists()
     monkeypatch.setattr(A, "move_refusals", lambda moved, policy, bases=(): [])
-    rep = audit(moved={"Control.A": "Control.X"}, base=A.base_locks(pkg, A.base_revs(tmp_path), tmp_path))
+    rep = audit(moved={"Control.A": "Control.X"}, base=A.base_locks(pkg, A.base_revs(tmp_path), tmp_path)[0])
     assert "guarantee Control.X.t: changed" in rep["review"] and "guarantee Control.A.t: removed" in rep["review"]
     assert rep["statement_changes"] and not [n for n in rep["review"] if n.startswith("guarantee Control.X.t: moved")]
 
@@ -2794,7 +2794,7 @@ def test_a_move_keeps_each_premise_entry_with_its_fields_on_a_real_build(tmp_pat
     build()
     rep = audit(moved={"Control.P": "Control.R", "Control.T": "Control.U", "Control.Hyp": "Control.Base"}, defer=True)
     assert A.load(pkg) == was
-    shutil.copyfile(rep["staged"], pkg / A.POLICY)
+    shutil.copyfile(rep["staged_lock"], pkg / A.POLICY)
     now = A.load(pkg)
     assert now["open"] == {"Control.R.Op": {"owner": "@amy", "digest": now["open"]["Control.R.Op"]["digest"]} | ticket}
     assert now["domain"] == {"Control.R.Dom": {"owner": "@lean", "digest": now["domain"]["Control.R.Dom"]["digest"], "why": why}}
@@ -3818,17 +3818,20 @@ def test_a_moves_file_whose_names_are_not_lean_names_is_refused(tmp_path):
     """`renamed` splits at every dot and `Facts.lean` reads names as `String.toName` does; they agree on a moves file
     whose every old and new name is a Lean name, so any other is refused, by name, before a lock is read."""
     f = tmp_path / "moves.json"
+    anon = "String.toName reads the name as anonymous"
     for bad, why in (("A.", "an empty component"), ("A..b", "an empty component"), ("", "empty"),
-                     ("A.«b", "a « left open"), ("A.b»", "a » that closes no «"), ("A.«»", "an empty component"),
+                     (".A", "an empty component"), ("A.«b", "a « left open"),
+                     ("A.b»", f"'»' (U+00BB) after the component 'b' is no identifier character: {anon}"),
+                     ("A.«»", "the escaped component '«»' is empty or holds a «"),
                      (" A.b", "whitespace"), ("A. b", "whitespace"), ("A.« »", "whitespace"),
-                     ("A.«b»c", "a character after the » that closes its component"),
-                     ("A.b«c»", "a « that does not open its component")):
+                     ("A.«b-c»d", f"'d' (U+0064) after the component '«b-c»' is no identifier character: {anon}"),
+                     ("A.b«c»", f"'«' (U+00AB) after the component 'b' is no identifier character: {anon}")):
         for moves in ({bad: "Q"}, {"Q": bad}):
             f.write_text(json.dumps(moves))
             with pytest.raises(ValueError) as e:
                 A.moves_file(f)
             assert str(e.value) == f"{bad!r} is not a Lean name ({why})", moves
-    f.write_text(json.dumps(moves := {"A.«b.c»": "Z", "Y.«d»": "Y.«e.f».g"}))
+    f.write_text(json.dumps(moves := {"A.«b.c»": "Z", "Y.«d-x»": "Y.«e.f».g"}))
     assert A.moves_file(f) == moves and A.renamed("A.«b.c».d", moves) == "Z.d" and A.renamed("A.«b.x»", moves) == "A.«b.x»"
 
 
@@ -7729,7 +7732,9 @@ def test_a_proving_package_requires_the_spec_records_no_guarantee_and_keeps_its_
 
 def test_a_move_refused_in_one_package_writes_no_lock_of_the_run(tmp_path, monkeypatch, capsys):
     """Under `--moved` each package's audit stages its lock (`_finish`'s ``defer``) and the run writes them at its end: all
-    of them, or none when a move is refused in any package, though another's own audit passed."""
+    of them, or none when a move is refused in any package, though another's own audit passed, or when copying one
+    beside its package's fails.  The build's own `staged` (what the artifact cache restored) is never taken for a lock,
+    and a run without `--moved` writes nothing at its end."""
     s, q = tmp_path / "s", tmp_path / "q"
     for d, root in ((s, "S"), (q, "Q")):
         d.mkdir()
@@ -7739,23 +7744,94 @@ def test_a_move_refused_in_one_package_writes_no_lock_of_the_run(tmp_path, monke
     refuse = {"q"}
 
     def fake(pkg, out, build, update, replay, fresh, log=print, **kw):
-        assert kw["defer"] and kw["base"] == [json.loads(before[pkg])]
+        restored = {"staged": {"modules": 0, "keyed": 4}} if pkg.name == "s" else {"staged": "not used: no sandbox"}
+        if not kw["defer"]:
+            return {"package": str(pkg), "seconds": {}, "failures": []} | restored
+        assert kw["base"] == [json.loads(before[pkg])]
         staged = tmp_path / f"staged-{pkg.name}.json"
         staged.write_text(json.dumps({"roots": [pkg.name.upper()], "moved": True}))
-        return {"package": str(pkg), "seconds": {}, "staged": str(staged),
+        return {"package": str(pkg), "seconds": {}, "staged_lock": str(staged),
                 "failures": [A.Failure("moved.collision", None, "moved: X, Y all land on Y in guarantees")]
-                if pkg.name in refuse else []}
+                if pkg.name in refuse else []} | restored
 
     monkeypatch.setattr(A, "audit", fake)
     (tmp_path / "moves.json").write_text('{"S.a": "S.b"}')
-    argv = [str(s), str(q), "--update", "--moved", str(tmp_path / "moves.json"), "--out", str(tmp_path / "out"),
-            "--repo", str(tmp_path)]
+    plain = [str(s), str(q), "--update", "--out", str(tmp_path / "out"), "--repo", str(tmp_path)]
+    assert A.main(plain) == 0 and {d: (d / A.POLICY).read_text() for d in (s, q)} == before
+    argv = [*plain, "--moved", str(tmp_path / "moves.json")]
     A.main(argv)
     assert {d: (d / A.POLICY).read_text() for d in (s, q)} == before
     assert f"no lock written: the moves are refused in {q}" in capsys.readouterr().out
     refuse.clear()
+    copy = shutil.copyfile
+    with monkeypatch.context() as broken:
+        broken.setattr(A.shutil, "copyfile", lambda a, b: copy(a, b) if Path(b).parent.name == "s" else 1 / 0)
+        with pytest.raises(ZeroDivisionError):
+            A.main(argv)
+    assert {d: (d / A.POLICY).read_text() for d in (s, q)} == before
+    assert not [*s.glob(".*.moved"), *q.glob(".*.moved")]
     assert A.main(argv) == 0
     assert all(json.loads((d / A.POLICY).read_text())["moved"] for d in (s, q))
+    assert not [*s.glob(".*.moved"), *q.glob(".*.moved")]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_build_run_with_the_artifact_cache_writes_its_report_and_each_lock_once(tmp_path, monkeypatch, capsys):
+    """`check.py --build --artifacts`, as `lean_audit.py`'s warm run and `lean_changed.py`'s slot path run it, on real
+    builds of the control fixture: one package and two, each without `--moved` and with it, under the sandbox (the
+    build's `staged` a dict) and without (a string).  Each run ends with its report written; without `--moved` the lock
+    `--update` writes is the one written today, and with it each lock is written once at the end, the moved package's
+    under the new name and the other's as it was, nothing left beside either.  Real builds, a few minutes: the build's
+    `staged` and the staged lock meet only in `main` after an audit of a build that read the artifact cache."""
+    mk = A.sibling("module_keys")
+    pkgs = {n: tmp_path / n for n in ("a", "b")}
+    for p in pkgs.values():
+        shutil.copytree(HERE / "fixtures" / "control", p, ignore=shutil.ignore_patterns(".lake"))
+    a = pkgs["a"]
+    (a / "Control.lean").write_text((a / "Control.lean").read_text() + "import Control.A\n")
+    (a / "Control" / "A.lean").write_text("namespace Control.A\ntheorem t : 1 + 1 = 2 := rfl\nend Control.A\n")
+    pol = unclaimed(A.load(a))
+    A.dump(a, pol | {"layers": pol["layers"] | {"Control.A": {"imports": []}},
+                     "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.A.t")}})
+    for p in pkgs.values():
+        A.dump(p, unclaimed(A.load(p)))
+        subprocess.run(["lake", "build"], cwd=p, check=True, capture_output=True, env=A.lake_env())
+        A.audit(p, tmp_path / "rec", update=True, replay=False, runs=False, log=lambda *_: None)
+    committed(tmp_path, *(p / A.POLICY for p in pkgs.values()))
+    recorded = {n: (p / A.POLICY).read_bytes() for n, p in pkgs.items()}
+    store = tmp_path / "store"
+    (store / "artifacts").mkdir(parents=True)
+    (store / mk.INDEX).mkdir()
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "lean_slot", lambda repo: None)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, at=(): argv)
+    moves = tmp_path / "moves.json"
+    moves.write_text(json.dumps({"Control.A": "Control.Z"}))
+    runs = iter(range(100))
+
+    def run(names, *flags, sandbox=True):
+        monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
+        out = tmp_path / f"out{next(runs)}"
+        code = A.main([*(str(pkgs[n]) for n in names), "--build", "--no-replay", "--no-runs", "--artifacts", str(store),
+                       "--out", str(out), "--repo", str(tmp_path), *flags])
+        said = capsys.readouterr().out
+        reps = {Path(r["package"]).name: r for r in json.loads((out / "audit.json").read_text())["packages"]}
+        assert all(r.get("staged") for r in reps.values()), "the build read the artifact cache"
+        return code, reps, said
+
+    for names, sandbox in ((["a"], False), (["a", "b"], True)):
+        code, reps, said = run(names, "--update", sandbox=sandbox)
+        assert code == 0 and not any("staged_lock" in r for r in reps.values()) and ": written" not in said, said
+        assert {n: (pkgs[n] / A.POLICY).read_bytes() for n in pkgs} == recorded
+    code, reps, said = run(["b"], "--update", "--moved", str(moves))
+    assert code == 0 and f"audit: {pkgs['b'] / A.POLICY}: written" in said, said
+    assert (pkgs["b"] / A.POLICY).read_bytes() == recorded["b"]
+    (a / "Control" / "A.lean").write_text("namespace Control.Z\ntheorem t : 1 + 1 = 2 := rfl\nend Control.Z\n")
+    code, reps, said = run(["a", "b"], "--update", "--moved", str(moves), sandbox=False)
+    assert code == 0, said
+    assert said.count(": written") == 2 and set(A.load(a)["guarantees"]) == {"Control.main_thm", "Control.Z.t"}
+    assert (pkgs["b"] / A.POLICY).read_bytes() == recorded["b"]
+    assert not [f for p in pkgs.values() for f in p.glob(".*.moved")]
 
 
 def test_a_move_with_no_main_to_compare_with_is_refused_until_a_base_is_given(tmp_path, monkeypatch, capsys):
@@ -7774,6 +7850,146 @@ def test_a_move_with_no_main_to_compare_with_is_refused_until_a_base_is_given(tm
     assert "give `--base REV`" in capsys.readouterr().err
     monkeypatch.setattr(A, "audit", lambda pkg, *a, **kw: {"package": str(pkg), "seconds": {}, "failures": []})
     assert A.main([*argv, "--base", "work"]) == 0
+
+
+def git_in(root: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(root), "-c", "user.name=test", "-c", "user.email=test@example.com", "-c",
+                           "commit.gpgsign=false", *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def test_a_base_given_adds_to_head_and_the_merge_base_so_it_cannot_hide_a_hand_deletion(tmp_path, monkeypatch, capsys):
+    """`main` records `Control.A.t` and the deployed `Control.X.t`; the branch deletes `Control.X.t`'s record by hand,
+    commits, commits again, and moves `Control.A` onto `Control.X`.  `--base HEAD` or `--base` the deletion's commit
+    would hold the move to locks without the record; each is held to HEAD and the merge-base with main besides, so the
+    move is refused, and no audit runs."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    pol = unclaimed(A.load(pkg))
+    A.dump(pkg, pol | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.A.t", "Control.X.t")},
+                       "deployed": ["Control.X.t"], "trust_gap": {"Control.X.t": []}})
+    committed(tmp_path, pkg / A.POLICY)
+    mb = git_in(tmp_path, "rev-parse", "HEAD")
+    git_in(tmp_path, "checkout", "-q", "-b", "feat")
+    pol = A.load(pkg)
+    del pol["guarantees"]["Control.X.t"]
+    A.dump(pkg, pol)
+    git_in(tmp_path, "commit", "-q", "-am", "delete X.t's record")
+    deletion = git_in(tmp_path, "rev-parse", "HEAD")
+    git_in(tmp_path, "commit", "-q", "--allow-empty", "-m", "unrelated")
+    moves = tmp_path / "moves.json"
+    moves.write_text(json.dumps({"Control.A": "Control.X"}))
+    monkeypatch.setattr(A, "audit", lambda *a, **kw: pytest.fail("a refused move reached an audit"))
+    head = git_in(tmp_path, "rev-parse", "HEAD")
+    for given in ("HEAD", deletion):
+        assert A.base_revs(tmp_path, [given]) == list(dict.fromkeys([head, mb, git_in(tmp_path, "rev-parse", given)]))
+        with pytest.raises(SystemExit):
+            A.main([str(pkg), "--update", "--moved", str(moves), "--no-runs", "--out", str(tmp_path / "out"), "--repo",
+                    str(tmp_path), "--base", given])
+        out = capsys.readouterr()
+        assert "Control.A.t, Control.X.t (in the base's lock) all land on Control.X.t in guarantees" in out.err
+        assert f"held to the locks at {head}, {mb}" in out.out
+    assert A.base_revs(tmp_path, ["nowhere"]) == f"--base: nowhere is no commit of {tmp_path}"
+
+
+def test_a_base_commit_without_the_lock_is_reported_and_one_git_cannot_read_refuses(tmp_path, monkeypatch, capsys):
+    """The package's lock is added on the branch, so the merge-base has none: the run says it is held to HEAD alone, and
+    proceeds.  A lock git lists but cannot read (its object gone), or one that is not JSON, refuses the run rather than
+    drop that commit from the base."""
+    (tmp_path / "README").write_text("base\n")
+    git_in(tmp_path, "init", "-q", "-b", "main")
+    git_in(tmp_path, "add", "README")
+    git_in(tmp_path, "commit", "-q", "-m", "base")
+    mb = git_in(tmp_path, "rev-parse", "HEAD")
+    git_in(tmp_path, "checkout", "-q", "-b", "feat")
+    s = tmp_path / "s"
+    s.mkdir()
+    (s / A.POLICY).write_text(json.dumps({"roots": ["S"]}))
+    git_in(tmp_path, "add", str(s / A.POLICY))
+    git_in(tmp_path, "commit", "-q", "-m", "add s")
+    head = git_in(tmp_path, "rev-parse", "HEAD")
+    assert A.base_locks(s, [head, mb], tmp_path) == ([{"roots": ["S"]}], [mb])
+    (tmp_path / "moves.json").write_text('{"S.a": "S.b"}')
+    argv = [str(s), "--update", "--moved", str(tmp_path / "moves.json"), "--out", str(tmp_path / "out"), "--repo", str(tmp_path)]
+    monkeypatch.setattr(A, "audit", lambda pkg, *a, **kw: {"package": str(pkg), "seconds": {}, "failures": []})
+    assert A.main(argv) == 0
+    assert f"audit: {s}/{A.POLICY} is not in {mb}, so it is held to 1 of those commits" in capsys.readouterr().out
+    blob = git_in(tmp_path, "rev-parse", f"HEAD:s/{A.POLICY}")
+    (tmp_path / ".git" / "objects" / blob[:2] / blob[2:]).unlink()
+    with pytest.raises(ValueError, match=f"git can't show s/{A.POLICY} at {head}"):
+        A.base_locks(s, [head, mb], tmp_path)
+    with pytest.raises(SystemExit):
+        A.main(argv)
+    assert f"--moved: the base's lock: git can't show s/{A.POLICY} at {head}" in capsys.readouterr().err
+    (s / A.POLICY).write_text("{not json")
+    git_in(tmp_path, "commit", "-q", "-am", "broken")
+    with pytest.raises(ValueError, match=f"s/{A.POLICY} at {git_in(tmp_path, 'rev-parse', 'HEAD')} is not JSON"):
+        A.base_locks(s, ["HEAD"], tmp_path)
+
+
+def test_a_chain_or_a_swap_in_a_moves_file_is_refused_and_told_to_split(tmp_path):
+    """`rename.py` has already renamed the lock's hand-kept lines when `--moved` re-keys them, which is the identity only
+    while no entry's new name lies at or under another entry's old name; a chain or a swap would move Period's lines
+    onto Window's, so it is refused, saying to split it into two passes.  Monday's map and a nested pair pass."""
+    chain = {"N.Window": "N.ExecutionPhase", "N.Period": "N.Window"}
+    assert A.move_errors(chain) == [
+        "N.Period moves to N.Window, at or under N.Window, which moves to N.ExecutionPhase: a chain or a swap, which the "
+        "lock's lines `rename.py` already renamed would follow twice; split it into two passes, each its own moves file"]
+    assert len(A.move_errors({"N.X": "N.Y", "N.Y": "N.X"})) == 2
+    assert A.move_errors({"A": "B.C", "B": "D"})[0].startswith("A moves to B.C, at or under B, which moves to D")
+    assert A.move_errors({"A": "C", "A.x": "A.y"})[0].startswith("A.x moves to A.y, at or under A, which moves to C")
+    for fine in ({"Accounting": "ResourceAccounting"}, {"A": "C", "A.x": "C.y"}, {"A.x": "A.y"}, {"A": "A.B"}):
+        assert A.move_errors(fine) == [], fine
+    s = tmp_path / "s"
+    s.mkdir()
+    (s / A.POLICY).write_text(json.dumps({"roots": ["S"]}))
+    (tmp_path / "moves.json").write_text(json.dumps(chain))
+    with pytest.raises(SystemExit):
+        A.main([str(s), "--update", "--moved", str(tmp_path / "moves.json"), "--out", str(tmp_path / "out")])
+    assert not (tmp_path / "out").exists()
+
+
+#: READER's look-alikes, which Lean's `String.toName` reads as the anonymous name, and names it reads as themselves
+LOOK_ALIKES = ("A.≪b≫", "A.《b》", "A.‹b›", "A.b-c", "A.1x", "A.\u200bb", "A.b\u2024c")
+LEAN_READS = ("A.«b.c».d", "A.«b.»", "A.«.»", "A.b'", "A.b!", "A.b?", "A.1", "A.0", "Pous.αβ", "A.x₁", "A.ℕ", "A.«1»",
+              "A.fun", "Control.X.t", "_root.A")
+
+
+def test_a_moves_file_name_is_a_lean_name_only_as_string_to_name_reads_it(tmp_path):
+    """An unescaped component is an identifier (Lean's `isIdFirst`, then `isIdRest`) or a number; the look-alikes are
+    refused, the names Lean reads back as themselves are accepted, and those it reads as another string are refused
+    with what to write."""
+    f = tmp_path / "moves.json"
+    for bad in LOOK_ALIKES:
+        for moves in ({bad: "Q"}, {"Q": bad}):
+            f.write_text(json.dumps(moves))
+            with pytest.raises(ValueError, match="String.toName reads the name as anonymous"):
+                A.moves_file(f)
+    for good in LEAN_READS:
+        assert A.name_error(good) is None, good
+    for bad, why in (("A.«b»", "'«b»' is 'b' to Lean: write it without « »"),
+                     ("A.01", "the number '01' has a leading zero, which Lean drops"),
+                     ("A.««b»", "the escaped component '««b»' is empty or holds a «"),
+                     ("A.λ", "'λ' (U+03BB) starts no identifier, number or « »: String.toName reads the name as anonymous"),
+                     ("A.é", "'é' (U+00E9) starts no identifier, number or « »: String.toName reads the name as anonymous")):
+        assert A.name_error(bad) == why, bad
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_every_name_name_error_accepts_lean_reads_back_as_itself(tmp_path):
+    """Lean itself, on the control fixture's toolchain: each name `name_error` accepts is one `String.toName` reads as a
+    name whose `toString` is the same string, and each look-alike it reads as the anonymous name."""
+    cases = [*LOOK_ALIKES, *LEAN_READS, "A.«b»", "A.01", "A.««b»", "A.λ", "A.é", "A.b₊", "A..b", "A.«b", "A.«b»c", "A.b«c»",
+             "_private.X.0.y", "1.A", "A.«fun»", "A.ab'?!₁ᵢ", "A.Π", "A.Σ", "A.𝔽"]
+    pkg, f = tmp_path / "control", tmp_path / "Names.lean"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    f.write_text("def cases : List String := [" + ", ".join(json.dumps(c, ensure_ascii=False) for c in cases) + "]\n"
+                 "#eval cases.forM fun s => IO.println (if s.toName.isAnonymous then \"-\" else s.toName.toString)\n")
+    r = subprocess.run(["lake", "env", "lean", str(f)], cwd=pkg, capture_output=True, text=True, env=A.lake_env())
+    assert r.returncode == 0 and len(r.stdout.splitlines()) == len(cases), r.stdout + r.stderr
+    read = dict(zip(cases, r.stdout.splitlines(), strict=True))
+    assert all(read[c] == "-" for c in LOOK_ALIKES), read
+    assert [c for c in cases if A.name_error(c) is None and read[c] != c] == [], read
+    assert [c for c in LEAN_READS if read[c] != c] == [], read
 
 
 def test_a_package_proving_anothers_guarantees_is_audited_beside_it(tmp_path, monkeypatch):

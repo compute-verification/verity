@@ -1596,7 +1596,8 @@ def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]
 
 def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
     """Why ``moved`` cannot be read back: a name moved to itself, two old names moved to one new name (a name of the build
-    under it has no one old name), or a name of ``names`` (a lock's, `lock_names`) whose new name maps back to another
+    under it has no one old name), a new name at or under another entry's old name (a chain or a swap: `rename.py` has
+    already renamed the lock's hand-kept lines, which `renamed_witnesses` would then move a second time), or a name of ``names`` (a lock's, `lock_names`) whose new name maps back to another
     (`unrenamed`).  Both maps take the longest prefix, so the names under an entry nested under another's new name map
     back under its own old name whether or not the old names nest alike; only a name that falls under a longer entry
     than its own on one way, and not on the other, fails to come back.  Which names do is a fact of the lock and the
@@ -1606,6 +1607,12 @@ def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
     for old, new in moved.items():
         by_new.setdefault(new, []).append(old)
     errs += [f"{', '.join(sorted(olds))} all move to {new}" for new, olds in sorted(by_new.items()) if len(olds) > 1]
+    for old, new in sorted(moved.items()):
+        for other in (new.rsplit(".", i)[0] for i in range(new.count(".") + 1)):
+            if other in moved and other != old:
+                errs.append(f"{old} moves to {new}, at or under {other}, which moves to {moved[other]}: a chain or a "
+                            f"swap, which the lock's lines `rename.py` already renamed would follow twice; split it into "
+                            f"two passes, each its own moves file")
     if errs:
         return errs
     for n in sorted(set(names)):
@@ -1678,45 +1685,69 @@ def moves_refused(pkgs: list[Path], moved: dict[str, str], bases: dict[Path, lis
 
 def write_staged(reports: list[dict]) -> None:
     """Write the lock each of ``reports`` staged (`_finish`'s ``defer``) as its package's: the end of a `--moved` run in
-    which no move was refused."""
-    for r in reports:
-        shutil.copyfile(r["staged"], Path(r["package"]) / POLICY)
-        print(f"audit: {r['package']}/{POLICY}: written", flush=True)
+    which no move was refused.  Every lock is first copied beside its package's (`.lean-audit.json.moved`), and only then
+    is each renamed over it, so a failure while copying writes none; a process killed between two renames leaves the
+    locks before it written and the rest beside theirs: restore the written ones (`git checkout`) and run it again."""
+    beside = [(Path(r["staged_lock"]), Path(r["package"]) / POLICY) for r in reports]
+    try:
+        for staged, lock in beside:
+            shutil.copyfile(staged, lock.with_name(f".{POLICY}.moved"))
+    except BaseException:
+        for _, lock in beside:
+            lock.with_name(f".{POLICY}.moved").unlink(missing_ok=True)
+        raise
+    for _, lock in beside:
+        os.replace(lock.with_name(f".{POLICY}.moved"), lock)
+        print(f"audit: {lock}: written", flush=True)
 
 
-def base_revs(repo: Path) -> list[str] | str:
-    """The commits a `--moved` run compares with when no `--base` names them: HEAD and its merge-base with main
-    (`MAIN`), the commit the change stands on, since HEAD may already hold the change's own hand edits to the lock; or
-    why there are none."""
+def base_revs(repo: Path, given: Iterable[str] = ()) -> list[str] | str:
+    """The commits a `--moved` run compares with: HEAD and its merge-base with main (`MAIN`), the commit the change
+    stands on, since HEAD may already hold the change's own hand edits to the lock, and each of ``given`` (`--base`)
+    beside them, never instead; ``given`` stands in for the merge-base only where there is none.  Or why there are none."""
     def git(*args: str) -> str | None:
         r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
         return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
-    head = git("rev-parse", "HEAD")
+    if (head := git("rev-parse", "HEAD")) is None:
+        return f"{repo} has no HEAD"
+    if bad := [g for g in given if git("rev-parse", "-q", "--verify", f"{g}^{{commit}}") is None]:
+        return f"--base: {', '.join(bad)} is no commit of {repo}"
     main = next((m for r in MAIN if (m := git("rev-parse", "-q", "--verify", r))), None)
-    if head is None or main is None:
-        return (f"{repo} has no HEAD or no main ({', '.join(MAIN)}): give `--base REV`, the commit of main the change "
-                f"stands on (the queue's check of a candidate: the candidate's base)")
-    if (mb := git("merge-base", head, main)) is None:
-        return f"HEAD and main have no merge-base in {repo}: give `--base REV`, the commit of main the change stands on"
-    return list(dict.fromkeys([head, mb]))
+    mb = git("merge-base", head, main) if main else None
+    if mb is None and not given:
+        return (f"{repo} has no main ({', '.join(MAIN)}) or no merge-base of HEAD with it: give `--base REV`, the "
+                f"commit of main the change stands on (the queue's check of a candidate: the candidate's base)")
+    return list(dict.fromkeys([head, *([mb] if mb else []),
+                               *(git("rev-parse", f"{g}^{{commit}}") or g for g in given)]))
 
 
-def base_locks(pkg: Path, revs: list[str], repo: Path, tree: Path | None = None) -> list[dict]:
-    """``pkg``'s lock at each of ``revs`` in ``repo`` (none at a commit without it), its path taken under ``tree`` (the
-    tree the packages are in) or ``repo``; ValueError for a commit git can't read or a lock it can't parse."""
+def base_locks(pkg: Path, revs: list[str], repo: Path, tree: Path | None = None) -> tuple[list[dict], list[str]]:
+    """``pkg``'s lock at each of ``revs`` in ``repo``, its path taken under ``tree`` (the tree the packages are in) or
+    ``repo``, and the commits of ``revs`` whose tree has no file at that path; ValueError for a commit git can't read, a
+    lock git lists but can't show, and a lock it can't parse."""
     roots = [r.resolve() for r in (tree, repo) if r is not None]
     rel = next((pkg.resolve().relative_to(r) for r in roots if pkg.resolve().is_relative_to(r)), None)
     if rel is None:
         raise ValueError(f"{pkg} is under neither {' nor '.join(map(str, roots))}")
-    out = []
+    path = (rel / POLICY).as_posix()
+    out, absent = [], []
     for rev in revs:
-        if subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{rev}^{{commit}}"], capture_output=True).returncode:
+        def git(*args: str) -> subprocess.CompletedProcess:
+            return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+        if git("cat-file", "-e", f"{rev}^{{commit}}").returncode:
             raise ValueError(f"{rev} is no commit of {repo}")
-        r = subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{(rel / POLICY).as_posix()}"], capture_output=True,
-                           text=True)
-        if r.returncode == 0:
+        if (ls := git("ls-tree", "--name-only", rev, "--", path)).returncode:
+            raise ValueError(f"git can't list {path} at {rev}: {ls.stderr.strip()}")
+        if not ls.stdout.strip():
+            absent.append(rev)
+            continue
+        if (r := git("show", f"{rev}:{path}")).returncode:
+            raise ValueError(f"git can't show {path} at {rev}: {r.stderr.strip()}")
+        try:
             out.append(json.loads(r.stdout))
-    return out
+        except ValueError as e:
+            raise ValueError(f"{path} at {rev} is not JSON: {e}") from None
+    return out, absent
 
 
 def moves_file(path: Path) -> dict[str, str]:
@@ -1741,35 +1772,64 @@ def moves_file(path: Path) -> dict[str, str]:
     return moved
 
 
+def lean_id_first(c: str) -> bool:
+    """Lean's `isIdFirst`: an ASCII letter, `_`, or a letter-like character (`isLetterLike`)."""
+    v = ord(c)
+    return (c.isascii() and c.isalpha()) or c == "_" or (0x3b1 <= v <= 0x3c9 and v != 0x3bb) or (
+        0x391 <= v <= 0x3a9 and v not in (0x3a0, 0x3a3)) or 0x3ca <= v <= 0x3fb or 0x1f00 <= v <= 0x1ffe or (
+        0x2100 <= v <= 0x214f) or 0x1d49c <= v <= 0x1d59f
+
+
+def lean_id_rest(c: str) -> bool:
+    """Lean's `isIdRest`: `isIdFirst`, an ASCII digit, `'`, `!`, `?`, or a subscript (`isSubScriptAlnum`)."""
+    v = ord(c)
+    return lean_id_first(c) or (c.isascii() and c.isdigit()) or c in "'!?" or 0x2080 <= v <= 0x2089 or (
+        0x2090 <= v <= 0x209c) or 0x1d62 <= v <= 0x1d6a
+
+
 def name_error(name: str) -> str | None:
-    """Why ``name`` is not a Lean name as `String.toName` reads it, or None: an empty component, whitespace, a `«` that
-    does not open its component or is left open, a `»` that closes none, or anything after the `»` that closes a
-    component, each of which `String.toName` reads as the anonymous name.  `renamed` splits at every dot, so it agrees
-    with `Facts.lean`'s `renameName` only on such names (a dot inside `«…»` starts no prefix that a well-formed entry can
-    be)."""
+    """Why ``name`` is not a Lean name that `String.toName` reads back as itself, or None.  `String.toName` splits as
+    `splitNameLit` does, and reads the whole string as the anonymous name unless each component, between single dots, is
+    an identifier (`isIdFirst`, then `isIdRest`), a run of ASCII digits, or `«…»` up to the first `»`.  This refuses
+    besides: whitespace, a number with a leading zero and an escape around an identifier (Lean reads `A.01` as `A.1`
+    and `A.«b»` as `A.b`, which `renamed` compares as other strings), and an empty or `«`-holding escape.  `renamed`
+    splits at every dot, so it agrees with `Facts.lean`'s `renameName` only on such names (a dot inside `«…»` starts no
+    prefix that an accepted entry can be)."""
     if not name:
         return "empty"
     if any(ch.isspace() for ch in name):
         return "whitespace"
-    part, inside = "", False
-    for ch in name + ".":
-        if inside:
-            inside = ch != "»"
-        elif ch == ".":
-            if part in ("", "«»"):
-                return "an empty component"
-            part = ""
-            continue
-        elif part.startswith("«"):
-            return "a character after the » that closes its component"
-        elif ch == "»":
-            return "a » that closes no «"
-        elif ch == "«":
-            if part:
-                return "a « that does not open its component"
-            inside = True
-        part += ch
-    return "a « left open" if inside else None
+    i = 0
+    while True:
+        start = i
+        if i == len(name) or name[i] == ".":
+            return "an empty component"
+        if name[i] == "«":
+            if (j := name.find("»", i + 1)) < 0:
+                return "a « left open"
+            part, i = name[i + 1:j], j + 1
+            if not part or "«" in part:
+                return f"the escaped component {name[start:i]!r} is empty or holds a «"
+            if lean_id_first(part[0]) and all(map(lean_id_rest, part[1:])):
+                return f"{name[start:i]!r} is {part!r} to Lean: write it without « »"
+        elif lean_id_first(name[i]):
+            i += 1
+            while i < len(name) and lean_id_rest(name[i]):
+                i += 1
+        elif "0" <= name[i] <= "9":
+            while i < len(name) and "0" <= name[i] <= "9":
+                i += 1
+            if name[start] == "0" and i - start > 1:
+                return f"the number {name[start:i]!r} has a leading zero, which Lean drops"
+        else:
+            return (f"{name[i]!r} (U+{ord(name[i]):04X}) starts no identifier, number or « »: String.toName reads the "
+                    f"name as anonymous")
+        if i == len(name):
+            return None
+        if name[i] != ".":
+            return (f"{name[i]!r} (U+{ord(name[i]):04X}) after the component {name[start:i]!r} is no identifier "
+                    f"character: String.toName reads the name as anonymous")
+        i += 1
 
 
 def lock_names(policy: dict) -> set[str]:
@@ -6808,7 +6868,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
     notes, and the report (`report.json`).  ``judged`` runs the lock's spec/trees/shape checks (the caller's), ``on_lock``
     the caller's lock failures (bookkeeping keeps the rest), ``lnotes`` the compile-time listings' review notes, ``t`` the
     audit's start for `seconds.total`, ``base`` the locks of the change's base (`base_locks`) that `--moved` is held to.
-    With ``defer`` the lock `--update` writes is left in the report (`staged`), for the run to write with every other
+    With ``defer`` the lock `--update` writes is left in the report (`staged_lock`), for the run to write with every other
     package's or not at all (`main`).  A pure function of what it is given: `--facts-from` writes the same record."""
     def sources() -> dict[str, Path]:
         return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
@@ -6817,7 +6877,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
         if defer:
             (work / "staged").mkdir(exist_ok=True)
             dump(work / "staged", new)
-            rep["staged"] = str(work / "staged" / POLICY)
+            rep["staged_lock"] = str(work / "staged" / POLICY)
         else:
             dump(pkg, new)
 
@@ -7108,8 +7168,9 @@ def main(argv: list[str]) -> int:
                     "or none is")
     ap.add_argument("--base", action="append", metavar="REV", help="with --moved: a commit whose locks the move is held "
                     "to (repeatable): a moved name may not land on a name they hold, and a guarantee whose new name they "
-                    "record with another statement is reviewed as changed (default: HEAD and its merge-base with main; "
-                    "the queue's check of a candidate gives the candidate's base)")
+                    "record with another statement is reviewed as changed; always held to HEAD and its merge-base with "
+                    "main too, and REV adds to them, never replaces them (the queue's check of a candidate gives the "
+                    "candidate's base)")
     ap.add_argument("--owner", metavar="@LANE", help="with --update: the owner of each guarantee whose entry names none")
     ap.add_argument("--name-instances", action="store_true", help="write each anonymous instance's name (the one Lean gave "
                     "it) into its declaration instead of failing on it; no record changes")
@@ -7238,13 +7299,18 @@ def main(argv: list[str]) -> int:
     if a.base and not moved:
         ap.error("--base goes with --moved")
     if moved:
-        if isinstance(revs := a.base or base_revs(a.repo.resolve()), str):
+        if isinstance(revs := base_revs(a.repo.resolve(), a.base or ()), str):
             ap.error(revs)
         try:
-            bases = {p: base_locks(p, revs, a.repo.resolve(), a.tree) for p in pkgs}
+            held = {p: base_locks(p, revs, a.repo.resolve(), a.tree) for p in pkgs}
         except ValueError as e:
-            ap.error(f"--base: {e}")
+            ap.error(f"--moved: the base's lock: {e}")
+        bases = {p: locks for p, (locks, _) in held.items()}
         print(f"audit: --moved is held to the locks at {', '.join(revs)}", flush=True)
+        for p, (_, absent) in held.items():
+            if absent:
+                print(f"audit: {p}/{POLICY} is not in {', '.join(absent)}, so it is held to "
+                      f"{len(revs) - len(absent)} of those commits", flush=True)
     if moved and (errs := moves_refused(pkgs, moved, bases)):
         ap.error(f"{a.moved}: " + "; ".join(errs))
     for flag, d in (("--replay-cache", a.replay_cache), ("--facts-cache", a.facts_cache),
@@ -7423,7 +7489,7 @@ def main(argv: list[str]) -> int:
     finally:
         run_seals.close()
     reports = [reports[p] for p in pkgs]
-    if staged := [r for r in reports if r.get("staged")]:
+    if moved and (staged := [r for r in reports if r.get("staged_lock")]):
         if refused := [r["package"] for r in reports if any((c or "").startswith("moved.") for c in r["failure_codes"])]:
             print(f"audit: no lock written: the moves are refused in {', '.join(refused)}", flush=True)
         else:
