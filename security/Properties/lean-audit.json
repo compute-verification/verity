@@ -27624,7 +27624,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "2a6099d05e5f99e2b4ca63b6d68f2d1cc325fcb029976b1a58f6b5fac73236eb",
+   "digest": "777f240b6794a5735d678e689d8c3184ba461db6710873e886bfea1f9aef2b89",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -27743,9 +27743,7 @@
     "Verity.Vocab.finders": "e5725fceb17cdd6be5769ec66540a754ad19b81b0d8891e10e32f6ba1a82186c",
     "Verity.Vocab.foreignBits": "01fc978897106e0a5ee5f2108cee4bdc042d8bb0e6bedfe8ec9607f36a4e22ec",
     "Verity.Vocab.forger": "a2ead269084c288e752f6245817267a91403eb991f474da457ea8defff49754f",
-    "Verity.Vocab.fresh": "06cad04e4161dd21703b4771373f25af57e01801d15cb226168c328b86a70599",
     "Verity.Vocab.game": "5555cfde862b4e5d93f93531ab8540632b7426c6627229134f018b54c4ddbcdf",
-    "Verity.Vocab.gates": "97e78ce104a499a8d1b974dfbbff5b3fe4aaa1887002407f0886bd833380f475",
     "Verity.Vocab.live": "55f1dec1cd2cf5b78c1f2695dc4c9bcb20e62ccf679ba884d413f1b19b1477e9",
     "Verity.Vocab.loss": "c5f5dbd05c22b89775897e7cd08b3d4cd1c85df6c7cbd3a4d2a9dd668d645f23",
     "Verity.Vocab.macs": "f748c8035ee8f86787778b84a614b046216ae5d942a176a0cafd41414398775f",
@@ -27851,15 +27849,6 @@
     "Verity.SoundnessOfComponents": "4870232ad88c5c4e3835bd07ecd25ac481ed4904101c7ab0886c432da132f99c",
     "Verity.Vocab.ComponentBound": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5",
     "Verity.Vocab.TargetFor": "ec976ae835f1bb2898c5985076e7c8f9428af657386b02d0da93ae886e1ed1a7"
-   }
-  },
-  "Properties.Verity.Tied": {
-   "digest": "177f8afac7804365f5f6e78a5545a445721f99ad98903602fb6fa020c898812c",
-   "definitions": {
-    "Verity.ValueTie.Cell": "f8f3ca63b9a4fc2572609c70251589fc36753d1361a41a3b026a1eee88211806",
-    "Verity.ValueTie.Cut": "818b6ce685044028430e0bb1c4f29179c8f2eaf2e528cc11c6d44f5e771cd87c",
-    "Verity.ValueTie.Cut.empty": "88b72bcb4467e352ed29c3bbe96015de86bc93f3113f7187d22f1bf2f47fdc50",
-    "Verity.ValueTie.Cut.y": "f2ba72f3b8c0117988d28a09c330adabc1881dabb73856e536048f51036d2d50"
    }
   },
   "Properties.ZkServer": {
