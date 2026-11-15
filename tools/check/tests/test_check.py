@@ -501,7 +501,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
         out = capsys.readouterr().out
-        assert ("check: this commit can't land as is; the train's check is the merge check" in out) is said
+        assert ("check: this commit can't land as is; the queue's check is the merge check" in out) is said
         launched.clear()
 
 
