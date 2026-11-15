@@ -1,0 +1,65 @@
+# PoUB's verifier as executable Lean (`verity/remote-bandwidth/v0`), its definition: a window's
+# receipt checks (`Poub.verifyWindow`), the session's bookkeeping (`Poub.Session`) and the verifier's
+# registrations (`Poub.Registry`), which `audit.py` is held to by the difftest (`poub-difftest`), and the
+# verifier's process the driver runs (`poub-verifier`, `Poub.Verifier`), the session as a core
+# protocol (`poub-protocol`, `Poub.Protocol`, onsite's bandwidth component), and a P2 store's receipts
+# and openings (`Poub.P2`) and its sessions, of record in the verifier's process (`Poub.P2Session`),
+# which `p2.py` and `p2_parties.py` are held to by the same difftest, and such a session as a core protocol
+# (`poub-p2-protocol`, `Poub.P2Protocol`, which checks the memory challenger's close of its case,
+# `Poub.P2Close`, and replays the case, `p2_case.py`). Code: Lean core and the packages below, no Mathlib and
+# nothing of Security.
+name = "poub"
+defaultTargets = ["Poub", "poub-difftest", "poub-verifier", "poub-protocol",
+  "poub-p2-protocol"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "flock_verifier"
+path = "../../../../../proofs/flock/verifier"
+
+[[require]]
+name = "core_randomness"
+path = "../../../../../../commitments/randomness"
+
+[[require]]
+name = "verity_difftest"
+path = "../../../../../../circuits/difftest"
+
+# A P2 store's openings are checked on PoUS's vk (`Poub.P2`), by PoUS's own leaf and path check
+# (`PousCheck.Merkle`).
+[[require]]
+name = "pous_check"
+path = "../../../pous/verifier/check"
+
+[[require]]
+name = "core_protocol"
+path = "../../../../../interface"
+
+# A window decided from the proof system's accepted runs of the opening unit (`Poub.Span`) reads the sampled
+# proof system's one-stage audit (`Spot.OneStageZk`).
+[[require]]
+name = "core_spot"
+path = "../../../../../proofs/spot/verifier/lean"
+
+[[lean_lib]]
+name = "Poub"
+
+[[lean_exe]]
+name = "poub-difftest"
+root = "Poub.DifftestMain"
+
+[[lean_exe]]
+name = "poub-verifier"
+root = "Poub.VerifierMain"
+
+[[lean_exe]]
+name = "poub-protocol"
+root = "Poub.ProtocolMain"
+
+[[lean_exe]]
+name = "poub-p2-protocol"
+root = "Poub.P2ProtocolMain"

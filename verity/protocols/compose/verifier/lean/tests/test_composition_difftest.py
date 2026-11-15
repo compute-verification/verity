@@ -999,7 +999,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     assert got["reason"].startswith(f"{audit['id']} reject") and R.PEARL_PLUS.id not in got["reason"], got
 
 
-INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/lean"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
 #: How Pearl+'s refusal of params that name none of its keys starts (`PouwCheck.PearlPlus.Protocol`'s guard, which gives
 #: no digest); the reference compares no reason
 PEARL_PLUS_REFUSED = "params: keys are not coins,"

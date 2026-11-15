@@ -16,13 +16,13 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# derived.py builds and charges advice v0 with the certifier's I1 (verity.protocols.accounting.certifier.verifier.advice), which reads
+# derived.py builds and charges advice v0 with the certifier's I1 (verity.protocols.resource_accounting.network.verifier.advice), which reads
 # the package inits on the way; cache_vectors.py runs the certifier's CacheStep_v1 (`cache_step`, through `head_check`
 # and the circuits it imports) and writes the certifier's difftest vectors, which a test reads back; test_arith_vectors
 # holds the certifier's arith_encode vectors to what this directory's coders code now.
 inputs = ["verity/__init__.py", "verity/errors.py", 
-          "verity/protocols/accounting/certifier", 
-          "verity/protocols/accounting/certifier/prover", "verity/circuits", "verity/commitments",
+          "verity/protocols/resource_accounting/network", 
+          "verity/protocols/resource_accounting/network/prover", "verity/circuits", "verity/commitments",
           "verity/commitments/crypto",
           # test_v1 runs the certifier's replay chain (`replay_chain`) over v1's windows, which imports SPOT's
           # produced and registered row helpers
@@ -43,7 +43,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/pipeline/advice_code",
           # the compile slice and its pieces, the vLLM integration's compiler, which the pool drivers and their tests import
           "adapters/vllm/verity_vllm/compiler",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/proofs/spot/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/proofs/spot/__init__.py",
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/boolean/memcheck.py", "verity/commitments/gates/block_key.py",
           # the certifier's `head_check` counts a Definition's ANDs with the census (`census.BooleanWork`), and the
           # advice code's codec imports it (`window_code`, the certifier's `window_charge`, `arith_encode`):

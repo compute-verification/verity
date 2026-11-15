@@ -29,15 +29,15 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/verifier/live_challenger"))
 
 import auditor as G  # noqa: E402
-from verity.protocols.accounting.certifier.device.tests.test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, served  # noqa: E402
-from verity.protocols.accounting.certifier.prover.tests.test_scan_zk import published, sz  # noqa: E402
+from verity.protocols.resource_accounting.network.attester.tests.test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, served  # noqa: E402
+from verity.protocols.resource_accounting.network.prover.tests.test_scan_zk import published, sz  # noqa: E402
 
 from benchmarks.network_traces import network_certifier_chain as WC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import blob_files as bf  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import blob_files as bf  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import record_files as RF  # noqa: E402
 
 
 def _load(name: str):
@@ -48,7 +48,7 @@ def _load(name: str):
 
 
 cr = _load("chain_record")
-from verity.protocols.accounting.certifier.prover import n2_zk as n2  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import n2_zk as n2  # noqa: E402
 from benchmarks.network_traces import leak_guard as LG  # noqa: E402
 from benchmarks.network_traces import zk_drivers  # noqa: E402
 
@@ -235,7 +235,7 @@ def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics
     what the step found of the traffic (`network_certifier_chain.WITNESS_KEYS`: which execution phases the signer refused, how
     many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
     held any of it would fail the record."""
-    from verity.protocols.accounting.certifier.prover import released_keys as RK
+    from verity.protocols.resource_accounting.network.prover import released_keys as RK
 
     listing = RK.load().listing("certs.json")
     assert listing is not None and not RK.load().waits("certs.json")

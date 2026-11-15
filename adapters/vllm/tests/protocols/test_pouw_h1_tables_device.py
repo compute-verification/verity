@@ -22,14 +22,14 @@ else:
 
 from verity.commitments.limits import VerificationLimits
 from verity.commitments.merkle import Commitment, verify_opening
-from verity.protocols.accounting.pouw.verifier.audit import HM96, rows_domain
-from verity.protocols.accounting.pouw.verifier.protocol import tagged
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, rows_domain
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 
 from verity_vllm.engine import int8_ops
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
-from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 from verity_torch.pouw.h1 import tables_device as TD
 
 KEY = bytes(range(32))

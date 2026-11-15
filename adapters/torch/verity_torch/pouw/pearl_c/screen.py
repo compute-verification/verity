@@ -8,8 +8,8 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
 
 __all__ = ["excluded", "excluded_host", "launch", "scatter_into", "screen_into"]
 

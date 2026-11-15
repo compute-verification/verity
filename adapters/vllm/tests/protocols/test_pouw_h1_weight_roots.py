@@ -7,7 +7,7 @@ import types
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
     commit_rows,
@@ -15,7 +15,7 @@ from verity.protocols.accounting.pouw.verifier.audit import (
 )
 
 torch = pytest.importorskip("torch")
-PH = pytest.importorskip("verity.protocols.accounting.pouw.prover.serving.h1")
+PH = pytest.importorskip("verity.protocols.resource_accounting.compute.pouw.prover.serving.h1")
 PHK = pytest.importorskip("verity_vllm.protocols.pouw.h1_hooks")
 
 FRESH = PH.weight_root

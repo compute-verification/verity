@@ -5,7 +5,7 @@ from fractions import Fraction
 
 import pytest
 import second_stage as s2
-from verity.protocols.proofs.spot.device.challenger import COIN_BYTES, MAX_COINS
+from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
 from verity.protocols.proofs.spot.prover.optimize import Cell
 from verity.protocols.proofs.spot.verifier import service
 

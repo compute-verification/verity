@@ -1,5 +1,5 @@
 """Pearl-C's forming v1, chain, Gram matrix, peel factors and peel as registered Definitions
-(`verity.protocols.accounting.pouw.prover.circuit.pearl_c_forming`), word and Boolean, against PoUW's reference (`schemes.pearl_c`:
+(`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_forming`), word and Boolean, against PoUW's reference (`schemes.pearl_c`:
 `s5_stats`, `eprime`, `form_v1`, `chain`, `gram`, `peel_factors_a`, `peel_factors_b`, `peel`), against PoUW's row units
 (`circuit.pc8`: `Pc8RowA`, `Pc8RowB`) on rows the reference rejects too, and on a chain the Lean specification proves of its
 own (`Pouw.PearlC.PeelExactVectors.chainV1c0`, held by `PeelExactChecks.chainsV1`)."""
@@ -19,11 +19,11 @@ from verity.circuits.evaluation.bits import compile as compile_bits
 from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity.circuits.ops.boolean.versions import boolean_version
-from verity.protocols.accounting.pouw.prover.circuit import pearl_c_forming as F
-from verity.protocols.accounting.pouw.prover.circuit import pc8
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_c_forming as F
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
 
 #: each device record's atom and promotion period as the Definitions' statics (G = 0: no promotion)
 ATOMS = {"h100": (HopperE4m3QgmmaDot32, 4), "sm120": (BlackwellE4m3QmmaDot32, 4), "sm120-unpromoted": (BlackwellE4m3QmmaDot32, 0)}

@@ -36,7 +36,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     a_value,
     b_value,
     NCP_SCHEMES as SCHEMES,

@@ -12,7 +12,7 @@ attention, each held to the host bit for bit before it is timed), not a served v
 quantization are left out, so a step here is a lower bound on a served step. `comm/` is the same question for a
 Llama-3.1-70B tensor-parallel decode step, one process a rank, with the filler inside its collectives.
 
-The kernels are in PoUW's prover, `../../../verity/protocols/accounting/pouw/prover/kernels/filler/`: `dcap.cu`,
+The kernels are in PoUW's prover, `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/`: `dcap.cu`,
 `pfill.cuh` with its host build `pfill_host.cpp`, `lfill.cuh` and `flin.cuh`; their Python twins, `pfill_ref.py` and
 `dfill_ref.py`, are here. This directory's jobs and drivers (`dscore.cu`, `fscore.cu`, `pscore.cu`, `comm/tpcomm.cu`) build them
 from there.
@@ -86,7 +86,7 @@ python3 benchmarks/pouw/filler/comm/report.py OUT [--json]                      
 `dfill_ref.py` and `pfill_ref.py` are the filler tiles' receipts in Python, held to the kernels'
 own host reference (`pfill_host.cpp` builds `pfill.cuh`'s with g++ for the tests); `pfill_ref.py` and `pfill.cuh` take
 their folds, key rules and lane starts from the receipts reference
-(`verity/protocols/accounting/pouw/verifier/receipts/`). One test outside the directory,
+(`verity/protocols/resource_accounting/compute/pouw/verifier/receipts/`). One test outside the directory,
 `../tests/test_receipts_adopters.py`, loads `pfill_ref.py`, `pfill.cuh` and `scoring.py`'s `FOLDS` and `RECEIPT_TAGS`
 and holds them to that reference; nothing else outside the directory loads its Python, and nothing else includes the
 kernels. `arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `dfill_ref.py`, `capacity_of.py`,

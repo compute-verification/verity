@@ -15,18 +15,18 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SCHEDULES
 
 from verity_vllm import protocols as PO
 from verity_vllm.protocols import pouw as P
-from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity_torch.pouw.pearl_c import graphs as PG
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PK
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
 from verity_torch.pouw.pearl_c import lanes_device as L
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import manifest as PM
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PM
 from verity_torch.pouw.pearl_c.host import joined
 from verity_torch.pouw.pearl_c.whole import WholeStep
 

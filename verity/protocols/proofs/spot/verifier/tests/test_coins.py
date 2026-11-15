@@ -8,7 +8,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.protocols.proofs.spot.device.coins import OwnRandomness, closure_of, draw_first
+from verity.protocols.proofs.spot.verifier.challenger.coins import OwnRandomness, closure_of, draw_first
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 
 

@@ -501,7 +501,7 @@ CHECKED = {
                      "certifier its log places (A.key cert.id = some (hexOf key)). It reads only the auditor's inputs, "
                      "its certifier-key record (--certifier-key) and its registration (--site-registration: the "
                      "registration log's params and the log, which the log's check accepts, "
-                     "verity.protocols.accounting.registration.verifier.registration), and the parameters the period's check read (its case's "
+                     "verity.protocols.registration.verifier.registration), and the parameters the period's check read (its case's "
                      "params, whose SHA-512 over their canonical JSON must be the one the composite of record states "
                      "for the network certifier's case), never the prover's node or its deployment.json. Where an "
                      "input is missing or doesn't match, it doesn't hold, and certifier-key stays open. The "
@@ -1518,7 +1518,7 @@ def auditor_record(params: Any, composed: str | None, key: Path | None, site: Pa
     ``holds``, that ``certifier`` where it does and ``why`` where it doesn't, and ``from``, each input's SHA-512."""
     import composite as CO
     from benchmarks.network_traces import network_certifier_chain as WC
-    from verity.protocols.accounting.registration.verifier import registration as REG
+    from verity.protocols.registration.verifier import registration as REG
 
     out: dict[str, Any] = {"is": CHECKED[AUDITOR_RECORD], "holds": False, "from": {}}
     docs = {}

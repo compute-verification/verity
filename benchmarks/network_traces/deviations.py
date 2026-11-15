@@ -124,16 +124,16 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from verity.protocols.accounting.certifier.device.runner_cli import _address, _announce  # noqa: E402
+from verity.protocols.resource_accounting.network.attester.runner_cli import _address, _announce  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import negatives as N  # noqa: E402
-from verity.protocols.accounting.certifier.device import network_certifier_serve as ws  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import release as REL  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.network_certifier import END, FAIL, NetworkCertifierParams, read_cell  # noqa: E402
+from verity.protocols.resource_accounting.network.attester import network_certifier_serve as ws  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import release as REL  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.id_form import id_request  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier.network_certifier import END, FAIL, NetworkCertifierParams, read_cell  # noqa: E402
 
 #: the classes in the order they are tried: the control first, and the one with the longest try last
 CLASSES = ("honest", "tokens", "length", "fail", "extra", "bucket")
@@ -730,7 +730,7 @@ def one_try(cls: str, run: Path, args, clock=time.monotonic) -> float:
     requests = args.bucket_requests if cls == "bucket" else args.requests
     start, procs, env, name = clock(), [], dict(os.environ), args.front_env
     me = [sys.executable, str(HERE / "deviations.py")]
-    relay = [sys.executable, "-m", "verity.protocols.accounting.certifier.device.network_certifier_serve"]
+    relay = [sys.executable, "-m", "verity.protocols.resource_accounting.network.attester.network_certifier_serve"]
     try:
         if args.stand_in:
             fake = subprocess.Popen(relay + ["fake", "--listen", "127.0.0.1:0", "--id-payload", str(payload),

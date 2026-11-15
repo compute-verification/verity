@@ -13,7 +13,7 @@ The directory is scripts run by their paths, and no package. Seven are imported 
 bare names: `checked_strip.py`, `cpw_sass_count.py`, `fold_kernel_check.py`, `fold_opt_fx.py`, `fold_root_sweep.py`,
 `fold_routes.py` and `narrow_u.py`. Each one's `__all__` lists what its readers and the tests take, and every other
 name is the script's own. Outside the directory and its own tests (`../tests/test_theory_*.py`) only
-`checked_strip.py` is read: the references of `../../../verity/protocols/accounting/pouw/prover/kernels/edited_gemm/` load it by file (`cgemm_ref.py`) and
+`checked_strip.py` is read: the references of `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/` load it by file (`cgemm_ref.py`) and
 `../tests/test_segment_h1.py` imports it. No Python here touches a GPU: the sm_120 probes are the `*.sh` jobs. A script
 starts only `gcc` and the C program it built, and `run.py` the checks; each writes only in a temporary directory and
 where its command says (`--verdict`, `--json`, `--out`).
@@ -100,7 +100,7 @@ What each one checks, and the Lean or the test that reads it.
 - `narrow_u.py`: that check with U on ±N for N = 8, 16, 32 (`edited_gemm`'s `co32c-u*`).
 - `zero_routes_check.py`: `checked_strip.py`'s priced zero-instance routes.
 - `attn_noise.py`: attention's committed words at every operand value, and its noise's h. Core's
-  `verity/protocols/accounting/pouw/prover/circuit/compile.py` cites its `h_table` for the attention forms H1 is to
+  `verity/protocols/resource_accounting/compute/pouw/prover/circuit/compile.py` cites its `h_table` for the attention forms H1 is to
   carry.
 
 ### The sm_120 unit's checkpoint and issue

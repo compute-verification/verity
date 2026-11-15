@@ -21,10 +21,10 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.registry import io_shell as IO
-from verity.protocols.accounting.certifier.prover import ingress_scan as IS
-from verity.protocols.accounting.certifier.verifier import network_certifier as W
-from verity.protocols.accounting.certifier.verifier.id_form import id_request
-from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+from verity.protocols.resource_accounting.network.verifier import network_certifier as W
+from verity.protocols.resource_accounting.network.verifier.id_form import id_request
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 

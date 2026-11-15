@@ -56,7 +56,7 @@ from pathlib import Path
 
 from verity.protocols.proofs.spot.prover.cost import h200 as H
 
-from verity.protocols.accounting.pouw.verifier.window import eps_at
+from verity.protocols.resource_accounting.compute.pouw.verifier.window import eps_at
 from verity.protocols.proofs.spot.verifier.consumers import entropy_bits
 from verity.protocols.proofs.spot.verifier.profile import MARGIN, Stratified, Stratum
 from verity.protocols.proofs.spot.prover.optimize import (

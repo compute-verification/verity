@@ -15,9 +15,9 @@ from typing import Any
 import pytest
 import torch
 from verity.runtime.stream import Side
-from verity.protocols.accounting.pous.prover import challenger_prover as CR
-from verity.protocols.accounting.pous.verifier import period, setup
-from verity.protocols.accounting.pous.prover import period_prover
+from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.resource_accounting.memory.pous.verifier import period, setup
+from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.runtime.stream import Side
 
 from tests import fake_vllm
@@ -38,7 +38,7 @@ from tests.protocols.test_pous_option import (
 )
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
-from verity.protocols.accounting.pous.prover import weight_store as ws
+from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity_vllm.protocols import pous
 from verity_vllm.protocols.interface import Target
 

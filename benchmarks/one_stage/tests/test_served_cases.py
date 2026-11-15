@@ -40,8 +40,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.pouw.verifier import credit as Cr
-from verity.protocols.accounting.pouw.verifier import weights as PW
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
+from verity.protocols.resource_accounting.compute.pouw.verifier import weights as PW
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P

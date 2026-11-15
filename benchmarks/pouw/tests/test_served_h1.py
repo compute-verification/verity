@@ -418,7 +418,7 @@ class _Host:
     def __init__(self, tmp_path, epoch: int = EPOCH, rounds: int | None = ROUNDS, host: str = "vy-challenger-1",
                  root: bytes = ROOT, secret: bytes = bytes([5]) * 32, sid: str = SID, withhold: bool = False,
                  parent: _Host | None = None) -> None:
-        from verity.protocols.proofs.spot.device import remote as R
+        from verity.protocols.proofs.spot.verifier.challenger import remote as R
         from verity.commitments.crypto import lms
         self.tmp_path, self.epoch, self.host, self.sid, self.sample = tmp_path, epoch, host, sid, None
         self.R, self.directory, self.secret = R, tmp_path / ("session" if parent is None else "draw") / "out", secret
@@ -510,7 +510,7 @@ def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
     """A served window's coin path on `cs`: the salt coin after the window's root, round s's coin after step s's round
     root and the step's units under its live salt, then the sampling coin after the receipts root; the manifest, its window
     `WINDOW`."""
-    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT
     salt = cs.salt(root)
     log = []
     for s in sorted({c["step"] for c in calls}):
@@ -686,7 +686,7 @@ def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_pa
     each coin comes back opened after its own root, round by round in the challenger's own release log and under
     `order_reason`; closing waits for the coins still out, then closes the session.  In process the same roots open at
     once, and a root past the epoch's rounds is refused before it is sent."""
-    from verity.protocols.proofs.spot.device import remote as R
+    from verity.protocols.proofs.spot.verifier.challenger import remote as R
     host = _Host(tmp_path, rounds=4)
     cs = CO.open_coins(host.session, EPOCH, 4)
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]
@@ -741,7 +741,7 @@ def test_the_sampling_coin_and_its_time_are_read_under_the_lock_round_roots_are_
 def _pipe_server(sock, challenger, answers: list[str]) -> None:
     """The challenger's side of a `RoundPipe` stream for its refusals: the hello's commitment, then each open frame's
     reply as `answers` names it in turn ("ok" its coin, "refuse" a refusal, "other" the next coin's opening)."""
-    from verity.protocols.proofs.spot.device import remote as R
+    from verity.protocols.proofs.spot.verifier.challenger import remote as R
     w = R._Wire(sock)
     w.recv()
     w.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
@@ -759,7 +759,7 @@ def _pipe_server(sock, challenger, answers: list[str]) -> None:
 def test_round_coins_pipelined_refuse_every_later_round_after_a_refusal_or_a_bad_opening(answer, why):
     """A `RoundPipe` whose challenger refuses round 1's open, or answers it with another coin's opening, ends the session:
     round 1's coin and every later one are refused, round 0's (back before) is kept, and no root is sent after."""
-    from verity.protocols.proofs.spot.device import remote as R
+    from verity.protocols.proofs.spot.verifier.challenger import remote as R
     lay = CO.layout(EPOCH, 4)
     ch = CO.Ch.LiveChallenger(lay["scheme"], lay["epoch"], lay["families"], random.Random("host").randbytes)
     a, b = socket.socketpair()
@@ -1024,7 +1024,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
     `$POUW_CHALLENGER_SECRET_FILE`) and no ``--coins``, it opens the challenger's session before anything else (this
     host's layout isn't the window's, so it stops there), and ``--coins seeded`` beside a session is refused.
     ``--gate`` is refused, with a session or without, and the refusal names the gated served window of record, vllm's H1
-    path (`verity/protocols/accounting/pouw/prover/serving/h1/__init__.py`)."""
+    path (`verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py`)."""
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
     CO.write_secret(tmp_path / "secret", host.secret)
     monkeypatch.delenv(CO.COMMITMENT_ENV, raising=False)
@@ -1042,7 +1042,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
             for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV):
                 monkeypatch.delenv(name)
         with pytest.raises(ValueError, match=r"--gate research@gate: served_h1's own gated window is superseded; .*"
-                                             r"verity/protocols/accounting/pouw/prover/serving/h1/__init__.py, which holds"):
+                                             r"verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py, which holds"):
             SV.main([*argv, "--gate", "research@gate"])
 
 

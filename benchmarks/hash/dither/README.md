@@ -4,7 +4,7 @@ PoUW's served H1 + fx1 and J10-R receipts in compiled vLLM, on int8-exact Llama-
 against stock vLLM int8. Each arm replaces the int8-exact linear with kernels that serve y and, from the same operands,
 compute the execution phase's tables, seeds and receipts. An arm is gated in its own run before it is timed: its roots, receipts
 and z against its CPU twin and the Definition (`h1tile.reference` and `h1tile.j10r_reference`,
-`verity/protocols/accounting/pouw/prover/circuit/h1tile.py`). Nothing a verifier runs reads this directory.
+`verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1tile.py`). Nothing a verifier runs reads this directory.
 
 The arms' names (`dither`, `dither-1s`, `dither-a`, ...) are identifiers the runs' records carry. What they serve are
 H1's and J10-R's folds, not Dither, PoUW's no-fold design (`verity/protocols/experimental/dither/`).
@@ -34,7 +34,7 @@ docstring lists every arm and flag, and `settings.py` every variable they read (
 ## What the rest of the tree reads
 
 - `h1u.cu` (with the kernels, below): the proof-block kernels: H1 + fx1's seeds and proof blocks, the one-stream `kh_one`, and J10-R's (`kh_seeds_j10r`, `kh_units_multi_j10r`). `benchmarks/pouw/served_h1` builds
-  it, and `verity/protocols/accounting/pouw/prover/circuit/h1device.py` states the domain it serves on sm_90.
+  it, and `verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1device.py` states the domain it serves on sm_90.
 - `j10r_units.py`: J10-R's proof blocks on the host, each receipt bit for bit `h1tile.j10r_reference`'s.
 - `forms.py`: every arm's form label, from one table (`form_of`).
 - `sbench.sh`'s receipts-only build of `h1u.cu`, which `benchmarks/pouw/served_h1`'s producer loads; and the execution phase

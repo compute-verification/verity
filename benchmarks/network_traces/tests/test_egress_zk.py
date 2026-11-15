@@ -15,7 +15,7 @@ import pytest
 from benchmarks.network_traces.tests.test_network_certifier_zk import needs_lean, reads_of, statement
 
 
-from verity.protocols.accounting.certifier.prover import egress_zk as ez
+from verity.protocols.resource_accounting.network.prover import egress_zk as ez
 
 
 def test_each_members_host_read_is_the_members(tmp_path):

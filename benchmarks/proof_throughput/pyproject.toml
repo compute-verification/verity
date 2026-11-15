@@ -35,7 +35,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_instances.py", "tests/test_workloads.py"]
-paths = ["verity/protocols/accounting/certifier", "verity/protocols/accounting/pous", "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods"]
+paths = ["verity/protocols/resource_accounting/network", "verity/protocols/resource_accounting/memory/pous", "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/resource_accounting/compute/pouw/prover", "verity/protocols/resource_accounting/memory/poub/verifier/commitments", "verity/commitments/periods"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_workloads.py"]

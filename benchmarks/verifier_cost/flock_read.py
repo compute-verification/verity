@@ -22,7 +22,7 @@ H1 = Path(__file__).resolve().parents[1] / "pouw" / "h1_prove"
 sys.path.insert(0, str(H1))
 sys.path.insert(0, str(H1.parent / "hidden_zk"))
 
-from verity.protocols.accounting.pouw.prover.lowering import h1unit as U  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
 

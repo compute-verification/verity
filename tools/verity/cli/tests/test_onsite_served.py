@@ -22,11 +22,11 @@ from verity import config as K
 from verity.commitments.crypto import lms
 from verity.protocol import Channel, Start
 from verity.channel import Refused
-from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.pous.device import onsite
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.device import wipe_challenger as WC
-from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.resource_accounting.memory.pous.attester import onsite
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.attester import wipe_challenger as WC
+from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
 

@@ -49,7 +49,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
   it the incorrect proof blocks the sample allows can carry (`uncertified`), its δ added to the ledger's error.
 * **Check 3.** The session samples ``--samples`` receipts a window, and nothing is opened: each sample goes through
-  PoUB's opening unit (`poub.opening`, `verity.protocols.accounting.poub.verifier.commitments.gates.block_check`, §8's checks 1-3
+  PoUB's opening unit (`poub.opening`, `verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
   at the sampled position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
   docket's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
@@ -80,16 +80,16 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
-from verity.protocols.accounting.poub.prover import opening_prover  # noqa: E402
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
-from verity.protocols.accounting.poub.verifier import schedule as SC  # noqa: E402
-from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover import opening_prover  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import schedule as SC  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 from verity.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.protocols.accounting.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.commitments.merkle import CommitmentDomain, MerkleTree  # noqa: E402

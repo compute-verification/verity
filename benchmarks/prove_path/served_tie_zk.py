@@ -1,6 +1,6 @@
 """The routed served-rows tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows, proved in zero
 knowledge: the window's P / G units by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through
-N2-ZK's audit path (`verity/protocols/accounting/certifier/prover/n2_zk.py`: its stager, ZK server and received-pieces scan); and the cost.
+N2-ZK's audit path (`verity/protocols/resource_accounting/network/prover/n2_zk.py`: its stager, ZK server and received-pieces scan); and the cost.
 
     python benchmarks/prove_path/served_tie_zk.py cost [--out DIR]
     python benchmarks/prove_path/served_tie_zk.py build --class slice|9c10|served --g G [--out DIR]
@@ -27,7 +27,7 @@ N2-ZK's audit path (`verity/protocols/accounting/certifier/prover/n2_zk.py`: its
   not yet a proof row's.
   The received-pieces scan (`leak_scan.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece, whatever its
   row or its bytes, under the rule every zero-knowledge driver's scan follows (`leak_scan.scan`,
-  ``verity/protocols/accounting/certifier/prover/leak_scan.py``): a find counts only inside one field of Flock's proof format
+  ``verity/protocols/resource_accounting/network/prover/leak_scan.py``): a find counts only inside one field of Flock's proof format
   (`redigest.layout`) or one record of a round message, and is excused only by what the statement fixes. The staged circuit's pieces are left
   out before the scan (`public_pieces`).
 * **rescan**: a finished ``prove``'s statements scanned again (`leak_scan.rescan`): the verifier's files searched afresh
@@ -50,7 +50,7 @@ REPO = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(REPO)]
 
 from benchmarks.network_traces import zk_drivers  # noqa: E402
-from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 from verity_vllm.compiler import served_rows as SR  # noqa: E402
 from verity_vllm.compiler import served_tie as ST  # noqa: E402

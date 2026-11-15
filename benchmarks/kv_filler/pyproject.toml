@@ -6,9 +6,9 @@ testpaths = ["tests"]
 [tool.verity.tests]
 # bench.py puts PoUB's prover's word_codec directory on the path for kv.py, which takes PoUB's
 # codec (on the commitments, which import blake3), and for cuda_lib.py, which opens the kernels
-inputs = ["verity/protocols/accounting/poub/prover/word_codec/kv.py", "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py", "verity/__init__.py", "verity/errors.py",
-          "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/codec.py",
+inputs = ["verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py", "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py", "verity/__init__.py", "verity/errors.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py", "verity/protocols/resource_accounting/memory/poub/verifier/codec.py",
           "verity/commitments", "verity/commitments/crypto",
-          "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py",
           # bench.py's launch grids read the RTX PRO 6000's sm.count from its card through verity.device
           "hardware/cards/rtx-pro-6000-server.toml", "verity/device.py", "verity/channel.py"]

@@ -70,7 +70,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
   if [ -z "${WIPE_PROTOCOL_EXE:-}" ]; then
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
-    L=verity/protocols/accounting/pous/device/lean
+    L=verity/protocols/resource_accounting/memory/pous/attester/lean
     # tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes __pycache__
     # beside it meanwhile, as a check's other suites do; 2 or more is a copy that failed
     { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \

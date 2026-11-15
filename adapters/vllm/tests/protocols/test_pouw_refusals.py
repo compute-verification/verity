@@ -21,38 +21,38 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
-from verity.protocols.accounting.pouw.prover.circuit.ncp2 import Shape
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import SCHEMES
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.ncp2 import Shape
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Workload,
     salt_of,
     weights_root,
 )
-from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul
-from verity.protocols.accounting.pouw.verifier.protocol import Shape as MatmulShape
-from verity.protocols.accounting.pouw.verifier.serving import (
+from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Matmul
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as MatmulShape
+from verity.protocols.resource_accounting.compute.pouw.verifier.serving import (
     SCHEDULES,
     Schedule,
     SchemeId,
 )
-from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.interface import Context
-from verity.protocols.accounting.pouw.prover.serving import circuit as PC
-from verity.protocols.accounting.pouw.prover.serving import device as PD
-from verity.protocols.accounting.pouw.prover.serving import native as PN
-from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.accounting.pouw.prover.serving.lead import feed as PF
-from verity.protocols.accounting.pouw.prover.serving.operands import quantize
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.lead import feed as PF
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.operands import quantize
 from verity_torch.pouw.pearl_c import grouped as PG
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PK
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import schedule_of, whole_options
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.lanes import schedule_of, whole_options
 
 HOST = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: the least (n, k) of a linear the host schemes' domain takes
@@ -177,7 +177,7 @@ def test_h1s_install_refuses_a_layout_without_its_rows_or_its_steps(monkeypatch,
 @pytest.mark.parametrize("scheme", ["ncp-v1", "ncp-v1-shift24", "ncp-v3", ""])
 def test_a_scheme_without_a_circuit_has_no_permutation_and_no_program(scheme):
     assert scheme not in SCHEMES and "ncp-v2" in SCHEMES
-    said = f"{scheme}: no circuit (verity.protocols.accounting.pouw.prover.circuit.SCHEMES = {', '.join(SCHEMES)})"
+    said = f"{scheme}: no circuit (verity.protocols.resource_accounting.compute.pouw.prover.circuit.SCHEMES = {', '.join(SCHEMES)})"
     with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
         PC.kind_of(scheme)
     with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
