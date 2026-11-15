@@ -234,8 +234,7 @@ theorem step_all {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
     · obtain rfl := Except.ok.inj h
       simp at ha
     · rename_i hv
-      split_ifs at h
-      · exact absurd h (throw_ne _ _)
+      split_ifs at h <;> try exact absurd h (throw_ne _ _)
       obtain ⟨units, -, h⟩ := bind_ok h
       obtain rfl := Except.ok.inj h
       refine ⟨ha, b, record, hb, hrec, ?_, hv⟩
