@@ -312,7 +312,8 @@ def session(record: Path, k: int | None, *, python_ledger: bool = False) -> dict
         raise NoNumber(f"session {vs['k']} was accepted and its ledger holds no γ at the specification's rate")
     binding = v.get("binding") or {}
     return {"value": gamma, "gamma_decided_by": decided_by,
-            "numbers_decided_by": NUMBERS_PYTHON if decided_by == PYTHON_LEDGER else NUMBERS_LEAN, "session": vs["k"], "verdict": vs.get("verdict"),
+            "numbers_decided_by": NUMBERS_PYTHON if decided_by == PYTHON_LEDGER else NUMBERS_LEAN,
+            "session": vs["k"], "verdict": vs.get("verdict"),
             "error": error_of(ledger, *under),
             "rate_bytes_per_s": (ledger.get("inputs") or {}).get("spec_bytes_per_s"),
             "store_bytes": blocks * BLOCK_BYTES,

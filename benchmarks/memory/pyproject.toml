@@ -21,15 +21,10 @@ inputs = [
     "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
     "benchmarks/harness/verity_bench/settings.py",
     "verity/device.py", "verity/protocols/accounting/poub/verifier", "hardware",
-    "benchmarks/harness/verity_bench/kit_report.py",
-    # what PoUB's verifier imports, and the documents a `--local` machine's digest hashes with the data sheets and the
-    # verifier (a directory's inputs leave out its Markdown)
     "verity/errors.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
     "verity/commitments/randomness", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py",
     "verity/protocols/accounting/poub/__init__.py", "verity/protocols/proofs/__init__.py",
-    "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
+    "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
+    "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/device/__init__.py",
     "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/remote.py",
-    "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/verifier/profile.py",
-    "hardware/README.md", "verity/protocols/accounting/poub/verifier/README.md",
-    "verity/protocols/accounting/poub/verifier/PROTOCOL.md",
 ]

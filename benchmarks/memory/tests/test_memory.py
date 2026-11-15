@@ -774,8 +774,8 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert (held / "out" / "memory.json").read_text() == line + "\n"
     assert sorted(p.name for p in (held / "out").iterdir()) == ["memory.json"]
     assert list(doc) == ["value", "unit", "commit", "run", "loopback", "local", "machine", "gamma_decided_by",
-                         "numbers_decided_by", "host_run", "no_bound", "session", "verdict", "error", "rate_bytes_per_s", "store_bytes",
-                         "node_gpu_bytes", "model", "bound", "parameters", "beside", "ran_with", "audit"]
+                         "numbers_decided_by", "host_run", "no_bound", "session", "verdict", "error",
+                         "rate_bytes_per_s", "store_bytes", "node_gpu_bytes", "model", "bound", "parameters", "beside", "ran_with", "audit"]
     got = written(held)
     assert list(got) == WRITTEN
     assert {n: m["value"] for n, m in got.items()} == {
