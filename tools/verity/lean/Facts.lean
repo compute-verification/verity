@@ -1393,6 +1393,11 @@ unsafe def main (args : List String) : IO UInt32 := do
         done := done.insert c
         lines := lines.push <| Task.spawn fun _ =>
           (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon env rci))]).compress
+        if !back.isEmpty then
+          named := (uses rci).foldl (·.insert ·) (named.insert c)
+          lines := lines.push <| Task.spawn fun _ =>
+            (Json.mkObj [("id", toJson s!"moved-read:{c}"), ("as", toJson (rn c).toString),
+              ("canon", toJson (readCanon env rci rn))]).compress
     for (c, ci) in constants do
       if ci matches .defnInfo _ | .thmInfo _ then
         lines := lines.push <| Task.spawn fun _ =>

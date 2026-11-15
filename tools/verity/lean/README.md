@@ -266,8 +266,13 @@ One line per mechanism; a new one gets its line here and its detail in the docst
 - **A move is not a change**: `--update --moved MOVES.json` compares the build with the records under the old names
   (`review`, `facts_of`, `move_refusals`, `Facts.lean`). Both ways take the longest moved prefix, and a name of the lock
   or of the compared texts that does not come back to itself is refused, as are two names of one section that land on
-  one (`section_collisions`), and a name of the moves file that is not a Lean name. The lock's names are checked at startup, before anything is written, and
-  again by the judge; a refused move rewrites no lock.
+  one (`section_collisions`), and a name of the moves file that is not a Lean name. The premises (`open`, `domain`,
+  `assumptions`), `four_names_except` and `claims.witnesses` are re-keyed like the guarantees, each entry's fields kept,
+  and a moved premise is compared by the digest of what it reads under its old names. A move is held to the locks of the
+  change's base (`--base REV`; by default HEAD and its merge-base with main, `base_revs`): a moved name may not land on
+  a name they hold, and a guarantee whose new name they record with another statement is a statement change, though the
+  change deleted that record by hand. The lock's names are checked at startup, before anything is written, and again by
+  the judge; the run writes every package's lock at its end, or none when a move is refused in any.
 - **Merging**: `merge.py` merges `lean-audit.json` entry by entry and leaves git's conflict only at its three guards;
   a merged record is a candidate, which the Lean check rebuilds, so a merge that is clean but wrong (a definition that
   changed on one side without a guarantee there reading it, while the other side's new guarantee reads it) fails there

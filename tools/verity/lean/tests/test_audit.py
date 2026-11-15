@@ -2537,6 +2537,18 @@ def unclaimed(policy: dict) -> dict:
     return {k: v for k, v in policy.items() if k != "claims"}
 
 
+def committed(root: Path, *locks: Path) -> None:
+    """``root`` a git repository whose `main` holds ``locks`` as they are: the base a `--moved` run is held to by default
+    (`base_revs`: HEAD and its merge-base with main)."""
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(root), "-c", "user.name=test", "-c", "user.email=test@example.com",
+                        "-c", "commit.gpgsign=false", *args], check=True, capture_output=True)
+    if not (root / ".git").exists():
+        git("init", "-q", "-b", "main")
+    git("add", "-f", *(str(p.relative_to(root)) for p in locks))
+    git("commit", "-q", "--allow-empty", "-m", "base")
+
+
 def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     """`Facts.lean`'s renaming and unfolding on a real build: a guarantee lifted into a `Guarantees` definition (its old theorem
     kept as the lemma that proves it), one whose statement holds a proof Lean abstracts out of a definition (`_proof_1`), and a
@@ -2676,6 +2688,7 @@ def test_a_guarantee_moved_onto_an_untouched_one_is_refused_and_the_lock_kept_on
         return A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
     build()
     assert unshaped(audit()) == []
+    committed(tmp_path, pkg / A.POLICY)
     a.write_text("namespace Control.A\nend Control.A\n")
     x.write_text("namespace Control.X\ntheorem t : 1 + 1 = 2 := rfl\nend Control.X\n")
     build()
@@ -2689,6 +2702,112 @@ def test_a_guarantee_moved_onto_an_untouched_one_is_refused_and_the_lock_kept_on
     assert f"moved: {clash}" in rep["failures"] and "moved.collision" in rep["failure_codes"]
     assert (pkg / A.POLICY).read_text() == before
     assert "guarantee Control.X.t: changed" in audit()["review"]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_record_deleted_by_hand_before_a_move_still_holds_its_name_on_a_real_build(tmp_path, capsys, monkeypatch):
+    """The change deletes the theorem of `Control.X.t`, a deployed guarantee with its `trust_gap` line, moves
+    `Control.A.t`'s theorem onto the name `Control.X.t`, deletes `Control.X.t`'s record from the lock by hand and runs
+    `--update --moved {"Control.A": "Control.X"}`.  The lock no longer shows the name taken; the base's does (HEAD and its
+    merge-base with main, `base_locks`), so the move is refused at startup and no lock is written.  With the refusal
+    taken away, the review still compares `Control.X.t` with the base's record: changed, a statement change, never the
+    same statement moved."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.A\nimport Control.X\n")
+    a, x = pkg / "Control" / "A.lean", pkg / "Control" / "X.lean"
+    a.write_text("namespace Control.A\ntheorem t : 1 + 1 = 2 := rfl\nend Control.A\n")
+    x.write_text("namespace Control.X\ntheorem t : 2 + 2 = 4 := rfl\nend Control.X\n")
+    pol = unclaimed(A.load(pkg))
+    A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.A": {"imports": []}, "Control.X": {"imports": []}},
+                       "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.A.t", "Control.X.t")},
+                       "deployed": ["Control.X.t"], "trust_gap": {"Control.X.t": []}})
+
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def audit(**kw):
+        return A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
+    build()
+    audit()
+    committed(tmp_path, pkg / A.POLICY)
+    a.write_text("namespace Control.A\nend Control.A\n")
+    x.write_text("namespace Control.X\ntheorem t : 1 + 1 = 2 := rfl\nend Control.X\n")
+    build()
+    pol = A.load(pkg)
+    del pol["guarantees"]["Control.X.t"]
+    A.dump(pkg, pol)
+    before, moves = (pkg / A.POLICY).read_text(), tmp_path / "moves.json"
+    moves.write_text(json.dumps({"Control.A": "Control.X"}))
+    with pytest.raises(SystemExit):
+        A.main([str(pkg), "--update", "--moved", str(moves), "--no-runs", "--out", str(tmp_path / "main"), "--repo", str(tmp_path)])
+    assert "Control.A.t, Control.X.t (in the base's lock) all land on Control.X.t in guarantees" in capsys.readouterr().err
+    assert (pkg / A.POLICY).read_text() == before and not (tmp_path / "main").exists()
+    monkeypatch.setattr(A, "move_refusals", lambda moved, policy, bases=(): [])
+    rep = audit(moved={"Control.A": "Control.X"}, base=A.base_locks(pkg, A.base_revs(tmp_path), tmp_path))
+    assert "guarantee Control.X.t: changed" in rep["review"] and "guarantee Control.A.t: removed" in rep["review"]
+    assert rep["statement_changes"] and not [n for n in rep["review"] if n.startswith("guarantee Control.X.t: moved")]
+
+
+PREM = "namespace Control.{ns}\ndef Op : Prop := ∀ n : Nat, {op}\ndef Dom : Prop := ∀ n : Nat, 0 + n = n\nend Control.{ns}\n"
+USES = ("import Control.Assumptions\nimport Control.Defs\nimport Control.Prem\nnamespace Control.{ns}\n"
+        "theorem uses (h : Control.{p}.Op) (d : Control.{p}.Dom) (k : Control.{hyp}) : double 1 = 2 := rfl\nend Control.{ns}\n")
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_move_keeps_each_premise_entry_with_its_fields_on_a_real_build(tmp_path):
+    """An open premise (its issue and due date), a domain hypothesis (its `why`) and a named assumption (its id and owner),
+    each taken by a guarantee and moved with it: `--update --moved` re-keys their entries with every field, and the review
+    says each is the same statement moved, by the digest of what it reads under its old names (`Facts.lean`'s `moved-read`
+    texts of the premises' walks); a plain `--update` then changes nothing.  A premise moved with a new body is a
+    statement change."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Prem\nimport Control.Uses\n")
+    prem, uses, hyp, thms = (pkg / "Control" / f for f in ("Prem.lean", "Uses.lean", "Assumptions.lean", "Thms.lean"))
+    prem.write_text(PREM.format(ns="P", op="n * 1 = n"))
+    uses.write_text(USES.format(ns="T", p="P", hyp="Hyp"))
+    pol = unclaimed(A.load(pkg))
+    ticket, why = {"issue": "LEAN-1", "due": "2026-12-31"}, "the controls' scope"
+    A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Prem": {"imports": []}},
+                       "guarantees": {n: {"owner": "@lean"} for n in ("Control.main_thm", "Control.T.uses")},
+                       "assumptions": {"Control.Hyp": {"owner": "@bea"}},
+                       "open": {"Control.P.Op": {"owner": "@amy"} | ticket},
+                       "domain": {"Control.P.Dom": {"owner": "@lean", "why": why}}})
+
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def audit(**kw):
+        return A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None, **kw)
+    build()
+    audit()
+    was = A.load(pkg)
+    assert set(was["open"]) == {"Control.P.Op"} and set(was["domain"]) == {"Control.P.Dom"}, was
+    prem.write_text(PREM.format(ns="R", op="n * 1 = n"))
+    uses.write_text(USES.format(ns="U", p="R", hyp="Base"))
+    hyp.write_text(hyp.read_text().replace("def Hyp", "def Base"))
+    thms.write_text(thms.read_text().replace("Control.Hyp", "Control.Base"))
+    build()
+    rep = audit(moved={"Control.P": "Control.R", "Control.T": "Control.U", "Control.Hyp": "Control.Base"})
+    now = A.load(pkg)
+    assert now["open"] == {"Control.R.Op": {"owner": "@amy", "digest": now["open"]["Control.R.Op"]["digest"]} | ticket}
+    assert now["domain"] == {"Control.R.Dom": {"owner": "@lean", "digest": now["domain"]["Control.R.Dom"]["digest"], "why": why}}
+    assert now["assumptions"]["Control.Base"]["owner"] == "@bea" and set(now["assumptions"]) == {"Control.Base"}
+    assert now["ids"] == {"Control.Base": "control-hyp"} and set(now["guarantees"]) == {"Control.main_thm", "Control.U.uses"}
+    for line in ("open premise Control.R.Op: moved from Control.P.Op", "domain hypothesis Control.R.Dom: moved from "
+                 "Control.P.Dom", "assumption Control.Base: moved from Control.Hyp"):
+        assert any(n.startswith(line) for n in rep["review"]), (line, rep["review"])
+    assert not rep["statement_changes"], rep["review"]
+    again = audit()
+    assert A.load(pkg) == now and not again.get("statement_changes"), again.get("review")
+    prem.write_text(PREM.format(ns="S", op="1 * n = n"))
+    uses.write_text(USES.format(ns="U", p="S", hyp="Base"))
+    build()
+    rep = audit(moved={"Control.R": "Control.S"})
+    assert "open premise Control.S.Op: changed (moved from Control.R.Op; its statement or a definition it reads)" in \
+        rep["review"] and rep["statement_changes"]
+    assert A.load(pkg)["open"]["Control.S.Op"]["issue"] == "LEAN-1"
 
 
 SPLIT_KEPT = "def pick : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\ndef three : Fin 5 := ⟨3, by decide⟩\n"
@@ -3622,9 +3741,50 @@ def test_names_of_one_section_that_land_together_are_refused_and_a_record_meetin
                           ("witnesses_assumed", {"witnesses_assumed": {"P.A.t": "why", "P.X.t": "why"}}),
                           ("trust.extra", {"trust": {"extra": {"P.A.t": {}, "P.X.t": {}}}}),
                           ("trust.extra.P.g", {"trust": {"extra": {"P.g": {"P.A.t": "why", "P.X.t": "why"}}}}),
-                          ("shape.inline", {"shape": {"inline": {"P.A.t": {}, "P.X.t": {}}}})):
+                          ("shape.inline", {"shape": {"inline": {"P.A.t": {}, "P.X.t": {}}}}),
+                          ("open", {"open": {"P.A.t": {}, "P.X.t": {}}}),
+                          ("domain", {"domain": {"P.A.t": {}, "P.X.t": {}}}),
+                          ("assumptions", {"assumptions": {"P.A.t": {}, "P.X.t": {}}}),
+                          ("four_names_except", {"four_names_except": {"P.A.t": "why", "P.X.t": "why"}}),
+                          ("claims.witnesses", {"claims": {"witnesses": {"P.A.t": {}, "P.X.t": {}}}})):
         assert A.move_refusals(moved, lock) == [("moved.collision", f"P.A.t, P.X.t all land on P.X.t in {section}")], section
-    assert A.move_refusals(moved, {"open": {"P.A.t": {}, "P.X.t": {}}, "domain": {"P.A.t": {}, "P.X.t": {}}}) == []
+
+
+def test_a_move_holds_the_names_of_the_base_lock_unless_they_move_away():
+    """A name the change's base records (`base_locks`) holds its place though the change deleted it from the lock by hand:
+    moving another onto it is refused, the base's name marked.  A base name the moves take elsewhere holds nothing, so
+    the landing's pass, whose base records the guarantees under their old names, is refused nothing."""
+    moved = {"P.A": "P.X"}
+    working = {"guarantees": {"P.A.t": {"owner": "@lean"}}, "deployed": ["P.X.t"], "trust_gap": {"P.X.t": ["P.H"]}}
+    base = working | {"guarantees": working["guarantees"] | {"P.X.t": {"owner": "@lean"}}}
+    assert A.move_refusals(moved, working) == []
+    assert A.move_refusals(moved, working, [base]) == [
+        ("moved.collision", "P.A.t, P.X.t (in the base's lock) all land on P.X.t in guarantees")]
+    assert A.move_refusals(moved, working, [working, {"guarantees": {"P.A.t": {}, "P.A.u": {}}}]) == []
+    assert A.move_refusals({"P.A": "P.X", "P.X": "P.Y"}, working, [base]) == []
+
+
+def test_a_move_re_keys_the_premises_and_claims_with_every_field_of_their_entries():
+    """`open`, `domain`, `assumptions`, `four_names_except` and `claims.witnesses` are re-keyed like the guarantees, each
+    entry's fields kept (an open premise's issue and due date, a domain hypothesis's `why` and the guarantee it cites, a
+    named assumption's id and owner), so the names they hold come back (`lock_names`) and a move of one is no refusal."""
+    moved = {"P.A": "P.X"}
+    lock = {"guarantees": {"P.A.t": {"owner": "@lean"}, "P.A.g": {}},
+            "open": {"P.A.Op": {"owner": "@amy", "digest": "d1", "issue": "LEAN-1", "due": "2026-12-31"}},
+            "domain": {"P.A.Dom": {"owner": "@lean", "digest": "d2", "why": "its scope", "cites": "P.A.g"}},
+            "assumptions": {"P.A.Hyp": {"id": "a-hyp", "owner": "@bea", "digest": "d3"}},
+            "four_names_except": {"P.A.t": "not yet lifted"},
+            "claims": {"modules": ["P.Defs"], "witnesses": {"P.A.Small": {"fails": "P.A.Small_fails",
+                                                                          "meets": ["P.A.Small_meets", "P.B.m"]}}}}
+    kept = A.renamed_current(lock, moved)
+    assert kept["open"] == {"P.X.Op": lock["open"]["P.A.Op"]}
+    assert kept["domain"] == {"P.X.Dom": lock["domain"]["P.A.Dom"] | {"cites": "P.X.g"}}
+    assert kept["assumptions"] == {"P.X.Hyp": lock["assumptions"]["P.A.Hyp"]}
+    assert kept["four_names_except"] == {"P.X.t": "not yet lifted"}
+    assert kept["claims"] == {"modules": ["P.Defs"], "witnesses": {"P.X.Small": {"fails": "P.X.Small_fails",
+                                                                                   "meets": ["P.X.Small_meets", "P.B.m"]}}}
+    assert {"P.A.Op", "P.A.Dom", "P.A.Hyp", "P.A.Small", "P.A.Small_fails", "P.A.Small_meets"} <= A.lock_names(lock)
+    assert A.move_refusals(moved, lock) == []
 
 
 def test_a_moves_file_that_gives_one_name_two_new_names_is_refused(tmp_path):
@@ -3644,7 +3804,10 @@ def test_a_moves_file_whose_names_are_not_lean_names_is_refused(tmp_path):
     whose every old and new name is a Lean name, so any other is refused, by name, before a lock is read."""
     f = tmp_path / "moves.json"
     for bad, why in (("A.", "an empty component"), ("A..b", "an empty component"), ("", "empty"),
-                     ("A.«b", "a « left open"), ("A.b»", "a » that closes no «"), ("A.«»", "an empty component")):
+                     ("A.«b", "a « left open"), ("A.b»", "a » that closes no «"), ("A.«»", "an empty component"),
+                     (" A.b", "whitespace"), ("A. b", "whitespace"), ("A.« »", "whitespace"),
+                     ("A.«b»c", "a character after the » that closes its component"),
+                     ("A.b«c»", "a « that does not open its component")):
         for moves in ({bad: "Q"}, {"Q": bad}):
             f.write_text(json.dumps(moves))
             with pytest.raises(ValueError) as e:
@@ -3662,6 +3825,7 @@ def test_moves_refused_against_a_lock_are_refused_before_anything_is_written(tmp
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     A.dump(pkg, unclaimed(A.load(pkg)) | {"guarantees": {n: {"owner": "@lean"} for n in ("Control.A.t", "Control.X.t",
                                                                                             "Control.Y.z.t")}})
+    committed(tmp_path, pkg / A.POLICY)
     before, f = (pkg / A.POLICY).read_text(), tmp_path / "moves.json"
     for moves, said in (({"Control.A": "Control.X"}, "Control.A.t, Control.X.t all land on Control.X.t in guarantees"),
                         ({"Control.Y": "Control.Q", "Control.B": "Control.Q.z"},
@@ -7548,6 +7712,55 @@ def test_a_proving_package_requires_the_spec_records_no_guarantee_and_keeps_its_
                      "modules under a root of their own (declarations keep their names)"]
 
 
+def test_a_move_refused_in_one_package_writes_no_lock_of_the_run(tmp_path, monkeypatch, capsys):
+    """Under `--moved` each package's audit stages its lock (`_finish`'s ``defer``) and the run writes them at its end: all
+    of them, or none when a move is refused in any package, though another's own audit passed."""
+    s, q = tmp_path / "s", tmp_path / "q"
+    for d, root in ((s, "S"), (q, "Q")):
+        d.mkdir()
+        (d / A.POLICY).write_text(json.dumps({"roots": [root]}))
+    committed(tmp_path, s / A.POLICY, q / A.POLICY)
+    before = {d: (d / A.POLICY).read_text() for d in (s, q)}
+    refuse = {"q"}
+
+    def fake(pkg, out, build, update, replay, fresh, log=print, **kw):
+        assert kw["defer"] and kw["base"] == [json.loads(before[pkg])]
+        staged = tmp_path / f"staged-{pkg.name}.json"
+        staged.write_text(json.dumps({"roots": [pkg.name.upper()], "moved": True}))
+        return {"package": str(pkg), "seconds": {}, "staged": str(staged),
+                "failures": [A.Failure("moved.collision", None, "moved: X, Y all land on Y in guarantees")]
+                if pkg.name in refuse else []}
+
+    monkeypatch.setattr(A, "audit", fake)
+    (tmp_path / "moves.json").write_text('{"S.a": "S.b"}')
+    argv = [str(s), str(q), "--update", "--moved", str(tmp_path / "moves.json"), "--out", str(tmp_path / "out"),
+            "--repo", str(tmp_path)]
+    A.main(argv)
+    assert {d: (d / A.POLICY).read_text() for d in (s, q)} == before
+    assert f"no lock written: the moves are refused in {q}" in capsys.readouterr().out
+    refuse.clear()
+    assert A.main(argv) == 0
+    assert all(json.loads((d / A.POLICY).read_text())["moved"] for d in (s, q))
+
+
+def test_a_move_with_no_main_to_compare_with_is_refused_until_a_base_is_given(tmp_path, monkeypatch, capsys):
+    """`--moved` is held to the change's base; with no main to take its merge-base with, the run refuses, naming
+    `--base`, rather than run against the lock alone."""
+    s = tmp_path / "s"
+    s.mkdir()
+    (s / A.POLICY).write_text(json.dumps({"roots": ["S"]}))
+    committed(tmp_path, s / A.POLICY)
+    subprocess.run(["git", "-C", str(tmp_path), "branch", "-q", "-m", "main", "work"], check=True)
+    assert "give `--base REV`" in A.base_revs(tmp_path)
+    (tmp_path / "moves.json").write_text('{"S.a": "S.b"}')
+    argv = [str(s), "--update", "--moved", str(tmp_path / "moves.json"), "--out", str(tmp_path / "out"), "--repo", str(tmp_path)]
+    with pytest.raises(SystemExit):
+        A.main(argv)
+    assert "give `--base REV`" in capsys.readouterr().err
+    monkeypatch.setattr(A, "audit", lambda pkg, *a, **kw: {"package": str(pkg), "seconds": {}, "failures": []})
+    assert A.main([*argv, "--base", "work"]) == 0
+
+
 def test_a_package_proving_anothers_guarantees_is_audited_beside_it(tmp_path, monkeypatch):
     """`s` names `p` under `proved_in`, and `p` requires `s`: auditing `s` audits `p` too, `--update` only `s`, and `s`'s
     reading of `p` waits for `p`'s build, which waits for `s`'s."""
@@ -7571,7 +7784,9 @@ def test_a_package_proving_anothers_guarantees_is_audited_beside_it(tmp_path, mo
 
     monkeypatch.setattr(A, "audit", fake)
     (tmp_path / "moves.json").write_text('{"S.a": "S.b"}')
-    assert A.main([str(s), "--update", "--moved", str(tmp_path / "moves.json"), "--out", str(tmp_path / "out")]) == 0
+    committed(tmp_path, s / A.POLICY, p / A.POLICY)
+    assert A.main([str(s), "--update", "--moved", str(tmp_path / "moves.json"), "--out", str(tmp_path / "out"),
+                   "--repo", str(tmp_path)]) == 0
     assert calls == {"s": {"update": True, "moved": {"S.a": "S.b"}}, "p": {"update": False, "moved": None}}
     assert events.index(("built", "s")) < events.index(("start", "p")) < events.index(("built", "p")) < events.index(("read", "s"))
     doc = json.loads((tmp_path / "out" / "audit.json").read_text())

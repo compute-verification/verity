@@ -1411,6 +1411,8 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     for es in facts.get("assumption_reads", {}).values():
         for r in es:
             r["sha256"] = hashes[f"read:{r['name']}"]
+            if (m := f"moved-read:{r['name']}") in hashes:
+                r["moved"] = renamed_as[m] | {"sha256": hashes[m]}
     for c, e in facts.get("constants", {}).items():
         if f"const:{c}" in hashes:
             e["sha256"] = hashes[f"const:{c}"]
@@ -1545,11 +1547,31 @@ def unrenamed(name: str, moved: dict[str, str]) -> str:
     return renamed(name, {new: old for old, new in moved.items()})
 
 
+#: main, whose merge-base with HEAD is the commit a change stands on (`base_revs`), the first that resolves
+MAIN = ("refs/remotes/origin/main", "refs/heads/main")
+#: the maps keyed by a guarantee, theorem or premise that `renamed_witnesses` re-keys, beside `deployed`, `trust`,
+#: `shape.inline` and `claims.witnesses`
+RE_KEYED = ("guarantees", "deployed", "ids", "trust_gap", "witnesses_assumed", "witnesses", "unwitnessed", "open", "domain",
+            "assumptions", "four_names_except")
+
+
 def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]) -> dict:
-    """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed`, `trust_gap` and `ids` with
-    every guarantee, theorem and premise they name `renamed` by ``moved`` (or mapped by it, a function)."""
+    """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed`, `trust_gap`, `ids`, `open`,
+    `domain`, `assumptions`, `four_names_except` and `claims.witnesses` with every guarantee, theorem and premise they name
+    `renamed` by ``moved`` (or mapped by it, a function), each entry's other fields kept."""
     rn = moved if callable(moved) else lambda n: renamed(n, moved)
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
+    for k in ("open", "domain", "assumptions"):
+        if isinstance(m := policy.get(k), dict):
+            out[k] = {rn(a): e | {"cites": rn(e["cites"])} if isinstance(e, dict) and isinstance(e.get("cites"), str)
+                      else e for a, e in m.items()}
+    if isinstance(waiting := policy.get("four_names_except"), dict):
+        out["four_names_except"] = {rn(g): why for g, why in waiting.items()}
+    if isinstance(claims := policy.get("claims"), dict) and isinstance(cw := claims.get("witnesses"), dict):
+        out["claims"] = claims | {"witnesses": {rn(c): {k: rn(v) if isinstance(v, str) else
+                                                        [rn(x) if isinstance(x, str) else x for x in v]
+                                                        if isinstance(v, list) else v for k, v in w.items()}
+                                                if isinstance(w, dict) else w for c, w in cw.items()}}
     if name_list(policy.get("deployed")):
         out["deployed"] = sorted(rn(n) for n in policy["deployed"])
     if isinstance(trust := policy.get("trust"), dict):
@@ -1594,41 +1616,53 @@ def move_errors(moved: dict[str, str], names: Iterable[str] = ()) -> list[str]:
     return errs
 
 
-def section_collisions(policy: dict, moved: dict[str, str]) -> list[str]:
-    """Two names of one section of ``policy`` that `--moved` re-keys (`renamed_current`, `renamed_witnesses`: the keys of
-    each map, and `deployed`) landing on one new name, where the pass would keep one entry for both and one guarantee's
-    record or line would stand for another's.  Names that meet across sections are no collision: a record still under its
-    old name meets its own lines already written under the new one.  `open` and `domain` are not re-keyed."""
-    sections: list[tuple[str, object]] = [(k, policy.get(k)) for k in ("guarantees", "deployed", "ids", "trust_gap",
-                                                                         "witnesses_assumed", "witnesses", "unwitnessed")]
+def lock_sections(policy: dict) -> list[tuple[str, object]]:
+    """The sections of ``policy`` that `--moved` re-keys (`renamed_witnesses`), each by its label: a map, whose keys are
+    re-keyed, or `deployed`, a list."""
+    out: list[tuple[str, object]] = [(k, policy.get(k)) for k in RE_KEYED]
     if isinstance(trust := policy.get("trust"), dict):
-        sections += [(f"trust.{k}", v) for k, v in trust.items()]
+        out += [(f"trust.{k}", v) for k, v in trust.items()]
         if isinstance(extra := trust.get("extra"), dict):
-            sections += [(f"trust.extra.{g}", ps) for g, ps in extra.items()]
+            out += [(f"trust.extra.{g}", ps) for g, ps in extra.items()]
     if isinstance(shape := policy.get("shape"), dict):
-        sections.append(("shape.inline", shape.get("inline")))
+        out.append(("shape.inline", shape.get("inline")))
+    if isinstance(claims := policy.get("claims"), dict):
+        out.append(("claims.witnesses", claims.get("witnesses")))
+    return out
+
+
+def section_collisions(policy: dict, moved: dict[str, str], bases: Iterable[dict] = ()) -> list[str]:
+    """Two names of one section of ``policy`` that `--moved` re-keys (`lock_sections`) landing on one new name, where the
+    pass would keep one entry for both and one guarantee's record or line would stand for another's.  A name of the same
+    section in a lock of the change's base (``bases``, `base_locks`) counts too unless the moves take it elsewhere, so a
+    record deleted by hand before the move still holds its name.  Names that meet across sections are no collision: a
+    record still under its old name meets its own lines already written under the new one."""
+    of_base: dict[str, set[str]] = {}
+    for b in bases:
+        for section, names in lock_sections(b):
+            if isinstance(names, (dict, list)):
+                of_base.setdefault(section, set()).update(n for n in names if isinstance(n, str) and renamed(n, moved) == n)
     out = []
-    for section, names in sections:
-        if not isinstance(names, (dict, list)):
-            continue
+    for section, names in lock_sections(policy):
+        names = {n for n in names if isinstance(n, str)} if isinstance(names, (dict, list)) else set()
         lands: dict[str, list[str]] = {}
-        for n in sorted({n for n in names if isinstance(n, str)}):
-            lands.setdefault(renamed(n, moved), []).append(n)
+        for n in sorted(names | of_base.get(section, set())):
+            lands.setdefault(renamed(n, moved), []).append(n if n in names else f"{n} (in the base's lock)")
         out += [f"{', '.join(ns)} all land on {m} in {section}" for m, ns in sorted(lands.items()) if len(ns) > 1]
     return out
 
 
-def move_refusals(moved: dict[str, str], policy: dict) -> list[tuple[str, str]]:
+def move_refusals(moved: dict[str, str], policy: dict, bases: Iterable[dict] = ()) -> list[tuple[str, str]]:
     """Why ``moved`` cannot re-key the lock ``policy``, each with its failure code: the map itself (`moved.map`), a name of
     the lock that does not come back (`moved.round-trip`; `move_errors` over `lock_names`), and two names of one section
-    that land on one (`moved.collision`; `section_collisions`)."""
+    that land on one, with the names of the change's base locks ``bases`` (`moved.collision`; `section_collisions`)."""
     if errs := move_errors(moved):
         return [("moved.map", e) for e in errs]
     return [("moved.round-trip", e) for e in move_errors(moved, lock_names(policy))] + \
-        [("moved.collision", e) for e in section_collisions(policy, moved)]
+        [("moved.collision", e) for e in section_collisions(policy, moved, bases)]
 
 
-def moves_refused(pkgs: list[Path], moved: dict[str, str]) -> list[str]:
+def moves_refused(pkgs: list[Path], moved: dict[str, str], bases: dict[Path, list[dict]] | None = None) -> list[str]:
     """`move_refusals` of each package's lock as loaded, before anything is written (`main`); the judge refuses them again.
     It reads the lock only to refuse the moves, and changes nothing an audit builds, extracts or replays."""
     out = []
@@ -1640,7 +1674,42 @@ def moves_refused(pkgs: list[Path], moved: dict[str, str]) -> list[str]:
         except ValueError as e:
             out.append(f"{p / POLICY}: {e}")
             continue
-        out += [f"{p / POLICY}: {e}" for _, e in move_refusals(moved, policy)]
+        out += [f"{p / POLICY}: {e}" for _, e in move_refusals(moved, policy, (bases or {}).get(p, ()))]
+    return out
+
+
+def base_revs(repo: Path) -> list[str] | str:
+    """The commits a `--moved` run compares with when no `--base` names them: HEAD and its merge-base with main
+    (`MAIN`), the commit the change stands on, since HEAD may already hold the change's own hand edits to the lock; or
+    why there are none."""
+    def git(*args: str) -> str | None:
+        r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+    head = git("rev-parse", "HEAD")
+    main = next((m for r in MAIN if (m := git("rev-parse", "-q", "--verify", r))), None)
+    if head is None or main is None:
+        return (f"{repo} has no HEAD or no main ({', '.join(MAIN)}): give `--base REV`, the commit of main the change "
+                f"stands on (the queue's check of a candidate: the candidate's base)")
+    if (mb := git("merge-base", head, main)) is None:
+        return f"HEAD and main have no merge-base in {repo}: give `--base REV`, the commit of main the change stands on"
+    return list(dict.fromkeys([head, mb]))
+
+
+def base_locks(pkg: Path, revs: list[str], repo: Path, tree: Path | None = None) -> list[dict]:
+    """``pkg``'s lock at each of ``revs`` in ``repo`` (none at a commit without it), its path taken under ``tree`` (the
+    tree the packages are in) or ``repo``; ValueError for a commit git can't read or a lock it can't parse."""
+    roots = [r.resolve() for r in (tree, repo) if r is not None]
+    rel = next((pkg.resolve().relative_to(r) for r in roots if pkg.resolve().is_relative_to(r)), None)
+    if rel is None:
+        raise ValueError(f"{pkg} is under neither {' nor '.join(map(str, roots))}")
+    out = []
+    for rev in revs:
+        if subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{rev}^{{commit}}"], capture_output=True).returncode:
+            raise ValueError(f"{rev} is no commit of {repo}")
+        r = subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{(rel / POLICY).as_posix()}"], capture_output=True,
+                           text=True)
+        if r.returncode == 0:
+            out.append(json.loads(r.stdout))
     return out
 
 
@@ -1667,11 +1736,15 @@ def moves_file(path: Path) -> dict[str, str]:
 
 
 def name_error(name: str) -> str | None:
-    """Why ``name`` is not a Lean name as `String.toName` reads it, or None: an empty component, or a `«` left open or a
-    `»` that closes none.  `renamed` splits at every dot, so it agrees with `Facts.lean`'s `renameName` only on such
-    names (a dot inside `«…»` starts no prefix that a well-formed entry can be)."""
+    """Why ``name`` is not a Lean name as `String.toName` reads it, or None: an empty component, whitespace, a `«` that
+    does not open its component or is left open, a `»` that closes none, or anything after the `»` that closes a
+    component, each of which `String.toName` reads as the anonymous name.  `renamed` splits at every dot, so it agrees
+    with `Facts.lean`'s `renameName` only on such names (a dot inside `«…»` starts no prefix that a well-formed entry can
+    be)."""
     if not name:
         return "empty"
+    if any(ch.isspace() for ch in name):
+        return "whitespace"
     part, inside = "", False
     for ch in name + ".":
         if inside:
@@ -1681,9 +1754,13 @@ def name_error(name: str) -> str | None:
                 return "an empty component"
             part = ""
             continue
+        elif part.startswith("«"):
+            return "a character after the » that closes its component"
         elif ch == "»":
             return "a » that closes no «"
         elif ch == "«":
+            if part:
+                return "a « that does not open its component"
             inside = True
         part += ch
     return "a « left open" if inside else None
@@ -4637,7 +4714,8 @@ def lifted_into(a: dict, b: dict, fact: dict, mv: dict, renames: dict[str, str] 
     return lift["head"] if a.get("type_hash") == unfolded and assumptions == b.get("assumptions") else None
 
 
-def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames: dict[str, str] | None = None) -> list[str]:
+def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames: dict[str, str] | None = None,
+           base: Iterable[dict] = ()) -> list[str]:
     """What an `--update` changed: each changed guarantee's signature before and after, and each changed definition a
     guarantee reads, with the guarantees that read it in the build (none for one gone) and its source as it is now.  A
     guarantee whose statement is the same but prints differently (a toolchain's printer, notation) gets one line, and so
@@ -4650,17 +4728,22 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
     (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
-    records under its new name (a lock re-recorded after the move) is compared with that record.  Each entry added to
+    records under its new name (a lock re-recorded after the move) is compared with that record, and so is one whose new
+    name a lock of the change's base (``base``, `base_locks`) records with another statement, whatever ``old`` holds:
+    a record deleted by hand before the move leaves that guarantee's statement changed, never moved.  Each entry added to
     or dropped from `verifier.allow` gets a line."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
     moved = {n: f["moved"] for n, f in facts["pins"].items() if moves and f.get("moved")}
-    was = {n: moved[n]["as"] if n in moved and moved[n]["as"] in op else n for n in np}
+    prior = {n: r for b in base for n, r in (b.get("guarantees") or {}).items()
+             if n in moved and moved[n]["as"] != n and isinstance(r, dict) and isinstance(np.get(n), dict)
+             and any(r.get(k) != np[n].get(k) for k in ("type_hash", "unfolded_hash"))}
+    was = {n: moved[n]["as"] if n in moved and n not in prior and moved[n]["as"] in op else n for n in np}
     lifts: dict[str, set[str]] = {}
     for name in sorted(set(np) | (set(op) - set(was.values()))):
         o = was.get(name, name)
-        a, b = op.get(o) or {}, np.get(name) or {}
+        a, b = prior.get(name) or op.get(o) or {}, np.get(name) or {}
         if a and b and a.get("owner") != b.get("owner"):
             out.append(f"guarantee {name}: owner {a.get('owner') or 'none'} -> {b.get('owner') or 'none'}: {OWNED}")
         a, b = unowned(a), unowned(b)
@@ -4746,7 +4829,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {regrouped} {REGROUPED}")
     if regrouped_own:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
-    out += assumption_changes(old, new)
+    out += assumption_changes(old, new, renames, facts)
     before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
     where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
     out += [Change("verifier", a, f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the "
@@ -4780,14 +4863,25 @@ def premise_changes(a: dict, b: dict, new: dict) -> list[str]:
     return out
 
 
-def assumption_changes(old: dict, new: dict) -> list[str]:
+def assumption_changes(old: dict, new: dict, renames: dict[str, str] | None = None, facts: dict | None = None) -> list[str]:
     """A line for each listed premise whose `digest` changed, or that has one where its record held none, and that no
-    `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed; and one
+    `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed.  After
+    `--moved` (``renames``) each of ``old``'s entries is read under its new name, and a premise that moved is compared by
+    the digest of what it reads under the old names (``facts``' `assumption_reads`, whose `moved` texts `Facts.lean`
+    prints): one line when that is its record's, moved from its old name.  And one
     for each that moved between `assumptions`, `domain` and `open`, or whose open entry's issue or due date changed, or
     whose domain entry's `why` or `cites` did; and one for each domain hypothesis ``old`` lists under none of the three,
     with its `why` and the guarantees whose records take it: it restricts what they say, and nothing else prints it."""
+    if renames:
+        old = old | renamed_witnesses(old, renames)
     was, now = map(listed_premises, (old, new))
     records = new.get("guarantees") if isinstance(new.get("guarantees"), dict) else {}
+    walks = (facts or {}).get("assumption_reads") or {}
+
+    def as_was(a: str) -> str | None:
+        es = walks.get(a)
+        return digest([{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]} if e.get("moved")
+                       else e for e in es]) if es and all("sha256" in e for e in es) else None
 
     def takers(a: str) -> list[str]:
         return sorted(g for g, r in records.items() if isinstance(r, dict) and isinstance(p := r.get("premises"), dict)
@@ -4805,7 +4899,12 @@ def assumption_changes(old: dict, new: dict) -> list[str]:
         h, before = (rec or {}).get("digest"), (was.get(a) or {}).get("digest")
         k = kind(new, a)
         what = {"assumptions": "assumption", "domain": "domain hypothesis", "open": "open premise"}[k]
-        if a in was and h and h != before and a not in held:
+        if renames and a in was and (o := unrenamed(a, renames)) != a:
+            if a in held or (h and before and as_was(a) == before):
+                out.append(f"{what} {a}: moved from {o}: {MOVED}")
+            else:
+                out.append(Change(k, a, f"{what} {a}: changed (moved from {o}; its statement or a definition it reads)"))
+        elif a in was and h and h != before and a not in held:
             out.append(Change(k, a, f"{what} {a}: " + ("changed (its statement or a definition it reads)" if before else
                                                        "recorded: its statement and the definitions it reads, digested")))
         if a not in was and k == "domain":
@@ -6289,7 +6388,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
           store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False,
-          matched=lambda ok: None, prover_matched=lambda q: None) -> dict:
+          matched=lambda ok: None, prover_matched=lambda q: None, base: list[dict] | None = None,
+          defer: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
     modules the build didn't compile is compiled again from their sources against the seal and compared with the seal's
     copies (`sampled_recompile`; the report's `sampled`), in `background` beside the replay, and the verdict waits for it
@@ -6304,7 +6404,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
     tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
-    the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
+    the build with the records under the old names (`review`), each held to ``base``, the locks of the change's base
+    (`base_locks`): a move may land on no name they hold, and a guarantee whose new name they record with another
+    statement is reviewed as changed.  With ``defer`` the lock it writes is staged for the run (`_finish`). An update's
+    report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
     ``owner`` (with ``update``) is the owner of a guarantee whose entry names none.  ``name`` writes each anonymous
     instance's name into its source (`name_instances`) instead of failing on it.  ``lifts`` writes those lifts (`lift`)
@@ -6692,21 +6795,33 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             store_cached_facts(facts_cache, rep["facts_key"], doc)
         else:
             write_facts_document(Path(facts_out), doc)
-    return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock, lnotes, t, log)
+    return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock, lnotes, t, log,
+                   base, defer)
 
 
 def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: dict[str, str], fails: list[str],
             rep: dict, update: bool, moved: dict[str, str] | None, bookkeeping: str | None,
-            judged: Callable[[dict], list[str]], on_lock: list[str], lnotes: list[str], t: float, log=print) -> dict:
+            judged: Callable[[dict], list[str]], on_lock: list[str], lnotes: list[str], t: float, log=print,
+            base: list[dict] | None = None, defer: bool = False) -> dict:
     """The records tail `audit` and `audit_from_facts` share, once the lock failures ``fails`` and the record ``new`` are
     judged: the bookkeeping repair (`--bookkeeping warn`), the record `--update`/`--regenerate` writes and its review, the
     notes, and the report (`report.json`).  ``judged`` runs the lock's spec/trees/shape checks (the caller's), ``on_lock``
     the caller's lock failures (bookkeeping keeps the rest), ``lnotes`` the compile-time listings' review notes, ``t`` the
-    audit's start for `seconds.total`.  A pure function of what it is given: `--facts-from` writes the same record."""
+    audit's start for `seconds.total`, ``base`` the locks of the change's base (`base_locks`) that `--moved` is held to.
+    With ``defer`` the lock `--update` writes is left in the report (`staged`), for the run to write with every other
+    package's or not at all (`main`).  A pure function of what it is given: `--facts-from` writes the same record."""
     def sources() -> dict[str, Path]:
         return {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
 
-    if moved and (back := move_refusals(moved, policy)):
+    def write(pkg: Path, new: dict) -> None:
+        if defer:
+            (work / "staged").mkdir(exist_ok=True)
+            dump(work / "staged", new)
+            rep["staged"] = str(work / "staged" / POLICY)
+        else:
+            dump(pkg, new)
+
+    if moved and (back := move_refusals(moved, policy, base or ())):
         fails = [*fails, *(Failure(c, None, f"moved: {e}") for c, e in back)]
     refused = [f for f in fails if (code_of(f) or "").startswith("moved.")]
     if bookkeeping is not None and fails and not update:
@@ -6738,21 +6853,21 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
     if update and refused and new != policy:
         log(f"audit: {pkg}/{POLICY}: not rewritten, the moves are refused ({len(refused)} moved failures)")
     elif update and new != policy:
-        dump(pkg, new)
-        notes = review(policy, new, facts, sources(), moved) + lnotes
+        write(pkg, new)
+        notes = review(policy, new, facts, sources(), moved, base or ()) + lnotes
         (work / "review.txt").write_text("\n".join(notes) + "\n")
         rep["review"] = notes
         must = statement_changes(notes)
         rep["statement_changes"] = bool(must)
         rep["before"] = {k: policy.get(k, {}) for k in ("guarantees", "reads")}   # the record the review compared with
-        log(f"audit: {pkg}/{POLICY}: guarantees and reads rewritten from the build" + (
+        log(f"audit: {pkg}/{POLICY}: guarantees and reads {'staged' if defer else 'rewritten'} from the build" + (
             f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed, moved or lifted"
             if len(notes) > len(must) else "") + (
             "; these change what a guarantee says, and the landing message shows them:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
     elif update and not refused and (work / POLICY).read_text() != (pkg / POLICY).read_text():
-        dump(pkg, new)
-        log(f"audit: {pkg}/{POLICY}: rewritten under today's names and layout, saying what it said")
+        write(pkg, new)
+        log(f"audit: {pkg}/{POLICY}: {'staged' if defer else 'rewritten'} under today's names and layout, saying what it said")
     weak = sum(len((r or {}).get("type_hash", "")) == OLD for r in policy.get("guarantees", {}).values()) + \
         sum(old_group(g) for g in policy.get("reads", {}).values())
     if weak and not update:
@@ -6773,7 +6888,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
 
 def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = False, owner: str | None = None,
                      repo: Path = ROOT, moved: dict[str, str] | None = None, bookkeeping: str | None = None,
-                     log=print) -> dict:
+                     log=print, base: list[dict] | None = None, defer: bool = False) -> dict:
     """Judge ``pkg`` from a stage-A facts document (`--facts-from`), with no build and no `Facts.lean`.  It reads the
     document (`read_facts_document` from ``facts_from``, a file or the reports directory that holds the package's
     `audit-<tag>/FACTS_DOC`) and runs the lock checks over its facts (`judge`, `spec_reads`, `tree_failures`, `shape`,
@@ -6837,7 +6952,7 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
     if update and listed.get("compile_time"):
         new["compile_time"] = listed["compile_time"]
     return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock,
-                   listed.get("notes", []), t, log)
+                   listed.get("notes", []), t, log, base, defer)
 
 
 def reported(rep: dict) -> dict:
@@ -6988,7 +7103,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--update", action="store_true", help="write the guarantees' records from the build instead of comparing them")
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --update: a JSON object {old name: new name} of the "
                     "declarations and namespaces moved since the record (the longest prefix applies); the record's guarantees are "
-                    "renamed, and the review compares the build with the records under the old names")
+                    "renamed, and the review compares the build with the records under the old names; no name may land "
+                    "on one the lock or a --base lock holds, and the locks are written together at the end of the run, "
+                    "or none is")
+    ap.add_argument("--base", action="append", metavar="REV", help="with --moved: a commit whose locks the move is held "
+                    "to (repeatable): a moved name may not land on a name they hold, and a guarantee whose new name they "
+                    "record with another statement is reviewed as changed (default: HEAD and its merge-base with main; "
+                    "the queue's check of a candidate gives the candidate's base)")
     ap.add_argument("--owner", metavar="@LANE", help="with --update: the owner of each guarantee whose entry names none")
     ap.add_argument("--name-instances", action="store_true", help="write each anonymous instance's name (the one Lean gave "
                     "it) into its declaration instead of failing on it; no record changes")
@@ -7113,7 +7234,18 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
-    if moved and (errs := moves_refused(pkgs, moved)):
+    bases: dict[Path, list[dict]] = {}
+    if a.base and not moved:
+        ap.error("--base goes with --moved")
+    if moved:
+        if isinstance(revs := a.base or base_revs(a.repo.resolve()), str):
+            ap.error(revs)
+        try:
+            bases = {p: base_locks(p, revs, a.repo.resolve(), a.tree) for p in pkgs}
+        except ValueError as e:
+            ap.error(f"--base: {e}")
+        print(f"audit: --moved is held to the locks at {', '.join(revs)}", flush=True)
+    if moved and (errs := moves_refused(pkgs, moved, bases)):
         ap.error(f"{a.moved}: " + "; ".join(errs))
     for flag, d in (("--replay-cache", a.replay_cache), ("--facts-cache", a.facts_cache),
                     ("--program-cache", a.program_cache)):
@@ -7198,7 +7330,7 @@ def main(argv: list[str]) -> int:
             mine = pkg in named
             if a.facts_from is not None:
                 rep = audit_from_facts(pkg, out, a.facts_from, a.update and mine, a.owner, a.repo.resolve(),
-                                       moved if mine else None, due, log=print)
+                                       moved if mine else None, due, log=print, base=bases.get(pkg), defer=bool(moved))
             elif pkg in unbuilt:
                 built[pkg].set()                        # unpassed, and unsealed: no package that builds rests on it
                 rep = {"package": str(pkg), "seconds": {}, "failures": list(unbuilt[pkg])}
@@ -7215,7 +7347,8 @@ def main(argv: list[str]) -> int:
                             if (a.facts_only or a.facts_cache) and mine else None,
                             facts_reuse=a.facts_cache is not None,
                             matched=lambda ok: (ok and matching.add(pkg), sample_done[pkg].set()),
-                            prover_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None)
+                            prover_matched=lambda q: (sample_done[q].wait(), q in matching)[1] if q in sample_done else None,
+                            base=bases.get(pkg), defer=bool(moved))
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
@@ -7290,6 +7423,13 @@ def main(argv: list[str]) -> int:
     finally:
         run_seals.close()
     reports = [reports[p] for p in pkgs]
+    if staged := [r for r in reports if r.get("staged")]:
+        if refused := [r["package"] for r in reports if any((c or "").startswith("moved.") for c in r["failure_codes"])]:
+            print(f"audit: no lock written: the moves are refused in {', '.join(refused)}", flush=True)
+        else:
+            for r in staged:
+                shutil.copyfile(r["staged"], Path(r["package"]) / POLICY)
+                print(f"audit: {r['package']}/{POLICY}: written", flush=True)
     if lifts and not reports[0]["failures"]:
         moved = Path(f"{a.lift}.moved.json")
         moved.write_text(json.dumps(reports[0]["moved"], indent=1) + "\n")
