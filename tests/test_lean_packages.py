@@ -17,7 +17,7 @@ from typing import NamedTuple
 ROOT = Path(__file__).resolve().parents[1]
 SKIP = {".lake", ".git", ".venv", "node_modules", "__pycache__"}
 #: the Lean tools' test fixtures, which no audit reads (`modules.FIXTURES`): trees laid out as this one's, roots and all
-FIXTURES = ROOT / "tools/verity/lean/tests/fixtures"
+FIXTURES = ROOT / "tests/tools/verity/lean/fixtures"
 
 
 def lake_packages(fixtures: bool = False) -> list[Path]:

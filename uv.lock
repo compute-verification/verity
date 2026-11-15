@@ -187,7 +187,7 @@ source = { editable = "infra/cluster" }
 [[package]]
 name = "cluster-tests"
 version = "0.0.0"
-source = { virtual = "infra/cluster/tests" }
+source = { virtual = "tests/infra/cluster" }
 dependencies = [
     { name = "cluster" },
 ]
@@ -1804,7 +1804,7 @@ source = { editable = "tools/research" }
 [[package]]
 name = "research-tests"
 version = "0.0.0"
-source = { virtual = "tools/research/tests" }
+source = { virtual = "tests/tools/research" }
 dependencies = [
     { name = "research" },
 ]
@@ -2400,7 +2400,7 @@ source = { virtual = "benchmarks/harness/specs" }
 [[package]]
 name = "verity-bench-tests"
 version = "0.0.0"
-source = { virtual = "benchmarks/harness/tests" }
+source = { virtual = "tests/benchmarks/harness" }
 dependencies = [
     { name = "verity-bench" },
 ]
@@ -2458,7 +2458,7 @@ requires-dist = [
 [[package]]
 name = "verity-circuit-check-tests"
 version = "0.0.0"
-source = { virtual = "tools/verity/circuit_check/tests" }
+source = { virtual = "tests/tools/verity/circuit_check" }
 dependencies = [
     { name = "verity-circuit-check" },
 ]
@@ -2480,7 +2480,7 @@ requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
 [[package]]
 name = "verity-cli-tests"
 version = "0.0.0"
-source = { virtual = "tools/verity/cli/tests" }
+source = { virtual = "tests/tools/verity/cli" }
 dependencies = [
     { name = "verity-cli" },
 ]
@@ -2525,7 +2525,7 @@ requires-dist = [{ name = "verity", editable = "." }]
 [[package]]
 name = "verity-config-tests"
 version = "0.0.0"
-source = { virtual = "tools/config/tests" }
+source = { virtual = "tests/tools/config" }
 dependencies = [
     { name = "verity-config" },
 ]
@@ -2591,7 +2591,7 @@ requires-dist = [{ name = "hypothesis", specifier = ">=6.100" }]
 [[package]]
 name = "verity-difftest-tests"
 version = "0.0.0"
-source = { virtual = "tools/difftest/tests" }
+source = { virtual = "tests/tools/difftest" }
 dependencies = [
     { name = "verity-difftest" },
 ]
@@ -2619,7 +2619,7 @@ requires-dist = [
 [[package]]
 name = "verity-exact-kit-tests"
 version = "0.0.0"
-source = { virtual = "benchmarks/pouw/exact_kit/tests" }
+source = { virtual = "tests/benchmarks/pouw/exact_kit" }
 dependencies = [
     { name = "verity-exact-kit" },
 ]
@@ -2656,7 +2656,7 @@ provides-extras = ["bench"]
 [[package]]
 name = "verity-flock-tests"
 version = "0.0.0"
-source = { virtual = "verity/protocols/proofs/flock/prover/tests" }
+source = { virtual = "tests/verity/protocols/proofs/flock/prover" }
 dependencies = [
     { name = "verity-flock", extra = ["bench"] },
 ]
@@ -2672,7 +2672,7 @@ source = { editable = "tools/verity/graph" }
 [[package]]
 name = "verity-graph-tests"
 version = "0.0.0"
-source = { virtual = "tools/verity/graph/tests" }
+source = { virtual = "tests/tools/verity/graph" }
 dependencies = [
     { name = "verity-graph" },
 ]
@@ -2688,7 +2688,7 @@ source = { editable = "tools/verity/landq" }
 [[package]]
 name = "verity-landq-tests"
 version = "0.0.0"
-source = { virtual = "tools/verity/landq/tests" }
+source = { virtual = "tests/tools/verity/landq" }
 dependencies = [
     { name = "verity-landq" },
 ]
@@ -2725,7 +2725,7 @@ requires-dist = [
 [[package]]
 name = "verity-machine-model-tests"
 version = "0.0.0"
-source = { virtual = "benchmarks/machine_model/tests" }
+source = { virtual = "tests/benchmarks/machine_model" }
 dependencies = [
     { name = "verity-machine-model" },
 ]
@@ -2801,7 +2801,7 @@ requires-dist = [
 [[package]]
 name = "verity-numerical-tests"
 version = "0.0.0"
-source = { virtual = "benchmarks/numerical/tests" }
+source = { virtual = "tests/benchmarks/numerical" }
 dependencies = [
     { name = "verity-numerical" },
 ]
@@ -2823,7 +2823,7 @@ requires-dist = [{ name = "research", editable = "tools/research" }]
 [[package]]
 name = "verity-ops-tests"
 version = "0.0.0"
-source = { virtual = "infra/ops/tests" }
+source = { virtual = "tests/infra/ops" }
 dependencies = [
     { name = "verity-ops" },
 ]
@@ -2901,7 +2901,7 @@ requires-dist = [
 [[package]]
 name = "verity-proof-throughput-tests"
 version = "0.0.0"
-source = { virtual = "benchmarks/proof_throughput/tests" }
+source = { virtual = "tests/benchmarks/proof_throughput" }
 dependencies = [
     { name = "verity-proof-throughput" },
 ]
@@ -2991,7 +2991,7 @@ provides-extras = ["torch"]
 [[package]]
 name = "verity-torch-tests"
 version = "0.0.0"
-source = { virtual = "adapters/torch/tests" }
+source = { virtual = "tests/adapters/torch/tests" }
 dependencies = [
     { name = "verity-torch", extra = ["torch"] },
 ]
@@ -3032,7 +3032,7 @@ provides-extras = ["torch", "research"]
 [[package]]
 name = "verity-vllm-tests"
 version = "0.0.0"
-source = { virtual = "adapters/vllm/tests" }
+source = { virtual = "tests/adapters/vllm/tests" }
 dependencies = [
     { name = "verity-vllm", extra = ["research"] },
     { name = "verity-vllm", extra = ["torch"], marker = "extra == 'extra-11-verity-vllm-torch' or (extra == 'extra-18-verity-native-peak-torch' and extra == 'extra-6-verity-torch-cpu')" },

@@ -28,7 +28,7 @@ each file under its path relative to its package (a module's is its name), never
   otherwise stays a path in the key;
 - `tools/verity/lean/` (the auditor and this file) and `tools/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
-  `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
+  `tests/tools/verity/lean/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
   (the merge driver, the Lean fast path, the daily publish, ...), which the audit never reads: the scratch tree leaves them
   out too, so a read of one would fail there.
 A `git mv` of a package with its content unchanged is therefore no miss, and its kept pass answers at the new path. What the

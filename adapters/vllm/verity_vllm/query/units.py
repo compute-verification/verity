@@ -18,7 +18,7 @@ This module is deliberately small and dependency-free: it knows Calls, ports, re
 Definition instance of some registry), how a Program is stored, which annotation says which module owns a Call, and how
 an identity is spelt for a collector are the integration's concern (``verity_vllm.query``).  The one-unit / two-unit
 example of the design (``x -- Matmul -- u -- Activation -- y``: one unit -> {x, y}; two units -> {x, u, y}) is the
-contract; see ``adapters/vllm/tests/query/test_units.py``.
+contract; see ``tests/adapters/vllm/tests/query/test_units.py``.
 
 The Program is read through the :class:`CallGraph` protocol so an integration can present a decoded ``verity.circuits`` descriptor,
 a streamed instance sequence, or a synthetic graph without converting it: a Program is a sequence of :class:`Call` records
@@ -29,7 +29,7 @@ the Program lists in ``inputs``), exactly as a Program gives ``Input`` gates the
 The canonical partition (``verity.circuits.partition_object``: ``Partition``, ``CallPartition``) cuts inside each Call and commits
 every Call output, read or not.  With every Call a unit (the query of record, ``required.Population``), the boundary here leaves out
 an output nothing reads; the policy requires those a module returns, and a Call it leaves out too is ``unreturned``.
-``adapters/vllm/tests/query/test_units_canonical.py`` holds what serving commits to the canonical object on a served Program.
+``tests/adapters/vllm/tests/query/test_units_canonical.py`` holds what serving commits to the canonical object on a served Program.
 """
 
 from __future__ import annotations

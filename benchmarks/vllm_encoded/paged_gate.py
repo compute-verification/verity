@@ -43,7 +43,7 @@ from paged import K, KB  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 
-sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "tests")]
+sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "tests" / "verity" / "protocols" / "accounting" / "poub" / "verifier")]
 import poub_vectors as RV  # noqa: E402
 from verity.protocols.accounting.poub.verifier import codec as RC  # noqa: E402
 

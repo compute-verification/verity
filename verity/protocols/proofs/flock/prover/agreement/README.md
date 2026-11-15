@@ -82,8 +82,8 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
   means: `security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.
 - The trusted code: the running binary also trusts the toolchain's compiler and runtime and the C compiler and library
   under them, and no declaration swaps a definition for code no proof reads (`verity/protocols/proofs/flock/verifier/README.md`,
-  enforced by `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py`). The agreement corpus's coverage rule is
-  `verity/protocols/proofs/flock/prover/tests/test_vectors_coverage.py`.
+  enforced by `tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py`). The agreement corpus's coverage rule is
+  `tests/verity/protocols/proofs/flock/prover/test_vectors_coverage.py`.
 - The lemmas the verifier's parts rest on: `merkle_binding` (`security/Proofs/Flock/Verifier/Merkle.lean`),
   `squeeze_answers` and `squeeze_retained` (`Verifier/Transcript.lean`), `G_irreducible` and `Q_irreducible`
   (`security/Proofs/Flock/Level3/`). The model they're about: `security/Definitions/Flock/`.
@@ -153,7 +153,7 @@ fastest handed in one after another; the order changes no byte. It exits 0 iff e
 before any member without a program it can read. A caller takes as refused every session of a member with no `MEMBER`
 line, and every session of an answered member with no `VERDICT` line of its own. The process opens no
 connection and writes no file, so it may be started before a member's session exists and kept while later sessions run
-(`verity/protocols/proofs/flock/prover/tests/test_lean_verify_members.py`).
+(`tests/verity/protocols/proofs/flock/prover/test_lean_verify_members.py`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
 (`rec_part`), the SHA-512 of the shared rows file it checked (`rec_rows_sha512`), of the inner shape file it read
@@ -179,7 +179,7 @@ with two sessions or none, a session opened and not composed, a composed session
 the first Hello, a second staging or one of other inputs, and a record that isn't closed (`RecCompose.checkRun`;
 `check_oneRun` proves acceptance gives `OneRun`, and `ComposeParts.composed_run` reads it at the compiled verifier's
 parts). The record is the auditor's: it is read from the challenger's host (`trusted-device`), never from the prover's
-bundle. `verity_flock.rec_compose` is its Python mirror (`verity/protocols/proofs/flock/prover/tests/test_lean_rec_compose.py`). The pod's Lean step
+bundle. `verity_flock.rec_compose` is its Python mirror (`tests/verity/protocols/proofs/flock/prover/test_lean_rec_compose.py`). The pod's Lean step
 (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part those files and composes V*'s parts over the run's
 record: on loopback the pod is the challenger's host, and under `MODES=zk_server` (one session per staged statement) its
 oprove step keeps the record (`v-sess/rec-run.jsonl`, one event a line): it stages the rows file and the shared set of
@@ -314,6 +314,6 @@ legacy or before hm96-sha512 rows, so Lean refuses each and no agreement job rep
 
 ## Tests
 
-`verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py` pins the toolchain, holds the package's requires to the base packages
+`tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py` pins the toolchain, holds the package's requires to the base packages
 of the tree, rejects `native_decide`, `implemented_by`, `extern` and `unsafe` in its sources and theirs, and runs the Lean-backed tests when `lake` is on the PATH; the `test_lean_*.py` modules verify
 fetched fixtures (`artifacts.json`) with the built verifier.

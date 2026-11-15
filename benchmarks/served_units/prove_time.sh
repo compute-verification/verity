@@ -91,7 +91,7 @@ name() {
 # Lean source under $FW/tmpl-unit (its log $O/build-tmpl-unit.log)
 tmpl_unit() {
   [ -n "${PT_TMPL_UNIT:-}" ] && { echo "$PT_TMPL_UNIT"; return 0; }
-  local L=$FW/tmpl-unit LC=$REPO/verity/protocols/proofs/flock/prover/pod/lake_closure.py TU=$REPO/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean
+  local L=$FW/tmpl-unit LC=$REPO/verity/protocols/proofs/flock/prover/pod/lake_closure.py TU=$REPO/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean
   local lsha; lsha=$(python3 $LC key $REPO/verity/protocols/proofs/flock/verifier $TU) || return 1
   local bin=$L/lean-$lsha/flock-tmpl-unit; mkdir -p $L
   (

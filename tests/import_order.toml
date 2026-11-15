@@ -176,9 +176,9 @@ paths = [
 ]
 trusted = true
 loaded_by = [
-    "verity/protocols/proofs/flock/prover/tests/test_challenger_audit.py",
-    "verity/protocols/proofs/flock/prover/tests/test_honest_reqs.py",
-    "verity/protocols/proofs/flock/prover/tests/test_honest_session.py",
+    "tests/verity/protocols/proofs/flock/prover/test_challenger_audit.py",
+    "tests/verity/protocols/proofs/flock/prover/test_honest_reqs.py",
+    "tests/verity/protocols/proofs/flock/prover/test_honest_session.py",
 ]
 
 [[place]]
@@ -188,7 +188,7 @@ paths = [
     "verity/runtime/__init__.py",
     "verity/runtime/framing.py",
     "verity/runtime/handshake.py",
-    "verity/tests/tests/test_channel.py",
+    "tests/verity/tests/test_channel.py",
 ]
 trusted = true
 loaded_by = [
@@ -335,7 +335,7 @@ loads = [
 [[place]]
 paths = [
     "verity/device.py",
-    "verity/tests/tests/test_device.py",
+    "tests/verity/tests/test_device.py",
 ]
 trusted = true
 loads = [
@@ -346,9 +346,9 @@ reaches = [
 ]
 loaded_by = [
     "verity/hardware/lean.py",
-    "verity/tests/tests/test_cards.py",
+    "tests/verity/tests/test_cards.py",
     "verity/hardware/tests/test_lean.py",
-    "verity/tests/tests/test_nodes.py",
+    "tests/verity/tests/test_nodes.py",
     "verity/hardware/tests/test_policy.py",
     "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
 ]
@@ -387,8 +387,8 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/protocols/accounting/certifier/prover/tests/test_network_certifier_serve.py",
-    "verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py",
+    "tests/verity/protocols/accounting/certifier/prover/test_network_certifier_serve.py",
+    "tests/verity/protocols/accounting/certifier/prover/test_scan_zk.py",
 ]
 
 [[place]]
@@ -469,7 +469,7 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/commitments/tests/test_block_check.py",
+    "tests/verity/commitments/test_block_check.py",
     "verity/protocols/accounting/poub/prover/audit_prover.py",
     "verity/protocols/accounting/poub/prover/codec_tensor/reader.py",
     "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
@@ -483,7 +483,7 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/poub/prover/word_codec/kv.py",
     "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
-    "verity/protocols/accounting/poub/tests/session_harness.py",
+    "tests/verity/protocols/accounting/poub/session_harness.py",
 ]
 
 [[place]]
@@ -647,10 +647,10 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c_work.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_kw.py",
     "verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py",
-    "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_f1_fast.py",
-    "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_fixture.py",
-    "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_twin.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_registered_bit_rows.py",
+    "tests/verity/protocols/experimental/pearl_c4/test_pearl_c4_f1_fast.py",
+    "tests/verity/protocols/experimental/pearl_c4/test_pearl_c4_fixture.py",
+    "tests/verity/protocols/experimental/pearl_c4/test_pearl_c4_twin.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_registered_bit_rows.py",
 ]
 
 [[place]]
@@ -803,40 +803,40 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_sparse.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstar.py",
-    "verity/protocols/proofs/flock/prover/tests/plain_hidden.py",
-    "verity/protocols/proofs/flock/prover/tests/served_registered.py",
-    "verity/protocols/proofs/flock/prover/tests/stratified_agree.py",
-    "verity/protocols/proofs/flock/prover/tests/test_challenger_audit.py",
-    "verity/protocols/proofs/flock/prover/tests/test_class_statement_unit_stager.py",
-    "verity/protocols/proofs/flock/prover/tests/test_inner_registered.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_ks_form.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_plain_hidden_tables.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_plain_tree.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_rec_coins.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_rec_compose.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_rec_inner_streams.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_registered_bit_rows.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_served_registered.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_verify_members.py",
-    "verity/protocols/proofs/flock/prover/tests/test_lean_witness.py",
-    "verity/protocols/proofs/flock/prover/tests/test_pod_lean_verdicts.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_bindings.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_claim.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_full_draw.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_inner_stage.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_links.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_live.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_opening_statement.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_residuals.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_session.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_vstage.py",
-    "verity/protocols/proofs/flock/prover/tests/test_rec_vstar_checks.py",
-    "verity/protocols/proofs/flock/prover/tests/test_registered_rows.py",
-    "verity/protocols/proofs/flock/prover/tests/test_stream_zk_server.py",
-    "verity/protocols/proofs/flock/prover/tests/test_tmpl_statement.py",
-    "verity/protocols/proofs/flock/prover/tests/tmpl_statement.py",
+    "tests/verity/protocols/proofs/flock/prover/plain_hidden.py",
+    "tests/verity/protocols/proofs/flock/prover/served_registered.py",
+    "tests/verity/protocols/proofs/flock/prover/stratified_agree.py",
+    "tests/verity/protocols/proofs/flock/prover/test_challenger_audit.py",
+    "tests/verity/protocols/proofs/flock/prover/test_class_statement_unit_stager.py",
+    "tests/verity/protocols/proofs/flock/prover/test_inner_registered.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_ks_form.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_plain_hidden_tables.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_plain_tree.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_rec_coins.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_rec_compose.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_rec_inner_streams.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_registered_bit_rows.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_registered_reads.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_served_registered.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_verify_members.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_witness.py",
+    "tests/verity/protocols/proofs/flock/prover/test_pod_lean_verdicts.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_bindings.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_claim.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_full_draw.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_inner_stage.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_links.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_live.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_opening_statement.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_residuals.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_session.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_vstage.py",
+    "tests/verity/protocols/proofs/flock/prover/test_rec_vstar_checks.py",
+    "tests/verity/protocols/proofs/flock/prover/test_registered_rows.py",
+    "tests/verity/protocols/proofs/flock/prover/test_stream_zk_server.py",
+    "tests/verity/protocols/proofs/flock/prover/test_tmpl_statement.py",
+    "tests/verity/protocols/proofs/flock/prover/tmpl_statement.py",
     "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
 ]
 
@@ -852,12 +852,12 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/accounting/pouw/prover/circuit/plan.py",
-    "verity/protocols/proofs/flock/prover/tests/test_audit_profile.py",
+    "tests/verity/protocols/proofs/flock/prover/test_audit_profile.py",
 ]
 
 [[place]]
 paths = [
-    "verity/protocols/tests",
+    "tests/verity/protocols",
 ]
 trusted = true
 
@@ -866,8 +866,8 @@ paths = [
     "verity/runtime",
     "verity/config.py",
     "verity/protocol.py",
-    "verity/tests/tests/test_periods.py",
-    "verity/tests/tests/test_periods_difftest.py",
+    "tests/verity/tests/test_periods.py",
+    "tests/verity/tests/test_periods_difftest.py",
 ]
 trusted = true
 loads = [

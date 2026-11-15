@@ -39,7 +39,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `model.py` | the starts' architecture, the lf dense decoder |
 | `program_reading.py` | a training step's work read off its Program (`circuit_properties.work.read`, its point's test among it): the lf model's step under AdamW, looped (`loop`), with the reading's seconds, its pass's memory and claims, the refusal or N and \|C\|; `python -m training_slowdown.program_reading`, s-t20's shape by default |
 
-The reference shapes are the lf model's (`adapters/torch/tests/frontend/train_step_lf.py`), which the suite checks.
+The reference shapes are the lf model's (`tests/adapters/torch/tests/frontend/train_step_lf.py`), which the suite checks.
 
 ## The one entry point
 

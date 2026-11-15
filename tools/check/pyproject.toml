@@ -89,7 +89,7 @@ inputs = [".agents/skills/using-slack/registry.json", "READY.json", "tools/move/
           "tests/lint/test_repo_env_reads.py",
           "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py", "tools/research/src/research/telemetry/__init__.py",
           "tools/verity/circuit_check/src/circuit_check/cli.py", "tools/verity/cli/verity_cli/__init__.py",
-          "benchmarks/one_stage/tests/test_served_cases.py", "benchmarks/one_stage/tests/test_two_stage_driver.py"]
+          "tests/benchmarks/one_stage/test_served_cases.py", "tests/benchmarks/one_stage/test_two_stage_driver.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -104,7 +104,7 @@ paths = ["artifacts.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_shards.py"]
-paths = ["benchmarks/one_stage/tests/test_served_cases.py", "benchmarks/one_stage/tests/test_two_stage_driver.py"]
+paths = ["tests/benchmarks/one_stage/test_served_cases.py", "tests/benchmarks/one_stage/test_two_stage_driver.py"]
 
 # `check.cc_manifests`, which every step list and check run reads: whether this tree's circuit-check lists its records
 [[tool.verity.tests.reads]]
