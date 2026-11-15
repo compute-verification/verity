@@ -28,7 +28,7 @@ untraced = [
 # Test-only: `lake` builds this package and, through its path requires, Flock's verifier's Lean, core's randomness, LMS,
 # the auditor parties' period checks, the protocol interface and the difftest server; the sessions are signed by the PoUS
 # tests' test signer, read by path.
-inputs = ["verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",
+inputs = ["verity/protocols/accounting/pous/device/lean", "verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",
           "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/randomness", "verity/commitments/lms/lean", "verity/commitments/attest/lean",
