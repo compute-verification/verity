@@ -577,18 +577,18 @@ def slowdown_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> 
     one `formalism.measure` refuses or can't measure."""
     none = calculator.slowdown(pol, None)["bound"]
     if run is None:
-        return {"rho": None, "why": "unmeasured: the config has no search record"}, none
+        return {"slowdown": None, "why": "unmeasured: the config has no search record"}, none
     at = seed_at(run["checkpoints"], f, g)
     cp = next((c for c in run["checkpoints"] if c["gates"] is not None and c["step"] == at.get("step")), None)
     if cp is None:
-        return {"rho": None, "why": f"unmeasured: the search record has no scored checkpoint ({at.get('why')})"}, none
+        return {"slowdown": None, "why": f"unmeasured: the search record has no scored checkpoint ({at.get('why')})"}, none
     fwd = run["record"].get("forward_macs_per_token")
     try:
         m = F.measure(traced(run["record"], cp["row"]), shape | ({"forward_macs_per_token": fwd} if fwd else {}))
     except F.Refused as e:
-        return {"rho": None, "why": f"refused: {e}"}, none
+        return {"slowdown": None, "why": f"refused: {e}"}, none
     except ValueError as e:
-        return {"rho": None, "why": f"unmeasured: {e}"}, none
+        return {"slowdown": None, "why": f"unmeasured: {e}"}, none
     c, k = pol["c_gates"], pol["k_bits"]
     b, out = F.bound(m, c, k), F.published(m, c, k)
     of_record = b["entry"]["bound"]
@@ -686,9 +686,9 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
     wanted = (config.get("seeds") or {}).get("search") or [None]
     search = next((r for r in jobs[me] if r["split"] == "search" and wanted[0] in (None, r["seed"])), None)
     slowdown, of_record = slowdown_of(search, f, g, pol, entry["shape"])
-    why = two or ((slowdown.get("why") or "the record's slowdown is unmeasured") if slowdown["rho"] is None else
+    why = two or ((slowdown.get("why") or "the record's slowdown is unmeasured") if slowdown["slowdown"] is None else
                   None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}")
-    S = {k: None if why or not p[k] else p[k]["p"] * slowdown["rho"] for k in H} | {
+    S = {k: None if why or not p[k] else p[k]["p"] * slowdown["slowdown"] for k in H} | {
         "why": why, "lower_bound": bool(slowdown.get("partial"))}
     traced_rows = (((search or {}).get("record") or {}).get("trace") or {}).get("rows") or []
     return {
@@ -699,18 +699,18 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
         "fit": f | {"data": entry.get("data"), "starts": data,
                     "c_spread": c_spread(f, target(f, entry["l0_bpb"], g))},
         "attack": sides[me], "honest": sides[hon], "others": [sides[n] for n in others or {}],
-        "H": H, "p": p, "rho": slowdown, "S": S,
+        "H": H, "p": p, "record_slowdown": slowdown, "S": S,
         "bound_of_record": of_record,
         "rests_on": {
             "p": f"counted |C| ({gates.UNIT}) at each seed's first checkpoint at or below its target on "
                  f"{SPLITS[basis]}, the mean over the seeds that reach, over the same for H"
                  + (", every record counted by the assumed dtypes (as-if)" if as_if_assumed else ""),
-            "rho": slowdown.get("rests_on"), "capture": slowdown.get("capture"), "capture_code": slowdown.get("capture_code"),
+            "record_slowdown": slowdown.get("rests_on"), "capture": slowdown.get("capture"), "capture_code": slowdown.get("capture_code"),
             "provenance": slowdown.get("provenance"),
             "attention": products.ATTENTION_PREMISE if products.on_premise(traced_rows) else None,
             "gain": f"the fit {FORM} on {f['points']} of the {len(data)} starts on data {entry.get('data')}"
                     + (f", provisional under {FIT_TARGET}" if f["provisional"] else "")},
-        "per_period": per_period(C["mean"] * slowdown["rho"], slowdown) if C and slowdown["rho"] is not None and not two else None,
+        "per_period": per_period(C["mean"] * slowdown["slowdown"], slowdown) if C and slowdown["slowdown"] is not None and not two else None,
         "records": [_read(n, r) for n, rs in jobs.items() for r in rs]}
 
 
@@ -756,7 +756,7 @@ def _said(provenance) -> str:
 def text(s: dict) -> str:
     """The block the grade prints (module docstring). An as-if grade's block says so in its first line and its
     second, and every line after them begins with `as-if`, so a line read apart from the block still says it."""
-    pol, f, slowdown, S, basis = s["policy"], s["fit"], s["rho"], s["S"], s["basis"]["split"]
+    pol, f, slowdown, S, basis = s["policy"], s["fit"], s["record_slowdown"], s["S"], s["basis"]["split"]
     mine, per, bound = s["attack"]["splits"], s["per_period"], s["bound_of_record"]
     tag = "as-if " if s["as_if"] else ""
     lines = [f"{tag.upper()}SLOWDOWN {s['config']}   start {s['start']}, gain {s['gain']:g}x, policy {pol['name']} "
@@ -771,7 +771,7 @@ def text(s: dict) -> str:
         add("S = p x slowdown", f"none: {S['why']}")
     else:
         add("S = p x slowdown", *(f"against {name}: S {'>= ' if S['lower_bound'] else ''}{S[k]:,.6g} = p {s['p'][k]['p']:.4g}"
-                             f" x the record's slowdown {slowdown['rho']:,.6g}" if S[k] else f"against {name}: none (H: {_h(s['H'][k])})"
+                             f" x the record's slowdown {slowdown['slowdown']:,.6g}" if S[k] else f"against {name}: none (H: {_h(s['H'][k])})"
                              for k, name in (("any", "any route"), ("honest", "the honest route"))))
     spread_ = "the fit's residuals bound none of its uncertainty" if f["c_spread"] is None else \
         f"the fit's rms is {100 * f['c_spread']:.3g}% in effective compute at the target"
@@ -783,10 +783,10 @@ def text(s: dict) -> str:
     add("p", f"against any route {_p(s['p']['any'])}; against the honest route {_p(s['p']['honest'])}; the attack's "
              + (f"|C| {C['mean']:.4g} gates" if C else "|C| none")
              + f" ({mine[basis]['reached']} of {mine[basis]['of']} seeds reach)")
-    add("record's slowdown", f"none: {slowdown['why']}" if slowdown["rho"] is None else
-        f"{slowdown['rho']:,.6g}{' (a lower bound: ' + str(slowdown['why'] or 'a kind is unmeasured') + ')' if slowdown['partial'] else ''}"
+    add("record's slowdown", f"none: {slowdown['why']}" if slowdown["slowdown"] is None else
+        f"{slowdown['slowdown']:,.6g}{' (a lower bound: ' + str(slowdown['why'] or 'a kind is unmeasured') + ')' if slowdown['partial'] else ''}"
         f", binding {slowdown['binding_kind']}, on search seed {slowdown['seed']} at {slowdown['at']} (step {slowdown['checkpoint_step']})")
-    if slowdown["rho"] is not None:
+    if slowdown["slowdown"] is not None:
         gaps = slowdown["blank"]
         add("sensitivities", ", ".join(f"{name} " + ("blank" if name in gaps else f"{v:,.6g}")
                                        for name, v in slowdown["sensitivities"].items())
@@ -801,7 +801,7 @@ def text(s: dict) -> str:
                                   + (f", sd {C['sd']:.3g}" if C["sd"] is not None else "")))
     r = s["rests_on"]
     no_code = slowdown.get("blank", {}).get("capture_code", "the record's slowdown is unmeasured")
-    add("rests on", f"the record's slowdown: {r['rho'] or 'nothing: it is unmeasured'}",
+    add("rests on", f"the record's slowdown: {r['record_slowdown'] or 'nothing: it is unmeasured'}",
         f"capture: {r['capture'] or 'none'}, its code "
         + (r["capture_code"] or f"blank: {no_code}")
         + (f"; the record's provenance: {_said(r['provenance'])}" if r["provenance"] is not None else ""),
