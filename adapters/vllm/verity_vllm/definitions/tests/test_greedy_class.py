@@ -1,6 +1,7 @@
-"""A class's selects and length check (`greedy_stages.GreedyCombineFirst_v1`, `GreedyCombine_v3`, `greedy_stop.GreedyStopCheck_v2`)
-on made-up requests at a small class: each step's row puts its argmax on a chosen token, the selects run as a chain (each
-reads the step before's bit and count), and the check reads the served ids, the last bit and count.  Each property the
+"""A class's selects and length check (`greedy_stages.GreedyCombineFirst_v1`, `GreedyCombineLive_v1`,
+`greedy_stop.GreedyStopCheckClass_v1`) on made-up requests at a small class: each step's row puts its argmax on a chosen
+token, the selects run as a chain (each reads the step before's bit and count), and the check reads the served ids, the
+last bit and count.  Each property the
 class's design asks of them has a test here that fails without it."""
 from __future__ import annotations
 

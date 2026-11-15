@@ -20,9 +20,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     served = dict(V=154880, N=7744, O=128, STOP=(154820, 154827, 154829), MAX_MODEL_LEN=131072)
     return [
         ("GreedyCombineFirst_v1", lambda: bind(G.GreedyCombineFirst, **small)),
-        ("GreedyCombine_v3", lambda: bind(G.GreedyCombineLive, **small)),
+        ("GreedyCombineLive_v1", lambda: bind(G.GreedyCombineLive, **small)),
         ("GreedyCombineFirst_v1-served", lambda: bind(G.GreedyCombineFirst, **served)),
-        ("GreedyCombine_v3-served", lambda: bind(G.GreedyCombineLive, **served)),
+        ("GreedyCombineLive_v1-served", lambda: bind(G.GreedyCombineLive, **served)),
         ("GreedyChunk_v2-first", lambda: bind(G.GreedyChunk, N=16, OFF=0)),
         ("GreedyChunk_v2", lambda: bind(G.GreedyChunk, N=16, OFF=48)),
         ("GreedyChunk_v2-carry", lambda: bind(G.GreedyChunk, N=24, OFF=65520)),

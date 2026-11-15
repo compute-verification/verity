@@ -19,8 +19,8 @@ word, so it is injective: the id's high half (`U32Hi16_v1`) and the token's high
 (`I32Eq_v1`), and the id's low half and the token's low word are iff the id doubled 16 times (`I32Add_v1` of a word and
 itself, its low half moved up) equals the low word's widening.
 
-**A class's check.**  `GreedyStopCheck_v2{V,N,P,T,STOP,MAX_MODEL_LEN}` is the length check of a class's Program (P prompt
-ids, T = O served ids), whose selects carry a bit and a count step to step (`greedy_stages.GreedyCombine_v3`):
+**A class's check.**  `GreedyStopCheckClass_v1{V,N,P,T,STOP,MAX_MODEL_LEN}` is the length check of a class's Program (P prompt
+ids, T = O served ids), whose selects carry a bit and a count step to step (`greedy_stages.GreedyCombineLive_v1`):
 
     (logits: bf16[N], r0, .., r{K-2}, ids: Array<T, i32>, request: Array<4, i32>, count: Array<16, bit>,
      live: Array<16, bit>) -> bit
@@ -37,7 +37,7 @@ where the rule ends or at T.  Refused by its bit until their rules are written: 
 
 Registered functions:
   GreedyStopCheck{V,N,T,STOP,MAX_TOKENS,PROMPT_LEN,MAX_MODEL_LEN,FINISH}  (logits: N bf16, r<c>: 3 u16, ids: T i32) -> bit
-  GreedyStopCheck_v2{V,N,P,T,STOP,MAX_MODEL_LEN}  (logits: N bf16, r<c>: 3 u16, ids: T i32, request: 4 i32, count: 16 bits,
+  GreedyStopCheckClass_v1{V,N,P,T,STOP,MAX_MODEL_LEN}  (logits: N bf16, r<c>: 3 u16, ids: T i32, request: 4 i32, count: 16 bits,
                                                    live: 16 bits) -> bit
 """
 from __future__ import annotations
@@ -55,7 +55,7 @@ from verity_vllm.definitions.registry import stop_check as SC
 from verity_vllm.definitions.registry.prims import BIT, I32, Bf16ToF32
 
 STATICS = ["V", "N", "T", "STOP", "MAX_TOKENS", "PROMPT_LEN", "MAX_MODEL_LEN", "FINISH"]
-#: `GreedyStopCheck_v2`'s statics: the class's (P, T) and its stop ids and model length, no request's
+#: `GreedyStopCheckClass_v1`'s statics: the class's (P, T) and its stop ids and model length, no request's
 CLASS_STATICS = ["V", "N", "P", "T", "STOP", "MAX_MODEL_LEN"]
 
 
@@ -115,7 +115,7 @@ def _class_sig(S):
 
 def class_reference(row: np.ndarray, ids: Sequence[int], request: Sequence[int], count: int, live: int, V: int, N: int,
                     P: int, STOP: tuple[int, ...], MAX_MODEL_LEN: int) -> int:
-    """`GreedyStopCheck_v2`'s function on the row's V logits (as `reference`), T = len(ids) i32 encodings, the i32 limits
+    """`GreedyStopCheckClass_v1`'s function on the row's V logits (as `reference`), T = len(ids) i32 encodings, the i32 limits
     ``request``, and the last select's ``count`` and ``live``."""
     X = SC.X
     lp, max_tokens, min_tokens, ignore_eos = (int(x) & X.M32 for x in request)
@@ -127,7 +127,7 @@ def class_reference(row: np.ndarray, ids: Sequence[int], request: Sequence[int],
                and (n < T or ids[T - 1] == token))
 
 
-@composite("GreedyStopCheck", 2, CLASS_STATICS, _class_sig, refuse=refuse_class,
+@composite("GreedyStopCheckClass", 1, CLASS_STATICS, _class_sig, refuse=refuse_class,
            conformance="model-untested: StopRule_v1's (n, finish) against the selects' count, and GreedyCombine_v2's token")
 def GreedyStopCheckClass(B, S, logits, *rest):
     """1 exactly when `StopRule_v1` over the class's ids and the request's limits ends them, at the n the last select's

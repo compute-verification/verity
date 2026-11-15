@@ -17,8 +17,8 @@ SMALL = dict(V=320, N=16, O=4, stops=(37,), max_model_len=64)
 def test_the_builders_bind_the_class_s_definitions(s):
     first, live, check = CS.first_select(**s), CS.live_select(**s), CS.class_check(P=64, **s)
     statics = f"V={s['V']},N={s['N']},O={s['O']},STOP=({','.join(map(str, s['stops']))}),MAX_MODEL_LEN={s['max_model_len']}"
-    assert first.id == f"GreedyCombineFirst_v1{{{statics}}}" and live.id == f"GreedyCombine_v3{{{statics}}}"
-    assert check.id == (f"GreedyStopCheck_v2{{V={s['V']},N={s['N']},P=64,T={s['O']},STOP=({','.join(map(str, s['stops']))}),"
+    assert first.id == f"GreedyCombineFirst_v1{{{statics}}}" and live.id == f"GreedyCombineLive_v1{{{statics}}}"
+    assert check.id == (f"GreedyStopCheckClass_v1{{V={s['V']},N={s['N']},P=64,T={s['O']},STOP=({','.join(map(str, s['stops']))}),"
                         f"MAX_MODEL_LEN={s['max_model_len']}}}")
 
 
