@@ -30,5 +30,10 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json"]
 
+[rewrite.keep_in]
+# replay's era paths (`ERA_PARTS`), paths into history read at a recorded run's commit: a run recorded before this move
+# has served_zk at its old path, so a rerun of this map keeps it there.
+"benchmarks/one_stage/replay.py" = ["benchmarks/pouw/served_zk", "benchmarks/pouw/served_zk/*"]
+
 [modules]
 "benchmarks.pouw.served_zk" = "verity.protocols.accounting.pouw.prover.kernels.served_zk"
