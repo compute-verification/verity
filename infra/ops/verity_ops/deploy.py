@@ -633,7 +633,9 @@ print(json.dumps(out))
 '''
 # What holds a check slot under each of `locks` (a step's [step.NAME].locks), as tools/check/slot.py's `holder` reads it: a
 # slot's lock (`*.lock`) or a waiter's ticket in a line directory beside it (`*line*/`) that a FLOCK in /proc/locks holds,
-# with what the holder recorded (`X.who`). Read-only, as the login: prints [{path, pid, run, by}].
+# with what the holder recorded (`X.who`). Read-only, as the login: prints {held: [{path, pid, run, by[, who_error]}],
+# missing: [a lock directory the node lacks], vanished: [a path gone between its listing and its stat]}. A held lock whose
+# `.who` can't be read stays held, with the error's class.
 BUSY = r'''
 import json, os, sys
 held = {}
@@ -642,12 +644,12 @@ for line in open("/proc/locks").read().splitlines():
     if len(f) > 5 and f[1] == "FLOCK" and f[5].count(":") == 2:
         maj, mn, ino = f[5].split(":")
         held[(int(maj, 16), int(mn, 16), int(ino))] = int(f[4])
-out = []
+out = {"held": [], "missing": [], "vanished": []}
 for d in json.load(sys.stdin)["locks"]:
-    try:
-        names = sorted(os.listdir(d))
-    except FileNotFoundError:
+    if not os.path.isdir(d):
+        out["missing"].append(d)
         continue
+    names = sorted(os.listdir(d))
     paths = [os.path.join(d, n) for n in names if n.endswith(".lock")]
     for n in names:
         if "line" in n and os.path.isdir(os.path.join(d, n)):
@@ -656,16 +658,23 @@ for d in json.load(sys.stdin)["locks"]:
         try:
             st = os.stat(p)
         except FileNotFoundError:
+            out["vanished"].append(p)
             continue
         pid = held.get((os.major(st.st_dev), os.minor(st.st_dev), st.st_ino))
         if pid is None:
             continue
-        try:
-            who = json.load(open(p[:-len(".lock")] + ".who")) if p.endswith(".lock") else {}
-        except (OSError, ValueError):
-            who = {}
-        who = who if isinstance(who, dict) and who.get("pid") == pid else {}
-        out.append({"path": p, "pid": pid, "run": who.get("run"), "by": who.get("by")})
+        entry = {"path": p, "pid": pid, "run": None, "by": None}
+        if p.endswith(".lock"):
+            who, err = {}, None
+            try:
+                who = json.load(open(p[:-len(".lock")] + ".who"))
+            except (OSError, ValueError) as e:
+                err = type(e).__name__
+            if err:
+                entry["who_error"] = err
+            elif isinstance(who, dict) and who.get("pid") == pid:
+                entry.update(run=who.get("run"), by=who.get("by"))
+        out["held"].append(entry)
 print(json.dumps(out))
 '''
 BACKUP = re.compile(r"\.(bak|prev|orig)([-.\d_]|$)")       # a hand deploy's copy: x.py.bak-20261001T0611Z, x.sh.prev, x.orig
@@ -721,11 +730,12 @@ class Entry:
 @dataclass
 class Step:
     """Files a whole-node install leaves out (deploy.toml's [step.NAME]): `install NODE --only NAME` installs them, and only
-    while no check slot under `locks` is held or waited for."""
+    while no check slot under `locks` is held or waited for, and while the node has every one of `locks` but `optional`."""
     name: str
     shows: str | None = None           # an installed path whose lines (comments and blanks apart) an install of the step prints
     locks: list[str] = field(default_factory=list)       # slot directories (tools/check/slot.py's SLOTS and LINE beside it)
     held: dict[str, str] = field(default_factory=dict)   # node -> why its files of the step aren't installed yet
+    optional: list[str] = field(default_factory=list)    # those of `locks` a node may lack; any other a node lacks refuses
 
 
 @dataclass
@@ -748,13 +758,16 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
         raise ValueError(f"deploy.toml: node {bad[0]!r}: `admin` is true or false")
     steps = {}
     for s, c in m.get("step", {}).items():
-        held, locks = c.get("held", {}), c.get("locks", [])
-        if (set(c) - {"shows", "locks", "held"} or not isinstance(held, dict) or not isinstance(locks, list)
-                or not all(isinstance(w, str) and w.strip() for w in held.values())):
-            raise ValueError(f"deploy.toml: [step.{s}] takes `shows` (a path), `locks` (directories) and `held` (node = why)")
+        held, locks, optional = c.get("held", {}), c.get("locks", []), c.get("optional", [])
+        if (set(c) - {"shows", "locks", "optional", "held"} or not isinstance(held, dict) or not isinstance(locks, list)
+                or not isinstance(optional, list) or not all(isinstance(w, str) and w.strip() for w in held.values())):
+            raise ValueError(f"deploy.toml: [step.{s}] takes `shows` (a path), `locks` (directories), `optional` (those of "
+                             f"`locks` a node may lack) and `held` (node = why)")
+        if bad := [d for d in optional if d not in locks]:
+            raise ValueError(f"deploy.toml: [step.{s}].optional names {bad[0]!r}, which its `locks` don't")
         if bad := [n for n in held if n not in nodes]:
             raise ValueError(f"deploy.toml: [step.{s}] holds node {bad[0]!r}, which has no [nodes.{bad[0]}]")
-        steps[s] = Step(s, c.get("shows"), list(locks), dict(held))
+        steps[s] = Step(s, c.get("shows"), list(locks), dict(held), list(optional))
     for nd in nodes.values():
         nd.steps = steps
     for kind in ("file", "tree"):
@@ -1370,8 +1383,9 @@ def copied(node: Node, own: dict[str, Node], only: list[str]) -> None:
                       "over the node's list. Nothing changed; install from a commit that has the change (origin/main)")
 
 
-def busy(node: Node, locks: list[str], run: Runner) -> list[dict]:
-    """The check slots and line tickets under `locks` that a process holds on `node` (BUSY), read as its login."""
+def busy(node: Node, locks: list[str], run: Runner) -> dict:
+    """The check slots and line tickets under `locks` that a process holds on `node`, the directories of `locks` it lacks, and
+    the paths gone between their listing and their stat (BUSY), read as its login."""
     r = run(node.name, ["python3", "-c", BUSY], json.dumps({"locks": locks}).encode())
     if r.returncode != 0:
         raise RuntimeError(f"{node.name}: reading its check slots failed (exit {r.returncode}): "
@@ -1422,17 +1436,23 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
         skipped += [{"path": p, "src": v[0], "changed": "apart", "run": [], "step": v[3].step}
                     for p, v in sorted(want.items()) if v[3].step and not v[3].hold]
         want = {p: v for p, v in want.items() if not v[3].hold and not v[3].step}
-    shown = {}
+    shown, vanished = {}, []
     for s in sorted({v[3].step for v in want.values() if v[3].step}):
         st = node.steps[s]
-        if st.locks and (held := busy(node, st.locks, run)):
+        b = busy(node, st.locks, run) if st.locks else {"held": [], "missing": [], "vanished": []}
+        if missing := [d for d in b["missing"] if d not in st.optional]:
+            raise Refused(f"{node.name} lacks {', '.join(missing)}, which step {s}'s locks name, so whether it runs a check "
+                          f"can't be read. Nothing changed; a directory a node may lack is named in [step.{s}].optional")
+        if b["held"]:
             raise Refused(f"{node.name} runs a check: " + "; ".join(
-                f"{h['path']} held by pid {h['pid']}" + "".join(f", {k} {h[k]}" for k in ("run", "by") if h.get(k)) for h in held)
+                f"{h['path']} held by pid {h['pid']}" + "".join(f", {k} {h[k]}" for k in ("run", "by") if h.get(k))
+                + (f", its .who unreadable ({h['who_error']})" if h.get("who_error") else "") for h in b["held"])
                 + f". Nothing changed; step {s} waits until no check slot under {', '.join(st.locks)} is held or waited for")
+        vanished += b["vanished"]
         if st.shows in want:
             text = git("cat-file", "blob", want[st.shows][1], repo=repo)
             shown[st.shows] = [ln for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
-    shown = {"shows": shown} if shown else {}
+    shown = ({"shows": shown} if shown else {}) | ({"vanished": vanished} if vanished else {})
     reg = register() if any(v[3].register for v in want.values()) else None
     gen = {p: made(e, sha, reg, repo) for p, (_, sha, _, e) in sorted(want.items()) if e.register}
     files = [{"path": p, "blob": gen[p].blob if p in gen else sha, "mode": e.mode, "git_mode": mode,
@@ -1791,6 +1811,8 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     for p, lines in done.get("shows", {}).items():
         print(f"{p} {'holds' if ns.apply else 'would hold'}:")
         print("".join(f"{'':13} {ln}\n" for ln in lines), end="")
+    for p in done.get("vanished", []):
+        print(f"vanished     {p}  (gone between its listing and its stat: read as not held)")
     hint = {"not running": "; it stays stopped", "not quiet": f"; the node isn't quiet (`{nodes[ns.node].quiet}`): restart it once it is"}
     for d in done["restarts"]:
         failed = d["state"].startswith("failed")

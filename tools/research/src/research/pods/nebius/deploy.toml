@@ -1830,6 +1830,8 @@ owner = "infra"
 [step.lockout]
 shows = "/usr/local/lib/vy-lockout/50-vy-research"
 locks = ["/workspace/research/locks", "/workspace/research/locks/prebuild", "/workspace/research/locks/nightly"]
+# the prebuild and nightly pools' directories exist only where those pools have run
+optional = ["/workspace/research/locks/prebuild", "/workspace/research/locks/nightly"]
 
 [step.lockout.held]
 vy-nebius-cpu-13 = "its vqueue loop's install needs root and goes in before the lock-out"

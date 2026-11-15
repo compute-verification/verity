@@ -18,6 +18,8 @@ import pytest
 
 from verity_ops import deploy
 
+ROOT = Path(__file__).resolve().parents[3]
+
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 FUTURE = 4102444800    # 2100-01-01: an mtime after any process here started
 
@@ -324,6 +326,72 @@ def test_a_step_is_installed_only_on_its_own_word_and_never_while_the_node_holds
     assert {_states(rep)[k] for k in ("allow", "tool")} == {"ok"}
     assert deploy_("install", "m", "--only", "lock") == 3
     assert "held in deploy.toml" in capsys.readouterr().err
+
+
+def test_a_lock_directory_the_node_lacks_refuses_unless_the_step_names_it_optional(stepped, capsys):
+    """A mistyped or absent directory of `locks` can't say whether the node runs a check, so it never reads as not busy."""
+    node, locks, gone = stepped["node"], stepped["locks"], stepped["locks"].parent / "gone"
+    text = stepped["manifest"].read_text().replace(f'locks = ["{locks}"]', f'locks = ["{locks}", "{gone}"]')
+    stepped["manifest"].write_text(text)
+
+    def deploy_(*argv: str) -> int:
+        return deploy.main([*argv, "--by", "lane-x", "--no-fetch"], run=local, manifest=stepped["manifest"], repo=stepped["repo"])
+
+    for argv in (["--only", "lock"], ["--only", "lock", "--apply"]):
+        assert deploy_("install", "n", *argv) == 3
+        assert f"n lacks {gone}, which step lock's locks name" in capsys.readouterr().err
+    assert not (node / "bin" / "tool").exists()
+    stepped["manifest"].write_text(text.replace(f'locks = ["{locks}", "{gone}"]', f'locks = ["{locks}", "{gone}"]\noptional = ["{gone}"]'))
+    assert deploy_("install", "n", "--only", "lock") == 0 and "would install" in capsys.readouterr().out
+    with pytest.raises(ValueError, match="optional names '/elsewhere', which its `locks` don't"):
+        deploy.load(text=text.replace(f'locks = ["{locks}", "{gone}"]', f'locks = ["{locks}"]\noptional = ["/elsewhere"]'))
+
+
+def test_a_held_slot_whose_who_cant_be_read_stays_held_and_says_why(stepped, capsys):
+    locks = stepped["locks"]
+    (locks / "check-b.who").write_text('{"pid": ')
+    fd = hold(locks / "check-b.lock")
+    try:
+        assert deploy.main(["install", "n", "--only", "lock", "--by", "lane-x", "--no-fetch"], run=local,
+                           manifest=stepped["manifest"], repo=stepped["repo"]) == 3
+    finally:
+        os.close(fd)
+    assert (f"n runs a check: {locks / 'check-b.lock'} held by pid {os.getpid()}, its .who unreadable (JSONDecodeError)"
+            in capsys.readouterr().err)
+
+
+def test_a_slot_gone_between_its_listing_and_its_stat_is_recorded_as_vanished(stepped, monkeypatch, capsys):
+    import io
+    locks = stepped["locks"]
+    (locks / "check-a.lock").write_text("")
+    gone, real_stat = str(locks / "check-a.lock"), os.stat
+
+    def raced(p, *a, **k):
+        if os.fspath(p) == gone:
+            raise FileNotFoundError(2, "No such file or directory", gone)
+        return real_stat(p, *a, **k)
+
+    monkeypatch.setattr(os, "stat", raced)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"locks": [str(locks)]})))
+    exec(compile(deploy.BUSY, "BUSY", "exec"), {})  # noqa: S102  (the node's program, verbatim, in-process so its stat can race)
+    assert json.loads(capsys.readouterr().out) == {"held": [], "missing": [], "vanished": [gone]}
+    monkeypatch.setattr(os, "stat", real_stat)
+
+    monkeypatch.setattr(deploy, "busy", lambda node, locks, run: {"held": [], "missing": [], "vanished": [gone]})
+    assert deploy.main(["install", "n", "--only", "lock", "--by", "lane-x", "--no-fetch"], run=local,
+                       manifest=stepped["manifest"], repo=stepped["repo"]) == 0
+    assert f"vanished     {gone}  (gone between its listing and its stat: read as not held)" in capsys.readouterr().out
+
+
+def test_no_handler_of_the_slot_reader_swallows_what_it_caught():
+    """BUSY runs as a string, inside which the silent-excepts lint (tests/lint/test_repo_silent_excepts.py) can't see: held
+    here to the lint's own definition, every handler of it records what it caught."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("silent_excepts", ROOT / "tests" / "lint" / "test_repo_silent_excepts.py")
+    lint = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lint)
+    assert "except" in deploy.BUSY and lint.handlers(deploy.BUSY) == []
 
 
 def test_a_step_names_a_step_the_manifest_has_and_holds_only_its_nodes(stepped):
