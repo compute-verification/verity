@@ -4,7 +4,7 @@ public import Properties.Pous
 public import Definitions.Core.InProofs
 public import Properties.Verity.Sha512
 public import Proofs.Properties.Pous.InProofs
-public import Proofs.Properties.Accounting.InProofs
+public import Proofs.Properties.ResourceAccounting.InProofs
 
 /-!
 # PoUS's setup inside proofs: an accepted run leaves at most `⌊B/100⌋` blocks that don't decode
@@ -98,7 +98,7 @@ to their slice are exactly the proof blocks whose values fail `BlockOk`, so the 
 namespace PousCheck.Properties.InProofs.SecurityProofs
 
 open PousCheck.Properties.InProofs
-open Verity.InProofs Properties.Accounting.InProofs Verity.Game
+open Verity.InProofs Properties.ResourceAccounting.InProofs Verity.Game
 
 theorem setupGives : SetupGives := by
   intro q salt W Ω μ r right ε g h hc

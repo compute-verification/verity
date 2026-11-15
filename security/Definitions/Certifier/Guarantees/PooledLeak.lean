@@ -36,11 +36,11 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The leak through the network certifier over a monitoring period of sampled audits
+# The leak through the network attester over a monitoring period of sampled audits
 
 A monitoring period is `m` windows, each audited on its own live coins (the period's coins are `Fin m → Ω`, window
 `i`'s at `ω i`) at a statement registered as `sw i`. `PooledLeakAccepted` is the count `K_pooled`: what a covert
-sender in the server moves through the network certifier over the whole monitoring period, with the incorrect proof blocks paid
+sender in the server moves through the network attester over the whole monitoring period, with the incorrect proof blocks paid
 for once over the period rather than at `δ` in every window. At each window the witness computed from the
 registration, before the window's sample, has an incorrect set `W i` (it reads only the earlier windows' coins), and the
 statement takes two inputs per window:
@@ -49,7 +49,7 @@ statement takes two inputs per window:
   `(1 - q)^|W_i| + e_i`, `q` the deployed design's per-window detection probability (a uniform sample of `kd_i` of the
   window's `n_i` proof blocks meets it at `q = kd_i / n_i`; the statement fixes no sample's form);
 * the leak relation at that same witness (`hleak`): the audit accepts while the window's observations in the network
-  certifier's record are not accepted with the incorrect set `W_i` (`LeakAt`) with probability at most `e'_i`.
+  attester's record are not accepted with the incorrect set `W_i` (`LeakAt`) with probability at most `e'_i`.
 
 From them, every audit accepts while the incorrect sets hold `Fmax ≥ ln(1/δ)/q` units or more, or some window's leak
 relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledIncorrectBlocksLe`'s
@@ -60,9 +60,9 @@ period's proof blocks and `b` each proof block's committed bits: `(ln(1/δ)/q + 
 incorrect proof blocks, plus the advice and timing terms and the schedule terms. A proof block's outputs are at most 16
 bits, so `b = 16`.
 
-The network certifier is one device on the server's uplink, as in `MonitoringPeriodLeakAccepted`
+The network attester is one device on the server's uplink, as in `MonitoringPeriodLeakAccepted`
 (`Definitions.Certifier.Tap`): one run of its code gives the cells the client receives (it functions as an
-active network certifier) and its record of them, the observations the audits read, so on every schedule its record
+active network attester) and its record of them, the observations the audits read, so on every schedule its record
 format holds the client's cells read back from the record. Its one named assumption is `trusted-device`.
 
 The statement is conditional: it holds for any audits that satisfy the two inputs. Over a monitoring period of live
@@ -80,14 +80,14 @@ open Claims Claims.Sampling Finset
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
 
-/-- **The leak through the network certifier over a monitoring period of accepted sampled audits** (conditional on its
+/-- **The leak through the network attester over a monitoring period of accepted sampled audits** (conditional on its
 two per-window inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`,
 values `ρ i` at the registered inputs), with `n i` proof blocks, each committing at most `b` bits; with an operator
 `op` fixed before the period and the covert sender's secrets, a function of the observations alone: window `i`'s
 operator at the period's observations `o` is `op i (runsBefore o i)`, which reads only the windows before `i`, closed
 by then (`runsBefore`), and window `i` only through the observations before each step, so no window still open and
 none after; with
-the network certifier running its code by `trusted-device` on schedules in `Ss`, each held by its record format `f`
+the network attester running its code by `trusted-device` on schedules in `Ss`, each held by its record format `f`
 (`RecordFormat.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and its record of them in the format `f`,
 the windows' observations; and a covert sender in the server whose secrets `z ∈ Zs` a decoder recovers from the

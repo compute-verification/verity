@@ -123,7 +123,7 @@ the linear term of `Claims.KSLin` for extraction-based finders, a constant that 
 for its coins `r`. `fb` and `fz` are the analysis's reductions from those events to collisions of `sha`, built from
 `M` at `r`, one a round. Binding is at the circuit's cuts, before each round's coin, which live coins allow: a round's
 coin is released after the roots it reads, and the fork finder forks there. Under seeded coins nothing is bound before
-a round's seed, so the seeded statements bind at the sample instead (`Accounting.Assumptions.Compose`, at
+a round's seed, so the seeded statements bind at the sample instead (`ResourceAccounting.Assumptions.Compose`, at
 `Declared.atSample`).
 
 A square-root term folds into this form by AM–GM: `√(γ x) ≤ δ' + γ x/(4δ')` for every `δ' > 0`. So `Claims.KS`'s
@@ -135,7 +135,7 @@ The finders and their costs, path by path:
   from the commitment, a function of `(M, r)` that one run of `M` doesn't compute, so a finder that plays one run and
   reads the collision off it takes the table as advice its cost (`T`, one run's SHA-512 calls) doesn't count. The fork
   finder plays `M` twice from its commitment on fresh samples, and a fork bound `Pr[Bind w]² ≤ |L|² Pr[fork]` (the form
-  of `Accounting.Guarantees.TS.BindingOfFork`, there at `|L| = 1`, over a sampled layer `L`) gives, by AM–GM, `δb = δ'`
+  of `ResourceAccounting.Guarantees.TS.BindingOfFork`, there at `|L| = 1`, over a sampled layer `L`) gives, by AM–GM, `δb = δ'`
   and `βb = |L|²/(4δ')`. Its cost is two runs of `M` and the verifier's checks of both openings: `cb` is twice the
   SHA-512 calls one unit of `Mc`'s time can buy, `db` twice the verifier's calls. The other honest instance counts
   the table: its cost is about the samples times `T`.

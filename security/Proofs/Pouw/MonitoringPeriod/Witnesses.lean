@@ -61,8 +61,8 @@ windows at `δ_s = 1%`, `δ_bind = δ_ks = 0`.
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
 open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 theorem zeroCone_eq : zeroCone Honest.scheme circuit 144 = 0 := by
   unfold zeroCone
@@ -110,8 +110,8 @@ end Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 namespace Properties.Pouw.MonitoringPeriod.SecurityProofs
 
 open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept HonestH1
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-- **The honest witness of `h1CheckedCreditMonitoringPeriod`**: H1's honest live-salt period of `64` windows meets every premise
 of `H1CheckedCreditMonitoringPeriod`, in its order, at its numbers (`N_p = 144`, `K_d = 24`, one round, `ρ = 8/9`, `w_max = 1`,

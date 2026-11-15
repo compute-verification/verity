@@ -46,9 +46,9 @@ The certificate's price against the bound, the stars' signs, (RD) in price form 
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS ResourceAccounting.Guarantees.TS Pouw.RelativeSecurity
 
 -- The frozen statements take every section `Fintype` binder, whether or not their proofs use it.
 set_option linter.unusedSectionVars false
@@ -277,4 +277,4 @@ theorem identity (Z : Model K R T L U F X) (P : Labelled K) (lam : R → ℝ) (d
 
 end Lemmas
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

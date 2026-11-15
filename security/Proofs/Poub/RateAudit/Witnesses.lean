@@ -23,7 +23,7 @@ Each lemma states that some device has its property and proves it of the named o
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -74,11 +74,11 @@ theorem honest_one_partial (cost : ℕ → ℕ) (E : Store 1 1) (R : Bits 0) (O 
     exact hacc i
   · rw [t5 1 cost, hc, h5, h6, zero_mul, add_zero]
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -323,4 +323,4 @@ theorem RateAuditPartial_nontrivial :
   rw [pr_one hev, not_le]
   exact error_one_lt
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

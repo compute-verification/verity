@@ -1,6 +1,6 @@
 """A registered circuit's requirement of memory, from its wiring and its schedule (the Program, never a kernel): the values its
 execution keeps live when each step begins and the values each step reads, in bits, in all and by block of the store.
-The Python counterpart of `security/Definitions/Accounting/Requirement.lean`, by explicit expansion of the canonical
+The Python counterpart of `security/Definitions/ResourceAccounting/Requirement.lean`, by explicit expansion of the canonical
 circuit (small Programs, `layout.Circuit`'s explicit limit), which the Lean definitions and the memory map (I3) are held to.
 
     live(t)  = the values produced before step t (or registered) that a gate run at step t or later has as an operand
@@ -14,7 +14,7 @@ credited as the requirement. `live(t)` is `boundary.py`'s `out(S_<t) âˆ© in(S_â‰
 before `t`, and `upper_bound`'s `reads(t)` is `in(S_t)` less the run inputs that arrive at `t`;
 `tests/test_requirement.py` holds both to `boundary.out_gates` and `boundary.in_gates`.
 
-`execution` is the gate pass: `Accounting.Requirement`'s `Wiring` and `Execution` gate by gate (an `Execution`: widths,
+`execution` is the gate pass: `ResourceAccounting.Requirement`'s `Wiring` and `Execution` gate by gate (an `Execution`: widths,
 the registered values, each produced value's engine step, each gate's operands and those it uses, the run's values and
 inputs), and `Requirement.of` derives each value's birth and last structural reader from it (`last`: the last step
 running a gate with it as an operand, whether or not that gate uses it). Placed on devices (`leaf`, and `ticks`: the
@@ -111,7 +111,7 @@ class Schedule:
 
 @dataclass(frozen=True)
 class Execution:
-    """A circuit's wiring and one execution of it, value by value, as `Accounting.Requirement`'s `Wiring` and `Execution`
+    """A circuit's wiring and one execution of it, value by value, as `ResourceAccounting.Requirement`'s `Wiring` and `Execution`
     hold them: each value's width, the registered values, the engine step of each other value the execution produces (a
     run input's is its arrival), the operands of each gate it runs (`ops`) and those the gate uses (`uses`), the run's
     values where known, and the run's inputs (`inputs`: an `Input` not bound by registration, a request's tokens). It
@@ -153,7 +153,7 @@ class Execution:
 
 @dataclass(frozen=True)
 class Placement:
-    """An execution placed on devices, as `Accounting.Requirement.Placement` holds it: each value's device (`leaf`, the
+    """An execution placed on devices, as `ResourceAccounting.Requirement.Placement` holds it: each value's device (`leaf`, the
     device, never an SM, an SMSP or a unit), and the tick at which each device begins each engine step (`ticks`, device by
     device). A value is placed at the tick its device begins its step (`tick`). PoUW's credits and help over the placed
     execution, when the node runs it as placed, are `credits` and `ingress` (`RequirementCredits`, and `RequirementHelp`
@@ -414,7 +414,7 @@ class Store:
 
     @dataclass(frozen=True)
     class Packing:
-        """Values placed in the store, as `Accounting.Requirement.Store.Placement` holds them: each value's block (a store
+        """Values placed in the store, as `ResourceAccounting.Requirement.Store.Placement` holds them: each value's block (a store
         index) and its bit offset there, and each block's first encoded read (`encoded`, the first step whose reads see it
         under its append's coin: memory-map/v1's deferred residency), 0 for a block missing."""
 

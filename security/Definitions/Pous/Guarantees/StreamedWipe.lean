@@ -17,7 +17,7 @@ physical premises enter as the game's shape, and the challenger's deployment mus
 
 - *no unaccounted tier*: `M` is every bit the server can hold when the fill ends, all its memory tiers;
 - C6, *egress certified over the whole wipe*: `E` bounds the bits that left the boundary from the fill's start to the
-  last challenge, as the network certifier counts them, and the deadline keeps an answer from being fetched from
+  last challenge, as the network attester counts them, and the deadline keeps an answer from being fetched from
   outside in any other way;
 - C5, *no side channel*: no label reaches the outside except through that egress, and nothing reaches the server during
   the challenges but the indices and what the outside sends, which is a function of `ξ` and the indices.

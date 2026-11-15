@@ -13,7 +13,7 @@ proof block, which no guarantee states yet.
 
 * `WorkSound`: under the accelerator model's device premises (G1, G2, G3, P1, P2) and exactly the program's trust
   base, each a named premise (SAK(matmul), SHA-512's speed, the price of an exchanged bit, the proof system's
-  soundness, the network certifier's count, and commit-and-open's extraction), for every prover that runs the period
+  soundness, the network attester's count, and commit-and-open's extraction), for every prover that runs the period
   one sampling block at a time, each in its commit, challenge and response phases, its operands committed before its
   coins (`Prover`),
   `Pr[accepted ∧ rv + W_other > OPT_honest + ε_A C] ≤ δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm + κ_dsha)`, `C` the
@@ -59,7 +59,7 @@ whatever the price), the devices meet (G1), (G2), (G3), (P1) and (P2), and
 * an exchanged bit replaces at most `β` of priced work (`OutsourceWithinEgress`),
 * the service's verdict accepts only periods whose sampling blocks' committed instances are registrable and whose
   checks pass, but with probability `κ_S`,
-* the network certifier counts at most `K` exchanged bits,
+* the network attester counts at most `K` exchanged bits,
 * an accepted period's selected answers run within it (`AnswersFit`), and
 * each sampling block's work splits into its words and their commitment on advice of at most `B_adv(A)` bits fixed
   before the block's coins, the commitment's output the prover's root; on runs within the cap `Q` (the commit phases'
@@ -245,7 +245,7 @@ its own devices `Pd u`, under the service's verdict `verdict u` on its transcrip
 One oracle serves the fleet. The challenger issues the coins from its randomness `Ω` (`coin`), each replica its own
 (`OwnDither`). The strategy the fleet runs on replica `u` (`A u`, at the challenger's randomness) reads every other
 replica's coins, past and future (a coalition at its worst), and none of its own (`CoinsConfidential`); what other
-replicas compute for it is work it exchanges with machines outside its devices, which the network certifier counts.
+replicas compute for it is work it exchanges with machines outside its devices, which the network attester counts.
 If every replica's period is sound in moment at rate `η_u` (`MomentSound`, from `WorkMoment`), with `ε_u` its `ε_skip`
 without the luck and `κ_u(A u ω) ≤ κmax_u`, then the probability over the oracle and the challenger's randomness that
 some nonempty set `S` of replicas is accepted, with other work `z_u` fitting beside each one's sampling blocks, while

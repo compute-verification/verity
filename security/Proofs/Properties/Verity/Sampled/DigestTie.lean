@@ -24,7 +24,7 @@ namespace Verity.Sampled
 
 open FlockSoundness.Discharge
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **v2's statement has hm96-sha512 rows**: the tags registered under `Spot.OneStageZk.STATEMENT`. -/
 theorem statement_hm96Rows {t : Flock.Tags}

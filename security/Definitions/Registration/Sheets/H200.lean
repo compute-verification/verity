@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The H200's data sheet (generated)
 
-The data-sheet machine (`Accounting.TS.Sheet.machine`) at the H200 SXM (sm_90a)'s vendor values: each constant with the
+The data-sheet machine (`ResourceAccounting.TS.Sheet.machine`) at the H200 SXM (sm_90a)'s vendor values: each constant with the
 axiom that reads it, its value, its grade and its source, and the census of the machine model's `DS-90` vector, which
 `machine_eq_census` proves the machine is, line for line. Each tensor peak has a lemma that the per-clock peak
 reproduces the document's per-second figure at the clock that figure is quoted at. A3 reads `Run.n` as device totals
@@ -53,7 +53,7 @@ tile, and `Device.lean`'s side channels don't list NVLink peer offload.
 
 @[expose] public section
 
-namespace Accounting.TS.Sheets.H200
+namespace ResourceAccounting.TS.Sheets.H200
 
 noncomputable section
 
@@ -813,4 +813,4 @@ theorem peakF64_figure :
 
 end
 
-end Accounting.TS.Sheets.H200
+end ResourceAccounting.TS.Sheets.H200

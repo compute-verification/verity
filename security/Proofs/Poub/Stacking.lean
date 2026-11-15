@@ -4,14 +4,14 @@ public import Mathlib
 public import Definitions.Poub.Guarantees.Stacking
 public import Proofs.Poub.RateAudit.DeployedSketchSum
 public import Proofs.Poub.RateAudit.DeployedRelay
-public import Proofs.Accounting.Requirement
-public import Proofs.Accounting.Gates
+public import Proofs.ResourceAccounting.Requirement
+public import Proofs.ResourceAccounting.Gates
 import Proofs.Pous.Prob
 
 /-!
 # Stacking: the carrier lemma and the stacked session
 
-`Accounting.SecurityProofs.CarrierBits` counts a circuit's values: a step of `x` bits splits the stores into at most
+`ResourceAccounting.SecurityProofs.CarrierBits` counts a circuit's values: a step of `x` bits splits the stores into at most
 `2^x` classes, in each of which the rest of the provenance has `x` bits fewer, so the values take at most `2^n`
 contents when every run has at most `n` input and encoded bits (`Provenance.card_image_le`). A carrier's values are its
 sectors at every store, which take every value, so its sectors are at most `n` bits (`Carrier.card_le`). Under
@@ -25,7 +25,7 @@ uniform store's when the blocks are uniform (`KeyBinding.uniformBut_coinStore`; 
 `KeyBinding.uniformBut_blocks`). A store uniform but for `δ` at an index read from the coins moves an event of the
 store and the coins to a uniform store at a cost of `δ` (`UniformBut.pr_le_of`), fiber by fiber over the coins.
 
-`Accounting.SecurityProofs.StackedRunConservationSketchDeployed` charges each carrier's sectors in the pass's
+`ResourceAccounting.SecurityProofs.StackedRunConservationSketchDeployed` charges each carrier's sectors in the pass's
 rebuilds, so every pass rebuilds at most `X + C` bits, and bounds the session with a store per pass. A window that
 doesn't pay for its correct receipts has a sign matrix of low rank, paid once a window, or a pass whose kept candidate
 is unpaid on its own store (`SketchDeployedWindow.exists_unpaidOn`). That store is the append-coin rule's at the
@@ -35,13 +35,13 @@ deployed guarantee's one-pass family bound holds (`SketchDeployedRun.pr_pass_le`
 causal family of the windows' samples, whatever stores they are on (`pr_samples_causal_le`), so the samples' terms are the
 deployed guarantee's (`pr_deployed_of_unpaid_causal`).
 
-`Accounting.SecurityProofs.StackedRunConservationRelay` simulates each pass device by one that reruns its carrier's
+`ResourceAccounting.SecurityProofs.StackedRunConservationRelay` simulates each pass device by one that reruns its carrier's
 circuit first, reading every step's bits over the side link at odd addresses (`PIChip.walk`, within `C` bits), and then
 runs the device with its carrier reads answered from the circuit's values (`PIChip.answer`). The simulating device
 (`PIDevice.stack`) has the device's state, memory, receipts, tier reads and compute, and side link `L + C`, so
 `RemoteRunConservationRelay` bounds its session, which is the stacked session's event.
 
-`Accounting.SecurityProofs.StackedRequirementSketchDeployed` and `Accounting.SecurityProofs.StackedRequirementRelay`
+`ResourceAccounting.SecurityProofs.StackedRequirementSketchDeployed` and `ResourceAccounting.SecurityProofs.StackedRequirementRelay`
 bound a registered circuit's held and read bits over at most `k` steps by the store's `k·N·B` when the store and the
 plans are its own (`Requirement.cap_of_matches`, from `RequirementHeld` and `RequirementMoved` with no block held), so a
 shortfall against the requirement is one against the store.
@@ -49,7 +49,7 @@ shortfall against the requirement is one against the store.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- **Under the encode bound at `E`, `x` bits of a block's encoding cost `x/(8·bytes)` words' `E` capped
 units**: the encode cost of the `⌈x/(8·bytes)⌉` words those bits fill is at least that many words' `E`
@@ -73,9 +73,9 @@ theorem encodeBitsCost_ge {F : Gates.Field} {k B E εnum εden : ℕ}
     _ = (8 * F.bytes : ℕ) * ((q * E : ℕ) : ℕ∞) := by push_cast; ring
     _ ≤ (8 * F.bytes : ℕ) * encodeBitsCost F k B εnum εden x := by gcongr
 
-end Accounting
+end ResourceAccounting
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (Bits)
 
@@ -201,9 +201,9 @@ theorem card_le_of_budget (K : Carrier N m) {F : Gates.Field} {kr B E εnum εde
 
 end Carrier
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch
 
-namespace Accounting.Assumptions
+namespace ResourceAccounting.Assumptions
 
 open Pous (pr)
 open scoped ENNReal
@@ -221,9 +221,9 @@ theorem pr_prod_eq_sum_div {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → 
   rw [ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
   ring
 
-end Accounting.Assumptions
+end ResourceAccounting.Assumptions
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pous (pr)
 open scoped ENNReal
@@ -286,9 +286,9 @@ theorem Assumptions.KeyBinding.uniformBut_coinStore {n P N m ρ h ks G d T M : �
   rw [hl, ← hr]
   exact h1
 
-end Accounting
+end ResourceAccounting
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 
@@ -696,9 +696,9 @@ theorem stack_win {τ : ℕ} (A : DeployedRun n P N b h ρ S L' q r s d G) (L C 
 
 end DeployedRun
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (pr)
 open scoped ENNReal
@@ -712,7 +712,7 @@ local instance instFintypeOracleFamStack (N ρ h ks G : ℕ) :
 
 /-- Signs whose sector blocks all have rank at least `r`. -/
 def RankGood {ks m : ℕ} (r : ℕ) (σ : SketchSigns ks m) : Prop :=
-  ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
+  ∀ u, r ≤ ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank
 
 namespace SketchDeployedWindow
 
@@ -789,7 +789,7 @@ theorem pr_pass_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (r X qtot :
       let B := (A.window w η).device j ι c
       let D := Data.ofParts E R
       (B.prog σ D).rebuilds O D * 256 ≤ X)
-    (hq : ∀ w η j ι, Accounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot)
+    (hq : ∀ w η j ι, ResourceAccounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot)
     (w : Fin n) (j : Fin P) :
     pr (fun y : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       RankGood r (y.2 w).1 ∧
@@ -809,7 +809,7 @@ theorem pr_pass_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (r X qtot :
       (fun j ι σ Os D => hq w η j ι σ Os D) j
 
 /-- The rank tail of window `w`'s signs, on any `ω` sampled before the session. -/
-theorem pr_rank_le {Ω : Type} [Fintype Ω] (r : ℕ) (ε : ℝ≥0∞) (hRank : Accounting.Assumptions.SketchRank ks m r ε)
+theorem pr_rank_le {Ω : Type} [Fintype Ω] (r : ℕ) (ε : ℝ≥0∞) (hRank : ResourceAccounting.Assumptions.SketchRank ks m r ε)
     (w : Fin n) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) => ¬ RankGood r (x.2 w).1) ≤ ε := by
   classical
@@ -830,13 +830,13 @@ pass, a uniform store but for `δ` at each prefix, some window fails to pay for 
 most `n·ε + n·P·(G·N/2^h + qtot/2^(8r) + δ)`: the rank tail once a window, and each pass's family bound and `δ`. -/
 theorem pr_unpaidOn_le {Ω : Type} [Fintype Ω] (A : SketchDeployedRun n P N m ρ h S L q ks G d)
     (view : SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m) (δ : ℝ≥0∞)
-    (hKB : Accounting.UniformBut δ view) (r X qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32)
-    (hRank : Accounting.Assumptions.SketchRank ks m r ε)
+    (hKB : ResourceAccounting.UniformBut δ view) (r X qtot : ℕ) (ε : ℝ≥0∞) (hr32 : r ≤ 32)
+    (hRank : ResourceAccounting.Assumptions.SketchRank ks m r ε)
     (hX : ∀ w η j ι c E σ R O,
       let B := (A.window w η).device j ι c
       let D := Data.ofParts E R
       (B.prog σ D).rebuilds O D * 256 ≤ X)
-    (hq : ∀ w η j ι, Accounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) :
+    (hq : ∀ w η j ι, ResourceAccounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       ∃ w, (A.win w x.2).readsOn (programmed view x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 +
           P * (S + (L - ρ * 256) + X) <
@@ -1041,9 +1041,9 @@ theorem pr_deployed_of_unpaid_causal {Ω : Type} [Fintype Ω]
 
 end SketchDeployedRun
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch
 
-namespace Accounting.Requirement
+namespace ResourceAccounting.Requirement
 
 variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Store.Placement V)
 
@@ -1077,25 +1077,25 @@ theorem lt_of_cap {a H R Y : ℕ} {c : ℝ} (hH : H ≤ Y) (hR : R ≤ Y) (h : (
     · nlinarith [(Nat.cast_nonneg a : (0 : ℝ) ≤ a), (Nat.cast_nonneg X : (0 : ℝ) ≤ X)]
   exact h.elim (key hH) (key hR)
 
-end Accounting.Requirement
+end ResourceAccounting.Requirement
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.RateSketch
+open ResourceAccounting.RateSketch
 open Pous (pr)
 open scoped ENNReal
 
-/-- **The carrier lemma**, `Accounting.Guarantees.CarrierBits`. -/
-theorem CarrierBits : Accounting.Guarantees.CarrierBits := by
+/-- **The carrier lemma**, `ResourceAccounting.Guarantees.CarrierBits`. -/
+theorem CarrierBits : ResourceAccounting.Guarantees.CarrierBits := by
   intro N m I X α c hc
   classical
   have h := c.card_image_le Finset.univ (I + X) fun E _ => add_le_add (hc E).1 (hc E).2
   rwa [Nat.card_coe_set_eq, Set.ncard_eq_toFinset_card', Set.toFinset_range]
 
 /-- **PoUB at the deployed parameters with a store per pass, with stacking**,
-`Accounting.Guarantees.StackedRunConservationSketchDeployed`. -/
+`ResourceAccounting.Guarantees.StackedRunConservationSketchDeployed`. -/
 theorem StackedRunConservationSketchDeployed :
-    Accounting.Guarantees.StackedRunConservationSketchDeployed := by
+    ResourceAccounting.Guarantees.StackedRunConservationSketchDeployed := by
   intro n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A hn hP hN
     hE0 hrank hKB hSq hCs hEle hε hB hK C
   have hE : Gates.EncodeBound Gates.p1024 3 B E εnum εden :=
@@ -1139,8 +1139,8 @@ theorem StackedRunConservationSketchDeployed :
   ring
 
 /-- **PoUB with relaying side sources on a programmed store, with stacking**,
-`Accounting.Guarantees.StackedRunConservationRelay`. -/
-theorem StackedRunConservationRelay : Accounting.Guarantees.StackedRunConservationRelay := by
+`ResourceAccounting.Guarantees.StackedRunConservationRelay`. -/
+theorem StackedRunConservationRelay : ResourceAccounting.Guarantees.StackedRunConservationRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B es εnum εden tier
     δ Ω Ca Ch _ _ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hSq hCs hEle hε hk hp hp4 hK C
   have hE : Gates.EncodeBound Fc k B E εnum εden := SecurityProofs.Gates.encodeBound_of hSq hCs hEle hε hk hp hp4
@@ -1173,8 +1173,8 @@ theorem StackedRunConservationRelay : Accounting.Guarantees.StackedRunConservati
     ring
 
 /-- **Stacked PoUB at the deployed parameters, read against a registered circuit's requirement**,
-`Accounting.Guarantees.StackedRequirementSketchDeployed`. -/
-theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed := by
+`ResourceAccounting.Guarantees.StackedRequirementSketchDeployed`. -/
+theorem StackedRequirementSketchDeployed : ResourceAccounting.Guarantees.StackedRequirementSketchDeployed := by
   intro n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A V _ W e ℓ mm
     plan win hn hP hN hE0 hrank hKB hSq hCs hEle hε hB hK hwin hm C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan 32768 N (n * P) win hwin hm
@@ -1187,8 +1187,8 @@ theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirem
   exact h
 
 /-- **Stacked PoUB with relaying side sources, read against a registered circuit's requirement**,
-`Accounting.Guarantees.StackedRequirementRelay`. -/
-theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay := by
+`ResourceAccounting.Guarantees.StackedRequirementRelay`. -/
+theorem StackedRequirementRelay : ResourceAccounting.Guarantees.StackedRequirementRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B es εnum εden tier
     δ Ω Ca Ch _ _ enc choose slot A dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hSq hCs
     hEle hε hk hp hp4 hK hwin hm C γ
@@ -1202,4 +1202,4 @@ theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay 
   simp only [Nat.cast_mul] at h
   exact h
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

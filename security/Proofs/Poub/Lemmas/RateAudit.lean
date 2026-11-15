@@ -19,9 +19,9 @@ with the proofs: no record pins it.
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.Rate
+open ResourceAccounting ResourceAccounting.Rate
 open Pous (Bits)
 
 /-- **Completeness of `RateAudit`: an honest device that reads every word once is accepted on every coin.** For every
@@ -32,7 +32,7 @@ bits, and its compute is `N·c_tag`, with nothing rebuilt. It reads the stream, 
 the oracle at it under the stream. Against `RateAudit` at `S = 0`, `L = ρ` (so `c_free = 0`), `q = N` and
 `F = N·c_tag`, the honest `N·b` sits above the floor `k·b − λ − (N − k)·c_tag·b/c_enc` by the sample's slack
 `(N − k)·b`, about `ε_s·N·b`, plus `λ` and the tagging the sample's slack leaves unspent. Proof:
-`Accounting.SecurityProofs.RateHonest`. -/
+`ResourceAccounting.SecurityProofs.RateHonest`. -/
 def RateHonest : Prop :=
   ∀ N b h ρ : ℕ, ∃ A : Rate.Prover N b h ρ 0 ρ N,
     ∀ (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
@@ -43,11 +43,11 @@ every `N`, `b`, `h` and `ρ` there is a partial device with no on-chip state and
 carries exactly the certified stream (`L = ρ`) and which makes `N` oracle queries, that is accepted on every store,
 stream, oracle and sample; its footprint and its ingress are exactly the store, `N·b` bits, it completes nothing, and
 its compute is `N·c_tag` at every price of a completion. It is `RateHonest`'s device. Proof:
-`Accounting.SecurityProofs.RatePartialHonest`. -/
+`ResourceAccounting.SecurityProofs.RatePartialHonest`. -/
 def RatePartialHonest : Prop :=
   ∀ N b h ρ : ℕ, ∃ A : Rate.PartialDevice N b h ρ 0 ρ N,
     ∀ (cTag : ℕ) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
       A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.completed E R O = 0 ∧
         A.compute cTag cost E R O = N * cTag
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

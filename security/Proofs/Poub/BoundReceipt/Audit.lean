@@ -22,7 +22,7 @@ compression of the store, at `C(q, k − m)/2^λ`).
 
 @[expose] public section
 
-namespace Accounting.Rate.Chip
+namespace ResourceAccounting.Rate.Chip
 
 variable {N b h ρ : ℕ} {α : Type}
 
@@ -84,11 +84,11 @@ theorem inline_addrs (m : ℕ → Bool) (w : World N b h ρ) (c : Chip N b h ρ 
   | stream i k ih => exact ih _
   | rebuild j k ih => exact ih _
 
-end Accounting.Rate.Chip
+end ResourceAccounting.Rate.Chip
 
-namespace Accounting.BoundReceipt
+namespace ResourceAccounting.BoundReceipt
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (Bits)
 
 variable {N a b h S L q Lz qz : ℕ}
@@ -128,9 +128,9 @@ theorem Rest.view_taken (B : Rest N a h Lz qz) (E : Store N b) (z : Store N a) (
 
 theorem noStream_eq (R : Bits 0) : R = noStream := funext (fun i => i.elim0)
 
-end Accounting.BoundReceipt
+end ResourceAccounting.BoundReceipt
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits)
 open Bandwidth (card_line_le)
@@ -177,11 +177,11 @@ theorem card_filter_noStream {X : Type} [Fintype X] (P : X × Bits 0 → Prop) [
   rw [show y = (y.1, BoundReceipt.noStream) from Prod.ext rfl (BoundReceipt.noStream_eq y.2)]
   rfl
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.BoundReceipt.Node
+namespace ResourceAccounting.BoundReceipt.Node
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (Bits)
 
 variable {N a b h S L q Lz qz : ℕ}
@@ -225,11 +225,11 @@ theorem card_guess_rest (A : Node N a b h S L q Lz qz) (E : Store N b) (z : Stor
   rw [Rest.mem_view_queried, Rest.view_tags]
   exact ⟨hG.2, hG.1⟩
 
-end Accounting.BoundReceipt.Node
+end ResourceAccounting.BoundReceipt.Node
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate Accounting.BoundReceipt Accounting.BoundReceipt.Node
+open ResourceAccounting.Rate ResourceAccounting.BoundReceipt ResourceAccounting.BoundReceipt.Node
 open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono pr_or_le pr_exists_le
@@ -242,16 +242,16 @@ theorem two_div_eq (h : ℕ) : ((1 : ℕ) : ℝ≥0∞) / ((2 ^ h : ℕ) : ℝ�
   push_cast
   rw [one_add_one_eq_two]
 
-/-- **Co-location** (`Accounting.Guarantees.Colocation`). -/
-theorem Colocation : Accounting.Guarantees.Colocation := by
+/-- **Co-location** (`ResourceAccounting.Guarantees.Colocation`). -/
+theorem Colocation : ResourceAccounting.Guarantees.Colocation := by
   intro N a b h S L q Lz qz A j E z
   classical
   refine (pr_or_le _ _).trans ((add_le_add ?_ ?_).trans (le_of_eq (two_div_eq h)))
   · exact pr_le_of_card _ (2 ^ h) 1 (by positivity) (by rw [one_mul]; exact card_guess_gpu A E z j)
   · exact pr_le_of_card _ (2 ^ h) 1 (by positivity) (by rw [one_mul]; exact card_guess_rest A E z j)
 
-/-- **The link's share** (`Accounting.Guarantees.BoundReceiptShare`). -/
-theorem BoundReceiptShare : Accounting.Guarantees.BoundReceiptShare := by
+/-- **The link's share** (`ResourceAccounting.Guarantees.BoundReceiptShare`). -/
+theorem BoundReceiptShare : ResourceAccounting.Guarantees.BoundReceiptShare := by
   intro a b w L Lz Fz lam ha hw
   have hd : 0 < a * w := Nat.mul_pos ha hw
   set X := (Lz + lam) * w + Fz * a with hX
@@ -273,8 +273,8 @@ theorem BoundReceiptShare : Accounting.Guarantees.BoundReceiptShare := by
       _ ≤ b * (L * w + X) := by gcongr
       _ = b * ((L + Lz + lam) * w + Fz * a) := by rw [hX]; ring
 
-/-- **The link relay** (`Accounting.Guarantees.BoundReceiptLink`). -/
-theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
+/-- **The link relay** (`ResourceAccounting.Guarantees.BoundReceiptLink`). -/
+theorem BoundReceiptLink : ResourceAccounting.Guarantees.BoundReceiptLink := by
   intro N a b h S L q Lz qz s k m F cTag cEnc w Fz lam A hm
   rw [Bandwidth.pr_coins_flat]
   dsimp only
@@ -410,4 +410,4 @@ theorem BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink := by
     push_cast
     rfl
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

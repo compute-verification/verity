@@ -46,12 +46,12 @@ A prover whose memory is laid out before the signs as any function of the store 
 chip takes the certified stream in over the link, then for each tile reads those `d` bits at the window's signs,
 decodes the digest and queries the oracle at it. Every tag it commits is right, so it is accepted at every sample; it
 reads `N·d` bits and its memory is `|Sig|·N·d` bits (`table_run`, `table_mem`; the guarantees
-`Accounting.SecurityProofs.RateSketchTable` and `RateTensorSketchTable`).
+`ResourceAccounting.SecurityProofs.RateSketchTable` and `RateTensorSketchTable`).
 -/
 
 @[expose] public section
 
-namespace Accounting.RateSketch.Table
+namespace ResourceAccounting.RateSketch.Table
 
 open Pous (Bits)
 
@@ -240,19 +240,19 @@ theorem table_run (N m ρ h d : ℕ) (X Sig Dg : Type) [Inhabited X] [Fintype Si
   · simp only [LayoutDevice.linkSteps, table]
     rw [l4, t4, List.length_finRange, Nat.zero_add]
 
-end Accounting.RateSketch.Table
+end ResourceAccounting.RateSketch.Table
 
-open Accounting.RateSketch
+open ResourceAccounting.RateSketch
 
-/-- **The table** (`Accounting.Guarantees.RateSketchTable`). -/
-theorem Accounting.SecurityProofs.RateSketchTable : Accounting.Guarantees.RateSketchTable := by
+/-- **The table** (`ResourceAccounting.Guarantees.RateSketchTable`). -/
+theorem ResourceAccounting.SecurityProofs.RateSketchTable : ResourceAccounting.Guarantees.RateSketchTable := by
   intro N m ρ h d X Sig Dg _ _ _ dig hd
   obtain ⟨e⟩ := Function.Embedding.nonempty_of_card_le (α := Dg) (β := Pous.Bits d) (by simpa using hd)
   exact ⟨Table.table N m ρ h d X Sig Dg dig e, Table.mem_cap N m d dig e,
     Table.table_run N m ρ h d X Sig Dg dig e⟩
 
-/-- **The table at the deployed tag** (`Accounting.Guarantees.RateTensorSketchTable`). -/
-theorem Accounting.SecurityProofs.RateTensorSketchTable : Accounting.Guarantees.RateTensorSketchTable := by
+/-- **The table at the deployed tag** (`ResourceAccounting.Guarantees.RateTensorSketchTable`). -/
+theorem ResourceAccounting.SecurityProofs.RateTensorSketchTable : ResourceAccounting.Guarantees.RateTensorSketchTable := by
   intro N m ρ h ks
   have hS : Fintype.card (SketchSigns ks m) = 2 ^ (ks * m * 32) := by
     simp only [SketchSigns, Fintype.card_fun, Fintype.card_fin, Fintype.card_bool, ← pow_mul]
@@ -260,6 +260,6 @@ theorem Accounting.SecurityProofs.RateTensorSketchTable : Accounting.Guarantees.
     ring
   have hD : Fintype.card (Fin ks → ZMod (2 ^ 32)) ≤ 2 ^ (32 * ks) := by
     simp only [Fintype.card_fun, Fintype.card_fin, ZMod.card, ← pow_mul, le_refl]
-  obtain ⟨A, hmem, hrun⟩ := Accounting.SecurityProofs.RateSketchTable N m ρ h (32 * ks) Sector (SketchSigns ks m)
+  obtain ⟨A, hmem, hrun⟩ := ResourceAccounting.SecurityProofs.RateSketchTable N m ρ h (32 * ks) Sector (SketchSigns ks m)
     (Fin ks → ZMod (2 ^ 32)) sketch hD
   exact ⟨A, fun E a ha => hmem E a (by rwa [hS]), hrun⟩

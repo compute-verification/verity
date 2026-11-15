@@ -7,7 +7,7 @@ public import Proofs.Pouw.Lemmas.Game
 /-!
 # PoUW's work lower bound on an isolated node (proof)
 
-`Accounting.SecurityProofs.PouwLocalOff`: an accepted coin whose node is short of `Wb · Nmin` credits is short of
+`ResourceAccounting.SecurityProofs.PouwLocalOff`: an accepted coin whose node is short of `Wb · Nmin` credits is short of
 `Nmin` right blocks (A2), right by luck (A2b), in the floor's skip event, or under the floor, which A5 at 0 rules out;
 the union bound sums the first three. `PouwWork.detection_of_sampling` derives A2 from
 `Pouw.Guarantees.WorkWeightedSampling` when the sampled blocks are the coins' last part.
@@ -15,9 +15,9 @@ the union bound sums the first three. `PouwWork.detection_of_sampling` derives A
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.PouwWork Finset
+open ResourceAccounting.PouwWork Finset
 
 namespace PouwWork
 
@@ -80,7 +80,7 @@ theorem detection_of_sampling (hW : Pouw.Guarantees.WorkWeightedSampling) {α : 
 
 end PouwWork
 
-theorem PouwLocalOff : Accounting.Guarantees.PouwLocalOff := by
+theorem PouwLocalOff : ResourceAccounting.Guarantees.PouwLocalOff := by
   intro Ω _ L S P X π m Wb Nmin ρ δdet δluck δskip hdet hluck hfl hH
   obtain ⟨Z, hZ, hfloor⟩ := hfl
   have hsub : ∀ r, (Accepts S P r ∧ credits S P X π m r < Wb * Nmin) →
@@ -107,4 +107,4 @@ theorem PouwLocalOff : Accounting.Guarantees.PouwLocalOff := by
         add_le_add_left (PouwWork.pr_or_le _ _) _
     _ ≤ δdet + δluck + δskip := add_le_add (add_le_add hdet hluck) hZ
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

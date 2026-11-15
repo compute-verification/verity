@@ -1,4 +1,4 @@
-"""PoUW's H1 + fx1 tile against the circuit model's census: `security/Proofs/Accounting/Gates/Rows.lean`'s `h1Rows`.
+"""PoUW's H1 + fx1 tile against the circuit model's census: `security/Proofs/ResourceAccounting/Gates/Rows.lean`'s `h1Rows`.
 
 The Lean is the definition and this file mirrors it on the tile's Program (`h1tile.PouwH1Tile` with `EXACT` the s8
 accumulator over `BlackwellS8ImmaDot32_v2`, on the full grid). A row's dot steps and their MACs (`census.dotMacs`) are the

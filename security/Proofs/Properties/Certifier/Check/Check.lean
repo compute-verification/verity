@@ -28,7 +28,7 @@ violation exactly when it is accepted (`egress_none`, `ingress_none`), and `no-v
 open NetworkCheck hiding Params
 open NetworkCheck.Check
 open Flock
-open NetworkCertifier (ClockSync LogicalFrame expectedRow)
+open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
 set_option maxRecDepth 20000
 

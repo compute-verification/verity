@@ -66,7 +66,7 @@ for one server block and the Lean check's answer for it. It extends the all-prot
   `verity/remote/v0` or remote's composite of record `verity/remote/v1`, as the composite Lean check writes its
   `answer.json` and `composite.py` its public `composite.json`), `accept`, `reject` or `undecided`, and
   `undecided` with no answer. Nothing in Python combines the subprotocols' verdicts;
-- what the product's subprotocols say (`compose`) and the error of `Accounting.Guarantees.JointPooledLive` over the
+- what the product's subprotocols say (`compose`) and the error of `ResourceAccounting.Guarantees.JointPooledLive` over the
   block: the accepted subprotocols' errors summed, with `joint_horizon.named_terms` naming, by subprotocol, the terms
   those errors leave out, which the sum and the monitoring period's bounds leave out too. The product (`PRODUCTS`) is
   onsite's, every subprotocol, unless `composed.product` names remote's, SPOT and PoUW, whose other

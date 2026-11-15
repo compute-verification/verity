@@ -11,12 +11,12 @@ A device with no on-chip state, no free side sources and nothing rebuilt, whose 
 (`Bandwidth.Completeness.layout`), reads the certified stream, then every word once, and queries the oracle at each
 word under the stream. It is accepted on every store, stream, oracle and sample; its footprint and ingress are exactly
 the store, `N·b` bits, its link carries exactly the stream, and its compute is `N` tags (`honest_accepts`; the
-guarantee `Accounting.SecurityProofs.RateHonest`).
+guarantee `ResourceAccounting.SecurityProofs.RateHonest`).
 -/
 
 @[expose] public section
 
-namespace Accounting.Rate.Completeness
+namespace ResourceAccounting.Rate.Completeness
 
 open Pous (Bits)
 
@@ -171,9 +171,9 @@ theorem honest_accepts (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Orac
   · simp only [Prover.compute, honest] at h5 h6 ⊢
     rw [h5, h6, zero_mul, add_zero]
 
-end Accounting.Rate.Completeness
+end ResourceAccounting.Rate.Completeness
 
-/-- **Completeness of the rate audit** (`Accounting.Guarantees.RateHonest`). -/
-theorem Accounting.SecurityProofs.RateHonest : Accounting.Guarantees.RateHonest :=
-  fun N b h ρ => ⟨Accounting.Rate.Completeness.honest N b h ρ,
-    fun cTag cEnc E R O _ I => Accounting.Rate.Completeness.honest_accepts cTag cEnc E R O I⟩
+/-- **Completeness of the rate audit** (`ResourceAccounting.Guarantees.RateHonest`). -/
+theorem ResourceAccounting.SecurityProofs.RateHonest : ResourceAccounting.Guarantees.RateHonest :=
+  fun N b h ρ => ⟨ResourceAccounting.Rate.Completeness.honest N b h ρ,
+    fun cTag cEnc E R O _ I => ResourceAccounting.Rate.Completeness.honest_accepts cTag cEnc E R O I⟩

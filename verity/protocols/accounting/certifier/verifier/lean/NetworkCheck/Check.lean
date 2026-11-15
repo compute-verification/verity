@@ -1,7 +1,7 @@
 module
 
 public import NetworkCheck.Certificate
-public import NetworkCertifier.Schedule
+public import NetworkAttester.Schedule
 public import Lms.Verify
 public import CoreProtocol.Cli
 
@@ -10,7 +10,7 @@ public import CoreProtocol.Cli
 
 The auditor's check of one spatial unit's certified execution phases (record v2, `certificate.py`), as `audit.py`'s
 `Audit` runs it: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link, each
-against the network certifier's public key (`LmsKey`) in the certifier session the parameters name. The id is the
+against the network attester's public key (`LmsKey`) in the certifier session the parameters name. The id is the
 check's; the message a certificate signs has its own domain-separation tag, `verity/network-certificate-message/v2`
 (`messageTag`).
 
@@ -45,7 +45,7 @@ gets the empty digest, since `Core.Protocol.digest` is total.
 
 the Program's logical frames on the link in canonical order (`LogicalFrame`) and the clock sync it declares for each of the W
 windows (`ClockSync`, num and den ≥ 1). The audit reads no frames or Merkle openings from a certified record: it recomputes
-the Program's grid from these frames and syncs (`NetworkCertifier.expectedRow`, the rows of the constant-rate Program
+the Program's grid from these frames and syncs (`NetworkAttester.expectedRow`, the rows of the constant-rate Program
 `constantRate`) and compares its record digest, root and counts included, with the signed head's. Evidence that doesn't fit
 the parameters (another number of links or of syncs, a payload of other than B bytes) is a rejection.
 
@@ -84,7 +84,7 @@ namespace NetworkCheck.Check
 
 open Lean (Json toJson)
 open Flock (V)
-open NetworkCertifier (ClockSync LogicalFrame expectedRow)
+open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
 def protocolId : String := "verity/network-certificate/v4"
 def commitmentTag : String := "verity-network-certifier/certificates/v3"
@@ -98,7 +98,7 @@ structure Params where
   windows : Nat
   grid : Grid
   ingressGrid : Grid
-  syncSet : NetworkCertifier.SyncSet
+  syncSet : NetworkAttester.SyncSet
   lms : Lms.Params
   key : ByteArray
   session : ByteArray
@@ -192,7 +192,7 @@ def ratOf (j : Json) (ctx : String) : V Rat := do
   unless 1 ≤ n ∧ 1 ≤ d do throw s!"{ctx}: a numerator and a denominator of at least 1"
   pure (mkRat n d)
 
-private def syncSetOf (j : Json) : V NetworkCertifier.SyncSet := do
+private def syncSetOf (j : Json) : V NetworkAttester.SyncSet := do
   let deltas := (← (← Flock.J.arr j "deltas" "sync_set").mapM (Flock.J.asNat · "sync_set.deltas")).toList
   let rhos := (← (← Flock.J.arr j "rhos" "sync_set").mapM (ratOf · "sync_set.rhos")).toList
   if h : deltas ≠ [] ∧ rhos ≠ [] ∧ (∀ ρ ∈ rhos, 0 < ρ) ∧ deltas.Nodup ∧ rhos.Nodup then
@@ -312,10 +312,10 @@ def evidenceOf (j : Json) : V Evidence := do
 private def sameSync (a b : ClockSync) : Bool := a.delta == b.delta && a.rho == b.rho
 
 /-- `sync in sync_set`: its δ is one of Σ_sync's and its ρ one of Σ_sync's. -/
-def inSyncSet (ss : NetworkCertifier.SyncSet) (s : ClockSync) : Bool := decide (s.delta ∈ ss.deltas ∧ s.rho ∈ ss.rhos)
+def inSyncSet (ss : NetworkAttester.SyncSet) (s : ClockSync) : Bool := decide (s.delta ∈ ss.deltas ∧ s.rho ∈ ss.rhos)
 
 /-- Σ_sync as `parameters_digest` reads it, each ρ in lowest terms. -/
-def manifestSet (ss : NetworkCertifier.SyncSet) : NetworkCheck.SyncSet :=
+def manifestSet (ss : NetworkAttester.SyncSet) : NetworkCheck.SyncSet :=
   ⟨ss.deltas.toArray.map Int.ofNat, ss.rhos.toArray.map fun ρ => (ρ.num, ρ.den)⟩
 
 /-- `CertifiedRecord.verify` under `LmsKey` in the parameters' session: the certificate names the head's execution phase,

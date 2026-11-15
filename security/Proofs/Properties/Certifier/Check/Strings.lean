@@ -14,7 +14,7 @@ is a string of the list the claims search (`headStrings`, `saltedStrings`, `fram
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check
-open NetworkCertifier (ClockSync)
+open NetworkAttester (ClockSync)
 
 namespace Properties.Certifier
 

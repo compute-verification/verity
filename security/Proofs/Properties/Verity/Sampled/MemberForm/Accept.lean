@@ -68,7 +68,7 @@ theorem formAccepts : FormAccepts := by
 
 /-- **An accepted play at parameters that name members is an accept of the form**: v2's case in the play accepted
 at the coins it read, on the play's parameters, and the form's accepts hold `MembersAccept`. -/
-theorem accept_members {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+theorem accept_members {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
     {k : Verity.Registration.Composite} {o : Verity.Exchange} (hF : FormAccepts)
     {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member}
     (hp : ParamsAt o.params p) (hms : p.members = some ms) (hv : V.Verdict k .sampled o) :

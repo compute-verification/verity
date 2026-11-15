@@ -72,9 +72,9 @@ beside the complete check). `readsOk` checks the input bits at columns every one
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked FlockSoundness.Discharge
+open PouwWindow.Lanes Flock.SoundAtBridge ResourceAccounting.TS.Checked FlockSoundness.Discharge
 open FlockSoundness.Discharge.Layout (portRowW)
 
 section
@@ -531,4 +531,4 @@ theorem combKnownOk_of_check
     simp [okRow, size_rowWords]
   exact combKnownOk hN hK hu hS hcomp ho hPo (rowBitRead_of_check u hread hmo ho (by omega))
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

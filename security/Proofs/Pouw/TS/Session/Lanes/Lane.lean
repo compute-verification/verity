@@ -44,7 +44,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 /-!
 # A lane's part of `LeafChecks` from its Definition
 
-`Accounting.Assumptions.TS.LeafChecks`' lane field bundles three claims: lane `l`'s circuit's input wires sit where
+`ResourceAccounting.Assumptions.TS.LeafChecks`' lane field bundles three claims: lane `l`'s circuit's input wires sit where
 `decL` reads them, the circuit computes `PouwH1LaneZy_v1`, and that Definition's `ok = 1` means `LaneOk`. The third is
 proved here for every input, at a `K` the lane's tile binds at (`32 ∣ K`, `K < 2^17`, `GemmAccumulatorS8`'s bind), with
 `LeafChecks`' `dq` and `part` the Definition's own (`dqOf`, `partOf`):
@@ -60,7 +60,7 @@ proved here for every input, at a `K` the lane's tile binds at (`32 ∣ K`, `K <
 
 What stays of the field is the first two claims, `LaneComputes`: on every wire assignment the session's evaluation
 agrees with, the decoded `ok` is the Definition's on `laneIn`. `leafChecks_of_computes` gives `LeafChecks` from it and
-`CombineComputes`. Everything here is generic in `dqW` and `chain`; `Accounting.Guarantees.TS.LeafLanesSound` takes
+`CombineComputes`. Everything here is generic in `dqW` and `chain`; `ResourceAccounting.Guarantees.TS.LeafLanesSound` takes
 `dqW` to be the Definition's, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`), and `chain` to be `laneChain K nw`, the words
 of `h1tile._chain` (`Pouw.H1Zy.h1Chain K`: the fx1 chain over the noise from σ_J, keyed from σ_R) at the seeds the
 `pub` row holds.
@@ -74,9 +74,9 @@ each restated piece's lowering computes its word view, and so their composition 
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge PouwWindow.Lanes
+open ResourceAccounting.TS ResourceAccounting.TS.Checked Flock.SoundAtBridge PouwWindow.Lanes
 
 /-- **A lane's inputs as words**, from a reader of its ports' row bits, each field at the bits `decLane` reads it from:
 codes, scales, record words and partial words their fields' bits as unsigned numbers, the admit bits, the public inputs
@@ -272,15 +272,15 @@ theorem laneComputes_of_lowers {K nw : ℕ} {T : Tile}
   (laneLowers_iff T chain dqW sess).1 h
 
 /-- **`LeafChecks` from the circuits computing their Definitions**: with `dq` and `part` the Definition's (`dqOf dqW`,
-`partOf chain`), `LaneComputes` and `CombineComputes` give `Accounting.Assumptions.TS.LeafChecks` at the layout's
+`partOf chain`), `LaneComputes` and `CombineComputes` give `ResourceAccounting.Assumptions.TS.LeafChecks` at the layout's
 decodes, whose lane field asks only at a `K` the lane's tile binds at; that each Definition's `ok = 1` is `LaneOk` or
 `CombineOk` is `laneOk_of_def` and `combineOk_of_def`. -/
 theorem leafChecks_of_computes {K nw : ℕ} (T : Tile)
     (chain : LanePub → Fin 32 → (Fin 4 → Fin K → BitVec 8) → (Fin 8 → Fin K → BitVec 8) → Fin nw → BitVec 32)
     (dqW : BitVec 32 → BitVec 32 → BitVec 32 → BitVec 16) (sess : Option (Fin 32) → RowsSession)
     (hL : LaneComputes T chain dqW sess) (hC : CombineComputes sess (decC nw T)) :
-    Accounting.Assumptions.TS.LeafChecks (dqOf dqW) (partOf chain) sess (decL K nw T) (decC nw T) :=
+    ResourceAccounting.Assumptions.TS.LeafChecks (dqOf dqW) (partOf chain) sess (decL K nw T) (decC nw T) :=
   leafChecks_of_combineComputes _ _ sess _ _
     (fun hK32 hK l vals hv hok => laneOk_of_def T chain dqW _ hK32 hK ((hL l vals hv).symm.trans hok)) hC
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

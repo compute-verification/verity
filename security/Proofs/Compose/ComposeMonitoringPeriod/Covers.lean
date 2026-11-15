@@ -3,7 +3,7 @@ module
 public import Proofs.Compose.Compose.ServiceCovers
 public import Proofs.Compose.Compose.CircuitWork
 public import Definitions.Compose.ComposeMonitoringPeriod
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 
 /-!
 # The period layer's covers: `ServiceCovers` with a window index
@@ -27,9 +27,9 @@ layer's inside its window (`CoversProof.late_one`), and `Compose.CoversProof.rea
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.ComposeMonitoringPeriod
+namespace ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
-open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
 
 open Classical in
 /-- **The period layer's covers on a credited window's live tiles** (proved as `monitoringPeriodCovers`): the period layer's
@@ -74,7 +74,7 @@ theorem late_one {u v : Fin n × Fin Np} (h : (Cd.monitoringPeriodLayer hr hK pr
   split at hsrc
   · rename_i hs
     obtain rfl := Option.some.inj hsrc
-    refine ⟨rfl, k, (Accounting.SecurityProofs.Compose.CoversProof.src_eq Cd hr hK
+    refine ⟨rfl, k, (ResourceAccounting.SecurityProofs.Compose.CoversProof.src_eq Cd hr hK
       (anyRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np) _).trans (dite_eq_left hs), ?_⟩
     rcases hcut with h0 | h1
     · exact absurd h0 (lt_irrefl _)
@@ -94,7 +94,7 @@ theorem rtg_one {u v : Fin n × Fin Np} (h : Relation.ReflTransGen (Cd.monitorin
 `LayerCommitted`. -/
 theorem monitoringPeriodLayer_cone (hw : Cd.Wf) (hc : LayerCommitted Cd) {u v : Fin n × Fin Np}
     (h : Relation.ReflTransGen (Cd.monitoringPeriodLayer hr hK pr).Late u v) : u.1 = v.1 ∧ Cd.Reaches u.2.val v.2.val :=
-  ⟨(rtg_one Cd hr hK pr h).1, Accounting.SecurityProofs.Compose.CoversProof.reaches_of_rtg Cd hr hK
+  ⟨(rtg_one Cd hr hK pr h).1, ResourceAccounting.SecurityProofs.Compose.CoversProof.reaches_of_rtg Cd hr hK
     (anyRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np) hw hc (rtg_one Cd hr hK pr h).2⟩
 
 theorem monitoringPeriodLayer_writerReads : (Cd.monitoringPeriodLayer hr hK pr).WriterReads := by
@@ -103,9 +103,9 @@ theorem monitoringPeriodLayer_writerReads : (Cd.monitoringPeriodLayer hr hK pr).
   split at hu
   · rename_i h
     obtain rfl := Option.some.inj hu
-    obtain ⟨k, hk⟩ := Accounting.SecurityProofs.Compose.WorkProof.writerReads Cd hr hK
+    obtain ⟨k, hk⟩ := ResourceAccounting.SecurityProofs.Compose.WorkProof.writerReads Cd hr hK
       (anyRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np) ℓ.2 (0, ⟨Cd.unit ℓ.2, h.2.2⟩)
-      ((Accounting.SecurityProofs.Compose.CoversProof.src_eq Cd hr hK _ ℓ.2).trans (dite_eq_left h))
+      ((ResourceAccounting.SecurityProofs.Compose.CoversProof.src_eq Cd hr hK _ ℓ.2).trans (dite_eq_left h))
     exact ⟨k, Prod.ext rfl hk⟩
   · cases hu
 
@@ -116,7 +116,7 @@ theorem liveWords_le_wordsOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (N
     (t : Fin Np) : liveWords Sc Cd Np live t ≤ wordsOf Sc Cd := by
   unfold liveWords
   split
-  · exact Accounting.SecurityProofs.Compose.CoversProof.tileWords_le_wordsOf Sc Cd Np t
+  · exact ResourceAccounting.SecurityProofs.Compose.CoversProof.tileWords_le_wordsOf Sc Cd Np t
   · exact Nat.zero_le _
 
 open Classical in
@@ -207,4 +207,4 @@ theorem monitoringPeriodCovers : MonitoringPeriodCoversStmt := by
     · rename_i hn
       exact (hn ⟨hx, hl⟩).elim
 
-end Accounting.SecurityProofs.ComposeMonitoringPeriod
+end ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod

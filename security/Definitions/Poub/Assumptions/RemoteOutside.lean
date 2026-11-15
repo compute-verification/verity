@@ -3,7 +3,7 @@ module
 public import Definitions.Poub.Remote.Outside
 
 /-!
-# No device outside the node computes for it, as the network certifiers observe it (trusted)
+# No device outside the node computes for it, as the network attesters observe it (trusted)
 
 A relay prover forwards each window's coin from a thin node to a helper outside it, which
 holds the encoded store and computes the receipts. No block crosses the node's boundary links, so `Identity` holds and
@@ -11,14 +11,14 @@ the links' charge (`Links`) is untouched, yet the node holds nothing. What exclu
 computation ran. `SketchBound` used to carry that inside its derivation (the sketch model's `Present`); here it is split
 into what the receipts' sketch shows wherever the computation ran, and what the auditor's devices see of where it ran,
 each a named `Prop` on a trace, the session's record of computation off the node for it
-(`Accounting.Remote.Held.Outside`) and what entered the node over its uplinks (`Accounting.Remote.Held.Ingress`):
+(`ResourceAccounting.Remote.Held.Outside`) and what entered the node over its uplinks (`ResourceAccounting.Remote.Held.Ingress`):
 
 * `SketchBoundAt O δ`: except with probability `δ`, a correct receipt of a registered block was computed while the
   block was in node memory or on a chip, or while a device outside the node computed on it for the node, during its
   pass. The relay meets it: its helper computed on every block it receipted, and sent the receipts in.
 * `Covered O I` (`certifier-coverage`): on every accepting outcome where nothing but the verifier's messages entered
   the node over its uplinks during the credited passes, no device outside the node computed for it then. It is what
-  the provider's lockdown (`ProviderLockdown`) became, with the network certifiers in its place, and it says what the
+  the provider's lockdown (`ProviderLockdown`) became, with the network attesters in its place, and it says what the
   certifiers cover and what they don't.
 * `IngressCounted I δ` (the certifiers' count, at δ_net): except with probability `δ` when the audit accepts, where the
   certifiers sign nothing but the verifier's messages entering the node over the credited passes, nothing else
@@ -32,10 +32,10 @@ keep what the certifiers sign from the auditor, and the bits-read bound needs on
 Statement C in full, no device outside the node computing on a registered block or a receipt during a credited pass,
 was a premise of the memory line (`NoOutsideCompute`), on the prover's own conduct. It is now the event the certifiers
 observe (`Quiet T I.counted`), inside the line's event, and their count's error δ_net in its bound. The three give the
-sketch bound where the certifiers observed nothing else entering (`Accounting.SecurityProofs.Remote.sketchBound_of_covered`)
+sketch bound where the certifiers observed nothing else entering (`ResourceAccounting.SecurityProofs.Remote.sketchBound_of_covered`)
 and `SketchBound` gives `SketchBoundAt` at every `O`. The relay breaks no premise: its receipts come in from the
 helper, so the certifiers count them and the line credits that outcome nothing. How the split stands to the sketch
-model's premises, under which `SketchBound` is derived (`Accounting.Guarantees.Remote.SketchBoundRun`):
+model's premises, under which `SketchBound` is derived (`ResourceAccounting.Guarantees.Remote.SketchBoundRun`):
 
 * `Present` is the block clause over the passes together with the same statement without a location (`PresentAt`, in
   the proofs: the block obtained whole was on the node or computed on outside it for the node at a tick of the pass).
@@ -49,13 +49,13 @@ model's premises, under which `SketchBound` is derived (`Accounting.Guarantees.R
 
 @[expose] public section
 
-namespace Accounting.Remote.Held.Assumptions
+namespace ResourceAccounting.Remote.Held.Assumptions
 
-open Accounting.Remote.Held
+open ResourceAccounting.Remote.Held
 
 variable {Ω : Type}
 
-/-- **`certifier-coverage`** (every uplink of the node passes through a network certifier): on every accepting outcome
+/-- **`certifier-coverage`** (every uplink of the node passes through a network attester): on every accepting outcome
 where nothing but the verifier's messages entered the node over its uplinks during the credited passes, at every tick
 of every credited pass no device outside the node computes for it on a registered block or on a receipt of one. A
 computation off the node reaches the receipts the verifier takes only by coming into the node during the passes
@@ -81,7 +81,7 @@ def Covered (T : Trace Ω) (O : Outside T) (I : Ingress Ω) : Prop :=
 variable [Fintype Ω]
 
 /-- **The certifiers' count of what enters, at δ_net** (`trusted-device`: each certifier is the auditor's device, running
-its stated code): except with probability `δ` when the audit accepts, where the network certifiers on the node's uplinks
+its stated code): except with probability `δ` when the audit accepts, where the network attesters on the node's uplinks
 sign nothing but the verifier's messages entering it over the credited passes, nothing else entered over them. `δ` is
 δ_net, the certifiers' error at the session's boundary: their sampled audit's `δ + ε_ks + ε_bind`
 (`NetTiming.Guarantees.SampledAuditAccepted`) at the ingress windows covering the credited span. -/
@@ -95,4 +95,4 @@ def SketchBoundAt (T : Trace Ω) (O : Outside T) (δ : ℝ) : Prop :=
   T.Holds δ fun ω => ∀ p < T.passes, ∀ j ∈ T.correct ω p,
     ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t ∪ O.blocks ω t
 
-end Accounting.Remote.Held.Assumptions
+end ResourceAccounting.Remote.Held.Assumptions

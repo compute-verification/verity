@@ -7,7 +7,7 @@ import Proofs.Pouw.Prob
 /-!
 # The deployed sketch bound's premises meet, and its conclusion bites
 
-`Accounting.Guarantees.Remote.SketchBoundDeployed` has its premises met at an honest session
+`ResourceAccounting.Guarantees.Remote.SketchBoundDeployed` has its premises met at an honest session
 (`SketchBoundDeployed_honest`) and its conclusion false on a trace that accepts everything
 (`SketchBoundDeployed_nontrivial`).
 
@@ -27,10 +27,10 @@ The instances are `Definitions.Poub.Remote.SketchToy`'s.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Finset Accounting.RateSketch Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sketch
-  Accounting.Remote.Sketch.Assumptions Accounting.Remote.Sketch.Toy
+open Finset ResourceAccounting.RateSketch ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sketch
+  ResourceAccounting.Remote.Sketch.Assumptions ResourceAccounting.Remote.Sketch.Toy
 
 /-- The honest device's receipt is right at every outcome, so the honest session is accepted on all of them. -/
 theorem SketchMeets.honest_accepts (ω : Outcome Unit Hs₁ 1 128) : honestTrace.accepts ω := by
@@ -43,7 +43,7 @@ theorem SketchMeets.honest_accepts (ω : Outcome Unit Hs₁ 1 128) : honestTrace
 its device holding the block and tagging it with one query, SHA-512's keys the outcome's own. -/
 theorem SketchBoundDeployed_honest :
     KeyBudget honest (fun _ => 1) ∧ Receipted honest honestTrace ∧ Present honest honestTrace ∧
-      Accounting.Assumptions.SketchHashRandom honest ((((1 : ℕ) : ℝ) + ((1 : ℕ) : ℝ)) ^ 2 / 2 ^ 513) := by
+      ResourceAccounting.Assumptions.SketchHashRandom honest ((((1 : ℕ) : ℝ) + ((1 : ℕ) : ℝ)) ^ 2 / 2 ^ 513) := by
   refine ⟨fun b j η κ D => ?_, fun ω hω j b _ => ⟨0, ?_, ?_⟩, fun ω _ j _ _ b _ => ⟨j, le_rfl, Nat.lt_succ_self _, ?_⟩,
     fun b D E => le_self_add⟩
   · simp [honest, device, Prover.prog, Chip.queries]
@@ -74,4 +74,4 @@ theorem SketchBoundDeployed_nontrivial :
   norm_num at h1
   linarith
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

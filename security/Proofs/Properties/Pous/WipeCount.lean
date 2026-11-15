@@ -55,7 +55,7 @@ theorem sentBits_le_egressBits {κ : Type} {d : MarkDevice κ} {n : SpanCount} (
   rw [Finset.card_range, smul_eq_mul] at h
   exact h
 
-/-- **`WipeCountTied`**: an accepted wipe's egress is the network certifier's count over the wipe's span, from what an
+/-- **`WipeCountTied`**: an accepted wipe's egress is the network attester's count over the wipe's span, from what an
 accepted count under the device's parameters means, the memory challenger's start mark and the device model's lines
 for a span, its capacity a phase and its marking a message once. -/
 theorem wipeCountTied : WipeCountTied := by
@@ -103,7 +103,7 @@ theorem wipeCountTied_honest :
   exact ⟨seed, K, c, k, sig, out, prof, hk, h, countRan_marked, sentWithinCapacity_marked,
     marksOnce_marked⟩
 
-/-- **`WipeCountTied`'s nontrivial lemma**: its conclusion fails at a network certifier that made no mark, for the
+/-- **`WipeCountTied`'s nontrivial lemma**: its conclusion fails at a network attester that made no mark, for the
 unencoded session and a break that never holds. No mark of the device is the span's start mark. -/
 theorem wipeCountTied_nontrivial :
     ¬ (SpanCounted emptyMarks idleDevice measuredCommitment unencoded markedSpan 0 ∨ False) := by

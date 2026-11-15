@@ -8,7 +8,7 @@ public import PouwCheck
 # A period's work over the windows PoUW's deployed check accepts (`PouwCheck.protocol.check`)
 
 PoUW's per-period statement about its deployed Lean code, for the all-protocols period (one loop audited every period by
-each protocol, composed in the causal game, `Accounting.Guarantees.JointPeriodLive`). `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod`
+each protocol, composed in the causal game, `ResourceAccounting.Guarantees.JointPeriodLive`). `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod`
 is stated over the accounting model's abstract proofs (`Outcomes`): whether window `w`'s proof of its `i`-th sampled tile
 was accepted is a parameter. Here it is the deployed check's verdict on the window: `protocol.check` (`verity/pouw/v1`,
 `core_check.py`'s port, the `Core.Protocol` that `CoreRemote` composes; onsite composes the period's,
@@ -56,7 +56,7 @@ check doesn't discharge it:
 * The game identity (`Pl.game = monitoringPeriodGame …`) and `PrefixOf`: protocol structure, the play's ideal game and its pass at
   the sampled tiles' rightness, held by construction of the play.
 * `MovedIn ≤ δ_bind` in each window: binding of the service's openings to the values committed before each position's
-  cut, which the proof reads. It is SHA-512's binding at the trees' sizes (`Accounting.Guarantees.Compose.BindingOfECR`)
+  cut, which the proof reads. It is SHA-512's binding at the trees' sizes (`ResourceAccounting.Guarantees.Compose.BindingOfECR`)
   only when the window's rows are committed by its registration, under roots the openings are checked against, and the
   registration is fixed before the window's sampling coin (`RegisteredBeforeDraw`, which states the order; the commitment
   is the roots'). On today's path the registered roots are tags, not the rows' commitments (below): the loop's
@@ -79,7 +79,7 @@ check doesn't discharge it:
 * `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` per live tile, and `UnitFixed` at `monitoringPeriodMode`: the named claims, as in
   `CircuitWorkMonitoringPeriod`. On H1's unit they are (H-μ) at `μ = 3/4`, B′ at `r_B = 1/2` and the guess bound at
   `1/2`; ncp-v2 has no Compose `Scheme`, and its receipt bound is a time-tradeoff form
-  (`Accounting.Guarantees.TileUnpredictableOfNCPU`), not lucks.
+  (`ResourceAccounting.Guarantees.TileUnpredictableOfNCPU`), not lucks.
 
 `PouwCheck.Credit.periodCredit`, served H1's period credit, is another verdict: its windows' (`PouwCheck.Credit.window`),
 refusing the whole period on any refused window. A loop credited through it takes these statements with `Accepts` at
@@ -139,7 +139,7 @@ accepted window), and `Proofs.Pouw.MonitoringPeriod.Honest` is a live-salt perio
 namespace Properties.Pouw.MonitoringPeriod
 
 open PouwCheck
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **The deployed check accepts the window**: `protocol.check` at the verifier's parameters `p`, on the window's
 registration `c` and the proof system's answer `e`, accepts with some public items and profile. -/

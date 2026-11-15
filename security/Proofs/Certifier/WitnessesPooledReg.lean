@@ -62,7 +62,7 @@ theorem twoLay_fits : (twoLay).Fits twoStmt.prog 1 := by
   subst hg
   rfl
 
-/-- The network certifier registers the one step's record `twoObs` at `twoLay` among `certOps`: both openings pass
+/-- The network attester registers the one step's record `twoObs` at `twoLay` among `certOps`: both openings pass
 under `twoL`'s commitment, the ingress gate has one, and the operator's move is the ingress it holds. -/
 theorem twoLay_registers :
     CertifierRegisters shaD (twoL Bool).commit twoLay 1 (fun _ _ => [true]) twoStmt certOps [twoObs] := by
@@ -100,7 +100,7 @@ the prover that sends nothing, at the rate `1` of a program sampled whole, the r
 registered openings `certOps`, the record `twoObs` at the layout `twoLay`, and the phase's own error. The proof
 system's knowledge soundness, the commitment's binding and the sessions' contract hold there (`twoSessions_meets`);
 the verifier has two rounds; nothing reads a coin; the registered openings pass and open the registered input; the
-layout fits; the network certifier registers the record; and at every history the phase is accepted, registered as
+layout fits; the network attester registers the record; and at every history the phase is accepted, registered as
 the period's and its record complete, which is the guarantee's event. -/
 theorem PooledLeakRegistered_honest :
     (twoA Bool).KS shaD ∧ (twoL Bool).commit.Binds shaD ∧ (twoL Bool).Sessions shaD ∧ PhaseRounds D₂ 2 x₂ ∧

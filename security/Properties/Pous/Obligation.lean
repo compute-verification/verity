@@ -47,8 +47,8 @@ def ObligationHeld : Prop :=
   ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
     ∀ (ι α ΩW ΩQ T : Type) [Fintype ι] [Fintype α] [Fintype T] [DecidableEq T]
       (tag : Fin (2 ^ 19) → T), Function.Injective tag →
-      ∀ (d : Accounting.Device ι)
-        (r : Accounting.Run d α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065))
+      ∀ (d : ResourceAccounting.Device ι)
+        (r : ResourceAccounting.Run d α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065))
           ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
         (P : Audits ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)))
         (τ : Strategy ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065))) (round : ℕ) (S : ℝ),

@@ -8,19 +8,19 @@ public import Definitions.Core.Blocks
 
 In the one theorem's form, a period is one causal game (`Verity.Game`), each device release
 sampled after the bytes it answers and the evidence last; its claims are read off the run it ends in
-(`Accounting.PeriodLive`), the SPOT claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
+(`ResourceAccounting.PeriodLive`), the SPOT claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
 gates, and its break is the probability that a fixed finder built from the strategy outputs a collision
 (`PeriodLive.finder`, `PeriodLive.collides`).
 
 Each subprotocol's per-period guarantee (`PeriodLive.Sound`) bounds, at every strategy of the whole game, the
 probability that it accepts while its claim fails by its error at that strategy (`PeriodLive.error`: its `δ` plus its
-reduction's loss at its finder's success; or `Accounting.condError`: its `δ` where its finders meet a quantitative
+reduction's loss at its finder's success; or `ResourceAccounting.condError`: its `δ` where its finders meet a quantitative
 collision bound, `⊤` elsewhere). That is the adaptive form: the subprotocols' coins interleave in the device's
 order, and the prover may adapt every byte to every coin released before it. Given those guarantees, at every strategy,
 the probability that some subprotocol accepts while its claim fails is at most the errors summed:
 
 * `JointPeriodLive`: one period, the five subprotocols (SPOT, PoUW, PoUS, the bandwidth audit and the network
-  certifier);
+  attester);
 * `JointPeriodLiveECR`: the same in the one adversary form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
   bound is numbers;
 * `JointPooledLive`: `m` periods read off one game's run, each over its own circuit;
@@ -32,24 +32,24 @@ Two statements say the bound is not vacuous: an honest prover meets every claim 
 (`JointPeriodLive_honest`), and some prover fails a claim with positive probability at an accepting verdict
 (`JointPeriodLive_nontrivial`).
 
-The proofs are `Accounting.SecurityProofs.JointPeriodLive` and its siblings.
+The proofs are `ResourceAccounting.SecurityProofs.JointPeriodLive` and its siblings.
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting
+open ResourceAccounting
 open scoped ENNReal
 
 /-- **The joint guarantee over a period played as a causal game.** On any device and any period read off the run of a
 causal game `G`, over a circuit, whose five subprotocols (SPOT, PoUW, PoUS, the bandwidth audit and the
-network certifier) have their per-period guarantees over `G` at certificates `c` (integrity `ε`, work `W`, space `S`,
+network attester) have their per-period guarantees over `G` at certificates `c` (integrity `ε`, work `W`, space `S`,
 bandwidth `Q`, communication `K`) and errors `err`, each a function of the strategy (`PeriodLive.error`'s
 `δ + loss(Pr[B^s finds a collision])`, or `condError`'s): at every strategy `s`, the probability that some subprotocol
 accepts while its claim fails (more than an `ε` share of the circuit's units unbound in the extractor's transcript,
 fewer than `W` gates computed after their coin, fewer than `S` bits held on average, fewer than `Q` bits read, or more
-than `K` bits through the network certifiers) is at most `∑_a err_a(s)`. -/
+than `K` bits through the network attesters) is at most `∑_a err_a(s)`. -/
 def JointPeriodLive : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (C : Verity.Circuit) (O : Type) (G : Verity.Game O)
     (r : PeriodLive d α C G) (c : Certificates) (err : Audit → Verity.Game.Strategy G → ℝ≥0∞),
@@ -118,7 +118,7 @@ accepts while foreign content of at least `foreignBits b` bits plus the state th
 $$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{Wipe},b}(s) + \sum_b \delta_{\mathrm{PoUS},b}(s),$$
 `ε_Wipe,b(s)` the survivor bound's error at the run's moves at boundary `b`. On the run, the wipe's event at a fraction
 `f`, more than `f · fill + 2λ` bits plus the unfilled state kept, is inside that event wherever
-`foreignBits b ≤ f · fill + 2λ` (`Accounting.SecurityProofs.Live.prob_survives_of_survivorBound`).
+`foreignBits b ≤ f · fill + 2λ` (`ResourceAccounting.SecurityProofs.Live.prob_survives_of_survivorBound`).
 **Gap:** that the run's coins at each boundary are the wipe's is a premise. A run that samples its foreign content with
 the wipe's coins meets it at every strategy (`Verity.Wipe.OfRun.drawn_preserves`); a run whose foreign content is the
 prover's, a function of what came before the boundary, does not. The state a block carries across a wipe (the KV cache,
@@ -145,4 +145,4 @@ def JointPooledBlocksLive : Prop :=
           (∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm (σ b) s b o)) G s ≤
         ∑ b, ∑ a, err b a s + ∑ b, εWipe b (R b s).S_φ (R b s).hold (R b s).keep + ∑ b, δPous b s
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

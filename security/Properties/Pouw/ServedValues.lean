@@ -55,7 +55,7 @@ registered circuit, the unit the PoUW component's `Holds` is restated in.
 namespace Properties.Pouw.ServedValues
 
 open Properties.Pouw.MonitoringPeriodJ10R
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **The registered circuit's proof blocks and its words' bits**, the public map from words to gates. `gates t` is proof
 block `t`'s gates in `lower D`, the registered declaration `D` under the lowering `lower` pinned at registration: the

@@ -30,7 +30,7 @@ and a cost model whose costs and calls don't depend on the coins satisfies it (`
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pouw
 
@@ -236,7 +236,7 @@ end Run
 
 namespace SecurityProofs
 
-theorem PearlCEndToEndPerRun : Accounting.Guarantees.PearlCEndToEndPerRun := by
+theorem PearlCEndToEndPerRun : ResourceAccounting.Guarantees.PearlCEndToEndPerRun := by
   intro Q R S _ _ _ _ CM P D γ η hγ hG hCM U hU w κ hκ hw q hq A hA t εs hεs
   refine pr_lt_of_abort
     (fun (A' : PearlC.Adversary CM) (x : PearlCCoins Q R S U w t) =>
@@ -247,7 +247,7 @@ theorem PearlCEndToEndPerRun : Accounting.Guarantees.PearlCEndToEndPerRun := by
   obtain ⟨A', hA', htr⟩ := abortPearlC hCM A U hA hb
   exact ⟨A', hA', fun x hx hacc => (htr x.1 x.2.1 hx).symm ▸ hacc⟩
 
-theorem ComputeOfPearlCPerRunPriced : Accounting.Guarantees.ComputeOfPearlCPerRunPriced := by
+theorem ComputeOfPearlCPerRunPriced : ResourceAccounting.Guarantees.ComputeOfPearlCPerRunPriced := by
   intro Q R S _ _ _ _ CM P D γ η hγ hG hCM U hU w κ hκ hw t εs hεs hne ι α ΩQ ΩS _ _ _ d r p pRead hq real o
   obtain ⟨⟨_, _, tix⟩⟩ := hne
   have hA : CallsWithinPearlC (real.adv o) U (d.rate .oracle * (r.win .compute).len) := fun H s =>
@@ -256,14 +256,14 @@ theorem ComputeOfPearlCPerRunPriced : Accounting.Guarantees.ComputeOfPearlCPerRu
     (PearlCEndToEndPerRun Q R S CM P D γ η hγ hG hCM U hU w κ hκ hw _ hq (real.adv o) hA t εs hεs)
   exact ⟨(real.accepts_iff x o).1 hx.1, (real.cost_le x o).trans_lt hx.2⟩
 
-theorem JointPerRunPriced : Accounting.Guarantees.JointPerRunPriced := by
+theorem JointPerRunPriced : ResourceAccounting.Guarantees.JointPerRunPriced := by
   intro ι α ΩW ΩQ ΩS _ _ _ _ _ _ _ _ d r p pRead W Q S εW εQ εS hA hW hQ hS
   exact ⟨r.read_add_pouwRead_add_covertRead hA, r.jointPerRunPriced hW hQ hS⟩
 
-theorem CovertResidualPerRunPriced : Accounting.Guarantees.CovertResidualPerRunPriced := by
+theorem CovertResidualPerRunPriced : ResourceAccounting.Guarantees.CovertResidualPerRunPriced := by
   intro ι α ΩW ΩQ ΩS _ _ _ _ _ _ _ _ d r p pRead W Q S εW εQ εS h0 hA hW hQ hS
   exact r.covertResidualPerRunPriced h0 hA hW hQ hS
 
 end SecurityProofs
 
-end Accounting
+end ResourceAccounting

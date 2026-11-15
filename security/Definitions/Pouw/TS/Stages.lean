@@ -61,7 +61,7 @@ sampling design with rational weights, and the round passes when every sampled p
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Pouw.RelativeSecurity
 
@@ -163,4 +163,4 @@ def Priced [Fintype D] (r : ℝ) : {n : ℕ} → SampledExecutionPhase A D s n �
 
 end SampledExecutionPhase
 
-end Accounting.TS
+end ResourceAccounting.TS

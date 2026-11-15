@@ -57,9 +57,9 @@ import Proofs.Flock.Soundness.Lowering
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open Flock.SoundAtBridge Accounting.TS.Checked FlockSoundness.Discharge
+open Flock.SoundAtBridge ResourceAccounting.TS.Checked FlockSoundness.Discharge
 open FlockSoundness.Discharge.Layout (keyN keyB keyRowOf portRowW)
 
 /-- **Bit `k` of row port `q` is read by the circuit**: some row of the circuit's template instance reads an input
@@ -154,4 +154,4 @@ theorem holds_known (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c
     Holds (portBit s (openedReg s) s.c.ports[q].name) lo n x :=
   holds_of_bytes hN hu hS hcomp hseg hv2 (known_bytes hK hS hcomp hm) hread hx
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

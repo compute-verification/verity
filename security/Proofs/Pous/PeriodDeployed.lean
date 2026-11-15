@@ -95,13 +95,13 @@ theorem S_eq : Pous.EndToEnd.S = 8169621180 := PousP2Ring.stateBound_p2ring_b19 
 theorem held_periodRun (m : ℕ) (hm : m ≤ FULL)
     (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)) :
     (periodRun m hm).held ω = K * m := by
-  simp [Accounting.Run.held, Accounting.Schedule.held, Accounting.Window.ticks, periodRun]
+  simp [ResourceAccounting.Run.held, ResourceAccounting.Schedule.held, ResourceAccounting.Window.ticks, periodRun]
 
 theorem periodHeldHonest : PeriodHeldHonest := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · intro P hs
     have h0 : (0 : ℕ) ∈ (honestRun.win .capacity).ticks := by
-      simp [honestRun, periodRun, Accounting.Window.ticks, K]
+      simp [honestRun, periodRun, ResourceAccounting.Window.ticks, K]
     exact periodHeld_honest honestRun P RING_D RING_Q RING_L 1 hs fun _ => ⟨0, h0, le_rfl⟩
   · show (0 : ℝ) < (HONEST_S : ℝ) * ((K : ℕ) : ℝ)
     norm_num [HONEST_S, K]

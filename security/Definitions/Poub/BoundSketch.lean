@@ -25,7 +25,7 @@ injectively); the sketch is the integer sketch's image mod `p`, which a location
 
 @[expose] public section
 
-namespace Accounting.BoundSketch
+namespace ResourceAccounting.BoundSketch
 
 /-- A deterministic two-party protocol between the block side (input `x : X`) and the tile side (input `y : Y`),
 ending with an output in `O`. `sendX s t f` is the block side sending the bit `s x` (the tree so far is the transcript,
@@ -74,4 +74,4 @@ in `𝔽_p`. -/
 def sketch {r m : ℕ} (E B : Fin r × Fin m → ZMod p) : Fin r → Fin r → ZMod p :=
   fun i c => ∑ q, E (i, q) * B (c, q)
 
-end Accounting.BoundSketch
+end ResourceAccounting.BoundSketch

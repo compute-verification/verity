@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pouw.TS.Price
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # The fan-in count, and FOLD-OPT and FILL-OPT from it
@@ -19,9 +19,9 @@ public import Proofs.Accounting.Lemmas.TS
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Finset
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Finset
 
 namespace FanIn
 
@@ -155,13 +155,13 @@ theorem card_fed_le (m : ℕ) : ∀ (S : Finset (ι ⊕ Fin D.n)), (∀ i, .inr 
 
 end FanIn
 
-theorem FanInCount : Accounting.Guarantees.TS.FanInCount := by
+theorem FanInCount : ResourceAccounting.Guarantees.TS.FanInCount := by
   intro ι W _ _ _ D O hO
   classical
   have h := FanIn.card_fed_le D D.n O (fun i _ => i.isLt) univ fun j _ => FanIn.feeds_of_sees D hO j
   rwa [filter_true_of_mem fun i _ => i.isLt, card_univ] at h
 
-theorem SeesOfInjective : Accounting.Guarantees.TS.SeesOfInjective := by
+theorem SeesOfInjective : ResourceAccounting.Guarantees.TS.SeesOfInjective := by
   intro ι W D O f hf hinj j x x' v v' hv hv' hx hne
   by_contra hno
   exact hinj j x x' hx hne (funext fun o => by
@@ -192,7 +192,7 @@ theorem thinFold_append : ∀ (pre : List (BitVec 32 × BitVec 32)) (xor : Bool)
     obtain ⟨xor', s', h⟩ := thinFold_append pre (!xor) (thinStep xor s w w')
     exact ⟨xor', s', fun post => h post⟩
 
-theorem ThinFoldInjective : Accounting.Guarantees.TS.ThinFoldInjective := by
+theorem ThinFoldInjective : ResourceAccounting.Guarantees.TS.ThinFoldInjective := by
   intro xor s pre post w₁ w₁' w₂ w₂'
   obtain ⟨xor', s', h⟩ := thinFold_append pre xor s
   refine ⟨fun hne e => hne ?_, fun hne e => hne ?_, fun s'' hne e => hne (thinFold_inj_state _ _ _ _ e)⟩
@@ -254,7 +254,7 @@ theorem class_bound {K R : Type} [Fintype R] (G : Machine K R) (lam : R → ℝ)
   · rw [← hk, zero_mul]
     exact sum_nonneg fun r _ => mul_nonneg (hl r) (ha r k)
 
-theorem FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn := by
+theorem FoldOptOfFanIn : ResourceAccounting.Guarantees.TS.FoldOptOfFanIn := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ ι W J _ _ _ _ _ _ Z P A D O ins cls m hZ hO hF hm hn hN hOμ hroute lam hlam
   have ha : ∀ r k, 0 ≤ Z.G.a r k := hZ.1
   have hphi := (stars_nonneg Z P lam hZ hlam).2.2.1
@@ -268,7 +268,7 @@ theorem FoldOptOfFanIn : Accounting.Guarantees.TS.FoldOptOfFanIn := by
     _ ≤ ∑ r, lam r * (Z.G.a r k / m k) := sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (hφ r) (hlam.1 r)
     _ = (∑ r, lam r * Z.G.a r k) / m k := by rw [sum_div]; exact sum_congr rfl fun r _ => by ring
 
-theorem FillOptOfFanIn : Accounting.Guarantees.TS.FillOptOfFanIn := by
+theorem FillOptOfFanIn : ResourceAccounting.Guarantees.TS.FillOptOfFanIn := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ ι W J _ _ _ _ _ _ _ Z P A D O ins cls m hZ hO hF hm hn hOμ hroute lam hlam
   have ha : ∀ r k, 0 ≤ Z.G.a r k := hZ.1
   have hchi := (stars_nonneg Z P lam hZ hlam).2.2.2
@@ -290,4 +290,4 @@ theorem FillOptOfFanIn : Accounting.Guarantees.TS.FillOptOfFanIn := by
         field_simp
     _ ≤ _ := key
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

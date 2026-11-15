@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Slowdown.Guarantees.FitRate
-public import Proofs.Accounting.Actual.ServerBlocks
+public import Proofs.ResourceAccounting.Actual.ServerBlocks
 public import Proofs.Slowdown.Fit
 
 /-!
@@ -21,7 +21,7 @@ open InferenceOnly InferenceOnly.SecurityProofs
 
 namespace Slowdown.SecurityProofs
 
-open Verity Accounting Finset
+open Verity ResourceAccounting Finset
 
 /-- Through a containment `M : c ≼ d`, the piece of `c` that a unit of `d` induces reads at most what the unit reads in
 the image of `c`'s novel gates. -/
@@ -45,7 +45,7 @@ theorem computeRate_N {L : Type*} (A : Placed L) (𝒳 : Set (Finset L)) :
       (Nat.le_mul_of_pos_right _ (Nat.sub_pos_of_lt hab))
   · have hempty : A.region X (Set.Ico a b) = ∅ :=
       eq_empty_of_forall_notMem fun g hg => by
-        obtain ⟨-, -, ht⟩ := (Accounting.SecurityProofs.Actual.mem_region A).1 hg
+        obtain ⟨-, -, ht⟩ := (ResourceAccounting.SecurityProofs.Actual.mem_region A).1 hg
         have := Set.mem_Ico.1 ht
         omega
     rw [hempty, card_empty]
@@ -72,7 +72,7 @@ theorem cuts_mul_le {t : ℕ} (κ : Cuts t) {ω₀ : ℕ} (h : ∀ j : Fin κ.J,
 
 theorem FitRate : Guarantees.FitRate := by
   intro L E _ _ A ℓ ends β link n X θ hθ t κ ω R r c M T start Nstar b_w w_e hX hC hL hω hr hR hgap hReach hFits
-  obtain ⟨P, hP⟩ := Accounting.SecurityProofs.Actual.ServerBlocksAt A ℓ (fun _ => A.N) ends β link n X θ hθ t κ
+  obtain ⟨P, hP⟩ := ResourceAccounting.SecurityProofs.Actual.ServerBlocksAt A ℓ (fun _ => A.N) ends β link n X θ hθ t κ
     ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) hX hC (computeRate_N A _) hL
   have hQ : ∀ (i : Fin n) (j : Fin κ.J) (g : Fin c.D.N), g ∈ (pull M P).gates (finProdFinEquiv (i, j)) ↔
       M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) := fun i j g =>

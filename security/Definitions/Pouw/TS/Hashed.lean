@@ -38,7 +38,7 @@ before its sampling coin, not before the coins its sample follows).
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Pouw.RelativeSecurity
 
@@ -110,4 +110,4 @@ noncomputable def finder [Fintype C] [Fintype B] [Nonempty (Paths (Paths C m × 
 
 end HashedOpenings
 
-end Accounting.TS
+end ResourceAccounting.TS

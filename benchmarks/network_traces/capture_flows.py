@@ -444,10 +444,10 @@ def record_counts(run: Path) -> dict:
     from verity.protocols.accounting.certifier.verifier.certificate import record_head
     from verity.protocols.accounting.certifier.verifier.grid import row_count
     from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-    from verity.protocols.accounting.certifier.verifier.network_certifier import END, NetworkCertifierParams, audit, read_cell
+    from verity.protocols.accounting.certifier.verifier.network_certifier import END, NetworkAttesterParams, audit, read_cell
 
     dep = json.loads((run / "deployment.json").read_text())
-    params = NetworkCertifierParams(**dep["params"])
+    params = NetworkAttesterParams(**dep["params"])
     run_id = bytes.fromhex(dep["run_id"]) if dep.get("run_id") else None
     records = RC.read_records(run, params)
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])

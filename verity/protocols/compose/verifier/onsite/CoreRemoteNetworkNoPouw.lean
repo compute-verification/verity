@@ -1,21 +1,21 @@
 /-
-Remote with the network certifier, without PoUW (`verity/remote-network-no-pouw/v0`), **development**: the subprotocols
-of remote with the network certifier's development composite (`Core.RemoteNetwork`) but PoUW's period credit. Its
-subprotocols are the network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`), the
+Remote with the network attester, without PoUW (`verity/remote-network-no-pouw/v0`), **development**: the subprotocols
+of remote with the network attester's development composite (`Core.RemoteNetwork`) but PoUW's period credit. Its
+subprotocols are the network attester over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`), the
 inference-only policy (`InferenceOnlyCheck.Protocol.protocol`, `verity/inference-only/v0`) and SPOT
-(`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`), each as remote with the network certifier reads it.
+(`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`), each as remote with the network attester reads it.
 `Core.Composition.tiedSameB` composes them on the caller's blobs under remote's record subprotocols (`Core.Remote.tied`)
-and remote with the network certifier's egress tie (`Core.RemoteNetwork.egress`), so its verdict is the AND of its
+and remote with the network attester's egress tie (`Core.RemoteNetwork.egress`), so its verdict is the AND of its
 three subprotocols' over one registration: it accepts when all three accept and every compute audit of the network
-certifier's period is on the policy's record, and any one's rejection rejects it whatever the others answer.
+attester's period is on the policy's record, and any one's rejection rejects it whatever the others answer.
 
 It credits no verified compute: PoUW's period is none of its subprotocols, so a case of it is refused by name, and
 remote's window tie (`Core.Remote.executionPhases`), which reads the period's windows, is none of its ties. It is not remote
-with the network certifier with a subprotocol switched off: it has its own id.
+with the network attester with a subprotocol switched off: it has its own id.
 
 It is no verifier: `Core.Composites` doesn't list it, so no configuration names it, the Site has no registration
 composite for it, and no soundness theorem covers it; it runs only as its development executable
-(`remote-network-no-pouw`). What it doesn't check is remote with the network certifier's: the network certifier's
+(`remote-network-no-pouw`). What it doesn't check is remote with the network attester's: the network attester's
 period reads its audits' answers as its evidence carries them, and the policy's v0 publishes the declared division and
 each inference block's profile in the clear (`Core.Remote`).
 -/
@@ -36,11 +36,11 @@ open Composition
 
 def protocolId : String := "verity/remote-network-no-pouw/v0"
 
-/-- The subprotocols, in the order of their ids: the network certifier's period, the policy and SPOT. -/
+/-- The subprotocols, in the order of their ids: the network attester's period, the policy and SPOT. -/
 def components : List BlobProtocol :=
   [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, VStar.Recursive.Sampled.protocol]
 
-/-- Every compute audit of the network certifier's period on the policy's record; no window tie, since no
+/-- Every compute audit of the network attester's period on the policy's record; no window tie, since no
 subprotocol reads a PoUW period. -/
 def ties : List Tie := [Core.RemoteNetwork.egress]
 
@@ -60,7 +60,7 @@ private def ids : List String := components.map (·.id)
 
 #guard orderedB components
 #guard components.map (·.id) == ["verity/certifier/v0", "verity/inference-only/v0", "verity/sampled-proofs/v1"]
--- remote with the network certifier's subprotocols but PoUW's period, which no tie names either
+-- remote with the network attester's subprotocols but PoUW's period, which no tie names either
 #guard ids == (Core.RemoteNetwork.components.map (·.id)).filter (· != PouwCheck.Period.protocolId)
 #guard Core.Remote.tied.all ids.contains
 #guard ties.all fun t => t.names.all fun n => ids.contains n.1
@@ -75,7 +75,7 @@ private def allRefused : Answer := answer (components.map refused)
 #guard allRefused.reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 #guard components.all fun P => (allRefused.reason.map (contains · s!"{P.id} reject: params: ")).getD false
 -- PoUW's period is not a subprotocol of it: its case is refused by name, beside the three, and remote with the network
--- certifier's four cases are not this composite's
+-- attester's four cases are not this composite's
 #guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
     refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/period/v1 is not a component of this composition"

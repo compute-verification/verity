@@ -37,7 +37,7 @@ open Verity.Game
 open Spot.Challenger
 open Properties.Challenger (Draws)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **Where v2's check accepts, its order refusal passed** (`Spot.OneStageZk.orderHeld`). -/
 theorem checkBlobsAt_orderHeld {p : _root_.Spot.OneStageZk.Params}

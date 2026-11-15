@@ -51,12 +51,12 @@ against a count of 1 (`MonitoringPeriodLeakChecked_readsBy_exclusion`).
 **The code** (`Proofs.Flock.Claims.Witnesses.SamplingGenericPlaced`). `posL` is a compiled verifier that rejects every
 run, so `Compiled.KS` holds at it, over the statement whose program negates its input (`notProg`), under a commitment
 `posCm` whose roots hold the input's bit: an opening of the input passes at that bit and one of the negation at its
-complement, so it binds with no call. The network certifier's openings (`posTops`) register one step whose ingress is
+complement, so it binds with no call. The network attester's openings (`posTops`) register one step whose ingress is
 the bit and whose egress frame is there when the bit is unset. The window meets `ExecutionPhaseGoodChecked` (`pos_good`) at the
 check that always holds, with no checked input (`pos_checkedUnique`): the leak relation holds at every witness, since
 the circuit computes the frame the openings hold.
 
-**The network certifier** (`Definitions.Certifier.Witness`) is one connection of one cell with no data
+**The network attester** (`Definitions.Certifier.Witness`) is one connection of one cell with no data
 (`Cell := Empty`): its end is late for its bucket or not (`bitArr`), so the client receives the fail cell or padding,
 and the record format `bitFmt` writes that bit as the window's frame and reads it back under the whole schedule. Its
 host runs `recordingCode bitFmt`.
@@ -67,7 +67,7 @@ write the same record (`adm_obs`), so no reader takes the record to both views u
 schedules (`adm_not_readsBy`), and both secrets are counted against `#Θ · executionPhasesCount = 1` (`pos_count`).
 
 **The premises together.** At the same window, under the one schedule `oneSched` and a server that is not late, the
-record reads back under the registered parameter (`RecordFormat.readsBy_comp`), the network certifier registers its
+record reads back under the registered parameter (`RecordFormat.readsBy_comp`), the network attester registers its
 observations at the operator whose move is the unset bit, the window meets `ExecutionPhaseGoodChecked`, and
 `MonitoringPeriodLeakChecked`'s premises hold together (`MonitoringPeriodLeakChecked_placed`). It is at one secret: the toy circuit
 has no free input, so its count is 1, and an operator fixed before the secrets registers one ingress. `posL` rejects
@@ -170,7 +170,7 @@ theorem pos_opens (H : Msg → Msg) (s : AuditStatement) : ∀ q ∈ posTops s, 
   · show posOpens s.roots ⟨1, !rootBit s.roots, []⟩ = true
     simp [posOpens]
 
-/-- **The network certifier registers the step** `posObs b` at `posStmt b`, at an operator whose first move is the
+/-- **The network attester registers the step** `posObs b` at `posStmt b`, at an operator whose first move is the
 bit. -/
 theorem pos_registers (H : Msg → Msg) (b : Bool) (op : ℕ → List (Obs 1 1 1) → List Bool) (hop : op 0 [] = [b]) :
     CertifierRegisters H posCm notLay 1 op (posStmt b) (posTops (posStmt b)) [posObs b] := by
@@ -212,7 +212,7 @@ theorem pos_faulty_empty {F : Finset ℕ} (hF : F ∈ incorrectSets (⟨[.all]�
 theorem pos_incorrectSets : incorrectSets (⟨[.all]⟩ : Design) notPart 0 = {∅} :=
   Finset.eq_singleton_iff_unique_mem.2 ⟨pos_empty_mem, fun _ h => pos_faulty_empty h⟩
 
-/-- **What the network certifier registers at `posStmt b` is accepted**, at every operator: the openings hold the
+/-- **What the network attester registers at `posStmt b` is accepted**, at every operator: the openings hold the
 ingress `b` and the frame's presence `!b`, which the circuit computes from that ingress, with no incorrect proof
 block. -/
 theorem pos_acc (H : Msg → Msg) (b : Bool) (ρ : ℕ → Bool) (op : ℕ → List (Obs 1 1 1) → List Bool)
@@ -375,7 +375,7 @@ theorem adm_not_readsBy (rd : Unit → (Fin 1 → List (Obs 1 1 1)) → Unit →
 /-- **Without the read-back, `MonitoringPeriodLeakChecked`'s count fails.** At `posL`, one window, a server that is never late and
 the format `bitFmt`, with the secret the connection's admission bucket: the coins are a nonempty type and `δ = 0` is
 nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning, `TrustedDevice` at a
-host that runs the network certifier's code, and the channel all hold; the network certifier registers its
+host that runs the network attester's code, and the channel all hold; the network attester registers its
 observations at both secrets, at an operator that reads nothing; no reader reads the record back under the one
 registered parameter; and the two secrets, each of whose windows meets its good event, are counted against
 `#Θ · executionPhasesCount = 1`. -/
@@ -419,8 +419,8 @@ theorem MonitoringPeriodLeakChecked_readsBy_exclusion :
 /-- **`MonitoringPeriodLeakChecked`'s premises hold together at a monitoring period of one placed window that meets its good
 event**, at a verifier that rejects every run: they are consistent there, and no honest run passes. At `posL`, the format `bitFmt`, the one schedule `oneSched` and the one secret of a server that is not late:
 `Compiled.KS`, the commitment's binding, the window's placement (`ExecutionPhasesPlaced`), its check's pinning at no checked
-input (`CheckedUnique`), `TrustedDevice` at a host that runs the network certifier's code, the read-back under the one
-registered parameter (`RecordFormat.ReadsBy`) and the channel of the secret (`MonitoringPeriodChannelReg`); the network certifier
+input (`CheckedUnique`), `TrustedDevice` at a host that runs the network attester's code, the read-back under the one
+registered parameter (`RecordFormat.ReadsBy`) and the channel of the secret (`MonitoringPeriodChannelReg`); the network attester
 registers the window's observations at the operator whose move is the unset bit (`CertifierRegisters`); and the window
 meets its good event (`ExecutionPhaseGoodChecked`), at the check every run passes. -/
 theorem MonitoringPeriodLeakChecked_placed :

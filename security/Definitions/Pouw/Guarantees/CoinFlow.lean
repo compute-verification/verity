@@ -48,7 +48,7 @@ Each holds of every Program the Build admits (`FlowGraph.admits`), with no hypot
   cone give it the same value.
 * `OneReader`, from rule (b): a noise injection's forward cone is the injection and its one reader's forward cone. So a
   view may hold every value except the noised operand and what reads its consumer.
-* `PointMass`: `Accounting.Guarantees.HMu.CoinPointMass` applies outright. A skipped value `a + Σ_j [e_j]·v_j` over a
+* `PointMass`: `ResourceAccounting.Guarantees.HMu.CoinPointMass` applies outright. A skipped value `a + Σ_j [e_j]·v_j` over a
   noise injection's `u` fresh coins, with `a`, the nonzero integer weights `v` and the view `F` functions of `View k`
   (every value outside its forward cone and every other coin), takes any value with probability at most
   `C(u, ⌊u/2⌋)/2^u` given the view. The bits are uniform: the probability is over every coin of the run.
@@ -56,14 +56,14 @@ Each holds of every Program the Build admits (`FlowGraph.admits`), with no hypot
 What stays outside, by construction: the values in the injection's forward cone. Those are its reader's other words,
 which share the noised operand (a dithered row's words in every column). So the view independence `CoinPointMass`
 needs is checked for every view built from the rest of the Program. A view holding a word that shares the operand still
-determines the skipped value, as `Accounting.Guarantees.HMu` says.
+determines the skipped value, as `ResourceAccounting.Guarantees.HMu` says.
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees.CoinFlow
+namespace ResourceAccounting.Guarantees.CoinFlow
 
-open Accounting.CoinFlow Accounting.HMu Pouw.RelativeSecurity
+open ResourceAccounting.CoinFlow ResourceAccounting.HMu Pouw.RelativeSecurity
 
 /-- **A noise injection's coins reach only its forward cone (rule (b)).** In a Program the Build admits, two coin samples
 that agree off a noise injection's fresh coins give every node outside its forward cone the same value. -/
@@ -98,4 +98,4 @@ def PointMass : Prop :=
         (((P.noiseCoins k).card).choose ((P.noiseCoins k).card / 2) : ℝ) / 2 ^ (P.noiseCoins k).card *
           prob (fun σ : C → Bool => F (P.view k σ) = o)
 
-end Accounting.Guarantees.CoinFlow
+end ResourceAccounting.Guarantees.CoinFlow

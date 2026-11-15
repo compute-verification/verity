@@ -3,7 +3,7 @@ module
 public import Properties.Pous.Period
 public import Proofs.Pous.EndToEnd
 public import Proofs.Properties.Pous.Run
-public import Proofs.Accounting.Prob
+public import Proofs.ResourceAccounting.Prob
 public import Proofs.Pous.Accounting.Capacity
 public import Proofs.Pouw.PerRunJoint
 
@@ -20,10 +20,10 @@ the extractor's server answers round after round as the strategy does (`seqAnswe
 **The guarantee.** At a value `o` of the other audits' coins, a certificate `S` with `S · len > 0` and
 `B = ⌈S · len⌉₊ − 1`: on a capacity coin where the verifier accepts with no break in the period's data, the period is
 certified (`certified_of`, from `runCertifies`), and where the capacity account held fewer than `S · len` bit-ticks, it
-held fewer than `S · len`, so at most `B`, bits at every tick of the window (`Accounting.Run.mem_le_held`).
+held fewer than `S · len`, so at most `B`, bits at every tick of the window (`ResourceAccounting.Run.mem_le_held`).
 `B < S · len`, so `B + S_chip + c < S₀`, and the extractor's server passes on every such coin; `endToEndRing` bounds its
 pass by `δ + ε_max`. With `S · len ≤ 0` the event is empty. A run whose capacity verdict is that acceptance outside a
-break then has `CapacitySoundPerRun`, and with it `CapacitySound` (`Accounting.Run.capacitySound_of_perRun`).
+break then has `CapacitySoundPerRun`, and with it `CapacitySound` (`ResourceAccounting.Run.capacitySound_of_perRun`).
 -/
 
 @[expose] public section
@@ -119,8 +119,8 @@ other audits' coins and every `B` with `B + S_chip + ∑ cap_i · round < S₀`:
 the ring game's session (`Passes`, at the designated id, on the payload `W`) on every capacity coin where the capacity
 account holds at most `B` bits of device memory at every tick of the capacity window and the period is certified
 (`Certified`). -/
-theorem extractPasses (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+theorem extractPasses (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : ResourceAccounting.Device ι)
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (D Q L round : ℕ) (hdev : DeviceModel r P τ D Q L round)
     (hinst : Instantiates P τ) (o : ΩW × ΩQ) (B : ℕ) (hB : B + d.chip + ∑ i, d.cap i * round < Pous.EndToEnd.S)
     (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
@@ -161,7 +161,7 @@ theorem periodHeld : PeriodHeld := by
     · have hfin : ENNReal.ofReal (Params.δ : ℝ) + Params.εMax ≠ ⊤ :=
         ENNReal.add_ne_top.2 ⟨ENNReal.ofReal_ne_top, εMax_ne_top⟩
       calc Pouw.pr (Passes P.sid (P.W o) (extract τ o D Q L))
-          = (Pous.pr (Passes P.sid (P.W o) (extract τ o D Q L))).toReal := Accounting.pr_eq_toReal _
+          = (Pous.pr (Passes P.sid (P.W o) (extract τ o D Q L))).toReal := ResourceAccounting.pr_eq_toReal _
         _ ≤ (ENNReal.ofReal (Params.δ : ℝ) + Params.εMax).toReal :=
           ENNReal.toReal_mono hfin
             (Pous.EndToEnd.SecurityProofs.endToEndRing D Q L hP _ _ (extract τ o D Q L))
@@ -225,8 +225,8 @@ capacity account holds all of `C`'s `FULL` bits at a tick of the capacity window
 designated session id has 32 bytes, as the memory challenger's ids do, the lookup strategy meets the device model
 (each answer is a lookup, no query, and its state is `C`'s bits) and the instantiation (the code's sample never fails,
 and a lookup returns the challenged block of `C`). -/
-theorem periodHeld_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+theorem periodHeld_honest {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)
     (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, FULL ≤ (r.schedule ω t).mem (r.acct .capacity)) :
     DeviceModel r P (lookup ΩW ΩQ) D Q L round ∧ Instantiates P (lookup ΩW ΩQ) := by
@@ -286,8 +286,8 @@ theorem periodHeld_nontrivial :
   exact not_le.2 bound_toReal_lt_one
 
 /-- **`periodCapacity` holds at the honest instance**: `periodHeld_honest`, its premises being `periodHeld`'s. -/
-theorem periodCapacity_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+theorem periodCapacity_honest {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)
     (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, FULL ≤ (r.schedule ω t).mem (r.acct .capacity)) :
     DeviceModel r P (lookup ΩW ΩQ) D Q L round ∧ Instantiates P (lookup ΩW ΩQ) :=

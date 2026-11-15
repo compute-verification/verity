@@ -13,14 +13,14 @@ With positive weights, the bit vectors with one given weighted sum, read as the 
 a strictly larger set has a strictly larger sum. Sperner's theorem (`IsAntichain.sperner`) bounds an antichain of subsets
 of a `u`-set by `C(u, ⌊u/2⌋)` (`card_level_pos_le`). Nonzero weights reduce to positive ones by flipping the bits whose
 weight is negative, which shifts every sum by the same constant (`card_level_le_choose`). `littlewoodOfford` is
-`Accounting.Guarantees.Sketch.LittlewoodOfford`.
+`ResourceAccounting.Guarantees.Sketch.LittlewoodOfford`.
 -/
 
 @[expose] public section
 
-namespace Accounting.TagProofs
+namespace ResourceAccounting.TagProofs
 
-open Accounting.Tag Finset
+open ResourceAccounting.Tag Finset
 open scoped ENNReal
 
 /-- With positive weights, at most `C(u, ⌊u/2⌋)` bit vectors share a weighted sum. -/
@@ -90,7 +90,7 @@ theorem card_level_le_choose {u : ℕ} (v : Fin u → ℤ) (hv : ∀ j, v j ≠ 
     _ ≤ _ := card_le_card hsub
     _ ≤ u.choose (u / 2) := card_level_pos_le _ (fun j => abs_pos.2 (hv j)) _
 
-theorem littlewoodOfford : Accounting.Guarantees.Sketch.LittlewoodOfford := by
+theorem littlewoodOfford : ResourceAccounting.Guarantees.Sketch.LittlewoodOfford := by
   intro u v t
   classical
   have hcard : Fintype.card (Fin u → Bool) = 2 ^ u := by simp
@@ -107,4 +107,4 @@ theorem littlewoodOfford : Accounting.Guarantees.Sketch.LittlewoodOfford := by
     rw [Nat.le_zero, card_eq_zero, filter_eq_empty_iff]
     exact fun ε _ h => hv h.1
 
-end Accounting.TagProofs
+end ResourceAccounting.TagProofs

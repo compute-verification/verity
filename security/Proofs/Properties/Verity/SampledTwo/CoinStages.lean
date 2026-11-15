@@ -156,7 +156,7 @@ theorem leaves_relK {β : Type} (P : β → Prop) :
         · exact h0
 
 /-- **Every play of the period's game releases each fresh coin's 512 bits.** -/
-theorem freshWide_play {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (θ : ByteArray)
+theorem freshWide_play {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c)) {o : Verity.Exchange}
     (h : PlayReaches (V.game θ F c) σ o) : FreshWide o.log := by
   have hl : Leaves (fun o : Verity.Exchange => FreshWide o.log) (V.game θ F c) := by

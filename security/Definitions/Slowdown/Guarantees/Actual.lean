@@ -20,12 +20,12 @@ declaration the inference-only policy's statements are about.
   gates into `n ⌈t/ω⌉` inference blocks, each of at most `Φ_X ω` gates (work priced at one per gate) and reading at most
   `M_X + β_X ω` fresh input bits. It takes the four physical constraints it uses (`Causal`, `ComputeRate`, `Memory`, `Links`).
 
-The proofs are in `security/Proofs/Accounting/Actual/`.
+The proofs are in `security/Proofs/ResourceAccounting/Actual/`.
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Actual
+namespace ResourceAccounting.Guarantees.Actual
 
 open Verity InferenceOnly Finset
 
@@ -66,4 +66,4 @@ def ServerBlocks : Prop :=
         freshInput (A.declaration (univ.biUnion X) t θ hθ) (P.gates (finProdFinEquiv (i, k))) ≤
           M (X i) + linkCapacity ends β (X i) * ω
 
-end Accounting.Guarantees.Actual
+end ResourceAccounting.Guarantees.Actual

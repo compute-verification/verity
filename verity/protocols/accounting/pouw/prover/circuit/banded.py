@@ -1,6 +1,6 @@
 """J10's banded H1 noise on words: `h1tile`'s unit under one noise seed a call, the bit-exact reference a banded kernel is
 held to. The luck claims cover it at the same values; it is served only once kernels measure the gain. It is not the
-unit's gates. Its coin is the Lean `Accounting.TS.CallCoin` of one row block by one
+unit's gates. Its coin is the Lean `ResourceAccounting.TS.CallCoin` of one row block by one
 band.
 
 A call's column tiles are cut into bands of g ≤ `BAND_MAX` column tiles from column tile 0 (`band_start`), the last band
@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from . import h1tile as H
 from . import seeds as SD
 
-#: the widest band `Accounting.Guarantees.TS.GridTemplateMoment` prices at the one-tile rate, in column tiles
+#: the widest band `ResourceAccounting.Guarantees.TS.GridTemplateMoment` prices at the one-tile rate, in column tiles
 BAND_MAX = 64
 
 

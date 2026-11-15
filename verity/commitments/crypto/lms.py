@@ -16,7 +16,7 @@ the party's messages (`PartyKey`): one root per certification period (`period_ro
 only, and one public liveness record per execution phase (`liveness_message`). An `HssSignature` is the lower key, its
 certificate and the signature; `hss_verify` checks both levels, and `verify_liveness` a liveness record in the clear. Both
 levels are at ``DEPLOYED`` and both trees' states are `LeafState`s, so neither ever signs twice at a leaf, as long as its
-host never restores an earlier copy of the state (`faithful`, Lean's `Accounting.Assumptions.Parties.Faithful`).
+host never restores an earlier copy of the state (`faithful`, Lean's `ResourceAccounting.Assumptions.Parties.Faithful`).
 
 **The hash.** ``H(x) = SHA-512(x)``, the whole output: N = 64, nothing truncated. The one other N, `TOY_N` = 8 (the
 first word of SHA-512's output, asked for by name with ``toy=True``), is circuit-check's binding of the verifier and is never

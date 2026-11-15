@@ -7,7 +7,7 @@ public import Definitions.Pouw.Headline.Sm120
 
 Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/machine_model/data`), and
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
-file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
+file. `ResourceAccounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
 * `rowNames`, `vf3s16`, `machine`: the measured vector VF3s-16 (the exporter's `VECTOR`, named there, not model.toml's
   `current`), 130 rows of SMSP-cycles a warp instruction at its epoch's census, each sparse over `Sm120.classes`;
@@ -25,9 +25,9 @@ file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.Sm120Measured
+namespace ResourceAccounting.TS.Headline.Sm120Measured
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- VF3s-16's rows, in index order. -/
 def rowNames : List String := [
@@ -1628,4 +1628,4 @@ def piStar : Fin 130 := 89
 /-- The writer kind of w* at π*: IMMA16832. -/
 def wStarKind : Fin 15 := 6
 
-end Accounting.TS.Headline.Sm120Measured
+end ResourceAccounting.TS.Headline.Sm120Measured

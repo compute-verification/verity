@@ -26,7 +26,7 @@ everything.
 
 namespace Verity
 
-open Accounting Core
+open ResourceAccounting Core
 open scoped ENNReal
 
 namespace Vocab

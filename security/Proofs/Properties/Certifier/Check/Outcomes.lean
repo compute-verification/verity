@@ -23,7 +23,7 @@ The proofs of properties (1) to (3) of `Properties.Certifier.Check`, from the if
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check
-open NetworkCertifier (ClockSync)
+open NetworkAttester (ClockSync)
 
 namespace Properties.Certifier
 

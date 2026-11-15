@@ -69,7 +69,7 @@ theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.
 /-- **At a session v2 sets up, the statement's registration is v2's parameters'**: the statement's descriptor parses as
 their verifier's program and its query is their verifier's, at the parameters whose verifier's sampling design the sample reads over
 the population. -/
-theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
+theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : ResourceAccounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A) :
     ∃ p, ParamsAt θ p ∧ p.base.verifier.query = A.qr ∧ samplingDesignAt p.base.verifier A.n = .ok A.design ∧
       _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program := by

@@ -31,7 +31,7 @@ import Proofs.Flock.Soundness.Game
   least `M` either has a sampling block accepted with a sampled proof block incorrect, at most `Σ_w (ε_ks,w + ε_bind,w)` by
   `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenSampled` (`SamplingBlock.accepted_drawnIncorrect_le`), or every
   sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
-  `monitoringPeriod_monitoringPeriod`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
+  `monitoringPeriod_horizon`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
   `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.sampleMiss_le`; `SamplingDesign.execOS_subset_escape_le`,
   `SamplingDesign.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
@@ -191,7 +191,7 @@ theorem IntegrityPooled : Flock.Guarantees.IntegrityPooled := by
     (fun t => (W t).ks + (W t).link)
     (fun t τ hτ => (W t).accepted_drawnIncorrect_le τ hτ.2) T 0 s hgood
   -- every sample misses, with at least `M` incorrect proof blocks in all
-  have hB := monitoringPeriod_monitoringPeriod (fun t => (W t).game) (fun t => (W t).record t) (fun r => ¬ r.sampledWrong)
+  have hB := monitoringPeriod_horizon (fun t => (W t).game) (fun t => (W t).record t) (fun r => ¬ r.sampledWrong)
     SamplingBlockRec.incorrect (fun t τ => t < T ∧ (W t).CR τ) x hx
     (fun t τ hτ => ⟨((W t).incorrectSet τ).card, fun _ => rfl,
       ((W t).sampleMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) T 0 s M hgood

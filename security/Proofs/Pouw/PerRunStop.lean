@@ -27,7 +27,7 @@ within the two.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pouw
 
@@ -72,12 +72,12 @@ theorem w1Stop_cost_le (dv : PearlC.W1.W1Device) (salt : S → List ℕ) (prog :
 
 namespace SecurityProofs
 
-theorem PearlCStopEndToEndPerRun : Accounting.Guarantees.PearlCStopEndToEndPerRun := by
+theorem PearlCStopEndToEndPerRun : ResourceAccounting.Guarantees.PearlCStopEndToEndPerRun := by
   intro Q R S _ _ _ _ CM hnn P D γ η hγ hG U hU w κ hκ hw q hq A hA t εs hεs
   exact PearlCEndToEndPerRun Q R S CM.withStop P D γ η hγ ((PearlC.W1Stop.gGap_withStop_iff CM P D hγ.le η).2 hG)
     ((budgetAbortPearlC_iff _).2 (PearlC.W1Stop.withStop_budgetAbort CM hnn)) U hU w κ hκ hw q hq A hA t εs hεs
 
-theorem ComputeOfPearlCStopPerRunPriced : Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced := by
+theorem ComputeOfPearlCStopPerRunPriced : ResourceAccounting.Guarantees.ComputeOfPearlCStopPerRunPriced := by
   intro Q R S _ _ _ _ CM hnn P D γ η hγ hG U hU w κ hκ hw t εs hεs hne ι α ΩQ ΩS _ _ _ d r p pRead hq real
   exact ComputeOfPearlCPerRunPriced Q R S CM.withStop P D γ η hγ
     ((PearlC.W1Stop.gGap_withStop_iff CM P D hγ.le η).2 hG)
@@ -104,4 +104,4 @@ theorem w1Stop_computeSoundPerRunPriced [Fintype Q] [DecidableEq Q] [Fintype R] 
     (PearlC.W1Stop.w1Priced_nonneg dv hdv salt) P D g δ hg hG U hU w κ hκ hw t εs hεs inferInstance ι α ΩQ ΩS d r p
     pRead hq real
 
-end Accounting
+end ResourceAccounting

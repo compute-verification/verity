@@ -5,9 +5,9 @@ public import Mathlib.Data.Set.Card
 import Mathlib.Data.Sym.Sym2.Init
 
 /-!
-# The network certifier's lemmas
+# The network attester's lemmas
 
-The statements that are steps of the network certifier's proofs rather than bounds or rules a document cites: the
+The statements that are steps of the network attester's proofs rather than bounds or rules a document cites: the
 occupancy facts, Theorem 1(b)'s counting bound and the advice cap. Each is a `def G : Prop` under the guarantees' namespace, proved by `NetTiming.SecurityProofs.G`, so they
 are audited with them and pinned by no record.
 -/

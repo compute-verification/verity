@@ -2,12 +2,12 @@ module
 
 public import Definitions.Compose.Guarantees.Compose
 public import Proofs.Pouw.TS.Stages
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 
 /-!
 # The service's window budget: proof
 
-`Accounting.Guarantees.Compose.ServiceBudget`, step 4 of `Proofs.Compose.Compose`, in three parts.
+`ResourceAccounting.Guarantees.Compose.ServiceBudget`, step 4 of `Proofs.Compose.Compose`, in three parts.
 
 * **The miss bound** (`miss_le`): a uniform permutation's `K`-subset (`Pouw.Window.subsetDraw`) misses a set `B` of
   the `N` tiles with probability at most `(1 − |B|/N)^K`. By induction on `K` through `Equiv.Perm.decomposeFin`: the
@@ -25,10 +25,10 @@ public import Proofs.Accounting.Lemmas.Compose
 
 open Claims renaming Ex → expect
 
-namespace Accounting.SecurityProofs.Compose.Budget
+namespace ResourceAccounting.SecurityProofs.Compose.Budget
 
-open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.TS.Stages (prob_prod sum_le_card_of_expect expect_empty)
+open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.TS.Stages (prob_prod sum_le_card_of_expect expect_empty)
 
 /-! ## The miss bound -/
 
@@ -437,7 +437,7 @@ theorem weight_le_card {N : ℕ} {w : Fin N → ℝ} {ρ : ℝ} (hρN : ∀ v, �
   rw [le_div_iff₀ hN]
   linarith [hρN v]
 
-theorem serviceBudget : Accounting.Guarantees.Compose.ServiceBudget := by
+theorem serviceBudget : ResourceAccounting.Guarantees.Compose.ServiceBudget := by
   intro C Ξ _ _ N M stg W w lk lk0 K ρ p p0 a b wmax Λ hw0 hρ hρN hst hlk hL ha hb hSR
   classical
   obtain ⟨ν, ν0, hSR⟩ := hSR
@@ -492,4 +492,4 @@ theorem serviceBudget : Accounting.Guarantees.Compose.ServiceBudget := by
   · refine mul_le_mul_of_nonneg_left ((miss_le K N B).trans (pow_le_pow_left₀ (sub_nonneg.mpr hB1) ?_ K)) he0
     linarith
 
-end Accounting.SecurityProofs.Compose.Budget
+end ResourceAccounting.SecurityProofs.Compose.Budget

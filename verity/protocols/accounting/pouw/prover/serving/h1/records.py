@@ -1,4 +1,4 @@
-"""H1's z/y records (`pouw_h1`'s z table, compute accounting's `Accounting.Served.ValueChecked`): what
+"""H1's z/y records (`pouw_h1`'s z table, compute accounting's `ResourceAccounting.Served.ValueChecked`): what
 ``verity_int8::scaled_mm_zy`` writes beside the served y over a call's T slots, one `ZY_BYTES` record a 32 × 32 unit in the
 compiled Program's unit order, the unit's exact s32 z over the whole K then its y = dq(z, s_a, s_w) in bf16, little-endian
 and row-major, an empty slot's bytes zero (`engine.int8_exact.zy_records`). Unit u's record is the z table's leaf u. The

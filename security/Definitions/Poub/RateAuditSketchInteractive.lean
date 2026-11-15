@@ -17,7 +17,7 @@ tags, which this game leaves out.
 
 @[expose] public section
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (Bits)
 
@@ -89,7 +89,7 @@ def rebuilds (addr : List Bool → Pos N m ρ) (O : Oracle N ρ h X Dg) (D : Dat
 
 end IChip
 
-/-- A prover whose side sources answer what its chip sent, on a device of the device model (`Accounting.Device`)
+/-- A prover whose side sources answer what its chip sent, on a device of the device model (`ResourceAccounting.Device`)
 and bounded by its figures as `Prover` is: the store sectors it holds on chip (`w` bits each, at most
 `S` bits), side sources that pick each read's address from the bits sent so far, and a chip program from the signs and
 the held sectors. In every run, starting from nothing sent, the program takes in at most `L` bits over the side link and
@@ -134,4 +134,4 @@ def Accepts {s : ℕ} (A : InteractiveProver N m ρ h S L q w X Sig Dg) (dig : S
 
 end InteractiveProver
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch

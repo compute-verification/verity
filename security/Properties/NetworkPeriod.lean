@@ -14,7 +14,7 @@ of ceilings is at least the ceiling of the sum, so `K` is at least `⌈log2⌉` 
 `RowsKBoundsCount` says the count at the check's numbers is at most `2 ^ K`. `Proofs.Properties.NetworkPeriod` proves
 it.
 
-The count is the statement's, factor by factor, over the network certifier's `m` connections and the period's `n`
+The count is the statement's, factor by factor, over the network attester's `m` connections and the period's `n`
 windows: `#Ss · ((∏_c (cap_c + 1)) · ∏_i (2^#(free inputs) · #incorrectSets · 2^β · Dj^k))`. A reader of `K` (the
 communication audit's bridge to `MonitoringPeriodLeakAccepted`) instantiates it at the run's caps and the windows' facts, and
 supplies each of the statement's quantities as at most the check's number. The windows are the execution phases' scans:
@@ -377,7 +377,7 @@ def CapPublished (p : Params) (pub : Public) : Prop := pub.maxTokensCap = p.form
 /-- **The period check publishes its schedule's response cap.** If the check accepts a period, its public's
 `max_tokens_cap` is the cap of the schedule the parameters name (`CapPublished`), the schedule whose digest every
 execution phase's registrations bind (`rowsCheck`): a reader of the public, the communication audit's charge, reads the
-cap the network certifier held each released response to (`NetTiming.Guarantees.ResponseCapped`), and none where the
+cap the network attester held each released response to (`NetTiming.Guarantees.ResponseCapped`), and none where the
 schedule has none. -/
 def RowsCapPublished : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
@@ -639,7 +639,7 @@ def RowsSessionsCompleteOf (chk : Params → Commitment → Evidence → Core.Ou
 parameters it was given: each listed entry's session's start is shown, its certificate signed over its base, its
 ordinal and its schedule under the entry's key in the entry's session; the listed sessions under one key carry
 consecutive ordinals in the entries' order; and each such session's signed base is where the list's execution phases
-put it, after every execution phase of its predecessor's stretch (`RowsSessionsCompleteAt`). The network certifier's
+put it, after every execution phase of its predecessor's stretch (`RowsSessionsCompleteAt`). The network attester's
 device state gives each session it starts the next ordinal and none twice, and moves the key's life on by the
 session's whole span (`certificate.DeviceState`, on `trusted-device`), so no session of the key started between two such
 entries' sessions.

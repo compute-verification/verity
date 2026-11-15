@@ -28,7 +28,7 @@ the windows' results (`seqAnswers_congr`), so an outcome the windows answer corr
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
 namespace Latency
 
@@ -454,4 +454,4 @@ theorem B2PeriodP2Ring : Guarantees.B2PeriodP2Ring := by
   intro D Q L T ℓ hsec W A₁ Wd hℓ hT hlat hspan hbud
   exact B2PeriodAudit _ _ _ _ _ _ _ _ _ hsec W A₁ Wd hℓ hlat (fun W pp j σ i => (hspan W pp j σ i).trans hT) hbud
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

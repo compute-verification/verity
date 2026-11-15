@@ -30,12 +30,12 @@ carries the bound from the monitoring period's game to the uniform coins.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Bridge
+namespace ResourceAccounting.SecurityProofs.Bridge
 
 open scoped ENNReal
 
-/-- **The integrity audit of a server-time block** (`Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock`). -/
-theorem IntegrityOfIntegrityBlock : Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock := by
+/-- **The integrity audit of a server-time block** (`ResourceAccounting.Guarantees.Bridge.IntegrityOfIntegrityBlock`). -/
+theorem IntegrityOfIntegrityBlock : ResourceAccounting.Guarantees.Bridge.IntegrityOfIntegrityBlock := by
   intro ι d α _ C I Ω _ _ r S b q δ hq hδ hqt hA3 R hT hL hA2 c p hcert hfin ξ
   have hsub : ∀ x : Ω (r.own .sampled),
       (r.accepts .sampled (Function.update ξ (r.own .sampled) x) ∧
@@ -67,4 +67,4 @@ theorem IntegrityOfIntegrityBlock : Accounting.Guarantees.Bridge.IntegrityOfInte
   rw [← ENNReal.toReal_ofReal (Pouw.pr_nonneg _), hlaw, hev]
   exact ENNReal.toReal_mono hfin' hsrc
 
-end Accounting.SecurityProofs.Bridge
+end ResourceAccounting.SecurityProofs.Bridge

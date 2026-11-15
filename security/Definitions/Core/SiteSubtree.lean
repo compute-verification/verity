@@ -13,7 +13,7 @@ location it is that site's registered hardware, the auditor's devices at it amon
 of the code's `Core.Site.within`, whose locations are those of `Core.Site.part`. A **place** is a registered location
 or the outside (`Site.places`).
 
-The hardware model (`Accounting.Placed`, `Accounting.linkCapacity`) takes its leaves as a type and its links as a
+The hardware model (`ResourceAccounting.Placed`, `ResourceAccounting.linkCapacity`) takes its leaves as a type and its links as a
 table of ends and capacities. Here the Site is read as that: its places are the model's leaves (`Site.Place`,
 `Site.place`, `Site.placesIn`), so a gate of the actual circuit is placed at one, a device or a memory leaf as much as
 a host; and its links are the table, each at its position in the Site (`Site.placeEnds`, `Site.linkβ`), so a bound of

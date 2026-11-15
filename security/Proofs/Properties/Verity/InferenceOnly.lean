@@ -42,7 +42,7 @@ no deployment, so no instance concludes it: it holds or fails once, for every fi
 
 namespace Verity
 
-open Accounting Core
+open ResourceAccounting Core
 
 /-- **A composite's acceptance holds the policy's case to its check's**: on what composite `k` accepted as a `same`
 composition, every decoding of the policy's case meets `PolicyHeld`. -/

@@ -47,11 +47,11 @@ at `F = F·T − W`.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting Accounting.Rate
+open ResourceAccounting ResourceAccounting.Rate
 
-theorem RateOfAudit : Accounting.Guarantees.RateOfAudit := by
+theorem RateOfAudit : ResourceAccounting.Guarantees.RateOfAudit := by
   intro N b h ρ s k cTag cEnc lam W p ι α ΩW ΩS _ _ _ d r real x s'
   refine (Bandwidth.pr_mono (fun y hy => ?_)).trans
     (RateAudit N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len) (d.rate .oracle * (r.win .bandwidth).len) s k
@@ -67,4 +67,4 @@ theorem RateOfAudit : Accounting.Guarantees.RateOfAudit := by
       Nat.mul_le_mul_right _ (h1.trans (real.ingress_le x y s'))
     exact lt_of_le_of_lt h3 hread
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

@@ -6,7 +6,7 @@ public import Definitions.Pouw.TS
 # The tensor–scalar model's named assumptions (trusted)
 
 The premises of EPS1-SPEC's Theorem D-ideal ((I1)–(I8), §2.7) and of the compiler lemma (Lemma C), each a `Prop` over
-`Accounting.TS`'s vocabulary, taken as a hypothesis, never an `axiom`. Each docstring opens with its claim id
+`ResourceAccounting.TS`'s vocabulary, taken as a hypothesis, never an `axiom`. Each docstring opens with its claim id
 (`verity.core.claims`). An assumption over an `Anatomy` is claimed at §0.4's and §1.3's labelling of the cheater's
 instructions (heads, ownership, copies); an assumption over a run is claimed for the stated device.
 
@@ -15,7 +15,7 @@ Which form each takes:
 * (I1) `FacetCeilings`: a device-model assumption, scoped by device (sm_120 RTX PRO 6000, on the rows of the vector
   its statement names), checked by measurement: a corpus program that runs faster than a facet
   falsifies it.
-* (I2) and the uniform part of (I4): `WordsWritten`, the ISA's `ω` (P12). Lemma 2 (`Accounting.Guarantees.TS.OutputCount`)
+* (I2) and the uniform part of (I4): `WordsWritten`, the ISA's `ω` (P12). Lemma 2 (`ResourceAccounting.Guarantees.TS.OutputCount`)
   is its counting; the ISA fact that an instruction writes at most `ω` words is the assumption.
 * (I3) `ScalarRoute`: SCALAR-ROUTE at its floors `(q, q_T, b_T)`. QSTAR's joint statement, which gave them from
   class P and a per-instruction cap `κ` (`q = 2.03`, `q_T = 1.22`, `b_T` from `κ`), rests on Theorem C, which is
@@ -31,13 +31,13 @@ Which form each takes:
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
   `benchmarks/pouw/theory/fold_opt.py`) is a mechanical fact; the multi-round residual, that no program folds below the
   menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read (every form,
-  guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a
+  guarded), gives both at the fan-in menu's price (`ResourceAccounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a
   fold or filler presented as a straight-line dataflow over the words it absorbs, priced at least the menu's routes of
   `a_k/m_k` a word. `FoldOptFolded` is FOLD-OPT per word folded: the fold priced at the words the run folds, `FoldOpt`
   its case at `N_w`. `FoldOptFoldedAt` is it at one certificate, the one D-ideal prices at; the headlines take it at
   their `π*`, so a run that skips folds is charged through `WholeLuckAt`.
 * (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round. Split at the receipt
-  (`Accounting.Guarantees.TS.LuckOfReceipt`), it is two luck premises:
+  (`ResourceAccounting.Guarantees.TS.LuckOfReceipt`), it is two luck premises:
   * the operand luck, which `OperandHMu` gives: (H-μ) at the deficient words, through Lemma B at fibre 1;
   * `ReceiptLuckAt`, the receipt luck, which is HMU's B′ case.
   `WholeLuckAt` is B′ at a unit whose fold the run skips, the whole-unit luck at `p₀` (`½`, B′'s value).
@@ -46,14 +46,14 @@ Which form each takes:
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
   `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
   own derivation). E1(c) is proved on paper; it sits inside this premise until the adaptive model is in Lean.
-  `Accounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`Accounting.TS.ProofLayer`):
-  binding at `δ_bind` (at `√δ_fork` from its fork form, `Accounting.Guarantees.TS.BindingOfFork`), proof soundness at
-  `δ_ZK`, the Definitions' pinning, and `RightFixed`. For a sampled window, `Accounting.Guarantees.TS.ProofsSoundOfSampled`
-  derives it at `n_π = 1`, `δ_ZK = δ_ks`, from the sampled proof blocks' proofs (`Accounting.TS.SampledLayer`): binding of every
+  `ResourceAccounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`ResourceAccounting.TS.ProofLayer`):
+  binding at `δ_bind` (at `√δ_fork` from its fork form, `ResourceAccounting.Guarantees.TS.BindingOfFork`), proof soundness at
+  `δ_ZK`, the Definitions' pinning, and `RightFixed`. For a sampled window, `ResourceAccounting.Guarantees.TS.ProofsSoundOfSampled`
+  derives it at `n_π = 1`, `δ_ZK = δ_ks`, from the sampled proof blocks' proofs (`ResourceAccounting.TS.SampledLayer`): binding of every
   committed position before the coin that follows its commitment (at `|L|·√δ_fork`,
-  `Accounting.Guarantees.TS.SampledBindingOfFork`), the proofs' soundness jointly over a round's samples at `δ_ks`, each
+  `ResourceAccounting.Guarantees.TS.SampledBindingOfFork`), the proofs' soundness jointly over a round's samples at `δ_ks`, each
   unit's pinning, the share covering every unit that isn't good (`SampledLayer.Covers`, proved for each game), and
-  `UnitFixed`. Its crypto half, the sampled proof blocks right, is `Accounting.Guarantees.TS.SampledRightOff`.
+  `UnitFixed`. Its crypto half, the sampled proof blocks right, is `ResourceAccounting.Guarantees.TS.SampledRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof system's.
 * `BindingForkAt`, `ProofSoundAt`, `ProofsPin`: `ProofsSoundOfPinned`'s proof-system pieces as named premises, binding
@@ -67,14 +67,14 @@ Which form each takes:
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
 
 SAMPLING's LIN-STEER is false and is not stated here: a segmented consumer satisfies it only when its noise-active
-segments carry equal counts. It and the bound that holds, `SegmentSteer`, are lemmas (`Proofs.Accounting.Lemmas.TS.Steer`).
+segments carry equal counts. It and the bound that holds, `SegmentSteer`, are lemmas (`Proofs.ResourceAccounting.Lemmas.TS.Steer`).
 -/
 
 @[expose] public section
 
-namespace Accounting.Assumptions.TS
+namespace ResourceAccounting.Assumptions.TS
 
-open Accounting.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS Pouw.RelativeSecurity
 
 variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
   [Fintype X]
@@ -172,7 +172,7 @@ def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n →
   ∀ j, (D.issued ins j : ℝ) ≤ m (cls j)
 
 /-- `accounting-ts-luck` ([P+R] per noise; ¾ in Lean for affine operands; 0.854 in Lean for the pfill filler's cells
-(`Accounting.Guarantees.FillerLuck.FillerLuckAt`), 0 for a filler's pinned receipts (`PinnedFillLuckAt`)). **(L) at
+(`ResourceAccounting.Guarantees.FillerLuck.FillerLuckAt`), 0 for a filler's pinned receipts (`PinnedFillLuckAt`)). **(L) at
 `p`, with freshness (F1)–(F2)**: the ideal game is one bet a round, a deficient round passing with probability at most
 `p` given the past. -/
 def LuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p : ℝ) (g : RoundGame Ω S) : Prop := RoundGame.LuckAt p g
@@ -181,9 +181,9 @@ def LuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p : ℝ) (g : RoundGame Ω S) : P
 premise). **A cheater's deficient words are unpredictable from its view**: in the ideal game split at the receipt, at
 every round, whatever the past, the values of the round's deficient words have point mass at most `μ` given everything
 the cheater's skip and its values for them are functions of (`ReceiptGame.OperandPointMass`, HMU's `SkipRound.PointMass`
-at word level). The headlines take it at `¾`. Lemma B at fibre 1 (`Accounting.Guarantees.HMu.LemmaB`) turns it into the
+at word level). The headlines take it at `¾`. Lemma B at fibre 1 (`ResourceAccounting.Guarantees.HMu.LemmaB`) turns it into the
 operand luck at `μ`. Where it holds:
-* the coins give it for a fresh-bit skipped value (`Accounting.Guarantees.HMu.CoinPointMass`: `½` at one bit);
+* the coins give it for a fresh-bit skipped value (`ResourceAccounting.Guarantees.HMu.CoinPointMass`: `½` at one bit);
 * for degree-2 operands on cube bits `OperandLuckCube` gives the operand luck at `¾` directly, on affine-operand runs
   only;
 * where the cheater computes a word that shares the skipped value's coins, it is computational: the cheater hasn't
@@ -202,10 +202,10 @@ deficient round whose deficient words are not all right keeps the honest committ
 for DUO-CP-W and FX1-CP-W at `KS = 4`. Every real skip is in this case at
 `KS = 4`, because one skipped MMA puts a wrong word into each of 4 chains of a set.
 
-(H-μ) doesn't imply it. `Accounting.Guarantees.HMu.ReceiptLuckOfCoins` needs a fibre bound at the start state the
+(H-μ) doesn't imply it. `ResourceAccounting.Guarantees.HMu.ReceiptLuckOfCoins` needs a fibre bound at the start state the
 cheater knows, and for two or more places a set that bound fails: two
 words of a chain at the served keys, three or more at every key. Case (a), one deficient word a unit, gives 0
-(`Accounting.Guarantees.TS.ReceiptLuckCaseA`), but it restricts the cheater, so it is no premise.
+(`ResourceAccounting.Guarantees.TS.ReceiptLuckCaseA`), but it restricts the cheater, so it is no premise.
 
 The evidence (PROJ r5): no sure-win cancellation at the served keys when the wrong words sit in a set's last two
 places (`Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel` and `Fx1PairXorNoKernel`), and a sweep at places 1–2 with no
@@ -294,7 +294,7 @@ every accepted path:
   over `S`: a paid unit folds its words, a folded unit its committed ones, and only a whole unit skips its fold.
 
 It reads neither the sample nor the proofs: the modes are the run's, and the proofs only vouch for the sampled proof blocks
-(`Accounting.Guarantees.TS.SampledRightOff`). Under live coins a unit's coin is the live coin its noise reads; under
+(`ResourceAccounting.Guarantees.TS.SampledRightOff`). Under live coins a unit's coin is the live coin its noise reads; under
 seeded (Fiat–Shamir) coins it is read per query, on the circuit's cut layer: the layer's coins are the seed answers the
 prover queried, and a unit's coin the query its noise's seed answers (it may stay on that layer because it reads no
 committed value). With `Σ wt = S·N_w` and the share covering every unit that isn't good (`SampledLayer.Covers`), it gives
@@ -307,4 +307,4 @@ def UnitFixed {C B : Type} {S m s : ℕ} {J Q Pos V : Type} [Fintype J] (P : Pla
     (∑ w, ∑ j, if pf.Good mode x w j then wt w j else 0) / S ≤ (P.run x).fixed ∧
       (∑ w, ∑ j, if mode x (w, j) = .whole then 0 else wt w j) / S ≤ folded x
 
-end Accounting.Assumptions.TS
+end ResourceAccounting.Assumptions.TS

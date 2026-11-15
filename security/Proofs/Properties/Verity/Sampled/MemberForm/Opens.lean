@@ -32,7 +32,7 @@ namespace Verity.Sampled.MemberForm
 
 open Flock.Guarantees (MemberV5)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **A value of `w` bits opens at the place `pl`**: `pl` is a place, at which the row-leaf verifier accepts an
 opening under SHA-512 whose row holds the value's bits from the place's offset. -/

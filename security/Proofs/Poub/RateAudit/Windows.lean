@@ -50,7 +50,7 @@ windows (`mul_pr_le_sum`) gives the guarantee.
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -165,16 +165,16 @@ theorem pr_short_le (A : Devices n N b h ρ S L q s) (cTag cEnc F k lam : ℕ) (
     simp [j.2]
   simpa [e, Short, hω, hd] using hx
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (pr)
 open scoped ENNReal
 
-/-- **The rate audit over `n` windows** (`Accounting.Guarantees.RateAuditWindows`). -/
-theorem RateAuditWindows : Accounting.Guarantees.RateAuditWindows := by
+/-- **The rate audit over `n` windows** (`ResourceAccounting.Guarantees.RateAuditWindows`). -/
+theorem RateAuditWindows : ResourceAccounting.Guarantees.RateAuditWindows := by
   classical
   intro n N b h ρ S L q s k F cTag cEnc lam m A
   calc (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
@@ -192,4 +192,4 @@ theorem RateAuditWindows : Accounting.Guarantees.RateAuditWindows := by
     _ = (n : ℝ≥0∞) * ((((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

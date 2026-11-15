@@ -20,7 +20,7 @@ at most `tableError(fast100 m, shape)`:
 > the verifier accepts both reps, while no codeword within the level-0 proximity radius of the committed table packs a
 > witness that satisfies the statement.
 
-- **The radius** is `1 − √ρ − η` with the analysis slack `η = 1/200` (`Accounting.eta`), 0.2879 at rate 1/2.
+- **The radius** is `1 − √ρ − η` with the analysis slack `η = 1/200` (`ResourceAccounting.eta`), 0.2879 at rate 1/2.
 - **`tableError`** is a Lean function of the parameters (`Accounting/Bound.lean`), with one term per verifier coin. It
   is at most **2^-205 for 22 ≤ m ≤ 35**, proved in `Accounting/Numbers.lean`.
 - **The statement shapes covered** have at most 2^27 witness bits per block, 1,024 public regions and 64 link-point

@@ -7,13 +7,13 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # A period whose PoUB audit is the bandwidth audit's game (trusted)
 
-A period of a node's run (`Accounting.PeriodRun`) realizes the bandwidth audit's game with at most `G` regenerations
+A period of a node's run (`ResourceAccounting.PeriodRun`) realizes the bandwidth audit's game with at most `G` regenerations
 when PoUB's coordinate of the period's coins is the game's coins (the store, the oracle at the fresh seed and the
 sample), and at each value of the other audits' coins the device's bandwidth interaction over the period's window is
 a device of the game (`Bandwidth.Device`) within the device model's limits over that window: on-chip state of `chip`
 bits, side sources of `∑ i, cap i * len` bits, `rate .oracle * len` oracle queries and `G` regenerations. PoUB's
 verdict is the game's, and the game's ingress is covered by the bandwidth account's reads from device memory over the
-window. It is `Accounting.RealizesBandwidth` restated for a period's coins, `(i : I) → Ω i`, in place of a joint run's
+window. It is `ResourceAccounting.RealizesBandwidth` restated for a period's coins, `(i : I) → Ω i`, in place of a joint run's
 three coordinates.
 
 As in `RealizesBandwidth`, the game's side sources are a function of the store laid out before the seed, so no
@@ -23,7 +23,7 @@ realization carries relayed tags: a device that relays tags in over a side chann
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- Period `r`'s PoUB audit is the bandwidth audit's game with a store of `N` blocks of `b` bits, `h`-bit tags, `s`
 sampled blocks and at most `G` regenerations. Every field is a property of the deployed period: its PoUB coins, the
@@ -44,4 +44,4 @@ structure RealizesBandwidthOfAuditPerRunPeriod (G : ℕ) {N b h s : ℕ} {ι : T
   /-- the bandwidth account's reads from device memory over the period's window cover the game's ingress -/
   ingress_le : ∀ ξ, (dev ξ).ingress (coins (ξ (r.own .poub))).1 (coins (ξ (r.own .poub))).2.1 ≤ r.read ξ
 
-end Accounting
+end ResourceAccounting

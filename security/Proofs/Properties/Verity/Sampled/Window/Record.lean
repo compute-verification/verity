@@ -49,7 +49,7 @@ open Claims.Bridge.CustodyZkP (repRounds)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## A stop's messages, off the misses -/
 

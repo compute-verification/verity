@@ -64,7 +64,7 @@ What the filler's per-check luck is about, as `benchmarks/pouw/filler/pfill_ref.
 
 @[expose] public section
 
-namespace Accounting.Filler
+namespace ResourceAccounting.Filler
 
 open Finset Pouw.RelativeSecurity
 
@@ -216,4 +216,4 @@ def PinnedFillBlocks {Ω₀ : Type} [Fintype Ω₀] (p₀ : ℝ) (F : D → C �
 
 end Pinned
 
-end Accounting.Filler
+end ResourceAccounting.Filler

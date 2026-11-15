@@ -49,7 +49,7 @@ real value.
 
 namespace Flock.SoundAtBridge
 
-open FlockSoundness FlockSoundness.Discharge.ZkReg Accounting.TS
+open FlockSoundness FlockSoundness.Discharge.ZkReg ResourceAccounting.TS
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 

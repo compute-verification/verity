@@ -77,7 +77,7 @@ from its own seed.
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Pouw.RelativeSecurity
 
@@ -113,4 +113,4 @@ def CondReceiptLuck {Z O : Type} [Fintype O] (e : Ω ≃ Z × O) (pr : ℝ) : {n
 
 end ReceiptGame
 
-end Accounting.TS
+end ResourceAccounting.TS

@@ -17,9 +17,9 @@ public import Definitions.Pouw.TS.J10R
 
 @[expose] public section
 
-namespace Accounting.TS.J10RChecks
+namespace ResourceAccounting.TS.J10RChecks
 
-open Accounting.TS.J10R
+open ResourceAccounting.TS.J10R
 
 theorem unit_row_is_call_row (s : List ℕ) (M N k R C I J i : ℕ) :
     rowAt s k ((unitBlocks M k R C I J).1 + i * rb k) = rowAt s k ((NoiseLayout.mk M N k).row (R * I + i)) := by
@@ -83,4 +83,4 @@ theorem prefill_4096 : callCompressionsNum 256 4096 4096 32 32 = 73986 ∧ units
 theorem prefill_k14336 : rb 14336 = 29 ∧ cb 14336 = 29 ∧ unitCompressions ⟨32, 32, 14336⟩ = 1892 ∧
     callCompressionsNum 256 4096 14336 32 32 = 161026 := by decide +kernel
 
-end Accounting.TS.J10RChecks
+end ResourceAccounting.TS.J10RChecks

@@ -29,7 +29,7 @@ take as a hypothesis:
 namespace Bandwidth.Causal
 
 open Pous (Bits)
-open Accounting
+open ResourceAccounting
 
 /-- What a location does during an interval, as `Actual.Run.acts` gives it. -/
 abbrev Acts (L : Type*) :=

@@ -37,10 +37,10 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A credit in words, priced as work on the device model (trusted)
 
-`Accounting.PeriodRun.Sound` at `.pouw` is the joint period's PoUW guarantee: over PoUW's own coordinate of the coins,
+`ResourceAccounting.PeriodRun.Sound` at `.pouw` is the joint period's PoUW guarantee: over PoUW's own coordinate of the coins,
 the audit accepts while the compute account did less than the work certificate `W` at price `p` (`PeriodRun.Holds`:
 `c.W ≤ r.work p ξ`) with probability at most its error. `r.work p ξ` is the device model's priced work: the compute
-account's ops of each class (`Accounting.OpClass`) over the period's window, each at its price, summed (`Schedule.work`). It
+account's ops of each class (`ResourceAccounting.OpClass`) over the period's window, each at its price, summed (`Schedule.work`). It
 counts ops, not time and not words.
 
 PoUW's per-period statements credit words. `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod` bounds the probability that
@@ -54,19 +54,19 @@ words of the windows before the check's first refusal). The two differ in their 
   `R = 4`, `C = 8`) has 4 words of 512, its `64·32 = 2048` products (`core_check.TILES`' `tile_work`), all INT8
   multiply-adds on the integer tensor cores (`EXACT=GemmAccumulatorS8_v2{DOT=BlackwellS8ImmaDot32_v2}`). A circuit of
   several word kinds is priced at the fewest a word of any kind stands for (`Compose.minWordMacs`).
-* The words are the play's, read off the run its game is about (`Accounting.TS.Play.run`); the work is the schedule's,
+* The words are the play's, read off the run its game is about (`ResourceAccounting.TS.Play.run`); the work is the schedule's,
   the device's ticks. Nothing PoUW's check sees ties one to the other. That each right word of a unit the device didn't
-  outsource cost at least `m` multiply-adds of priced work on it is a premise (`Accounting.Assumptions.WordCostsMacs`),
-  and that it outsourced at most `K / b_unit` units, `K` the network certifier's bits and `b_unit` the bits that carry a
-  unit, is another (`Accounting.Assumptions.HelpWithinCertifier`). The count is of units, not words: a unit whose
+  outsource cost at least `m` multiply-adds of priced work on it is a premise (`ResourceAccounting.Assumptions.WordCostsMacs`),
+  and that it outsourced at most `K / b_unit` units, `K` the network attester's bits and `b_unit` the bits that carry a
+  unit, is another (`ResourceAccounting.Assumptions.HelpWithinCertifier`). The count is of units, not words: a unit whose
   inputs are seed-derived goes out whole in about a kilobit (its seed out, its root in), however many words it has.
 
-So the bridge prices the credit less the multiply-adds of the units the network certifier's bits could have carried
+So the bridge prices the credit less the multiply-adds of the units the network attester's bits could have carried
 out, `W ≤ m·p(tc)·credit − u·p(tc)·K/b_unit` with `u` a unit's, at every price `p`. It needs no time credit: Compose's
 time line (`(1 − ε)·T_cred`, `CreditOfWork`), which no period statement gives, would credit device
 time, and the joint period's PoUW claim is priced ops.
 
-* `Certificates.helpUnits`: the units the network certifier's `K` bits can carry, at `b_unit` bits a unit.
+* `Certificates.helpUnits`: the units the network attester's `K` bits can carry, at `b_unit` bits a unit.
 * `RealizesCreditedWords`: a period whose PoUW audit is a source game's on PoUW's coordinate of the coins, with the work
   certificate within the priced credit, less the outsourced units, on every accepted period.
 * `receiptWordMacs`: the multiply-adds an H1 + fx1 tile's committed receipt word stands for.
@@ -76,9 +76,9 @@ time, and the joint period's PoUW claim is priced ops.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
-/-- **The units the network certifier's bits can carry out**: `K / b_unit`, at `b_unit` bits a unit (about `1024` for a
+/-- **The units the network attester's bits can carry out**: `K / b_unit`, at `b_unit` bits a unit (about `1024` for a
 unit whose inputs are seed-derived: a SHA-512 seed out and a SHA-512 root in). At `b_unit = 0` it is `0`. -/
 noncomputable def Certificates.helpUnits (c : Certificates) (bUnit : ℕ) : ℝ := c.K / bUnit
 
@@ -95,7 +95,7 @@ structure RealizesCreditedWords {ι : Type} {d : Device ι} {α : Type} [Fintype
   accepts_iff : ∀ ξ y, r.accepts .pouw (Function.update ξ (r.own .pouw) y) ↔ acc ξ (coin y)
   /-- the work certificate is within the priced credit less the outsourced units on every accepted period: what the
   deployed loop certifies as `W` at `p` is at most the words it credits at `m` multiply-adds each, less the `K / b_unit`
-  units the network certifier's bits could have carried out at `u` each, every multiply-add at `p .tc` -/
+  units the network attester's bits could have carried out at `u` each, every multiply-add at `p .tc` -/
   cert_le : ∀ ξ y, acc ξ (coin y) → c.W ≤ m * p .tc * credit ξ (coin y) - u * p .tc * c.helpUnits bUnit
 
 /-- **The tensor-core multiply-adds one committed receipt word stands for**, on an H1 + fx1 tile of `R` rows and `C`
@@ -117,4 +117,4 @@ def receiptUnitMacs (K R C : ℕ) : ℕ := 2 * (K / 32) * receiptWordMacs R C
 def Compose.minWordMacs {ι K : Type} (Sc : Compose.Scheme K) (Cd : Compose.Declared ι) (macs : Compose.Kind → ℕ) : ℕ :=
   ((Compose.creditedWords Sc Cd).map fun i => macs (Compose.kindAt Cd i)).min?.getD 0
 
-end Accounting
+end ResourceAccounting

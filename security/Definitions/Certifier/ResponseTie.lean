@@ -5,11 +5,11 @@ public import Definitions.Core.Boolean
 /-!
 # The response tie: what its two Definitions compute, and what a release is held to
 
-Definitions only. The response tie is the proof block each connection of a tied class of the network certifier's
+Definitions only. The response tie is the proof block each connection of a tied class of the network attester's
 content rows gets (`verity/protocols/accounting/certifier/prover/response_tie.py`), of one of two Definitions by the
 kind of its class: `ResponseTieStop{O}` in a stop class, whose connections the stop rule ends after the stop word's n ids, and
-`ResponseTieNoStop{O}` in a no-stop class, whose connections end where the network certifier's end row says. Each
-reads the compute side's committed egress row of O u32 ids and the network certifier's end row (u16 class, u16 at),
+`ResponseTieNoStop{O}` in a no-stop class, whose connections end where the network attester's end row says. Each
+reads the compute side's committed egress row of O u32 ids and the network attester's end row (u16 class, u16 at),
 and a stop class's also its stop word (n + finish·2^13, n of 13 bits); each returns o0, `accept` or 0, and o1, the
 response row: a u32 count, `noCount` where o0 is 0, then O u32 ids.
 
@@ -17,8 +17,8 @@ response row: a u32 count, `noCount` where o0 is 0, then O u32 ids.
 and `outputBits` are their signature's bits, each field little-endian, a row's bit 8b + i bit i of its byte b.
 `Computes` is the statement that a Boolean circuit, read on its signature's wires, computes them on every input the
 Definition takes. `ReleaseHeld` is what an accepted block holds a release to: where o1 opens to the signed
-`response.i` row, the ids the network certifier released are the committed egress row's ids below the count, the
-network certifier's own `at`, or the stop word's n where the stop rule ended the response.
+`response.i` row, the ids the network attester released are the committed egress row's ids below the count, the
+network attester's own `at`, or the stop word's n where the stop rule ended the response.
 
 Two statements are open, each a `def … : Prop` that nothing proves yet (the goal `network/egress-tied-to-trace`):
 `OutputsHoldRelease`, that the outputs of an accepted block hold its release; and `ResponseTieComputesSpec`, that
@@ -44,7 +44,7 @@ def ended : ℕ := 0
 /-- The end row's class of a connection that failed (`content_rows.FAILED`). -/
 def failed : ℕ := 1
 
-/-- The network certifier's end row of a connection: its class and the cells it released before it ended. -/
+/-- The network attester's end row of a connection: its class and the cells it released before it ended. -/
 structure EndRow where
   cls : ℕ
   cells : ℕ

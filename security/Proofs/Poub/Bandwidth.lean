@@ -4,7 +4,7 @@ public import Proofs.Poub.Bandwidth.AuditRO
 public import Proofs.Poub.Bandwidth.Honest
 public import Proofs.Poub.Bandwidth.Relay
 public import Proofs.Poub.Bandwidth.Interactive
-public import Proofs.Accounting.Actual.Physical
+public import Proofs.ResourceAccounting.Actual.Physical
 public import Proofs.Poub.Bandwidth.Witnesses
 public import Proofs.Poub.Bandwidth.Ticked
 public import Proofs.Poub.Bandwidth.Causal
@@ -13,7 +13,7 @@ public import Proofs.Poub.Bandwidth.TickedJoint
 public import Proofs.Poub.Bandwidth.CausalJoint
 
 /-! The bandwidth audit v0's proofs: the guarantee in the random-oracle model, PoUB's per-pass lemma
-(`Accounting.SecurityProofs.Remote.AuditRO`), its completeness (`Bandwidth.SecurityProofs.HonestPasses`), the guarantee
+(`ResourceAccounting.SecurityProofs.Remote.AuditRO`), its completeness (`Bandwidth.SecurityProofs.HonestPasses`), the guarantee
 with relayed tags (`Bandwidth.SecurityProofs.AuditRelay`), with side sources that answer what the chip sent
 (`Bandwidth.SecurityProofs.AuditInteractive`, and `AuditInteractiveRO` when they ignore the oracle), and for the chip
 as a tick transducer over

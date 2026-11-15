@@ -1,6 +1,6 @@
 """`python network_certifier_probe.py ARGS...`: `verity/protocols/accounting/certifier/device/network_certifier_serve.py ARGS...`, with probes the network certifier doesn't
-keep, for telling a late tick's cause: every tick's lateness (`NetworkCertifier.lateness`, which warden.json keeps only as
-quantiles), how long each tick's own work took (`NetworkCertifier._tick`), when the publisher packed, signed and committed each
+keep, for telling a late tick's cause: every tick's lateness (`NetworkAttester.lateness`, which warden.json keeps only as
+quantiles), how long each tick's own work took (`NetworkAttester._tick`), when the publisher packed, signed and committed each
 record (`Publisher.keep`) and every garbage collection of the network certifier's process (serve turns the collector off, so any is
 an explicit one).
 
@@ -175,7 +175,7 @@ def main(argv: list[str]) -> int:
 
     probe = Probe(out=out)
     gc.callbacks.append(probe.collections)
-    probe.install(network_certifier.NetworkCertifier, network_certifier_serve.Publisher, getattr(network_certifier_serve, "PublisherProcess", None))
+    probe.install(network_certifier.NetworkAttester, network_certifier_serve.Publisher, getattr(network_certifier_serve, "PublisherProcess", None))
     try:
         return network_certifier_serve.main(argv)
     finally:

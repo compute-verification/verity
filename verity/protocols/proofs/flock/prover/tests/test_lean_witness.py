@@ -455,7 +455,7 @@ def test_f1_the_sessions_fail_the_public_output_checks(f1):
 
 def test_f1_the_rate_is_below_one_at_k_2_21(f1):
     """`_hr`: `rateZ j k = 2^(level 0's logLen) / (e·k)` (`ZkLink.rateZ`) over each session's own plan, its statement's
-    `Zk.schedule`, whose level 0's `logLen = logCols + logInvRate` (`Accounting.Level.logLen`) is `cols + rate`. The largest
+    `Zk.schedule`, whose level 0's `logLen = logCols + logInvRate` (`ResourceAccounting.Level.logLen`) is `cols + rate`. The largest
     is L0's (m 33): 21, so at `k = 2^21` every recorded session's rate is at most `ρ = 1/e < 1`. `_hr` is over every
     session the prover may supply, so the Lean takes `k = 2^23` (`Witness.hr_inv_exp zr` is `_hr`, through
     `ZkHidden.hr_planZHJ_23`), the cap `Zk.schedule` puts on level 0's `logLen` at every `m` it accepts

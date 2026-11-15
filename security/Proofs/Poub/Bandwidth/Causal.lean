@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Poub.Bandwidth.Ticked
-public import Proofs.Accounting.Defs.Actual.Source
+public import Proofs.ResourceAccounting.Defs.Actual.Source
 public import Definitions.Poub.Guarantees.Bandwidth.Causal
 public import Mathlib.Logic.Encodable.Pi
 import Mathlib.Algebra.Order.Floor.Extended
@@ -40,7 +40,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.Actual.Transducer
+import Proofs.ResourceAccounting.Actual.Transducer
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
@@ -86,7 +86,7 @@ and the bound holds at `βm T` in place of `∑ wd`. The four are the guarantees
 namespace Bandwidth
 
 open Pous (Bits pr)
-open Accounting Accounting.SecurityProofs.Actual
+open ResourceAccounting ResourceAccounting.SecurityProofs.Actual
 open scoped ENNReal
 
 namespace Causal

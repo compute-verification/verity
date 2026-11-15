@@ -44,14 +44,14 @@ import Proofs.Pous.Prob
 /-!
 # The deployed session as a run of PoUB: its routes, and conservation at the same `γ`
 
-`Accounting.Remote.Run.ofDeployed` reads a deployed session as a run of PoUB. Its routes:
+`ResourceAccounting.Remote.Run.ofDeployed` reads a deployed session as a run of PoUB. Its routes:
 
 * `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
   `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's sample (`DeployedRun.pr_samples_pooled_le`).
 * `Paid`: a run whose correct receipts' words exceed its payments and slacks has a window whose do
   (`DeployedRun.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_sample_le`) covers.
 
-`Accounting.SecurityProofs.Remote.Conservation` composes them; the run's payments other than its tier reads are the
+`ResourceAccounting.SecurityProofs.Remote.Conservation` composes them; the run's payments other than its tier reads are the
 `n·P` passes' `S + (L − ρ) + X` bits, so its `(1 − d̄ − λ)·C` of payments are `(1 − (d̄ + γ))·C` of tier reads, with
 `γ` the deployed game's `Deployed.gammaPass`. The remote model's probability is real (`Pouw.pr`), the game's in `ℝ≥0∞`
 (`Pous.pr`); `pouw_pr_le` carries a bound across.
@@ -59,9 +59,9 @@ import Proofs.Pous.Prob
 
 @[expose] public section
 
-namespace Accounting.Remote
+namespace ResourceAccounting.Remote
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open scoped ENNReal
 
 variable {n P N b h ρ S L q r s d G τ : ℕ}
@@ -140,8 +140,8 @@ theorem ofDeployed_sampled (A : DeployedRun n P N b h ρ S L q r s d G) (tier : 
 theorem ofDeployed_paid_route (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = n * P) (hab : a.b = b) (hal : a.lam = lam)
-    (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
-    (hF : ∀ w η j ι c, Accounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c))
+    (hW : ResourceAccounting.Assumptions.WorkHardness b rounds cRoot cost)
+    (hF : ∀ w η j ι c, ResourceAccounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c))
     (hA : ∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') :
     (Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
       ((n * P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam)) := by
@@ -222,8 +222,8 @@ theorem ofDeployedWindow_sampled (A : DeployedRun n P N b h ρ S L q r s d G) (w
 theorem ofDeployedWindow_paid_route (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = P) (hab : a.b = b) (hal : a.lam = lam)
-    (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
-    (hF : ∀ w η j ι c, Accounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c))
+    (hW : ResourceAccounting.Assumptions.WorkHardness b rounds cRoot cost)
+    (hF : ∀ w η j ι c, ResourceAccounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c))
     (hA : ∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') :
     (Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
       ((P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam)) := by
@@ -249,21 +249,21 @@ theorem ofDeployedWindow_paid_route (A : DeployedRun n P N b h ρ S L q r s d G)
   have e : P * (S + (L - ρ) + X + lam) = P * (L - ρ) + P * S + P * X + P * lam := by ring
   omega
 
-end Accounting.Remote
+end ResourceAccounting.Remote
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate Accounting.Remote
+open ResourceAccounting.Rate ResourceAccounting.Remote
 
-/-- **The deployed session meets PoUB's routes** (`Accounting.Guarantees.RemoteRunRoutes`). -/
-theorem RemoteRunRoutes : Accounting.Guarantees.RemoteRunRoutes := by
+/-- **The deployed session meets PoUB's routes** (`ResourceAccounting.Guarantees.RemoteRunRoutes`). -/
+theorem RemoteRunRoutes : ResourceAccounting.Guarantees.RemoteRunRoutes := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
   exact ⟨ofDeployed_sampled A tier _ Nd a dbar hn hP hN hb hdbar hab hC,
     ofDeployed_paid_route A tier Nd a hrc ha hab hal hW hF hA⟩
 
 /-- **The deployed session conserves its words as a run of PoUB, at the same `γ`**
-(`Accounting.Guarantees.RemoteMonitoringPeriodConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteMonitoringPeriodConservation : Accounting.Guarantees.RemoteMonitoringPeriodConservation := by
+(`ResourceAccounting.Guarantees.RemoteMonitoringPeriodConservation`), from `ResourceAccounting.SecurityProofs.Remote.Conservation`. -/
+theorem RemoteMonitoringPeriodConservation : ResourceAccounting.Guarantees.RemoteMonitoringPeriodConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
   obtain ⟨hs, hp⟩ := RemoteRunRoutes n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN
     hb hrc hdbar ha hab hal hC hW hF hA
@@ -286,8 +286,8 @@ theorem RemoteMonitoringPeriodConservation : Accounting.Guarantees.RemoteMonitor
   nlinarith [h2, eΛ, k]
 
 /-- **Each window conserves its words as a run of PoUB, at the same `γ_w`**
-(`Accounting.Guarantees.RemoteWindowRunConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteWindowRunConservation : Accounting.Guarantees.RemoteWindowRunConservation := by
+(`ResourceAccounting.Guarantees.RemoteWindowRunConservation`), from `ResourceAccounting.SecurityProofs.Remote.Conservation`. -/
+theorem RemoteWindowRunConservation : ResourceAccounting.Guarantees.RemoteWindowRunConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A w Nd a dw hP hN hb hrc hdw ha hab hal hC hW hF hA
   have hs := ofDeployedWindow_sampled A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a dw hP hN hb hdw hab hC
   have hp := ofDeployedWindow_paid_route A w tier Nd a hrc ha hab hal hW hF hA
@@ -309,4 +309,4 @@ theorem RemoteWindowRunConservation : Accounting.Guarantees.RemoteWindowRunConse
   rw [hCr] at h2 eΛ k ⊢
   nlinarith [h2, eΛ, k]
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

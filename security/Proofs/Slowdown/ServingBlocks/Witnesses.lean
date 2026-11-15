@@ -14,9 +14,9 @@ so the lemmas are the premises as the guarantee states them.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.ServingBlocks
+namespace ResourceAccounting.SecurityProofs.ServingBlocks
 
-open Verity Finset Accounting.ServingBlocks
+open Verity Finset ResourceAccounting.ServingBlocks
 
 namespace Counted
 
@@ -69,7 +69,7 @@ end Counted
 
 namespace Honest
 
-open Accounting.ServingBlocks.Honest
+open ResourceAccounting.ServingBlocks.Honest
 
 theorem ω_one : ∀ v ∈ J.V, J.ω v = 1 := fun _ _ => rfl
 
@@ -97,7 +97,7 @@ end Honest
 
 namespace Counter
 
-open Accounting.ServingBlocks.Counter
+open ResourceAccounting.ServingBlocks.Counter
 
 theorem ω_one : ∀ v ∈ J.V, J.ω v = 1 := fun _ _ => rfl
 
@@ -134,7 +134,7 @@ end Counter
 
 namespace Straddle
 
-open Accounting.ServingBlocks.Straddle
+open ResourceAccounting.ServingBlocks.Straddle
 
 theorem ω_one : ∀ v ∈ J.V, J.ω v = 1 := fun _ _ => rfl
 
@@ -162,7 +162,7 @@ end Straddle
 
 namespace Detached
 
-open Accounting.ServingBlocks.Detached
+open ResourceAccounting.ServingBlocks.Detached
 
 theorem ω_one : ∀ v ∈ J.V, J.ω v = 1 := fun _ _ => rfl
 
@@ -327,4 +327,4 @@ example (q : ℝ)
   rw [UncertifiedCap, heq] at h
   exact not_le.2 hq h
 
-end Accounting.SecurityProofs.ServingBlocks
+end ResourceAccounting.SecurityProofs.ServingBlocks

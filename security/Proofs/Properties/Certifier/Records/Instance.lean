@@ -65,7 +65,7 @@ they are taken as given.
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params LinkOpening Evidence)
-open NetworkCertifier (ClockSync)
+open NetworkAttester (ClockSync)
 open Properties.Certifier (ParamsDigests Declares programGrid)
 open Properties.Certifier.CheckProofs (declares_unique declares_declared)
 

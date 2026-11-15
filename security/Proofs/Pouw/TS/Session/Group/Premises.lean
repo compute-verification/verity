@@ -43,39 +43,39 @@ it abbreviates at every proof's every session, unchanged:
 
 * `SessionsCR` (`Flock.SoundAtBridge.RowsSession.CR`): Flock's `EndToEndRegisteredRows`' named assumptions,
   `cr/sha-512` and `ecr/sha-512` for its finders, at every session and every unit's opening.
-* `ExecutionPhaseDesigns` (`Accounting.Assumptions.TS.ExecutionPhaseDesign`, `accounting-ts-window-law`): at each statement of the group, the
+* `ExecutionPhaseDesigns` (`ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign`, `accounting-ts-window-law`): at each statement of the group, the
   window's coins read through its sessions have the sessions' law.
-* `GroupRealizes` (`Accounting.Assumptions.TS.GroupRealizes`, `accounting-ts-group-realizes`): at every proof, the
+* `GroupRealizes` (`ResourceAccounting.Assumptions.TS.GroupRealizes`, `accounting-ts-group-realizes`): at every proof, the
   group's circuits realize the leaf's relation at the rows its sessions open.
 
 They belong in `security/Definitions/`, but they read `RowsSession`, which is in the proofs package, so they are here
-until Flock's spec is extracted, as `Accounting.Assumptions.TS`'s other session premises are.
+until Flock's spec is extracted, as `ResourceAccounting.Assumptions.TS`'s other session premises are.
 -/
 
 @[expose] public section
 
-namespace Accounting.Premises.TS
+namespace ResourceAccounting.Premises.TS
 
-open Accounting.TS Flock.SoundAtBridge
+open ResourceAccounting.TS Flock.SoundAtBridge
 open Pouw.RelativeSecurity (Paths)
 
 /-- **`RowsSession.CR` at every session of every proof**: `EndToEndRegisteredRows`' named assumptions. -/
 abbrev SessionsCR {Ω : Type} {S nπ : ℕ} {ι : Type} (sess : Paths Ω S → Fin S → Fin nπ → ι → RowsSession) : Prop :=
   ∀ x w i k, (sess x w i k).CR
 
-/-- **`Accounting.Assumptions.TS.ExecutionPhaseDesign` at every statement of the group**. -/
+/-- **`ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign` at every statement of the group**. -/
 abbrev ExecutionPhaseDesigns {Ω : Type} [Fintype Ω] {S nπ : ℕ} {ι : Type} (sess : Paths Ω S → Fin S → Fin nπ → ι → RowsSession)
     (out : ∀ x w i k, (sess x w i k).Out) : Prop :=
-  ∀ k, Accounting.Assumptions.TS.ExecutionPhaseDesign (fun x w i => sess x w i k) (fun x w i => out x w i k)
+  ∀ k, ResourceAccounting.Assumptions.TS.ExecutionPhaseDesign (fun x w i => sess x w i k) (fun x w i => out x w i k)
 
-/-- **`Accounting.Assumptions.TS.GroupRealizes` at every proof**. -/
+/-- **`ResourceAccounting.Assumptions.TS.GroupRealizes` at every proof**. -/
 abbrev GroupRealizes {Ω : Type} {S nπ : ℕ} {ι V : Type} (sess : Paths Ω S → Fin S → Fin nπ → ι → RowsSession)
-    (known : Paths Ω S → Fin S → Fin nπ → ι → Accounting.TS.Lanes.Known)
+    (known : Paths Ω S → Fin S → Fin nπ → ι → ResourceAccounting.TS.Lanes.Known)
     (full : Paths Ω S → Fin S → Fin nπ → ι → Array String)
     (want : Paths Ω S → Fin S → Fin nπ → ι → List _root_.Flock.Registered.Port)
     (gate : Paths Ω S → Fin S → Fin nπ → Prop) (opened : Paths Ω S → Fin S → Fin nπ → V)
     (rel : Paths Ω S → Fin S → Fin nπ → V → Prop) : Prop :=
-  ∀ x w i, Accounting.Assumptions.TS.GroupRealizes (sess x w i) (known x w i) (full x w i) (want x w i) (gate x w i)
+  ∀ x w i, ResourceAccounting.Assumptions.TS.GroupRealizes (sess x w i) (known x w i) (full x w i) (want x w i) (gate x w i)
     (opened x w i) (rel x w i)
 
-end Accounting.Premises.TS
+end ResourceAccounting.Premises.TS

@@ -20,7 +20,7 @@ root (`coinReasonAt`); a live Pearl-C pass, whose manifest's coins are a live se
 salt-only session of the auditor device's challenger opened on its salt execution phase's root, which its verifier reads only through
 the auditor's ledger and the session's own files (`{key, ledger, main, pins, session}`, `livePassSalt`), never the
 pass's word; a pass recorded before the execution phase's coins (`MANIFEST_RECORDED`, read only in a replay) carries a beacon. Either
-way the manifest's salt must be the execution phase's. A certified execution phase's verifier holds the network certifier's salt for
+way the manifest's salt must be the execution phase's. A certified execution phase's verifier holds the network attester's salt for
 the PoUW execution phase its context names (`executionPhaseOf`), the execution phase's stream and prover, and what PoUW recorded with the certifier
 before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salted by them (`MANIFEST_CERTIFIED`, the salt
 `pouwSalt`, `salt.pouw_salt`); no other verifier passes such a pass. A refusal is `coin` (the coin rule's, Python's

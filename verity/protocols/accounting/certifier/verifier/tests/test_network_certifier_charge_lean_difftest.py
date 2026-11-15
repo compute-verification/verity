@@ -3,7 +3,7 @@
 `device/program/lean/scripts/charge_vectors.py` writes 4,000 random instances, a book, a carry and windows of slots that ask or not
 with their decisions, and `reference_charge`'s results on each: window by window from the carry, and chained from the
 book's priors. `check` runs the Lean half in its Lean audit (`runs` in `device/program/lean/lean-audit.json`):
-`device/program/lean/NetworkCertifier/ChargeDifftestMain.lean` evaluates every instance with the program's `AdviceV1.window` and
+`device/program/lean/NetworkAttester/ChargeDifftestMain.lean` evaluates every instance with the program's `AdviceV1.window` and
 `AdviceV1.charges` and fails on any difference, and `security_proofs` proves `charges` equal to `NetTiming.AdviceV1`'s
 (`CodeChargesV1`). circuit-check holds `ChargeCount_v1{N}`'s circuit to `reference_charge`, so this is what holds the
 circuit's charge to the Lean definition's. The audit checks that data against the record's SHA-256, and its pass is
@@ -27,7 +27,7 @@ SCRIPT = LEAN / "scripts" / "charge_vectors.py"
 _spec = importlib.util.spec_from_file_location("charge_vectors", SCRIPT)
 vectors = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vectors)
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NetworkCertifier.ChargeDifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NetworkAttester.ChargeDifftestMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):

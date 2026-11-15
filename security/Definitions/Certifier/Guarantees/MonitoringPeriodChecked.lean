@@ -40,7 +40,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The leak through the network certifier over a monitoring period, with the checked inputs left out
+# The leak through the network attester over a monitoring period, with the checked inputs left out
 
 `MonitoringPeriodLeakAccepted` with each window's checked inputs `chk` left out of the count
 (`Definitions.Certifier.Checked`), and the client's view read back from the windows' records under a registered
@@ -48,10 +48,10 @@ parameter (`RecordFormat.ReadsBy`) in place of the whole schedule.
 
 **The check.** Each statement has two checks on its run, `valid₁` and `valid₂`, each with its own miss bound; together
 they pin the checked inputs (`CheckedUnique` at their conjunction). The run they are held to is the one the leak
-relation at the network certifier's rows accepts at (`certifierRun`): the trace's inputs, the ingress the operator's
-moves on the network certifier's records give, and an incorrect proof block's committed gates held at the trace filled
-in with the network certifier's openings. `CheckedWitness` at that run is the premise. At the trace's run (`traceRun`)
-it would not carry the bound: the two runs differ at a gate the network certifier opens and the trace leaves unopened.
+relation at the network attester's rows accepts at (`certifierRun`): the trace's inputs, the ingress the operator's
+moves on the network attester's records give, and an incorrect proof block's committed gates held at the trace filled
+in with the network attester's openings. `CheckedWitness` at that run is the premise. At the trace's run (`traceRun`)
+it would not carry the bound: the two runs differ at a gate the network attester opens and the trace leaves unopened.
 
 **The count.** With the record read back under a parameter of the registered set `Θ`, a secret whose every window
 meets its good event is recovered from one parameter and the windows' records, each a sequence its window's Program
@@ -79,7 +79,7 @@ open Claims.SamplingGeneric (Arg Compiled)
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 /-- **A window's good event with a valid run**: at the window's statement `x` and the audit's extracted witness `w`,
-the leak relation at the network certifier's rows holds with a valid run (the network certifier's openings `tops s`),
+the leak relation at the network attester's rows holds with a valid run (the network attester's openings `tops s`),
 `x` is in the audit's scope and registered as `s₀`, with `s₀`'s check, the trace holds `ρ` at the registered inputs
 (`RegisteredInputsHeld`), and the run's observations `o` have the horizon's length, jitter below `Dj` and every status
 complete. -/
@@ -105,22 +105,22 @@ open Claims.SamplingGeneric (Arg Compiled)
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
 
-/-- **The leak through the network certifier over a monitoring period of accepted sampled audits, with the checked
+/-- **The leak through the network attester over a monitoring period of accepted sampled audits, with the checked
 inputs left out.** At every compiled sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds and the
 trace's commitment binds (`CommitmentScheme.Binds`), over a monitoring period of `n` windows registered as `sw i`
 (`ExecutionPhasesPlaced`: partition `Pw i`, and `β i` bounding the committed bits of each of its possible incorrect sets; its
 registered values `ρ i`), each window's two checks together pinning its checked inputs (`CheckedUnique`); with an
 operator `op` fixed before the period and the covert sender's secrets, window `i`'s reading only the windows before
-`i`, closed by then (`runsBefore`); with the network certifier's openings `tops s` at each statement, and a network
-certifier that runs its code by `trusted-device`, its one run giving the cells the client receives and the observations
+`i`, closed by then (`runsBefore`); with the network attester's openings `tops s` at each statement, and a network
+attester that runs its code by `trusted-device`, its one run giving the cells the client receives and the observations
 of the monitoring period's windows (its record of those cells, in the format `f`), which reads back under a registered
 parameter (`RecordFormat.ReadsBy`); and a covert sender in the server over the registered parameters `Θ`, whose secrets
 a decoder recovers from the client's view of the server side (`MonitoringPeriodChannelReg`):
 
-* each window's audit, at a statement in its scope where the two checks miss on the run at the network certifier's rows
+* each window's audit, at a statement in its scope where the two checks miss on the run at the network attester's rows
   with probability at most `ε₁` and `ε₂` (`CheckedWitness` at `certifierRun`), has
   `Pr[acc ∧ ¬RLeakCertifierChecked δ] ≤ δ + ε_ks + ε_bind + ε₁ + ε₂ + Pr[B_tap]`;
-* where at every window's statement the network certifier registers its observations at that window's operator at the
+* where at every window's statement the network attester registers its observations at that window's operator at the
   run's observations (`CertifierRegisters`), for the secrets whose every window meets `ExecutionPhaseGoodChecked`, at that
   window's statement `x z i` and extracted witness `wit z i`:
   * **held**: the cells the client receives are read from the windows' records under a registered parameter of `Θ`,

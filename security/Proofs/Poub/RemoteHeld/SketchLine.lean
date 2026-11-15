@@ -45,22 +45,22 @@ outside the node with the chips', so its sketch bound's event is `SketchBoundAt 
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sketch
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sketch
 
 /-- The sketch outcomes whose prover's coins carry the openings coins are the line's coins whose other coins are a
 sketch outcome, reordered. -/
 def lineCoinsEquiv {β Hs : Type} {n κ N m : ℕ} :
-    Outcome (β × (Fin n → Pous.Bits κ)) Hs N m ≃ Accounting.Remote.Sample.SampleCoins n κ (Outcome β Hs N m) where
+    Outcome (β × (Fin n → Pous.Bits κ)) Hs N m ≃ ResourceAccounting.Remote.Sample.SampleCoins n κ (Outcome β Hs N m) where
   toFun := lineCoins
   invFun ω := ((ω.1.1, ω.2), ω.1.2.1, ω.1.2.2)
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- **The sketch bound on the memory line's coins** (`Accounting.Guarantees.Remote.SketchBoundLine`): the sketch bound
+/-- **The sketch bound on the memory line's coins** (`ResourceAccounting.Guarantees.Remote.SketchBoundLine`): the sketch bound
 on the line's trace read on the sketch outcomes is `SketchBoundAt` on the line's trace. -/
-theorem SketchBoundLine : Accounting.Guarantees.Remote.SketchBoundLine := by
+theorem SketchBoundLine : ResourceAccounting.Guarantees.Remote.SketchBoundLine := by
   intro β Hs _ _ n κ N m T O δ h
   unfold SketchBound SketchBoundAt Trace.Holds at *
   rw [← Pouw.pr_equiv lineCoinsEquiv]
@@ -70,4 +70,4 @@ theorem SketchBoundLine : Accounting.Guarantees.Remote.SketchBoundLine := by
   simp only [Trace.present, Trace.sketch, Finset.union_assoc]
   rfl
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

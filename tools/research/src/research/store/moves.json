@@ -4725,6 +4725,23 @@
         "verity/protocols/proofs/spot/prover/tests/test_cost_demo_a.py": "benchmarks/sampling_plan/tests/test_demo_a.py",
         "adapters/vllm/tests/pipeline/test_two_stage_driver.py": "benchmarks/one_stage/tests/test_two_stage_driver.py"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting.lean": "security/Definitions/ResourceAccounting.lean",
+        "security/Definitions/Accounting/": "security/Definitions/ResourceAccounting/",
+        "security/Definitions/Accounting/Registration/Guarantees.lean": "security/Definitions/Registration/Guarantees.lean",
+        "security/Definitions/Accounting/Registration/Guarantees/Witnesses.lean": "security/Definitions/Registration/Guarantees/Witnesses.lean",
+        "security/Definitions/Accounting/Registration/View.lean": "security/Definitions/Registration/View.lean",
+        "security/Definitions/Assumptions/Accounting.lean": "security/Definitions/Assumptions/ResourceAccounting.lean",
+        "security/Proofs/Accounting.lean": "security/Proofs/ResourceAccounting.lean",
+        "security/Proofs/Accounting/": "security/Proofs/ResourceAccounting/",
+        "security/Proofs/Properties/Accounting/": "security/Proofs/Properties/ResourceAccounting/",
+        "security/Properties/Accounting/": "security/Properties/ResourceAccounting/",
+        "security/Properties/Accounting/Registration/Premises.lean": "security/Properties/Registration/Premises.lean",
+        "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier.lean": "verity/protocols/accounting/certifier/device/program/lean/NetworkAttester.lean",
+        "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier/": "verity/protocols/accounting/certifier/device/program/lean/NetworkAttester/"
+      }
     }
   ]
 }

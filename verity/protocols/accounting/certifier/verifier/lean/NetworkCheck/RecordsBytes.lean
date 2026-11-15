@@ -7,7 +7,7 @@ import NetworkCheck.RecordsGrid
 # The records check's byte payloads are v4's bits
 
 `verity/network-records/v3` keeps each frame's payload as its bytes (`Records.ByteEvidence`), where
-`verity/network-certificate/v4` reads it as bits (`Check.evidenceOf`, `NetworkCertifier.LogicalFrame`). The two readings
+`verity/network-certificate/v4` reads it as bits (`Check.evidenceOf`, `NetworkAttester.LogicalFrame`). The two readings
 of the evidence agree, and so do the grids, the clock and the frame-size check the verdicts read from them:
 
 - `bytesOfBits_bitsOfBytes`: a payload's bits, read back as bytes, are the payload;
@@ -25,7 +25,7 @@ namespace NetworkCheck.RecordsBytes
 
 open NetworkCheck.Records
 open NetworkCheck.Check (bitsOfBytes bytesOfBits bytesOfBitsList byteOfBits)
-open NetworkCertifier (ClockSync LogicalFrame)
+open NetworkAttester (ClockSync LogicalFrame)
 
 /-- The eight bits of `n`, most significant first, as `bitsOfBytes` writes a byte. -/
 private def bits8 (n : Nat) : List Bool := (List.range 8).map fun i => (n >>> (7 - i)) % 2 == 1
@@ -103,7 +103,7 @@ theorem frameOf_toLogical (j : Lean.Json) : Check.frameOf j = ByteFrame.toLogica
     · rfl
     · show (Except.bind (Flock.J.asStr p "a frame's payload") fun x => Except.bind (Flock.unhex x) fun x =>
           Except.bind (Flock.J.asNat q "an anchor") fun y => Except.bind (Flock.J.asNat r "an index") fun z =>
-          Except.pure (⟨Check.bitsOfBytes x, y, z⟩ : NetworkCertifier.LogicalFrame)) =
+          Except.pure (⟨Check.bitsOfBytes x, y, z⟩ : NetworkAttester.LogicalFrame)) =
         ByteFrame.toLogical <$> (Except.bind (Flock.J.asStr p "a frame's payload") fun x =>
           Except.bind (unhex x) fun x => Except.bind (Flock.J.asNat q "an anchor") fun y =>
           Except.bind (Flock.J.asNat r "an index") fun z => Except.pure (⟨x, y, z⟩ : ByteFrame))
@@ -114,7 +114,7 @@ theorem frameOf_toLogical (j : Lean.Json) : Check.frameOf j = ByteFrame.toLogica
       dsimp only
       rcases Flock.J.asNat q "an anchor" with _ | y <;> try rfl
       rcases Flock.J.asNat r "an index" with _ | z <;> rfl
-    · show (Except.error "a frame is [payload, anchor, index]" : Flock.V NetworkCertifier.LogicalFrame) =
+    · show (Except.error "a frame is [payload, anchor, index]" : Flock.V NetworkAttester.LogicalFrame) =
         ByteFrame.toLogical <$> (Except.error "a frame is [payload, anchor, index]" : Flock.V ByteFrame)
       rfl
 
@@ -159,7 +159,7 @@ theorem handingRev_timing (T W : Nat) (syncs : Fin W → ClockSync) (last : Nat)
     handingRev T W syncs last (fs.map ByteFrame.toLogical) acc = handingRev T W syncs last (fs.map ByteFrame.timing) acc := by
   induction fs generalizing last acc with
   | nil => rfl
-  | cons f fs ih => simp only [List.map_cons, handingRev, NetworkCertifier.eligible, ByteFrame.toLogical, ByteFrame.timing, ih]
+  | cons f fs ih => simp only [List.map_cons, handingRev, NetworkAttester.eligible, ByteFrame.toLogical, ByteFrame.timing, ih]
 
 theorem payloads_bytes (fs : List ByteFrame) :
     ((fs.map ByteFrame.toLogical).toArray.map fun f => Check.bytesOfBits f.payload) = fs.toArray.map ByteFrame.payload := by

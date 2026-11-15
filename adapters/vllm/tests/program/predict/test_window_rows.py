@@ -265,7 +265,7 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
     ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ST)
     scan = cls.scan
-    params = W.NetworkCertifierParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
+    params = W.NetworkAttesterParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
                             queue=scan.lanes, window=cls.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
                             egress_cells=scan.KO + 1, every=scan.EVERY)
     reqs = [id_request(model="org/m", user=f"user-{i}", prompt=list(p), max_tokens=2, seed=i, temperature=0.0, top_p=1.0,

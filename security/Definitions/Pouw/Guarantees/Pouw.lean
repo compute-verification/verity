@@ -9,25 +9,25 @@ public import Mathlib.Data.Fintype.Sigma
 # PoUW's guarantee as a joint run's compute guarantee (trusted)
 
 PoUW's end-to-end guarantee (`Pouw.Guarantees.EndToEnd`) embeds into the device model unweakened: in a run that
-realizes PoUW's game (`Accounting.RealizesPouw`), the compute audit has its guarantee at EndToEnd's certificate and
-error unless the run breaks SHA-512 (`Accounting.Run.ComputeSoundUnless`), with the oracle-call budget `q` the device's
+realizes PoUW's game (`ResourceAccounting.RealizesPouw`), the compute audit has its guarantee at EndToEnd's certificate and
+error unless the run breaks SHA-512 (`ResourceAccounting.Run.ComputeSoundUnless`), with the oracle-call budget `q` the device's
 oracle queries over the compute window.
 
-Proved by `Accounting.SecurityProofs.ComputeOfPouw : Accounting.Guarantees.ComputeOfPouw` (`Proofs.Pouw.Pouw`),
+Proved by `ResourceAccounting.SecurityProofs.ComputeOfPouw : ResourceAccounting.Guarantees.ComputeOfPouw` (`Proofs.Pouw.Pouw`),
 from `Pouw.SecurityProofs.EndToEnd`.
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Pouw
+open ResourceAccounting Pouw
 
 /-- **PoUW's guarantee is the compute guarantee.** Under EndToEnd's hypotheses (TT among them), for any run on any
 device whose compute audit realizes PoUW's game at price `p`, with at least one sample of the game's coins and the device's
 oracle queries over the compute window at most `2^64`, the compute audit has its guarantee at certificate
 `(1 − g)(1 − εs)·W` (`g = reductionGap g₀ Ωmax`) and error `(1 − εs)^t + δ(q, N)` unless the device's run breaks
-SHA-512 (`Accounting.Run.ComputeSoundUnless`, the break `Pouw.Adversary.Breaks` of the game's adversary), where `q` is
+SHA-512 (`ResourceAccounting.Run.ComputeSoundUnless`, the break `Pouw.Adversary.Breaks` of the game's adversary), where `q` is
 the device's oracle rate times the compute window's length. -/
 def ComputeOfPouw : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
@@ -44,4 +44,4 @@ def ComputeOfPouw : Prop :=
         ((1 - εs) ^ t + δ (d.rate .oracle * (r.win .compute).len) U.layout.N)
         (fun x o => (real.adv o).Breaks U x.1 x.2.1)
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

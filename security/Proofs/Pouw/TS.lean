@@ -14,12 +14,12 @@ public import Proofs.Pouw.TS.Fork
 public import Proofs.Pouw.TS.Sampled
 public import Proofs.Pouw.TS.Keyed
 public import Proofs.Pouw.RelativeSecurity
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # The tensor–scalar model's proofs
 
-Each guarantee of `Definitions.Pouw.Guarantees.TS` as `Accounting.SecurityProofs.TS.G`. One file per prover
+Each guarantee of `Definitions.Pouw.Guarantees.TS` as `ResourceAccounting.SecurityProofs.TS.G`. One file per prover
 group: the price lemmas (`TS/Price.lean`), the round lemmas
 (`TS/Rounds.lean`), Lemma 1 with Corollaries D1 and D2 (`TS/Facets.lean`), T1 and Lemma 2 (`TS/Tensor.lean`), the
 fan-in count with FOLD-OPT and FILL-OPT from it (`TS/FanIn.lean`), the fan-in floor of a fold of binding steps and
@@ -35,9 +35,9 @@ is `ε_luck` at `d̄ = Λ·ln(1/δ′)/S`, off `budget_tail`'s event at `t = ln(
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- Steps 1 and 3 of Theorem D(a): `π·n ≤ B(n) ≤ f_max·T(M)` on a run whose facets are ceilings. -/
 theorem price_le_time {K R : Type} [Fintype K] [Fintype R] [Nonempty R] (G : Machine K R) (lam : R → ℝ)
@@ -134,7 +134,7 @@ theorem pow_ceil_le {p δ' : ℝ} (hp0 : 0 < p) (hp1 : p < 1) (hδ : 0 < δ') :
     _ = δ' := Real.exp_log hδ
 
 /-- Theorem D(a): `price_le_bound`, `price_of_rd`, `identity` and `TimeBound`. -/
-theorem DecompositionD : Accounting.Guarantees.TS.DecompositionD := by
+theorem DecompositionD : ResourceAccounting.Guarantees.TS.DecompositionD := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Ω _ accepts M fixed lam dbar abar δ h hZ hCH hfH hM hRD hLk
   refine le_trans (prob_mono ?_) hLk
   rintro ω ⟨ha, hlt⟩
@@ -159,7 +159,7 @@ theorem fixed_of_tail {Ω K T L U : Type} [Fintype Ω] {S : ℕ} (P : Play Ω S 
   linarith
 
 /-- Theorem D-ideal (2.7): `luck_rounds`, `deficiency_le_rounds`, `price_of_parts`, `identity`, `TimeBound`. -/
-theorem DIdeal : Accounting.Guarantees.TS.DIdeal := by
+theorem DIdeal : ResourceAccounting.Guarantees.TS.DIdeal := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Ω _ S P lam p δ δbind δzk nπ h hZ hCH hfH hS hp0 hp1 hδ hSplit hM
     hW hSR hU hN hF hX hL hPS
   set δ' := δ - S * (δbind + nπ * δzk) with hδ'
@@ -169,7 +169,7 @@ theorem DIdeal : Accounting.Guarantees.TS.DIdeal := by
   calc prob (fun x => P.accepts x ∧ (P.run x).run.time / H.time <
         (1 - Z.epsSkip H.prog lam - Z.epsMand H.prog lam - Z.epsMachine H.prog lam -
           Z.epsJl H.prog lam p δ' S) * (1 - Z.epsSched H) * (1 - Z.epsClock H))
-      ≤ prob (fun x => E x ∨ (P.game.accepts x ∧ ⌈t⌉₊ ≤ Accounting.TS.RoundGame.deficientRounds P.game x)) := by
+      ≤ prob (fun x => E x ∨ (P.game.accepts x ∧ ⌈t⌉₊ ≤ ResourceAccounting.TS.RoundGame.deficientRounds P.game x)) := by
         refine prob_mono ?_
         rintro x ⟨ha, hlt⟩
         by_contra hne
@@ -184,13 +184,13 @@ theorem DIdeal : Accounting.Guarantees.TS.DIdeal := by
           ring
         rw [e, Model.epsAdapt, zero_mul, sub_zero] at key
         exact absurd hlt (not_lt.mpr key)
-    _ ≤ prob E + prob (fun x => P.game.accepts x ∧ ⌈t⌉₊ ≤ Accounting.TS.RoundGame.deficientRounds P.game x) :=
+    _ ≤ prob E + prob (fun x => P.game.accepts x ∧ ⌈t⌉₊ ≤ ResourceAccounting.TS.RoundGame.deficientRounds P.game x) :=
         prob_or_le _ _
     _ ≤ S * (δbind + nπ * δzk) + δ' := add_le_add hE hB
     _ = δ := by rw [hδ']; ring
 
 /-- Theorem D-ideal (2.7♭): as `DIdeal`, with the identity at ♭. -/
-theorem DIdealFloor : Accounting.Guarantees.TS.DIdealFloor := by
+theorem DIdealFloor : ResourceAccounting.Guarantees.TS.DIdealFloor := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z Fl Ω _ S P lam p δ δbind δzk nπ h hZ hS hp0 hp1 hδ hSplit hM
     hW hSR hU hN hF hX hL hPS
   set δ' := δ - S * (δbind + nπ * δzk) with hδ'
@@ -200,7 +200,7 @@ theorem DIdealFloor : Accounting.Guarantees.TS.DIdealFloor := by
   calc prob (fun x => P.accepts x ∧ (P.run x).run.time / Z.credit Fl <
         1 - Z.epsSkip Fl lam - Z.epsCert Fl lam - Z.epsRoute Fl lam - Z.epsMand Fl lam -
           Z.epsJl Fl lam p δ' S)
-      ≤ prob (fun x => E x ∨ (P.game.accepts x ∧ ⌈t⌉₊ ≤ Accounting.TS.RoundGame.deficientRounds P.game x)) := by
+      ≤ prob (fun x => E x ∨ (P.game.accepts x ∧ ⌈t⌉₊ ≤ ResourceAccounting.TS.RoundGame.deficientRounds P.game x)) := by
         refine prob_mono ?_
         rintro x ⟨ha, hlt⟩
         by_contra hne
@@ -215,14 +215,14 @@ theorem DIdealFloor : Accounting.Guarantees.TS.DIdealFloor := by
           ring
         rw [e, Model.epsAdapt, zero_mul, sub_zero] at key
         exact absurd hlt (not_lt.mpr key)
-    _ ≤ prob E + prob (fun x => P.game.accepts x ∧ ⌈t⌉₊ ≤ Accounting.TS.RoundGame.deficientRounds P.game x) :=
+    _ ≤ prob E + prob (fun x => P.game.accepts x ∧ ⌈t⌉₊ ≤ ResourceAccounting.TS.RoundGame.deficientRounds P.game x) :=
         prob_or_le _ _
     _ ≤ S * (δbind + nπ * δzk) + δ' := add_le_add hE hB
     _ = δ := by rw [hδ']; ring
 
 /-- Theorem D-ideal (2.7♭) on the data-sheet machine: `DIdealFloor`, its (I1) from `facetCeilings_of_sheet`, (I2)/(I4)
 and (I3) from A6 (`scalarRoute_half`), (I5) from A7. -/
-theorem SheetDIdealFloor : Accounting.Guarantees.TS.SheetDIdealFloor := by
+theorem SheetDIdealFloor : ResourceAccounting.Guarantees.TS.SheetDIdealFloor := by
   intro K P T L U F X _ _ _ _ _ _ _ _ _ _ Sh Z Fl Ω _ S Pl lam p δ δbind δzk nπ hG h hZ hS hp0 hp1 hδ hSplit hq
     hqT hb h1 h2 h3 h4 h5 h6 h7 hF hX hL hPS
   refine DIdealFloor Z Fl Ω S Pl lam p δ δbind δzk nπ h hZ hS hp0 hp1 hδ hSplit (fun x => ?_) (fun x => (h6 x).1)
@@ -231,7 +231,7 @@ theorem SheetDIdealFloor : Accounting.Guarantees.TS.SheetDIdealFloor := by
   exact facetCeilings_of_sheet Sh _ (run_nonneg_of_split (hSplit x)) (h1 x) (h2 x) (h3 x) (h4 x) (h5 x)
 
 /-- Lemma C: `budget_tail`, `price_of_parts`, `identity`, `TimeBound`. -/
-theorem CompilerC : Accounting.Guarantees.TS.CompilerC := by
+theorem CompilerC : ResourceAccounting.Guarantees.TS.CompilerC := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Ω _ S P lam Λ p δ δbind δzk nπ h hZ hCH hfH hS hp0 hp1 hΛ hδ
     hSplit hM hW hSR hU hN hF hX hBud hPS
   set δ' := δ - S * (δbind + nπ * δzk) with hδ'
@@ -280,7 +280,7 @@ theorem price_of_combination {K R ι : Type} [Fintype K] [Fintype R] [Fintype ι
   exact Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun r _ => by ring
 
 /-- Corollary D3: `price_of_rd`, `identity` at ♭, `TimeBound`; the signs from `FloorKnown`. -/
-theorem FloorCreditD3 : Accounting.Guarantees.TS.FloorCreditD3 := by
+theorem FloorCreditD3 : ResourceAccounting.Guarantees.TS.FloorCreditD3 := by
   intro K R T L U F X _ _ _ _ _ _ _ _ _ _ Z H Fl Ω _ accepts M fixed lam dbar abar δ h hZ hCH hfH hM hRD hLk
   have hZ' := hZ
   obtain ⟨ha0, hf, hNw, hB, -, -, -, -, -, -, -, hmuF0, -, hmuX0, -⟩ := hZ'
@@ -340,4 +340,4 @@ theorem FloorCreditD3 : Accounting.Guarantees.TS.FloorCreditD3 := by
     rw [Honest.time, Model.gammaFloor, Model.credit]
     field_simp
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

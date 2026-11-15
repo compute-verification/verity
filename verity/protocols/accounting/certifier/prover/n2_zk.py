@@ -17,7 +17,7 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
 
 * **The run** (``--warden-run``): an active network certifier's run (`network_certifier_serve.py`'s, or the gate's
   ``warden-rehearse``'s), read by `network_certifier_chain`: its own certified records under its key and session, on the network
-  certifier link (`service.NetworkCertifierProfile`: both heads at the network certifier's grid and parameters digest, no sync
+  certifier link (`service.NetworkAttesterProfile`: both heads at the network certifier's grid and parameters digest, no sync
   declared or charged), a certifier rehearsal's run refused by name. Which execution phases its signer refused follows
   what the node sent, so the public summary of a run whose signer refused any holds each member's
   ``certifier_refused`` and ``ok`` alone, nothing per window, and the members whole go to ``--witness``.

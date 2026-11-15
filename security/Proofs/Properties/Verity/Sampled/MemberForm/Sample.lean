@@ -139,7 +139,7 @@ theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _r
 /-- **The members' counts sum to the window's population**, where every member's files pass: the committed files'
 units are the population and the members' reads' units summed, and a member whose files pass has as many units in
 its read as proof blocks. -/
-theorem ExecutionPhaseOn.total {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+theorem ExecutionPhaseOn.total {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
     {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (h : ExecutionPhaseOn V T θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) : (W.ms.map fun m => m.n).sum = W.nJ := by
   obtain ⟨m₀, rest, hW, hread⟩ := h.read
@@ -156,7 +156,7 @@ theorem ExecutionPhaseOn.total {ι : Type} {d : Accounting.Device ι} {α : Type
 /-- **The window's population is the registration's**: at the window the parameters' members are on, whose members'
 files pass, where the form's structure holds the members to the registration `rec` (`Spot.OneStageZk.laidHeld`),
 the window's population is the population `rec` names. -/
-theorem ExecutionPhaseOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+theorem ExecutionPhaseOn.population {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
     {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (h : ExecutionPhaseOn V T θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
     {ms : Array _root_.Spot.OneStageZk.Member} (hpa : ParamsAt θ p) (hms : p.members = some ms) {rec : Json}

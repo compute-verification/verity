@@ -30,7 +30,7 @@ set_option exponentiation.threshold 20000
 instance instNeZeroDemoBlocks : NeZero (1038 * 2 ^ 16) := ⟨by norm_num⟩
 
 /-- The honest period whose capacity verdict is the verifier's whole decision on `sidAudit` outside a break. -/
-def verdictRun : Accounting.Run honestDevice Unit Unit Unit
+def verdictRun : ResourceAccounting.Run honestDevice Unit Unit Unit
     ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) :=
   { honestRun with accepts := fun _ ω => sidAudit.Accepts ω ∧ ¬ sidAudit.Break ω }
 
@@ -51,14 +51,14 @@ def obligationAudit : Audits Unit (Unit × IdKeys) where
 
 /-- The honest period with the other tags' keys among the other audits' coins, its capacity verdict
 `obligationAudit`'s decision outside a break. -/
-def obligationRun : Accounting.Run honestDevice Unit Unit (Unit × IdKeys)
+def obligationRun : ResourceAccounting.Run honestDevice Unit Unit (Unit × IdKeys)
     ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) where
   acct _ := ()
   win _ := ⟨0, K⟩
   schedule _ _ := ⟨fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => FULL⟩
   fits := by
     intro _ _
-    simp [Accounting.Step.Fits, honestDevice]
+    simp [ResourceAccounting.Step.Fits, honestDevice]
   accepts _ ω := obligationAudit.Accepts ω ∧ ¬ obligationAudit.Break ω
 
 /-- `sidAudit` at `N` blocks. -/
@@ -77,7 +77,7 @@ def sidAuditAt (N : ℕ) [NeZero N] : AuditsAt N Unit Unit where
 def DEMO_FULL : ℕ := 1038 * 2 ^ 16 * 16448
 
 /-- `honestDevice` with Demo B's store as its device memory. -/
-def demoDevice : Accounting.Device Unit := ⟨2 ^ 30, DEMO_FULL, fun _ => 0, 0, fun _ => 437248000⟩
+def demoDevice : ResourceAccounting.Device Unit := ⟨2 ^ 30, DEMO_FULL, fun _ => 0, 0, fun _ => 437248000⟩
 
 /-- Demo B's point: its codec's parameters at `1038` segments, the deployed rounds and limit. -/
 def demoPoint : PousCheck.Run.Point :=
@@ -85,14 +85,14 @@ def demoPoint : PousCheck.Run.Point :=
 
 /-- A period at Demo B's store whose capacity account holds the whole store at every tick, its capacity verdict
 `sidAuditAt`'s decision at `demoPoint` outside a break. -/
-def demoRun : Accounting.Run demoDevice Unit Unit Unit
+def demoRun : ResourceAccounting.Run demoDevice Unit Unit Unit
     ((ringRO (1038 * 2 ^ 16) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) where
   acct _ := ()
   win _ := ⟨0, K⟩
   schedule _ _ := ⟨fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => DEMO_FULL⟩
   fits := by
     intro _ _
-    simp [Accounting.Step.Fits, demoDevice]
+    simp [ResourceAccounting.Step.Fits, demoDevice]
   accepts _ ω := (sidAuditAt (1038 * 2 ^ 16)).Accepts demoPoint ω ∧ ¬ (sidAuditAt (1038 * 2 ^ 16)).Break demoPoint ω
 
 end Pous.Period

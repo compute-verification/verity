@@ -71,7 +71,7 @@ def test_the_bound_is_exact_at_two_rows(cols: int) -> None:
 
 
 def test_seeded_sampling_does_not_falsify_the_rank_tail() -> None:
-    """Seeded sampling at small parameters against the formulas behind `Accounting.Assumptions.SketchRank`
+    """Seeded sampling at small parameters against the formulas behind `ResourceAccounting.Assumptions.SketchRank`
     (the deployed 16 × 4096 number is out of any sampler's reach): 10,000 samples a check at seed
     20261014.  The F2 formula is exact, so the empirical CDF matches it two-sided; the ±1 bound and the union bound over
     sectors (the assumption's `∃ u` event) are upper bounds that sampling sits below, up to noise, and they are tight

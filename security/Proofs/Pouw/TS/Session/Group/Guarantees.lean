@@ -38,24 +38,24 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A leaf's group of linked sessions realizes one unit, any shape (the statement)
 
-`Accounting.Guarantees.TS.LeafGroupSound`: a sampled leaf proved as a group of one-unit Flock statements, `L` lanes of
-`n` chunks each and one combine (`Accounting.TS.Group.Ix L n`, `G = L n + 1` sessions, `L` the tile's lanes
+`ResourceAccounting.Guarantees.TS.LeafGroupSound`: a sampled leaf proved as a group of one-unit Flock statements, `L` lanes of
+`n` chunks each and one combine (`ResourceAccounting.TS.Group.Ix L n`, `G = L n + 1` sessions, `L` the tile's lanes
 `(R/4)(C/8)`), is accepted with a leaf that fails its relation, and no collision in hand, with probability at most
 `G δ`: `δ` a session from `CheckedSessionSound`'s argument, joined by a union bound over the group. Its premises are named
-(`Accounting.Premises.TS`): Flock's collision resistance at every session (`SessionsCR`), the window's sampling design at every
+(`ResourceAccounting.Premises.TS`): Flock's collision resistance at every session (`SessionsCR`), the window's sampling design at every
 statement (`ExecutionPhaseDesigns`), and the group's circuits realizing the leaf's relation at the rows the sessions open
 (`GroupRealizes`). Everything else of the session argument is the verifier's: port uniqueness and the `ok` port (the
 known-read check's names, at known content ending in the `o0` row 1), full checking and a unit (the sample check),
 registered served roots (the reads built from `own` and the one-read check). At the 32 × 32 leaf with one chunk a lane
-it is `Accounting.Guarantees.TS.LeafLanesSound`'s argument, which proves `GroupRealizes` there from `LaneLowers` and
+it is `ResourceAccounting.Guarantees.TS.LeafLanesSound`'s argument, which proves `GroupRealizes` there from `LaneLowers` and
 `CombineLowers`. It sits in the proofs package because the sessions do (`reads_exempt`).
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS Accounting.TS.Group Flock.SoundAtBridge
+open ResourceAccounting.TS ResourceAccounting.TS.Group Flock.SoundAtBridge
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
@@ -71,8 +71,8 @@ verity-verify-proof `--zk --registered` accepts with its known-content, complete
 `pouw-leaf-own`'s checks of its file at the ports `want x w i k`, of its sample, every unit of a non-empty population,
 and of its reads, one at each port, pass; opening `opened x w i`, its relation `rel x w i`, or a clash of two of the
 sessions' registrants' records, `LeafColl`, or a collision of a session's known-content tie, `LeafKnownColl`): given
-the named premises `Accounting.Premises.TS.SessionsCR` (`RowsSession.CR` at every session),
-`Accounting.Premises.TS.ExecutionPhaseDesigns` (the window's sampling design at every statement) and `Accounting.Premises.TS.GroupRealizes`
+the named premises `ResourceAccounting.Premises.TS.SessionsCR` (`RowsSession.CR` at every session),
+`ResourceAccounting.Premises.TS.ExecutionPhaseDesigns` (the window's sampling design at every statement) and `ResourceAccounting.Premises.TS.GroupRealizes`
 (the group's circuits realize `rel` of `opened` at the rows the sessions open, past the leaf verifier's check of the
 tile and its chunks), and
 $$n_s \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
@@ -90,11 +90,11 @@ def LeafGroupSound : Prop :=
     (want : Paths Ω S → Fin S → Fin nπ → Ix T.lanes n → List _root_.Flock.Registered.Port)
     (opened : Paths Ω S → Fin S → Fin nπ → V) (rel : Paths Ω S → Fin S → Fin nπ → V → Prop)
     (right : Paths Ω S → (Fin S → Fin nπ → V) → Prop) (δ : ℝ),
-    Accounting.Premises.TS.SessionsCR sess →
-    Accounting.Premises.TS.ExecutionPhaseDesigns sess out →
-    Accounting.Premises.TS.GroupRealizes sess (fun x w i k => okKnown (known x w i k) (okSalt x w i k)) full want
+    ResourceAccounting.Premises.TS.SessionsCR sess →
+    ResourceAccounting.Premises.TS.ExecutionPhaseDesigns sess out →
+    ResourceAccounting.Premises.TS.GroupRealizes sess (fun x w i k => okKnown (known x w i k) (okSalt x w i k)) full want
       (fun _ _ _ => PouwWindow.Lanes.checkChunks T n = .ok ()) opened rel →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     (groupLayer T n sess out known okSalt full want opened rel right).SoundAt ((T.lanes * n + 1) * δ)
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS

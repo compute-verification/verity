@@ -38,8 +38,8 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The openings' pooled bound (trusted)
 
-The memory line's `LiveCoins` premise (`Accounting.Remote.Held.Assumptions.LiveCoins`), derived from the verifier's
-opening sample as it runs it (`Accounting.Remote.Sample`): a session of windows `D`, each window's size and correct
+The memory line's `LiveCoins` premise (`ResourceAccounting.Remote.Held.Assumptions.LiveCoins`), derived from the verifier's
+opening sample as it runs it (`ResourceAccounting.Remote.Sample`): a session of windows `D`, each window's size and correct
 receipts fixed before its own openings coin (`Live`), whose opened receipts an accepted session found correct or moved
 off the rows their roots hold (`Refused`, at the receipts `R`), and whose wrong receipts count the trace's (`Counted`).
 The prover is sent each coin as it is released, and the challenger's commitment to the session's coins only once the
@@ -87,10 +87,10 @@ coin, but that the receipts' roots read only the cut is not a premise here (the 
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Remote
+namespace ResourceAccounting.Guarantees.Remote
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
-  Accounting.Remote.Sample.Assumptions
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sample
+  ResourceAccounting.Remote.Sample.Assumptions
 
 /-- **The openings' pooled bound.** On a session whose windows' sizes and correct receipts are fixed before their
 openings coins (`Live`), whose accepted outcomes found every opened receipt correct or moved off the row its root holds
@@ -176,4 +176,4 @@ def HeldOverTimeLinksSampled : Prop :=
           - K.fill ω T.blocks (D.pooled δc ω)
         ≤ T.heldOver ω (K.start ω) (K.stop ω)
 
-end Accounting.Guarantees.Remote
+end ResourceAccounting.Guarantees.Remote

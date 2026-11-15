@@ -424,7 +424,7 @@ def test_the_red_teams_primitives_are_never_free():
     assert P.class_of("BlackwellS8ImmaDot32_v1") == "family" and P.class_of("NoSuchPrimitive_v1") is None
 
 
-LEAN_REGISTRY = Path(__file__).resolve().parents[3] / "security/Definitions/Accounting/Gates/Registry.lean"
+LEAN_REGISTRY = Path(__file__).resolve().parents[3] / "security/Definitions/ResourceAccounting/Gates/Registry.lean"
 #: the ids the table lists that Lean's registry doesn't yet: the exact-int8 profile's casts, f64 products and LUT index
 NOT_IN_LEAN = {"F32MulWide_v1", "F32Rint_v1", "F32ToS8Rzi_v1", "F64Mul_v1", "F64ToU32RniSat_v1", "LutIndex_v1", "S32ToF32Rn_v1",
                "S8ToF32_v1"}
@@ -445,7 +445,7 @@ def lean_class_of() -> tuple[dict[str, str], dict[str, str]]:
 
 
 def test_the_table_is_leans_class_of():
-    """Lean's `Accounting.Gates.classOf` id for id: each of the registry's ids is in its class here, a family's instances in
+    """Lean's `ResourceAccounting.Gates.classOf` id for id: each of the registry's ids is in its class here, a family's instances in
     the family's (run and registered inputs are read by their node, not the table); and each id the table lists that Lean
     doesn't is in `NOT_IN_LEAN`. Then the FP dots are roundings (refused for their operand bits, not their class),
     and so are the integer products reduced mod 2^w and the field extractions; the clamps and the 1-bit logic ops are

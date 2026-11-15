@@ -22,7 +22,7 @@ grid's rows are determined by their real frames and their counts (`grid_inj`). W
 open NetworkCheck hiding Params
 open NetworkCheck.Check
 open Flock
-open NetworkCertifier (ClockSync LogicalFrame expectedRow)
+open NetworkAttester (ClockSync LogicalFrame expectedRow)
 
 namespace Properties.Certifier.GridProofs
 
@@ -224,15 +224,15 @@ theorem bytesGrid_inj {r T : Nat} {row row' : Nat → Fin r → Option (List Boo
 /-- A slot of the Program's row holds a payload of the link's frames, or nothing. -/
 theorem expectedRow_slot {S T W : Nat} {syncs : Fin W → ClockSync} {frames : List LogicalFrame} {t : Nat}
     {s : Fin S} {f : List Bool} (h : expectedRow S T W syncs frames t s = some f) :
-    ∃ k, f = NetworkCertifier.payloads frames k := by
-  unfold expectedRow NetworkCertifier.fifoGrid NetworkCertifier.fill at h
+    ∃ k, f = NetworkAttester.payloads frames k := by
+  unfold expectedRow NetworkAttester.fifoGrid NetworkAttester.fill at h
   split at h
   · exact ⟨_, (Option.some.inj h).symm⟩
   · cases h
 
 theorem payloads_length {frames : List LogicalFrame} {n : Nat} (hf : ∀ f ∈ frames, f.payload.length = n) (k : Nat) :
-    (NetworkCertifier.payloads frames k).length = n ∨ NetworkCertifier.payloads frames k = [] := by
-  unfold NetworkCertifier.payloads
+    (NetworkAttester.payloads frames k).length = n ∨ NetworkAttester.payloads frames k = [] := by
+  unfold NetworkAttester.payloads
   cases hk : frames[k]? with
   | none => right; rfl
   | some f => left; exact hf f (List.mem_of_getElem? hk)

@@ -33,7 +33,7 @@ def mostClassesWords : Nat := 16383
 /-- ⌈a / b⌉, and 0 at b = 0. -/
 def divCeil (a b : Nat) : Nat := (a + b - 1) / b
 
-/-- The keys a schedule has only where it sets them (`network_certifier.OPTIONAL_FIELDS`). -/
+/-- The keys a schedule has only where it sets them (`network_attester.OPTIONAL_FIELDS`). -/
 def optionalScheduleKeys : List String := ["content", "lengths", "max_tokens_cap", "request_words"]
 
 /-- A class's size, of prompt ids or of ids released: a power of two of at least 2 (`content_rows.check_size`). -/

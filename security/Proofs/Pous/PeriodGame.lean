@@ -3,7 +3,7 @@ module
 public import Properties.Pous.PeriodGame
 public import Proofs.Pous.PeriodAt
 public import Proofs.Pous.PeriodDeployed
-public import Proofs.Accounting.Prob
+public import Proofs.ResourceAccounting.Prob
 import Proofs.Pous.P2.Rounds
 import all Init.Data.Array.Basic
 import all Init.Data.String.Defs
@@ -12,7 +12,7 @@ import all Init.Data.String.Defs
 # Proof of PoUS's per-period guarantee in the shared coin game
 
 **At uniform streams** (`periodHeldCoins`, `periodHeldCoinsAt`). `PeriodHeld`'s probability is `Pous.pr`'s fraction
-(`Accounting.pr_eq_toReal`), which is `Verity.Game.prCoin` (`pr_eq_prCoin`). Where the session, the device record and
+(`ResourceAccounting.pr_eq_toReal`), which is `Verity.Game.prCoin` (`pr_eq_prCoin`). Where the session, the device record and
 the schedule don't read the primitive, the event at `(ω, y)` is the event at `(ω₀, y)` for every `ω`, so over
 `(ω, y)` it has the probability it has over `y` at any one `ω₀` (`prCoin_snd`), and the ring model's bound is the coin
 game's (`prCoin_le_of_pr`).
@@ -89,7 +89,7 @@ theorem prCoin_le_of_pr {Ω Y : Type} [Fintype Ω] [Fintype Y] (E : Ω × Y → 
     rw [← prCoin_snd (Y := Ω) fun y => E (ω, y)]
     refine prCoin_congr_equiv (Equiv.refl _) fun x => ?_
     exact hE x.1 ω x.2
-  rw [Accounting.pr_eq_toReal, pr_eq_prCoin, h1] at h
+  rw [ResourceAccounting.pr_eq_toReal, pr_eq_prCoin, h1] at h
   rw [← ENNReal.ofReal_toReal (prCoin_ne_top _)]
   exact ENNReal.ofReal_le_ofReal h
 
@@ -382,7 +382,7 @@ theorem periodHeldCoins : PeriodHeldCoins := by
   intro D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hs hd hsch ω
   refine (prCoin_le_of_pr _ (periodHeld D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o)
     (fun ω ω' y => ?_) ω).trans ofReal_bound
-  simp only [Audits.Accepts, Audits.Break, Accounting.Run.held, hs ω ω' y, hd ω ω' y, hsch ω ω' y]
+  simp only [Audits.Accepts, Audits.Break, ResourceAccounting.Run.held, hs ω ω' y, hd ω ω' y, hsch ω ω' y]
 
 theorem periodHeldSha512 : PeriodHeldSha512 := by
   intro D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hs hd hsch ω ε t h1 h2
@@ -397,7 +397,7 @@ theorem periodHeldCoinsAt : PeriodHeldCoinsAt := by
   intro p ε₀ D Q L hnum hW pt N _ h1 h2 ι α ΩW ΩQ _ _ d r P round S hdev hS o hs hd hsch ω
   refine (prCoin_le_of_pr _ (periodHeldAt p ε₀ D Q L (rounds_105 hnum) hW pt N (le_trans (by norm_num) h1)
     (h2.trans (by norm_num)) ι α ΩW ΩQ d r P round S hdev hS o) (fun ω ω' y => ?_) ω).trans ofReal_bound
-  simp only [AuditsOf.Accepts, AuditsOf.Break, Accounting.Run.held, hs ω ω' y, hd ω ω' y, hsch ω ω' y]
+  simp only [AuditsOf.Accepts, AuditsOf.Break, ResourceAccounting.Run.held, hs ω ω' y, hd ω ω' y, hsch ω ω' y]
 
 theorem periodHeldSha512At : PeriodHeldSha512At := by
   intro p ε₀ D Q L hnum hW pt N _ h1 h2 ι α ΩW ΩQ _ _ d r P round S hdev hS o hs hd hsch ω ε t k1 k2

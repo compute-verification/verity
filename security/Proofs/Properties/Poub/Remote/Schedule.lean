@@ -410,8 +410,8 @@ theorem pad_injective {a : ℕ} {l l' : List Bool} (hl : l.length ≤ a) (hl' : 
 /-- A layout that is the plan of a schedule of at most `a` bits is steered by `a + 1` bits: the schedule's, padded. -/
 theorem steered_of_scheduleDeterministic {Pfx Y S : Type} [Nonempty S] {N T M : ℕ}
     {canon : Pfx → S → Fin N ↪ Fin T × Fin M} {enc : S → List Bool} {a : ℕ}
-    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (h : Accounting.ScheduleDeterministic canon enc a layout) :
-    ∃ steer : Pfx → Y → Pous.Bits (a + 1), Accounting.Assumptions.SteeredLayout layout steer := by
+    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (h : ResourceAccounting.ScheduleDeterministic canon enc a layout) :
+    ∃ steer : Pfx → Y → Pous.Bits (a + 1), ResourceAccounting.Assumptions.SteeredLayout layout steer := by
   classical
   obtain ⟨inj, each⟩ := h
   choose s hs using each
@@ -431,7 +431,7 @@ theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a 
     {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap pos appended sent layout)
     (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks a passes (appended c y) = .ok b ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
-    Accounting.ScheduleDeterministic (S := {sc : Schedule.Schedule // Schedule.malformed sc blocks = none})
+    ResourceAccounting.ScheduleDeterministic (S := {sc : Schedule.Schedule // Schedule.malformed sc blocks = none})
       (fun c sc => pos c (Schedule.appendRuns sc.1 blocks) (Schedule.plan sc.1 blocks sc.1.steps[idx c]!))
       (fun sc => scheduleBits sc.1) a layout := by
   refine ⟨fun s s' h => Subtype.ext (ScheduleCode.scheduleBits_injective s.2 s'.2 h), fun c y => ?_⟩
@@ -466,7 +466,7 @@ theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : 
     (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks a passes (appended c y) = .ok b ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     ∃ steer : Pfx → Y → Pous.Bits (a + 1),
-      Accounting.Assumptions.SteeredLayout (runLayout blocks dflt appended sent) steer :=
+      ResourceAccounting.Assumptions.SteeredLayout (runLayout blocks dflt appended sent) steer :=
   have : Nonempty {sc : Schedule.Schedule // Schedule.malformed sc blocks = none} := ⟨⟨⟨#[], #[], #[]⟩, rfl⟩⟩
   steered_of_scheduleDeterministic
     (scheduleDeterministic_of_checked (idx := idx) (scheduleLayoutGap_code blocks dflt appended sent) checked)
@@ -606,7 +606,7 @@ def coinLayout : Unit → Fin 2 → Fin 1 ↪ Fin 1 × Fin 2 :=
 
 /-- `coinLayout` is `SteeredLayout` at one bit, the coin's. -/
 theorem coinLayout_steered :
-    Accounting.Assumptions.SteeredLayout coinLayout (fun _ y => (fun _ => decide (y = 1) : Pous.Bits 1)) :=
+    ResourceAccounting.Assumptions.SteeredLayout coinLayout (fun _ y => (fun _ => decide (y = 1) : Pous.Bits 1)) :=
   ⟨fun _ b => coinLayout () (if b 0 then 1 else 0), fun _ y => by match y with | 0 => rfl | 1 => rfl⟩
 
 /-- The one schedule's plan: the block at position `0`. -/
@@ -614,7 +614,7 @@ def storeOrder : Unit → Unit → Fin 1 ↪ Fin 1 × Fin 2 := fun _ _ => coinLa
 
 /-- `coinLayout` is `ScheduleDeterministic` at no `a` under a schedule that fixes the block. -/
 theorem coinLayout_not_scheduled (enc : Unit → List Bool) (a : ℕ) :
-    ¬ Accounting.ScheduleDeterministic storeOrder enc a coinLayout := by
+    ¬ ResourceAccounting.ScheduleDeterministic storeOrder enc a coinLayout := by
   rintro ⟨_, h⟩
   obtain ⟨s, _, hs⟩ := h () 1
   have : (1 : Fin 2) = 0 := congrArg (fun f => (f 0).2) hs
@@ -1091,12 +1091,12 @@ cap (`coinPasses_refused`). Stated at the default layout of block 0; the layout 
 default (`runLayout_coinRun`). -/
 theorem steered_of_checked_nontrivial :
     ∀ steer : Unit → Fin 3 → Pous.Bits (0 + 1),
-      ¬ Accounting.Assumptions.SteeredLayout
+      ¬ ResourceAccounting.Assumptions.SteeredLayout
         (runLayout 3 (fun _ : Unit => (⟨fun _ => (0, 0), fun _ _ _ => Subsingleton.elim _ _⟩ : Fin 1 ↪ Fin 1 × Fin 3))
           (fun (_ : Unit) (_ : Fin 3) => (#[] : Array (ℕ × ℕ))) (fun (_ : Unit) (y : Fin 3) => #[((y : ℕ), 1)]))
         steer := by
   intro steer hs
-  change Accounting.Assumptions.SteeredLayout (runLayout 3 (fun _ => threeLayout 0) noAppends coinRun) steer at hs
+  change ResourceAccounting.Assumptions.SteeredLayout (runLayout 3 (fun _ => threeLayout 0) noAppends coinRun) steer at hs
   obtain ⟨slot, h⟩ := hs
   have key : ∀ y y' : Fin 3, steer () y 0 = steer () y' 0 → y = y' := by
     intro y y' hs

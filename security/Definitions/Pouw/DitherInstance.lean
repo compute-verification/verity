@@ -42,7 +42,7 @@ table, the H200's and the RTX PRO 6000's among them (`Definitions.Pouw.Guarantee
 
 * **the period's devices** (`Devices`): `n` cards of one table pooled into one machine (`poolCard`, a coarsening:
   the pooled cards share their stores and resources, so the links between them are free), and the period's other
-  devices (`Others`: the host CPUs and DPUs the cards reach without crossing a network certifier), each resource
+  devices (`Others`: the host CPUs and DPUs the cards reach without crossing a network attester), each resource
   at its θ rate;
 * **where a round's coin and words sit in the cards' memory** (`RoundPlan`);
 * **`G` is the devices at the card's semantics `x`** (`OnCard`): `G`'s resources are the pooled cards' and the
@@ -54,11 +54,11 @@ table, the H200's and the RTX PRO 6000's among them (`Definitions.Pouw.Guarantee
   which the period's devices count;
 * **an oracle call on the card** (`CallsAtPub`): one compression of a public SHA-512 schedule, the call step's use;
 * **the card's runs at `x`** (`CardRunsAt`): `Assumptions.CardWithinAccel`'s refinement at the semantics it gives;
-* **the network certifier's counts** (`Counted`): the verifier refuses a period whose signed counts into
+* **the network attester's counts** (`Counted`): the verifier refuses a period whose signed counts into
   or out of the devices, read from the devices' readings (`Readings`), pass the caps `E_in`, `E_out`;
 * **the auditor's clocks** (`Timed`): the challenger issues each sampling block's dither coins only after the
   block's operand root is in, at least `Δ` before the period's end, and the next block's only after every root of
-  this one is in. The verifier refuses a period in which the network certifier saw a root arrive more than `Δ`
+  this one is in. The verifier refuses a period in which the network attester saw a root arrive more than `Δ`
   after its block's coins, or a selected block's answer more than `τ_ans` after its check coin. Only selected
   blocks are answered, and an answer may arrive after later blocks' coins. `TimedWorkFits` and `AnswersFit` are
   what that buys: the sampling blocks' commit phases and work within the period's capacity, at any number of
@@ -95,7 +95,7 @@ def poolCard (c : Verity.Accel.Card) (n : ℕ) (hn : 0 < n) : Verity.Accel.Card 
     text := n * c.text }
 
 /-- **The period's other devices**: every processor the period's cards reach without
-crossing a network certifier other than the cards themselves (host CPUs over PCIe or NVLink-C2C, DPUs), each
+crossing a network attester other than the cards themselves (host CPUs over PCIe or NVLink-C2C, DPUs), each
 resource with its θ rate in units a second (θ's per-node rows: SHA-512 and INT8 rates, DRAM, PCIe, C2C) and
 their memory in bits. Their programs are `Accel`'s like the cards', priced at the period's dual price, so the honest
 optimum may use them and the capacity `C` includes them. That the list is complete is the inventory premise
@@ -148,7 +148,7 @@ pooled cards' and the other devices',
   nothing and makes no oracle call (the machine has no oracle instruction).
 
 So `SAKMatmul` at `G` speaks of every words program of the card at `x`, at the card's rates; the dual price, the honest
-cost `H` and the capacity `C` are in the card's units. `G.ext` is the bits a run exchanges, which the network certifier
+cost `H` and the capacity `C` are in the card's units. `G.ext` is the bits a run exchanges, which the network attester
 counts (`Assumptions.CertifierSeesImports`). The commitment and the round's other programs read the oracle `P.Orc`,
 which the machine has no instruction for: they reach it through `G`'s priced calls (G3), each at a public SHA-512
 schedule's units on the card (`CallsAtPub`); that the card can't query the oracle more cheaply is the realization
@@ -321,7 +321,7 @@ end Cards
 
 section Certifier
 
-/-- **The verdict with the network certifier's counts**: the service's verdict, and the certifier's signed counts of the
+/-- **The verdict with the network attester's counts**: the service's verdict, and the certifier's signed counts of the
 bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them from the devices' readings, are
 within the caps `E_in` and `E_out`, fixed before the period at served traffic; a period past either is refused. The
 counts exclude the challenger's coin stream and nothing else, as `Assumptions.CertifierSeesImports` defines it: the
@@ -336,17 +336,17 @@ end Certifier
 section Clock
 
 /-- **The verdict with the auditor's clocks**: the service's verdict, read with the challenger's signed issue times
-and the network certifier's signed arrival times, as the verdict reads them from the devices' readings `ob`. Each
+and the network attester's signed arrival times, as the verdict reads them from the devices' readings `ob`. Each
 sampling block runs its commit phase, then its challenge phase, then its response phase, every commitment bound
 before any of its coins.
 
-* **The commit phase.** The network certifier signs the arrival of sampling block `b`'s operand root
+* **The commit phase.** The network attester signs the arrival of sampling block `b`'s operand root
   (`opArrive ob b`), and the challenger issues the block's dither coins at `t ob b`, after it: the period is refused
   if `t ob b` came before `opArrive ob b`. So the block's registered instance is read at `opArrive`, before any coin
   of the block. The coins' message is derived from that receipt (the derivation `OwnDither` rests on,
   with the receipt's digest in its context), so the coins can't be issued against an operand root that wasn't in.
 * **The challenge phase.** The dither coins go out at least `Δ` before the period's end, and block `b + 1`'s only
-  after every root of block `b` is in, so the blocks run one at a time. The network certifier watches the replica's
+  after every root of block `b` is in, so the blocks run one at a time. The network attester watches the replica's
   boundary; the period is refused if it saw a root of block `b` arrive (`arrive ob b`) more than `Δ` after the block's
   dither coins.
 * The challenger issues every sampling block's check coin, which carries whether the block is selected, at `tc ob b`,

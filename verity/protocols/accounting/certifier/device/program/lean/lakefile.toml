@@ -4,7 +4,7 @@
 # trusted text (`Definitions/Certifier/`), and `security_proofs` (`Proofs/Certifier/Code.lean`) proves the
 # two agree.
 name = "certifier_program"
-defaultTargets = ["NetworkCertifier", "certifier-difftest", "certifier-charge-difftest", "certifier-window-difftest"]
+defaultTargets = ["NetworkAttester", "certifier-difftest", "certifier-charge-difftest", "certifier-window-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -12,16 +12,16 @@ relaxedAutoImplicit = false
 backward.proofsInPublic = true
 
 [[lean_lib]]
-name = "NetworkCertifier"
+name = "NetworkAttester"
 
 [[lean_exe]]
 name = "certifier-difftest"
-root = "NetworkCertifier.DifftestMain"
+root = "NetworkAttester.DifftestMain"
 
 [[lean_exe]]
 name = "certifier-charge-difftest"
-root = "NetworkCertifier.ChargeDifftestMain"
+root = "NetworkAttester.ChargeDifftestMain"
 
 [[lean_exe]]
 name = "certifier-window-difftest"
-root = "NetworkCertifier.WindowDifftestMain"
+root = "NetworkAttester.WindowDifftestMain"

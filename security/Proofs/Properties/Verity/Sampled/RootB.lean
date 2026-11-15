@@ -36,7 +36,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The line `coinTreesOf` takes as a tree's round -/
 

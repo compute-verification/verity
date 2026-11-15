@@ -10,7 +10,7 @@ meta import Identity.Tagged
 /-!
 # The scan's ok bits at public content
 
-A proof block of the network certifier's scan outputs one public word, `o0`, its ok bit: 1 when every check of its
+A proof block of the network attester's scan outputs one public word, `o0`, its ok bit: 1 when every check of its
 bucket held. A member's `o0` rows are committed under public salts (`salt`), each row's by its index in the member's
 tree, so the tree of a member whose every proof block is ok is one anyone computes: its `n` rows `OK_ROW` under salts
 `0 … n − 1`, at the member's `o0` frame domain (`domain`), which is its template's and its proof blocks' count's and

@@ -67,7 +67,7 @@ The lock's `meets` witnesses of these claims are Flock's decoder bounds at its d
   `twoPart`), block `u`'s session at round `u`, under a commitment whose openings of `true` pass (`trueCm`). It meets
   `Compiled.Sessions` at every hash, its commitment binds, and the silent prover is accepted: `twoSessions_meets`.
 
-The network certifier's leak guarantees fail at two more compiled verifiers that accept everything, whose lemmas are
+The network attester's leak guarantees fail at two more compiled verifiers that accept everything, whose lemmas are
 `NetTiming.Witness`'s:
 
 * `leakL`: `sksL` at a statement whose program negates its input (`notStmt`, its partition `notPart` one proof block

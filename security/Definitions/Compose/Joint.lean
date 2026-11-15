@@ -32,7 +32,7 @@ reading, at the coins flipped, is `Run.ComputeSoundPerRun` and the two beside it
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- The resources a joint audit certifies, each by an audit of its own. -/
 inductive Resource
@@ -157,4 +157,4 @@ end Sound
 
 end Run
 
-end Accounting
+end ResourceAccounting

@@ -72,8 +72,8 @@ namespace Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs.HonestStrata
 
 open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.MonitoringPeriodJ10RStrata
   Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The honest instance -/
 
@@ -117,7 +117,7 @@ theorem strata_meets_period (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (e
   refine ⟨fun x z w => ?_, fun _ _ _ => hdraw _ _, fun _ _ => hsalt _, fun x => ?_⟩
   · show regOf (coinAt (coinAt (spliceAt w.val 1 x z) w).1 ⟨0, Nat.one_pos⟩) =
       regOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩)
-    rw [Accounting.SecurityProofs.TS.Keyed.coinAt_spliceAt]
+    rw [ResourceAccounting.SecurityProofs.TS.Keyed.coinAt_spliceAt]
     rfl
   · unfold CreditExecutionPhases.prefixLen
     have h : ∀ w ∈ (Finset.univ : Finset (Fin n)), (executionPhases σ regOf evOf n).AcceptedUpTo x w :=

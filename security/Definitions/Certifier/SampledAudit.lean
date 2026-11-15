@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 Definitions only. Network accounting writes the whole computation as one program `C` of the Boolean profile,
 each machine a subcircuit, and audits its committed trace with SPOT (`Claims.Sampling`). The transfer-gate
 units and N2's head checks are classes sampled `all`, and the internal step units are sampled. This module says what an
-accepted audit then establishes about the egress, in the network certifier's terms (`EgressPrediction`, `Accepted`), on
+accepted audit then establishes about the egress, in the network attester's terms (`EgressPrediction`, `Accepted`), on
 sampling's own vocabulary: its statement, partition, design, incorrect set and `M_δ`.
 
 **The layout** (`BoundaryGates`, public, part of the statement) says which of `C`'s gates hold each step's egress rows

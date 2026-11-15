@@ -59,9 +59,9 @@ what those bits are, so `LaneHolds` and `CombHolds` become statements of the row
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open Flock.SoundAtBridge Accounting.TS.Checked FlockSoundness.Discharge
+open Flock.SoundAtBridge ResourceAccounting.TS.Checked FlockSoundness.Discharge
 open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW)
 
 variable (s : RowsSession)
@@ -189,4 +189,4 @@ theorem holds_of_bytes (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = 
     Holds (portBit s (openedReg s) s.c.ports[q].name) lo n x := fun i hi => by
   rw [portBit_bytes hN hu hS hcomp hseg hv2 h (hread i hi), hx i hi]
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

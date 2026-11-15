@@ -46,18 +46,18 @@ reading is one named premise, `SeedExtractedAt` (`random-oracle`), taken once fo
 
 The logical layer (`CircuitWork`) rests on four claims, the headlines', sampled (I8)'s and its own:
 
-* (H-μ), `Accounting.Assumptions.TS.OperandHMu`, and B′, `Accounting.Assumptions.TS.ReceiptLuckAt`, taken per tile at
+* (H-μ), `ResourceAccounting.Assumptions.TS.OperandHMu`, and B′, `ResourceAccounting.Assumptions.TS.ReceiptLuckAt`, taken per tile at
   its stage folded (`PerTile`): a folded tile keeps its honest checked values at `μ + (1 − μ)·r_B`, `7/8` at `¾` and `½`
-  (`Accounting.Guarantees.TS.LuckOfReceipt`), as the headlines' `p`. Compose states no H-μ of its own: it takes the
+  (`ResourceAccounting.Guarantees.TS.LuckOfReceipt`), as the headlines' `p`. Compose states no H-μ of its own: it takes the
   headlines' definition, so the premise is one Lean statement, counted once;
 * `GuessLuckAt`: the whole-unit guess bound, per tile at its stage whole, a condition at whatever bound a kind's
   `Scheme.guess` names: the live line reads it at B′'s `½`, and `2^-64` isn't granted;
-* the fixed-words claim, `Accounting.Assumptions.TS.UnitFixed` (Lemma E1(c) per unit with its fold clause),
-  at the run's modes (`Accounting.Compose.tileMode`; `jointMode` in the seeded statements, on the IR-cut layer
+* the fixed-words claim, `ResourceAccounting.Assumptions.TS.UnitFixed` (Lemma E1(c) per unit with its fold clause),
+  at the run's modes (`ResourceAccounting.Compose.tileMode`; `jointMode` in the seeded statements, on the IR-cut layer
   `Declared.atIR`) and the tiles' words. Its good units are the ones the run paid for, so a receipt-lucky skipped tile
   isn't credited.
 
-The service's commit order (`Accounting.Compose.LayerCommitted`) is protocol structure, a fact of the registered circuit,
+The service's commit order (`ResourceAccounting.Compose.LayerCommitted`) is protocol structure, a fact of the registered circuit,
 and lives in the live statements' `Scope`, not here: today's code doesn't meet it, so a live window it serves is out of
 scope.
 
@@ -81,7 +81,7 @@ operands and skips after querying later rounds' seeds):
 
 The physical layer's (`CreditOfWork`):
 
-* `Accounting.Assumptions.TS.FoldOptFoldedAt`: FOLD-OPT per word folded at one certificate, the headlines' premise,
+* `ResourceAccounting.Assumptions.TS.FoldOptFoldedAt`: FOLD-OPT per word folded at one certificate, the headlines' premise,
   asked at the certificate `lam` each credit statement prices at. `FoldOptFolded` is it at every certificate, which a
   bit-exact fold falsifies, and `FoldOpt` is it at `N_w` words, which a sampled cheater that skips whole units
   falsifies.
@@ -89,13 +89,13 @@ The physical layer's (`CreditOfWork`):
 
 @[expose] public section
 
-namespace Accounting.Assumptions.Compose
+namespace ResourceAccounting.Assumptions.Compose
 
-open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose Pouw.RelativeSecurity
 
 /-- `accounting-compose-guess-luck` (the whole-unit guess bound; a claim, to be ruled on). **A unit skipped whole keeps
 its honest checked values only by guessing them**: in the ideal game split at the receipt, at every round, whatever the
-past, a deficient round passes with probability at most `p0` (`Accounting.TS.RoundGame.LuckAt` of its game). Taken per
+past, a deficient round passes with probability at most `p0` (`ResourceAccounting.TS.RoundGame.LuckAt` of its game). Taken per
 tile at its stage whole (`tileGame … .whole`, whose check is `same`): a tile whose product and fold are both skipped
 keeps its checked values, the fold state its proof pins, with probability at most `p0`. It is a condition at the `p0` it
 is given, and nothing here takes it as a fact. The live line reads it at B′'s `½` until a smaller value survives attack:
@@ -103,7 +103,7 @@ is given, and nothing here takes it as a fact. The live line reads it at B′'s 
 and no statement reads it. A guess falsifies `luck0 = 0`. It fails if the cheater's
 view pins the fold state without the fold: a state that a computed word, or a coin read before the skip, determines. -/
 def GuessLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) : Prop :=
-  Accounting.TS.RoundGame.LuckAt p0 G.game
+  ResourceAccounting.TS.RoundGame.LuckAt p0 G.game
 
 /-- `random-oracle` (the random-oracle ruling: PoUW only, each use a named premise; this one at the window's
 seeds). **The seed each round's accepted proofs derive is the
@@ -155,7 +155,7 @@ answer (`resample`), every other answer of the window fixed, is at most `1` (GRI
 binding event `Break` of probability at most `δ_b` (a root opened two ways after its seed), such that off `Break` round
 `r`'s gain in mode `s` (`roundGain` over the tiles of round `rd v = r`: `L − κ·U` at weights `w`) is at most the gain
 `g q` of the query `q = sq a r` its proofs' seed answers (`SeedExtractedAt`, the random-oracle premise, which names
-`sq`). With `Accounting.Guarantees.TS.GrindPremiumAt` it puts the gain below `ln(T_q/δ_g)/θ r` except with probability
+`sq`). With `ResourceAccounting.Guarantees.TS.GrindPremiumAt` it puts the gain below `ln(T_q/δ_g)/θ r` except with probability
 `δ_g + δ_b`, off `SeedExtractedAt`'s `Off`.
 
 It has no stage order: a cheater may choose round `r`'s operands and skips after querying the oracle for every later
@@ -171,9 +171,9 @@ prover's fork finder at about `2·T_q` SHA-512 calls a round gives about `2·T_q
 bound. `Break` is an event of the play's own answers, so no constant bounds it for every prover.
 
 At `s = folded`, `κ = 4` and `θ` from `Scheme.seedRate` (`seedTheta`) it is the template luck GRIND proves:
-`Accounting.Guarantees.TS.TemplateMoment` (32 columns, a word dead with probability at most `2^-w` over the row bits,
+`ResourceAccounting.Guarantees.TS.TemplateMoment` (32 columns, a word dead with probability at most `2^-w` over the row bits,
 then lucky at most `½` over the column bits, `θ = 1/(256·r)` a product) and `PrivateMoment`, the `½` from
-`Accounting.Guarantees.HMu.CoinPointMassHalf`. What stays assumed: that a seed group's gain decomposes into its
+`ResourceAccounting.Guarantees.HMu.CoinPointMassHalf`. What stays assumed: that a seed group's gain decomposes into its
 segments' (argued in GRIND, not stated); E3 in its one-oracle form, that query `q`'s own answer reaches round `r`'s
 gain only through `same` (the round's skips and the values the run commits for its tiles may read every other answer
 of the window, but not `q`'s, which decides only whether they are the honest ones); the binding term; and the oracle
@@ -246,4 +246,4 @@ def WholeEntropyAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V →
     ∀ a q, ¬ Break a → sq a r = some q → ∀ v, rd v = r.val →
       ((R.mode a v = .whole ↔ v ∈ Wh q a) ∧ (R.mode a v = .whole → R.same a v → v ∈ Lk q a))
 
-end Accounting.Assumptions.Compose
+end ResourceAccounting.Assumptions.Compose

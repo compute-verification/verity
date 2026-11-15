@@ -21,7 +21,7 @@ that where it answers, `evaluate` answers too, and each execution phase has the 
 accepts; `NoGridAcceptsMore`, that where `evaluate` answers it answers so too, unless a raw or committed record names an
 egress link, which it refuses. So it accepts every execution phase `evaluate` accepts.
 
-The Program's grid of an egress execution phase is `programGrid`, rows of `NetworkCertifier.expectedRow` under the syncs
+The Program's grid of an egress execution phase is `programGrid`, rows of `NetworkAttester.expectedRow` under the syncs
 the link declares, which the check reads through `Records.expectedGridsOfBytes` (`RecordsBytes.expectedGridsOfBytes_eq`). Nothing is
 assumed of SHA-512 or LMS. A committed record's digest is the one `commitment.py` gives the Program's grid,
 and any grid of `B`-byte frames with that digest holds the Program's frames, or two distinct strings the two digests
@@ -34,7 +34,7 @@ is the record head of the Program's grid, or two distinct strings the two heads'
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks)
-open NetworkCertifier (ClockSync)
+open NetworkAttester (ClockSync)
 open Properties.Certifier (EvidenceFits ParamsDigests Declares SyncAdmitted programGrid LmsVerifies headStrings)
 
 namespace Properties.NetworkRecords

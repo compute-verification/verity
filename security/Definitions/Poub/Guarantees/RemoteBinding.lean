@@ -36,12 +36,12 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The receipts' binding bound (trusted)
 
-The bound on the receipts' binding term (`Accounting.Remote.Sample.Receipts.binding`), the probability that some window
+The bound on the receipts' binding term (`ResourceAccounting.Remote.Sample.Receipts.binding`), the probability that some window
 opens a receipt presented with an accepted row other than the one its root holds, which `PooledSample` and the memory
 line's sampled guarantees charge. It is the forking argument: the held row is by definition the plurality of the rows the
 receipt shows over the window's continuations (`Receipts.held`), so a receipt moves with probability at most the
 square root of the chance that two runs from the cut on independent openings coins show it with two different accepted
-rows (`Accounting.SecurityProofs.TS.Plurality`'s argument, at `cont t`). Two such runs at one root, rank and verifier
+rows (`ResourceAccounting.SecurityProofs.TS.Plurality`'s argument, at `cont t`). Two such runs at one root, rank and verifier
 hash a SHA-512 collision (`Hash.Guarantees.RowBinding`): the fork's break (`Receipts.Broken`). Otherwise their roots
 split (`Receipts.Split`). Over window `t`'s receipts, at most `s_t` opened a run, Cauchy–Schwarz over the receipts it
 can open (`L_t`) gives its share. The statement has no premise beyond `L_t` holding what the window opens and the claim.
@@ -54,7 +54,7 @@ can open (`L_t`) gives its share. The statement has no premise beyond `L_t` hold
 `L_t` and `s_t` are the session's: a set holding every receipt window `t` opens at every outcome, and its sample cap, so
 the code charges at the session's bounds on a window's receipts and samples, not at one record's `U_t` and `s'_t`. Where
 every window's roots, ranks and verifiers are fixed by its cut, `split_t = 0` and the bound is
-`Σ_t √(|L_t|·s_t)·q_t/2^256.5` (`Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed`), `ledger.binding`'s
+`Σ_t √(|L_t|·s_t)·q_t/2^256.5` (`ResourceAccounting.SecurityProofs.Remote.Binding.binding_le_of_fixed`), `ledger.binding`'s
 charge. The deployed challenger sends the prover no commitment to window `t`'s coin before window `t`'s roots are in
 (the coin commitment comes only with the outcome). That the roots then read only the cut is not stated here, so
 `split_t` is not bounded: the gap `binding-split`.
@@ -62,9 +62,9 @@ charge. The deployed challenger sends the prover no commitment to window `t`'s c
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Remote
+namespace ResourceAccounting.Guarantees.Remote
 
-open Accounting.Remote.Sample
+open ResourceAccounting.Remote.Sample
 
 /-- **The receipts' binding term under `cr/sha-512`.** `ReceiptsBindingOfFork` with each window's fork finder
 (`Receipts.finder`, at `q_t` SHA-512 calls) meeting `Claims.StrictBirthday`: the binding term is at most
@@ -79,4 +79,4 @@ def ReceiptsBindingOfCR : Prop :=
     (R.binding D prf rest).toReal ≤
       ∑ t, √((L t).card * s t * ((q t : ℝ) ^ 2 / 2 ^ (513 : ℝ) + (R.split D prf rest t).toReal))
 
-end Accounting.Guarantees.Remote
+end ResourceAccounting.Guarantees.Remote

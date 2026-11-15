@@ -7,33 +7,33 @@ public import Definitions.Core.Partition
 # A period audited by every protocol, and what each audit's guarantee says about it (trusted)
 
 A period is one window of one node's run, over one circuit (`Verity.Circuit`, core's) and one device
-(`Accounting.Device`, the device model). Five audits decide it, each separately, on its own coins (`Audit`):
+(`ResourceAccounting.Device`, the device model). Five audits decide it, each separately, on its own coins (`Audit`):
 
 * SPOT, on the integrity of the circuit's committed trace: at most a share `ε` of the units of its
   partition are incorrect (`Verity.Partition.incorrect`);
 * PoUW, on work: the compute account did at least `W` of work at price `p`;
 * PoUS, on space: the capacity account held at least `S` bits of device memory on average;
 * PoUB, the bandwidth audit, on bandwidth: the bandwidth account read at least `Q` bits from device memory;
-* the network certifier, on communication: what the network certifiers saw the node move is within `K` bits.
+* the network attester, on communication: what the network attesters saw the node move is within `K` bits.
 
-The period's coins are one space, `(i : I) → Ω i`, uniform (`Pouw.pr`, as `Accounting.Joint`'s), and each audit samples
+The period's coins are one space, `(i : I) → Ω i`, uniform (`Pouw.pr`, as `ResourceAccounting.Joint`'s), and each audit samples
 its own coordinate of it (`PeriodRun.own`). The device sees every coin, so the schedule and the committed trace are
 functions of all of them, and so is each verdict.
 
-Each audit's per-period guarantee (`PeriodRun.Sound`) is stated in the shape of `Accounting.Run.ComputeSoundPerRun`:
+Each audit's per-period guarantee (`PeriodRun.Sound`) is stated in the shape of `ResourceAccounting.Run.ComputeSoundPerRun`:
 at any value of the other coins, the probability over the audit's own coins that it accepts while its claim fails on
 that run is at most its error. That is the form each protocol's own per-period guarantee is to give for a run that
-realizes its audit: `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod` for PoUW,
-`Accounting.Guarantees.Remote.AuditRO` for PoUB, `Pous.Guarantees.ContinuousAudit` for PoUS, the network certifier's
+realizes its audit: `ResourceAccounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod` for PoUW,
+`ResourceAccounting.Guarantees.Remote.AuditRO` for PoUB, `Pous.Guarantees.ContinuousAudit` for PoUS, the network attester's
 leak over a period of sampled audits for communication, and the sampled audit's live knowledge soundness for integrity.
 
 Two parts of the run are fields until their shared definitions exist: the verdicts (`accepts`), as in
-`Accounting.Run`, and the network certifier's claim (`commWithin`), which its period statement is to define.
+`ResourceAccounting.Run`, and the network attester's claim (`commWithin`), which its period statement is to define.
 -/
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- The audits that decide a period, one per protocol. -/
 inductive Audit
@@ -45,7 +45,7 @@ inductive Audit
   | pous
   /-- PoUB, the bandwidth audit: bits read from device memory -/
   | poub
-  /-- the network certifier: communication through the network certifiers -/
+  /-- the network attester: communication through the network attesters -/
   | network
   deriving DecidableEq
 
@@ -63,13 +63,13 @@ structure Certificates where
   S : ℝ
   /-- bandwidth: at least this many bits read from device memory (Q_cert) -/
   Q : ℝ
-  /-- communication: at most this many bits through the network certifiers (K) -/
+  /-- communication: at most this many bits through the network attesters (K) -/
   K : ℝ
 
 /-- A period of a node's run on device `d` with accounts `α`, over the circuit `C`, on the coins `(i : I) → Ω i`: the
 partition whose units the integrity claim counts, each audit's coordinate of the coins, each resource's account, the
 period's window, the schedule and the circuit's committed trace at each value of the coins, the network
-certifier's claim, and each audit's verdict. -/
+attester's claim, and each audit's verdict. -/
 structure PeriodRun {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) {I : Type}
     (Ω : I → Type) where
   /-- the number of units of the partition -/
@@ -88,7 +88,7 @@ structure PeriodRun {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Ve
   fits : ∀ ξ, (schedule ξ).Fits d
   /-- the circuit's trace the node committed in the period, at the coins -/
   trace : ((i : I) → Ω i) → C.Trace
-  /-- the network certifier's claim at `K`: what the network certifiers saw the node move in the period is within `K`
+  /-- the network attester's claim at `K`: what the network attesters saw the node move in the period is within `K`
   bits -/
   commWithin : ℝ → ((i : I) → Ω i) → Prop
   /-- the verdict of an audit at the coins -/
@@ -128,4 +128,4 @@ def Sound (c : Certificates) (p : Price) (a : Audit) (δ : ℝ) : Prop :=
 
 end PeriodRun
 
-end Accounting
+end ResourceAccounting

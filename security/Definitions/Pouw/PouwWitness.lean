@@ -7,12 +7,12 @@ public import Definitions.Pouw.PerRun
 
 `acceptAllRun`: on a device with no capacity (`nullDevice`) and an idle schedule (`idleStep`), a run whose every audit
 accepts. It does no work, so its compute audit accepts short of any positive certificate: what
-`Accounting.Guarantees.ComputeOfPouw` and `ComputeOfPouwPerRun` rule out.
+`ResourceAccounting.Guarantees.ComputeOfPouw` and `ComputeOfPouwPerRun` rule out.
 -/
 
 @[expose] public section
 
-namespace Accounting.PouwWitness
+namespace ResourceAccounting.PouwWitness
 
 /-- A device with no capacity. -/
 def nullDevice : Device Unit := ⟨0, 0, fun _ => 0, 0, fun _ => 0⟩
@@ -30,4 +30,4 @@ def acceptAllRun : Run nullDevice Unit Unit Unit Unit where
     simp [Step.Fits, idleStep, nullDevice]
   accepts _ _ := True
 
-end Accounting.PouwWitness
+end ResourceAccounting.PouwWitness

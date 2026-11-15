@@ -29,7 +29,7 @@ adapted and its incorrect set predictable (`Pooled.adapted_escapes`, `Pooled.pre
 `Periods.prCoin_forall_le_prod` at those escapes, and `pooled_escape` is `Periods.prCoin_forall_sum_le_pow` at the
 weights `|W_t|` and `ρ = 1 − kd/N`.
 
-The network certifier's leak bound, `(ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + ε_bind)`, adds each
+The network attester's leak bound, `(ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + ε_bind)`, adds each
 window's error once per window, so its second term grows with the number of windows in the monitoring period. It is
 `PooledLeakAccepted`'s, which bounds its own pooled missProb (`pr_adaptive_add_le`), not with this file's theorems.
 -/

@@ -24,7 +24,7 @@ available to rebuild.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- The rate audit's coins in its game with a store of `N` words of `b` bits, a `ρ`-bit certified stream, `h`-bit tags
 and `s` sampled words: the store, and the window's stream, oracle and sample. -/
@@ -46,4 +46,4 @@ structure RealizesRate (p : Price) (cTag cEnc : ℕ) {N b h ρ s : ℕ} {ι : Ty
   /-- the work of the accounts other than the compute account covers the game's tags and rebuilds -/
   compute_le : ∀ x y s', (dev (x, s')).compute cTag cEnc y.1 y.2.1.1 y.2.1.2 ≤ r.othersWork p (x, y, s')
 
-end Accounting
+end ResourceAccounting

@@ -5,12 +5,12 @@ public import Definitions.Compose.JointPeriod
 /-!
 # A period whose PoUS audit is a joint run's capacity audit (trusted)
 
-In the coins model (`Accounting.PeriodRun`), PoUS's per-period guarantee is `PeriodRun.Sound c p .pous δ`.
-PoUS proves its per-period guarantee (`Pous.Period.PeriodHeld`) over a joint run (`Accounting.Run`) whose capacity
+In the coins model (`ResourceAccounting.PeriodRun`), PoUS's per-period guarantee is `PeriodRun.Sound c p .pous δ`.
+PoUS proves its per-period guarantee (`Pous.Period.PeriodHeld`) over a joint run (`ResourceAccounting.Run`) whose capacity
 coins are the ring game's. `RealizesSpaceOfPeriodHeld` is what ties the two: a period whose PoUS coordinate of the coins
 is that run's capacity coins, whose capacity bit-ticks over its window are that run's over its capacity window, and
 whose PoUS verdict is the source's verdict (`verdict`, the verifier's whole decision outside a break in the period's
-own data, at `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`).
+own data, at `ResourceAccounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`).
 
 PoUS's audit grades the capacity account at the challenge times: `Pous.Period.DeviceModel` reads the account's memory at
 each tick of the capacity window, and `PeriodHeld` bounds the peak by the bit-ticks (`Pous.Period`'s header), so the
@@ -21,7 +21,7 @@ check; until it is, this bridge's guarantee holds at the challenge times only.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- **A period realizes its PoUS audit as the capacity audit of the joint run `run`, under the source's verdict
 `verdict`.** Each field is a property of the deployed period: PoUS samples its own coordinate of the period's coins, and
@@ -45,4 +45,4 @@ structure RealizesSpaceOfPeriodHeld {ι : Type} {d : Device ι} {α : Type} [Fin
   /-- PoUS's verdict on the period is the source's verdict on the joint run's coins -/
   accepts : ∀ ξ, r.accepts .pous ξ → verdict ((other ξ).1, (other ξ).2, coins (ξ (r.own .pous)))
 
-end Accounting
+end ResourceAccounting

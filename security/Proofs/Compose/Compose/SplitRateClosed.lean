@@ -1,12 +1,12 @@
 module
 
 public import Proofs.Compose.Compose.SplitRateExp
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 
 /-!
 # The closed rate: proof
 
-`Accounting.Guarantees.Compose.SplitRateClosed`, from `SplitRateExp`. A larger rate keeps `SplitRateAt` at the same
+`ResourceAccounting.Guarantees.Compose.SplitRateClosed`, from `SplitRateExp`. A larger rate keeps `SplitRateAt` at the same
 `ν, ν₀` (`splitRateAt_mono`), and each closed branch is at least the sharp one (`sharp_le_closed`): with
 `c = Kρw_max` and `q = p + (1 − p)e^{−c}`, `−ln q ≥ 1 − q = (1 − p)(1 − e^{−c})` and `(1 + c)e^{−c} ≤ 1`, so
 `(1 + c)·(−ln q) ≥ (1 − p)·c`. At `w_max = 0` every work is `0` and `ν = ν₀ = 0` do.
@@ -14,9 +14,9 @@ public import Proofs.Accounting.Lemmas.Compose
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Compose.Rates
+namespace ResourceAccounting.SecurityProofs.Compose.Rates
 
-open Accounting.Compose
+open ResourceAccounting.Compose
 
 /-- A larger rate keeps `SplitRateAt` at the same `ν, ν₀`. -/
 theorem splitRateAt_mono {K : ℕ} {ρ p p0 a b wmax Λ Λ' ν ν0 : ℝ} (hρ : 0 ≤ ρ) (hρw : ρ * wmax ≤ 1) (ha : 0 ≤ a)
@@ -62,7 +62,7 @@ theorem sharp_le_closed {K ρ p A w : ℝ} (hK : 0 < K) (hρ : 0 < ρ) (hw : 0 <
     _ ≤ A * ((1 + c) * -Real.log q) := mul_le_mul_of_nonneg_left key hA.le
     _ = A * (1 + c) * -Real.log q := by ring
 
-theorem splitRateClosed : Accounting.Guarantees.Compose.SplitRateClosed := by
+theorem splitRateClosed : ResourceAccounting.Guarantees.Compose.SplitRateClosed := by
   intro K ρ p p0 a b wmax hK hρ hw hρw hp0 hp1 hq0 hq1 ha hb
   rcases hw.eq_or_lt with h0 | hw'
   · subst h0
@@ -80,4 +80,4 @@ theorem splitRateClosed : Accounting.Guarantees.Compose.SplitRateClosed := by
       (max_le_max (sharp_le_closed hK' hρ hw' hp0 hp1 ha) (sharp_le_closed hK' hρ hw' hq0 hq1 hb))
       ⟨hν, hν0, h⟩⟩
 
-end Accounting.SecurityProofs.Compose.Rates
+end ResourceAccounting.SecurityProofs.Compose.Rates

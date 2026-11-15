@@ -38,25 +38,25 @@ import Proofs.Flock.SoundAtBridge.Reduce
 /-!
 # The served layer is sound through its Flock sessions (the proof)
 
-`Accounting.SecurityProofs.TS.SessionSoundAt` is `Flock.SoundAtBridge.soundAt_of_sessions` on the served layer `pf`,
+`ResourceAccounting.SecurityProofs.TS.SessionSoundAt` is `Flock.SoundAtBridge.soundAt_of_sessions` on the served layer `pf`,
 with `ServedRootsLinked`'s event as the event off the sessions' bad events. It needs neither `RelOfRows` nor
 `OpenedPlurAt` on every path: the named premises state them only on the accepted sessions whose sampled proof blocks are right,
 and every other unsound proof is `RowsSession.BadU`.
 
 This module imports `Proofs.Flock.SoundAtBridge`, whose imports make `X` a token (ArkLib's `notation3 "X"`), so
-`Proofs/Accounting.lean` imports it rather than `Proofs/Pouw/TS.lean`, whose theorems bind `X`.
+`Proofs/ResourceAccounting.lean` imports it rather than `Proofs/Pouw/TS.lean`, whose theorems bind `X`.
 -/
 
 @[expose] public section
 
-open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
+open ResourceAccounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 /-- **A window of proofs is sound at `δs + δ` through its Flock sessions**
-(`Accounting.Guarantees.TS.SessionSoundAt`). An unsound proof is accepted, so verity-verify-proof accepted its session
+(`ResourceAccounting.Guarantees.TS.SessionSoundAt`). An unsound proof is accepted, so verity-verify-proof accepted its session
 (`AcceptedLive`), and its relation fails at its opening. If every sampled proof block is right at its owned reads,
 `ServedChecksHold` gives the relation at the session's value layer, so that layer isn't the opening:
 `ServedRootsLinked`'s event, at most `δs`. Otherwise some sampled proof block is wrong or off, `RowsSession.BadU`, at most
 `n · bound ≤ δ` by `Flock.SecurityProofs.EndToEndRegisteredRows` (`RowsSession.prob_badU_le`). -/
-theorem Accounting.SecurityProofs.TS.SessionSoundAt : Accounting.Guarantees.TS.SessionSoundAt := by
+theorem ResourceAccounting.SecurityProofs.TS.SessionSoundAt : ResourceAccounting.Guarantees.TS.SessionSoundAt := by
   intro Ω _ S nπ V pf sess out rows δs δ hCR hAcc hSamplingDesign hChk hLink hδ hδ0
   refine soundAt_of_sessions pf (Out := fun s : RowsSession => s.Out) (fun s => s.G)
     (fun s => s.τ) (fun s => s.BadU) sess out

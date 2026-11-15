@@ -55,11 +55,11 @@ def StreamedWipeMeetsReadsTight : Prop := Pous.Claims.StreamedWipeMeetsReadsTigh
 
 /-- **A server keeps at most `B(n, r, k, R) + E` bits of its prior content through the wipe.** In the physical model a
 server `s` has a public assumed memory capacity `M_s` over every memory tier (HBM, host RAM, disks): its state is at
-most `M_s` bits at every tick (`Accounting.Placed.Memory`), so at the fill's end it is the game's `σ : Bits M_s`, a
+most `M_s` bits at every tick (`ResourceAccounting.Placed.Memory`), so at the fill's end it is the game's `σ : Bits M_s`, a
 smaller state padded. The memory challenger fills `n` labels of 64 bytes into it, `M_s = 512·n + R`, `R` being every
 bit of `M_s` outside the fill on any tier, the boot disk and the GPU contexts included. Then it reads `k` of them, one
 at a time and timed, at a ratio `r ≥ 1` with `(r − 1)^k · 2^129 ≤ r^k`. A server that keeps at least
-`B(n, r, k, R) + E` bits of uniform prior content through the reads, `E` its egress as the network certifier counts
+`B(n, r, k, R) + E` bits of uniform prior content through the reads, `E` its egress as the network attester counts
 it, is accepted with probability at most `2^-128` plus the PRF's advantage against `StreamedWipe.wipeDistinguisher P`.
 `B` is `StreamedWipe.serverBound`, the fill's share `512·m + m·(⌊log₂⌊3n/m⌋⌋ + 1) + ⌊log₂ k⌋ + 130`
 (`m = ⌈n/r⌉ − 1`) plus `R`, which counts in full. It is `Pous.Claims.StreamedWipeMeetsServer` at

@@ -1,4 +1,4 @@
-"""The physical model (GLOSSARY.md's "The physical model": HW and INV, `Accounting.Hardware` and `Accounting.Covered`),
+"""The physical model (GLOSSARY.md's "The physical model": HW and INV, `ResourceAccounting.Hardware` and `ResourceAccounting.Covered`),
 which bounds the feasible set 𝓕: the inventory's locations, its unregistered leaves and the monitoring period, in gates.
 
 `Units` is the one place a FLOP-model input becomes gates: `units.gates_per_flop` (`data/hardware.toml`), with its source
@@ -12,7 +12,7 @@ A **location** is the largest set of devices joined by links no certifier sees (
 rack, or a rack of servers whose certifiers sit only on its uplinks). Its `phi` is `Φ_X`, its capacity in gates per
 second (`|A[X,J]| ≤ Φ_X |J|`), `memory` its devices' bits, and its *hosts* (the servers or compute trays, each with its
 own NICs, certifier and side channels) carry host memory, disks, host CPUs and the boundary links whose line rate is
-`links` (`β_X`, `Accounting.linkCapacity`). `server_memory` is `M_s`, one server's memory over every tier (HBM, host
+`links` (`β_X`, `ResourceAccounting.linkCapacity`). `server_memory` is `M_s`, one server's memory over every tier (HBM, host
 RAM, disks): the capacity the wipe's per-server bound is stated against.
 
 A **fleet** is the inventory: the monitored locations, and the unregistered leaves `L_unreg` with `Φ(L_unreg) = ε_unreg Φ_total`,
@@ -68,7 +68,7 @@ class Location:
     disk: float = 0.0
     #: the host CPUs in gates per second (their densest integer matrix rate, through `Units`)
     host_phi: float = 0.0
-    #: `β_X`: bit/s across the location's boundary, its NICs' line rate (`Accounting.linkCapacity`)
+    #: `β_X`: bit/s across the location's boundary, its NICs' line rate (`ResourceAccounting.linkCapacity`)
     links: float = math.inf
 
     @property

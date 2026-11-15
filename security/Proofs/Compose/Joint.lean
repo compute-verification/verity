@@ -2,7 +2,7 @@ module
 
 public import Definitions.Compose.Guarantees.Joint
 public import Proofs.Registration.Device
-public import Proofs.Accounting.Prob
+public import Proofs.ResourceAccounting.Prob
 import Mathlib.Basic.ENNReal.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
@@ -20,7 +20,7 @@ of them, because each account's charge and every other account's are, together, 
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pouw
 
@@ -115,14 +115,14 @@ end Run
 
 namespace SecurityProofs
 
-theorem Joint : Accounting.Guarantees.Joint := by
+theorem Joint : ResourceAccounting.Guarantees.Joint := by
   intro ι α ΩW ΩQ ΩS _ _ _ _ _ _ _ d r p W Q S εW εQ εS hW hQ hS
   exact r.joint hW hQ hS
 
-theorem CovertResidual : Accounting.Guarantees.CovertResidual := by
+theorem CovertResidual : ResourceAccounting.Guarantees.CovertResidual := by
   intro ι α ΩW ΩQ ΩS _ _ _ _ _ _ _ _ d r p W Q S εW εQ εS hW hQ hS
   exact r.covertResidual hW hQ hS
 
 end SecurityProofs
 
-end Accounting
+end ResourceAccounting

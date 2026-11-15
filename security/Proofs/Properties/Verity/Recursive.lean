@@ -506,7 +506,7 @@ theorem sampled_protocol_oneStage_accepts {p₀ : Spot.OneStageZk.Params}
 
 /-! ## The target -/
 
-open Accounting (Device)
+open ResourceAccounting (Device)
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 

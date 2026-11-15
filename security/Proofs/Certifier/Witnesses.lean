@@ -57,14 +57,14 @@ import Proofs.Certifier.SampledLeakRegPlain
 import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
-# The honest and nontrivial lemmas of the network certifier's acceptance guarantees
+# The honest and nontrivial lemmas of the network attester's acceptance guarantees
 
 Each guarantee that says what an accepted run establishes has two lemmas (the two-lemma rule):
 `G_honest`, its premises at an honest instance, and `G_nontrivial`, its conclusion false at an instance whose verifier
 accepts everything. Each builds its instance and takes no hypothesis.
 
 * `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`, `MonitoringPeriodLeakAccepted` (and
-  `Accounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted`). Their premise `Compiled.KS` holds at SHA-512 at the
+  `ResourceAccounting.Guarantees.Bridge.CommOfMonitoringPeriodLeakAccepted`). Their premise `Compiled.KS` holds at SHA-512 at the
   deployed compiled form over the masked Flock record at the deployed relation, at a toy code that parses no statement,
   accepts no run and opens no session (`SamplingDeploy.toyCode`): `ks_toy`, from the compiler at Flock's KS there
   (`SamplingDeploy.ks_compiled`, `FlockDeploy.KS.zk_KS_untrim`) and the code's facts, which hold there. So does the
@@ -74,7 +74,7 @@ accepts everything. Each builds its instance and takes no hypothesis.
   opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the trace
   carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
   `MonitoringPeriodLeakAccepted`'s at `certL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
-  certifier's openings (`certOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
+  attester's openings (`certOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
   witness is in `RLeakCertifier`. These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`,
   `leakL`, `certL`) and the layouts and openings of `Definitions.Certifier.Witness` (`trivLay`, `notLay`,
   `certOps`), and no definition of this module: a statement the lock lists reads no proof-only definition outside the
@@ -82,7 +82,7 @@ accepts everything. Each builds its instance and takes no hypothesis.
 * `PooledLeakAccepted`. Its two inputs, each window's escape bound and its leak relation's error, hold with no error at
   one window audited by the compiled form at the toy code, at `q = 1` with the window's one proof block incorrect: the
   code accepts no run, so the audit accepts with probability `0`. Its other hypotheses hold there as well, the network
-  certifier running its code on no connection, so its bound reads there. At a code that accepts a run the two inputs
+  attester running its code on no connection, so its bound reads there. At a code that accepts a run the two inputs
   stay hypotheses, which the lemma does not discharge. At one window whose audit always accepts, `δ = 1/2`, `Fmax = 1`
   and no error, its observations empty where the horizon is one step, no window meets its leak relation, and the
   escape bound reads `1 ≤ 1/2`.
@@ -179,7 +179,7 @@ theorem PooledLeakAccepted_honest :
   · rw [Pr_congr fun ω => iff_false_intro (by exact fun h => hrej _ h.1)]
     exact Pr_false
 
-/-- At that instance `PooledLeakAccepted`'s other hypotheses hold as well, the network certifier running its code on no
+/-- At that instance `PooledLeakAccepted`'s other hypotheses hold as well, the network attester running its code on no
 connection, so its bound reads there: at `δ = 1/2` and `Fmax = 1`, with no error. -/
 example (h : Guarantees.PooledLeakAccepted) :
     Pr (fun ω : Fin 1 → Fin ((toyL).V.k []) → FlockDeploy.Coin =>
@@ -354,7 +354,7 @@ theorem leakL_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement →
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **No witness is in `RLeakCertifier`** at `certL`, at one step at `δ = 0`, whatever the inputs `As` admits: the
-network certifier's openings (`certOps`) register a frame at the input `true`, where the circuit, the negation of that
+network attester's openings (`certOps`) register a frame at the input `true`, where the circuit, the negation of that
 ingress, holds none, and the only possible incorrect set is empty, since the one unit is sampled `all`. -/
 theorem certL_noWit (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool))
     (x : Msg) (w : Claims.Sampling.Wit) :

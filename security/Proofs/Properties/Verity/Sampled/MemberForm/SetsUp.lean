@@ -50,7 +50,7 @@ namespace MemberForm
 open FlockSoundness.Discharge.ZkExec (zkTags)
 open Flock.Guarantees (MemberV5)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## Lists related member by member -/
 

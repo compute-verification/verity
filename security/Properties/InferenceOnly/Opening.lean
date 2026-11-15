@@ -2,7 +2,7 @@ module
 
 public import Properties.InferenceOnly.Record
 public import Properties.Flock.Circuit.CircuitOf
-public import Definitions.Accounting.ReadUnit
+public import Definitions.ResourceAccounting.ReadUnit
 public import Spot.Bits
 
 /-!
@@ -23,7 +23,7 @@ the names, by the one map from a Definition's parameters to a file's gates, `Spo
 * `readRows`: whether a Definition's rows are a table read's: six parameters, the key's two words, the root's and the
   domain id's 32 each, then the witness row, its salt and its path, a digest a level, each named once; and two output
   rows, the row returned and then the verdict's one word.
-* `portsOf`: a read unit's gates (`Accounting.ReadUnit.Ports`) at the roles, where the Definition's rows are a table
+* `portsOf`: a read unit's gates (`ResourceAccounting.ReadUnit.Ports`) at the roles, where the Definition's rows are a table
   read's: the gates of the key, the root, the domain id and the three opened parameters, of the output row the unit
   returns and of the first bit of its verdict's row. None where a bit of one of them has no gate.
 
@@ -39,7 +39,7 @@ the table's count and its row's words, which the reader's template fixes; an ope
 namespace InferenceOnlyCheck.Properties.Record
 
 open Flock.Program (Prog Defn)
-open Accounting
+open ResourceAccounting
 
 /-- **A Definition's parameters with their words**, in order: each parameter's name and its packed 16-bit words
 (`Spot.Bits.wordsOf`), as a template instance's input rows hold them. -/

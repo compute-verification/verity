@@ -34,7 +34,7 @@ scheme replaces.
 
 @[expose] public section
 
-namespace Accounting.TS.J10R
+namespace ResourceAccounting.TS.J10R
 
 open Pouw.PearlC.Sha512
 
@@ -175,4 +175,4 @@ seed_c's two, and each unit's σ_R (two) and its lanes' key blocks. A unit's sha
 def callCompressionsNum (M N k R C : ℕ) : ℕ :=
   (NoiseLayout.mk M N k).blocks + 2 + units M N R C * (2 + (NoiseLayout.mk R C k).lanes)
 
-end Accounting.TS.J10R
+end ResourceAccounting.TS.J10R

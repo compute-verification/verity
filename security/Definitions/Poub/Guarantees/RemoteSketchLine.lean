@@ -40,11 +40,11 @@ import Mathlib.Topology.Sheaves.Init
 
 The memory line (`Properties.Poub.Line.LineHeld`) takes the receipts' sketch bound
 wherever computed, `SketchBoundAt T O δs`, as a premise on its trace over the session's coins
-(`Accounting.Remote.Sample.SampleCoins n κ X`). `SketchBoundDeployed` derives the sketch bound on any trace over a
-session's sketch outcomes (`Accounting.Remote.Sketch.Outcome`: the prover's own coins, the registered store, SHA-512's
+(`ResourceAccounting.Remote.Sample.SampleCoins n κ X`). `SketchBoundDeployed` derives the sketch bound on any trace over a
+session's sketch outcomes (`ResourceAccounting.Remote.Sketch.Outcome`: the prover's own coins, the registered store, SHA-512's
 outputs), for every type of prover's coins. `SketchBoundLine` carries the one to the other: on the line's coins whose
 other coins are a sketch outcome (`X = Outcome β Hs N m`), the sketch bound on the line's trace read on the sketch
-outcomes (`Accounting.Remote.Held.Trace.sketch`) is `SketchBoundAt` on the line's trace, at the same δ.
+outcomes (`ResourceAccounting.Remote.Held.Trace.sketch`) is `SketchBoundAt` on the line's trace, at the same δ.
 
 So `SketchBoundDeployed` at prover's coins `β × (Fin n → Bits κ)` and the trace `T.sketch O`, under its premises
 there, gives `LineHeld`'s `SketchBoundAt` premise at `X = Outcome β Hs N 128` at `SketchBoundDeployed`'s δs,
@@ -58,16 +58,16 @@ during the credited passes, at δ_net). What stays assumed is `SketchBoundDeploy
 
 @[expose] public section
 
-namespace Accounting.Guarantees.Remote
+namespace ResourceAccounting.Guarantees.Remote
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sketch
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sketch
 
 /-- **The sketch bound on the memory line's coins.** On a trace over the line's coins whose other coins are a sketch
 outcome and any record `O` of computation outside the node, the receipts' sketch bound on the trace read on the sketch
 outcomes (`T.sketch O`) at `δ` gives `SketchBoundAt T O δ`. -/
 def SketchBoundLine : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (n κ N m : ℕ)
-    (T : Trace (Accounting.Remote.Sample.SampleCoins n κ (Outcome β Hs N m))) (O : Outside T) (δ : ℝ),
+    (T : Trace (ResourceAccounting.Remote.Sample.SampleCoins n κ (Outcome β Hs N m))) (O : Outside T) (δ : ℝ),
     SketchBound (T.sketch O) δ → SketchBoundAt T O δ
 
-end Accounting.Guarantees.Remote
+end ResourceAccounting.Guarantees.Remote

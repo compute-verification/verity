@@ -16,9 +16,9 @@ reaches the target on half the coins; no computation does better, since a positi
 
 @[expose] public section
 
-namespace Accounting.Slowdown.Toy
+namespace ResourceAccounting.Slowdown.Toy
 
-open Accounting
+open ResourceAccounting
 
 /-- The one-gate actual circuit at one leaf: an input of width one at cell `0`, tick `0`. -/
 def oneGate : Placed Unit where
@@ -62,4 +62,4 @@ def covered : (Unit → Actual.Run Unit) → Unit → Prop := fun C x => 2 ≤ (
 /-- The cost: a run's gate count. -/
 def cost : Actual.Run Unit → ℕ := fun R => R.A.N
 
-end Accounting.Slowdown.Toy
+end ResourceAccounting.Slowdown.Toy

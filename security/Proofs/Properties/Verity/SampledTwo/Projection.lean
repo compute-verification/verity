@@ -52,7 +52,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- The tapes of the period's play at the strategy `σ`. -/
 abbrev TapeOf (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
@@ -227,7 +227,7 @@ def MajorityBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F :
     (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
     (tr : Verity.Circuit.Trace (V.circuitOf θ F)) (bind : ℝ≥0∞) : Prop :=
   V.extract θ F c σ = tr →
-    ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) tr (V.certOf θ).ε →
+    ¬ ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) tr (V.certOf θ).ε →
       ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x × A.L.E.C x =>
         (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2.1).out = .acc ∧
           Claims.Rel.ext A.R x (A.L.E.eval FlockDeploy.sha512 Fr.P x s.1 s.2.1 s.2.2).1) ≤ bind

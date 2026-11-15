@@ -23,7 +23,7 @@ product with a block's elements, computed exactly on the tensor cores.
   two values leave its inner product guessable with probability up to `C(u, ⌊u/2⌋)/2^u ≈ √(2/(π u))`, and no more.
 
 Each takes no hypothesis: a condition on its inputs (the vectors differ) is part of the event it bounds, and the bounds
-on the data and the chain's length are in their types. The theorems are in `security/Proofs/Accounting/Sketch.lean`, on
+on the data and the chain's length are in their types. The theorems are in `security/Proofs/ResourceAccounting/Sketch.lean`, on
 the lemmas of `security/Proofs/Poub/Tag/`.
 -/
 
@@ -31,9 +31,9 @@ the lemmas of `security/Proofs/Poub/Tag/`.
 
 open Verity.Game renaming prPMF → prob
 
-namespace Accounting.Guarantees.Sketch
+namespace ResourceAccounting.Guarantees.Sketch
 
-open Accounting.Tag Pouw.Fp8Atom
+open ResourceAccounting.Tag Pouw.Fp8Atom
 open scoped ENNReal
 
 /-- **Non-collision.** Two integer vectors `x ≠ y`, fixed before the signs are sampled, have the same sketch under `k`
@@ -86,4 +86,4 @@ def LittlewoodOfford : Prop :=
     prob (PMF.uniformOfFintype (Fin u → Bool)) (fun ε => (∀ j, v j ≠ 0) ∧ unreadSum v ε = t) ≤
       (u.choose (u / 2) : ℝ≥0∞) / 2 ^ u
 
-end Accounting.Guarantees.Sketch
+end ResourceAccounting.Guarantees.Sketch

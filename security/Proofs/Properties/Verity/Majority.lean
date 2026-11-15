@@ -228,7 +228,7 @@ theorem units_bound {Ξ ι : Type} [Fintype Ξ] [Fintype ι] {Smp : Ξ → Type}
 opened at each of its wires, a unit unbound in `Xe` has a wire where `Xe` differs from `Xw`, at some bit. -/
 theorem unbound_sampled {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
     (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) {Xw Xe : C.Trace} {u : Fin n}
-    (hc : P.Correct Xw u) (ho : ∀ g ∈ P.io u, opens g (Xw g)) (hu : u ∈ Accounting.unbound P opens Xe) :
+    (hc : P.Correct Xw u) (ho : ∀ g ∈ P.io u, opens g (Xw g)) (hu : u ∈ ResourceAccounting.unbound P opens Xe) :
     ∃ g ∈ P.io u, ∃ i < C.w g, (Xw g).getLsbD i = !(Xe g).getLsbD i := by
   classical
   have hg : ∃ g ∈ P.io u, Xe g ≠ Xw g := by

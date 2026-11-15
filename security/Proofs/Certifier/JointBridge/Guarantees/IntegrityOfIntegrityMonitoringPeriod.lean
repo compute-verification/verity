@@ -32,7 +32,7 @@ them.
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
@@ -105,4 +105,4 @@ def IntegrityOfIntegrityMonitoringPeriod : Prop :=
 
 end Guarantees.Bridge
 
-end Accounting
+end ResourceAccounting

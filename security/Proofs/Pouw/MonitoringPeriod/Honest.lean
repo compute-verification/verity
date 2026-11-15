@@ -46,7 +46,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # An honest live-salt period meets `H1CheckedCreditMonitoringPeriod`'s premises
 
 The positive twin of `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, as
-`Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` executionPhases at H1's
+`ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` executionPhases at H1's
 instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
 parameters `Accept.h1Params`, and which meets every premise of the instance
 (`h1_meets`). The instance itself is `Properties.Pouw.MonitoringPeriod.Witnesses`', where the witnesses' statements read it.
@@ -80,8 +80,8 @@ namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
 open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 open PouwCheck (Params UnitsOk Ascending)
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The circuit -/
 

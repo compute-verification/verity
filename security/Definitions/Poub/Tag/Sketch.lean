@@ -30,7 +30,7 @@ The down-projection tag: `k` rows of uniform signs, each row's inner product wit
 
 @[expose] public section
 
-namespace Accounting.Tag
+namespace ResourceAccounting.Tag
 
 open Pouw.Fp8Atom
 
@@ -70,4 +70,4 @@ def sketchWord {T : ℕ} (s : Fin T → Fin 32 → Bool) (x : Fin T → Fin 32 �
   (List.finRange T).foldl
     (fun acc t => Pouw.PearlC.sm120Step acc (fun l => signCode (s t l)) (fun l => smallCode (x t l))) 0
 
-end Accounting.Tag
+end ResourceAccounting.Tag

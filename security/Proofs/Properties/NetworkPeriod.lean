@@ -402,7 +402,7 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
 /-! ## The rows form's scan's answer names no tied Input but its lanes' `prog<j>`
 
 `RowsTiedInputWired`'s honest lemma is `rowsCapPublished_honest`: the period check accepts a rows-form period, one
-with nothing registered. A period with an execution phase needs the network certifier's LMS signatures and one-stage's
+with nothing registered. A period with an execution phase needs the network attester's LMS signatures and one-stage's
 answers, which the period's difftest builds and checks against the mirror; `tiedAnswer_wired` is the check's step at
 the answers an honest scan gives. -/
 
@@ -567,7 +567,7 @@ theorem rowsCircuitHeld_nontrivial : ¬ RowsCircuitHeldOf acceptAllRows := by
   cases hh
 
 /-- **`RowsCircuitHeld`'s honest lemma**: the period check accepts a period in the rows form whose parameters name a
-class circuit, `heldMonitoringPeriod` with nothing registered. A period with an execution phase needs the network certifier's
+class circuit, `heldMonitoringPeriod` with nothing registered. A period with an execution phase needs the network attester's
 LMS signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
 tied audit registered under the class circuit; `tiedExecutionPhase_held` is `held` of such a phase's registrations. -/
 theorem rowsCircuitHeld_honest :
@@ -946,7 +946,7 @@ theorem rowsCapPublished : RowsCapPublished := by
   cases hf : p.form <;> simp only [hf] at h <;> split at h <;> cases h <;> simp [CapPublished, hf]
 
 /-- **`RowsCapPublished`'s honest lemma**: the period check accepts a period under a schedule with a response cap,
-`cappedPeriod` with nothing registered. A period with execution phases needs the network certifier's LMS signatures and
+`cappedPeriod` with nothing registered. A period with execution phases needs the network attester's LMS signatures and
 one-stage's answers, which the period's difftest builds and checks against the mirror. -/
 theorem rowsCapPublished_honest :
     ∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ = .accept pub prof := by
@@ -1206,7 +1206,7 @@ theorem rowsOkHeld : RowsOkHeld := by
   exact held_members hk hheld
 
 /-- **`RowsOkHeld`'s honest lemma**: the period check accepts a period in the rows form under a schedule of two
-ticks, `pairParams 0` with nothing registered. A period with an execution phase needs the network certifier's LMS
+ticks, `pairParams 0` with nothing registered. A period with an execution phase needs the network attester's LMS
 signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
 scans' registrations at the constants. -/
 theorem rowsOkHeld_honest :

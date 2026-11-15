@@ -3,8 +3,8 @@ module
 public import Definitions.Assumptions.Flock
 public import Definitions.Hash
 public import Definitions.Core
-public import Definitions.Accounting
-public import Definitions.Assumptions.Accounting
+public import Definitions.ResourceAccounting
+public import Definitions.Assumptions.ResourceAccounting
 public import Definitions.Assumptions.Hash
 public import Definitions.Assumptions.Pous
 public import Definitions.Slowdown.Cut
@@ -23,7 +23,7 @@ lock lists it under `open` with the issue that discharges it and its due date. A
 here once it is one of the real ones, into a module under this one that reads nothing private when the area's readers
 mustn't import the rest, since this one reads InferenceOnly: Flock's are `Definitions.Assumptions.Flock`, PoUW's hashless cost
 models and Pearl-C's gap property per coin `Definitions.Assumptions.Pouw`, memory and bandwidth accounting's
-`Definitions.Assumptions.Accounting`, keyed SHA-512 as a pseudorandom function `Definitions.Assumptions.Hash`, PoUS's
+`Definitions.Assumptions.ResourceAccounting`, keyed SHA-512 as a pseudorandom function `Definitions.Assumptions.Hash`, PoUS's
 timed incompressibility `Definitions.Assumptions.Pous` and weight security's model claim under faults
 `Definitions.Assumptions.WeightSecurity`, all of which this module re-exports. The transport's `ImprintPathPrivate` and
 `ChannelAuthentic` are `Definitions.Assumptions.Transport`, which it does not: the transport's premises sit apart so

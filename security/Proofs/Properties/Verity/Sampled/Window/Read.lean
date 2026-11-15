@@ -29,7 +29,7 @@ namespace Verity.Sampled
 
 open Verity.Game
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **What the verifier's acceptance gives of the play `x`, at a window**: every release of the family `label`
 answering `after` precedes every opening (`fresh`), and wherever the play's coins of that family agree with `nc`

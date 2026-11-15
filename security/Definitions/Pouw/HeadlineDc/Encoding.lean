@@ -49,9 +49,9 @@ import Mathlib.Topology.Sheaves.Init
 
 @[expose] public section
 
-namespace Accounting.TS.Headline
+namespace ResourceAccounting.TS.Headline
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- **The design's TS model on machine `G` with a filler**: `DesignData.model`, its filler menu one route whose demand
 is the load on `G` of `fill`, the filler's counts a unit of honest work. -/
@@ -80,4 +80,4 @@ noncomputable def SheetDataQ.sheet {P : Type} (D : SheetDataQ P) (n : ℕ) : She
   width p := D.width p
   smem k := D.smem.getD k.val 0
 
-end Accounting.TS.Headline
+end ResourceAccounting.TS.Headline

@@ -1,6 +1,6 @@
 """H1's z/y records checked in the tile unit: the served `verity_int8::scaled_mm_zy` commits each R × C
 unit's record (its call's z table, `h1window.TABLES`), and `PouwH1TileZy` reads its unit's record as an input and checks both
-halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by the unit, under Served's checked-record form
+halves: `ResourceAccounting.Served.ValueChecked`'s product and dequant are checked by the unit, under Served's checked-record form
 (pending), rather than taken on the fused kernel's word.
 
 * **The record** of a unit is its exact s32 z_u = A_u B_uᵀ over the whole K, its cells row-major, then
@@ -20,7 +20,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   (``cvt.rn.bf16.f32``); the device library's CPU cast gives 0x7FC0, the one encoding where the CPU oracle and the GPU differ.
 * **The scales.** A unit's A row is its K codes and then its f32 s_a, little-endian (its A table leaf, `ROW`), and its
   B row the K weight codes and then their f32 s_w: each scale is committed with its row, so a unit reads the A row's scale
-  at the A row's position and the weight row's at the weight row's (`Accounting.Served.DequantOf`: s_a with the A row, s_w
+  at the A row's position and the weight row's at the weight row's (`ResourceAccounting.Served.DequantOf`: s_a with the A row, s_w
   registered).
 * **The unit** `PouwH1TileZy_v1{TILE}` is ``(a: R rows, b: C rows, zy, salt, position, roots) -> {receipt, ok}``: TILE, the
   H1 tile (`h1tile.PouwH1Tile` v1 or v3 over the full grid; or J10-R's v5 or v6, `J10R_TILES`, whose ``call`` and
@@ -41,7 +41,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   statement under its public salt, beside the ``partials`` ports.
 * **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a sampled leaf is proved as its 32
   lanes and their combine). Option A is a proof strategy, not a new Served form: a sampled leaf is one Cd
-  unit and meets Served as `PouwH1TileZy_v1` does, and `Accounting.Guarantees.TS.LeafLanesSound`'s linked realization carries the 33 statements to it.
+  unit and meets Served as `PouwH1TileZy_v1` does, and `ResourceAccounting.Guarantees.TS.LeafLanesSound`'s linked realization carries the 33 statements to it.
   CP-W's receipt is the XOR over the leaf's lanes of their partials (`h1tile.fold`). The partials are proof-layer values,
   not Cd inputs: the prover commits them after the sample under hiding leaves, like a proof's own outputs, one row per lane
   (``partials``, row l lane l; proofs' service piece, `one_stage.produced`), and the 33 statements open that one

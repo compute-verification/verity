@@ -5,7 +5,7 @@ docstring makes, exhaustively at a small width or over a modelled ISA. A script 
 Lean reads it.
 
 Most of them are about the fold receipts: the duo step and the fx1 and li folds that the served H1 and J10-R designs
-absorb committed words with, and the TS premises their accounting reads (`Accounting.Assumptions.TS`: `FoldOpt`,
+absorb committed words with, and the TS premises their accounting reads (`ResourceAccounting.Assumptions.TS`: `FoldOpt`,
 `NoSum`, `ScalarRoute`, `SideUnits`, `WordsWritten`). Dither, PoUW's no-fold design, has none of them. When the TS fold
 premises are retired, their scripts are deleted with them.
 

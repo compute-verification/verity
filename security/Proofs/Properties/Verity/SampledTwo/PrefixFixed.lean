@@ -237,7 +237,7 @@ namespace Verity.SampledTwo.Messages
 
 open Claims
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The coins the history shows -/
 

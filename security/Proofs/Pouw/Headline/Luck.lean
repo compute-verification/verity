@@ -2,8 +2,8 @@ module
 
 public import Proofs.Pouw.TS
 public import Proofs.Pouw.HMu
-public import Proofs.Accounting.Lemmas.TS.Receipt
-public import Proofs.Accounting.Lemmas.HMu
+public import Proofs.ResourceAccounting.Lemmas.TS.Receipt
+public import Proofs.ResourceAccounting.Lemmas.HMu
 
 /-!
 # The headlines' luck from the receipt
@@ -18,9 +18,9 @@ public import Proofs.Accounting.Lemmas.HMu
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS.Headline
+namespace ResourceAccounting.SecurityProofs.TS.Headline
 
-open Accounting.TS Accounting.Assumptions.TS Accounting.SecurityProofs.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS ResourceAccounting.SecurityProofs.TS Pouw.RelativeSecurity
 
 /-- (H-μ) at the operands at `μ` gives the operand luck at `μ`, through Lemma B at fibre 1. -/
 theorem operandLuck_of_pointMass {Ω : Type} [Fintype Ω] (μ : ℝ) :
@@ -34,7 +34,7 @@ theorem operandLuck_of_pointMass {Ω : Type} [Fintype Ω] (μ : ℝ) :
       exact ⟨{b}, le_of_eq (Finset.card_singleton b), fun ω _ h => by
         rw [hid] at h
         exact Finset.mem_singleton.mpr h⟩
-    have hB := Accounting.SecurityProofs.HMu.LemmaB Ω O α α R μ 1 ⟨hPM, hInj⟩
+    have hB := ResourceAccounting.SecurityProofs.HMu.LemmaB Ω O α α R μ 1 ⟨hPM, hInj⟩
     have h2 : prob (fun ω => 0 < R.d (R.view ω)) = prob (fun ω => 0 < d ω) := by
       congr 1
       funext ω
@@ -54,4 +54,4 @@ theorem luck_of_receipt_half {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame �
   rw [e, ← hG] at h
   exact h
 
-end Accounting.SecurityProofs.TS.Headline
+end ResourceAccounting.SecurityProofs.TS.Headline

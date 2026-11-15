@@ -6,7 +6,7 @@ public import Definitions.Pouw.Assumptions.TS
 /-!
 # The filler's per-check luck (trusted)
 
-Lemma P2 over `Accounting.Filler`, each `def G : Prop` proved as `Accounting.SecurityProofs.FillerLuck.G` in
+Lemma P2 over `ResourceAccounting.Filler`, each `def G : Prop` proved as `ResourceAccounting.SecurityProofs.FillerLuck.G` in
 `Proofs.Pouw.FillerLuck`:
 
 * `FillerCellLuck`: the filler's own cell check, a cell of a tile with every other row's and column's noise its own,
@@ -28,9 +28,9 @@ at most `δ`.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.FillerLuck
+namespace ResourceAccounting.Guarantees.FillerLuck
 
-open Accounting.Filler Accounting.TS Pouw.RelativeSecurity
+open ResourceAccounting.Filler ResourceAccounting.TS Pouw.RelativeSecurity
 
 /-- **The filler's cell check**. On a tile of rows `ρ` and columns `ν` with the round's noise uniform, a cell `(r, s)`
 whose run word takes `R` two-sided products in the cell projection is right with probability at most `luck (K − R)`: at
@@ -53,7 +53,7 @@ at most `luck 1 = ½ + 2^(−3/2) ≤ 0.854` given the past. -/
 def FillerLuckAt : Prop :=
   ∀ {K : ℕ} {ρ ν Y A : Type} [Fintype ρ] [Fintype ν] [DecidableEq ρ] [DecidableEq ν] [Fintype Y] [CommRing A]
     (φ : A →+* ZMod 2) (c : Y → Fin K → A) {S : ℕ} (g : RoundGame (Noise K ρ ν Y) S),
-    ParityBalanced φ c → FullFill c g → Accounting.Assumptions.TS.LuckAt (luck 1) g
+    ParityBalanced φ c → FullFill c g → ResourceAccounting.Assumptions.TS.LuckAt (luck 1) g
 
 /-- **A spot-checked filler window meets Lemma C's budget at the filler's luck**: when every round checks one uniform
 cell and the column's parity is uniform, `Λ = 1/(1 − 0.854)` bounds the round's saving per unit of detection
@@ -79,7 +79,7 @@ from the round's committed data and live coins and compares it with the committe
 never passes, whatever the receipt function. -/
 def PinnedFillLuckAt : Prop :=
   ∀ {D C τ V : Type} [Fintype C] [Fintype τ] (F : D → C → τ → V) {S : ℕ} (g : RoundGame C S),
-    FullPinnedFill F g → Accounting.Assumptions.TS.LuckAt 0 g
+    FullPinnedFill F g → ResourceAccounting.Assumptions.TS.LuckAt 0 g
 
 /-- **A spot-checked window of pinned receipts meets Lemma C's budget at `p = 0`**: when every round recomputes one
 uniform tile's receipt, sampled after the receipts are committed, `Λ = 1` bounds the round's saving per unit of detection
@@ -98,4 +98,4 @@ def PinnedFillBlocksDeficit : Prop :=
     p₀ ≤ 1 → 0 < δ → PinnedFillBlocks p₀ F g →
       prob (fun x => g.accepts x ∧ Real.log (1 / δ) ≤ g.deficiency x) ≤ δ
 
-end Accounting.Guarantees.FillerLuck
+end ResourceAccounting.Guarantees.FillerLuck

@@ -40,7 +40,7 @@ open Lean (Json)
 open FlockSoundness.Discharge.ZkExec (zkTags)
 open FlockSoundness.Refine (ebind_ok TablesExtend parse_okLe parseCommit_okLe)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The circuit the checks read -/
 

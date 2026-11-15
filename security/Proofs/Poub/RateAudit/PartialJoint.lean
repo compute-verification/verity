@@ -55,9 +55,9 @@ completion costs a whole word (`workHardness_whole`), `RateAudit`'s all-or-nothi
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting Accounting.Rate
+open ResourceAccounting ResourceAccounting.Rate
 
 /-- W holds for a joint run whose bandwidth game's compute the work of the accounts other than the compute account
 covers: every op is charged once (`Step.Fits`). -/
@@ -74,7 +74,7 @@ theorem computeAdditive_of_othersWork {N b h ρ s : ℕ} {ι : Type} [Fintype ι
 theorem workHardness_whole (b rounds cRoot : ℕ) :
     Assumptions.WorkHardness b rounds cRoot (fun _ => rounds * cRoot) := fun _ hx => Nat.mul_le_mul_right _ hx
 
-theorem RateOfAuditPartial : Accounting.Guarantees.RateOfAuditPartial := by
+theorem RateOfAuditPartial : ResourceAccounting.Guarantees.RateOfAuditPartial := by
   intro N b h ρ s k cTag rounds cRoot lam W cost p ι α ΩW ΩS _ _ d r real hw hadd x s'
   refine (Bandwidth.pr_mono (fun y hy => ?_)).trans
     (RateAuditPartial N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len) (d.rate .oracle * (r.win .bandwidth).len)
@@ -136,11 +136,11 @@ theorem passes_floor {b ρ S L P T W cTag rounds cRoot x₁ k lam bw read : ℕ}
   have := Nat.lt_of_mul_lt_mul_right key
   omega
 
-theorem RateOfAuditPartialPasses : Accounting.Guarantees.RateOfAuditPartialPasses := by
+theorem RateOfAuditPartialPasses : ResourceAccounting.Guarantees.RateOfAuditPartialPasses := by
   intro N b h ρ s k cTag rounds cRoot x₁ lam W cost p ι α ΩW ΩS _ _ d r real hw hadd hx x s'
   refine (Bandwidth.pr_mono (fun y hy => ?_)).trans
     (RateOfAuditPartial N b h ρ s k cTag rounds cRoot lam W cost p ι α ΩW ΩS d r real hw hadd x s')
   obtain ⟨hacc, hW, hread⟩ := hy
   exact ⟨hacc, hW, passes_floor hx hread⟩
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

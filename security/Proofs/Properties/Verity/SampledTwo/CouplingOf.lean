@@ -27,7 +27,7 @@ namespace Verity.SampledTwo
 open Claims
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The coupling at one commitment and strategy, from the projection and the majority**: `CouplingTwoAt` at
 the two bounds' sum, at the frame's prover. -/
@@ -39,7 +39,7 @@ theorem coupling_at (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     (hX : V.extract θ F c σ = tr)
     (hdelta : V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
       ENNReal.ofReal (A.errAt x Fr.P) + (bound + bind) ≤ V.delta θ .sampled (V.cost θ F c σ))
-    (hI : ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε) :
+    (hI : ¬ ResourceAccounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε) :
     CouplingTwoAt V k A θ F c σ (bound + bind) := by
   rcases hScope with hs | h0
   swap

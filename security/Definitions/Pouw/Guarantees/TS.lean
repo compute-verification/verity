@@ -5,9 +5,9 @@ public import Definitions.Pouw.Assumptions.TS
 /-!
 # The tensor–scalar model's guarantee statements (trusted)
 
-EPS1's statements over `Accounting.TS`,
+EPS1's statements over `ResourceAccounting.TS`,
 each `def G : Prop`, proved (or a `sorry` stub) as
-`Accounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS`:
+`ResourceAccounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS`:
 
 * `TimeBound`: Lemma 1, `T(P) ≥ B(P)/f_max`.
 * `DIdeal`, `DIdealFloor`: Theorem D-ideal, (2.7) and (2.7♭), in 𝒫_full from (I1)–(I8).
@@ -24,9 +24,9 @@ at most `δ`.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- **Lemma 1 (time).** On the stated device, every run's time is at least its bound over `f_max`. -/
 def TimeBound : Prop :=
@@ -145,4 +145,4 @@ def FillOptOfFanIn : Prop :=
     (∀ k, 0 < m k → ∃ ψ, ∀ r, Z.fill ψ r ≤ Fintype.card ι * Z.G.a r k / m k) →
     FillOpt Z A
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS

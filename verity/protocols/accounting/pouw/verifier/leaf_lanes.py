@@ -40,7 +40,7 @@ index's ``pub`` among them) or an output row, is not one of its ``--registered``
 * **Their rows** (`known_rows`, the served path's one producer of them): lane l's ``pub`` (`pub_words`: the unit's salt,
   position and roots as its seed reads them, `seeds.leaves` and `seeds.position_leaves`, 100 words, then l as the 101st),
   ``admit`` (the leaf's R admit bits, `bits_words`) and ``o0`` (`OK_ROW`); the salts they're committed under are the
-  caller's. Read least significant bit first, as `Accounting.TS.Lanes.decLane` reads a field, the salt is its 16
+  caller's. Read least significant bit first, as `ResourceAccounting.TS.Lanes.decLane` reads a field, the salt is its 16
   big-endian 32-bit halves with half 0 the least significant, and the position its low half above its high one. Lean's
   is proofs' `PouwWindow.knownRows`, the rows `LeafLanesSound` takes, whose difftest reads this through h1_lanes'
   `known_rows` (`benchmarks/pouw/h1_lanes/leaf.py`), a wrapper over it.

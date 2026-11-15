@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction, LmsKey, certificate_message
-from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkAttesterParams
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.commitments.crypto import lms
 
@@ -30,7 +30,7 @@ from verity.protocols.accounting.certifier.device import network_certifier_serve
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from benchmarks.network_traces import wipe_egress as E  # noqa: E402
 
-SCAN = NetworkCertifierParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
+SCAN = NetworkAttesterParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
 #: the origin of the rehearsal the record was first read off
 ORIGIN = 1793035442.0242794
 WINDOWS = 6

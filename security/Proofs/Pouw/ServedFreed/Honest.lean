@@ -67,8 +67,8 @@ namespace Properties.Pouw.Served.SecurityProofs.Honest
 open Properties.Pouw.Served Properties.Pouw.Served.SecurityProofs
 open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
 open Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The registered devices' period -/
 

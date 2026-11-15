@@ -181,7 +181,7 @@ def rows() -> list[dict[str, Any]]:
             "PouwSound's bridge, not stated; κ = 0 assumed", "assumed")
 
     nmax = SM120_BUDGET - lg(SM120_CHECKS) - s64
-    row("sm120 n_π·δ_ZK", "Accounting.Guarantees.TS.Sm120SheetHeadline and siblings (ProofSoundAt)",
+    row("sm120 n_π·δ_ZK", "ResourceAccounting.Guarantees.TS.Sm120SheetHeadline and siblings (ProofSoundAt)",
         "n_π · one session's KS, against 2^-41/checks", f"n_π = 1, {TABLES_MAX} tables; budget 2^{SM120_BUDGET - lg(SM120_CHECKS):.2f}",
         s64, f"holds for n_π up to 2^{nmax:.1f}; Flock's bound omits the rows link ProofSoundAt reads")
 

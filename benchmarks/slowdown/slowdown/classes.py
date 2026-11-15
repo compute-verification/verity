@@ -78,7 +78,7 @@ class Structure:
     s_times: float | str
     #: `ω_max`: the most counted weight one operation carries
     omega_max: float = 1.0
-    #: `μ`: the most counted operations whose bodies hold one gate (`Accounting.ServingBlocks.Overlap`)
+    #: `μ`: the most counted operations whose bodies hold one gate (`ResourceAccounting.ServingBlocks.Overlap`)
     mu: float = 1.0
     #: where `s_×`'s gates come from, as `Units.basis` says it for `gates_per_flop` (`REFERENCE` is the FLOP model's);
     #: none needed at `s_× ≤ 1`, which holds in every design

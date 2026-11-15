@@ -108,7 +108,7 @@ Two things are outside this statement by design:
   deficient unit whose receipt came out right by luck isn't incorrect. PoUW adds luck through gap (4), TT or the TS model's
   `ε_luck`, composed with the window audit, which reads `ExecutionPhaseDelta`'s bound.
 * **Fiat–Shamir grinding** of the per-matmul seeds (decision 103) enters PoUW's `δ` through the seeded pair
-  (`Accounting.Guarantees.Compose.CircuitWorkSeeded`, `CircuitCreditSeeded`: GRIND's premium), not here.
+  (`ResourceAccounting.Guarantees.Compose.CircuitWorkSeeded`, `CircuitCreditSeeded`: GRIND's premium), not here.
 -/
 
 @[expose] public section

@@ -6,18 +6,18 @@ public import Definitions.Pouw.Basic.Prob
 /-!
 # PoUW's named premises on one node (trusted)
 
-The premises of the converged model (v3.1) that its PoUW work lower bound takes, over `Accounting.PouwWork`'s
+The premises of the converged model (v3.1) that its PoUW work lower bound takes, over `ResourceAccounting.PouwWork`'s
 vocabulary on the actual circuit. Each is a `Prop` about one strategy `S` and the verifier `P`, taken as a hypothesis by
-`Accounting.Guarantees.PouwLocalOff`, never an `axiom`. Their v3.1 names are A2 (`Detection`), A2b (`Luck`) and A5
+`ResourceAccounting.Guarantees.PouwLocalOff`, never an `axiom`. Their v3.1 names are A2 (`Detection`), A2b (`Luck`) and A5
 (`HelpBound`). They are under `shape.premises`. A3 (`FloorOff`), an open conjecture, is in
 `Definitions.Pouw.Assumptions.PouwFloor`.
 -/
 
 @[expose] public section
 
-namespace Accounting.Assumptions
+namespace ResourceAccounting.Assumptions
 
-open Accounting.PouwWork
+open ResourceAccounting.PouwWork
 
 variable {Ω : Type} [Fintype Ω] {L : Type*} (S : Ω → Actual.Run L) (P : Verdict Ω L)
 
@@ -33,10 +33,10 @@ luck. -/
 def PouwLuck (Nmin : ℕ) (δ : ℝ) : Prop :=
   Pouw.pr (fun r => Accepts S P r ∧ Nmin ≤ good S P r ∧ goodAll S P < Nmin) ≤ δ
 
-/-- **A5 HelpBound** (the network certifiers' signed ingress for the window, under `trusted-device`): at every coin
+/-- **A5 HelpBound** (the network attesters' signed ingress for the window, under `trusted-device`): at every coin
 the verifier accepts, the node took in at most `H` bits of help in `[ts, td)` (`help`). At `H = 0` the node is isolated:
 nothing placed off the node and the verifier reaches either of them during the window. -/
 def PouwHelpBound (X : Finset L) (H : ℕ) : Prop :=
   ∀ r, Accepts S P r → help S P X r ≤ H
 
-end Accounting.Assumptions
+end ResourceAccounting.Assumptions

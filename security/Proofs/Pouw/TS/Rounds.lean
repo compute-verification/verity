@@ -16,9 +16,9 @@ The plays' tail bounds: one bet a round under (L), the deficiency against the de
 
 open Claims renaming Ex → expect
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS ResourceAccounting.Guarantees.TS Pouw.RelativeSecurity
 
 /-! The helpers sit in `Rounds` so that they can't clash with a name in the file that imports this one. -/
 
@@ -68,14 +68,14 @@ end Rounds
 with probability at most `p^k`. -/
 theorem luck_rounds {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame Ω S) (p : ℝ) (hp : 0 ≤ p)
     (hL : RoundGame.LuckAt p g) (k : ℕ) :
-    prob (fun x => g.accepts x ∧ k ≤ Accounting.TS.RoundGame.deficientRounds g x) ≤ p ^ k := by
+    prob (fun x => g.accepts x ∧ k ≤ ResourceAccounting.TS.RoundGame.deficientRounds g x) ≤ p ^ k := by
   classical
   induction g generalizing k with
   | done =>
     rcases k with _ | j
     · rw [pow_zero]; exact prob_le_one _
     · refine (prob_mono (q := fun _ => False) fun x hx => ?_).trans (Rounds.prob_false.trans_le (pow_nonneg hp _))
-      simp [Accounting.TS.RoundGame.deficientRounds] at hx
+      simp [ResourceAccounting.TS.RoundGame.deficientRounds] at hx
   | round d pass next ih =>
     obtain ⟨-, hpass, hnext⟩ := hL
     rcases k with _ | j
@@ -93,8 +93,8 @@ theorem luck_rounds {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame Ω S) (p :
     · by_cases hpa : pass a
       · rw [ite_eq_left ⟨hpa, hda⟩, ite_eq_right (not_not.mpr hda), mul_one, mul_zero, add_zero]
         refine (Rounds.expect_ind_le_prob (Q := fun y => (next a).accepts y ∧
-          j ≤ Accounting.TS.RoundGame.deficientRounds (next a) y) fun y hy => ?_).trans (ih a (hnext a) j)
-        simp only [RoundGame.accepts, Accounting.TS.RoundGame.deficientRounds, ite_eq_left hda] at hy
+          j ≤ ResourceAccounting.TS.RoundGame.deficientRounds (next a) y) fun y hy => ?_).trans (ih a (hnext a) j)
+        simp only [RoundGame.accepts, ResourceAccounting.TS.RoundGame.deficientRounds, ite_eq_left hda] at hy
         exact ⟨hy.1.2, by omega⟩
       · rw [ite_eq_right fun h => hpa h.1, ite_eq_right (not_not.mpr hda), mul_zero, mul_zero, add_zero]
         refine (Rounds.expect_ind_le_prob (Q := fun _ => False) fun y hy => hpa ?_).trans Rounds.prob_false.le
@@ -102,19 +102,19 @@ theorem luck_rounds {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame Ω S) (p :
         exact hy.1.1
     · rw [ite_eq_right fun h => hda h.2, ite_eq_left hda, mul_zero, zero_add, mul_one]
       refine (Rounds.expect_ind_le_prob (Q := fun y => (next a).accepts y ∧
-        j + 1 ≤ Accounting.TS.RoundGame.deficientRounds (next a) y) fun y hy => ?_).trans (ih a (hnext a) (j + 1))
-      simp only [RoundGame.accepts, Accounting.TS.RoundGame.deficientRounds, ite_eq_right hda] at hy
+        j + 1 ≤ ResourceAccounting.TS.RoundGame.deficientRounds (next a) y) fun y hy => ?_).trans (ih a (hnext a) (j + 1))
+      simp only [RoundGame.accepts, ResourceAccounting.TS.RoundGame.deficientRounds, ite_eq_right hda] at hy
       exact ⟨hy.1.2, by omega⟩
 
 /-- A round's share is at most 1, so the deficiency is at most the number of deficient rounds. -/
 theorem deficiency_le_rounds {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame Ω S) (p : ℝ)
     (hL : RoundGame.LuckAt p g) (x : Paths Ω S) :
-    g.deficiency x ≤ Accounting.TS.RoundGame.deficientRounds g x := by
+    g.deficiency x ≤ ResourceAccounting.TS.RoundGame.deficientRounds g x := by
   induction g with
-  | done => simp [RoundGame.deficiency, Accounting.TS.RoundGame.deficientRounds]
+  | done => simp [RoundGame.deficiency, ResourceAccounting.TS.RoundGame.deficientRounds]
   | round d pass next ih =>
     obtain ⟨hd, -, hnext⟩ := hL
-    simp only [RoundGame.deficiency, Accounting.TS.RoundGame.deficientRounds, Nat.cast_add]
+    simp only [RoundGame.deficiency, ResourceAccounting.TS.RoundGame.deficientRounds, Nat.cast_add]
     refine add_le_add ?_ (ih x.1 (hnext x.1) x.2)
     split_ifs with h
     · simpa using (hd x.1).2
@@ -128,4 +128,4 @@ theorem budget_tail {Ω : Type} [Fintype Ω] {S : ℕ} (g : RoundGame Ω S) (Λ 
   have h := g.prob_accepts_le (c := 1 / Λ) (by positivity) (Rounds.expBound_of_budgetAt g hB) (Λ * t)
   rwa [one_div, inv_mul_cancel_left₀ hΛ.ne'] at h
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

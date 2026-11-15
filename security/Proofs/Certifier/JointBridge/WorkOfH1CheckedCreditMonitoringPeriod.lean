@@ -42,13 +42,13 @@ public import Proofs.Pouw.PearlC.Records
 /-!
 # Proof of the joint period's PoUW guarantee from H1's checked credit
 
-`Accounting.SecurityProofs.Bridge.WorkOfCreditedWords` at H1's instance: at each value `ξ` of the other audits' coins,
+`ResourceAccounting.SecurityProofs.Bridge.WorkOfCreditedWords` at H1's instance: at each value `ξ` of the other audits' coins,
 `Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod` at the source's instance there bounds the play's
 acceptance with `n` times its fixed words below the check's credit, which is the bound the bridge takes, read through
-`Pouw.pr` (`pr_le_prob_of_equiv` at the identity). The H200's instance is it at `Accounting.h200S8Price`, the H200's
+`Pouw.pr` (`pr_le_prob_of_equiv` at the identity). The H200's instance is it at `ResourceAccounting.h200S8Price`, the H200's
 price with INT8, `receiptWordMacs R C` multiply-adds a word and `receiptUnitMacs K R C` a unit.
 
-That price is stated here, with `Accounting.w1Price`, which it is an instance of. `Accounting.Price` prices the device
+That price is stated here, with `ResourceAccounting.w1Price`, which it is an instance of. `ResourceAccounting.Price` prices the device
 model's three op classes; W1 (`Pouw.PearlC.W1.W1Prices`) prices each tensor-core format's multiply-add and each
 CUDA-core instruction, in one dense E4M3 multiply-add. `w1Price pr f` reads the first off the second for a run whose
 tensor-core multiply-adds are of format `f`, and a card's price is it at that card's W1 prices and a format.
@@ -56,7 +56,7 @@ tensor-core multiply-adds are of format `f`, and a card's price is it at that ca
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pouw.PearlC.W1 in
 /-- **The device model's price at W1's prices `pr`**, for tensor-core multiply-adds of format `f`: a tensor-core
@@ -73,9 +73,9 @@ for S8 multiply-adds: an INT8 tensor-core multiply-add at W1's S8 price, `1`; a 
 is `64`); an oracle query at `sha` rounded up. -/
 def h200S8Price (sha fetch : ℚ) : Price := w1Price (Pouw.PearlC.W1.W1Device.s8H100 sha fetch).prices .s8
 
-end Accounting
+end ResourceAccounting
 
-namespace Accounting.SecurityProofs.Bridge
+namespace ResourceAccounting.SecurityProofs.Bridge
 
 open Properties.Pouw.MonitoringPeriod
 
@@ -116,14 +116,14 @@ theorem WorkOfH1CheckedCreditMonitoringPeriod : Properties.Certifier.JointBridge
   workOfH1CheckedCreditMonitoringPeriodAt_of Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod
 
 /-- **PoUW's per-period guarantee in the joint period from H1's checked credit on the H200, at INT8, for `K`-deep
-`R × C` tiles**: the guarantee above at `Accounting.h200S8Price sha fetch` (an INT8 tensor-core multiply-add `1`, a
+`R × C` tiles**: the guarantee above at `ResourceAccounting.h200S8Price sha fetch` (an INT8 tensor-core multiply-add `1`, a
 CUDA-core op `32`, an oracle query `⌈sha⌉`, in dense E4M3 multiply-adds, W1's prices on `W1Device.s8H100`), every
 word at the tile's `receiptWordMacs R C = 16·R·C` multiply-adds, every unit at its credited words'
 `receiptUnitMacs K R C = 2·(K/32)·16·R·C`, and `b_unit` bits a unit, for every SHA-512 and fetch price, tile shape and
 unit width. `PouwH1Tile_v1`'s is `K = 64`, `R × C = 4 × 8`: `512` a word, `2048` a unit; `PouwH1Tile_v5` and `_v6` (v1
 and v3 under J10-R's noise, with v1's receipt) at a warp, `32 × 32`: `16384` a word, `4194304` a unit at `K = 4096`.
 The certificate it admits on an accepted period is `W ≤ 16·R·C·credit − 2·(K/32)·16·R·C·K_net/b_unit` dense E4M3
-multiply-adds, `K_net` the network certifier's bits, for a circuit with a credited word (`m` is `0` for one with
+multiply-adds, `K_net` the network attester's bits, for a circuit with a credited word (`m` is `0` for one with
 none); a circuit of several tile shapes takes the smallest word. -/
 theorem WorkOfH1CheckedCreditMonitoringPeriodH200 :
     ∀ (sha fetch : ℚ) (K R C bUnit : ℕ),
@@ -132,4 +132,4 @@ theorem WorkOfH1CheckedCreditMonitoringPeriodH200 :
   fun sha fetch K R C bUnit =>
     WorkOfH1CheckedCreditMonitoringPeriod (h200S8Price sha fetch) (fun _ => receiptWordMacs R C) (receiptUnitMacs K R C) bUnit
 
-end Accounting.SecurityProofs.Bridge
+end ResourceAccounting.SecurityProofs.Bridge

@@ -33,7 +33,7 @@ open Verity.Game
 open Lean (Json)
 open Properties.Challenger (Draws)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **At an accepted play of the per-member form, the deployment's window is laid out in order and its members'
 files pass** (`ExecutionPhaseInstance.ExecutionPhasePasses`), where the form's accepts hold `MembersAccept` and their members share

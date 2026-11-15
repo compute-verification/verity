@@ -5,14 +5,14 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 /-!
 # A requirement's execution, placement and store (trusted)
 
-The objects a registered circuit's requirement (`Definitions/Accounting/Requirement.lean`) is read against, which every
+The objects a registered circuit's requirement (`Definitions/ResourceAccounting/Requirement.lean`) is read against, which every
 resource audit shares:
 
 * **Execution.** A scheduled execution is the values it produces (`ran`: the executed prefix, a request's rows up to
   its end and the engine's lag), the engine step at which it produces each (`step`), and the values (`value`, as bits).
   Registered values are there before step 0.
 * **Placement.** A placed execution also says at which device each value is produced or, an input, stored (`leaf`: a
-  leaf of the actual circuit's tree of locations, `Accounting.Placed`, the device, never an SM, an SMSP or a unit), and
+  leaf of the actual circuit's tree of locations, `ResourceAccounting.Placed`, the device, never an SM, an SMSP or a unit), and
   at which tick each device begins each engine step (`ticks`). A value is placed at the tick its device begins its step
   (`Placement.tick`).
 * **Store.** The registered store with the memory map beside it (I3, `memory-map/v1` of
@@ -30,7 +30,7 @@ A step is always an **engine step**: the engine's `s`-th step, never a device ti
 
 @[expose] public section
 
-namespace Accounting.Requirement
+namespace ResourceAccounting.Requirement
 
 /-- A scheduled execution of a circuit over values `G`. -/
 structure Execution (G : Type) where
@@ -45,12 +45,12 @@ structure Execution (G : Type) where
 engine step. -/
 structure Placement (L G : Type) extends Execution G where
   /-- the device at which each value is produced or, an input, stored: a leaf of the actual circuit's tree of locations
-  (`Accounting.Placed.x`), the device, never an SM, an SMSP or a unit -/
+  (`ResourceAccounting.Placed.x`), the device, never an SM, an SMSP or a unit -/
   leaf : G → L
   /-- the tick at which device `x` begins engine step `s` -/
   ticks : L → ℕ → ℕ
 
-/-- The tick at which a value is placed: the one at which its device begins its engine step (`Accounting.Placed.t`). -/
+/-- The tick at which a value is placed: the one at which its device begins its engine step (`ResourceAccounting.Placed.t`). -/
 def Placement.tick {L G : Type} (p : Placement L G) (v : G) : ℕ := p.ticks (p.leaf v) (p.step v)
 
 /-- Each device of `X` begins its engine steps at strictly increasing ticks. -/
@@ -73,4 +73,4 @@ structure Store where
 def Store.resident (σ : Store) (s : ℕ) : Finset ℕ :=
   (Finset.range σ.registered ∪ (Finset.range s).biUnion σ.written) \ (Finset.range s).biUnion σ.freed
 
-end Accounting.Requirement
+end ResourceAccounting.Requirement

@@ -80,7 +80,7 @@ theorem pooled_of_event [Fintype Tp] [Nonempty Tp] {H : Msg → Msg} {D : Msg �
   refine le_trans (Claims.Pr_mono fun ω hω => ?_) h
   exact ⟨fun i => (hω.1 i).1, fun hg => hω.2 (And.intro hg.1 fun i => hg.2 i (hω.1 i).2)⟩
 
-/-- **The leak through the network certifier over a monitoring period, at the trace with the registered openings**:
+/-- **The leak through the network attester over a monitoring period, at the trace with the registered openings**:
 `Guarantees.PooledLeakRegistered`. Each phase's event is bounded by the square-root form
 (`Compiled.ksRegR_of_sessionKS`), the sessions' bound from the proof system's knowledge soundness; the registered
 openings give that they pass under each statement's roots and that every registered input has one (`RegOpens`); and a

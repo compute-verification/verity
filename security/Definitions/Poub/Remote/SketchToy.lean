@@ -6,7 +6,7 @@ public import Definitions.Poub.Remote.Sketch
 /-!
 # The receipts' sketch: toy instances
 
-The session and the traces at which `Accounting.Guarantees.Remote.SketchBoundDeployed`'s witnesses are stated.
+The session and the traces at which `ResourceAccounting.Guarantees.Remote.SketchBoundDeployed`'s witnesses are stated.
 
 * `honest`: one pass of one candidate over a store of one 4096-byte block, at the deployed receipts (`m = 128`,
   `h = 512`, 64 sign rows). Its device holds the block's 128 sectors on chip (`S = 2^15` bits) and tags the block with
@@ -19,9 +19,9 @@ The session and the traces at which `Accounting.Guarantees.Remote.SketchBoundDep
 
 @[expose] public section
 
-namespace Accounting.Remote.Sketch.Toy
+namespace ResourceAccounting.Remote.Sketch.Toy
 
-open Finset Accounting.RateSketch Accounting.Remote.Held
+open Finset ResourceAccounting.RateSketch ResourceAccounting.Remote.Held
 
 /-- One candidate seed a pass. -/
 abbrev G₁ : Fin 1 → ℕ := fun _ => 1
@@ -73,4 +73,4 @@ def acceptAll : Trace Unit where
   disk _ _ := 0
   link _ _ := 0
 
-end Accounting.Remote.Sketch.Toy
+end ResourceAccounting.Remote.Sketch.Toy

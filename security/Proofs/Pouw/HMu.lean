@@ -3,7 +3,7 @@ module
 public import Proofs.Pouw.HMu.Luck
 public import Proofs.Pouw.HMu.Persist
 public import Proofs.Pouw.HMu.Gaps
-public import Proofs.Accounting.Lemmas.HMu
+public import Proofs.ResourceAccounting.Lemmas.HMu
 
 /-!
 # (H-μ⁺)'s guarantees
@@ -19,13 +19,13 @@ Each statement of `Definitions/Pouw/Guarantees/HMu.lean`, proved:
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.HMu
+namespace ResourceAccounting.SecurityProofs.HMu
 
-theorem LemmaB : Accounting.Guarantees.HMu.LemmaB := Accounting.HMuProofs.lemmaB
-theorem CoinPointMass : Accounting.Guarantees.HMu.CoinPointMass := Accounting.HMuProofs.coinPointMass
-theorem CoinPointMassHalf : Accounting.Guarantees.HMu.CoinPointMassHalf := Accounting.HMuProofs.coinPointMassHalf
-theorem ReceiptLuckOfCoins : Accounting.Guarantees.HMu.ReceiptLuckOfCoins := Accounting.HMuProofs.receiptLuckOfCoins
-theorem ReceiptLuckOfCoin : Accounting.Guarantees.HMu.ReceiptLuckOfCoin := Accounting.HMuProofs.receiptLuckOfCoin
-theorem PersistentOneWord : Accounting.Guarantees.HMu.PersistentOneWord := Accounting.HMuProofs.persistentOneWord
+theorem LemmaB : ResourceAccounting.Guarantees.HMu.LemmaB := ResourceAccounting.HMuProofs.lemmaB
+theorem CoinPointMass : ResourceAccounting.Guarantees.HMu.CoinPointMass := ResourceAccounting.HMuProofs.coinPointMass
+theorem CoinPointMassHalf : ResourceAccounting.Guarantees.HMu.CoinPointMassHalf := ResourceAccounting.HMuProofs.coinPointMassHalf
+theorem ReceiptLuckOfCoins : ResourceAccounting.Guarantees.HMu.ReceiptLuckOfCoins := ResourceAccounting.HMuProofs.receiptLuckOfCoins
+theorem ReceiptLuckOfCoin : ResourceAccounting.Guarantees.HMu.ReceiptLuckOfCoin := ResourceAccounting.HMuProofs.receiptLuckOfCoin
+theorem PersistentOneWord : ResourceAccounting.Guarantees.HMu.PersistentOneWord := ResourceAccounting.HMuProofs.persistentOneWord
 
-end Accounting.SecurityProofs.HMu
+end ResourceAccounting.SecurityProofs.HMu

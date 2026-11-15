@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pouw.TS.Fork
-public import Proofs.Accounting.Lemmas.TS
+public import Proofs.ResourceAccounting.Lemmas.TS
 
 /-!
 # (I8) for a sampled window
@@ -29,9 +29,9 @@ with every continuation that opens the position, except those opening `v₁` alo
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- A continuation's continuation from the same coin is a continuation of the first path. -/
 theorem spliceAt_left {C B : Type} {m : ℕ} : ∀ {n : ℕ} (w k : ℕ) (x z z' : Paths (Paths C m × B) n),
@@ -212,7 +212,7 @@ end Plurality
 namespace SampledLayer
 
 variable {C B : Type} [Fintype C] [Fintype B] {S m s : ℕ} {J Q Pos V : Type} [Nonempty V]
-  (pf : Accounting.TS.SampledLayer C B S m s J Q Pos V)
+  (pf : ResourceAccounting.TS.SampledLayer C B S m s J Q Pos V)
 
 /-- Binding's failure at one position, squared, is at most its fork form's at the position's cut. -/
 theorem moved_le_forked (ℓ : Pos) :
@@ -267,12 +267,12 @@ theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S
         refine Finset.sum_congr rfl fun u _ => ?_
         by_cases hb : mode x u = .paid
         · simp [hb]
-        · simp [hb, Accounting.TS.SampledLayer.coneWt]
+        · simp [hb, ResourceAccounting.TS.SampledLayer.coneWt]
 
 end SampledLayer
 
 /-- A sampled window's sampled proof blocks are right at their committed values, outside binding and joint soundness failures. -/
-theorem SampledRightOff : Accounting.Guarantees.TS.SampledRightOff := by
+theorem SampledRightOff : ResourceAccounting.Guarantees.TS.SampledRightOff := by
   intro J Q Pos V _ C B _ _ S m s pf δbind δks hB hZ hPin
   refine ⟨fun x => ∃ w ∈ (Finset.univ : Finset (Fin S)), pf.MovedIn x w ∨ ∃ i, pf.Unsound x w i, ?_, ?_⟩
   · calc prob _ ≤ ∑ w : Fin S, prob (fun x => pf.MovedIn x w ∨ ∃ i, pf.Unsound x w i) := prob_exists_le _ _
@@ -290,7 +290,7 @@ theorem SampledRightOff : Accounting.Guarantees.TS.SampledRightOff := by
 
 open Classical in
 /-- (I8) for a sampled window, from `SampledRightOff`'s pieces, the share's cover and E1(c) per unit. -/
-theorem ProofsSoundOfSampled : Accounting.Guarantees.TS.ProofsSoundOfSampled := by
+theorem ProofsSoundOfSampled : ResourceAccounting.Guarantees.TS.ProofsSoundOfSampled := by
   intro K T L U J Q Pos V _ _ _ _ _ _ C B _ _ S m s P pf mode wt folded Nw δbind δks hS hsum hWR hOf hB hZ hPin hCov
     hUF
   obtain ⟨E, hE, hoff⟩ := SampledRightOff C B S m s pf δbind δks hB hZ hPin
@@ -311,7 +311,7 @@ theorem ProofsSoundOfSampled : Accounting.Guarantees.TS.ProofsSoundOfSampled := 
 
 /-- Binding at every position's cut from the fork form: per position (`SampledLayer.moved_le_forked`), then the union
 over `L` and Cauchy–Schwarz. -/
-theorem SampledBindingOfFork : Accounting.Guarantees.TS.SampledBindingOfFork := by
+theorem SampledBindingOfFork : ResourceAccounting.Guarantees.TS.SampledBindingOfFork := by
   intro J Q Pos V _ C B _ _ S m s pf w L hL
   set F := prob (fun p : Paths (Paths C m × B) S × Paths (Paths C m × B) S => ∃ ℓ ∈ L, pf.Forked ℓ p.1 p.2) with hF
   have hm : ∀ ℓ ∈ L, prob (fun x => pf.Moved x ℓ) ^ 2 ≤ F := fun ℓ hℓ =>
@@ -331,4 +331,4 @@ theorem SampledBindingOfFork : Accounting.Guarantees.TS.SampledBindingOfFork := 
     _ ≤ L.card * (L.card * F) := mul_le_mul_of_nonneg_left h3 (by positivity)
     _ = (L.card : ℝ) ^ 2 * F := by ring
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

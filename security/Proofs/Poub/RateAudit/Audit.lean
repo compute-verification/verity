@@ -29,7 +29,7 @@ needs sources that ignore the oracle (`RelayDevice.audit`), and `Relay.lean` bou
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -281,11 +281,11 @@ theorem card_compress_le (A : RelayDevice N b h ρ S L q) (O : Oracle N b h ρ) 
             = q.choose k * (2 ^ S * 2 ^ r * 2 ^ lam) * (2 ^ b) ^ (N - k) := by ring
           _ = q.choose k * (2 ^ (k * b) * (2 ^ b) ^ (N - k) * 2 ^ ρ) := by rw [e1]; ring
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono pr_or_le pr_exists_le
@@ -293,7 +293,7 @@ open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono p
 open Bandwidth.AuditRO (card_sample)
 
 /-- `RateAudit`'s bound for a relay device whose side sources ignore the oracle. -/
-theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
+theorem _root_.ResourceAccounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
     (hA : ∀ E R O O', A.side E R O = A.side E R O') (s k F cTag cEnc lam : ℕ) :
     pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
@@ -369,10 +369,10 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
     push_cast
     rfl
 
-/-- **The rate audit in the random-oracle model** (`Accounting.Guarantees.RateAudit`). -/
-theorem RateAudit : Accounting.Guarantees.RateAudit :=
+/-- **The rate audit in the random-oracle model** (`ResourceAccounting.Guarantees.RateAudit`). -/
+theorem RateAudit : ResourceAccounting.Guarantees.RateAudit :=
   fun _ _ _ _ _ _ _ s k F cTag cEnc lam A => by
     rw [Bandwidth.pr_coins_flat]
     exact A.toRelay.audit (fun _ _ _ _ => rfl) s k F cTag cEnc lam
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

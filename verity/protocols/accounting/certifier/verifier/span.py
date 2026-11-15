@@ -49,7 +49,7 @@ from verity.protocols.accounting.certifier.verifier import registered as R
 from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import (DIGEST_BYTES, SALT_BYTES, Certificate, CertifiedMark,
                                                             Direction, LmsKey)
-from verity.protocols.accounting.certifier.verifier.network_certifier import INTEGER_FIELDS, NetworkCertifierParams as Schedule
+from verity.protocols.accounting.certifier.verifier.network_certifier import INTEGER_FIELDS, NetworkAttesterParams as Schedule
 
 ID = domains.CERTIFIER_SPAN_PROTOCOL
 COMMITMENT_TAG = domains.CERTIFIER_SPAN

@@ -19,13 +19,13 @@ namespace NetworkCheck.Period
 open Lean (Json toJson)
 
 /-- A schedule whose cells hold an id request's head and first prompt id, without lengths rows
-(`NetworkCertifierParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+(`NetworkAttesterParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
 ingress_buckets=3, egress_cells=9, every=2)`). -/
 def plainSchedule : Schedule :=
   { bucketMs := 100, cellBytes := 512, delay := 5, egressCells := 9, every := 2, ingressBuckets := 3,
     ingressCells := 4, lanes := 2, queue := 2, slots := 2, window := 16 }
 
--- `NetworkCertifierParams.digest` of `plainSchedule`, with lengths rows of form 1 and of form 2, with form 1's classes
+-- `NetworkAttesterParams.digest` of `plainSchedule`, with lengths rows of form 1 and of form 2, with form 1's classes
 -- (2, 2, 1) and (4, 8, 16), with form 2's classes (2, 2) and (4, 8), with those under `max_tokens_cap` 4, and with
 -- request words beside them: the lengths rows' form, the content rows' classes and the request words are in the
 -- digest only of a schedule that sets them
@@ -58,7 +58,7 @@ def plainSchedule : Schedule :=
 -- a slot stride's releases at `plainSchedule` and at its strides of 1, 4, 8 and 16 buckets, at a stride of 16 with
 -- one ingress bucket, and at 5 lanes, a stride of 8 and 5 ingress buckets; an execution phase's releases at
 -- `plainSchedule`, with one ingress bucket, at a delay of 12, and at 5 lanes and 5 ingress buckets; and a
--- connection's span, at a delay of 5 and of 12 (`NetworkCertifierParams.stride_releases`, `phase_releases` and `span`)
+-- connection's span, at a delay of 5 and of 12 (`NetworkAttesterParams.stride_releases`, `phase_releases` and `span`)
 #guard
   let s := plainSchedule
   s.strideReleases == 2 && ({ s with every := 1 } : Schedule).strideReleases == 2 &&

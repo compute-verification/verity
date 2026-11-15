@@ -42,9 +42,9 @@ One statement per family and reading: the family's credited work is at least `1 
 headline, on one device's machine, one design's TS model on it and its floor program ♭, all exact data
 (`Definitions.Pouw.Headline`). Each is `Definitions.Registration.Guarantees.Sheet`'s `SheetDIdealFloor` at that data
 with fold skippers charged (below), its parameters fixed (`π*`, `p`, `p₀`, `S`, `δ`), with every hypothesis that the
-data discharge gone and the rest left as they are: the named assumptions of `Definitions.Accounting.Assumptions` and the
+data discharge gone and the rest left as they are: the named assumptions of `Definitions.ResourceAccounting.Assumptions` and the
 proof layer's pieces. A measured reading is `Definitions.Pouw.Guarantees.TS`'s `DIdealFloor` at its data the same
-way, its machine the measured vector's rows. Each is proved as `Accounting.SecurityProofs.TS.G` in
+way, its machine the measured vector's rows. Each is proved as `ResourceAccounting.SecurityProofs.TS.G` in
 `Proofs.Pouw.Headline`.
 
 Each bound is per node: an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least `1 − ε`
@@ -174,9 +174,9 @@ route on the FMA pipe.
 
 @[expose] public section
 
-namespace Accounting.Guarantees.TS
+namespace ResourceAccounting.Guarantees.TS
 
-open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.TS.Headline ResourceAccounting.Assumptions.TS Pouw.RelativeSecurity
 
 /-- **sm_120's headline at the data sheet**, under full checking with live coins. On DS-120's machine (`Sm120.sheet`),
 H1 + fx1's TS model (`Sm120.model`, `q = q_T = ½`, `N_w = 128`) and its floor program (`Sm120.flat`), at its certificate
@@ -287,4 +287,4 @@ def Sm120MeasuredHeadline : Prop :=
     prob (fun x => Pl.accepts x ∧
       (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 591 / 100000) ≤ (1 / 2) ^ 40
 
-end Accounting.Guarantees.TS
+end ResourceAccounting.Guarantees.TS

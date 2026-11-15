@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pouw.TS.Stages
-public import Proofs.Accounting.Lemmas.TS.Steer
+public import Proofs.ResourceAccounting.Lemmas.TS.Steer
 
 /-!
 # Steering under one σ: proofs
@@ -20,9 +20,9 @@ and since its target doesn't read its own seed, `SteerUnion` with one configurat
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS ResourceAccounting.Guarantees.TS Pouw.RelativeSecurity
 
 namespace Steer
 
@@ -338,4 +338,4 @@ theorem GrindUnion : Guarantees.TS.GrindUnion := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
         ring
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

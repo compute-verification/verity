@@ -38,21 +38,21 @@ import Mathlib.Topology.Sheaves.Init
 # A monitoring period of sampled audits with checked inputs: the run the check is held to, and the leak relation there
 
 Definitions only. `Definitions.Certifier.MonitoringPeriod`'s leak relation with each statement's checked inputs left out
-of the count (`Definitions.Certifier.Checked`): the leak relation at the network certifier's rows, with a valid
+of the count (`Definitions.Certifier.Checked`): the leak relation at the network attester's rows, with a valid
 run. The window's good event with it (`ExecutionPhaseGoodChecked`) is stated with the guarantee
 (`Definitions.Certifier.Guarantees.MonitoringPeriodChecked`), since it reads a named premise.
 
-**The run.** The relation at the network certifier's rows accepts the network certifier's records on the run that
+**The run.** The relation at the network attester's rows accepts the network attester's records on the run that
 reads the trace's inputs, takes its ingress from the operator's moves on those records, and holds an incorrect proof
-block's committed gates at the trace filled in with the network certifier's values (`fillTrace`): the trace need open
-no transfer gate inside an incorrect proof block, and the network certifier's opening there is what its record shows.
+block's committed gates at the trace filled in with the network attester's values (`fillTrace`): the trace need open
+no transfer gate inside an incorrect proof block, and the network attester's opening there is what its record shows.
 That run is `certifierRun`, and the check is held to it (`CheckedWitness` at `certifierRun`). It is not the trace's
 run (`traceRun`), which holds those gates at the trace's own values, `false` where the trace opens nothing: a check
 that reads a transfer gate inside an incorrect proof block can hold on one and fail on the other.
 
-* `certifierRun`: the run at the network certifier's rows at a witness, where the network certifier registers records
+* `certifierRun`: the run at the network attester's rows at a witness, where the network attester registers records
   and the trace agrees with its openings wherever both open a gate. Elsewhere there is none: the relation at the
-  network certifier's rows asks nothing where it registers no record, and a disagreement is a collision (`Btap`).
+  network attester's rows asks nothing where it registers no record, and a disagreement is a collision (`Btap`).
 * `RLeakCertifierChecked`: `RLeakCertifier` with the sequences `AccSeqsChecked` counts.
 -/
 
@@ -62,12 +62,12 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
-/-- **The run at the network certifier's rows** at the witness `w`: where the trace agrees with the network
-certifier's openings `tops s` wherever both open a gate, and the network certifier registers records `o` at an operator
+/-- **The run at the network attester's rows** at the witness `w`: where the trace agrees with the network
+attester's openings `tops s` wherever both open a gate, and the network attester registers records `o` at an operator
 `op` (`CertifierRegisters`), `C` over the horizon on the trace's inputs, the ingress the operator's moves on `o` give,
-and the incorrect proof blocks' committed gates held at the trace filled in with the network certifier's values
+and the incorrect proof blocks' committed gates held at the trace filled in with the network attester's values
 (`heldAdv` of `fillTrace`). The registration fixes the operator's moves at the ingress its openings hold, so this is
-one run, or none where the network certifier registers nothing or the trace disagrees with it. It is the run
+one run, or none where the network attester registers nothing or the trace disagrees with it. It is the run
 `RLeakCertifierChecked` accepts at. -/
 def certifierRun (H : Msg → Msg) (Cm : CommitmentScheme Bool) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (tops : AuditStatement → List (Opening Bool)) (s : AuditStatement) (Pt : Partition)
@@ -79,7 +79,7 @@ def certifierRun (H : Msg → Msg) (Cm : CommitmentScheme Bool) (L K S : ℕ) (l
           ((lay s).inputOf (k s) ((List.range (k s)).map fun i => op i (o.take i)) (traceVal s.prog (w.val H Cm s)))
           (heldAdv s.prog Pt (faulty H Cm s Pt w) (fillTrace (w.val H Cm s) (certifierVal (tops s))))}
 
-/-- **The leak relation at the network certifier's rows with a valid run** at `δ`: `RLeakCertifier`, with the sequences
+/-- **The leak relation at the network attester's rows with a valid run** at `δ`: `RLeakCertifier`, with the sequences
 `AccSeqsChecked` counts at each statement's check `valid s`. -/
 def RLeakCertifierChecked (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
     (partition : AuditStatement → Option Partition) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)

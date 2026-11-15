@@ -47,7 +47,7 @@ census, `K` served MACs a dot).  The closure is empty: no unit's soundness rests
 verifier's and every absorbed word is recomputed in the unit's own proof (ncp-v2's digest, node and key units, and their
 closures, do not arise).
 
-**The conjecture.** Correct checked values become work through the TS model (`Accounting.Guarantees.TS.*`, the EPS1
+**The conjecture.** Correct checked values become work through the TS model (`ResourceAccounting.Guarantees.TS.*`, the EPS1
 designs' conjecture; `CompilerC` for H1's receipt).  Its link to `Pouw.Guarantees.EndToEnd` is open (`LINK_OPEN`).  This module states the scheme's
 circuit; it asserts no guarantee.
 
@@ -84,7 +84,7 @@ RECEIPT_TAG = domains.POUW_RECEIPT.encode()
 #: the fold H1's receipt uses and its receipt layout (`segment.PouwCallCheck`): fx1, the eight chain words a thread
 FOLD, OUT = "fx1", "chains"
 #: the per-dot work the TS conjecture credits is open until a theorem links TS to EndToEnd
-LINK_OPEN = "Accounting.Guarantees.TS.* -> Pouw.Guarantees.EndToEnd"
+LINK_OPEN = "ResourceAccounting.Guarantees.TS.* -> Pouw.Guarantees.EndToEnd"
 
 M32 = SG.M32
 

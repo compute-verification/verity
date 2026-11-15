@@ -444,7 +444,7 @@ def evaluate(expr: str) -> Fraction:
 
 
 def test_the_b200_sheet_agrees_with_its_card_file() -> None:
-    """``Accounting.TS.Sheets.B200`` states the B200 card's clock, SMs and pipe widths, and each format's peak as
+    """``ResourceAccounting.TS.Sheets.B200`` states the B200 card's clock, SMs and pipe widths, and each format's peak as
     ``rate.tensor`` over that format's weight. The sheet's implied and FP64 clocks, its FP6 peak and its uniform pipe
     have no key in the card file."""
     card = load_card("b200-sxm-180gb")

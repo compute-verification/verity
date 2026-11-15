@@ -40,7 +40,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 A sampled leaf too big for one Flock block is proved as a group of one-unit statements: `L` lanes, each in `n` chunks
 along `K`, and one combine, `G = L n + 1` sessions (`Ix L n`: `some (l, c)` lane `l`'s chunk `c`, `none` the combine).
-The 32 × 32 leaf's option-A group (`Accounting.TS.Lanes.leafLayer`) is `L = 32`, `n = 1`, indexed by `Option (Fin 32)`.
+The 32 × 32 leaf's option-A group (`ResourceAccounting.TS.Lanes.leafLayer`) is `L = 32`, `n = 1`, indexed by `Option (Fin 32)`.
 
 * `SessionChecks`: what the leaf verifier asks of each of the group's sessions, `leafLayer`'s acceptance at one
   statement: verity-verify-proof `--zk --registered` accepts it, with its known-content check (`Registered.checkKnownAll`), its
@@ -56,14 +56,14 @@ The 32 × 32 leaf's option-A group (`Accounting.TS.Lanes.leafLayer`) is `L = 32`
 
 The leaf's relation `rel` and the value `opened` are parameters: which leaf the committed rows decode to and what its
 served checks are depends on the shape's Definitions, which the group's premise
-(`Accounting.Assumptions.TS.GroupRealizes`) reads.
+(`ResourceAccounting.Assumptions.TS.GroupRealizes`) reads.
 -/
 
 @[expose] public section
 
-namespace Accounting.TS.Group
+namespace ResourceAccounting.TS.Group
 
-open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
+open ResourceAccounting.TS ResourceAccounting.TS.Checked ResourceAccounting.TS.Lanes Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
 open Pouw.RelativeSecurity (Paths)
 
 /-- **A leaf's group of statements**: lane `l`'s chunk `c` (`some (l, c)`) for `L` lanes of `n` chunks, then the
@@ -119,4 +119,4 @@ noncomputable def groupLayer {Ω : Type} {S nπ : ℕ} {V : Type} (T : PouwWindo
     LeafKnownColl (sess x w i) fun k => okKnown (known x w i k) (okSalt x w i k)
   right := right
 
-end Accounting.TS.Group
+end ResourceAccounting.TS.Group

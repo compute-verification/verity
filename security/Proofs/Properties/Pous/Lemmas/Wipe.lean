@@ -14,7 +14,7 @@ under the properties' namespace, proved by the `SecurityProofs` theorem of its n
 with the proofs: no record pins it.
 
 * `WipeSurvivorBoundHonest`: an honest session's parameters of 1 to `MAX_READS` reads with no egress are certified
-  by `certify` at its pair, which the check that composes the wipe with the network certifier is to publish
+  by `certify` at its pair, which the check that composes the wipe with the network attester is to publish
   (`verity/wipe/v0` itself publishes `uncounted` and certifies no session), and the honest strategy (`honest`: the labels written into the store, each read answered from
   it) meets the observed event on every run, with its fill the `n · 512` bits of the labels and its egress in a set of
   `2^0` strings.
@@ -35,12 +35,12 @@ count), with no egress, are certified by `certify` at `eps = 2^-128` and `foreig
 `r = ratio k`, with their reads, `memory_bits` and ratio. The honest strategy on any device whose store holds the fill
 has its fill the labels' `n · 512` bits, its egress in a set of `2^0` strings, and meets the observed event on every run
 at the count of no egress. `check` publishes `certify` only at `EGRESS_MAX_UNITS` (`uncounted`), so its hypothesis on
-`check` holds of no session until the check that composes the wipe with the network certifier. -/
+`check` holds of no session until the check that composes the wipe with the network attester. -/
 def WipeSurvivorBoundHonest : Prop :=
   (∀ (q : StreamedWipe.Params) [NeZero q.k], q.k ≤ WipeProtocol.MAX_READS →
       WipeProtocol.certify q 0 = ⟨true, 0, WipeProtocol.EPS, WipeProtocol.foreignBits q (WipeProtocol.ratio q.k), q.k,
         WipeProtocol.memoryBits q, WipeProtocol.ratio q.k⟩) ∧
-    ∀ {ι : Type} (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (n k : ℕ)
+    ∀ {ι : Type} (d : ResourceAccounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (n k : ℕ)
       (h : n * 512 ≤ d.mem) (carry : Device.State d → s.Carried b),
       (honest d s b n k h carry).fill = n * 512 ∧
         (Finset.univ : Finset (Fin (honest d s b n k h carry).egress → Bool)).card ≤ 2 ^ 0 ∧
@@ -53,7 +53,7 @@ segment, the cheating strategy, with every PRF, every egress string in `A` and a
 PRF advantage and a `δ_net` that are 0. -/
 def WipeSurvivorBoundNontrivial : Prop :=
   ∀ {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (carry : Device.State segmentDevice → s.Carried b) {κ : ℕ}
-    (prf : Pous.Bits κ → Accounting.Wipe.Labels (2 ^ 19)),
+    (prf : Pous.Bits κ → ResourceAccounting.Wipe.Labels (2 ^ 19)),
     ¬ ((cheat segmentDevice s b (2 ^ 19) 2152 carry).wipe (fun _ _ _ => True) prf).SurvivorBound
         (WipeProtocol.certify segmentParams 0).foreignBits fun _ hold keep =>
           ((WipeProtocol.certify segmentParams 0).eps.num : ℝ≥0∞) / (WipeProtocol.certify segmentParams 0).eps.den +

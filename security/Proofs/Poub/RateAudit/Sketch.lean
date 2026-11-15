@@ -24,7 +24,7 @@ obtained puts the footprint at the floor (`floor_le_of_complete`).
 
 @[expose] public section
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -362,19 +362,19 @@ theorem floor_le_of_complete (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig �
     ring
   omega
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.RateSketch
+open ResourceAccounting.RateSketch
 open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono pr_or_le pr_exists_le
   pr_eq_zero_of_card)
 open Bandwidth.AuditRO (card_sample)
 
-/-- **The rate audit with a sketch-then-hash tag** (`Accounting.Guarantees.RateAuditSketch`). -/
-theorem RateAuditSketch : Accounting.Guarantees.RateAuditSketch := by
+/-- **The rate audit with a sketch-then-hash tag** (`ResourceAccounting.Guarantees.RateAuditSketch`). -/
+theorem RateAuditSketch : ResourceAccounting.Guarantees.RateAuditSketch := by
   classical
   intro N m ρ h S L q w s k F cTag cEnc g X Sig Dg _ _ _ _ _ dig A
   rw [Bandwidth.pr_coins_flat]
@@ -501,23 +501,23 @@ theorem abs_int8_le (a : Fin 256) : |int8 a| ≤ 128 := by
   split_ifs <;> rw [abs_le] <;> constructor <;> omega
 
 /-- One coordinate of a sector's projection is at most `32·128` in absolute value. -/
-theorem abs_project_le {k : ℕ} (T : Accounting.Tag.Signs k 32) (a : Sector) (i : Fin k) :
-    |Accounting.Tag.project T (fun l => int8 (a l)) i| ≤ 4096 := by
-  unfold Accounting.Tag.project
-  calc |∑ j, Accounting.Tag.sgn (T i j) * int8 (a j)| ≤ ∑ j, |Accounting.Tag.sgn (T i j) * int8 (a j)| :=
+theorem abs_project_le {k : ℕ} (T : ResourceAccounting.Tag.Signs k 32) (a : Sector) (i : Fin k) :
+    |ResourceAccounting.Tag.project T (fun l => int8 (a l)) i| ≤ 4096 := by
+  unfold ResourceAccounting.Tag.project
+  calc |∑ j, ResourceAccounting.Tag.sgn (T i j) * int8 (a j)| ≤ ∑ j, |ResourceAccounting.Tag.sgn (T i j) * int8 (a j)| :=
         Finset.abs_sum_le_sum_abs _ _
     _ ≤ ∑ _j : Fin 32, (128 : ℤ) := Finset.sum_le_sum fun j _ => by
         rw [abs_mul]
-        have hs : |Accounting.Tag.sgn (T i j)| = 1 := by
-          unfold Accounting.Tag.sgn
+        have hs : |ResourceAccounting.Tag.sgn (T i j)| = 1 := by
+          unfold ResourceAccounting.Tag.sgn
           split_ifs <;> simp
         rw [hs, one_mul]
         exact abs_int8_le _
     _ = 4096 := by simp
 
 set_option linter.constructorNameAsVariable false in
-/-- **Binding signs make the tensor-core sketch's fiber `1`** (`Accounting.Guarantees.SketchBinds`). -/
-theorem SketchBinds : Accounting.Guarantees.SketchBinds := by
+/-- **Binding signs make the tensor-core sketch's fiber `1`** (`ResourceAccounting.Guarantees.SketchBinds`). -/
+theorem SketchBinds : ResourceAccounting.Guarantees.SketchBinds := by
   intro k m σ hσ
   unfold fib
   refine max_le le_rfl (Finset.sup_le fun p _ => ?_)
@@ -530,8 +530,8 @@ theorem SketchBinds : Accounting.Guarantees.SketchBinds := by
   have := congrFun (ha.trans hb.symm) i
   simp only [sketch] at this
   have hrest : ∀ c : Sector,
-      ∑ u' ∈ Finset.univ.erase u, Accounting.Tag.project (σ.block u') (fun l => int8 (Function.update x u c u' l)) i =
-        ∑ u' ∈ Finset.univ.erase u, Accounting.Tag.project (σ.block u') (fun l => int8 (x u' l)) i := fun c =>
+      ∑ u' ∈ Finset.univ.erase u, ResourceAccounting.Tag.project (σ.block u') (fun l => int8 (Function.update x u c u' l)) i =
+        ∑ u' ∈ Finset.univ.erase u, ResourceAccounting.Tag.project (σ.block u') (fun l => int8 (x u' l)) i := fun c =>
     Finset.sum_congr rfl (fun u' hu' => by rw [Function.update_of_ne (Finset.ne_of_mem_erase hu')])
   rw [← Finset.add_sum_erase _ _ (Finset.mem_univ u), ← Finset.add_sum_erase _ _ (Finset.mem_univ u), hrest,
     hrest, Function.update_self, Function.update_self] at this
@@ -540,15 +540,15 @@ theorem SketchBinds : Accounting.Guarantees.SketchBinds := by
   rw [ZMod.intCast_eq_intCast_iff_dvd_sub] at h2
   have ha' := abs_project_le (σ.block u) a i
   have hb' := abs_project_le (σ.block u) b i
-  have hlt : |Accounting.Tag.project (σ.block u) (fun l => int8 (b l)) i -
-      Accounting.Tag.project (σ.block u) (fun l => int8 (a l)) i| < ((2 ^ 32 : ℕ) : ℤ) := by
+  have hlt : |ResourceAccounting.Tag.project (σ.block u) (fun l => int8 (b l)) i -
+      ResourceAccounting.Tag.project (σ.block u) (fun l => int8 (a l)) i| < ((2 ^ 32 : ℕ) : ℤ) := by
     rw [abs_lt]
     rw [abs_le] at ha' hb'
     constructor <;> push_cast <;> linarith [ha'.1, ha'.2, hb'.1, hb'.2]
   exact (sub_eq_zero.1 (Int.eq_zero_of_abs_lt_dvd h2 hlt)).symm
 
-/-- **The rate audit at the deployed sketch-then-hash tag** (`Accounting.Guarantees.RateAuditTensorSketch`). -/
-theorem RateAuditTensorSketch : Accounting.Guarantees.RateAuditTensorSketch := by
+/-- **The rate audit at the deployed sketch-then-hash tag** (`ResourceAccounting.Guarantees.RateAuditTensorSketch`). -/
+theorem RateAuditTensorSketch : ResourceAccounting.Guarantees.RateAuditTensorSketch := by
   intro N m ρ h S L q s k F cTag cEnc ks A
   refine (RateAuditSketch N m ρ h S L q 256 s k F cTag cEnc 1 Sector (SketchSigns ks m)
     (Fin ks → ZMod (2 ^ 32)) sketch A).trans ?_
@@ -558,4 +558,4 @@ theorem RateAuditTensorSketch : Accounting.Guarantees.RateAuditTensorSketch := b
   rw [this]
   norm_num
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

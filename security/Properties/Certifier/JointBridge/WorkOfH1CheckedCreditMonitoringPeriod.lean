@@ -37,10 +37,10 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The joint period's PoUW guarantee from H1's checked credit over the torch loop
 
-Each audit's per-period guarantee in the coins model is `Accounting.PeriodRun.Sound`, which the one theorem's targets
-couple into the causal game (`Accounting.PeriodLive`). `WorkOfH1CheckedCreditMonitoringPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
-for a period whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords` at the play's acceptance
-and the check's credit over the accepted prefix, `m = Accounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word,
+Each audit's per-period guarantee in the coins model is `ResourceAccounting.PeriodRun.Sound`, which the one theorem's targets
+couple into the causal game (`ResourceAccounting.PeriodLive`). `WorkOfH1CheckedCreditMonitoringPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
+for a period whose PoUW audit credits H1's checked words (`ResourceAccounting.RealizesCreditedWords` at the play's acceptance
+and the check's credit over the accepted prefix, `m = ResourceAccounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word,
 `u` a unit and `b_unit` bits a unit), from `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod` and its premises, with its
 error `δ_s + n·(δ_bind + δ_ks)`. It is `Properties.Certifier.JointBridge.WorkOfCreditedWords` at H1's instance.
 `WorkOfH1CheckedCreditMonitoringPeriod` is it at every price, word and unit count and unit width. Its instance at the H200's INT8
@@ -53,8 +53,8 @@ registered circuit, the number of windows, the check's parameters, the salt's en
 and the errors are the protocol's and are fixed. The premises are the source's, unchanged; the gaps it names
 (`RegisteredBeforeDraw` and the binding it reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here.
 The bridge adds two: each right word of a unit the device didn't outsource cost `m` multiply-adds of
-priced work on it (`Accounting.Assumptions.WordCostsMacs`, at `n` times the run's fixed words), and it outsourced at
-most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
+priced work on it (`ResourceAccounting.Assumptions.WordCostsMacs`, at `n` times the run's fixed words), and it outsourced at
+most `K / b_unit` units (`ResourceAccounting.Assumptions.HelpWithinCertifier`).
 -/
 
 @[expose] public section
@@ -62,22 +62,22 @@ most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
 namespace Properties.Certifier.JointBridge
 
 open Properties.Pouw.MonitoringPeriod PouwCheck
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **PoUW's per-period guarantee in the joint period, from H1's checked credit on the torch loop, at price `p`,
 `macs k` multiply-adds a word of kind `k`, `u` a unit and `b_unit` bits a unit.** On any device and any period of a
-node's run on one coin space whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords`: PoUW's
+node's run on one coin space whose PoUW audit credits H1's checked words (`ResourceAccounting.RealizesCreditedWords`: PoUW's
 coordinate of the coins is the source game's, its verdict the play's acceptance, and the work certificate within the
 check's credit at `m = minWordMacs Sc Cd macs` multiply-adds a word, less the `K / b_unit` units the network
-certifier's bits can carry at `u` multiply-adds each, all at `p .tc`), each right word of a unit the device didn't
+attester's bits can carry at `u` multiply-adds each, all at `p .tc`), each right word of a unit the device didn't
 outsource costing `m` multiply-adds of priced work (`WordCostsMacs` at `n` times the run's fixed words and `help`
 outsourced units), at most `K / b_unit` units outsourced (`HelpWithinCertifier`), and the source's instance at each
 value `ξ` of the coins meeting `H1CheckedCreditMonitoringPeriod`'s premises: PoUW's per-period guarantee holds at certificates
 `c`, price `p` and error `δ_s + n·(δ_bind + δ_ks)`, i.e. at any value of the other coins, the probability over PoUW's
 own coins that it accepts while the compute account did less than `W` of work at `p` is at most that. -/
-def WorkOfH1CheckedCreditMonitoringPeriodAt (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (u bUnit : ℕ) : Prop :=
+def WorkOfH1CheckedCreditMonitoringPeriodAt (p : ResourceAccounting.Price) (macs : ResourceAccounting.Compose.Kind → ℕ) (u bUnit : ℕ) : Prop :=
   ∀ (ι α I : Type) [Fintype α] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
-    (d : Accounting.Device ι) (C : Verity.Circuit) (r : Accounting.PeriodRun d α C Ω) (c : Accounting.Certificates)
+    (d : ResourceAccounting.Device ι) (C : Verity.Circuit) (r : ResourceAccounting.PeriodRun d α C Ω) (c : ResourceAccounting.Certificates)
     {ι' K T L U Cn Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype Cn] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι') {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ 144)
     (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (hK : 24 ≤ 144) (prm : Params) (enc : Cn → ByteArray)
@@ -90,13 +90,13 @@ def WorkOfH1CheckedCreditMonitoringPeriodAt (p : Accounting.Price) (macs : Accou
     (Pl : ((i : I) → Ω i) → Play (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n K T L U)
     (folded : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)
     (help : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)
-    (real : Accounting.RealizesCreditedWords r c p (Accounting.Compose.minWordMacs Sc Cd macs) u bUnit
+    (real : ResourceAccounting.RealizesCreditedWords r c p (ResourceAccounting.Compose.minWordMacs Sc Cd macs) u bUnit
       (Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n) (fun ξ => (Pl ξ).accepts)
       (fun ξ x => creditPrefix Sc Cd 144 ((ws ξ).prefixLen prm x) (checkedLive Sc Cd (Wp ξ) prm (ws ξ) x) 1 1 (67 / 8)
         δs)),
-    Accounting.Assumptions.WordCostsMacs r p (Accounting.Compose.minWordMacs Sc Cd macs) u real.coin
+    ResourceAccounting.Assumptions.WordCostsMacs r p (ResourceAccounting.Compose.minWordMacs Sc Cd macs) u real.coin
       (fun ξ => (Pl ξ).accepts) (fun ξ x => n * ((Pl ξ).run x).fixed) help →
-    Accounting.Assumptions.HelpWithinCertifier r c bUnit real.coin (fun ξ => (Pl ξ).accepts) help →
+    ResourceAccounting.Assumptions.HelpWithinCertifier r c bUnit real.coin (fun ξ => (Pl ξ).accepts) help →
     Scope Sc Cd δs →
     (∀ t : Fin 144, (8 / 9 : ℝ) * (144 : ℕ) * shareCone Sc Cd 144 t ≤ 1) →
     (∀ j, stageShare (tileStage Cd 144) (shareCone Sc Cd 144) j ≤ 1) →
@@ -123,7 +123,7 @@ def WorkOfH1CheckedCreditMonitoringPeriodAt (p : Accounting.Price) (macs : Accou
 /-- **PoUW's per-period guarantee in the joint period from H1's checked credit**, at every price `p`, per-kind
 multiply-add count `macs`, unit count `u` and unit width `b_unit` (`WorkOfH1CheckedCreditMonitoringPeriodAt`). -/
 def WorkOfH1CheckedCreditMonitoringPeriod : Prop :=
-  ∀ (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (u bUnit : ℕ),
+  ∀ (p : ResourceAccounting.Price) (macs : ResourceAccounting.Compose.Kind → ℕ) (u bUnit : ℕ),
     WorkOfH1CheckedCreditMonitoringPeriodAt p macs u bUnit
 
 end Properties.Certifier.JointBridge

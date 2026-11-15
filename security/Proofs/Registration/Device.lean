@@ -15,7 +15,7 @@ counting, `Schedule.sum_work_le_of_subset`), and an account's charge plus every 
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 theorem Window.card_ticks (w : Window) : w.ticks.card = w.len := by
   simp [Window.ticks]
@@ -79,4 +79,4 @@ theorem held_add_othersHeld (ω : ΩW × ΩQ × ΩS) : r.held ω + r.othersHeld 
 
 end Run
 
-end Accounting
+end ResourceAccounting

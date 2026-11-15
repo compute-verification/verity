@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pouw.MonitoringPeriodJ10R
-public import Proofs.Accounting.Served
+public import Proofs.ResourceAccounting.Served
 public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Proofs.Flock.Soundness.Audit.StratifiedProj
 
@@ -30,8 +30,8 @@ open Claims renaming Ex → expect
 namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
 
 open Properties.Pouw.MonitoringPeriodJ10R Pouw.RelativeSecurity
-open Accounting.SecurityProofs.Compose.Budget (forall_mem_subsetDraw rest card_le_rest prob_mem)
-open Accounting.SecurityProofs.TS.Stages (prob_prod)
+open ResourceAccounting.SecurityProofs.Compose.Budget (forall_mem_subsetDraw rest card_le_rest prob_mem)
+open ResourceAccounting.SecurityProofs.TS.Stages (prob_prod)
 open Properties.Served.SecurityProofs (card_rest_le)
 
 /-- **A uniform permutation's `K`-prefix misses `B` with the hypergeometric factor, exactly**:
@@ -57,7 +57,7 @@ theorem miss_eq : ∀ (K N : ℕ) (B : Finset (Fin N)), K ≤ N →
       intro p
       by_cases hp : p ∈ B
       · rw [if_pos hp, mul_zero]
-        refine Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.prob_none fun e he => ?_
+        refine ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.Honest.prob_none fun e he => ?_
         have h0 := (forall_mem_subsetDraw _ _).mp he 0 (Nat.succ_pos K)
         rw [Equiv.Perm.decomposeFin_symm_apply_zero] at h0
         exact h0 hp

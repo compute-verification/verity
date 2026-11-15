@@ -2,8 +2,8 @@ module
 
 public import Definitions.Poub.Guarantees.RemoteDraw
 public import Proofs.Poub.RateAudit.Pooled
-public import Proofs.Accounting.Actual.Sampler
-public import Proofs.Accounting.Prob
+public import Proofs.ResourceAccounting.Actual.Sampler
+public import Proofs.ResourceAccounting.Prob
 public import Proofs.Hash.RowBinding
 public import Definitions.Poub.RateAuditRemote
 public import Proofs.Poub.RateAudit.Chain
@@ -114,13 +114,13 @@ passes, and C3 bounds no such distinguisher.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Remote
+namespace ResourceAccounting.SecurityProofs.Remote
 
-open Finset Accounting.Rate Accounting.Rate.Pooled
+open Finset ResourceAccounting.Rate ResourceAccounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
-  Accounting.Remote.Sample.Assumptions
+open ResourceAccounting.Remote.Held ResourceAccounting.Remote.Held.Assumptions ResourceAccounting.Remote.Sample
+  ResourceAccounting.Remote.Sample.Assumptions
 
 namespace Sample
 
@@ -1405,7 +1405,7 @@ theorem pooledSample {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [F
       fun ω h => (em (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)).elim Or.inr
         fun hb => Or.inl ⟨h, hb⟩).trans (Bandwidth.pr_or_le _ _)
   unfold Trace.Holds
-  rw [Accounting.pr_eq_toReal]
+  rw [ResourceAccounting.pr_eq_toReal]
   exact error_toReal s hδ
     (fun t => Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t))
     (fun t => F.hide com prf δ t) (fun t => tsub_le_self.trans (pr_le_one _)) (fun t => hide_le F com prf δ t)
@@ -1439,20 +1439,20 @@ theorem pooledSampleLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [
 
 end Sample
 
-/-- **The openings' pooled bound** (`Accounting.Guarantees.Remote.PooledSample`). -/
-theorem PooledSample : Accounting.Guarantees.Remote.PooledSample := by
+/-- **The openings' pooled bound** (`ResourceAccounting.Guarantees.Remote.PooledSample`). -/
+theorem PooledSample : ResourceAccounting.Guarantees.Remote.PooledSample := by
   intro n m k κ X _ prf rest D T R δ hδ hm hL hR hC
   replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
   exact Sample.pooledSampleLive prf rest D T R hδ hm hL hR hC
 
-/-- **Live coins, derived** (`Accounting.Guarantees.Remote.LiveCoinsSampled`). -/
-theorem LiveCoinsSampled : Accounting.Guarantees.Remote.LiveCoinsSampled := by
+/-- **Live coins, derived** (`ResourceAccounting.Guarantees.Remote.LiveCoinsSampled`). -/
+theorem LiveCoinsSampled : ResourceAccounting.Guarantees.Remote.LiveCoinsSampled := by
   intro n m k κ X _ prf rest D T R W δ hδ hm hL hR hC hW
   replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
   exact holdsMono (fun ω ha h => h.trans (hW ω ha)) (Sample.pooledSampleLive prf rest D T R hδ hm hL hR hC)
 
-/-- **The snapshot held at the record's pooled bound** (`Accounting.Guarantees.Remote.HeldSampled`). -/
-theorem HeldSampled : Accounting.Guarantees.Remote.HeldSampled := by
+/-- **The snapshot held at the record's pooled bound** (`ResourceAccounting.Guarantees.Remote.HeldSampled`). -/
+theorem HeldSampled : ResourceAccounting.Guarantees.Remote.HeldSampled := by
   intro n m k κ X _ prf rest D T R S s₀ e s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hc hk hL hR hC
   replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
   refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Sample.pooledSampleLive prf rest D T R hδ hm hL hR hC))
@@ -1460,18 +1460,18 @@ theorem HeldSampled : Accounting.Guarantees.Remote.HeldSampled := by
   exact held_of ω hE hs hβ hI hsq hd hS hr hm' h0 hP h.1 h.2
 
 /-- **Held over time with the links charged, at the record's pooled bound**
-(`Accounting.Guarantees.Remote.HeldOverTimeLinksSampled`). -/
-theorem HeldOverTimeLinksSampled : Accounting.Guarantees.Remote.HeldOverTimeLinksSampled := by
+(`ResourceAccounting.Guarantees.Remote.HeldOverTimeLinksSampled`). -/
+theorem HeldOverTimeLinksSampled : ResourceAccounting.Guarantees.Remote.HeldOverTimeLinksSampled := by
   intro n m k κ X _ prf rest D T R K S s E β βl Br Bd Bl δs δc hE hs hβ hβl hδ hm hl hsq hd hS hr hp hcov hk hL hR hC
   replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
   refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Sample.pooledSampleLive prf rest D T R hδ hm hL hR hC))
   exact heldOverLinks_of K ω hE hs hβ hβl hl hsq hd hS hr hp hcov ha h.1 h.2
 
-/-- **Held over time at the record's pooled bound, under Identity** (`Accounting.Guarantees.Remote.HeldOverTimeSampled`):
+/-- **Held over time at the record's pooled bound, under Identity** (`ResourceAccounting.Guarantees.Remote.HeldOverTimeSampled`):
 the link-charged form at links of rate 0 and burst 0. -/
-theorem HeldOverTimeSampled : Accounting.Guarantees.Remote.HeldOverTimeSampled := by
+theorem HeldOverTimeSampled : ResourceAccounting.Guarantees.Remote.HeldOverTimeSampled := by
   intro n m k κ X _ prf rest D T R K S s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hp hcov hk hL hR hC
   simpa only [add_zero] using HeldOverTimeLinksSampled n m k κ X prf rest D T R K S s E β 0 Br Bd 0 δs δc hE hs hβ
     le_rfl hδ hm (links_of_identity hI) hsq hd hS hr hp hcov hk hL hR hC
 
-end Accounting.SecurityProofs.Remote
+end ResourceAccounting.SecurityProofs.Remote

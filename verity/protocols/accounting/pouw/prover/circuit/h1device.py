@@ -20,7 +20,7 @@ record's s8 binding and refuses a contraction outside the record's domain.
   quoted at, f_max, the dense s8 MACs an SM clock, and the data sheet's dense INT8 figure (None where no data sheet states
   one). sm_90's are the machine model's H200 sheet (`benchmarks/machine_model/data/devices/sm_90/sheet.toml`, whose
   Lean is `security/Definitions/Registration/Sheets/H200.lean`), sm_120's its RTX PRO 6000 sheet
-  (`Accounting.TS.Headline.Sm120.ds120`).
+  (`ResourceAccounting.TS.Headline.Sm120.ds120`).
 """
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ SM120 = Device(
     arch="sm_120", gpu="RTX PRO 6000 Blackwell Server Edition", step=BLACKWELL_SM120_S8_M16N8K32,
     instruction="sm120.mma.m16n8k32.s8", domain=None,
     sms=188, tensor_mhz=2430, fmax_mhz=2430, s8_macs=1024, sheet_s8_tops=None,
-    source="the machine model's RTX PRO 6000 sheet (Accounting.TS.Headline.Sm120.ds120): f_max 2430 MHz, the driver's "
+    source="the machine model's RTX PRO 6000 sheet (ResourceAccounting.TS.Headline.Sm120.ds120): f_max 2430 MHz, the driver's "
            "reported maximum (no data sheet states it), at which the sheet quotes every peak; IMMA16832 at 1024 dense MACs "
            "an SM clock (the opcode census measures 1,023.6); 188 SMs, as the device reports (machine model table.toml); "
            "no RTX PRO 6000 data sheet figure for INT8 is on file",

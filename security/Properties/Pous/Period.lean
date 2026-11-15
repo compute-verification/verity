@@ -8,7 +8,7 @@ public import Definitions.Pous.P2.Clip
 /-!
 # PoUS over one period: the deployed check's acceptance certifies the capacity account's space
 
-One period of a joint run (`Accounting.Run`, the compute, bandwidth and capacity audits on one device) runs one PoUS
+One period of a joint run (`ResourceAccounting.Run`, the compute, bandwidth and capacity audits on one device) runs one PoUS
 audit: setup publishes `C*`'s root, and the memory challenger runs one session against it. Its capacity coins are the ring
 game's (`Pous.EndToEnd.Passes`'s `x`: the primitive `ω`, the memory challenger's hm96 coins and its streams), and what
 the verifier reads of the period (`Audits`) is setup's inputs and outputs, fixed before those coins, and the session's
@@ -20,8 +20,8 @@ record, a function of all the run's coins.
   of the verifier's list), while the capacity account held fewer than `S · len` bit-ticks over the capacity window,
   with probability at most `δ + ε_max` (`1% + 2^-128`) over the capacity coins.
 * `PeriodCapacity`, the joint's reading: in a run whose capacity verdict is that acceptance outside a break, the capacity
-  audit has its per-run guarantee (`Accounting.Run.CapacitySoundPerRun`), the input `Accounting.Guarantees.JointPerRun`
-  takes, and its sure-bound form (`Accounting.Run.CapacitySound`), the one `Accounting.Guarantees.Joint` takes.
+  audit has its per-run guarantee (`ResourceAccounting.Run.CapacitySoundPerRun`), the input `ResourceAccounting.Guarantees.JointPerRun`
+  takes, and its sure-bound form (`ResourceAccounting.Run.CapacitySound`), the one `ResourceAccounting.Guarantees.Joint` takes.
 * In the shared coin game (`Verity.Game.prCoin`), `PeriodHeldCoins` over the hm96 coins and uniform streams, and
   `PeriodHeldSha512` over the memory challenger's SHA-512 derivation of its streams, at `δ + ε_max + ε_prf` under
   `Hash.Assumptions.Sha512Prf` (`Properties.Pous.PeriodGame`); both are proved from `PeriodHeld`.
@@ -56,7 +56,7 @@ at the budget the deadline and the round floor give. The setup check's `AcceptsD
 (`Properties.Pous`) are proved against `SetupProtocol.protocol.check` (`Proofs.Properties.Pous.Setup`), so neither is a
 premise.
 
-The certificate is graded by the peak (`Accounting.Guarantees.CapacityOfStateBound`'s reading): the bit-ticks below
+The certificate is graded by the peak (`ResourceAccounting.Guarantees.CapacityOfStateBound`'s reading): the bit-ticks below
 `S · len` bound the capacity account's memory at every tick of the window by `S · len`, so `S · len + S_chip + c` must
 fit the ring game's state bound `S₀ = ⌊ρ·|C|⌋` (`Pous.EndToEnd.S`), with `c = ∑ cap_i · round` every side channel's
 capacity over a round. At a window of one tick that is `S = S₀ − S_chip − c` bits; over a window of `T` ticks, about
@@ -88,8 +88,8 @@ strategy `τ` the device runs:
   (`pous-ring-device`).
 
 It bounds `τ`'s state and time only, never what `τ` answers. -/
-def DeviceModel {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
-    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+def DeviceModel {ι : Type} [Fintype ι] {d : ResourceAccounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (D Q L round : ℕ) : Prop :=
   ∀ (o : ΩW × ΩQ) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
     (I : Fin 105 → Fin (2 ^ 19)) (v : ByteArray × ByteArray), Drawn P.sid x I v →
@@ -122,8 +122,8 @@ accepts the period with no break in its own data while the capacity account held
 capacity window with probability at most `δ + ε_max` (`1% + 2^-128`) over the capacity coins. -/
 def PeriodHeld : Prop :=
   ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : ResourceAccounting.Device ι)
+      (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
       (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
       DeviceModel r P τ D Q L round → Instantiates P τ →
         S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
@@ -140,8 +140,8 @@ audit has its per-run guarantee (`CapacitySoundPerRun`, `JointPerRun`'s input) a
 (`CapacitySound`, `Joint`'s) at certificate `S` and error `δ + ε_max`. -/
 def PeriodCapacity : Prop :=
   ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] [Fintype ΩW] [Fintype ΩQ] (d : Accounting.Device ι)
-      (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] [Fintype ΩW] [Fintype ΩQ] (d : ResourceAccounting.Device ι)
+      (r : ResourceAccounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
       (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) (round : ℕ) (S : ℝ),
       DeviceModel r P τ D Q L round → Instantiates P τ →
         S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →

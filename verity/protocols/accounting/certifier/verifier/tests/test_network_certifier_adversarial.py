@@ -32,7 +32,7 @@ import asyncio
 
 from verity.protocols.accounting.certifier.verifier.link_frame import PAD
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
-from verity.protocols.accounting.certifier.verifier.network_certifier import DATA, FAIL, NetworkCertifier, audit, cells
+from verity.protocols.accounting.certifier.verifier.network_certifier import DATA, FAIL, NetworkAttester, audit, cells
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import (
     B, D, EOF, P, PARAMS, R, TAU, Client, Server, ServerConn, expected_egress, reasons, records, request, run)
 
@@ -64,7 +64,7 @@ def test_the_servers_connect_delay_doesnt_move_the_egress_base_from_the_admissio
             conn.fed, conn.eof = len(b"hi"), True  # so `settle` sees the read complete
             return conn.reader, conn
 
-        network_certifier = NetworkCertifier(PARAMS, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        network_certifier = NetworkAttester(PARAMS, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
         running = asyncio.create_task(network_certifier.run())
         client = Client(network_certifier, cells(request(5), B))  # one-cell request, fully buffered at once
         await network_certifier.until(lambda w: w.ordinals == 1)

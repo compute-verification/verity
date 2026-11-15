@@ -33,7 +33,7 @@ starts from `priors` and passes each execution phase's carry on.
 
 **What is left.** That `ChargeCount_v1`'s circuit computes `executionPhase` is not proved in Lean. circuit-check holds the circuit
 to the Python reference, and these definitions are held to that reference by the charge difftest: the certifier
-program's `NetworkCertifier.AdviceV1`, which `Proofs.Certifier.Code` proves equal to these (`CodeChargesV1`), gives
+program's `NetworkAttester.AdviceV1`, which `Proofs.Certifier.Code` proves equal to these (`CodeChargesV1`), gives
 what `reference_charge` gives on 4,000 random instances, accepted and refused (`runs` in the certifier program's
 `lean-audit.json`).
 

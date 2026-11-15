@@ -948,7 +948,7 @@ theorem openMap_linkClose {g : Game Exchange} {σ : Strategy g} {Ω : Type} {R m
 
 /-! ## The coin map's premise within a term -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 

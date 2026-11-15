@@ -33,7 +33,7 @@ bits of egress that keeps at least `⌈M/19⌉ + E` bits of uniform prior conten
 `2^-128` plus the PRF's advantage.
 
 It is what `verity/wipe/v0` publishes for an accepted session at `k = 2152` over a fill of at least one segment:
-`foreign_bits = ⌈M/19⌉ + E` at `eps = 2^-128`, `E` the egress the network certifier counted.
+`foreign_bits = ⌈M/19⌉ + E` at `eps = 2^-128`, `E` the egress the network attester counted.
 
 The error splits as `2^-129` for sampling and `2^-129` for compression, at `g = n − ⌈n/24⌉`: the prover answers at
 most `23/24` of the labels, `(23/24)^2152 ≤ e^(−2152/24) ≤ 2^-129`, and with the count `C(n, g+1) ≤ 2^n` and

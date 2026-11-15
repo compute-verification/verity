@@ -28,7 +28,7 @@ The honest device is `RateHonest`'s, as a partial device (`Prover.toPartial`), a
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -281,19 +281,19 @@ theorem PartialDevice.completed_mul_le {rounds cRoot : ℕ} {cost : ℕ → ℕ}
     (R : Bits ρ) (O : Oracle N b h ρ) : A.completed E R O * (rounds * cRoot) ≤ b * A.work cost E R O :=
   PChip.completed_mul_le hw (A.world E R O) (A.chip (A.state E))
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth (card_filter_prod_le card_filter_prod_le' pr_le_of_card pr_mono pr_or_le pr_exists_le
   pr_eq_zero_of_card)
 open Bandwidth.AuditRO (card_sample)
 
-/-- **The rate audit with partial completion, in the random-oracle model** (`Accounting.Guarantees.RateAuditPartial`). -/
-theorem RateAuditPartial : Accounting.Guarantees.RateAuditPartial := by
+/-- **The rate audit with partial completion, in the random-oracle model** (`ResourceAccounting.Guarantees.RateAuditPartial`). -/
+theorem RateAuditPartial : ResourceAccounting.Guarantees.RateAuditPartial := by
   intro N b h ρ S L q s k F cTag rounds cRoot lam cost A hw
   rw [Bandwidth.pr_coins_flat]
   dsimp only
@@ -367,13 +367,13 @@ theorem RateAuditPartial : Accounting.Guarantees.RateAuditPartial := by
     push_cast
     rfl
 
-/-- **The rebuild route** (`Accounting.Guarantees.RatePartialRebuild`). -/
-theorem RatePartialRebuild : Accounting.Guarantees.RatePartialRebuild :=
+/-- **The rebuild route** (`ResourceAccounting.Guarantees.RatePartialRebuild`). -/
+theorem RatePartialRebuild : ResourceAccounting.Guarantees.RatePartialRebuild :=
   fun _ _ _ _ _ _ _ _ _ _ A hw E R O => A.completed_mul_le hw E R O
 
-/-- **Completeness of the rate audit with partial completion** (`Accounting.Guarantees.RatePartialHonest`):
+/-- **Completeness of the rate audit with partial completion** (`ResourceAccounting.Guarantees.RatePartialHonest`):
 `RateHonest`'s device, as a partial device. -/
-theorem RatePartialHonest : Accounting.Guarantees.RatePartialHonest := by
+theorem RatePartialHonest : ResourceAccounting.Guarantees.RatePartialHonest := by
   intro N b h ρ
   refine ⟨(Completeness.honest N b h ρ).toPartial, fun cTag cost E R O s I => ?_⟩
   obtain ⟨hacc, hfp, hin, -⟩ := Completeness.honest_accepts (h := h) cTag 0 E R O I
@@ -387,4 +387,4 @@ theorem RatePartialHonest : Accounting.Guarantees.RatePartialHonest := by
   · rw [t4, hc, h5, zero_mul]
   · rw [t5 cTag cost, hc, h5, h6, zero_mul, add_zero]
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

@@ -6,13 +6,13 @@ meta import MemoryChallenger.WipeProtocol
 /-!
 # The wipe's count, as a composition holds it
 
-`WipeProtocol.check` reads an egress count off its evidence and certifies nothing on it, since no network certifier
-signs it. This module is the wipe's half of the step that holds that count to the network certifier's count over the
+`WipeProtocol.check` reads an egress count off its evidence and certifies nothing on it, since no network attester
+signs it. This module is the wipe's half of the step that holds that count to the network attester's count over the
 span between the session's two marks: what a composition's tie reads off the wipe's case, and the check that publishes
 on the count once a composition holds it.
 
 * `named`: the start mark the signed message names, the session's start and end messages (`StreamedWipe.startMessage`
-  and `StreamedWipe.endMessage`, the 64 bytes the memory challenger hands the network certifier for each of its two
+  and `StreamedWipe.endMessage`, the 64 bytes the memory challenger hands the network attester for each of its two
   marks), and the evidence's count, in whole MiB (`StreamedWipe.egressUnits`' unit). A composition holds each to what
   the count over a span between two marks names of its own case. The wipe names no device, link or key.
 * `checkCounted`: `check`, and on its acceptance a rejection of an evidence that gives no count (`NO_COUNT`) and of a
@@ -20,7 +20,7 @@ on the count once a composition holds it.
   profile names the bound's gaps and not the count as one (`countedProfileJson`).
 
 `checkCounted` holds the count to nothing, as `check` does: outside a composition that ties `named` to the network
-certifier's count it certifies on what the evidence states. So no command line serves it under the accepted schemes.
+attester's count it certifies on what the evidence states. So no command line serves it under the accepted schemes.
 `mkCounted` builds the protocol for the composition that holds the tie, and `countedTest` is the same under the test
 signers' schemes alone, for the difftest (`wipe-count-test`).
 

@@ -19,7 +19,7 @@ counts are public.
 
 * **Locations** (`Site.Loc`): the site at the root, which states the Site's unit of time (`Site.timeUnit`); its hosts,
   the prover's machines; a host's devices; memory leaves by tier and bytes under a device or a host; and the auditor's
-  own: its hosts, machines of the auditor's at the site, and its devices, the network certifiers and memory challengers,
+  own: its hosts, machines of the auditor's at the site, and its devices, the network attesters and memory challengers,
   each at the site or in one of the auditor's devices (`Site.Kind.parents`). A host is registered hardware with no compute
   rate: the Site's compute is its devices'. A host states its on-chip state and, for a tier, the rate its leaves of
   that tier share; a memory leaf directly under a host states its own rate. A device names its sheet by digest. The
@@ -27,9 +27,9 @@ counts are public.
   device states the time base its clock runs on and how far that clock may run from real time.
 * **Sheets** (`Site.Sheet`): a card, the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the
   SKU, the tensor clock and the peak rate of each operand class) and its memory figures. A device's figures are its
-  sheet's, and its device model (`Accounting.Device`) is read off them (`Site.device`).
+  sheet's, and its device model (`ResourceAccounting.Device`) is read off them (`Site.device`).
 * **Links** (`Site.Link`): two ends, each a location or `outside`, the rest of the world, with a capacity `β` in bits a
-  second each way and a latency in the Site's units of time. A network certifier is the leaf that splits an uplink: one
+  second each way and a latency in the Site's units of time. A network attester is the leaf that splits an uplink: one
   link from a host to it, one from it to the outside. The prover's boundary links are a host's links to the outside or
   to a certifier (`Site.Boundary`), and a link is certified when a certifier is at one of its ends (`Site.Certified`).
   A link may say why no certifier splits it (`Site.Link.unmediated`): onsite a boundary link that is not certified
@@ -125,7 +125,7 @@ the outside, and a memory challenger and a host. No link ends at an auditor's de
 def Kind.links : List (Kind × Kind) :=
   [(.host, .host), (.host, .outside), (.certifier, .host), (.certifier, .outside), (.challenger, .host)]
 
-/-- The auditor's own: its devices, the network certifiers and the memory challengers, and its hosts. -/
+/-- The auditor's own: its devices, the network attesters and the memory challengers, and its hosts. -/
 def Kind.auditor : Kind → Bool
   | .certifier | .challenger | .auditorHost => true
   | _ => false
@@ -150,7 +150,7 @@ instance _root_.Verity.DeviceFigures.instDecidableEq : DecidableEq DeviceFigures
 
 /-- A sheet, a card: the figures the prover states for an SKU. Its compute figures (`figures`): the SKU, the tensor clock
 in Hz and the peak tensor-core MACs a second of each operand class. Its memory figures, in the device model's terms
-(`Accounting.Device`): bits read from or written to device memory a second (`bw`), bits of on-chip state (`chip`) and
+(`ResourceAccounting.Device`): bits read from or written to device memory a second (`bw`), bits of on-chip state (`chip`) and
 bytes of device memory (`mem`). -/
 structure Sheet where
   figures : DeviceFigures
@@ -489,7 +489,7 @@ namespace Site
 
 open Registration (Auditor)
 
-/-- **A device's model** (`Accounting.Device`), read off the Site at ticks of the Site's unit of time
+/-- **A device's model** (`ResourceAccounting.Device`), read off the Site at ticks of the Site's unit of time
 (`Site.timeUnit`). For a device `x` naming a registered sheet `k` whose SKU the auditor has a sheet `a` for: its on-chip
 state is `k`'s, its device memory is `k`'s in bits, and a tick's bits from device memory to the chip and tensor-core
 MACs are each a rate a second over one tick, rounded up: `k`'s `bw`, and the highest peak rate of the figures the bound
@@ -497,7 +497,7 @@ reads (`DeviceFigures.bounding`: class by class, the larger of `k`'s and `a`'s e
 CUDA-core ops or oracle queries a tick, or its side channels, so they are parameters, as in `Accel.Card.machine`.
 `none` when the Site states no unit of time, and for anything else. -/
 def device (digest : Sheet → String) (A : Auditor) (S : Site) (x : Loc) {ι : Type} (cuda oracle : ℕ)
-    (cap : ι → ℕ) : Option (Accounting.Device ι) :=
+    (cap : ι → ℕ) : Option (ResourceAccounting.Device ι) :=
   if x.kind = .accelerator then
     S.timeUnit.bind fun tick => (S.sheet? digest x).bind fun k => (A.sheet k.sku).map fun a =>
       let f := k.figures.bounding (A.estimate a)

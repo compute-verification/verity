@@ -19,17 +19,17 @@ public import Flock.FV3
   the window, each end's declared grid and its profile's row, both certificates' signed digests, and on a served link the
   window's declared sync) and an ``o0`` row commitment that opens to the delivered output word, whose verdict and
   deadline bits are both 1 (`opened`);
-* both certificates verify under the network certifier's LMS key in its session over their public fields, and name the
+* both certificates verify under the network attester's LMS key in its session over their public fields, and name the
   link, their end (egress first) and the window (`certified`);
 * the window's declared sync is one of Σ_sync.
 
-A network certifier link (`Kind.networkCertifier`, `service.NetworkCertifierProfile`) is the plain proof block under the active network
-certifier's records: both ends' grids are the network certifier's one grid, with no profile, and both carry the network
-certifier's parameters digest (`gridBytes`) in place of a certifier's; the active network certifier runs no shaper
+A network attester link (`Kind.networkAttester`, `service.NetworkAttesterProfile`) is the plain proof block under the active network
+attester's records: both ends' grids are the network attester's one grid, with no profile, and both carry the network
+attester's parameters digest (`gridBytes`) in place of a certifier's; the active network attester runs no shaper
 clock, so a window declares no sync and nothing is read of the syncs (`synced`). Its outputs are a plain link's.
 
 Its public outputs are `verdict` and the proved `deadline` bit, and `digest` binds them to the registration, the
-sessions and the accept bit (`verdictDigest`). A link is plain, served or a network certifier's (`service.OF_RECORD`); a case of
+sessions and the accept bit (`verdictDigest`). A link is plain, served or a network attester's (`service.OF_RECORD`); a case of
 kind ``advised`` is refused by name (`caseOf`): no advised link has a verdict of record.
 
 `transferBlocksFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
@@ -87,8 +87,8 @@ structure Sync where
 inductive Kind where
   | plain
   | served
-  /-- the network certifier's parameters digest (`service.NetworkCertifierProfile.digest`), which both ends' heads bind -/
-  | networkCertifier (digest : ByteArray)
+  /-- the network attester's parameters digest (`service.NetworkAttesterProfile.digest`), which both ends' heads bind -/
+  | networkAttester (digest : ByteArray)
 
 structure Case where
   link : String
@@ -186,7 +186,7 @@ def caseOf (j : Json) : V Case := do
     | "warden" => do
       let d ← bytesOf (← get j "warden" "case") "warden"
       unless d.size = digestBytes do throw s!"a network certifier's parameters digest is {digestBytes} bytes, not {d.size}"
-      pure (Kind.networkCertifier d)
+      pure (Kind.networkAttester d)
     | k => throw s!"a link is plain, served or a network certifier's, not {k}"
   let ss ← get j "sync_set" "case"
   let deltas ← natsOf (← get ss "deltas" "sync_set") "sync_set.deltas"
@@ -199,7 +199,7 @@ def caseOf (j : Json) : V Case := do
   let salts ← get j "salts" "case"
   let egress ← endOf (← get j "egress" "case") "egress"
   let ingress ← endOf (← get j "ingress" "case") "ingress"
-  if let .networkCertifier _ := kind then
+  if let .networkAttester _ := kind then
     let fields (g : NetworkCheck.Params) := (g.buckets, g.allocation, g.frameBytes, g.bucketMs, g.queueCapacity)
     unless egress.profile.isNone && ingress.profile.isNone && fields egress.grid == fields ingress.grid do
       throw "a network certifier link's two ends are on the network certifier's one grid, with no occupancy profile"
@@ -249,13 +249,13 @@ def manifestSet (c : Case) : NetworkCheck.SyncSet :=
   ⟨c.deltas.map Int.ofNat, c.rhos.map fun (n, d) => ((n / Nat.gcd n d : Nat), d / Nat.gcd n d)⟩
 
 /-- An end's grid as its head encodes it (`head_check.grid_bytes`): T, r, B and τ_b as u32 big-endian, then the grid's
-parameters digest, which binds Σ_sync on egress; on a network certifier link, both ends' the network certifier's
+parameters digest, which binds Σ_sync on egress; on a network attester link, both ends' the network attester's
 (`TransferBlocks.grid`). -/
 def gridBytes (c : Case) (d : Nat) : V ByteArray := do
   let e := if d = 0 then c.egress else c.ingress
   let g := e.grid
   let digest ← match c.kind with
-    | .networkCertifier w => pure w
+    | .networkAttester w => pure w
     | _ => parametersDigest g (if d = 0 then some (manifestSet c) else none)
   return be 4 g.buckets ++ be 4 g.allocation ++ be 4 g.frameBytes ++ be 4 g.bucketMs ++ digest
 
@@ -276,7 +276,7 @@ def pubRow (c : Case) : V (Option ByteArray) := do
   let digests := [d0, d1]
   if c.certificates.size ≠ 2 ∨ digests.any (·.size ≠ 64) then return none
   let tail : Option ByteArray ← match c.kind with
-    | .plain | .networkCertifier _ => pure (some ByteArray.empty)
+    | .plain | .networkAttester _ => pure (some ByteArray.empty)
     | .served => pure do
         let s ← c.syncs[c.window]?
         let (d, p, q) ← syncWords s
@@ -391,11 +391,11 @@ def certified (c : Case) : Bool :=
     | some x => x.link == c.link && x.direction.code == d && x.window == c.window && x.signs c.lms c.key c.session
     | none => false
 
-/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A network certifier
-link declares none (the active network certifier runs no shaper clock), so nothing is read of the syncs there. -/
+/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A network attester
+link declares none (the active network attester runs no shaper clock), so nothing is read of the syncs there. -/
 def synced (c : Case) : Bool :=
   match c.kind with
-  | .networkCertifier _ => true
+  | .networkAttester _ => true
   | _ => match c.syncs[c.window]? with
     | some s => c.deltas.contains s.delta && c.rhos.any fun (n, d) => s.num * d == n * s.den
     | none => false

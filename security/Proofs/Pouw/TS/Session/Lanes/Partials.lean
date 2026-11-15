@@ -65,9 +65,9 @@ marks `read_in_full` (`PouwWindow.Lanes.readFull`) to one row of its registered 
 
 @[expose] public section
 
-namespace Accounting.TS.Lanes
+namespace ResourceAccounting.TS.Lanes
 
-open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked FlockSoundness.Discharge
+open PouwWindow.Lanes Flock.SoundAtBridge ResourceAccounting.TS.Checked FlockSoundness.Discharge
 open FlockSoundness.Discharge.Layout (portRowW)
 
 /-- `ownOf`'s port `nm`: the leaf's row `row` of the value `v`, row `(place v).2 + row` of the table `(place v).1`,
@@ -277,4 +277,4 @@ theorem part_eq {K nw : ℕ} {T : Tile} {sL sC : RowsSession} {vL vC : ℕ → �
       (bitsN (portBit sC vC s!"p{l.val}") (fieldBit (combinePorts T) s!"partials[{l.val}]" + 32 * w.val) 32)
   rw [fieldBit_partials, fieldBit_combine, e]
 
-end Accounting.TS.Lanes
+end ResourceAccounting.TS.Lanes

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.Majority
 public import Proofs.Hash.RowBinding
-public import Proofs.Accounting.ReadUnit.Sha
+public import Proofs.ResourceAccounting.ReadUnit.Sha
 
 /-!
 # Two readings of a bound wire are a SHA-512 collision
@@ -36,11 +36,11 @@ namespace Verity.SampledTwo
 
 open Claims
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- `Verity.sha512`'s bytes are `FlockDeploy.sha512` of the same message. -/
 theorem sha512_bytes (m : Msg) : (Verity.sha512 m).bytes = FlockDeploy.sha512 m :=
-  Accounting.ReadUnit.Gates.isSha512_sha512 m
+  ResourceAccounting.ReadUnit.Gates.isSha512_sha512 m
 
 /-- **The witness carries its openings**: where `readX w` opens the wire `g`, which is not a constant and sits at `p`,
 `openOf w g` is an opening the row-leaf check accepts at `p` whose row holds the reading's bits from `p.offset`.
@@ -130,10 +130,10 @@ theorem readsBind_of (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (
   classical
   rintro w₁ w₂ g - - ⟨u₁, hu₁, hg₁⟩ ⟨u₂, hu₂, hg₂⟩ hne
   have hopen : ∀ (w : Claims.Sampling.Wit) u,
-      u ∉ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → g ∈ (V.partsOf θ F).io u →
+      u ∉ ResourceAccounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → g ∈ (V.partsOf θ F).io u →
       V.Opens θ F c g (readX w g) := by
     intro w u hu hg
-    simp only [Accounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and, not_or, not_exists, not_and,
+    simp only [ResourceAccounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and, not_or, not_exists, not_and,
       not_not] at hu
     exact hu.2 g hg
   have ho₁ := hopen w₁ u₁ hu₁ hg₁

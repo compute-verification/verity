@@ -3,7 +3,7 @@ record: γ against both R, per window and over the session, and the memory line,
 with its ε and δ.  They are computed here, the memory line's charges and paced forms by `line`'s arithmetic in floats,
 and nowhere else: the benchmark and every other consumer reads them from `declared`.
 
-The memory line's forms are the conclusions of `Accounting.Guarantees.Remote.Held` (the snapshot), `HeldOverTime`
+The memory line's forms are the conclusions of `ResourceAccounting.Guarantees.Remote.Held` (the snapshot), `HeldOverTime`
 (time-held) and `HeldOverTimeLinks` (link-charged), `security/Definitions/Poub/Guarantees/RemoteHeld.lean`, read at
 the record.  In the statements' terms, with b a block's bytes and every rate in blocks a ns:
 
@@ -45,7 +45,7 @@ FORMS = (SNAPSHOT, *line.FORMS)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
 REJECTION_LOG2 = 64
 """The sample's rejection a sample, in bits: a sample below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
-`Accounting.Remote.Sample.width`), so a uniform first word is rejected with probability below 2^-64."""
+`ResourceAccounting.Remote.Sample.width`), so a uniform first word is rejected with probability below 2^-64."""
 DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
 PRF_CLAIM = "prf/sha-512"
@@ -193,11 +193,11 @@ class Node:
 
 
 def sketch(record: audit.Record) -> Fraction:
-    """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed` at 64 rows,
+    """`SketchBound`'s δ for a sketch-sha512 record (`ResourceAccounting.Guarantees.Remote.SketchBoundDeployed` at 64 rows,
     `SketchBoundRun` at r = 12 at 16), every compression of the prover's budget a guess or a key:
     Q = 2^`audit.QUERIES_LOG2` (`timing.sketch_failure`, at the record's rows); 0 for another receipt kind. It is the δs
     of the memory line's `SketchBoundAt` premise (`LineHeld`): that statement gives the sketch bound at it on the
-    line's trace read on the sketch outcomes, and `Accounting.Guarantees.Remote.SketchBoundLine` carries it to the
+    line's trace read on the sketch outcomes, and `ResourceAccounting.Guarantees.Remote.SketchBoundLine` carries it to the
     line's coins."""
     if record.receipt != receipts.SKETCH_SHA512:
         return Fraction(0)
@@ -268,13 +268,13 @@ def binding_over(draws: int, receipts: int, samples: int, queries: int) -> Fract
 
 
 def binding(record: audit.Record) -> Fraction:
-    """The receipts' binding term (`Accounting.Remote.Sample.Receipts.binding`): the probability that some opened
+    """The receipts' binding term (`ResourceAccounting.Remote.Sample.Receipts.binding`): the probability that some opened
     receipt was presented with an accepted row other than the one its root holds (`Receipts.held`, the plurality of
     the rows it shows over its window's continuations from the cut before its coin).  Window t's fork finder runs the
     prover twice from that cut on independent openings coins and checks both runs' openings, q_t = 2·Q +
     2·s_t·`OPENING_HASHES` SHA-512 calls, Q = 2^`audit.QUERIES_LOG2` the prover's budget (`sketch`'s); under
     claim `cr/sha-512` it finds a collision with probability ε_t ≤ q_t²/2^513.
-    `Accounting.Guarantees.Remote.ReceiptsBindingOfCR` proves the term at most Σ_t √(|L_t|·s_t·(ε_t + split_t)),
+    `ResourceAccounting.Guarantees.Remote.ReceiptsBindingOfCR` proves the term at most Σ_t √(|L_t|·s_t·(ε_t + split_t)),
     L_t a set holding every receipt window t opens at every outcome, s_t the session's sample cap and split_t the chance
     that the two runs' roots differ.  Both are the session's bounds, not one outcome's U_t and s'_t, which follow the
     prover's play: this charges them at `window_receipts` and the record's `samples`.  At `groups_per_coin` g > 1 the

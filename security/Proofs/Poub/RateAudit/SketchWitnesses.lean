@@ -24,7 +24,7 @@ the named one.
 
 @[expose] public section
 
-namespace Accounting.RateSketch
+namespace ResourceAccounting.RateSketch
 
 open Pous (Bits pr)
 
@@ -126,11 +126,11 @@ theorem bindSigns_binds : SectorsBind bindSigns := by
   rw [bindSigns_succ, bindSigns_succ] at hl
   exact int8_injective (by omega)
 
-end Accounting.RateSketch
+end ResourceAccounting.RateSketch
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.RateSketch
+open ResourceAccounting.RateSketch
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -160,7 +160,7 @@ theorem RateAuditSketch_honest :
       RateSketch.Completeness.honest_accepts 1 firstSector 1 1 x.2.1.1 x.2.1.2 x.1 x.2.2
     refine ⟨ha, by omega, ?_⟩
     rw [hf]
-    unfold Accounting.RateSketch.floor
+    unfold ResourceAccounting.RateSketch.floor
     omega⟩
 
 /-- **`RateAuditSketch`'s nontrivial lemma**: with the check accepting everything, the device that reads nothing is
@@ -179,7 +179,7 @@ theorem RateAuditSketch_nontrivial :
           RateSketch.floor 1 1 0 0 0 0 0 1 1 := fun x =>
     ⟨trivial, (blank_compute _ _ _ _ _).le, by
       rw [blank_footprint]
-      unfold Accounting.RateSketch.floor
+      unfold ResourceAccounting.RateSketch.floor
       omega⟩
   have hfib : pr (fun σ : Unit => 2 < fib firstSector σ) = 0 := pr_zero fun σ => not_lt.2 (fib_firstSector_le σ)
   have t4 : ((0 * 2 : ℕ) : ℝ≥0∞) / (Fintype.card Bool : ℝ≥0∞) = 0 := by simp
@@ -197,7 +197,7 @@ theorem RateAuditSketchInteractiveRO_honest :
     obtain ⟨ha, hf, hc⟩ := honestOne_accepts x.2.1.1 x.2.1.2 x.1 x.2.2
     refine ⟨ha, by omega, ?_⟩
     rw [hf]
-    unfold Accounting.RateSketch.floor
+    unfold ResourceAccounting.RateSketch.floor
     omega⟩
 
 /-- **`RateAuditSketchInteractiveRO`'s nontrivial lemma**: with the check accepting everything, the interactive device
@@ -215,7 +215,7 @@ theorem RateAuditSketchInteractiveRO_nontrivial :
         blankOne.footprint x.2.1.1 x.2.1.2 x.1 * 1 < RateSketch.floor 1 1 0 0 0 0 0 1 1 := fun x =>
     ⟨trivial, (blankOne_compute _ _ _ _ _).le, by
       rw [blankOne_footprint]
-      unfold Accounting.RateSketch.floor
+      unfold ResourceAccounting.RateSketch.floor
       omega⟩
   have hfib : pr (fun σ : Unit => 2 < fib firstSector σ) = 0 := pr_zero fun σ => not_lt.2 (fib_firstSector_le σ)
   have t4 : ((0 * 2 : ℕ) : ℝ≥0∞) / (Fintype.card Bool : ℝ≥0∞) = 0 := by simp
@@ -236,7 +236,7 @@ theorem RateAuditTensorSketchRank_honest :
     obtain ⟨ha, hf, hc⟩ := RateSketch.Completeness.honest_accepts 256 sketch 1 1 x.2.1.1 x.2.1.2 x.1 x.2.2
     refine ⟨ha, by omega, ?_⟩
     rw [hf]
-    unfold Accounting.RateSketch.floor
+    unfold ResourceAccounting.RateSketch.floor
     omega⟩
 
 /-- **`RateAuditTensorSketchRank`'s nontrivial lemma**: with the check accepting everything, the device that reads
@@ -257,7 +257,7 @@ theorem RateAuditTensorSketchRank_nontrivial :
           1 < RateSketch.floor 1 256 0 0 0 0 0 1 1 := fun x =>
     ⟨trivial, (blank_compute _ _ _ _ _).le, by
       rw [blank_footprint]
-      unfold Accounting.RateSketch.floor
+      unfold ResourceAccounting.RateSketch.floor
       omega⟩
   have hrank : pr (fun σ : SketchSigns 0 1 =>
       ∃ u, ((Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < 0) = 0 :=
@@ -334,9 +334,9 @@ theorem RateAuditTensorSketch_nontrivial :
           x.1 * 1 < RateSketch.floor 1 256 0 0 0 0 0 1 1 := fun x =>
     ⟨trivial, (blank_compute _ _ _ _ _).le, by
       rw [blank_footprint]
-      unfold Accounting.RateSketch.floor
+      unfold ResourceAccounting.RateSketch.floor
       omega⟩
   rw [pr_one hev, not_le]
   exact tensor_error_lt
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

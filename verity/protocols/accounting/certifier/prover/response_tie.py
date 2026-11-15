@@ -187,7 +187,7 @@ class Shape:
         return {k: getattr(self, k) for k in STATICS}
 
 
-def tied(params: CT.NetworkCertifierParams, stop: bool) -> Shape:
+def tied(params: CT.NetworkAttesterParams, stop: bool) -> Shape:
     """The shape of the proof block of a schedule's tied class, a stop class or a no-stop class: its row is the one
     O every class of the schedule has. ValueError for a schedule that can't be tied, saying what keeps it from it
     (`content_rows.untied`): none of its classes is tied, and no shape is taken from it."""

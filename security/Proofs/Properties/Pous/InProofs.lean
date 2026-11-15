@@ -5,7 +5,7 @@ public import Definitions.Core.InProofs
 public import Properties.Verity.Sha512
 public import Mathlib.Probability.ProbabilityMassFunction.Monad
 public import Lms.Sign
-public import Proofs.Properties.Accounting.InProofs
+public import Proofs.Properties.ResourceAccounting.InProofs
 public import Proofs.Properties.Pous.MemoryChallenger
 import Proofs.Properties.Pous.WipeSigned
 import Proofs.Properties.Pous.MemoryChallenger.Session
@@ -151,7 +151,7 @@ whose value fails `PieceOk`, and `Gives` at `right` gives it at `PieceOk` (`Give
 namespace MemoryChallenger.Properties.InProofs.SecurityProofs
 
 open MemoryChallenger MemoryChallenger.Properties.InProofs MemoryChallenger.Properties.SecurityProofs
-open Verity.InProofs Properties.Accounting.InProofs Verity.Game
+open Verity.InProofs Properties.ResourceAccounting.InProofs Verity.Game
 
 theorem runGives : RunGives := by
   intro schemes trusted expected c openings scheme pk idx Ω μ r right ε g h hc

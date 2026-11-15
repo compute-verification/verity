@@ -63,7 +63,7 @@ def Kind.parents : Kind → List (Option Kind)
 def Kind.links : List (Kind × Kind) :=
   [(.host, .host), (.host, .outside), (.certifier, .host), (.certifier, .outside), (.challenger, .host)]
 
-/-- The auditor's own: its devices, the network certifiers and the memory challengers, and its hosts. -/
+/-- The auditor's own: its devices, the network attesters and the memory challengers, and its hosts. -/
 def Kind.auditor : Kind → Bool
   | .certifier | .challenger | .auditorHost => true
   | _ => false
@@ -533,7 +533,7 @@ end Site
 /-! ## The auditor's devices, by their keys
 
 A protocol's answer names the key its check ran under, never a location. `holder` finds the one device of the auditor's
-that holds that key, and `hostLinks` and `hostsOf` what that device witnesses: a network certifier, the links that join
+that holds that key, and `hostLinks` and `hostsOf` what that device witnesses: a network attester, the links that join
 it and a host of the prover's, the half of its uplink on its host's side; a memory challenger, the hosts its links join
 it to. -/
 
@@ -545,7 +545,7 @@ variable (S : Site)
 def lowerHex (s : String) : Bool :=
   !s.isEmpty && s.length % 2 == 0 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
 
-/-- **The device of the auditor's that holds key `k`**: a network certifier or a memory challenger, the one location of
+/-- **The device of the auditor's that holds key `k`**: a network attester or a memory challenger, the one location of
 the auditor's (`Kind.auditor`) that registers `k` as its key, where `k` is the auditor's own key for it
 (`Registration.Auditor.key`, which the `owner` check holds a registered key to) and in lower-case hex, the one form a
 key is compared in, so that one key is not two strings. None where no location of the auditor's holds `k`, more than one

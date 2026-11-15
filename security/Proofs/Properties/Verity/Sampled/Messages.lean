@@ -360,7 +360,7 @@ namespace Verity.Sampled
 open Verity.Game
 open scoped ENNReal
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The period's game is the prover's request, the device's releases, then the close**, as one game. -/
 theorem game_eq_relK (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :

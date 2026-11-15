@@ -4,12 +4,12 @@ public import Properties.Pouw.MonitoringPeriodJ10R
 public import Proofs.Compose.ComposeMonitoringPeriod
 public import Proofs.Compose.Compose.SplitRateClosed
 public import Proofs.Pouw.RelativeSecurity
-public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.ResourceAccounting.Lemmas.Compose
 
 /-!
 # Proof of `H1J10RCheckedCreditMonitoringPeriod`
 
-`Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, as `Proofs.Pouw.MonitoringPeriod` proves
+`ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, as `Proofs.Pouw.MonitoringPeriod` proves
 `CheckedCreditMonitoringPeriod`: a window is credited exactly when it and every earlier one are accepted by `Credit.window`
 (`credited_iff`, at `k s_T > 0`), so the run's accepted prefix and live words are `Credit.window`'s (`prefixLen_eq`,
 `creditedLive_eq`), and `JointSound` at `tileLayer` follows from `TileSampleIsCoin` and `TileServiceSound` by
@@ -23,7 +23,7 @@ monotonicity (`jointSound_tile`). The rate is `SplitRateClosed`'s at H1's lucks 
 namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
 
 open Properties.Pouw.MonitoringPeriodJ10R
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **A window is credited under `Credit.window` exactly when it and every earlier one are accepted**, at
 `k s_T > 0`. -/
@@ -88,7 +88,7 @@ theorem j10rRate_pos {K : ℕ} {ρ : ℝ} (hK : 1 ≤ K) (hρ : 0 < ρ) : 0 < j1
 `j10rRate K ρ = 8(1 + Kρ)/(ρK)`, is the larger. -/
 theorem rate_j10r {K : ℕ} {ρ : ℝ} (hK : 1 ≤ K) (hρ : 0 < ρ) (hρ1 : ρ ≤ 1) :
     SplitRate K ρ (7 / 8) (1 / 2) 1 1 1 (j10rRate K ρ) := by
-  have h := Accounting.SecurityProofs.Compose.Rates.splitRateClosed K ρ (7 / 8) (1 / 2) 1 1 1 hK hρ zero_le_one
+  have h := ResourceAccounting.SecurityProofs.Compose.Rates.splitRateClosed K ρ (7 / 8) (1 / 2) 1 1 1 hK hρ zero_le_one
     (by simpa using hρ1) (by norm_num) (by norm_num) (by norm_num) (by norm_num) one_pos one_pos
   have hK0 : (0 : ℝ) < K := by exact_mod_cast hK
   have hKρ : (0 : ℝ) < K * ρ := mul_pos hK0 hρ
@@ -125,7 +125,7 @@ theorem h1J10RCheckedCreditMonitoringPeriod : H1J10RCheckedCreditMonitoringPerio
     Wp Pl folded ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved _hReg hDraw hServ hSalt hLucks hUF
   obtain ⟨hMu, hRB, hGs⟩ := hLucks
   have hK0 : 0 < k sT := hKd
-  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod Sc Cd hn hN hr (hk sT) Wp Pl
+  have h := ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod Sc Cd hn hN hr (hk sT) Wp Pl
     (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile) (j10rAtCoin hr enc place tile))
     folded ρ (7 / 8) (1 / 2) 1 1 1 (j10rRate (k sT) ρ) δs δbind δks hS hρ hρN hwmax hlk one_pos one_pos
     (j10rRate_pos hKd hρ) (rate_j10r hKd hρ hρ1) hG hDD hPre hMoved

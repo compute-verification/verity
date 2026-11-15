@@ -50,9 +50,9 @@ local instance instLawfulBEqByteArray_certified : LawfulBEq ByteArray where
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
 theorem zero_mem_ticks : (0 : ℕ) ∈ (honestRun.win .capacity).ticks := by
-  simp [honestRun, periodRun, Accounting.Window.ticks, K]
+  simp [honestRun, periodRun, ResourceAccounting.Window.ticks, K]
 
-theorem honest_fits (r : Accounting.Run honestDevice Unit Unit Unit
+theorem honest_fits (r : ResourceAccounting.Run honestDevice Unit Unit Unit
     ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)) (hr : r.win .capacity = ⟨0, K⟩) :
     Fits honestDevice (r.win .capacity).len 1 HONEST_S Pous.EndToEnd.S := by
   rw [hr, S_eq]
@@ -550,7 +550,7 @@ theorem periodCapacity_nontrivialEmpty :
   norm_num [Params.δ] at h2
 
 theorem obligationRun_mem_ticks : (0 : ℕ) ∈ (obligationRun.win .capacity).ticks := by
-  simp [obligationRun, Accounting.Window.ticks, K]
+  simp [obligationRun, ResourceAccounting.Window.ticks, K]
 
 /-- **`obligationHeld`'s honest lemma at one instance**: at the snapshot `tag = id`, the honest period and a strategy
 (the lookup strategy) against `obligationAudit` meet the device model at the deployed budget and the instantiation, and
@@ -585,7 +585,7 @@ theorem periodHeldAt_honestInstance :
     norm_num [HONEST_S, K]
 
 theorem demoRun_mem_ticks : (0 : ℕ) ∈ (demoRun.win .capacity).ticks := by
-  simp [demoRun, Accounting.Window.ticks, K]
+  simp [demoRun, ResourceAccounting.Window.ticks, K]
 
 /-- **`periodHeldDemo`'s honest lemma at one instance**: at Demo B's point and `N = 1038·2^16`, a period whose account
 holds the whole store, above `SAt N`, meets the ring-model device premise at the deployed budget, and the certificate

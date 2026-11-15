@@ -61,7 +61,7 @@ served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T
   round where no entry is prefilling, `m` is at most the entries' count. `takesAt` is the bound at a given round, and
   `takes` is it at the decoded `s`; `live_credit` states it at each call's own round through `hs`.
 * `LiveSlotsChecks`: **the named premise**, that the unit's circuit computes `liveOk` at its decoded port rows, in
-  `Accounting.Assumptions.TS.LeafChecks`' form; `liveOk_of_accept` reads it.
+  `ResourceAccounting.Assumptions.TS.LeafChecks`' form; `liveOk_of_accept` reads it.
 * `dense_credit`, `dense_credit_of_sessions`: **dense credit is `Σ_c m_{s(c)}·n_c·K_c`**. The rows rule A credits, times
   each call's `n·K`, sum to the public rows': over accepted views, then over accepted sessions through the premise.
 * `Dead`, `dead_iff_rows`, `population`: a tile is dead iff every one of its rows is at or past `m`. Its admit bits
@@ -92,7 +92,7 @@ namespace Pouw.SecurityProofs.LiveCredit
 
 open Finset
 open Flock.SoundAtBridge (RowsSession)
-open Accounting.TS.Lanes (portRead)
+open ResourceAccounting.TS.Lanes (portRead)
 
 /-- **A round's words as `PouwLiveSlots_v1{T}` reads them**: slot `i`'s word (`q + 1` for a row of request `q`, 0 for
 `EMPTY_SLOT`), request leaf `q`'s header index, round (the round that admitted it), cap and prompt length
@@ -250,7 +250,7 @@ it yet, so it has no claim id or lock entry). **The unit's circuit computes its 
 `s`'s session `sess`, whose circuit is `PouwLiveSlots_v1{T}`'s lowering, on every wire assignment `vals` the key
 program's evaluation agrees with on every unit's wires, if the `ok` word `dec` reads from `vals`' port rows
 (`portRead`) is `1`, then `dec`'s view of them meets `liveOk T`. It reads every port row, registered or not, so it is a
-fact of the circuit alone, as `Accounting.Assumptions.TS.LeafChecks` is of a leaf's 33. -/
+fact of the circuit alone, as `ResourceAccounting.Assumptions.TS.LeafChecks` is of a leaf's 33. -/
 def LiveSlotsChecks (T : ℕ) (sess : RowsSession) (dec : RowsSession → (ℕ → ℕ → Option Bool) → LiveView) : Prop :=
   ∀ vals : Fin sess.Circ.N → Bool,
     (∀ u, ∀ g ∈ sess.P.io u, sess.Circ.eval vals g = vals g) →

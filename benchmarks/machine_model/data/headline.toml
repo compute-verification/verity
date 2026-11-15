@@ -8,7 +8,7 @@ capacity = "ε is relative to the declared capacity, the reading's Π (decision 
 scope = "ε is per node: an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least 1 − ε of the credited work; read per GPU, it needs LOC's host deduction (decision 37) and every billable GPU on the node credited each window (the README's \"The headline is per node\")"
 
 [floor]             # (I3) ScalarRoute, the floor a vector- or table-headed word pays; a row names the one it needs
-half = "the ½-slot floor ((I3) at q* = ½: Lean Accounting.SecurityProofs.TS.SheetScalarRouteHalf, from A6)"
+half = "the ½-slot floor ((I3) at q* = ½: Lean ResourceAccounting.SecurityProofs.TS.SheetScalarRouteHalf, from A6)"
 issue = "the 1.22-slot issue floor (Theorem C, unproved in Lean: its packed form is retired, the per-opcode κ count not run)"
 
 [reading.sheet]

@@ -20,7 +20,7 @@ faithful, or some faulted-use party steals it, which `FaultedUseHard` at the int
 The fault model's facts about populations (`Population.Dataflow`). In a checked population the run with some units'
 writes fixed is unique (`runOf_unique`, from `determinate_of_checked`), and any assignment is the run with its own
 incorrect proof blocks' writes fixed (`runOf_faultsOf`), whose pattern names exactly its incorrect proof blocks (`faultSet_faultsOf`).
-So a release the network certifier ties to a trace is a faulted run of the population's faulted function
+So a release the network attester ties to a trace is a faulted run of the population's faulted function
 (`Served.faithful_of_tie`). When every unit reads each slot through an idempotent clamp fixed in advance, the run with a
 pattern differs from the run with the pattern clamped only on the faulted slots, each by its clamp (`runOf_clamp`). With
 the clamp the identity on the egress, every pattern releases what an in-range one does (`runOf_clamp_egress`): the
@@ -407,7 +407,7 @@ theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F �
 omit [Fintype O] in
 /-- **`Faithful` from the dataflow.** If each accepted window that releases released, on the egress slots `eg`, a trace
 `σ` of a checked population at the inputs `inp θ x` of the outsider's query `x` served with the window's advice, with at
-most the window's count of incorrect proof blocks (the network certifier's tie), then its releases are faulted runs of the
+most the window's count of incorrect proof blocks (the network attester's tie), then its releases are faulted runs of the
 population's faulted function, each at its trace's own fault pattern. -/
 theorem faithful_of_tie {U S : Type} [Fintype U] (P : Population.Dataflow U S) (h : P.Checked) (f : P.Fns V)
     (inp : Θ → Q × Adv → S → V) (eg : O → S) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (L : ℕ)

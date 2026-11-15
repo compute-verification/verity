@@ -18,7 +18,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # version is paired with the block by `verity bench prove`'s pairing (`verity_bench.boolean`, and the census name's
 # spelling, `verity_bench.prove`), which loads every registered Boolean Definition: the registry, ops and numerics
 # whole, and what their imports open beside them. The binding bound's instances (`binding.LEAN`) are held to the Lean
-# theorems they name, read from their file. The network certifier's schedule (`NetworkCertifierParams`) bounds what a request
+# theorems they name, read from their file. The network certifier's schedule (`NetworkAttesterParams`) bounds what a request
 # serves by its response cap.
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/boolean.py",

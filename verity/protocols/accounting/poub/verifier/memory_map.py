@@ -25,7 +25,7 @@ free releases the slot's block and leaves the slot not live, its memory out of t
 Frees are structural.  A block is freed in the record of its values' last structural reader: the last step of the
 schedule that runs a gate with one of them as an operand, a gather that may select one included, whichever request
 the gate is in (a page requests share is freed once, after the last of them reads it).  That step is where Lean's
-`live` ends (`Definitions.Accounting.Requirement`, whose `StoreMatches` keeps every block holding a credited value
+`live` ends (`Definitions.ResourceAccounting.Requirement`, whose `StoreMatches` keeps every block holding a credited value
 resident through it), and it is `requirement.Requirement.last` over the circuit's census.  It reads the circuit, its
 schedule and the registration, never a committed value.  A free at a value's last use (the last step whose gather
 selected it) breaks `StoreMatches` for each candidate no later step selects, and one incorrect proof block upstream of the
@@ -89,7 +89,7 @@ Passes and steps.  Each pass of the audit covers one step `s`, which it names wi
 step=s)`, public), and the steps of a session's passes strictly increase.  Its plan holds every complete block the
 circuit reads at `s`, filler beside them allowed: here the blocks resident at `s`, registered or written at a step
 before `s` and not freed or overwritten at one (`Store.resident` and `PlanMatches`, in the Lean module
-`Definitions.Accounting.Requirement`).
+`Definitions.ResourceAccounting.Requirement`).
 A step's record takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step
 did and the device has since encoded, and its frees are of blocks whose values' last structural reader it is.
 `Replay.take(s)` is the plan's change for the pass at `s` since the last pass (`Plan.changed`, the root's

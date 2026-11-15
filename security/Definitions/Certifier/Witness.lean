@@ -6,7 +6,7 @@ public import Definitions.Certifier.RecordRows
 public import Definitions.Certifier.Tap
 
 /-!
-# The instances the network certifier's honest and nontrivial lemmas are stated at (trusted definitions; used only by
+# The instances the network attester's honest and nontrivial lemmas are stated at (trusted definitions; used only by
 the satisfiability witnesses)
 
 Each guarantee's honest lemma states its premises at an instance built by hand, and its nontrivial lemma states its
@@ -16,7 +16,7 @@ conclusion false at an audit that accepts everything. Those statements read thes
 * `trivLay`: one link of one slot with no gate, at which `SampledAuditAccepted`'s conclusion fails;
 * `notLay`: step `t`'s ingress is the input, and its egress slot's presence gate the input's negation, at which the
   leak bounds fail;
-* `certOps`: the network certifier's openings, the input and its negation both `true`, at which `MonitoringPeriodLeakAccepted`'s
+* `certOps`: the network attester's openings, the input and its negation both `true`, at which `MonitoringPeriodLeakAccepted`'s
   bound fails;
 * `obs0`, `obs1`: one step of one link of one slot, with no frame and with an empty frame;
 * `unitOp`: the operator, which sends nothing;
@@ -27,12 +27,12 @@ conclusion false at an audit that accepts everything. Those statements read thes
 * `inI`: a certifier recording one frame a bucket (`oneRow`) in the first of two slots, every status complete;
 * `sampProg`: two inputs and the negation of the first, with one proof block `{0, 1, 2}` (`sampPart`) sampled Bernoulli
   at rate `1/2` (`sampDesign`);
-* `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections), one window of ten
+* `fxRows`: a rows format of the Python network attester's fixture `fxQueue` (three connections), one window of ten
   buckets, whose schedule is `fxQueueSched`;
-* `noFormat`: the record format of a network certifier with no connection over a monitoring period of no execution
+* `noFormat`: the record format of a network attester with no connection over a monitoring period of no execution
   phases, at which `MonitoringPeriodLeakChecked`'s honest lemma states its period's premises.
 
-The lemma that drops its read-back is stated at a network certifier of one connection of one cell with no data
+The lemma that drops its read-back is stated at a network attester of one connection of one cell with no data
 (`Cell := Empty`), over a monitoring period of one window of one step:
 
 * `posObs`: the step's observation, a frame on the link when a bit is unset; `posDec` reads the bit back;
@@ -53,10 +53,10 @@ def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
 /-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
 def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
 
-/-- The network certifier's openings: the input and its negation, both `true`. -/
+/-- The network attester's openings: the input and its negation, both `true`. -/
 def certOps : List (Claims.Sampling.Opening Bool) := [⟨0, true, []⟩, ⟨1, true, []⟩]
 
-/-- The record format of a network certifier with no connection, over a monitoring period of no windows: it holds every
+/-- The record format of a network attester with no connection, over a monitoring period of no windows: it holds every
 schedule, its record is the empty one and no cell reads back from it, as the code sends none. -/
 def noFormat : RecordFormat Empty Unit (Fin 0 → List (Obs 1 1 1)) :=
   ⟨fun _ _ _ => Fin.elim0, fun _ _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
@@ -123,7 +123,7 @@ def sampPart : Claims.Sampling.Partition := ⟨[[[[0, 1, 2]]]]⟩
 /-- The one class sampled Bernoulli at rate `1/2`. -/
 def sampDesign : Claims.Sampling.Design := ⟨[.bernoulli 1 2]⟩
 
-/-! ## The Python network certifier's fixture -/
+/-! ## The Python network attester's fixture -/
 
 /-- A frame of the fixture's three connections, as a number below `9`: its connection's ordinal times three, plus its
 kind. -/

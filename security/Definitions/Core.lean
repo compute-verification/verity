@@ -43,7 +43,7 @@ the ones here.
 * What the developer commits: `RegisteredCircuit` (the registered circuit and `θ`), `Advice` (the advice root), `Site`
   (the registered hardware and its registration), `SiteSubtree` (a subtree of the Site, its places and its links as
   the hardware model's). What an accepted registration gives the theorems is registration's, an accounting protocol
-  (`Definitions.Accounting.Registration`).
+  (`Definitions.Registration`).
 * Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
 * A check moved inside proofs: `InProofs` (an accepted run leaves fewer than `K₀` proof blocks failing a check).

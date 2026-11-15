@@ -7,9 +7,9 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # The bandwidth audit's guarantee as a joint run's bandwidth guarantee (trusted)
 
-The bandwidth audit v0's guarantee, PoUB's per-pass lemma (`Accounting.Guarantees.Remote.AuditRO`), embeds into the
-device model at its own certificate and error: in a run that realizes its game (`Accounting.RealizesBandwidth`), the
-bandwidth audit has its guarantee (`Accounting.Run.BandwidthSound`) at AuditRO's certificate and error, with the game's
+The bandwidth audit v0's guarantee, PoUB's per-pass lemma (`ResourceAccounting.Guarantees.Remote.AuditRO`), embeds into the
+device model at its own certificate and error: in a run that realizes its game (`ResourceAccounting.RealizesBandwidth`), the
+bandwidth audit has its guarantee (`ResourceAccounting.Run.BandwidthSound`) at AuditRO's certificate and error, with the game's
 bounds the device's limits over the bandwidth window.
 
 `BandwidthOfAudit` keeps AuditRO's numbers but not its per-run reading: `BandwidthSound`, the form `Joint` takes, is about
@@ -17,16 +17,16 @@ a bound on the bandwidth account's reads on every one of the bandwidth audit's o
 AuditRO bounds the ingress at the coins flipped, so it also gives the per-run form, `BandwidthSoundPerRun`, the one
 `JointPerRun` takes: `BandwidthOfAuditPerRun`, at the same certificate and error.
 
-Proved by `Accounting.SecurityProofs.BandwidthOfAudit : Accounting.Guarantees.BandwidthOfAudit` and
-`Accounting.SecurityProofs.BandwidthOfAuditPerRun : Accounting.Guarantees.BandwidthOfAuditPerRun`
-(`Proofs.Poub.BandwidthAudit`), from `Accounting.SecurityProofs.Remote.AuditRO`.
+Proved by `ResourceAccounting.SecurityProofs.BandwidthOfAudit : ResourceAccounting.Guarantees.BandwidthOfAudit` and
+`ResourceAccounting.SecurityProofs.BandwidthOfAuditPerRun : ResourceAccounting.Guarantees.BandwidthOfAuditPerRun`
+(`Proofs.Poub.BandwidthAudit`), from `ResourceAccounting.SecurityProofs.Remote.AuditRO`.
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting
+open ResourceAccounting
 
 /-- **The bandwidth audit's guarantee is the bandwidth guarantee.** For any run on any device whose bandwidth audit
 realizes the bandwidth audit's game with a store of `N > 0` blocks of `b` bits, `h`-bit tags, `s` sampled blocks and at
@@ -57,4 +57,4 @@ def BandwidthOfAuditPerRun : Prop :=
         ((((k - 1 : ℕ) : ℝ) / N) ^ s + (s : ℝ) / 2 ^ h +
           (((d.rate .oracle * (r.win .bandwidth).len).choose k : ℕ) : ℝ) / 2 ^ lam)
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

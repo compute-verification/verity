@@ -103,7 +103,7 @@ The proof is `Proofs.Pouw.MonitoringPeriodJ10RStrata`'s: at each stratum, what `
 namespace Properties.Pouw.MonitoringPeriodJ10RStrata
 
 open Properties.Pouw.MonitoringPeriodJ10R
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## The sampling block's sample and stratum `s`'s view of it -/
 

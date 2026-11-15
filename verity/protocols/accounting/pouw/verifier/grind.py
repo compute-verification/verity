@@ -1,4 +1,4 @@
-"""Hashed seeds' grinding premium (GRIND, `Accounting.Guarantees.TS.GrindPremiumAt`), where a row's noise is
+"""Hashed seeds' grinding premium (GRIND, `ResourceAccounting.Guarantees.TS.GrindPremiumAt`), where a row's noise is
 visible once its seed is sampled: the formula `circuit.compile`'s seed-group check and
 `benchmarks/pouw/grind_price.py`'s table share.
 

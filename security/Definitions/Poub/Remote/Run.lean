@@ -27,7 +27,7 @@ by the oracle's Merkle chain pass `j`'s correct receipts are computed in `[t_j, 
   determines from its memory tiers over `I`.
 
 A route is a bound the run meets except with probability `δ` over the coins when the audit accepts (`Run.Holds`); a
-model row that holds on every outcome is a route at `δ = 0`. The compositions (`Accounting.SecurityProofs.Remote`)
+model row that holds on every outcome is a route at `δ = 0`. The compositions (`ResourceAccounting.SecurityProofs.Remote`)
 compose them by a union bound; each route is proved for the runs its game or the actual circuit realizes:
 
 * `Sampled ε`: correct receipts cover `(1 − ε) · C` (μ_sample); the verifier checks `committed · b ≥ C` and samples.
@@ -52,7 +52,7 @@ within a pass, is the other route; each guarantee names the route it takes.
 
 @[expose] public section
 
-namespace Accounting.Remote
+namespace ResourceAccounting.Remote
 
 /-- A run of PoUB on node `N` with parameters `a` over coins `Ω`. -/
 structure Run {τ : Type} (N : Node τ) (a : Audit) (Ω : Type) where
@@ -147,4 +147,4 @@ def Ports (δ : ℝ) : Prop := r.Holds δ fun ω => ∀ m, r.read ω m ≤ N.cei
 
 end Run
 
-end Accounting.Remote
+end ResourceAccounting.Remote

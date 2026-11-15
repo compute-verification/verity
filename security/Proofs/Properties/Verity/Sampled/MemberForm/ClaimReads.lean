@@ -33,7 +33,7 @@ namespace Verity.Sampled.MemberForm
 
 open Flock.Guarantees (MemberV5 Seat ReadsWith tracesWith JointAuditV5)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **Two traces side by side, at the first circuit's gates, are the first.** -/
 theorem traceLeft_beside {C D : Verity.Circuit} (tC : C.Trace) (tD : D.Trace) :

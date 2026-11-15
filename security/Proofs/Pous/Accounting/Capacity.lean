@@ -22,7 +22,7 @@ capacity account below the certificate on every one of them (`Run.capacityShort_
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Pouw
 
@@ -86,14 +86,14 @@ end Run
 
 namespace SecurityProofs
 
-theorem CapacityOfStateBound : Accounting.Guarantees.CapacityOfStateBound := by
+theorem CapacityOfStateBound : ResourceAccounting.Guarantees.CapacityOfStateBound := by
   intro ι α ΩW ΩQ ΩS _ _ _ _ _ d r G round S₀ S ε hε hG real hS
   exact r.capacitySound_of_state hε hG real hS
 
-theorem DerivedStateResidual : Accounting.Guarantees.DerivedStateResidual := by
+theorem DerivedStateResidual : ResourceAccounting.Guarantees.DerivedStateResidual := by
   intro ι α ΩW ΩQ ΩS _ _ _ _ _ _ _ _ d r w S εS hw hS
   exact r.derivedStateResidual hw hS
 
 end SecurityProofs
 
-end Accounting
+end ResourceAccounting

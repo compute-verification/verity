@@ -22,7 +22,7 @@ slack; the session is `DeployedRun.pr_paid_of_window` and the samples, as in `De
 
 @[expose] public section
 
-namespace Accounting.Rate
+namespace ResourceAccounting.Rate
 
 open Pous (Bits pr)
 open scoped ENNReal
@@ -325,11 +325,11 @@ theorem pr_unpaid_sample_mem_le {τ : ℕ} (A : DeployedWindow P N b h ρ S L q 
 
 end DeployedWindow
 
-end Accounting.Rate
+end ResourceAccounting.Rate
 
-namespace Accounting.Remote
+namespace ResourceAccounting.Remote
 
-open Accounting.Rate
+open ResourceAccounting.Rate
 open scoped ENNReal
 
 variable {n P N b h ρ S L q r s d G τ : ℕ}
@@ -353,8 +353,8 @@ theorem relayErr_toReal (P G N h L m q lam : ℕ) :
 
 /-- Window `w`'s bound with any side sources, at the slack `S + (L − ρ) + X + (λ + m·b)` a pass. -/
 theorem window_relay_le (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) {lam m rounds cRoot F : ℕ}
-    {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot) (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
-    (hF : ∀ w η j ι c, Accounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) (w : Fin n) (η) :
+    {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot) (hW : ResourceAccounting.Assumptions.WorkHardness b rounds cRoot cost)
+    (hF : ∀ w η j ι c, ResourceAccounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) (w : Fin n) (η) :
     Pous.pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
         (A.window w η).reads tier y.1 y.2.1 + P * (S + (L - ρ) + Deployed.rebuildBits b rounds cRoot F + (lam + m * b)) <
           ((A.window w η).correctAll y.1 y.2.1).card * b)
@@ -370,8 +370,8 @@ theorem window_relay_le (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ
 theorem ofDeployed_paid_relay (A : DeployedRun n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam m rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = n * P) (hab : a.b = b) (hal : a.lam = lam + m * b)
-    (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
-    (hF : ∀ w η j ι c, Accounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) :
+    (hW : ResourceAccounting.Assumptions.WorkHardness b rounds cRoot cost)
+    (hF : ∀ w η j ι c, ResourceAccounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) :
     (Run.ofDeployed A tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
       ((n * P * G : ℝ) * ((N.choose m : ℝ) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ) / 2 ^ lam)) := by
   classical
@@ -406,8 +406,8 @@ theorem ofDeployed_paid_relay (A : DeployedRun n P N b h ρ S L q r s d G) (tier
 theorem ofDeployedWindow_paid_relay (A : DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam m rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = P) (hab : a.b = b) (hal : a.lam = lam + m * b)
-    (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
-    (hF : ∀ w η j ι c, Accounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) :
+    (hW : ResourceAccounting.Assumptions.WorkHardness b rounds cRoot cost)
+    (hF : ∀ w η j ι c, ResourceAccounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) :
     (Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
       ((P * G : ℝ) * ((N.choose m : ℝ) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ) / 2 ^ lam)) := by
   classical
@@ -469,26 +469,26 @@ theorem run_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-end Accounting.Remote
+end ResourceAccounting.Remote
 
-namespace Accounting.SecurityProofs
+namespace ResourceAccounting.SecurityProofs
 
-open Accounting.Rate Accounting.Remote
+open ResourceAccounting.Rate ResourceAccounting.Remote
 open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **PoUB as deployed, with side sources that may relay receipts**
-(`Accounting.Guarantees.RemoteRunConservationRelay`). -/
-theorem RemoteRunConservationRelay : Accounting.Guarantees.RemoteRunConservationRelay := by
+(`ResourceAccounting.Guarantees.RemoteRunConservationRelay`). -/
+theorem RemoteRunConservationRelay : ResourceAccounting.Guarantees.RemoteRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF
   refine (run_relay_of_unpaid id A tier lam m rounds cRoot F dbar dw hn hP hN hb hdw _
     (DeployedRun.pr_unpaid_le A tier _ _ (window_relay_le A tier hrc hW hF))).trans (le_of_eq ?_)
   ring
 
 /-- **The deployed session with relaying side sources conserves its words as a run of PoUB**
-(`Accounting.Guarantees.RemoteMonitoringPeriodConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteMonitoringPeriodConservationRelay : Accounting.Guarantees.RemoteMonitoringPeriodConservationRelay := by
+(`ResourceAccounting.Guarantees.RemoteMonitoringPeriodConservationRelay`), from `ResourceAccounting.SecurityProofs.Remote.Conservation`. -/
+theorem RemoteMonitoringPeriodConservationRelay : ResourceAccounting.Guarantees.RemoteMonitoringPeriodConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF
   have hs := ofDeployed_sampled A tier (Deployed.rebuildBits b rounds cRoot F) Nd a dbar hn hP hN hb hdbar hab hC
   have hp := ofDeployed_paid_relay A tier Nd a hrc ha hab hal hW hF
@@ -511,8 +511,8 @@ theorem RemoteMonitoringPeriodConservationRelay : Accounting.Guarantees.RemoteMo
   nlinarith [h2, eΛ, k]
 
 /-- **Each window with relaying side sources conserves its words as a run of PoUB**
-(`Accounting.Guarantees.RemoteWindowRunConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteWindowRunConservationRelay : Accounting.Guarantees.RemoteWindowRunConservationRelay := by
+(`ResourceAccounting.Guarantees.RemoteWindowRunConservationRelay`), from `ResourceAccounting.SecurityProofs.Remote.Conservation`. -/
+theorem RemoteWindowRunConservationRelay : ResourceAccounting.Guarantees.RemoteWindowRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A w Nd a dw hP hN hb hrc hdw ha hab hal hC hW hF
   have hs := ofDeployedWindow_sampled A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a dw hP hN hb hdw hab hC
   have hp := ofDeployedWindow_paid_relay A w tier Nd a hrc ha hab hal hW hF
@@ -534,4 +534,4 @@ theorem RemoteWindowRunConservationRelay : Accounting.Guarantees.RemoteWindowRun
   rw [hCr] at h2 eΛ k ⊢
   nlinarith [h2, eΛ, k]
 
-end Accounting.SecurityProofs
+end ResourceAccounting.SecurityProofs

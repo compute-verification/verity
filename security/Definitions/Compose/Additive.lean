@@ -6,7 +6,7 @@ public import Definitions.Core.Accel.Machine
 # A device's period on the machine model (trusted)
 
 What compute additivity on the machine model 𝓜 (`Verity.Accel.Machine`) is stated over
-(`Accounting.Guarantees.AccelRate`, `AccelAdditive`):
+(`ResourceAccounting.Guarantees.AccelRate`, `AccelAdditive`):
 
 * `AccelRun m`: one run of 𝓜, a program, the state it starts from, a schedule and its seconds `T` (the run meets the
   model when it `Fits` at `T`). A run receives no data once it starts, so a device's period is a list of runs back to
@@ -24,7 +24,7 @@ which is a period itself.
 
 open scoped NNRat
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Finset Verity.Accel
 
@@ -52,4 +52,4 @@ def issued (iss : List m.Instr) : Finset ℕ := range iss.length
 /-- The units of resource `r` occurrence `k` uses (none for one past the end). -/
 def occUse (iss : List m.Instr) (r : Res) (k : ℕ) : ℚ≥0 := ((iss[k]?).map fun i => i.use r).getD 0
 
-end Accounting
+end ResourceAccounting

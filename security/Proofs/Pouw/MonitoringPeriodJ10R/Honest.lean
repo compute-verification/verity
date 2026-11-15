@@ -77,8 +77,8 @@ words are `N·n` (`creditLive_all`), so `j10r_credit` is the statement's bound a
 namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
 
 open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
-open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposeMonitoringPeriod
+open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumptions.TS ResourceAccounting.Assumptions.Compose Pouw.RelativeSecurity
+open ResourceAccounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The circuit -/
 
@@ -235,7 +235,7 @@ theorem registeredBeforeDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB
   intro x z w
   show regOf (coinAt (coinAt (spliceAt w.val (circuit (tileCount σ sT)).rounds x z) w).1 ⟨0, hr1 _⟩) =
     regOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩)
-  rw [Accounting.SecurityProofs.TS.Keyed.coinAt_spliceAt]
+  rw [ResourceAccounting.SecurityProofs.TS.Keyed.coinAt_spliceAt]
   rfl
 
 theorem period_every {Ω : Type} {N : ℕ} {P : (Fin N → Bool) → SplitStages Bool (Fin N) 1 → Prop}

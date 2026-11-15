@@ -811,7 +811,7 @@ theorem samplingDesignAt_of_samplingDesignOf {p : _root_.Spot.OneStageZk.Params}
   simp only [samplingDesignAt, hd, hder, hfl, ok_bind]
   rfl
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The session's sampling design is the sample's** where the session's population is: at the session `A` v2 sets up on the
 parameters `θ` (`SetsUp`), a sample v2 made in a composition composite `k` accepted, on those parameters, over `A.n`

@@ -43,15 +43,15 @@ At a value `ξ` of the period's coins, the period is a joint run (`bandwidthRun`
 carried by the realization's equivalence, and whose other audits' coins are trivial: its schedule and bandwidth verdict
 are the period's at `ξ` with PoUB's coordinate replaced. That run realizes the bandwidth audit's game
 (`bandwidthRealizes`), since the period's game device doesn't depend on PoUB's own coins, so
-`Accounting.Guarantees.BandwidthOfAuditPerRun` bounds its accept-while-short event. Uniform coins carried by an
+`ResourceAccounting.Guarantees.BandwidthOfAuditPerRun` bounds its accept-while-short event. Uniform coins carried by an
 equivalence keep their probabilities (`Pouw.pr_equiv`), so the same bound holds over PoUB's coordinate.
 -/
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.Bridge
+namespace ResourceAccounting.SecurityProofs.Bridge
 
-open Accounting
+open ResourceAccounting
 
 variable {G N b h s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
   {I : Type} [DecidableEq I] {Ω : I → Type} {r : PeriodRun d α C Ω}
@@ -79,8 +79,8 @@ def bandwidthRealizes (real : RealizesBandwidthOfAuditPerRunPeriod G (N := N) (b
     rwa [real.dev_update, Function.update_self, Equiv.apply_symm_apply] at this
 
 /-- PoUB's per-period guarantee from the bandwidth audit's per-run guarantee. -/
-theorem bandwidthOfAuditPerRunPeriod_of (hsrc : Accounting.Guarantees.BandwidthOfAuditPerRun) :
-    Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod := by
+theorem bandwidthOfAuditPerRunPeriod_of (hsrc : ResourceAccounting.Guarantees.BandwidthOfAuditPerRun) :
+    ResourceAccounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod := by
   intro N b h s G k lam ι α _ _ d C I _ Ω _ r c p hN real hQ ξ
   have key := hsrc N b h s G k lam ι α Unit Unit d (bandwidthRun real ξ) hN (bandwidthRealizes real ξ) () ()
   refine le_trans (Pouw.pr_mono ?_) ((Pouw.pr_equiv real.coins _).le.trans key)
@@ -98,8 +98,8 @@ theorem bandwidthOfAuditPerRunPeriod_of (hsrc : Accounting.Guarantees.BandwidthO
     linarith
 
 /-- **PoUB's per-period guarantee is the bandwidth audit's**
-(`Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod`). -/
-theorem BandwidthOfAuditPerRunPeriod : Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod :=
-  bandwidthOfAuditPerRunPeriod_of Accounting.SecurityProofs.BandwidthOfAuditPerRun
+(`ResourceAccounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod`). -/
+theorem BandwidthOfAuditPerRunPeriod : ResourceAccounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod :=
+  bandwidthOfAuditPerRunPeriod_of ResourceAccounting.SecurityProofs.BandwidthOfAuditPerRun
 
-end Accounting.SecurityProofs.Bridge
+end ResourceAccounting.SecurityProofs.Bridge

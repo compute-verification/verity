@@ -46,7 +46,7 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     Program is placed like any other, read at the census's grain without expanding a gate: the salt enters at the block's
     certifier, so it is trusted data the block consumes and the salt compute's custody counts, and the unit's work comes
     out by kind, its SHA-512 seed, noise and receipt fold as Boolean gates and its products, `z`'s and the lanes' segment
-    dots (r·c·(2K + 32m)), as int8 multiply-adds, of which census/v1 counts none served (Lean's `Accounting.Gates.roleOf`
+    dots (r·c·(2K + 32m)), as int8 multiply-adds, of which census/v1 counts none served (Lean's `ResourceAccounting.Gates.roleOf`
     puts the tile's served role on its receipt's words, which take no MACs). Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. The block's compute is PoUW's
     proved bound for its census (benchmarks/pouw/proved_ticks.py), basis "proved", which credits its tile's `z` products,
     r·c·K, and not the segment dots'. Slow: compiling builds the unit's 15

@@ -115,7 +115,7 @@ public import {imports}
 
 Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/machine_model/data`),
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
-this file. `Accounting.Guarantees.TS.{reads}` reads it.
+this file. `ResourceAccounting.Guarantees.TS.{reads}` reads it.
 '''
 
 
@@ -181,9 +181,9 @@ def render_sheet(fam: Family, r: Reading) -> str:
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.{fam.ns}
+namespace ResourceAccounting.TS.Headline.{fam.ns}
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- The {fam.sheet} census's instruction classes, in index order. -/
 def classes : List String := {LH._list([f'"{k}"' for k in x.classes], "  ")}
@@ -251,7 +251,7 @@ noncomputable def lamStar : SheetRow Pipe → ℝ
 /-- The checks a window. -/
 def checks : ℕ := {x.checks}
 
-end Accounting.TS.Headline.{fam.ns}
+end ResourceAccounting.TS.Headline.{fam.ns}
 '''
 
 
@@ -313,9 +313,9 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.{fam.ns}Measured
+namespace ResourceAccounting.TS.Headline.{fam.ns}Measured
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- {fam.measured}'s rows, in index order. -/
 def rowNames : List String := {LH._list([f'"{row}"' for row in x.rows], "  ")}
@@ -356,7 +356,7 @@ noncomputable def flat : Labelled (Fin {nk}) :=
 noncomputable def lamStar : Fin {m} → ℝ :=
   cert {m} [{lam}]
 
-end Accounting.TS.Headline.{fam.ns}Measured
+end ResourceAccounting.TS.Headline.{fam.ns}Measured
 '''
 
 
@@ -389,9 +389,9 @@ def render_twin(fam: Family, t: Reading, r: Reading) -> str:
 
 @[expose] public section
 
-namespace Accounting.TS.Headline.{fam.ns}MeasuredI3
+namespace ResourceAccounting.TS.Headline.{fam.ns}MeasuredI3
 
-open Accounting.TS
+open ResourceAccounting.TS
 
 /-- `{fam.ns}Measured.d2s` at (I3)'s floors `q = q_T = {qd}`. -/
 def d2s : DesignData where
@@ -411,7 +411,7 @@ noncomputable def model : Model (Fin {nk}) (Fin {m}) (Fin {nt}) Unit Empty (Fin 
 noncomputable def lamStar : Fin {m} → ℝ :=
   cert {m} [{lam}]
 
-end Accounting.TS.Headline.{fam.ns}MeasuredI3
+end ResourceAccounting.TS.Headline.{fam.ns}MeasuredI3
 '''
 
 

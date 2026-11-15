@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Registration.Guarantees.Sheet
-public import Proofs.Accounting.Lemmas.Sheet
+public import Proofs.ResourceAccounting.Lemmas.Sheet
 
 /-!
 # The data-sheet axioms' bridges
@@ -17,9 +17,9 @@ public import Proofs.Accounting.Lemmas.Sheet
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.TS
+namespace ResourceAccounting.SecurityProofs.TS
 
-open Accounting.TS Accounting.Assumptions.TS Finset
+open ResourceAccounting.TS ResourceAccounting.Assumptions.TS Finset
 
 section Run
 
@@ -64,7 +64,7 @@ theorem facetCeilings_of_sheet (S : Sheet K P) (Q : Run K) (hn : ∀ k, 0 ≤ Q.
     linarith
 
 /-- (I1) from the data sheet. -/
-theorem SheetFacetCeilings : Accounting.Guarantees.TS.SheetFacetCeilings := by
+theorem SheetFacetCeilings : ResourceAccounting.Guarantees.TS.SheetFacetCeilings := by
   intro K P _ _ S Q hn h1 h2 h3 h4 h5
   exact facetCeilings_of_sheet S Q hn h1 h2 h3 h4 h5
 
@@ -93,8 +93,8 @@ theorem scalarRoute_half (Z : Model K R T L U F X) (A : Anatomy K T L U) (hs : A
     nlinarith
 
 /-- (I3) at the ½ floor. -/
-theorem SheetScalarRouteHalf : Accounting.Guarantees.TS.SheetScalarRouteHalf := by
+theorem SheetScalarRouteHalf : ResourceAccounting.Guarantees.TS.SheetScalarRouteHalf := by
   intro K R T L U F X _ _ _ Z A hs h hq hqT hb
   exact scalarRoute_half Z A hs h hq hqT hb
 
-end Accounting.SecurityProofs.TS
+end ResourceAccounting.SecurityProofs.TS

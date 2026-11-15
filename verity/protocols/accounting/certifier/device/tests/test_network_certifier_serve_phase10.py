@@ -26,7 +26,7 @@ from verity.protocols.accounting.certifier.verifier.link_frame import DATA
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.certificate import record_head
 from verity.protocols.accounting.certifier.verifier.grid import Reason
-from verity.protocols.accounting.certifier.verifier.network_certifier import END, Shim, NetworkCertifier, cells, read_cell
+from verity.protocols.accounting.certifier.verifier.network_certifier import END, Shim, NetworkAttester, cells, read_cell
 
 from verity.protocols.accounting.certifier.device.tests.relay_runs import PARAMS, SESSION, _response, _Writer, ws
 from verity.protocols.accounting.certifier.verifier import relay_check as RC
@@ -121,12 +121,12 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
         reader.feed_eof()
         return reader, _Writer()
 
-    def settled(w: NetworkCertifier) -> bool:
+    def settled(w: NetworkAttester) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
 
     async def main():
         clock = VirtualClock(-tau / 2)
-        network_certifier = NetworkCertifier(PARAMS, connect, origin=0.0, windows=WINDOWS, clock=clock, sleep=clock.sleep,
+        network_certifier = NetworkAttester(PARAMS, connect, origin=0.0, windows=WINDOWS, clock=clock, sleep=clock.sleep,
                         publish=publish, release=release)
         running = asyncio.create_task(network_certifier.run())
         clients, tasks = [], []

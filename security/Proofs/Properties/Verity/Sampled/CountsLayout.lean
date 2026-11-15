@@ -54,7 +54,7 @@ open Claims.Bridge.Custody (decode_ok DecStream forall₂_find? forall₂_mem_le
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The counts the release log and the record give -/
 

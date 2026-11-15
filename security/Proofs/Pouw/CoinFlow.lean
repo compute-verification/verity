@@ -44,12 +44,12 @@ admitted Program.
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.CoinFlow
+namespace ResourceAccounting.SecurityProofs.CoinFlow
 
-theorem ViewIndependent : Accounting.Guarantees.CoinFlow.ViewIndependent := Accounting.CoinFlowProofs.viewIndependent
-theorem CoinsThroughNoise : Accounting.Guarantees.CoinFlow.CoinsThroughNoise :=
-  Accounting.CoinFlowProofs.coinsThroughNoise
-theorem OneReader : Accounting.Guarantees.CoinFlow.OneReader := Accounting.CoinFlowProofs.oneReader
-theorem PointMass : Accounting.Guarantees.CoinFlow.PointMass := Accounting.CoinFlowProofs.pointMass
+theorem ViewIndependent : ResourceAccounting.Guarantees.CoinFlow.ViewIndependent := ResourceAccounting.CoinFlowProofs.viewIndependent
+theorem CoinsThroughNoise : ResourceAccounting.Guarantees.CoinFlow.CoinsThroughNoise :=
+  ResourceAccounting.CoinFlowProofs.coinsThroughNoise
+theorem OneReader : ResourceAccounting.Guarantees.CoinFlow.OneReader := ResourceAccounting.CoinFlowProofs.oneReader
+theorem PointMass : ResourceAccounting.Guarantees.CoinFlow.PointMass := ResourceAccounting.CoinFlowProofs.pointMass
 
-end Accounting.SecurityProofs.CoinFlow
+end ResourceAccounting.SecurityProofs.CoinFlow

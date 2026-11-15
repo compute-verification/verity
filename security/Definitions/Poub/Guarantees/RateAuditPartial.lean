@@ -9,16 +9,16 @@ import Mathlib.Basic.ENNReal.Real
 The game is `security/Definitions/Poub/RateAuditPartial.lean`: `RateAudit`'s, with `rebuild` replaced by
 `complete j x g`, which obtains any `x` of word `j`'s `b` bits at `cost x`. Proofs are in
 `security/Proofs/Poub/RateAudit/Partial*.lean`. The rebuild term rests on the named assumption
-`Accounting.Assumptions.WorkHardness b rounds c_root cost` (`rate-codec-work` in partial-completion form: `x` bits
+`ResourceAccounting.Assumptions.WorkHardness b rounds c_root cost` (`rate-codec-work` in partial-completion form: `x` bits
 cost at least `x/b` of a word's `rounds · c_root`, `Definitions/Poub/Assumptions/RateAudit.lean`), and in a joint run
-on `Accounting.Assumptions.RateComputeAdditive` (W: the compute account's work and the game's completions share no
+on `ResourceAccounting.Assumptions.RateComputeAdditive` (W: the compute account's work and the game's completions share no
 work).
 
 * `RateAuditPartial`: `RateAudit`'s bound, at its floor with `c_enc = rounds · c_root` and its error, for a device that
   may keep part of a word and complete the rest; its honest device is a lemma, `RatePartialHonest`
   (`security/Proofs/Poub/Lemmas/RateAudit.lean`).
 * `RatePartialRebuild`: on every run, the bits completed cost `c_word / b` each (PoUB's route
-  `Accounting.Remote.Run.Rebuild` at `δ = 0`).
+  `ResourceAccounting.Remote.Run.Rebuild` at `δ = 0`).
 * `RateOfAuditPartial`: in a joint run, the bandwidth account's reads, with the completions charged as compute through
   W, so a compute account that did `W` of work leaves `F·T − W` for them.
 * `RateOfAuditPartialPasses`: the same with the rebuild term in passes,
@@ -41,9 +41,9 @@ reduction's operation-count floor, an estimate, not a measurement.
 
 @[expose] public section
 
-namespace Accounting.Guarantees
+namespace ResourceAccounting.Guarantees
 
-open Accounting Accounting.Rate
+open ResourceAccounting ResourceAccounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal
 
@@ -67,7 +67,7 @@ rebuild pays per bit, and partial completion buys it nothing over rebuilding. At
 `p = 2^512 − 569`, `c_word = 3·c_root` and a completed bit costs `3·c_root/512` (at two rounds `2·c_root/512`); at one
 round the hypothesis is false and the bound is about no deployed codec.
 
-**The proof** (`Accounting.SecurityProofs.RateAuditPartial`) is `RateAudit`'s with completions in place of rebuilds. The
+**The proof** (`ResourceAccounting.SecurityProofs.RateAuditPartial`) is `RateAudit`'s with completions in place of rebuilds. The
 compression encodes, for a completion of `x` bits, those `x` bits (`RateAudit`'s encodes `b` per rebuilt word), so a
 run that queried `k` words had its state, footprint, link bits and completed bits, at least `k·b + ρ − λ` of them
 except on a `C(q, k)·2^-λ` fraction of stores and streams; and `WorkHardness` turns the completions' compute, at most
@@ -89,11 +89,11 @@ the device completed, at `c_word = rounds · c_root` per `b` of them, cost at mo
 
   `completed · c_word ≤ b · work`.
 
-**The reading.** It is PoUB's route `Accounting.Remote.Run.Rebuild` at `δ = 0`
+**The reading.** It is PoUB's route `ResourceAccounting.Remote.Run.Rebuild` at `δ = 0`
 (`rebuilt · c_word ≤ b · rebuildWork`, the node-level guarantee) for a run whose node completes
 words as a partial device does: its rebuilt bits (the correct receipts' share) are at most the device's completed bits,
 however it splits them into partial words, and its rebuild work covers the completions' compute. `RateAuditPartial` uses it to turn the compute
-`F − k·c_tag` into at most `(F − k·c_tag)·b/c_word` completed bits. Proof: `Accounting.SecurityProofs.RatePartialRebuild`,
+`F − k·c_tag` into at most `(F − k·c_tag)·b/c_word` completed bits. Proof: `ResourceAccounting.SecurityProofs.RatePartialRebuild`,
 by induction on the chip program, one completion at a time.
 
 Frozen (no-function): a bound on every run of an abstract chip program, which no Lean function of the rate audit's
@@ -106,7 +106,7 @@ def RatePartialRebuild : Prop :=
 
 /-- **The rate audit with partial completion as a joint run's bandwidth guarantee, the adversary's idle compute
 charged through W.** For any run on any device whose bandwidth audit a partial device plays
-(`Accounting.RealizesRatePartial`: the game's device within the device model's limits over the bandwidth window, its
+(`ResourceAccounting.RealizesRatePartial`: the game's device within the device model's limits over the bandwidth window, its
 ingress charged to the bandwidth account), at any value of the compute and capacity audits' coins, if completions are
 as hard as `WorkHardness b rounds c_root cost` says and the compute account's work and the game's compute add
 (`RateComputeAdditive`, W), then for any `W`: the probability over the bandwidth coins that the bandwidth audit accepts, the
@@ -122,7 +122,7 @@ window.
 completes in the window, it completes with the idle compute `F·T − W`. So `μ_rebuild = (F·T − W − tagging)/(N·c_word)`,
 `(1 − τ)/(rounds·x)` with `τ = (W + tagging)/(F·T)` and `x = N·c_root/(F·T)`, the one-round encode time of the store in
 units of the window's compute. The compute audit's per-run certificate makes `W` hold, as in `RateOfAudit`.
-`RateOfAuditPartialPasses` restates the term in passes. Proof: `Accounting.SecurityProofs.RateOfAuditPartial`, from
+`RateOfAuditPartialPasses` restates the term in passes. Proof: `ResourceAccounting.SecurityProofs.RateOfAuditPartial`, from
 `RateAuditPartial`.
 
 Frozen (no-function, hash): it carries `RateAuditPartial`, a bound in the random-oracle model over an abstract chip
@@ -157,7 +157,7 @@ is at most `RateOfAuditPartial`'s error, at `S = S_chip`, `L = ∑ cap_i · T_bw
 
 so idle compute `F·T − W` completes at most `d/(rounds·x₁)` of the store per window, however the device splits it into
 partial words. At the deployed `x₁ ≈ 175` and the stated three rounds that is `d/525` (`d/350` at two). A natural `x₁` at most the true ratio
-suffices: rounding it down only weakens the bound. Proof: `Accounting.SecurityProofs.RateOfAuditPartialPasses`, from
+suffices: rounding it down only weakens the bound. Proof: `ResourceAccounting.SecurityProofs.RateOfAuditPartialPasses`, from
 `RateOfAuditPartial`: `(F·T − W − k·c_tag)·b/(rounds·c_root) ≤ BW·(F·T − W − k·c_tag)/(rounds·x₁·F)`.
 
 Frozen (no-function, hash): as `RateOfAuditPartial`. -/
@@ -175,4 +175,4 @@ def RateOfAuditPartialPasses : Prop :=
         ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h +
           (((d.rate .oracle * (r.win .bandwidth).len).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam
 
-end Accounting.Guarantees
+end ResourceAccounting.Guarantees

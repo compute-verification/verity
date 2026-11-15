@@ -42,7 +42,7 @@ open FlockSoundness.Refine (ebind_ok Ret)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The digest each opening of a rep stream answers -/
 

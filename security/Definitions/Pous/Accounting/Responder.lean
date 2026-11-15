@@ -24,7 +24,7 @@ state at the period's end, in flight too, so causality alone carries the state f
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 /-- **The length code**: a string `l` of at most `M` bits as `M + 1` bits, its bits, then a `1`, then `0`s. -/
 def lengthCode (M : ℕ) (l : List Bool) : Pous.Bits (M + 1) :=
@@ -81,4 +81,4 @@ def TicksIn {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} (t : Pous.Outc
     Prop :=
   ∀ j : Fin k, {v | ∃ x, Timely (t x) span k ∧ t x j = v}.encard ≤ ((2 ^ τ : ℕ) : ℕ∞)
 
-end Accounting
+end ResourceAccounting

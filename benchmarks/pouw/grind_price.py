@@ -3,7 +3,7 @@
     uv run benchmarks/pouw/grind_price.py [--md OUT] [--json OUT]
 
 A unit's seed is SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B)) with a live salt, so a cheater with T hash queries
-samples T fresh seeds for a seed group and keeps the best (`Accounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
+samples T fresh seeds for a seed group and keeps the best (`ResourceAccounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
 a scope's gain is L − κ·U (lucky and unlucky savings); outside δ every seed group realizes at most
 
     π* = ln(T·M/δ) / θ
@@ -78,7 +78,7 @@ P_ALIVE = 0.5                        # an alive word's luck over its column's co
 Q_BIT = 0.5                          # a one-bit dither's dead mass a product
 Q_KEYED = 1 / 129                    # a keyed word's (PouwU129's ±64 range): the lever "raise h"
 KAPPA_LIVE = BU.P_PASS / (1 - BU.P_PASS)
-#: (κ, r·θ) that `Accounting.SecurityProofs.TS.TemplateCondition` proves in Lean for 32 columns and a one-bit dither
+#: (κ, r·θ) that `ResourceAccounting.SecurityProofs.TS.TemplateCondition` proves in Lean for 32 columns and a one-bit dither
 PROVED = (4.0, 1 / 256)
 KAPPAS = tuple(round(3 + 0.05 * i, 2) for i in range(181))   # 3 … 12
 H_BITS = (0.415, 1.44, 6.0, 16.0)    # sensitivities, bits a tile

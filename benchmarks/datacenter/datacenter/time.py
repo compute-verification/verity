@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, order=True)
 class Interval:
-    """The ticks [start, end) of the trusted clock: Lean's `Accounting.Window` with `len = end − start`."""
+    """The ticks [start, end) of the trusted clock: Lean's `ResourceAccounting.Window` with `len = end − start`."""
 
     start: int
     end: int

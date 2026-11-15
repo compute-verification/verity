@@ -27,7 +27,7 @@ one-round session (`oneRound`), two answers whose `blockDigest`s differ show the
 
 namespace MemoryChallenger.Session.Properties.SecurityProofs
 
-open Accounting.Assumptions
+open ResourceAccounting.Assumptions
 open MemoryChallenger.Properties (Observed Recorded)
 open MemoryChallenger.Attest.Properties.SecurityProofs (meantRun meantRun_ok)
 

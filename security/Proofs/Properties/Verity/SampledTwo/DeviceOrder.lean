@@ -135,7 +135,7 @@ theorem printsInOrder_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Rel
 
 /-! ## The cut at the deployed history -/
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The cut where the device's ledger orders the two sessions, at the deployed two-session history**
 (`CutOrder.cutBound_order`): where the sampled verdict accepts only where the form does (`Wired`), the first stage's

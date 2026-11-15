@@ -14,7 +14,7 @@ public import Proofs.Pouw.Headline.Whole
 charged (`Headline/Whole.lean`: FOLD-OPT per word folded and the whole-unit luck) and one file per family and reading
 (`Headline/Sm120.lean`: sm_120 at its data sheet;
 `Headline/Sm120Measured.lean`: sm_120 on VF3s-16); and FP8-g1's and W4A8-g1's headlines on sm_120
-(`Definitions.Accounting.Guarantees.FpG1`), with an honest g1 window that meets every premise, at the data sheet
+(`Definitions.ResourceAccounting.Guarantees.FpG1`), with an honest g1 window that meets every premise, at the data sheet
 (`Headline/FpG1.lean`) and on the measured vector (`Headline/FpG1Measured.lean`). -/
 
 @[expose] public section

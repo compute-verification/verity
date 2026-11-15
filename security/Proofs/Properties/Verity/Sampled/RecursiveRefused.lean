@@ -53,7 +53,7 @@ theorem find_case {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Ve
   rw [← hid, ← hpid]
   exact find?_nodup (by rw [hfp]; exact components_nodup k s) hm.1
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **A sampled verdict names the one-stage form**: wherever composite `k`'s sampled verdict holds of what the prover
 sent, its parameters name SPOT's one-stage form (`ParamsAt`), since its component accepts no other

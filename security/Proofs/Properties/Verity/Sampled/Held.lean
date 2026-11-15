@@ -57,7 +57,7 @@ namespace Verity.Sampled
 open Lean (Json)
 open FlockSoundness.Refine (ebind_ok)
 
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## v2's log at its coins -/
 

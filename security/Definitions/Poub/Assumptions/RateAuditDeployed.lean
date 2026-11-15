@@ -8,7 +8,7 @@ public import Definitions.Poub.RateAuditSketchDeployed
 # The deployed rate audit's measured capacity: the squaring ceiling (trusted)
 
 What the composed guarantee (`Definitions/Poub/Guarantees/RateAuditDeployed.lean`) assumes beyond
-`Accounting.Assumptions.WorkHardness` (`Definitions/Poub/Assumptions/RateAudit.lean`), a named `Prop` taken as a
+`ResourceAccounting.Assumptions.WorkHardness` (`Definitions/Poub/Assumptions/RateAudit.lean`), a named `Prop` taken as a
 hypothesis, never an `axiom`:
 
 * `SquaringCeiling cost F A`: a pass's completions cost at most `F`, the node's squaring capacity over the pass (its
@@ -24,9 +24,9 @@ hypothesis, never an `axiom`:
 
 @[expose] public section
 
-namespace Accounting.Assumptions
+namespace ResourceAccounting.Assumptions
 
-open Accounting.Rate Accounting.RateSketch
+open ResourceAccounting.Rate ResourceAccounting.RateSketch
 open Pous (pr)
 open scoped ENNReal
 
@@ -40,11 +40,11 @@ rank is `r = 12`, where `ε = 128 · Pr[rank_ℚ(16 × 32 block) ≤ 11] ≤ 2^(
 reading `2^(-96) + ε = 2^(-95.12)`, by a standalone seeded script (exact rational arithmetic through
 the F2 rank distribution, with exhaustive and seeded self-checks; the script and its output are an evidence artifact,
 and `verity/protocols/accounting/poub/verifier/tests/test_sketch_reading.py` holds the in-suite falsification tests). At 64
-rows, the remote receipts' deployed count (`Accounting.Guarantees.Remote.SketchBoundDeployed`), it is `r = 27`, where
+rows, the remote receipts' deployed count (`ResourceAccounting.Guarantees.Remote.SketchBoundDeployed`), it is `r = 27`, where
 `ε = 128 · Pr[rank_ℚ(64 × 32 block) ≤ 26] ≤ 2^(-219.23)` and the reading is `2^(-216) + ε = 2^(-215.85)`. -/
 def SketchRank (ks m r : ℕ) (ε : ℝ≥0∞) : Prop :=
   pr (fun σ : SketchSigns ks m =>
-    ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r) ≤ ε
+    ∃ u, ((ResourceAccounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r) ≤ ε
 
 /-- **The per-pass hash budget: a pass's grinding candidates share at most `qtot` oracle queries.** Across a family
 of `G` candidate devices on shared data — a pass's grinding candidates, which differ only in their oracles — the
@@ -57,7 +57,7 @@ measured cap the deployed parameters state for a single candidate's `q` (at most
 budget is what makes grinding pay for its queries once rather than per candidate: a candidate the prover grinds spends
 real compressions, so the `G` candidates' queries add within the one budget instead of each getting it whole. The
 per-candidate cap `Prover.bounded` alone gives only the trivial budget `qtot = G·q`
-(`Accounting.RateSketch.Prover.budget_of_bounded` in `security/Proofs/Poub/RateAudit/DeployedSketchSum.lean`),
+(`ResourceAccounting.RateSketch.Prover.budget_of_bounded` in `security/Proofs/Poub/RateAudit/DeployedSketchSum.lean`),
 at which the budgeted bound recovers the multiplicative one. As for `SquaringCeiling`, the bound holds in every world:
 it is the hardware's capacity, which no oracle answer raises. -/
 def SketchHashBudget {N m ρ h S L q w G : ℕ} {X Sig Dg : Type}
@@ -78,7 +78,7 @@ one: at the stated codec's 1,024-bit words (masked `p = 2^1024 − 105`, `k = 3`
 the reference kernel's rate on the GPU, 1.67× with the host's share, against 1.68× on the GPU on the conservative
 reading. With
 `WorkHardness b rounds c_root cost` it bounds the bits a pass completes by `b·F/(rounds·c_root)`
-(`Accounting.Rate.Deployed.rebuildBits`), the term `μ_rebuild`.
+(`ResourceAccounting.Rate.Deployed.rebuildBits`), the term `μ_rebuild`.
 
 **Why every world.** As for the device's `bounded` field (the link's `L` and the `q` queries), the bound is on the
 program, whatever its steps are answered with: it is the hardware's capacity, which no answer raises. A device whose
@@ -91,4 +91,4 @@ it does not silently give every processor the node's whole ceiling. -/
 def SquaringCeiling {N b h ρ S L q : ℕ} (cost : ℕ → ℕ) (F : ℕ) (A : PIDevice N b h ρ S L q) : Prop :=
   ∀ (st : Pous.Bits S) (w : IWorld N b h ρ), (A.chip st).work cost w [] ≤ F
 
-end Accounting.Assumptions
+end ResourceAccounting.Assumptions

@@ -64,14 +64,14 @@ and `B`, and the statement that instantiates it (the one theorem's vocabulary, `
 that reads an honest evaluation whatever the strategy, the integrity claim holds trivially, so what an instance's
 guarantee says rests on the `E` it names.
 
-A period's view of the run (`PeriodLive`) is the device model's period (`Accounting.PeriodRun`) with every field read
+A period's view of the run (`PeriodLive`) is the device model's period (`ResourceAccounting.PeriodRun`) with every field read
 off the strategy and the run rather than off a product of coins: its partition and the commitment's openings, its
 extractor and finders, the circuit's gates the run computed after their coin (PoUW's claim, in gates), the world the
-run realized (`PeriodWorld`: accounts, window, schedule and the network certifier's claim), and each subprotocol's
+run realized (`PeriodWorld`: accounts, window, schedule and the network attester's claim), and each subprotocol's
 verdict. A subprotocol's per-period guarantee (`PeriodLive.Sound`) bounds its failure over the whole game at every
 strategy: its coins may come before, between or after the other subprotocols', and the prover may adapt every byte to
 every coin released before it. The joint guarantees are union bounds over the one game
-(`Accounting.Guarantees.JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive`).
+(`ResourceAccounting.Guarantees.JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive`).
 
 The period's game may be a horizon's: one game, several periods, each read off the same run, each period's parameters
 and commitment sent after the coins of the periods before it, so a period's extractor may read the run's prefix up to
@@ -80,7 +80,7 @@ its commitment (`extract` reads the run).
 
 @[expose] public section
 
-namespace Accounting
+namespace ResourceAccounting
 
 open Verity
 open scoped ENNReal
@@ -99,7 +99,7 @@ def IntegrityHolds {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
   ((unbound P opens X).card : ℝ) ≤ ε * n
 
 /-- **The world a run realized** on device `d` with accounts `α`: whose account each resource is charged to, the window,
-the device schedule, which fits the device, and the network certifier's claim at `K` (what the network certifiers saw
+the device schedule, which fits the device, and the network attester's claim at `K` (what the network attesters saw
 the node move is within `K` bits). -/
 structure PeriodWorld {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   acct : Resource → α
@@ -138,7 +138,7 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circui
 /-- **The claim a subprotocol certifies** at certificates `c`, on the run `o` of the strategy `s`: SPOT's on
 the extractor's values (at most an `ε` share of the units unbound), PoUW's in gates (at least `W` gates computed after
 their coin), and the others' on the world the run realized (at least `S` bits of device memory held on average, at
-least `Q` bits read, at most `K` bits through the network certifiers). -/
+least `Q` bits read, at most `K` bits through the network attesters). -/
 def Holds (c : Certificates) (s : Verity.Game.Strategy G) : Audit → O → Prop
   | .sampled, o => IntegrityHolds r.parts r.opens (r.extract s o) c.ε
   | .pouw, o => c.W ≤ (C.size (r.computed s o) : ℝ)
@@ -179,7 +179,7 @@ noncomputable def condError {O : Type} {G : Verity.Game O} (P : Verity.Game.Stra
 /-- A horizon of `B` server-time blocks read off one run of the game `G`: each block's period, over its own circuit,
 its PoUS challenge times on the run, and the read deadline. The wipe that opens each block is core's `Verity.Wipe`,
 read on the run through a map of the run into the wipe's game at its boundary (`Verity.Wipe.OfRun`), which the joint
-guarantee takes beside the horizon (`Accounting.Guarantees.JointPooledBlocksLive`). -/
+guarantee takes beside the horizon (`ResourceAccounting.Guarantees.JointPooledBlocksLive`). -/
 structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : ℕ) (C : Fin B → Verity.Circuit)
     {O : Type} (G : Verity.Game O) where
   /-- block `b`'s period -/
@@ -199,4 +199,4 @@ def BlocksLive.MemoryTerm {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [
       ((((S.block b).world s o).schedule t).mem (((S.block b).world s o).acct .capacity) : ℝ) ≤
     σ * d.mem + d.chip + (∑ i, d.cap i * S.readDeadline : ℕ)
 
-end Accounting
+end ResourceAccounting

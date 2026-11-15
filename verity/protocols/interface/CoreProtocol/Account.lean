@@ -946,7 +946,7 @@ private def accept (protocol : String) (published profile : List (String × Json
 
 /-- Toy accounts in the shapes a row takes: memory held, at a moment, from below, under a memory challenger's key;
 memory after a wipe, at a moment, from above, with its own capacity and a flag; a link's bits, over a span named by its
-first step and its count, from above, summed, under a network certifier's key; work, over a span that is only counted,
+first step and its count, from above, summed, under a network attester's key; work, over a span that is only counted,
 from below, with a share, pooled once; and work over a span named by its first and last steps, from below. Those that
 name no key are of the whole site. -/
 private def held : Account :=
@@ -997,7 +997,7 @@ private def wipe (foreign memory : Nat) (certified : Bool := true) : Answer :=
   accept "toy/wiped" [("certified", .bool certified), ("eps", .str "1/1000"), ("foreign_bits", Lean.toJson foreign),
     ("memory_bits", Lean.toJson memory)] []
 
-/-- A check of the link under the network certifier's key. -/
+/-- A check of the link under the network attester's key. -/
 private def check (k ns : Nat) (eps : String) (start : Option Nat := some 0) : Answer :=
   accept "toy/sent" ([("K", Lean.toJson k), ("eps", .str eps), ("span_ns", Lean.toJson ns)] ++
     (start.map fun s => ("start_ns", Lean.toJson s)).toList) [("key", .str certKey)]

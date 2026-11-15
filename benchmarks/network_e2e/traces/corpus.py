@@ -572,7 +572,7 @@ async def drive_network_certifier(deployment: dict, endpoints: dict, served: str
     from network_certifier_probe import Collections
 
     network_certifier, ws = network_certifier_modules()
-    params = network_certifier.NetworkCertifierParams(**deployment["params"])
+    params = network_certifier.NetworkAttesterParams(**deployment["params"])
     B, origin, listen = params.cell_bytes, deployment["origin_unix"], tuple(endpoints["listen"])
     host = "%s:%d" % tuple(endpoints["upstream"])
     loop = asyncio.get_running_loop()

@@ -41,7 +41,7 @@ before the coin its noise reads, or is written by a unit that is always proved, 
 public fan-out. Pricing is a property of the sample (`Priced`): some sample lands on the writer with probability at least
 its late cone's weight over the mean round weight `N_w`, the unit `SampledLayer.Covers` charges in. Additive operands
 don't decide fixedness: a computed unit's work reads its multiplicative operands and its noise only
-(`Accounting.Guarantees.TS.AdditiveFixed`, a lemma, not an assumption).
+(`ResourceAccounting.Guarantees.TS.AdditiveFixed`, a lemma, not an assumption).
 Option B (every operand bound before the coin) was refused because it drops K-chunk sums and glue-fed products, and
 option C (`UnitFixed`'s own reading) because it admits a cheater who cancels the noise (`A = −noise`). This file is
 that scoping with the slot roles the ruling needs and no
@@ -72,7 +72,7 @@ late cone, so a good unit that is `Fixed` has fixed words.
 
 @[expose] public section
 
-namespace Accounting.TS
+namespace ResourceAccounting.TS
 
 open Pouw.RelativeSecurity
 
@@ -188,4 +188,4 @@ def FixedWords (wt : Fin S → J → ℝ) (x : Paths (Paths C m × B) S) (u : Fi
 
 end WordLayer
 
-end Accounting.TS
+end ResourceAccounting.TS
