@@ -13,7 +13,9 @@ untraced = ["tests/test_slowdown_code.py"]
 # training-step frontend that derives the steps (`step_program`, `primitives`); its tests' lf model (`train_step_lf.py`),
 # the step the tests derive, loaded by path; `tools/config/verity_config`: settings.py's registry;
 # `benchmarks/training_slowdown/training_slowdown`: training's slowdown code, which the cross-check reads where it sits when
-# VERITY_GRADER_SLOWDOWN_CODE names this tree's.
+# VERITY_GRADER_SLOWDOWN_CODE names this tree's. The tests' reach past the vLLM adapter's public list
+# (`tests/test_vllm_public_api.py`) is held to one file by the harness's scan (`benchmarks/harness/tests/test_adapter.py`).
 inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/torch/tests/frontend/train_step_lf.py",
           "tools/config/verity_config", "benchmarks/training_slowdown/training_slowdown",
-          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py", "adapters/torch"]
+          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py", "adapters/torch",
+          "tests/test_vllm_public_api.py", "benchmarks/harness/tests/test_adapter.py"]

@@ -8,6 +8,9 @@ witness pieces the public circuit holds. ``--jobs`` is 1 unless given and 2 is r
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -17,6 +20,8 @@ from benchmarks.network_traces.tests.test_warden_chain import gate_run
 from benchmarks.network_traces import zk_drivers
 
 zk_drivers.install()
+
+RELEASED_KEYS = Path(n2.__file__).resolve().parents[1] / "device" / "released_keys.py"
 
 
 @pytest.fixture(scope="module")
@@ -75,19 +80,74 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} - tails and held_kept
 
 
-def test_the_summary_says_only_whether_the_signer_refused_and_the_phases_go_to_the_witness(tmp_path):
-    """A member's summary says whether its signer refused any execution phase and never which: those follow what the
-    node sent, so they are written to ``--witness`` alone, and without it nowhere."""
+def _summary(run: Path, at: Path) -> tuple[dict, dict]:
+    assert n2.main(["prove", "--warden-run", str(run), "--out", str(at / "out"), "--dry", "--witness",
+                    str(at / "witness" / "n2" / "summary.json")]) == 0
+    return json.loads((at / "out" / "summary.json").read_text()), json.loads((at / "witness" / "n2" / "summary.json")
+                                                                            .read_text())
+
+
+def _released(doc: dict, at: Path) -> tuple[int, str]:
+    """released_keys.py's exit and what it said, on a record whose ``n2/summary.json`` is `doc`."""
+    (at / "n2").mkdir(parents=True)
+    (at / "n2" / "summary.json").write_text(json.dumps(doc))
+    got = subprocess.run([sys.executable, str(RELEASED_KEYS), str(at)], capture_output=True, text=True)
+    return got.returncode, got.stdout + got.stderr
+
+
+def _public_lines(out: str) -> list[str]:
+    return [line.split(" ", 2)[2] for line in out.splitlines() if line.startswith("N2ZK ")]
+
+
+def test_the_summary_holds_its_released_keys_and_the_rest_goes_to_the_witness(tmp_path, capsys):
+    """The public summary holds only keys its list of released_keys.json declares; the run's path, the device, the
+    timings, the reference's failed parts and which execution phases the signer refused are written to ``--witness``
+    alone, which the list refuses, and without it nowhere. The printed log is the summary's split too: the failed
+    parts go to ``n2.log`` beside the witness."""
     run = gate_run(tmp_path / "g")
-    summary, witness = tmp_path / "out" / "summary.json", tmp_path / "witness" / "n2" / "issuer-refused.json"
-    assert n2.main(["prove", "--warden-run", str(run), "--out", str(summary.parent), "--dry", "--witness",
-                    str(witness)]) == 0
-    doc = json.loads(summary.read_text())
+    capsys.readouterr()
+    doc, witness = _summary(run, tmp_path)
+    said = "\n".join(_public_lines(capsys.readouterr().out))
+    assert "execution phases, words" in said and "failed parts" not in said
+    assert "failed parts" in (tmp_path / "witness" / "n2" / "n2.log").read_text()
+    assert _released(doc, tmp_path / "public") == (0, "released keys: 1 files checked by key, 0 with a key not declared "
+                                                      "public; 0 not yet checked; 0 with no keys\n")
     assert {m["certifier_refused"] for m in doc["members"].values()} == {False} and "issuer_refused" not in str(doc)
-    assert json.loads(witness.read_text()) == {name: {"issuer_refused": []} for name in doc["members"]}
-    witness.unlink()
+    assert {"run", "gpu", "instances_s"} <= set(witness) and not {"run", "gpu", "instances_s"} & set(doc)
+    assert {k: v["issuer_refused"] for k, v in witness["members"].items()} == {k: [] for k in doc["members"]}
+    assert all(set(r) == {"failed"} for m in witness["members"].values() for r in m["reference"].values())
+    rc, said = _released(witness, tmp_path / "private")
+    assert rc == 3 and all(f"key {k} is not declared public" in said
+                           for k in ("run", "gpu", "instances_s", "members/*/issuer_refused"))
     assert n2.main(["prove", "--warden-run", str(run), "--out", str(tmp_path / "again"), "--dry"]) == 0
-    assert not witness.exists() and "issuer_refused" not in (tmp_path / "again" / "summary.json").read_text()
+    assert "issuer_refused" not in (tmp_path / "again" / "summary.json").read_text()
+
+
+def test_a_refused_execution_phase_leaves_the_public_summary_the_same_wherever_it_fell(tmp_path, monkeypatch, capsys):
+    """When the signer refused an execution phase, the public summary is each member's flag alone, with no window
+    count, so nothing public says where the refusal fell; the witness holds the members whole, and the log's
+    per-phase lines go to the witness's ``n2.log``."""
+    run, real = gate_run(tmp_path / "g"), n2.phases
+
+    def refused_at(w: int):
+        def phases(r, **kw):
+            rd = real(r, **kw)
+            rd.issuer_refused = [] if kw else [w]
+            return rd
+        return phases
+
+    seen, printed = [], []
+    for w in (0, 1):
+        monkeypatch.setattr(n2, "phases", refused_at(w))
+        capsys.readouterr()
+        doc, witness = _summary(run, tmp_path / str(w))
+        printed.append(_public_lines(capsys.readouterr().out))
+        assert "execution phases" in (tmp_path / str(w) / "witness" / "n2" / "n2.log").read_text()
+        assert doc["members"] == {k: {"certifier_refused": True} for k in doc["members"]} and "windows" not in doc["link"]
+        assert witness["members"]["honest"]["issuer_refused"] == [w] and witness["link"]["windows"]
+        assert _released(doc, tmp_path / str(w) / "record")[0] == 0
+        seen.append(doc)
+    assert seen[0] == seen[1] and printed[0] == printed[1] and not any("phases" in x for x in printed[0])
 
 
 def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):

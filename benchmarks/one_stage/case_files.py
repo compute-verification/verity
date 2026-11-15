@@ -7,7 +7,7 @@ limit (and a quarter of the limit below 24 MiB, `STACK`, to which it is raised f
 blobs under their own paths pass that, and under short names they don't. v2 finds a blob by its digest
 (`Core.Blobs.get`), so which of several names of one file it is given changes nothing it decides.
 
-    case_files.py CASE --exe EXE [--command refusal] [--dir DIR]
+    case_files.py CASE --exe EXE [--command check] [--dir DIR]
 
 prints one JSON line (`run`): the executable's exit, its last line, its seconds and peak RSS, the blobs the case lists
 and the distinct files and bytes it was given.
@@ -95,7 +95,7 @@ def main(argv_: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("case", type=Path)
     ap.add_argument("--exe", type=Path, required=True)
-    ap.add_argument("--command", default="refusal")
+    ap.add_argument("--command", default="check")
     ap.add_argument("--dir", type=Path)
     a = ap.parse_args(argv_)
     d = a.dir or Path(tempfile.mkdtemp(prefix="case-files-"))

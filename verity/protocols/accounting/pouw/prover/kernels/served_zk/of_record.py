@@ -77,11 +77,11 @@ def core_params(params: Mapping[str, Any], check: Mapping[str, Any], query: str)
             "range": list(params["range"])}
 
 
-def registration_params(program: Any, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
+def registration_params(program: Any, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
                         ports: Mapping[str, Any], log: list[dict], delta: str) -> dict:
     """`spot-difftest registration`'s parameters for `Stream.register`'s `registration.check`: no leaf layer,
     anchors, partition, work table or registered values, which a PoUW window registers none of."""
-    return {"anchors": [], "delta": delta, "law": dict(law), "leaf_layer": None, "log": [dict(r) for r in log],
+    return {"anchors": [], "delta": delta, "law": dict(sampling_design), "leaf_layer": None, "log": [dict(r) for r in log],
             "partition": None, "ports": {p: dict(v) for p, v in ports.items()},
             "program": json.loads(codec.canonical_json(codec.encode_program(program))), "query": dict(query),
             "registered": None, "scheme": scheme, "work_table": None}

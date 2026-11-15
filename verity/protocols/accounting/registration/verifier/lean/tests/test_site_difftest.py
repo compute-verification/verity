@@ -192,7 +192,7 @@ GENESIS_ONSITE = ("d6356b427985ba6dab9a8deb46447a8108cdd9ca3fafa720f5b51af748999
 
 POOL = ["site0", "node0", "node1", "gpu0", "gpu1", "gpu9", "hbm0", "dram0", "cert0", "cert9", "chal0", "uplink0", OUTSIDE,
         "nowhere", 'gpu"\n\t\\', "vm0"]
-"""The ids a change draws from: the site's own, unregistered ones, the outside's, a link's, and one canonical JSON
+"""The ids a change samples from: the site's own, unregistered ones, the outside's, a link's, and one canonical JSON
 escapes."""
 LOC_FIELDS = {"id": st.sampled_from(POOL), "kind": st.sampled_from(KINDS), "parent": st.sampled_from([None, *POOL]),
               "owner": st.sampled_from(OWNERS), "sheet": st.sampled_from([A, B, Q, S, "00", ""]),
@@ -211,7 +211,7 @@ LINK_FIELDS = {"id": st.sampled_from([*POOL, "u9"]), "ends": st.tuples(st.sample
 SHEETS = st.sampled_from([SHEET_Q, SHEET_S, figures(SHEET_A, zero=0), figures(SHEET_B, uniform_u4=2 * 128 * GHZ),
                           replace(SHEET_A, bw=1), replace(SHEET_B, figures=replace(SHEET_B.figures, sku="sim-int8-a")),
                           SHEET_A, SHEET_B])
-"""The sheets a change or an auditor draws from: an escaped SKU's, figures at the 5% edges, a zero rate, a rate at a
+"""The sheets a change or an auditor samples from: an escaped SKU's, figures at the 5% edges, a zero rate, a rate at a
 tolerance of 1's edge, another memory figure, another SKU's figures under `SHEET_A`'s SKU, and the auditor's own."""
 TOLERANCES = [Fraction(0), TOLERANCE, Fraction(1), Fraction(3, 2)]
 """None, the auditor's, one at which `figures(SHEET_B, uniform_u4=...)` is on the edge, and one past 1, which sets no lower

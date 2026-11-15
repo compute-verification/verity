@@ -116,15 +116,15 @@ untraced = [
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `spot-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `poub-verifier`.
-# tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
-# compact_stage.py it imports (test_pouw_h1_drawn.py builds one), reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py),
-# and hands drawn's stage h1_prove's stagers.py (test_pouw_h1_drawn.py, test_pouw_h1_refusals.py).
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 # verity_vllm/definitions is a suite of its own, which this suite's directory leaves out; the package imports it throughout.
 # The package imports the PyTorch adapter (adapters/torch/verity_torch) throughout, and tests/program/test_inputs.py reads its
 # rules' sources.
 # tests/commit/test_census_and_memory_map.py builds `core_requirement` (verity/circuits/requirement) against the
 # difftest harness's Lean (tools/difftest), and loads that package's test_requirement_difftest.py by its path.
+# tests/pipeline/test_serve_h1.py loads adapters/torch's test_pouw_h1_receipts.py by its path, for its lanes-form Window;
+# tests/protocols/test_pous_option.py runs the memory challenger, which reads the configuration hashes the verity command
+# commits (tools/verity/cli/verity_cli/configurations.toml).
 inputs_only = true
 inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "hardware/cards", "verity/README.md",
           "tools/config/verity_config", "artifacts.json", "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
@@ -153,10 +153,10 @@ inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/ver
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
           "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
           "tools/research/src/research/treelock.py", "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
+          "tools/research/src/research/pipefail.py",
           "tools/research/src/research/withdraw.py",
-          "tools/research/src/research/__main__.py",
-          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py", "benchmarks/pouw/h1_prove/stagers.py",
-          "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py", "tools/difftest"]
+          "tools/research/src/research/__main__.py", "tools/difftest",
+          "adapters/torch/tests/pouw/test_pouw_h1_receipts.py", "tools/verity/cli/verity_cli/configurations.toml"]
 parallel = true
 # verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser

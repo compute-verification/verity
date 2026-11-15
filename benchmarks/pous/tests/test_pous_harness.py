@@ -709,10 +709,10 @@ def test_pod_sh_runs_the_placement_gate_first_and_stops_on_its_refusal(tmp_path)
     node = tmp_path / "n2.json"
     node.write_text(json.dumps({"boot_id": "another-machine"}))
     rc, _, out = _pod_sh(tmp_path, "gate", "GPU-only", "GATE_ROLE=memory-challenger", "GATE_CORES=124-127",
-                         f"GATE_PEERS=worker:gpu-node={node}", "GATE_ABSENT=firewall challenger")
+                         f"GATE_PEERS=worker:gpu-node={node}", "GATE_ABSENT=zk-server challenger")
     assert rc.returncode == 4 and "the placement gate refused this run as memory-challenger" in rc.stdout, rc.stdout[-2000:]
     v = json.loads((out / "placement-gate.json").read_text())
-    assert v["role"] == "memory-challenger" and v["passed"] is False and v["absent"] == ["challenger", "firewall"]
+    assert v["role"] == "memory-challenger" and v["passed"] is False and v["absent"] == ["challenger", "zk-server"]
     assert any(p.startswith("gpu-node (worker): its boot_id ") and p.endswith(" is not the node's another-machine")
                for p in v["problems"]), v["problems"]
     assert v["cores"]["declared"] == "124-127" and not (tmp_path / "gate" / "py-args").exists()

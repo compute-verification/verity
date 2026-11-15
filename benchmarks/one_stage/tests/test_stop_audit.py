@@ -92,8 +92,8 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
         monkeypatch.setattr(owner, name, prover)
     r = _resume(handoff)
     s = handoff["stop"]
-    assert r.registration.digest == s["registration"] and list(r.sample.units) == s["units"]
-    assert r.first.registration.digest == handoff["registration"] == s["record"]["previous"]
+    assert r.docket.digest == s["registration"] and list(r.sample.units) == s["units"]
+    assert r.first.docket.digest == handoff["registration"] == s["record"]["previous"]
     file = SA.reads(r)
     boundary = {e["port"]: e["root"] for e in handoff["record"]["roots"]}
     (stop,) = s["record"]["roots"]
@@ -193,7 +193,7 @@ def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
     """`answer_of` on outcomes written by hand, of a stream that holds only its δ and its docket's digest: a
     record that did not accept for a verdict alone names the verdict; an outcome the stream refused, which has no
     audit record, says so; an outcome that did not accept beside a record that did is a reject."""
-    r = NS(stream=NS(delta=0.5), registration=NS(digest="ab" * 64))
+    r = NS(stream=NS(delta=0.5), docket=NS(digest="ab" * 64))
     entry = {"accepted": False, "checks": {"proved": {"ok": True}},
              "verdicts": {SA.LEAN: {"accepted": True}, SA.BOUNDARY_AUDIT: {"accepted": False}, SA.STOP_RULE: {"accepted": None}}}
     reject = {"commitment": "ab" * 64, "profile": None, "protocol": SA.R.PROTOCOL, "public": None, "verdict": "reject"}
@@ -626,7 +626,7 @@ def test_a_summary_states_the_stop_word_only_where_lean_refused_the_stop_relatio
     entry = got["audit"]["verdicts"][SA.LEAN]
     assert (entry["of_record"], entry["digest"], entry["why"]) == (True, UNSATISFIED["digest"], UNSATISFIED["why"])
     assert summary["reason"] == SA.reason({SA.LEAN: entry}) == SA.STOP_WORD
-    assert summary["accepted"] is False and summary["failed"] == ["registered", "roots"]
+    assert summary["accepted"] is False and summary["failed"] == ["roots"]
     _, summary = _audit(hand, SMALL.unaccepted(hand), **told)
     assert summary["reason"] == SA.STOP_WORD and summary["verdicts"][SA.BOUNDARY_AUDIT] is False
 
@@ -643,10 +643,17 @@ def test_a_summary_states_the_stop_word_only_where_lean_refused_the_stop_relatio
     unsampled.write_text(json.dumps({**hand, "stop": {"error": "refused"}}))
     out = tmp_path / "stopped"
     monkeypatch.setattr(T.TS, "template_fn", lambda _id: T.PAIR)
+    k = T.FC.pinned_key()
+    (key := tmp_path / "challenger-key.json").write_text(json.dumps(
+        {"schema": "challenger-key/v1", "W": k.W, "H": k.H, "pubkey": k.public.hex(),
+         "pubkey_sha512": hashlib.sha512(k.public).hexdigest()}))
+    (main := tmp_path / "main.txt").write_text("".join(f"{x}\n" for x in T.FC.MAIN))
     assert SA.main(["--handoff", str(unsampled), "--boundary", str(tmp_path), "--stop", json.dumps(T.STOP.to_json()),
-                    "--design", DESIGN, "--bin", "none", "--lean", "none", "--out", str(out)]) == 1
+                    "--design", DESIGN, "--main", str(main), "--challenger-key", str(key), "--bin", "none",
+                    "--lean", "none", "--out", str(out)]) == 1
     stopped = json.loads((out / "summary.json").read_text())
-    assert stopped["accepted"] is False and stopped["reason"] is None and "error" in stopped and "verdicts" not in stopped
+    assert stopped["accepted"] is False and stopped["reason"] is None and "verdicts" not in stopped
+    assert "registered or sampled no stop block: refused" in stopped["error"], stopped
 
 
 def test_the_control_is_the_accepted_class_with_its_stop_word_changed_and_nothing_else(tmp_path, monkeypatch):

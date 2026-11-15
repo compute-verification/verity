@@ -55,7 +55,7 @@ def expected (p : Params) (f : Fixed) : List (String × Json) :=
   [("check", p.check.toJson), ("root_W", rootWJson f.rootW), ("sampling", f.sampling.toJson),
    ("work", f.work.itemJson p.check.tileWork)]
 
-def subsetLaw (k : Nat) : Json := Json.mkObj [("k", k), ("law", "subset")]
+def subsetSamplingDesign (k : Nat) : Json := Json.mkObj [("k", k), ("law", "subset")]
 
 /-- The level of the registered `work` item. -/
 def levelOf (items : Json) : Option Nat := PouwWindow.field? (get items "work") "level" >>= nat?
@@ -91,8 +91,8 @@ def registered (p : Params) (c : ExecutionPhaseCommitmentRecord) : Except String
         let incorrect := wrongItems p win.items f
         if incorrect ≠ [] then .error s!"public-value: {", ".intercalate incorrect}"
         else if c.population ≠ work.n then .error s!"population: registered {c.population}, the level's {work.n}"
-        else if cs c.samplingDesign ≠ cs (subsetLaw s.k) then
-          .error s!"law: registered {cs c.samplingDesign}, the window's {cs (subsetLaw s.k)}"
+        else if cs c.samplingDesign ≠ cs (subsetSamplingDesign s.k) then
+          .error s!"law: registered {cs c.samplingDesign}, the window's {cs (subsetSamplingDesign s.k)}"
         else if c.query ≠ p.query then .error s!"query: registered {c.query}, the check's {p.query}"
         else if c.scheme ≠ p.check.scheme then .error s!"scheme: registered {c.scheme}, the check's {p.check.scheme}"
         else .ok f
@@ -161,7 +161,7 @@ def outcome (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fixed) (e : E
     else if prof.drawn ≠ #[(unitLevel, k)] then
       .reject s!"profile: drawn {cs (sampledJson prof.drawn)}, not {k} units"
     else if draw.samplingDesign ≠ .subset k ∨ draw.population ≠ n then
-      .reject s!"draw: {lawName draw.samplingDesign} over {draw.population}, not subset:{k} over {n}"
+      .reject s!"draw: {samplingDesignName draw.samplingDesign} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else

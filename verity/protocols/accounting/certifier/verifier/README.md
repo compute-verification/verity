@@ -16,13 +16,13 @@ registered statement, with one network certifier on the server's uplink running 
 - per execution phase, at a statement in scope, `Pr[accept ∧ ¬RLeakCertifier(δ)] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
 - where the network certifier registers its observations in every execution phase, the secrets whose every execution
   phase meets its good event (`ExecutionPhaseGood`) number at most
-  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, whose log2 bounds the bits.
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`, whose log2 bounds the bits.
 
 `RLeakCertifier(δ)` says every observation sequence the network certifier registers is one the registered Program
 accepts at the trace's committed values with some incorrect set the audit allows at δ. ε_ks and ε_bind are the sampled
 verifier's errors (`Compiled.KS`'s) and `B_tap` a collision between the extracted trace's openings and the network
 certifier's. `cap_c` bounds connection c's cells; `freeInputs_i \ reg_i` are execution phase i's free inputs (the
-advice) outside its registered inputs; `faultySets_i(δ)` are its possible incorrect sets at δ and β_i bounds the bits
+advice) outside its registered inputs; `incorrectSets_i(δ)` are its possible incorrect sets at δ and β_i bounds the bits
 any of them commits; k_i is its steps and `Dj` bounds each step's jitter class.
 
 It bounds each execution phase's failure on its own: the union over the monitoring period's live coins is not stated,

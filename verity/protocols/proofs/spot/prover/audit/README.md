@@ -148,7 +148,7 @@ the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc 
 **The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
 (`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any compiled
 verifier. Given `SampledAuditAccepted` and `Compiled.KS` there, except with probability δ + ε_ks + ε_bind, an accepted
-audit's carried sequences, cut at the horizon, number at most 2^c · #faultySets(δ) · 2^β · D^n, at whatever values the
+audit's carried sequences, cut at the horizon, number at most 2^c · #incorrectSets(δ) · 2^β · D^n, at whatever values the
 statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
 - c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as
   ingress, and the registered inputs, the weights among them, don't count;

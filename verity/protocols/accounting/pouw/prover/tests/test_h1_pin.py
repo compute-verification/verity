@@ -1,18 +1,16 @@
-"""The salted H1 tile unit's pin (`core_check.TILES`, `PouwCheck/Tile.lean`): `h1unit.Shape(64)`'s staged flat circuit (`h1_prove/h1unit.py`; the
-statement `h1unit.layout` stages by default) is the one the verifier pins for its template, with the salted layout the opening reads: R A rows, C B rows, then the public row of
+"""The salted H1 tile unit's pin (`core_check.TILES`, `PouwCheck/Tile.lean`): `h1unit.Shape(64)`'s staged flat circuit (`lowering/h1unit.py`; the
+flat statement, `Shape.stager`'s default) is the one the verifier pins for its template, with the salted layout the opening reads: R A rows, C B rows, then the public row of
 salt, position and roots, each `hm96-sha512/row/v2`. The opening refuses a proof over any other circuit, so a change to
 `PouwH1Tile`'s Definition or to Flock's lowering lands its new digest in both tables. `test_pouw_core_check` ties the
 template's id, query and layout to its Definition without the build; only the build reaches the circuit's digest. The
 build takes about 3.5 minutes and 9.5 GB, so it runs when VERITY_POUW_H1_PIN is set."""
 from __future__ import annotations
 
-import h1unit as U
 import pytest
-from verity_config.settings import of
+from verity_config.verity_settings import REGISTRY as SETTINGS
 
+from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
 from verity.protocols.accounting.pouw.verifier import core_check as CC
-
-SETTINGS = of(__file__)
 
 
 @pytest.mark.slow
@@ -22,7 +20,7 @@ def test_the_h1_units_circuit_is_its_pin(tmp_path):
     shape = U.Shape(64)
     d = shape.definition()
     tile = CC.TILES[d.id]
-    st = shape.stager("unit/pouw-h1-tile", circuit=tmp_path / "circuit.txt", flat=True)
+    st = shape.stager("unit/pouw-h1-tile", circuit=tmp_path / "circuit.txt")
     assert st.pin == tile.circuit, (
         f"{d.id} builds circuit {st.pin}, not the one the verifier pins: a change to the template or to Flock's "
         "lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")

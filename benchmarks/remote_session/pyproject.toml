@@ -86,7 +86,10 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           # test_run_serve.py: the kv.cu that run.sh's SERVE=row hands nvcc (rows.sh's, above), and the lease script
           # run.sh falls back to, are files of the tree
           "tools/research/src/research/pods/sh/gpu_lease.sh",
-          "verity/protocols/compose/device/live_challenger/__init__.py"]
+          "verity/protocols/compose/device/live_challenger/__init__.py",
+          # test_vllm_serve.py: serve.py proves by PoUB's node store (`provers`: serving.prove, NodeMemory), which its
+          # CPU test loads without the adapter
+          "verity/protocols/accounting/poub/prover/node_store"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

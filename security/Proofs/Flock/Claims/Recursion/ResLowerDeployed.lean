@@ -1173,7 +1173,7 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     rw [L.m, Nat.add_sub_cancel_left]
     exact hb
   let o : Fin (2 ^ (L.model regs).nbl) := ⟨n / st.c.g, hb⟩
-  have hzero : FlockSoundness.Discharge.Hm.blockBit (L.model regs) (Flock.Readable.zOf 1 w 0 st.m) o
+  have hzero : FlockSoundness.Discharge.Hm.chunkBit (L.model regs) (Flock.Readable.zOf 1 w 0 st.m) o
       (FlockSoundness.Discharge.Hm.zeroCol st.c) = false :=
     FlockSoundness.Discharge.Hm.zero_bit L0 F0 hupv hg0 hz0 o
   have hnI : HmOut.nIn st.c = st.c.ports.size - st.c.outRowPorts.size := rfl
@@ -1196,7 +1196,7 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     rw [FlockSoundness.Discharge.Hidden.getElem!_eq_getD'] at h1
     omega
   have hrow : readForms w (outRowForms st.c q n) =
-      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs)
+      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.chunkBit (L.model regs)
         (Flock.Readable.zOf 1 w 0 st.m) o) (2 * st.c.ports[q]!.words)
         (FlockSoundness.Typed.msgCol st.c (n % st.c.g) q) := by
     refine readForms_eq_of_bits (by
@@ -1219,7 +1219,7 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
           i % 16 < 2 ^ st.c.kLog := by
         rw [hG] at hk2 ⊢
         exact outCol_lt L P.typed ho hls hin hgn (hoW _ hk2) (Nat.mod_lt i (by omega))
-      exact (blockBit_zOf_one (L.model regs) w o hy).symm
+      exact (chunkBit_zOf_one (L.model regs) w o hy).symm
     · rw [if_neg hk2, if_neg hk2, hzero]
       rfl
   have hpfx : rowPfx st.c q = (Flock.HmRow.rowPrefix st.c.ports[q]!.words).data.toList := by
@@ -1227,7 +1227,7 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     rw [Array.getElem?_eq_getElem hqs, hq!]
     rfl
   have hsalt : readForms w (hmSalt st.c q n) =
-      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.blockBit (L.model regs)
+      FlockSoundness.Discharge.Hm.bytesOf (FlockSoundness.Discharge.Hm.chunkBit (L.model regs)
         (Flock.Readable.zOf 1 w 0 st.m) o) 192 (FlockSoundness.Discharge.Hm.saltCol st.c (n % st.c.g) q) := by
     refine readForms_eq_of_bits (by simp [hmSalt, FlockSoundness.Discharge.Hm.length_bytesOf]) fun j hj => ?_
     have hj' : j < 1536 := by simpa [hmSalt] using hj

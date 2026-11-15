@@ -60,7 +60,7 @@ def phase_anchor(pi_n_steps: int, ep: dict | None) -> dict[str, Any]:
         return {"last_step": n_exec - 1, "anchor": "n_exec - 1", "cap_last_step": program_last, "n_exec": n_exec,
                 "lag_step": (n_exec - 1 if lag > 0 else None),
                 "why": (f"the request stopped at a_r {ep.get('a_r')} under LAG {lag}: steps [{n_exec}, {int(ep['cap'])}) are not executed; "
-                        f"its last EXECUTED step {n_exec - 1} is {last_is} -- the `last` stratum is anchored there, not at max_tokens' last step")}
+                        f"its last EXECUTED step {n_exec - 1} is {last_is} -- the `last` stratum is anchored there, not at the cap")}
     if ep and not ep.get("faults"):
         # an EOS stop at a_r = max_tokens - LAG under LAG > 0 has n_exec == max_tokens: max_tokens' last step anchors, AND it IS
         # a lag step -- the flag follows the STOP (a_r < max_tokens and LAG > 0), not n_exec < max_tokens.
@@ -69,10 +69,10 @@ def phase_anchor(pi_n_steps: int, ep: dict | None) -> dict[str, Any]:
         eos_stop_lag = a_r < int(ep["cap"]) and lag > 0
         return {"last_step": program_last, "anchor": "cap - 1", "cap_last_step": program_last, "n_exec": n_exec,
                 "lag_step": (n_exec - 1 if eos_stop_lag else None),
-                "why": (f"the request stopped at a_r {a_r} under LAG {lag} and its executed prefix reaches max_tokens (n_exec {n_exec} == max_tokens): "
-                        f"max_tokens' last step anchors and its last step {n_exec - 1} is the lag step" if eos_stop_lag else "the request ran to its max_tokens")}
+                "why": (f"the request stopped at a_r {a_r} under LAG {lag} and its executed prefix reaches the cap (n_exec {n_exec} == cap): the cap "
+                        f"anchors and its last step {n_exec - 1} is the lag step" if eos_stop_lag else "the request ran to its cap")}
     return {"last_step": program_last, "anchor": "cap - 1", "cap_last_step": program_last, "n_exec": None,
-            "lag_step": None, "why": ("no executed prefix" if not ep else "executed prefix has faults: max_tokens' last step anchors")}
+            "lag_step": None, "why": ("no executed prefix" if not ep else "executed prefix has faults: the cap anchors")}
 
 
 def _lifetime(engine_step: int, ring_slots: int | None) -> str:
@@ -316,10 +316,10 @@ NOT_EXECUTED_SCOPE = ("NOT-EXECUTED-BY-RULE is an active-reference implementatio
                       "there is no not-required-because-not-executed category.")
 
 #: the executed prefix of a request, as the C2 population CLASSIFIES it (never as it shrinks by it).
-EXECUTED_PREFIX_RULE = ("a request that served a_r < max_tokens tokens (its served token a_r-1 a declared EOS id of the Program's stop rule) "
-                        "executed exactly n_exec = min(a_r + LAG, max_tokens) request-relative steps; a request served to its max_tokens executed "
-                        "max_tokens (a length stop: no post-EOS row even if the last token is an EOS). RequiredValues(P, Q_module_v1) stays the "
-                        "full-length manifest of record (fixed population across stopping points; digest unchanged): its identities "
+EXECUTED_PREFIX_RULE = ("a request that served a_r < cap tokens (its served token a_r-1 a declared EOS id of the Program's stop rule) "
+                        "executed exactly n_exec = min(a_r + LAG, cap) request-relative steps; a request served to its cap executed cap "
+                        "(a length stop: no post-EOS row even if the cap token is an EOS). RequiredValues(P, Q_module_v1) stays the "
+                        "cap-length manifest of record (fixed population across stopping points; digest unchanged): its identities "
                         "at request-relative steps >= n_exec are the named class not-executed(a_r, LAG) -- counted in query_total, "
                         "absent from the sampling pool, never 'not evaluated' and never silently absent; reached + uncovered + not-executed "
                         "== |Q(P)|. CONDITIONS: (a) a_r is READ from the Match record of record (G6 lengths_by_request / tokens.json) "

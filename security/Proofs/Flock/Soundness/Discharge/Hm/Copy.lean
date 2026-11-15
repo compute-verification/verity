@@ -535,9 +535,9 @@ theorem pad_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
 
 end RowRanges
 
-theorem blockBit_of_lt (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) {y : ℕ}
-    (hy : y < 2 ^ S.kLog) : blockBit S z o y = FlockSoundness.bit (S.block z o ⟨y, hy⟩) := by
-  unfold blockBit
+theorem chunkBit_of_lt (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) {y : ℕ}
+    (hy : y < 2 ^ S.kLog) : chunkBit S z o y = FlockSoundness.bit (S.block z o ⟨y, hy⟩) := by
+  unfold chunkBit
   split
   · rfl
   · exact absurd hy ‹_›
@@ -597,17 +597,17 @@ theorem block_of_rows_ex {S : Model.Statement} {D : ℕ → Prop} {z : Model.Wit
     (o : Fin (2 ^ S.nbl)) {x src : ℕ} (hx : x < 2 ^ S.kLog) (hxD : ¬ D x)
     (h : ∀ j : Fin (2 ^ S.kLog), S.A₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0) ∧
       S.B₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0)) :
-    blockBit S z o x = blockBit S z o src := by
+    chunkBit S z o x = chunkBit S z o src := by
   by_cases hsrc : src < 2 ^ S.kLog
   · have he : ∀ j : Fin (2 ^ S.kLog), (if j.val = src then (1 : ZMod 2) else 0) =
         if j = (⟨src, hsrc⟩ : Fin (2 ^ S.kLog)) then 1 else 0 := fun j => by simp [Fin.ext_iff]
     have hcopy : CopyRow S ⟨x, hx⟩ ⟨src, hsrc⟩ := ⟨fun j => (h j).1.trans (he j), fun j => (h j).2.trans (he j)⟩
-    rw [blockBit_of_lt _ z o hx, blockBit_of_lt _ z o hsrc, hcopy.block_eq_ex hz hxD o]
+    rw [chunkBit_of_lt _ z o hx, chunkBit_of_lt _ z o hsrc, hcopy.block_eq_ex hz hxD o]
   · have hne : ∀ j : Fin (2 ^ S.kLog), (if j.val = src then (1 : ZMod 2) else 0) = 0 :=
       fun j => ite_eq_right fun (e : j.val = src) => hsrc (e ▸ j.isLt)
     have hzr : ZeroRow S ⟨x, hx⟩ := ⟨fun j => (h j).1.trans (hne j), fun j => (h j).2.trans (hne j)⟩
-    rw [blockBit_of_lt _ z o hx, hzr.block_eq_ex hz hxD o]
-    unfold blockBit
+    rw [chunkBit_of_lt _ z o hx, hzr.block_eq_ex hz hxD o]
+    unfold chunkBit
     simp only [hsrc, dite_false]
 
 /-- A row `[src]` in A and in B (zero when `src` is past the block) holds what `src` holds, in every block of a
@@ -616,12 +616,12 @@ theorem block_of_rows {S : Model.Statement} {z : Model.Witness S.m} (hz : S.Sati
     {x src : ℕ} (hx : x < 2 ^ S.kLog)
     (h : ∀ j : Fin (2 ^ S.kLog), S.A₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0) ∧
       S.B₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0)) :
-    blockBit S z o x = blockBit S z o src :=
+    chunkBit S z o x = chunkBit S z o src :=
   block_of_rows_ex (hz.ex fun _ => False) o hx not_false h
 
-theorem blockBit_constSrc {S : Model.Statement} {z : Model.Witness S.m} {o : Fin (2 ^ S.nbl)} {c : Circuit}
-    {pin : ℕ} (ws : Array UInt64) (t : ℕ) (hpin : blockBit S z o pin = true)
-    (hzero : blockBit S z o (zeroCol c) = false) : blockBit S z o (constSrc c pin ws t) = wordsBit ws t := by
+theorem chunkBit_constSrc {S : Model.Statement} {z : Model.Witness S.m} {o : Fin (2 ^ S.nbl)} {c : Circuit}
+    {pin : ℕ} (ws : Array UInt64) (t : ℕ) (hpin : chunkBit S z o pin = true)
+    (hzero : chunkBit S z o (zeroCol c) = false) : chunkBit S z o (constSrc c pin ws t) = wordsBit ws t := by
   unfold constSrc
   cases h : wordsBit ws t <;> simp [hpin, hzero]
 
@@ -658,7 +658,7 @@ theorem inBit_copy {tags : Tags} {t : Typed.Template} (hd : deriveChecked types 
     (hoff : off < (st.c.nets.getD n default).2.inWords * Flock.WORD)
     (hself : l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off])
     (hf : (rowCopies st.c st.pin ++ wireCopies st.c).filter (fun e => e.1 = x) = [(x, src)]) :
-    blockBit (T.model regs) z o x = blockBit (T.model regs) z o src := by
+    chunkBit (T.model regs) z o x = chunkBit (T.model regs) z o src := by
   have R := RowRanges.ofT T C P
   have hnn := R.rowNet_lt hn
   obtain ⟨hm, hk, -, -⟩ := R.range hnn

@@ -1,7 +1,7 @@
 """(T0) The Program-side step segmentation of every request component (GP-01; X-09's unit): `workload.request_component` cuts a request
 body into request-relative steps, one segment per sampling event (the instance that selects the step's token), and the workload
 Program's chronology programs segment s of request r for engine step `arrive_step + s`.  A rule that does not name the row's sampling
-family leaves the body as ONE segment: every step past s = 0 has no programmed instance set (`chronology.json` member `nodes: null`) and
+family leaves the body as ONE segment: every step past s = 0 has no programmed input set (`chronology.json` member `nodes: null`) and
 `component_steps_equal_cap` is false -- v1's rule named `TokenSelect_v1` only, so a seeded-Gumbel row records exactly that.
 
 Lifted from the row's OWN documents: per declared request (`build_workload/workload_program.json` `requests[*]`) its cap, component

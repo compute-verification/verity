@@ -69,7 +69,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 - **F**: the adversary resource model's total over a period: census `world-inference-2027`, 9.36e30 FP8 FLOP a year.
 
 The Lean predates these names. Its round is an execution phase, and its word is a proof block's committed value. Its `k`
-and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
+and `nsb` are k, and `k_sample` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
 a replica, and θ is 𝓜. A rename is to follow. Two premises already have their new names in the Lean (GLOSSARY.md's
 older names give the old ones): SHA-512's premise is SAK for SHA, `SAKSha`, and the proof system's premise, "the proof
 system is sound", is `ProofSystemSound` (`Pouw.Assumptions.ProofSystemSound`): the verdict accepts a period only where

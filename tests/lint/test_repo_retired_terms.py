@@ -213,6 +213,22 @@ OWN_NAMES = {
          "the certification period of `Attest.Period`, in its guarantees' names (`PeriodSigned`, `PeriodSound`, "
          "`PeriodRun`), in their two files only: elsewhere `PeriodRun` is compose's and `PeriodSound` PoUW's",
          ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryChallenger/Attest.lean")),
+        (r"_PeriodAuditor",
+         "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which GLOSSARY.md's row "
+         "of \"window\" calls a period, and not the stretch of time a bound is about that its row of `*Period*` retires",
+         ("adapters/vllm/tests/pipeline/test_serve_h1.py", "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py")),
+    ),
+    "row of record": (
+        (r"row[\s_]+of[\s_]+record",
+         "vLLM's workload of record: GLOSSARY.md's row of \"row\" for a workload keeps \"row of record\" "
+         "(`manifests/records.json`) in `adapters/vllm/` until vLLM's workloads move",
+         tuple(f"adapters/vllm/{p}" for p in (
+             "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/pipeline/test_neutrality.py",
+             "tests/pipeline/test_row_chain.py", "tests/program/test_compact.py", "verity_vllm/config.py",
+             "verity_vllm/pipeline/circuit_db.py", "verity_vllm/pipeline/config_record.py",
+             "verity_vllm/pipeline/neutrality.py", "verity_vllm/pipeline/research.py", "verity_vllm/pipeline/row.py",
+             "verity_vllm/pipeline/row_config.py", "verity_vllm/pipeline/workload.py",
+             "verity_vllm/program/gemm_target_correspondence.py"))),
     ),
 }
 OWN_NAME = {term: tuple((re.compile(pattern), files) for pattern, _, files in names)
@@ -1026,6 +1042,17 @@ def test_the_responder_s_and_a_party_s_periods_keep_the_word_and_attest_s_names_
         "PeriodSigned", "PeriodSound", "PeriodRun"]
 
 
+def test_the_adapter_s_row_of_record_and_h1_s_period_auditor_keep_their_words_only_in_their_files() -> None:
+    """vLLM's "row of record" and H1's ``_PeriodAuditor`` aren't sites in the adapter's files that name them, and are
+    elsewhere."""
+    text = "the row of record, row_of_record and _PeriodAuditor"
+    for term, (_, _, files) in (("row of record", OWN_NAMES["row of record"][0]), ("*Period*", OWN_NAMES["*Period*"][4])):
+        for f in files:
+            assert Path(ROOT, f).is_file(), f"{f} is gone: move its line of OWN_NAMES with it"
+            assert [w.split("'")[1] for _, w in sites(text, f) if (term == "*Period*") == ("Period" in w)] == []
+    assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record", "_PeriodAuditor"]
+
+
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
     assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
     assert not holds("x.json") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
@@ -1034,6 +1061,9 @@ def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
 
 
 def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
+    # The check that reads the tree's list is a bookkeeping test, whose failed assertion only warns: a list that
+    # doesn't parse would switch the scan off with nothing red, so the tree's list is parsed here, where it fails.
+    allowed()
     assert parse({"entries": [{"file": "a.py", "count": 2}]}) == Counter({"a.py": 2})
     for bad in ({"file": "a.py", "count": 0}, {"file": "a.py", "count": True}, {"file": "a.py", "count": 1, "rule": "x"}):
         try:
@@ -1042,6 +1072,13 @@ def test_the_list_is_well_formed_and_an_entry_moves_with_its_file() -> None:
             assert str(e).startswith(f"{LIST.name}: "), e
         else:
             raise AssertionError(f"{bad} parsed")
+    twice = {"entries": [{"file": "a.py", "count": 1}, {"file": "a.py", "count": 1}]}
+    try:
+        parse(twice)
+    except AssertionError as e:
+        assert "duplicate entry" in str(e), e
+    else:
+        raise AssertionError("a file listed twice parsed")
     assert moved(Counter({"a/x.py": 2, "a/y.md": 1, "b.py": 1}), "a", "c") == Counter({"c/x.py": 2, "c/y.md": 1, "b.py": 1})
 
 

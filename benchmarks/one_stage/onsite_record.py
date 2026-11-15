@@ -697,7 +697,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
                       "discharged_by": (), "stated_by": PERIOD_REGISTERED, "checked": AUDITOR_RECORD},
     "windows-placed": {"is": "ExecutionPhasesPlaced, MonitoringPeriodLeakAccepted's hPw and hβ: each window's statement has the partition "
-                             "the period read, and each of its faulty sets at δ commits at most the bits β the period "
+                             "the period read, and each of its incorrect sets at δ commits at most the bits β the period "
                              "charges it, from the period check's acceptance of the scan; the tied audits' half is "
                              "`tied-exposed`",
                        "discharged_by": ("Properties.NetworkPeriod.scanWindowsPlaced",)},
@@ -713,7 +713,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "in the lock. Three of its parts are in no lock: RegMatches, that the registration matches the "
                            "design the bound reads, assumed and the sampled subprotocol's bridge's to give (`sampled-leg-bridge`); "
                            "the sampling_design identity, that OneStage.check's derived v.law is g.rule.samplingDesignOver n, which today meet "
-                           "only through R1's Draw.sameLaw, an equality of canonical texts (jeq); and the population "
+                           "only through R1's Draw.sameSamplingDesign, an equality of canonical texts (jeq); and the population "
                            "lemma, jeq a (toJson n) → nat? a = some n, so R2's population check gives the n the audit's "
                            "bound reads",
                      "discharged_by": ("Claims.Sampling.Count.countBound_miss_design",)},

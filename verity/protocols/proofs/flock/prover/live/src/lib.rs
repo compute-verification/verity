@@ -2644,7 +2644,7 @@ mod replay_tests {
 }
 
 #[cfg(test)]
-mod coin_server_tests {
+mod live_coin_part_tests {
     use super::*;
 
     struct NoProofs;

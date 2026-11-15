@@ -317,14 +317,14 @@ def test_verify_sh_exits_on_the_leans_verdict_on_each_pass(tmp_path, monkeypatch
     (venv := tmp_path / "venv" / "bin").mkdir(parents=True)
     (venv / "python").write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
     (venv / "python").chmod(0o755)
-    PR = T.load("pearl_c_vllm_panel_rows", T.KERNEL.parent / "pearl_c_vllm" / "panel_rows.py")
+    PR = T.load("pearl_c_vllm_panel_rows", T.POUW / "pearl_c_vllm" / "panel_rows.py")
 
     def verify_sh(out: Path, refuse: str) -> subprocess.CompletedProcess:
         out.mkdir()
         env = {k: v for k, v in os.environ.items() if not k.startswith("PEARLC_CHALLENGER_")}
         env |= {"WORK": str(tmp_path / "work"), "VERITY_BENCH_VENV": str(venv.parent), "PEARLPLUS_LEAN_EXE": str(exe),
                 "TEST_INSTANCE": "1", "OUT": str(out), "REFUSE": refuse}
-        return subprocess.run(["bash", str(T.KERNEL.parent / "pearl_c_vllm" / "verify.sh"), run, "1"], cwd=T.KERNEL.parents[2],
+        return subprocess.run(["bash", str(T.POUW / "pearl_c_vllm" / "verify.sh"), run, "1"], cwd=T.POUW.parents[1],
                               env=env, capture_output=True, text=True)
 
     r = verify_sh(tmp_path / "out", "")

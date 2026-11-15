@@ -671,7 +671,7 @@ theorem msgData_filterAll {pin g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.s
   have hx := deltaMsgCol_pos R (g := g) (t := t) hp (by rw [← getElem!_eq_getD']; exact hup) hk
   by_cases hkb : c.ports[p]!.bits / 1024 ≤ b / 128
   · have hc : HmRow.constBit c.ports[p]! (HmRow.tailOf c.ports[p]!) (b / 128) (msgOff b t) = none := by
-      unfold HmRow.constBit HmRow.blockBit msgOff
+      unfold HmRow.constBit HmRow.chunkBit msgOff
       exact ite_eq_left_iff.2 fun h => absurd (by omega) h
     have hx' : deltaMsgCol c g p b t = msgColOf c g p (b / 128) + msgOff b t := by
       rw [hx, msgColOf_pos R hp hk]

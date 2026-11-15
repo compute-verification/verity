@@ -77,7 +77,7 @@ theorem trusted_run {tr : Json} {T : Trusted} (h : trustedOf tr = .ok T) :
 
 /-- **A θ parameter is registered under the run's root**: the log's first record registers a value of its name (its
 last entry of that name) under the root the run's own record commits it under. -/
-theorem isTheta_root {T : Trusted} {leaves : Nat} {p : String} (h : isTheta T leaves p = true) :
+theorem isTheta_root {T : Trusted} {leaves b : Nat} {p : String} (h : isTheta T leaves b p = true) :
     ∃ e R, lastWith T.log[0]! "registered" "value" p = some e ∧ strAt e "root" = some R ∧
       strAt (getD (getD T.log[T.run]! "window") "registered_roots") p = some R := by
   unfold isTheta at h
@@ -87,13 +87,15 @@ theorem isTheta_root {T : Trusted} {leaves : Nat} {p : String} (h : isTheta T le
     exact ⟨e, R, he, h.1, hR⟩
   · cases h
 
-/-- A parameter the case holds as θ is one `isTheta` passes, at some count of leaves. -/
+/-- A parameter the case holds as θ is one `isTheta` passes, at some count of leaves and the width its record's format
+gives it (`Spot.RecordText.widthOf`). -/
 theorem case_theta {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) {p : String}
-    (hp : c.isTheta p = true) : ∃ leaves, isTheta f.T leaves p = true := by
+    (hp : c.isTheta p = true) : ∃ leaves, isTheta f.T leaves (Spot.RecordText.widthOf f.doc p) p = true := by
   obtain ⟨-, -, -, -, hth, -⟩ := finish_case h
   unfold Case.isTheta at hp
   rw [hth] at hp
-  cases hl : (c.x.params.map (fun (p, leaves) => (p, isTheta f.T leaves p))).lookup p with
+  cases hl : (c.x.params.map fun (p, leaves) =>
+      (p, isTheta f.T leaves (Spot.RecordText.widthOf f.doc p) p)).lookup p with
   | none => rw [hl] at hp; cases hp
   | some b =>
     rw [hl] at hp

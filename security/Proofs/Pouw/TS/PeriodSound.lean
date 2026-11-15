@@ -73,13 +73,13 @@ theorem serviceSound_of_sessions {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np 
     (δs δ : ℝ)
     (hCR : ∀ x w i, (sess x w i).CR)
     (hAcc : Accounting.Assumptions.TS.AcceptedLive (checkLayer p ws opened rel sessOf) sess out)
-    (hLaw : Accounting.Assumptions.TS.ExecutionPhaseDesign sess out)
+    (hSamplingDesign : Accounting.Assumptions.TS.ExecutionPhaseDesign sess out)
     (hChk : Accounting.Assumptions.TS.ServedChecksHold (checkLayer p ws opened rel sessOf) sess out rows)
     (hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkLayer p ws opened rel sessOf) sess out rows δs)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
     Properties.Pouw.MonitoringPeriod.ServiceSound p ws opened rel (nπ * (δs + δ)) :=
   Accounting.SecurityProofs.Bridge.CheckProofSystemSound p ws opened rel sessOf (δs + δ)
-    (Accounting.SecurityProofs.TS.SessionSoundAt (checkLayer p ws opened rel sessOf) sess out rows δs δ hCR hAcc hLaw
+    (Accounting.SecurityProofs.TS.SessionSoundAt (checkLayer p ws opened rel sessOf) sess out rows δs δ hCR hAcc hSamplingDesign
       hChk hLink hδ hδ0)
 
 open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1

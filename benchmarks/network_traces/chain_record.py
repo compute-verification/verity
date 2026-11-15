@@ -363,12 +363,13 @@ def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
             + [f"network {'accepted' if net.get('accepted') else 'refused'}"]
             * (net.get("accepted") != (name == "honest") and escape is None)
             + [f"witness pieces leaked to the verifier: {rec.get('leaked')}"] * bool(rec.get("leaked"))
-            + [f"the control (the prover's own {(rec.get('control') or {}).get('file')}) holds "
-               f"{(rec.get('control') or {}).get('blobs_found')} of {(rec.get('control') or {}).get('of')} pieces, "
-               "so the scan isn't shown to find a leak"] * ((rec.get("control") or {}).get("holds_all") is False))
+            + [f"the control (the prover's own {(rec.get('control') or {}).get('file')}) doesn't hold all "
+               f"{(rec.get('control') or {}).get('of')} pieces, so the scan isn't shown to find a leak"] * ((rec.get("control") or {}).get("holds_all") is False))
 
 
 def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
+    """N2's step from its public summary `s` alone: the timings and the scan's ``structured`` finds stay in the
+    private side ``n2_zk.py prove --witness`` writes, and the report, which is released, holds none of them."""
     job = job or {}
     why, stand_in = (job.get("why") or {}).get("n2"), (job.get("stand_in") or {}).get("n2")
     rc = (job.get("rc") or {}).get("n2")
@@ -388,9 +389,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
                          "lean_proved": sum(bool((w.get("proof") or {}).get("proved")) for w in wins),
                          "as_expected": sum(bool(w.get("as_expected")) for w in wins),
                          "leaked": (m.get("received") or {}).get("leaked"),
-                         "structured": (m.get("received") or {}).get("structured"), "ok": m.get("ok"),
-                         "prove_s": round(sum((w.get("prove") or {}).get("session_s") or 0 for w in wins), 1),
-                         "verify_s": round(sum(w.get("verify_s") or 0 for w in wins), 1)}
+                         "ok": m.get("ok")}
     honest = members.get("honest") or {}
     draw = s.get("draw") if isinstance(s.get("draw"), dict) else {}
     n = (draw.get("population") or honest.get("windows")
@@ -675,7 +674,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the draw's term at δ (eps_at_delta)",
             "sum_eps": f"{windows}·(δ + ε_ks + ε_bind)",
             "a": "log2 #Ss + Σ_c log2(cap_c + 1), charged once a period",
-            "b_w": "#(freeInputs_w \\ reg_w) + log2 #faultySets_w(δ) + β_w + k_w·log2 Dj",
+            "b_w": "#(freeInputs_w \\ reg_w) + log2 #incorrectSets_w(δ) + β_w + k_w·log2 Dj",
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [
                 "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",

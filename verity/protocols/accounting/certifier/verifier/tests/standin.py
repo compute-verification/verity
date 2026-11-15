@@ -36,7 +36,7 @@ def prove(lw: SVC.TransferBlocks, opening: SVC.Hidden, draw: S.Draw, syncs: Sequ
     naming `program` (default: the link's registered Program) that the stand-in Lean `accepted`, and the circuit file.
     Where the unit takes no instance, the rows are zero and the output 0. `word` forges the output word,
     `salts` the salts delivered for ``pub`` and ``o0``, and `units` the public file's unit indices."""
-    root = bytes.fromhex(draw.registration.record["roots"][0]["root"]) if root is None else root
+    root = bytes.fromhex(draw.docket.record["roots"][0]["root"]) if root is None else root
     args = lw.arguments(opening, root, syncs)
     rows = {r: lw.row(args, r) if args is not None else bytes(lw.bits(r) // 8) for r in SVC.ROWS}
     rows["o0"] = SVC.output_row(lw.outputs(opening, root, syncs) if args is not None else 0)

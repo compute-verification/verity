@@ -32,7 +32,7 @@ ROLES = [P.CHALLENGER, P.INFERENCE_SERVER, P.PROOF_SERVER, P.VERIFIER]
 ADDRESS = "127.0.0.1:4242"
 
 
-def registration(i: int) -> bytes:
+def docket(i: int) -> bytes:
     return json.dumps({"block": i, "root": "ab" * 64}, sort_keys=True).encode()
 
 
@@ -49,7 +49,7 @@ def proof(i: int) -> bytes:
 
 
 def interior(i: int) -> bytes:
-    return json.dumps({"block": i, "previous": R.digest(json.loads(registration(i))), "root": "cd" * 64},
+    return json.dumps({"block": i, "previous": R.digest(json.loads(docket(i))), "root": "cd" * 64},
                       sort_keys=True).encode()
 
 
@@ -89,7 +89,7 @@ class Machine:
 
     def serve(self, i: int) -> bytes:
         self._step("serve", i)
-        return registration(i)
+        return docket(i)
 
     def replay(self, i: int) -> bytes:
         self._step("replay", i)
@@ -144,10 +144,10 @@ def test_an_honest_run_samples_proves_and_audits_each_block_in_order_and_accepts
     assert r.status == "completed", r.outcomes
     lines = lines_of(r)
     assert lines == [{"block": i, "coins": "simulated", "reason": None,
-                      "registration": R.digest(json.loads(registration(i))), "verdict": "accept"} for i in (0, 1)]
-    assert [c for c in m.calls if c[0] == "draw"] == [("draw", i, registration(i), ADDRESS) for i in (0, 1)]
+                      "registration": R.digest(json.loads(docket(i))), "verdict": "accept"} for i in (0, 1)]
+    assert [c for c in m.calls if c[0] == "draw"] == [("draw", i, docket(i), ADDRESS) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "prove"] == [("prove", i, replay(i), sample(i), ADDRESS) for i in (0, 1)]
-    assert [c for c in m.calls if c[0] == "audit"] == [("audit", i, registration(i), ADDRESS, sample(i), proof(i))
+    assert [c for c in m.calls if c[0] == "audit"] == [("audit", i, docket(i), ADDRESS, sample(i), proof(i))
                                                        for i in (0, 1)]
     assert m.host.events == ["start", "stop"]
     outputs = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "output"]
@@ -264,17 +264,17 @@ def test_two_stages_sample_each_blocks_second_stage_only_once_its_interior_is_in
     assert r.status == "completed", r.outcomes
     lines = lines_of(r)
     assert lines == [{"block": i, "coins": "simulated", "interior": digest(interior(i)), "reason": None,
-                      "registration": digest(registration(i)), "verdict": "accept"} for i in (0, 1)]
+                      "registration": digest(docket(i)), "verdict": "accept"} for i in (0, 1)]
     for i in (0, 1):
         assert [c[0] for c in m.calls if c[0] not in ("serve", "replay") and c[1] == i] == [
             "draw", "interior", "second", "prove", "audit"]
     assert [c for c in m.calls if c[0] == "interior"] == [("interior", i, replay(i), sample(i)) for i in (0, 1)]
-    assert [c for c in m.calls if c[0] == "second"] == [("second", i, registration(i), ADDRESS, sample(i), interior(i))
+    assert [c for c in m.calls if c[0] == "second"] == [("second", i, docket(i), ADDRESS, sample(i), interior(i))
                                                         for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "prove"] == [("prove", i, replay(i), sample(i), interior(i), second(i), ADDRESS)
                                                        for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "audit"] == [
-        ("audit", i, registration(i), ADDRESS, sample(i), proof(i), interior(i), second(i)) for i in (0, 1)]
+        ("audit", i, docket(i), ADDRESS, sample(i), proof(i), interior(i), second(i)) for i in (0, 1)]
     assert m.host.events == ["start", "stop"]
     assert [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "output"] == lines
     assert r.outcomes[P.PROOF_SERVER] == {"outcome": {"proved": 2}, "refused": None}
@@ -331,7 +331,7 @@ def _drawn():
     """A two-stage verifier that has sampled block 0's first stage."""
     v = _started(P.TwoStageVerifier())
     v.on(Received(P.CHALLENGER, Message("Challenger", {"address": ADDRESS, "pin": "f" * 40})))
-    assert [s.message.type for s in _said(v, P.INFERENCE_SERVER, "Registration", 0, registration(0))] == ["Draw"]
+    assert [s.message.type for s in _said(v, P.INFERENCE_SERVER, "Registration", 0, docket(0))] == ["Draw"]
     return v
 
 
