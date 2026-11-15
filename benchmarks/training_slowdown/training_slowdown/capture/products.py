@@ -173,7 +173,7 @@ def priced_dtype(row: dict, capture: str | None) -> str | None:
     path a job runs the card's fused kernel computes the call in its operands' dtype: the query's, as autocast hands
     it to the kernel. The job's count writes the call's ops in that dtype, its stand-ins' (`flops.dtype_of`, on
     `flops.Counter._attention`'s). The trace's float32 products stand in for the kernel's, and their price is the
-    kernel's: the dtype the call computes in, which the capture states at the call (`capture.trace`'s marker, the
+    kernel's: the dtype the call computes in, which the capture states at the call (`verity_torch.frontend.train_trace`'s marker, the
     row's `attention`), refusing a call that returns in another. A float32 job's call stays float32, and so does a
     float32 product a step computes outside a call, under autocast or not.
 
@@ -184,7 +184,7 @@ def priced_dtype(row: dict, capture: str | None) -> str | None:
       math path (fused kernels turned off, or a call none of them takes) is computed in float32 and priced low by
       the trace; the job's count sees it, since on that path its rows name the float32 the math kernel's ops return
       (`flops.dtype_of`);
-    - a call is marked where torch's dispatch hands it to the capture's mode (`capture.trace._MarkedAttention`); a
+    - a call is marked where torch's dispatch hands it to the capture's mode (`verity_torch.frontend.train_trace`); a
       call another function of torch makes through a name it bound before the capture is not, and its ops are
       priced as traced;
     - attention written by hand (a `bmm` and a softmax; `nn.MultiheadAttention` asked for its weights) is no call,
