@@ -9,7 +9,7 @@ public import Proofs.Flock.Claims.Complete.Replay.Sizes
 A squeeze records the pending bytes and a 16-byte header (`sent_bytes_size`), then empties them (`afterSq_pending`).
 So a round's bytes are what was absorbed since the last squeeze, plus 16. Every absorb of the models is of a fixed
 size but four: zerocheck's round-1 vectors, lincheck's `z_partial`, the ring switch's `s_k`, and Ligerito's caps and
-`y_r`. Those are bounds `V`, `C` and `Y` here.
+`y_r`. Those are bounds `V`, `C` and `NY` here.
 
 * `Wb B P t`: each of `t`'s rounds holds at most `B` bytes, and at most `P` bytes are pending; kept by an absorb of
   at most `c` bytes into `P + c` (`Wb.ap`), and by a squeeze when `P + 16 ≤ B`, after which nothing is pending.
@@ -81,8 +81,8 @@ theorem pSlice_le {vs : Array F128} {V : ℕ} (hv : vs.size ≤ V) : ∀ Q, (pSl
   rw [pSlice_size]
   omega
 
-theorem foldl_pF_le {a : Array F128} {Y : ℕ} (hy : a.size ≤ Y) :
-    ∀ Q, (a.foldl (fun P w => pF w P) Q).size ≤ Q.size + 32 * Y := by
+theorem foldl_pF_le {a : Array F128} {NY : ℕ} (hy : a.size ≤ NY) :
+    ∀ Q, (a.foldl (fun P w => pF w P) Q).size ≤ Q.size + 32 * NY := by
   intro Q
   have key : ∀ (l : List F128) (Q : ByteArray), (l.foldl (fun P w => pF w P) Q).size = Q.size + 32 * l.length := by
     intro l
@@ -112,7 +112,8 @@ theorem wb_tEnd {B P C V m : ℕ} {digest cap : ByteArray} {cs : Challenges} {tr
     (hcc : (r1c tr (m - 6) (cs.r m)).size ≤ V) (hP : P + 2 * C + 268 ≤ B) (hV : 32 * V + 48 ≤ B) (h80 : 80 ≤ B) :
     Wb B 64 (tEnd m digest cap cs tr t) := by
   have h₁ : Wb B (P + 95 + (C + 31) + (C + 31) + 95) (t₁ digest cap t) :=
-    (((h.ap (pLabel_le (by decide))).ap (pBytes_le hd)).ap (pBytes_le hc)).ap (pLabel_le (by decide))
+    (((h.ap (pLabel_le (by decide +kernel))).ap (pBytes_le hd)).ap (pBytes_le hc)).ap
+      (pLabel_le (by decide +kernel))
   have h₃ : Wb B 0 (t₃ m digest cap cs t) := (h₁.sq (by omega) _ _ _).sq (by omega) _ _ _
   have h₅ : Wb B 0 (t₅ m digest cap cs tr t) := ((h₃.ap (pSlice_le hab)).ap (pSlice_le hcc)).sq (by omega) _ _ _
   refine Wb.mono (P := 0 + 32 + 32) ?_ (by omega)
@@ -126,7 +127,7 @@ namespace Lc
 
 theorem wb_loopT {B P : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Challenges}
     {t : Transcript} (h : Wb B P t) (hP : P + 111 ≤ B) (hB : 80 ≤ B) : ∀ i, Wb B 0 (loopT c m tr zc full cs t i)
-  | 0 => ((h.ap (pLabel_le (by decide))).sq (by omega) _ _ _).sq (by omega) _ _ _
+  | 0 => ((h.ap (pLabel_le (by decide +kernel))).sq (by omega) _ _ _).sq (by omega) _ _ _
   | i + 1 => by
     simp only [loopT]
     exact (((wb_loopT h hP hB i).ap (pF_le _)).ap (pF_le _)).sq (by omega) _ _ _
@@ -144,16 +145,16 @@ end Lc
 namespace Rs
 
 theorem wb_loopT {B P V : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challenges} {t : Transcript} (h : Wb B P t)
-    (hs : ∀ k, (switchVec tr claims[k]!).size ≤ V) (hB : P + 16 * V + 222 ≤ B) :
+    (hs : ∀ k : ℕ, (switchVec tr claims[k]!).size ≤ V) (hB : P + 16 * V + 222 ≤ B) :
     ∀ k, Wb B (P + 95) (loopT tr claims cs t k)
-  | 0 => h.ap (pLabel_le (by decide))
+  | 0 => h.ap (pLabel_le (by decide +kernel))
   | k + 1 => by
     refine Wb.mono (P := 0) ?_ (by omega)
-    exact (((wb_loopT h hs hB k).ap (pLabel_le (by decide))).ap (pSlice_le (hs k))).sq (by omega) _ _ _
+    exact (((wb_loopT h hs hB k).ap (pLabel_le (by decide +kernel))).ap (pSlice_le (hs k))).sq (by omega) _ _ _
 
 /-- The ring switch's rounds: its label, and each claim's label and `s_k`. -/
 theorem wb_tEnd {B P V : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challenges} {t : Transcript} (h : Wb B P t)
-    (hs : ∀ k, (switchVec tr claims[k]!).size ≤ V) (hB : P + 16 * V + 222 ≤ B) :
+    (hs : ∀ k : ℕ, (switchVec tr claims[k]!).size ≤ V) (hB : P + 16 * V + 222 ≤ B) :
     Wb B 0 (tEnd tr claims cs t) :=
   (wb_loopT h hs hB _).sq (by omega) _ _ _
 
@@ -205,22 +206,22 @@ theorem wb_lv0 {B C : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch 
     (by omega) (by omega)) (by omega)
 
 theorem wb_stepN {B C : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} {i : ℕ}
-    {x : Vars × LState × Transcript} (h : Wb B 0 x.2.2) (hc : ∀ j, (capBytes p.recursiveCaps[j]!).size ≤ C)
+    {x : Vars × LState × Transcript} (h : Wb B 0 x.2.2) (hc : ∀ j : ℕ, (capBytes p.recursiveCaps[j]!).size ≤ C)
     (hB : C + 247 ≤ B) : Wb B 0 (stepN p cf sch i x).2.2 := by
   unfold stepN
   exact wb_close (wb_query (wb_ood (wb_ood ((wb_chals (h.mono (Nat.zero_le _)) (by omega) 4).ap
     (pBytes_le (hc _))) (by omega) (by omega)) (by omega) (by omega)) (by omega) (by omega)) (by omega)
 
-theorem wb_stepL {B Y : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule}
-    {x : Vars × LState × Transcript} (h : Wb B 0 x.2.2) (hy : p.finalProof.yr.size ≤ Y) (hB : 32 * Y + 247 ≤ B) :
+theorem wb_stepL {B NY : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule}
+    {x : Vars × LState × Transcript} (h : Wb B 0 x.2.2) (hy : p.finalProof.yr.size ≤ NY) (hB : 32 * NY + 247 ≤ B) :
     Wb B 0 (stepL p cf sch x).2.2 := by
   unfold stepL
   exact wb_closeLast (wb_query ((wb_chals (h.mono (Nat.zero_le _)) (by omega) 4).ap (foldl_pF_le hy)) (by omega)
     (by omega)) (by omega)
 
-theorem wb_loop {B C Y : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule}
-    {x : Vars × LState × Transcript} (h : Wb B 0 x.2.2) (hc : ∀ j, (capBytes p.recursiveCaps[j]!).size ≤ C)
-    (hy : p.finalProof.yr.size ≤ Y) (hB : C + 32 * Y + 256 ≤ B) : ∀ j, Wb B 0 (loop p cf sch x j).2.2
+theorem wb_loop {B C NY : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule}
+    {x : Vars × LState × Transcript} (h : Wb B 0 x.2.2) (hc : ∀ j : ℕ, (capBytes p.recursiveCaps[j]!).size ≤ C)
+    (hy : p.finalProof.yr.size ≤ NY) (hB : C + 32 * NY + 256 ≤ B) : ∀ j, Wb B 0 (loop p cf sch x j).2.2
   | 0 => h
   | j + 1 => by
     have ih := wb_loop h hc hy hB j
@@ -231,14 +232,14 @@ theorem wb_loop {B C Y : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {s
     · exact wb_stepL ih hy (by omega)
 
 /-- **Ligerito's rounds**: its label, the claim and the cap, then each level's messages, nonces, values, caps (at most
-`C` bytes each) and `y_r` (at most `Y` elements). -/
-theorem wb_out {B C Y : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} {T : F128}
+`C` bytes each) and `y_r` (at most `NY` elements). -/
+theorem wb_out {B C NY : ℕ} {p : LigeritoProof} {cf : ℕ → ℕ → F128} {sch : Schedule} {T : F128}
     {cap : Array ByteArray} {t : Transcript} (h : Wb B 0 t) (hcap : (capBytes cap).size ≤ C)
-    (hc : ∀ j, (capBytes p.recursiveCaps[j]!).size ≤ C) (hy : p.finalProof.yr.size ≤ Y)
-    (hB : C + 32 * Y + 256 ≤ B) : Wb B 0 (out p cf sch T cap t).2.2 := by
+    (hc : ∀ j : ℕ, (capBytes p.recursiveCaps[j]!).size ≤ C) (hy : p.finalProof.yr.size ≤ NY)
+    (hB : C + 32 * NY + 256 ≤ B) : Wb B 0 (out p cf sch T cap t).2.2 := by
   have hpre : Wb B 0 (pre p cf sch T cap t).2.2 := by
     unfold pre
-    exact wb_lv0 (wb_chals (wb_head (((h.ap (pLabel_le (by decide))).ap (pF_le _)).ap (pBytes_le hcap))
+    exact wb_lv0 (wb_chals (wb_head (((h.ap (pLabel_le (by decide +kernel))).ap (pF_le _)).ap (pBytes_le hcap))
       (by omega) (by omega)) (by omega) _) (hc 0) (by omega)
   exact wb_loop (x := x₀ p cf sch T cap t) hpre hc hy hB _
 
