@@ -1,5 +1,5 @@
 """certifier_timing without the host's clock: the number on offsets the test makes, the server's plan on a schedule
-the test gives, the guard on a clock the test moves, and the network certifier on a `VirtualClock` under each attack.
+the test gives, the guard on a clock the test moves, and the network attester on a `VirtualClock` under each attack.
 
 - `channel.measure` reads a planted bit whole, an ignored one as nothing, and a bit behind noise at its decoder's
   rate; `step` reads through a drift; `samples_to_show` is where a decoder at chance has its upper bound at the value.
@@ -10,7 +10,7 @@ the test gives, the guard on a clock the test moves, and the network certifier o
   whose clock drifts; through one that releases at a fixed time neither attack shows; and a first arrival an
   interval off the server's, an admission the server didn't take, a chunk of another interval's bytes or a failed
   connection is named.
-- The network certifier itself, on a clock the test moves: under `write` and `burst` every interval's cell leaves in
+- The network attester itself, on a clock the test moves: under `write` and `burst` every interval's cell leaves in
   its own interval whatever the bits (the last, with the server's end, as the `END` cell) and ends in the byte that
   names it, and under `delay` the first late interval fails the connection closed.
 - `--launch`'s schedule is one interval's cycle from the release time, open and then shut for the certifier's
@@ -685,7 +685,7 @@ class _Wire:
 
 
 async def _certify(attack: str, intervals: int) -> tuple[Certifier, list[tuple[int, int, int]], int, dict[int, int]]:
-    """The network certifier on a clock the test moves, at the benchmark's schedule, one client, and the server's
+    """The network attester on a clock the test moves, at the benchmark's schedule, one client, and the server's
     plan: each write reaches the certifier before the first tick at or after its time. Returns the certifier, the
     client's cells as (tick, kind, last byte), the first interval the server wrote for and its bits."""
     cfg = CFG | {"certifier": "network", "attack": attack, "ignore": False, "intervals": intervals}

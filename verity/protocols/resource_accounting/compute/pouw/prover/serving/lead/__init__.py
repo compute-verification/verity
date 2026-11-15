@@ -1,5 +1,5 @@
 """PoUW's lead on the int8 plain arm (``tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min``): the serving side of each
-noised linear call. `feed` is a call's coin feed and the in-process certifier that stands in for the network certifier's
+noised linear call. `feed` is a call's coin feed and the in-process certifier that stands in for the network attester's
 coin link; `record` is the pass's record.
 
 `LeadRun` is one install's lead (`pouw.install` under `SCHEME`). Each engine step's forward is one pass and one window,
@@ -30,7 +30,7 @@ words root (`words_root`) and recorded, and the pass's `PassCommitment` is publi
 outside a step (an engine's dummy run) joins the next step's window. A window past ``calls`` calls is refused, and so is a
 call off its linear's n x k or on other than the window's m rows, since the words were counted at that m: a forward whose
 linears see different m, as a MoE layer's experts do, is not covered. The coins are this process's (`feed.IN_PROCESS`)
-until the network certifier's coin link replaces them, and they credit nothing.
+until the network attester's coin link replaces them, and they credit nothing.
 """
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """The advice code's window coder: the residual's coder, canonical, prefix-free and self-delimiting per window.
 
-The advice code (`codec`) charges nothing for what is certified (the network certifier's admission order, the request
+The advice code (`codec`) charges nothing for what is certified (the network attester's admission order, the request
 records, the release buckets), replayed (the scheduler replay, `replay`) or derived (`derived`'s rules), and sends only the
 residual, one `Window` (the certifier's `window_charge.Advice`) per sampling block, each field's values in the
 order its reader asks for them:

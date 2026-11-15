@@ -1,6 +1,6 @@
 """egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress execution phase
 computed by its own `EgressBucket_v1` proof block, its computed row, output ``o1``, registered against the network
-certifier's signed root
+attester's signed root
 (`network_certifier_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
 by the Lean verifier's registered reads (`verity-verify-proof verify --zk --registered`), which name every port of the
 statement (`Flock.Registered.checkComplete`); each unit's one public output, its 16-bit ``o0`` (1 when the state
@@ -9,8 +9,8 @@ holds these units yet (`verity.protocols.resource_accounting.network.prover.egre
 
     python benchmarks/network_traces/zk_drivers.py egress_zk prove --bin flock-circuit --lean verity-verify-proof --out DIR [--dry]
 
-* **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the network certifier's own egress
-  (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the network certifier and its
+* **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the network attester's own egress
+  (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the network attester and its
   head signed by a test-size LMS key (`network_certifier_rows.attest`). The window read is the one with the most `DATA` cells; its
   registration is read by the verifier (`network_certifier_rows.check_registration`) before its port is built from the head it
   names.
@@ -19,12 +19,12 @@ holds these units yet (`verity.protocols.resource_accounting.network.prover.egre
   `egress_traffic.states`), row t of the member's committed states (`network_certifier_zk.committed_value`: each bucket's state
   under a salt of the prover's own, committed before staging, the root the registration names before any coin, where
   the scan registers its view tree), and computes ``o0``, 1 when the state renders a row, and ``o1``, the row,
-  committed under the salt of the network certifier's row t and registered as a read of it, so the proof opens the network certifier's row
+  committed under the salt of the network attester's row t and registered as a read of it, so the proof opens the network attester's row
   only when the row the state renders is it. Each ``o0`` row is committed under its public salt and read off the
   verifier's own value of words 1 (`known_o0`, its rows and salts in the verifier's registered reads, from which Lean
   recomputes the root), so a unit whose state renders no row fails its read.
 * **Members.** ``honest``: accepted, every ``o0`` 1. ``lying``: one rendered output id of one bucket's state changed:
-  the proof block computes a row the network certifier didn't sign, so its ``o1`` opens no registered row: refused by
+  the proof block computes a row the network attester didn't sign, so its ``o1`` opens no registered row: refused by
   Lean ("does not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts
   swapped to match, so each ``o1`` opens at the other proof block's position: refused by Lean ("reads position"). Each
   is registered, every proof block sampled by the verifier's Lean (`verity-verify-proof draw --stratified n`), proved ``--zk``
@@ -88,7 +88,7 @@ def _data(row: bytes) -> int:
 
 
 def link(out: Path) -> SimpleNamespace:
-    """The execution phase to prove: the network certifier's opening and its signed registration, read back by the
+    """The execution phase to prove: the network attester's opening and its signed registration, read back by the
     verifier (the head and domain the port is built on), and each bucket's state (`egress_traffic.states`)."""
     served = traffic.busy(SEED, PARAMS, CONNECTIONS, LONGEST, WINDOWS)
     T = PARAMS.window
@@ -127,7 +127,7 @@ def _changed_state(at: SimpleNamespace) -> tuple[int, EG.State, dict]:
 
 def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
     """A member's proof blocks' state, in proof block order, the row each computes (`egress.outputs`, its ``o1``), the salts its
-    ``o1`` rows are committed under, the header's `registered` entry (the network certifier's positions and paths for the rows
+    ``o1`` rows are committed under, the header's `registered` entry (the network attester's positions and paths for the rows
     it names), each unit's ``o0``, and the states the member commits before staging, in bucket order (``committed``:
     unit t reads bucket ``order[t]``'s)."""
     cells, T = at.cells, PARAMS.window
@@ -157,7 +157,7 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int) -> str | 
 def known_o0(program: str, head: WR.CellsHead, words: list[int]) -> G.Registered:
     """Each unit's ``o0`` row, its one word, as the value the verifier registers at known content on `head`'s
     execution phase: row t under its public salt (`registered.supplied_salts`), in a tree whose domain binds the statement's
-    Program (its SHA-512, `program`) and the network certifier's root. The verifier's own is every word 1
+    Program (its SHA-512, `program`) and the network attester's root. The verifier's own is every word 1
     (`EG.ACCEPT`); the prover commits its units' words the same way, so its rows open the verifier's root only where
     each is 1."""
     value = f"{head.value}/{VERIFIER}/o0"
@@ -174,7 +174,7 @@ def known_port(v: G.Registered, reads_from: int = 0) -> dict:
 
 def registered_file(program: str, at: SimpleNamespace, state: G.Registered, reads_from: int) -> dict:
     """The verifier's own `--registered` file, which names every port of the statement
-    (`Flock.Registered.checkComplete`): unit `reads_from + t`'s ``o1`` reads row t of the network certifier's root
+    (`Flock.Registered.checkComplete`): unit `reads_from + t`'s ``o1`` reads row t of the network attester's root
     (`network_certifier_rows.bucket_port`), its ``state`` row t of the member's committed states at the root the registration
     names (`network_certifier_zk.value_port`), and its ``o0`` row t of the verifier's own value of words 1 (`known_o0`)."""
     o0 = known_o0(program, at.head, [EG.ACCEPT] * state.leaves)
@@ -229,7 +229,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     """Member `name`'s statement: its units' ``state`` rows in a shared-row file (each instance its own table row),
     every port under the salts and paths of its registered entry: ``state`` the member's committed states'
     (`network_certifier_zk.committed_value`), ``o0`` its words' under their public salts (`known_o0`) and ``o1`` the network
-    certifier's; and the verifier's own `--registered` file of every port (`registered_file`). The units' outputs are
+    attester's; and the verifier's own `--registered` file of every port (`registered_file`). The units' outputs are
     the reference's."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"

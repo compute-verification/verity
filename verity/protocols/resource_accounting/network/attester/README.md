@@ -1,8 +1,8 @@
-# The network certifier's device (`verity/protocols/resource_accounting/network/attester`)
+# The network attester's device (`verity/protocols/resource_accounting/network/attester`)
 
 ## Interface
 
-The network certifier's device: its party on the deployment layer, what it needs of that layer's runtime, its end of
+The network attester's device: its party on the deployment layer, what it needs of that layer's runtime, its end of
 the challenges' link, and the certifier program in executable Lean (the executable forms of the certifier's
 definitions). It has no console script.
 

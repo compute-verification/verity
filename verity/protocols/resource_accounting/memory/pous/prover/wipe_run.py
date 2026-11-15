@@ -18,14 +18,14 @@ after it, `wipe.dram`), the memory challenger on `period.json`'s `challenger_hos
 whose key and session log are beside the periods), its side handed in by the caller that starts the run (`side_of`).
 The verifier trusts one memory-challenger key, the one whose SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, and a challenger on its own host with no
 key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
-key its session came with. No network certifier counts the session's egress yet, so the check is given no
+key its session came with. No network attester counts the session's egress yet, so the check is given no
 count unless `wipe.egress_bits` names one, and an accepted subprotocol certifies nothing either way (`wipe_period.uncounted`): its verdict
 is real and its quantity isn't. The subprotocol's record says `trusted-device` holds only under a committed configuration, for
 a session signed under a key its `[[pin]]` entries give the memory challenger for the wipe (`period.json`'s
 `deployment`, `period.deployment`), never from the hosts' names: a session accepted under a key the run pinned itself
 is a rehearsal with no bound. It names what the bound doesn't cover (`uncertified`): the key custody of any other
 session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), what the prover's store
-leaves out (`wipe_period.store_gaps`) and each link leaving the node that no network certifier counts
+leaves out (`wipe_period.store_gaps`) and each link leaving the node that no network attester counts
 (`wipe_party.link`).
 `main` runs the subprotocol on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU,
 through `wipe_on_node.py`, which hands it the runtime's `Side.of`). Run as a module, with no side to hand it, this file

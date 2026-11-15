@@ -54,7 +54,7 @@
 # (REPLAY_FROM=OUT/<arm>.K).
 # The number is not given without the row on a repeated prefix under it, which is load prefix's, served in a job of its
 # own (--loads prefix --arms "compiled no-prefix-cache two-stage": its cost is the row alone) and joined with WITH.
-# An arm behind the network certifier (tick-certifier) is served by two commands, and this script is the node's:
+# An arm behind the network attester (tick-certifier) is served by two commands, and this script is the node's:
 #   ARMS="[compiled] tick-certifier" SIDE=server LOADS=chat=RUNG TICK_MS=SAT,FREE [FRONT=PORT] [CELLS=NAME=N,...]
 #     [STOP_AT=TIME] bash benchmarks/serve_tax/run.sh --model glm53
 # starts the arm's engine and the id front before it on loopback port FRONT and holds them until the certifier's run
@@ -361,7 +361,7 @@ for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
 # the cost of the last arm over the stock arm it is made from (compiled, or prod); a job that ends on stock has
 # none: compiled alone (a calibration of its rungs), or published or prod, which are stock under other settings and
-# no arm of ours; nor has the node's side of an arm behind the network certifier, whose passes are in the other
+# no arm of ours; nor has the node's side of an arm behind the network attester, whose passes are in the other
 # side's directory. WITH: the out/ directories of earlier jobs on this node whose arms served another load, which
 # joins the number
 if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \

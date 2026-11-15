@@ -1,4 +1,4 @@
-"""The network certifier's output value: the output it relayed, committed by the certifier as a registered value
+"""The network attester's output value: the output it relayed, committed by the certifier as a registered value
 (`one_stage.registered`) and its head signed with its key, never by the prover. The verifier pins the value's root from
 that certificate alone (`check_out`), so every output proof block's row is a registered read of it, opened against
 the certifier's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`), not compared in the
@@ -24,7 +24,7 @@ the rows are what the server sent, which the prover holds.
 
 Its certificate is `Issuer.sign`'s of the out digest for the egress execution phase, in the certifier's session
 (`certificate.certificate_message`). D is the same in every window, so the certificate is what keeps one window's root
-out of another's: `check_out` takes the window it expects. A record's, a clock's and the network certifier cells'
+out of another's: `check_out` takes the window it expects. A record's, a clock's and the network attester cells'
 digests are under other tags, so none verifies as another.
 
 **The record** (`CertifiedOut.public`) is the head and its certificate as one public JSON object, what the auditor
@@ -282,7 +282,7 @@ def _read(doc: Any) -> tuple[OutHead, Certificate, bytes]:
 def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape, *, window: int,
               link: str = LINK) -> str:
     """The verifier's read of the out record `certificate` (`CertifiedOut.public`) for the egress execution phase
-    `(link, window)` it expects, under the network certifier's `key` in certifier session `session`: the root to pin
+    `(link, window)` it expects, under the network attester's `key` in certifier session `session`: the root to pin
     (lowercase hex, `registration.check`'s `pinned` form), or `OutRefused` naming the first check that fails. `shape`
     is the verifier's own, from its registration of the reading program (module docstring, "The shape"), whose
     `domain` is the one `registered_entries` derives for the value pinned."""

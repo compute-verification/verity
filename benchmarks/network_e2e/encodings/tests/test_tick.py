@@ -72,7 +72,7 @@ def plan(seed: int = 7) -> tuple[list, list[float]]:
 
 
 def buckets(times: list[float]) -> list[int]:
-    """Each release's bucket, as the network certifier counts it from its run's origin."""
+    """Each release's bucket, as the network attester counts it from its run's origin."""
     return [int(t * 1e6) // TICK[0] for t in times]
 
 
@@ -134,7 +134,7 @@ def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] =
     watermark line t comes up to 60 ms after bucket t closes, and each step takes 15 to 45 ms, all sampled from `seed`.
     With `gated`, the gate stands in front of the scheduler and the loop waits while it isn't ready; without, each
     request is added when it reaches the engine. Each bucket's line names its releases in `lost`, as the network
-    certifier's does; of those, only the ones in `arrive` send their release record and their request. The scheduler
+    attester's does; of those, only the ones in `arrive` send their release record and their request. The scheduler
     holds the releases not in `lost`, numbered in release order, and what the run returns is theirs."""
     rng = random.Random(seed)
     a = buckets(times)

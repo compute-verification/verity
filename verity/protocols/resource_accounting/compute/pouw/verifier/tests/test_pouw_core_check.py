@@ -628,7 +628,7 @@ def test_every_pass_mutation_hits_its_refusal():
 
 def test_each_honest_pass_is_had_as_it_was_salted():
     """Each kind of honest pass is accepted, and says how its salt was had: by the execution phase's coins (either version), a
-    recorded replay's beacon, the network certifier's reveal over the weights, stream and prover it recorded before
+    recorded replay's beacon, the network attester's reveal over the weights, stream and prover it recorded before
     it, or a live Pearl-C pass's session of the auditor's challenger, opened on its salt execution phase's root."""
     want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier",
             "live": "live coin"}

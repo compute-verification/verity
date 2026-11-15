@@ -69,7 +69,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   release), the leaf the challenger's record was signed at (`record_leaf`), its commitment root (`commitment`) and how
   many hellos serve.py refused before it accepted one (`refused_hellos`, each in `out/hellos.jsonl`, which `files` seals). A session with an `open` and no `end` never
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
-- **The coins' path**: the device that runs a server's network certifier produces its live coins. `serve.py` listens
+- **The coins' path**: the device that runs a server's network attester produces its live coins. `serve.py` listens
   on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is one of the peer's certifier
   coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, within 7811..7899), which
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
@@ -159,40 +159,40 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (its id, α and Γ, read as a period-open reads them), so the policy a period's open names (`--policy-name`) is the
   auditor's own, fixed before any lane's open. `policies` reads the registry.
 
-- **A network certifier rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell network certifier
+- **A network attester rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell network attester
   (`verity.protocols.resource_accounting.network.verifier.network_certifier`) as the auditor's device, `verity/protocols/resource_accounting/network/attester/network_certifier_serve.py
-  rehearse`, with the network certifier and its client here and the server the peer's endpoint, reached through a
-  tunnel: client ──cells──▶ network certifier (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`
+  rehearse`, with the network attester and its client here and the server the peer's endpoint, reached through a
+  tunnel: client ──cells──▶ network attester (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`
   (one of /etc/vy/peers), `--port` (the endpoint's on the peer's loopback), `--minutes` (1 to 170),
   `--requests` 4 to 1700 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
   passed on only when given (`network_certifier_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
   is the gate's (`NETWORK_CERTIFIER_RATE`, `NETWORK_CERTIFIER_SEED`, `NETWORK_CERTIFIER_TAIL_S`), so a request whose `--minutes` is under
   `network_certifier_minutes` of its requests and height is refused, with the least that fits. With `--scan` (recorded only then)
-  it is the scan's rehearsal, the network certifier run `scan_zk.py prove --warden-run` reads from its `fetch`: the schedule is
+  it is the scan's rehearsal, the network attester run `scan_zk.py prove --warden-run` reads from its `fetch`: the schedule is
   scan_zk's (`SCAN_SCHEDULE`, `scan_zk.py schedule`'s flags; the gate's otherwise `network_certifier_serve.py`'s default, which
   the scan's class doesn't serve) and the traffic the same arrivals of network-certifier-form id requests (`rehearse --ids`, at
   the sampling below), so the endpoint must answer each id-form (`io_tie.id_event`s, then `io_tie.TRAILER`): the
-  network certifier frames what the server sends, and the check and the scan refuse a response that isn't by name. `--bucket-ms`
+  network attester frames what the server sends, and the check and the scan refuse a response that isn't by name. `--bucket-ms`
   (with `--scan`, recorded and passed on only when given) is that schedule's tick τ instead of its 100 ms
-  (`SCAN_BUCKET_MS`; the scan's class takes any tick), the network certifier run at it: a request has D ticks from its admission
+  (`SCAN_BUCKET_MS`; the scan's class takes any tick), the network attester run at it: a request has D ticks from its admission
   to its first egress cell, by which a short answer must be whole, and the gate counts the minutes and sampling blocks
   below at that tick (`scan_schedule`). A scan rehearsal's `--prompts` sends the caller's own requests instead (a period's of a loop, say): the gate reads them off
   its stdin (`network_certifier_prompts`: at most `NETWORK_CERTIFIER_PROMPTS_BYTES` of JSON, `NETWORK_CERTIFIER_PROMPTS` prompts of `NETWORK_CERTIFIER_PROMPT_IDS`
   token ids each, at most the scan's KI of 1024 and below 2^17, its IDB), writes them to `witness/prompts.json` alone (the request records their
   count and ids), and `rehearse --prompts` sends request j the (j mod n)-th of the n with exactly `--tokens`
   (`NETWORK_CERTIFIER_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`NETWORK_CERTIFIER_PROMPT_REQUESTS`) the prompts' count by
-  default. `--scan-class CLASS` (with `--prompts`, recorded and passed on only when given) runs the network certifier
+  default. `--scan-class CLASS` (with `--prompts`, recorded and passed on only when given) runs the network attester
   at that class's schedule instead (`SCAN_CLASSES`, `scan_schedule`: w63k4, the window circuit's 4,32,4, at 5 egress cells),
   with its prompts of at most its KI ids (32) and `--tokens` at most its egress cells less the trailer (4)
-  (`scan_bounds`), the network certifier's run `scan_zk.py prove --class CLASS --warden-run` reads. `--window-per-group` (at most
+  (`scan_bounds`), the network attester's run `scan_zk.py prove --class CLASS --warden-run` reads. `--window-per-group` (at most
   the scan's 4 lanes of prompts) sends them a group at a time, group g's half a bucket into execution phase g·G
   (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
   `out/groups.json` publishes, and `--minutes` must cover `network_certifier_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
-  --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the network certifier also send the
+  --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the network attester also send the
   endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
   (`verity.protocols.resource_accounting.network.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
-  bucket t its server connections lost); the network certifier reads nothing
+  bucket t its server connections lost); the network attester reads nothing
   back, and nothing it signs, certifies or publishes changes. Its request carries `device: network_certifier`. The gate
   refuses while another rehearsal runs, writes `certifier/<run>/request.json` and starts its unit
   (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
@@ -203,14 +203,14 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   run ended follows what the peer sent and when. `status RUN` and `fetch RUN` return it. A rehearsal is no window of
   the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
-  The network certifier writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
+  The network attester writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
   the connection rows', a line a registration), a load's registrations whole (`load.json`), the cells' salts
   (each registration's rows' and wiring's), the traffic, the client's log, the check, the rehearsal's own output
   (`rehearse.log`, its stdout and stderr: free text, whose last line prints the registrations' cost) and its
   tunnels' (`tunnel.log`, what each `ssh` prints: free text, a line for each connection the peer's port refused),
   all the prover's. Its unit publishes to `out/` only what isn't:
-  `deployment.json` (the network certifier's key, session and schedule, `DEPLOYMENT_PUBLIC`: where the relay listened
+  `deployment.json` (the network attester's key, session and schedule, `DEPLOYMENT_PUBLIC`: where the relay listened
   and reached the peer, and the origin on the device's raw clock, stay in the witness's copy), a `--window-per-group`
   run's `groups.json`, and of a run its check accepted the lines: `certificates.jsonl`
   (the records' certificates alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row
@@ -237,7 +237,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   count an accepted run served. Of `witness/` the end says nothing, no file's name or size: `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
 - **A relay session** (`relay-session`, a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with
-  the rehearsals): the network certifier's relay kept up here, as the auditor's device, for a served run's own load.
+  the rehearsals): the network attester's relay kept up here, as the auditor's device, for a served run's own load.
   The gate sends no request and runs no client: the clients are the served run's, on the peer, and a connection's
   path is client ──cells──▶ the peer's 127.0.0.1:CLIENT_PORT ──tunnel──▶ the relay (here) ──tunnel──▶ the peer's
   127.0.0.1:PORT. What follows is the contract a runner of another lane reads.
@@ -325,7 +325,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   the shape and what the shape fixes; or the one word it was refused in, `LOAD_REFUSED`), and the record as the
   write left it and what the write printed (`rehearse.log`) are in its `witness/`. A request the gate refuses for
   the store says the word too, never the store's path. `load-relay` is a rehearsal of the same kind (all
-  of `warden-rehearse`'s flags) with the load first, run by the same network certifier: the gate refuses it unless the store's
+  of `warden-rehearse`'s flags) with the load first, run by the same network attester: the gate refuses it unless the store's
   record of `--shape` is interface 1's (`load_relay.read_store`), `--program` is the reading program's digest and
   `--minutes` covers `load_minutes` (the stream and its witness at `LOAD_RATE`, and `LOAD_READY_S`) and then the
   rehearsal's. Its run opens one more tunnel a stream (`--streams`, 4 by default) to `--sink-port` on the peer's
@@ -333,7 +333,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   rehearse --load-store` relays the store over them: each value's bytes held to its digest and committed as they
   cross (`load_relay.relay_load`), every row's salts sent on with them. The witness (4.85 GB at H200) is the sink's
   `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
-  endpoint on the weights the sink wrote, and the network certifier's one signer (its publisher process) signs the load's 733
+  endpoint on the weights the sink wrote, and the network attester's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
   of the load `out/` publishes nothing, and the end's verdict carries the check's `load` (values and how many
   registered). The load's registrations (`load.json`, which the block record pins) stay in `witness/`, as the row
@@ -349,7 +349,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
   request says otherwise; recorded in every request and passed on every one. `certifier_key.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
-  a rehearsal makes one, which `network_certifier_minutes` counts. A network certifier rehearsal's key signs a load's heads, then its
+  a rehearsal makes one, which `network_certifier_minutes` counts. A network attester rehearsal's key signs a load's heads, then its
   session's start (`START_LEAVES`), then `NETWORK_CERTIFIER_WINDOW_LEAVES` one-time signatures an execution phase, and its signer
   refuses every window past its 2^H: so a request whose `network_certifier_windows` its height can't sign is refused, with the
   least height that can (`network_certifier_height`; the gate's most requests at the scan's schedule take 13). The rehearsal
@@ -439,22 +439,22 @@ DECIMAL = r"[0-9](\.[0-9]{1,4})?"
 REHEARSAL_HEIGHT = (10, lms.DEPLOYED.H)
 #: the one-time keys a second `certifier_key.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
 KEYGEN_LEAVES_S = 4096
-#: a network certifier rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `NETWORK_CERTIFIER_PROMPT_REQUESTS`): 1700 at
+#: a network attester rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `NETWORK_CERTIFIER_PROMPT_REQUESTS`): 1700 at
 #: `NETWORK_CERTIFIER_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s execution phases, past the 745 that
 #: the whole-node wipe needs
 NETWORK_CERTIFIER_REQUESTS = (4, 1700)
-#: the one-time signatures a network certifier rehearsal's key gives an execution phase: a certificate for each of its three links'
+#: the one-time signatures a network attester rehearsal's key gives an execution phase: a certificate for each of its three links'
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
 #: (`network_certifier_serve.Publisher.keep` and `attest`)
 NETWORK_CERTIFIER_WINDOW_LEAVES = 5
 #: the one-time signature that key gives its session's start, before its first execution phase's (`certify_start`
 #: there)
 START_LEAVES = 1
-#: a network certifier rehearsal's execution phase without `--scan`: `network_certifier_serve.py`'s default schedule's (`NetworkCertifierParams`, 600
+#: a network attester rehearsal's execution phase without `--scan`: `network_certifier_serve.py`'s default schedule's (`NetworkCertifierParams`, 600
 #: buckets of 100 ms)
 NETWORK_CERTIFIER_WINDOW_MS = 60_000
 NETWORK_CERTIFIER_TOKENS = (16, 256)
-#: the network certifier rehearsal's traffic, which the gate fixes so that `network_certifier_minutes` bounds it: Poisson arrivals at
+#: the network attester rehearsal's traffic, which the gate fixes so that `network_certifier_minutes` bounds it: Poisson arrivals at
 #: `NETWORK_CERTIFIER_RATE` a second sampled from `NETWORK_CERTIFIER_SEED`, the run lasting `NETWORK_CERTIFIER_TAIL_S` past the last
 NETWORK_CERTIFIER_RATE, NETWORK_CERTIFIER_TAIL_S, NETWORK_CERTIFIER_SEED = 0.5, 60, 0
 #: a scan rehearsal's (`--scan`) schedule at the class of record, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`),
@@ -489,7 +489,7 @@ NETWORK_CERTIFIER_PROMPT_REQUESTS = (1, NETWORK_CERTIFIER_REQUESTS[1])
 NETWORK_CERTIFIER_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `network_certifier_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
-#: what a network certifier run publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`)
+#: what a network attester run publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`)
 #: and the cells' registrations less their private keys (`ROW_REGISTRATIONS`);
 #: everything else `network_certifier_serve.py rehearse` writes, what it prints (`rehearse.log`) and what the run's tunnels
 #: print (`tunnel.log`) are witness and stay in `witness/`, which `fetch` gives the run's own lane alone.
@@ -553,7 +553,7 @@ KEY_PARAMS = [(64,), (1, 2, 4, 8), tuple(range(1, 31))]
 #: form: until then its line fails the gate (`row_registration`). What is public, and why it may be:
 #: - `root`: a hiding commitment, the root over the rows' `hm96` leaves, each row under a fresh salt at the pinned
 #:   key (the named assumption `hash-derived-key`);
-#: - `certificate`: the network certifier's signature over the head's digest, which `cells-certificates.jsonl`
+#: - `certificate`: the network attester's signature over the head's digest, which `cells-certificates.jsonl`
 #:   publishes already;
 #: - every other key: protocol structure. `network_certifier_rows.check_registration` holds each to the one value the
 #:   schedule, the session, the link, the direction and the execution phase give: the format and the rows' schema
@@ -1536,7 +1536,7 @@ def bounded(flag: str, v: str, lo: int, hi: int) -> int:
 
 
 def network_certifier_minutes(requests: int, height: int = REHEARSAL_HEIGHT[1], window_ms: int = NETWORK_CERTIFIER_WINDOW_MS) -> int:
-    """The fewest minutes a network certifier rehearsal of `requests` requests takes: its traffic's last arrival (1/`NETWORK_CERTIFIER_RATE`
+    """The fewest minutes a network attester rehearsal of `requests` requests takes: its traffic's last arrival (1/`NETWORK_CERTIFIER_RATE`
     seconds a request), the tail, the rest of the `window_ms` sampling block it ends in (a minute for a shorter one)
     and the check, and its key at `height` (2^height one-time keys at `KEYGEN_LEAVES_S` a second)."""
     return _minutes(round(requests / NETWORK_CERTIFIER_RATE) + max(0, -(-window_ms // 1000) - NETWORK_CERTIFIER_TAIL_S), height)
@@ -1565,13 +1565,13 @@ def scan_bounds(scan_class: str | None = None) -> tuple[tuple[int, int], tuple[i
 
 
 def network_certifier_window_ms(req: dict) -> int:
-    """A network certifier rehearsal's sampling block, in ms: T ticks of the scan's schedule at the request's tick with ``scan``,
+    """A network attester rehearsal's sampling block, in ms: T ticks of the scan's schedule at the request's tick with ``scan``,
     `NETWORK_CERTIFIER_WINDOW_MS` otherwise."""
     return SCAN["--window"] * req.get("bucket_ms", SCAN["--bucket-ms"]) if req.get("scan") else NETWORK_CERTIFIER_WINDOW_MS
 
 
 def network_certifier_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bucket-ms"]) -> int:
-    """The most execution phases a network certifier rehearsal of `requests` requests runs (`network_certifier_serve.rehearse` counts its
+    """The most execution phases a network attester rehearsal of `requests` requests runs (`network_certifier_serve.rehearse` counts its
     traffic's last arrival and tail): `network_certifier_minutes`'s arrivals and three tails, in execution phases of the scan's
     schedule at the tick `bucket_ms` with `scan` and of `NETWORK_CERTIFIER_WINDOW_MS` otherwise."""
     window_ms = network_certifier_window_ms({"scan": True, "bucket_ms": bucket_ms} if scan else {})
@@ -1597,7 +1597,7 @@ def load_heads(shape: str) -> int:
 
 
 def network_certifier_key(windows: int, height: int, what: str, heads: int = 0) -> None:
-    """Refuses a network certifier rehearsal whose key at `height` can't sign its `windows` execution phases after a load's `heads`,
+    """Refuses a network attester rehearsal whose key at `height` can't sign its `windows` execution phases after a load's `heads`,
     with the least height that can (`network_certifier_height`)."""
     if height < (least := network_certifier_height(windows, heads)):
         load = f" after the load's {heads} heads" if heads else ""
@@ -1654,7 +1654,7 @@ def session_request(a: argparse.Namespace, port: int, minutes: int, window_ms: i
 
 
 def parse_network_certifier(argv: list[str], host: Host, *, load: bool = False, session: bool = False) -> dict:
-    """A network certifier rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
+    """A network attester rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
     `network_certifier_minutes` of its requests and height), how many requests its traffic sends, when given the most tokens a
     request asks for (`network_certifier_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic) with, when
     given, its tick `--bucket-ms` (`SCAN_BUCKET_MS`, which the minutes and the key's sampling blocks are counted at),
@@ -2563,7 +2563,7 @@ def certifier_env(tree: Path = TREE) -> dict[str, str]:
 
 def network_certifier_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: list[tuple[str, int]] = (),
                    store: Path | None = None, listen: int | None = None, listen_fd: int | None = None) -> list[str]:
-    """`network_certifier_serve.py rehearse` of the request: the network certifier and its client here, the network certifier's upstream the endpoint
+    """`network_certifier_serve.py rehearse` of the request: the network attester and its client here, the network attester's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
     requests on the gate's traffic (`NETWORK_CERTIFIER_RATE`, `NETWORK_CERTIFIER_SEED`, `NETWORK_CERTIFIER_TAIL_S`) at its sampling (`sampling_argv`),
     for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick and class
@@ -2605,7 +2605,7 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
             "--out", str(out / "store.json")]
 
 
-#: the counts of `network_certifier_serve.py check`'s summary a network certifier run's end carries: the schedule's execution
+#: the counts of `network_certifier_serve.py check`'s summary a network attester run's end carries: the schedule's execution
 #: phases, how many were certified and by how many certificates, the registered rows (cut to `CELL_ROWS`), a load's
 #: values and how many registered, and how its failed connections failed in `FAILED`'s words.
 #: None counts the traffic: the requests and how each ended, the cells, their bits, how many kept their bucket and
@@ -2619,7 +2619,7 @@ NETWORK_CERTIFIER_COUNTS = ("failed", "windows", "certified_windows", "certifica
 #: and a load's counts, which are the schedule's and the store's whatever the peer sent
 ACCEPTED_COUNTS, ACCEPTED_CELL_ROWS = ("certified_windows", "certificates"), ("registered",)
 #: the end's words for how a connection that neither ended nor was refused failed (the verdict's `failed`): the
-#: network certifier's own two outcomes, and `error` for any other. A client's exception is one, and its words are
+#: network attester's own two outcomes, and `error` for any other. A client's exception is one, and its words are
 #: its connection's own line of `witness/client.json`
 FAILED = ("cut", "fail", "error")
 
@@ -2782,7 +2782,7 @@ def row_registration(text: str, given: dict) -> str:
 
 
 def network_certifier_outcome(out: Path, witness: Path, requests: int | None = None) -> dict:
-    """A network certifier rehearsal's public outcome, from what `network_certifier_serve.py rehearse` wrote to `witness`:
+    """A network attester rehearsal's public outcome, from what `network_certifier_serve.py rehearse` wrote to `witness`:
     `NETWORK_CERTIFIER_PUBLIC`'s files copied to `out` (of the deployment, `DEPLOYMENT_PUBLIC`'s keys), the check's verdict
     (`accepted` and `NETWORK_CERTIFIER_COUNTS`, its `cell_rows` less the registrations' cost, its `failed` in `FAILED`'s
     words), and of an accepted run its lines:
@@ -2967,13 +2967,13 @@ def certifier_run(host: Host, run: str, *, pinned: str,
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
                   command: Callable[..., list[str]] | None = None,
                   wait: Callable[[subprocess.Popen, float], int] | None = None, stop: _Stop) -> dict:
-    """Run the requested rehearsal (the module docstring's "A network certifier rehearsal" and "The load") or relay session ("A
+    """Run the requested rehearsal (the module docstring's "A network attester rehearsal" and "The load") or relay session ("A
     relay session": a rehearsal's relay alone, where the same ssh also brings the peer's clients to its listener,
     `tunnel_argv`'s third argument, and the session is stopped when that ssh exits), as `auditor`: open the tunnel to
     the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
     `end.json`. Every run's own output (`rehearse.log`) and its tunnels' (`tunnel.log`) are free text and go to
-    `witness/`. A network certifier run writes to `witness/` too, and its public outcome (`network_certifier_outcome`) to `out/`
+    `witness/`. A network attester run writes to `witness/` too, and its public outcome (`network_certifier_outcome`) to `out/`
     and the end, its lines only when its check accepted; such a run's line of its certificates or its cells'
     registrations that its list doesn't rule (`CERTIFICATE_LINE`, `ROW_LINE`) ends it nonzero, the end saying
     `unruled` and the witness's `ENDED_WHY` the line and the fix, and so does an accepted check that counted another
@@ -3068,7 +3068,7 @@ def certifier_run(host: Host, run: str, *, pinned: str,
 #: the exit beside it in `rc`), it was stopped at the request's minutes (`stopped`), a tunnel to the peer didn't come
 #: up or closed first (`tunnel`), a line of a certificates' or registrations' file or a store's record isn't ruled
 #: (`unruled`: `CERTIFICATE_LINE`, `ROW_LINE`, `STORE_PUBLIC`), or its check accepted and counted another number of
-#: requests than the request asked for (`miscounted`). A network certifier run's end in either of those two words is
+#: requests than the request asked for (`miscounted`). A network attester run's end in either of those two words is
 #: not accepted. The sentence a word stands for names the peer, the port
 #: and, for an unruled line, the line and the fix: it is the run's `witness/` file `ENDED_WHY`, and no word of it
 #: is in the end

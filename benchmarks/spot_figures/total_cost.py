@@ -47,7 +47,7 @@ Lean checks each two-stage point too (`figure1.lean_two`, unless `lean` is off):
 finds from the planner's, with the planner's bits (`planner`) and Lean's θ beside them, and a refused point is an
 error.
 
-A request's served bits, S, are Figure 1's (`figure1.cards`): its tokens at most the network certifier's registered
+A request's served bits, S, are Figure 1's (`figure1.cards`): its tokens at most the network attester's registered
 response cap where the model's `certifier` card registers one, else every one of them.  Each configuration's two
 panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A

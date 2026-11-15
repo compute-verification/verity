@@ -1,11 +1,11 @@
 """network-certifier-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
-the offline check of a run whose network certifier is driven tick by tick on a `VirtualClock`, its records certified by
+the offline check of a run whose network attester is driven tick by tick on a `VirtualClock`, its records certified by
 an LMS key: the check accepts the run, whose server got each request with its release order and bucket under the run
 id `deployment.json` names, and refuses a deployment whose start isn't the one certified, a record that isn't what
 was certified, a cell that reached its client in another bucket, and a response that isn't the record's; a window in
-which the network certifier refused a connection is
+which the network attester refused a connection is
 certified and signed nowhere; and a window's slow commit, which faults the next window when it runs in the network
-certifier's process, moves no tick in `serve`'s publisher process. The registrations' file a check of a run with
+attester's process, moves no tick in `serve`'s publisher process. The registrations' file a check of a run with
 connection rows writes, as the stop verdicts' reader (`stop_verdicts`) reads it: each head it holds under the key
 and the session the check was handed, none of a run under another key, and every class at its whole schedule when
 a registration's signature is changed."""
@@ -74,7 +74,7 @@ def test_the_network_certifier_always_paces_and_serve_and_rehearse_refuse_a_rele
 
 
 def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_group_windows(tmp_path):
-    """The bound `group_windows` rests on, on the network certifier itself at the scan's schedule: a group of `lanes` id
+    """The bound `group_windows` rests on, on the network attester itself at the scan's schedule: a group of `lanes` id
     requests admitted together at a window's first bucket, each answered with `tokens` id events and the trailer (the
     loop's two, and the gate's most, 64), ends every connection with its last cell D + ⌊tokens/r⌋ buckets after its
     admission, so that one admitted two buckets late (`prompt_traffic`'s half a bucket, and the client's lag) still
@@ -136,7 +136,7 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
 
 
 def test_the_fake_endpoint_reads_the_watermark_stream_to_its_end_and_answers_nothing():
-    """`rehearse --fake --watermark`: the network certifier's watermark stream (`release`'s `POST /verity/watermark`)
+    """`rehearse --fake --watermark`: the network attester's watermark stream (`release`'s `POST /verity/watermark`)
     isn't a completion request, so the fake endpoint takes all of it, answers nothing and closes; `serve --watermark`
     and `rehearse --watermark` both take the flag."""
     stream = watermark_head(bytes(32)) + b"".join(watermark_chunk(t, n) for t, n in ((0, 0), (1, 2), (2, 2))) + \
@@ -160,7 +160,7 @@ def test_the_fake_endpoint_reads_the_watermark_stream_to_its_end_and_answers_not
 
 
 def test_serve_releases_the_id_form_unless_told_and_rehearse_names_its_traffics_form(tmp_path):
-    """`serve` is the deployed network certifier, so its egress form is the egress record's id form unless `--egress`
+    """`serve` is the deployed network attester, so its egress form is the egress record's id form unless `--egress`
     names another; `rehearse` names its traffic's, id with `--ids` and bytes for its text, and passes it to its
     `serve`, whose deployment's digest binds it. A text response through the id form fails its connection at its first
     cell (format), and the check names it."""
@@ -819,12 +819,12 @@ def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tm
 
 
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
-    """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the network certifier's process
+    """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the network attester's process
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
     (`monitor-unavailable`), the issuer certifies none of its records, and the check refuses it. In `serve`'s
     `PublisherProcess` the same commit runs in the spawned process, which signs and commits from the rows released to
     it: every tick is on time, and the check accepts every execution phase, certified and registered. A commit that fails
-    there fails `close`, and the network certifier's process doesn't wait on it."""
+    there fails `close`, and the network attester's process doesn't wait on it."""
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
     runs = {name: tmp_path / name for name in ("inline", "process", "refusing")}
@@ -854,7 +854,7 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
 
 def test_the_load_is_signed_by_the_serving_publisher_in_the_runs_session_before_its_windows(tmp_path):
     """The gate's load end to end at the tiny shape: the store relayed over four streams to the prover's sink on
-    loopback (`load_relay.py sink`, a process), then a run whose `PublisherProcess`, the network certifier's one signer,
+    loopback (`load_relay.py sink`, a process), then a run whose `PublisherProcess`, the network attester's one signer,
     signs the relay's heads first: `load.json` is under the deployment's key and session, on the key's first leaves, and
     `check` reads every value's registration at the relay's roots; another session's, values swapped, heads that
     aren't the relay's and an unsigned load are refused."""
@@ -942,7 +942,7 @@ def answer(tmp, file, registrations: list[dict]) -> SV.Stop:
 
 def test_the_check_writes_what_it_was_checked_under_then_each_registration_as_the_publisher_kept_it(
         tmp_path, monkeypatch):
-    """Handed the SHA-512 of the network certifier's public key and the session, and given a file, a check that
+    """Handed the SHA-512 of the network attester's public key and the session, and given a file, a check that
     accepts the run writes it. The first line, under its own format's word, names the hash and the session it was
     handed, and the reader's `checked_under` reads them from it; the hash is over the LMS public key ``I ‖ T[1]``,
     the bytes the deployment record writes in hex. Each line after it is one registration the check held to both,
@@ -983,9 +983,9 @@ def test_the_check_writes_what_it_was_checked_under_then_each_registration_as_th
 
 
 def test_a_run_under_another_key_gets_no_file_under_the_keys_hash_and_one_under_its_own(tmp_path, monkeypatch):
-    """A run directory whose deployment record names another key than the network certifier's, a rehearsal's own:
+    """A run directory whose deployment record names another key than the network attester's, a rehearsal's own:
     its certificates and its registrations are signed under that key and verify under it. Handed the hash of the
-    network certifier's key, the check names the problem, the key and not the session, as its only one, and leaves
+    network attester's key, the check names the problem, the key and not the session, as its only one, and leaves
     no file; so does its command, which exits 1, with a file asked or not. Handed the hash of the run's own key, the
     same directory is accepted and its file is written, naming that hash: the reader holds all three execution
     phases on it and prints the hash, which it is not told to refuse."""

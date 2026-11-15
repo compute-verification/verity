@@ -1,22 +1,22 @@
-"""`python network_certifier_probe.py ARGS...`: `verity/protocols/resource_accounting/network/attester/network_certifier_serve.py ARGS...`, with probes the network certifier doesn't
+"""`python network_certifier_probe.py ARGS...`: `verity/protocols/resource_accounting/network/attester/network_certifier_serve.py ARGS...`, with probes the network attester doesn't
 keep, for telling a late tick's cause: every tick's lateness (`NetworkCertifier.lateness`, which warden.json keeps only as
 quantiles), how long each tick's own work took (`NetworkCertifier._tick`), when the publisher packed, signed and committed each
-record (`Publisher.keep`) and every garbage collection of the network certifier's process (serve turns the collector off, so any is
+record (`Publisher.keep`) and every garbage collection of the network attester's process (serve turns the collector off, so any is
 an explicit one).
 
-A network certifier whose publisher is a spawned process (`PublisherProcess`) keeps its records there: that process runs this file
-as `__mp_main__`, which times its `Publisher.keep` into `PUBLISHER_KEEPS` in `--out`, and the network certifier's own process
+A network attester whose publisher is a spawned process (`PublisherProcess`) keeps its records there: that process runs this file
+as `__mp_main__`, which times its `Publisher.keep` into `PUBLISHER_KEEPS` in `--out`, and the network attester's own process
 records when it handed each record's close over (`PublisherProcess.__call__`) and how long serve's `close` waited for
 the last one, and writes the process's pid to `PUBLISHER_PID` once it has started (for `host_sample.py`).
 
-Every time is read on the network certifier's own clock, its host's raw clock (`certifier_clock`), which its origin
+Every time is read on the network attester's own clock, its host's raw clock (`certifier_clock`), which its origin
 is a reading of. When serve ends they go to `ticks.json` in its `--out` directory, times in seconds after that origin:
 `lateness_ms` (tick t's lateness past its deadline, origin + t·τ, in ms), `tick_ms` (tick t's `_tick`, in ms), `publish`
 ([start, ms, link, window] each, an inline publisher's), `gc` ([start, generation, ms, objects collected] of each
 collection of generation 1 or 2, or of `GC_MS` or more) and `gc_counts` (all collections, by generation), with `origin`,
-`bucket_ms`, `window`, `slack_ms`, `gc_enabled`, `switch_ms` and `cpus` (the network certifier's affinity, which its publisher
+`bucket_ms`, `window`, `slack_ms`, `gc_enabled`, `switch_ms` and `cpus` (the network attester's affinity, which its publisher
 process inherits); and for a spawned publisher `publisher`: its `pid`, `handoff` ([time, link, window] each), `keep`
-([start, ms, link, window] each, in its process) and `close` ([start, seconds waited]). The network certifier's code and schedule
+([start, ms, link, window] each, in its process) and `close` ([start, seconds waited]). The network attester's code and schedule
 are unchanged; this only wraps its methods and adds a `gc.callbacks` entry.
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SERVE = ROOT / "verity" / "protocols" / "resource_accounting" / "network" / "attester" / "network_certifier_serve.py"
 #: a collection kept in `gc` by its own: any of generation 1 or 2, else one that took at least this long
 GC_MS = 1.0
-#: in `--out`: the spawned publisher's keeps, one JSON line each: [start on the network certifier's clock, seconds,
+#: in `--out`: the spawned publisher's keeps, one JSON line each: [start on the network attester's clock, seconds,
 #: link, window]
 PUBLISHER_KEEPS = "publisher_keeps.jsonl"
 #: in `--out`: the spawned publisher's pid
@@ -39,7 +39,7 @@ PUBLISHER_PID = "publisher.pid"
 
 
 def certifier_clock():
-    """The network certifier's own clock, which its origin is a reading of: its host's raw clock, read by its clock id
+    """The network attester's own clock, which its origin is a reading of: its host's raw clock, read by its clock id
     (`pacer.raw_clock`). A probe's times are laid against that origin, so a probe given no clock reads this one: on
     another clock its times would be off by however far the two clocks stand apart."""
     from verity.protocols.resource_accounting.network.verifier.pacer import raw_clock
@@ -69,7 +69,7 @@ class Collections:
 
 
 class Probe:
-    """The wrappers' shared record; `install` puts them on the network certifier's and the publisher's classes. `out` is serve's
+    """The wrappers' shared record; `install` puts them on the network attester's and the publisher's classes. `out` is serve's
     `--out` (where a spawned publisher's keeps are, and its pid goes)."""
 
     def __init__(self, clock=None, out: Path | None = None) -> None:

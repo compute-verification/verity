@@ -1,4 +1,4 @@
-"""The network certifier's period evidence on the prover's side: each one-stage answer the period check
+"""The network attester's period evidence on the prover's side: each one-stage answer the period check
 (`NetworkCheck.Period`) reads, with the inputs one-stage's compiled verifier gave it, which the check runs that verifier
 on again and holds equal (`Properties.NetworkPeriod.AnswersVerified`)."""
 from __future__ import annotations

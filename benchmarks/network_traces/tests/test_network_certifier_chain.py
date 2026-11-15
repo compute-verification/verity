@@ -1,15 +1,15 @@
-"""The network chain on an active network certifier's run (`network_certifier_chain`, `chain_record`'s network certifier path),
+"""The network chain on an active network attester's run (`network_certifier_chain`, `chain_record`'s network attester path),
 here the synthetic run published as `network_certifier_serve.Publisher` publishes a served one, in the gate's layout (its witness
 under ``witness/``, and under ``out/`` what the gate's own outcome publishes of it): the
-certificates step reruns the network certifier's own check and holds the public certificates to the certified lines,
+certificates step reruns the network attester's own check and holds the public certificates to the certified lines,
 refusing a changed one and a changed cell; the run's deployment is the auditor's record's (`network_certifier_chain.deployment_of`),
 and a copy of it re-signed, rewritten or in other bytes is refused; the certified I/O read off the cells is the requests
 and responses served;
-N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its references expect honest
+N2's link is the network attester's (both heads at its digest, no sync, charge 0) and its references expect honest
 accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through the older certifier's proxy)
 is refused by name (`network_certifier_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
-network certifier's run. The report on the network certifier path requires the certificates, the endpoint, the tie, N2
-and the scan, names its stubs, and refuses a step whose input is a certifier rehearsal's or another network certifier
+network attester's run. The report on the network attester path requires the certificates, the endpoint, the tie, N2
+and the scan, names its stubs, and refuses a step whose input is a certifier rehearsal's or another network attester
 run's."""
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def _n2(run: Path, at: Path, *args: str) -> tuple[int, dict, dict, str]:
 
 
 def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
-    """The synthetic network certifier run in the gate's layout, under the network certifier key ``seed`` makes: its
+    """The synthetic network attester run in the gate's layout, under the network attester key ``seed`` makes: its
     files under ``witness/`` with the check the runner writes there, which accepts it, and under ``out/`` what the
     gate publishes of them (`auditor.network_certifier_outcome`), its lines among them."""
     run = published(d / "flat", seed=seed)
@@ -189,7 +189,7 @@ def test_a_network_certifier_runs_certificates_io_and_link_are_its_own(tmp_path)
 
 
 def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(tmp_path):
-    """Of the network certifier's own check, the certificates step writes the gate's end's verdict, key for key:
+    """Of the network attester's own check, the certificates step writes the gate's end's verdict, key for key:
     whether it accepted and the gate's own list of counts (`auditor.NETWORK_CERTIFIER_COUNTS`, its `cell_rows` cut to
     `auditor.CELL_ROWS`). The step's list is the gate's, so a key the gate does not publish is not written by the
     chain: the check's problems and their number, the summary's counts of the traffic and its other keys (a
@@ -231,7 +231,7 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
 def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics_in_the_witness(tmp_path,
                                                                                                monkeypatch):
     """``chain_record.py certs`` writes ``certs.json`` with only the keys the list of released_keys.json names, on an
-    accepted run and on one the network certifier's own check refuses, and every count of `verdict` the list names;
+    accepted run and on one the network attester's own check refuses, and every count of `verdict` the list names;
     what the step found of the traffic (`network_certifier_chain.WITNESS_KEYS`: which execution phases the signer refused, how
     many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
     held any of it would fail the record."""
@@ -290,7 +290,7 @@ def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and
 @pytest.fixture(scope="module")
 def certifier_run(tmp_path_factory):
     """A certifier rehearsal's run as a fetched one holds it: its plan and calibration, and a deployment.json naming the
-    certifier's key and links, which no active network certifier's does."""
+    certifier's key and links, which no active network attester's does."""
     run = tmp_path_factory.mktemp("certifier") / "honest"
     run.mkdir()
     docs = {"plan.json": {"windows": 2}, "calibration.json": {"grid": {}},
@@ -317,7 +317,7 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
 
 
 def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_reader_checks_it(tmp_path):
-    """A run at the lengths rows' form 2 whose first two execution phases end in the network certifier's word that
+    """A run at the lengths rows' form 2 whose first two execution phases end in the network attester's word that
     they have no head, and its last two in their heads. Of each line of its `rows.jsonl` the gate publishes one
     certificate in the same six fields and nothing of the line's cost. The word's fields, with the schedule's digest,
     are the word's public record whole, which `connection_rows.check_no_head` accepts under the deployment's key and
@@ -378,7 +378,7 @@ def test_n2_on_a_sampled_network_certifier_period_tampers_every_window_and_prove
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:
-    """The network certifier path's step outputs on `run`: its real certificates, and the endpoint, the tie, N2 and the
+    """The network attester path's step outputs on `run`: its real certificates, and the endpoint, the tie, N2 and the
     scan as their drivers write them."""
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))

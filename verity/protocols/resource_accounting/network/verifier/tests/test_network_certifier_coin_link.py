@@ -1,4 +1,4 @@
-"""The network certifier's coin link (`coin_link`), driven a quarter bucket at a time on a `VirtualClock`: its prover side
+"""The network attester's coin link (`coin_link`), driven a quarter bucket at a time on a `VirtualClock`: its prover side
 an in-memory connection that speaks `remote`'s frames, its challenger an in-memory one over a real `LiveChallenger`'s
 coins, which a test can make misbehave. An honest session passes, its coins exempt and nothing else, every other frame
 counted by name, and the client's own reader (`remote._Wire`) reads the re-cut stream as the challenger wrote it; a
@@ -435,7 +435,7 @@ def test_the_link_stops_at_its_window_boundary():
 
 
 def test_the_links_clock_is_the_network_certifiers_and_a_tick_whose_wait_ends_early_waits_again():
-    """Unless a caller injects one, the link's ticks read the network certifier's clock. A wait may end before its time
+    """Unless a caller injects one, the link's ticks read the network attester's clock. A wait may end before its time
     (a timer against another clock, a signal): here every tick's first wait ends at once, and each tick still runs only
     once the clock reads its time, none of them late and the execution phase complete."""
     assert inspect.signature(CoinLink).parameters["clock"].default is raw_clock

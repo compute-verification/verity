@@ -1017,7 +1017,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   Statement C in full is that no device outside the node computes for it during the session. Identity is only its
   links clause: a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the
   receipts, sends no block over the links, so neither Identity nor the links' charge sees it, and only C excludes it.
-  The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network certifiers
+  The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network attesters
   observe. Its event is that the certifiers counted no ingress into the node over the credited passes and yet the
   passes read fewer bits than the line credits, and its error carries δ_net, the certifiers' miscount
   (`IngressCounted`, `trusted-device`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which

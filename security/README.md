@@ -572,7 +572,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
   reads coins only from that log (`VerifierReadsLog`). Under them a sample sampled with a logged coin misses a set fixed
   before it at most as often as the sampling design allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
-  remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network certifiers and memory
+  remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network attesters and memory
   challengers are onsite's.
 - **Not the remote composite.** `Accounting.Remote` and `Properties.Poub.Remote` are PoUB
   (`verity/protocols/resource_accounting/memory/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol

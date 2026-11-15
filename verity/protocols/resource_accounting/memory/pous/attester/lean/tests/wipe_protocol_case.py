@@ -14,7 +14,7 @@ the same formats, its check `wipe_period.outcome_counted`.
 deployed parameters (`mc_cases.deployed_signer`) so that `verity/wipe/v0` itself takes it: an honest wipe at a small fill
 and `READS` reads, one 32 MiB segment at `READS` reads and one at `REMOTE_READS` with a MiB declared past the fill, and
 an honest wipe whose evidence gives an egress of 0 (each accepted and not certified, its evidence giving an egress count
-that no network certifier signs), an honest wipe whose evidence gives no egress (accepted and not certified), one whose
+that no network attester signs), an honest wipe whose evidence gives no egress (accepted and not certified), one whose
 evidence gives an egress outside 0 to
 `EGRESS_MAX_UNITS` (rejected), a prover keeping one
 label past that threshold of foreign content, a read past its deadline, a session the prover left before it ended

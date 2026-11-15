@@ -1,18 +1,18 @@
 """A relay run's connection rows (`connection_rows_run`) without the wall clock: the schedule's lengths rows and
 content rows as flags that `rehearse` passes to its `serve`, and a run without them what it was; the hand as the
-publisher queue's items, a slot stride each; a run of the network certifier on a `VirtualClock` whose publisher,
+publisher queue's items, a slot stride each; a run of the network attester on a `VirtualClock` whose publisher,
 inline and in `serve`'s process, lays, commits and signs each handed execution phase's tables, which the offline
 check holds to the records' own reading of the same cells and refuses when a registration, a salt, a kept line or a
 record isn't the run's; the registrations' file, which a check that found no problem writes when it is handed the
-SHA-512 of the network certifier's public key and its session: a first line that names the two, then a line for
+SHA-512 of the network attester's public key and its session: a first line that names the two, then a line for
 each registration it held and each the publisher's own bytes, which the reader of the stop verdicts takes its
 heads from (its side: `certifier/prover/tests/test_network_certifier_serve.py`), so that a deployment record of
 another session or a registration with tables that aren't its records' leaves no file, and a check handed neither
 is refused the file; an execution phase that isn't handed has no line; under the lengths rows' form 2
-every execution phase has one line, its registration or the network certifier's word that it has no head, the run's
+every execution phase has one line, its registration or the network attester's word that it has no head, the run's
 last included, and the check holds each to the one that is due, also past an execution phase that isn't complete;
 the request words as a schedule flag, a run's kept words tables, which the check holds to the records, and their cost;
-the head's tick as two schedule flags, under which the publisher hands each line back and the network certifier's
+the head's tick as two schedule flags, under which the publisher hands each line back and the network attester's
 tick writes it: at its due tick, at the first tick a late one is back by, or never, with a note in its place; the
 tick a line says it left at, which no check and no verifier reads, and the note, which can only take a head away;
 and the cost's load and its measurement at a small schedule, with the heads it counts as late or missed."""
@@ -289,7 +289,7 @@ def test_the_check_refuses_rows_that_arent_the_runs(tmp_path):
 
 
 def handed(out) -> tuple[bytes, bytes]:
-    """What the auditor hands the check of a run made under the network certifier's own key: the SHA-512 of the key
+    """What the auditor hands the check of a run made under the network attester's own key: the SHA-512 of the key
     the run's deployment record names, and its session."""
     key, session = device_key(out)
     return CRC.key_sha512(key), session
@@ -600,7 +600,7 @@ def test_a_run_with_content_rows_keeps_each_execution_phases_filed_releases_and_
 def test_a_run_with_request_words_keeps_each_classes_words_table_and_the_check_holds_it_to_the_records(tmp_path, process):
     """The six connections at a schedule with request words, inline and in the publisher process: each execution
     phase's line lists a fourth table a class, `words.i`, after the class's other three and at their count, with a
-    salt a row, and its rows are what the network certifier reads of each request the records hold: the `max_tokens`
+    salt a row, and its rows are what the network attester reads of each request the records hold: the `max_tokens`
     it was sent with and the count of its prompt's ids, two u32. The check accepts the run, and refuses a words
     table's root that isn't the records', by its execution phase."""
     out = tmp_path / "run"
@@ -641,7 +641,7 @@ def test_a_run_with_request_words_keeps_each_classes_words_table_and_the_check_h
 def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_and_no_head(tmp_path, process):
     """The sixth of six connections at once is refused, so execution phase 0's records are withheld: under form 2 it
     and the one after it, which releases a connection too, end without releases. Each has one line, the network
-    certifier's signed word that it has no head, an empty blob and no registration, inline and in the publisher
+    attester's signed word that it has no head, an empty blob and no registration, inline and in the publisher
     process; the two after them have their heads, the first of them one release's. The check, which refuses the run
     on execution phase 0's certificates, takes both words and both heads, and no release of the first two execution
     phases is in a head."""
@@ -672,7 +672,7 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
 
 def test_under_form_2_a_run_through_its_last_buckets_passes_the_check_which_counts_the_arrivals_turned_away(tmp_path):
     """Eight requests at form 2 over a run of two execution phases, the last four from the first bucket that admits
-    nothing to the run's last: the network certifier serves the first four and turns the last four away, each with
+    nothing to the run's last: the network attester serves the first four and turns the last four away, each with
     one cell, in its bucket; it refuses none, so both execution phases are certified and each has its head. The
     run's log counts the four on their own, and the check accepts the run, its summary and its table saying that the
     four clients whose outcome is refused were turned away."""
@@ -707,7 +707,7 @@ def left(out) -> list[dict]:
 @pytest.mark.parametrize("process", [False, True])
 def test_with_a_head_offset_the_tick_writes_each_execution_phases_line_at_its_due_tick(tmp_path, process):
     """The six connections under form 2 with a head offset, inline and in the publisher process, which hands each
-    line back in time: the network certifier's tick writes each execution phase's line at the tick the schedule
+    line back in time: the network attester's tick writes each execution phase's line at the tick the schedule
     gives it, as the publisher handed it back, and the run ticks on past its last window until its last two lines
     have left. A line holds no tick: the device's own log has the tick each left at (`heads`). Every line is a
     registration, as without the offset, and no tick is late. The check accepts the run and counts four of four
@@ -731,7 +731,7 @@ def test_a_line_back_late_is_written_at_the_first_tick_it_is_back_by_within_the_
     wait: that tick writes it, one tick late at a wait of 1, and after the next execution phase's line at a wait
     longer than an execution phase. `rows.jsonl` then holds the lines in the order they left, which `read` takes by
     execution phase, as the salts were kept; the check accepts the run, four of four registered. No line holds its
-    tick, so the check says nothing of the late one: the network certifier's own log does (`heads`)."""
+    tick, so the check says nothing of the late one: the network attester's own log does (`heads`)."""
     out, params = tmp_path / "run", dataclasses.replace(TIMED, head_wait=wait)
     device, _ = served(out, tmp_path / "key", params=params, back={0: at})
     ticks = {**dict(enumerate(DUE)), 0: at}
@@ -748,8 +748,8 @@ def test_a_line_back_late_is_written_at_the_first_tick_it_is_back_by_within_the_
 @pytest.mark.parametrize("wait, at", [(0, DUE[1] + 1), (1, DUE[1] + 2), (0, None)])
 def test_a_line_not_back_by_its_last_tick_is_never_written_and_its_execution_phase_has_no_head(tmp_path, wait, at):
     """Execution phase 1's line is handed back one tick late at a wait of 0, two ticks late at a wait of 1, or
-    never: the network certifier refuses it (`head_back` is False) and no tick writes it. The last tick it could
-    have left at writes the network certifier's note that it missed, in its place, so the execution phase has one
+    never: the network attester refuses it (`head_back` is False) and no tick writes it. The last tick it could
+    have left at writes the network attester's note that it missed, in its place, so the execution phase has one
     line, one blob of salts and no head; the other lines leave at their due ticks. The check accepts the run,
     counts three of four registered and names the one that missed. It takes the release order from the device's
     log and nothing of the ticks there: its result is the same whatever the log's `heads` say, and without them."""
@@ -776,7 +776,7 @@ def test_a_line_not_back_by_its_last_tick_is_never_written_and_its_execution_pha
 
 def test_the_note_that_a_line_missed_takes_a_head_away_and_only_a_schedule_with_a_head_offset_hands_lines_back(
         tmp_path):
-    """A run at a wait of 1 whose lines all left at their due ticks, one line changed to the network certifier's
+    """A run at a wait of 1 whose lines all left at their due ticks, one line changed to the network attester's
     note that it missed: the check, which reads the note, takes that execution phase as one with no head, three of
     four registered, and refuses nothing. The note can only take a head away:
     beside a line of the same execution phase it is a second line, and without a blob of salts of its own the rows
@@ -942,7 +942,7 @@ def test_under_form_2_the_keep_refuses_a_hand_that_files_more_than_the_bound_in_
 def test_the_check_reads_the_release_order_past_an_execution_phase_that_isnt_complete(tmp_path, form):
     """A tick past its slack faults the second of five execution phases after its third bucket, and a connection
     released in it after that has lost its `END` in the records, so they count the later releases one short. The
-    network certifier counted it: its heads of the later execution phases hold each release at its place in the
+    network attester counted it: its heads of the later execution phases hold each release at its place in the
     release order. With the run's `warden.json` the check lays the same tables and takes every head, under form 1
     and form 2, and under form 2 the words of the faulted execution phase and the ones beside it. Without it the
     check can't place the later releases and takes no head past the fault; and with a log that gives a later
@@ -1008,7 +1008,7 @@ SMALL_COST = ["--slots", "2", "--lanes", "2", "--window", "32", "--every", "2", 
 
 def test_the_costs_load_is_the_classes_rows_or_what_the_grids_carry_and_its_close_is_measured(tmp_path):
     """`loaded`: with `rows`, every row of every class, each release its class's longest request and most ids, filed
-    in its class by the network certifier's rule; with `grid`, no more than an execution phase's grids carry; a
+    in its class by the network attester's rule; with `grid`, no more than an execution phase's grids carry; a
     schedule without content rows is refused. `cost` at a small schedule hands that load to the publisher process
     through the device's own hand and reports each step once an execution phase."""
     p = dataclasses.replace(PLAIN, window=32, every=2, lanes=2, slots=2, ingress_cells=4, egress_cells=9, lengths=1,

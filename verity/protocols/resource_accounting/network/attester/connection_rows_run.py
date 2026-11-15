@@ -7,12 +7,12 @@ of that form (`network_certifier`'s "The lengths rows") and `--content P,O[,ROWS
 there, the rows of each of its three tables. Under form 2 a class is `P,O`: its tables hold a row a release filed in
 it and no other. `--request-words`, with `--lengths 2`, `--content` and the schedule's `--max-tokens-cap`, gives it
 request words (`content_rows`' "A request's words"): a fourth table a class, each released request's `max_tokens`
-and count of prompt ids as the network certifier reads them. `--head-offset N --head-wait W`, with `--lengths`, hold
+and count of prompt ids as the network attester reads them. `--head-offset N --head-wait W`, with `--lengths`, hold
 each execution phase's line to a tick (`network_certifier`'s "The head's tick"): N buckets after the close that hands it, or up
 to W ticks later for one that is late. `network_certifier_serve`'s `serve` and `rehearse` take the flags, and `rehearse` passes
 them to its `serve`. Without them the schedule, its digest and everything the run writes are what they were.
 
-**The hand** (`hand`, `Keeper`). With lengths rows the network certifier hands an execution phase's releases once
+**The hand** (`hand`, `Keeper`). With lengths rows the network attester hands an execution phase's releases once
 the next one's records are published (`NetworkCertifier.hand_lengths`): on its ticker, after that execution phase's last bucket
 has left, or after the pacer has reported it released. The ticker only queues the hand, a slot stride an item, so the
 queue's thread pickles a stride's releases at a time and never an execution phase's. The hand carries every release,
@@ -25,12 +25,12 @@ their rows and bytes, and the build's, the commit's and the signature's ms) and 
 content rows the process also writes a line of `filed.jsonl` an execution phase, after its line of `rows.jsonl`:
 the releases the hand filed in each class, under the digest of the head it signed, or the record with no list for
 an execution phase whose head it did not sign (`connection_rows`' "The filed releases"). It is witness, for the
-prover's serve: which class a release is in turns on how the network certifier ended it. A hand the tables refuse
+prover's serve: which class a release is in turns on how the network attester ended it. A hand the tables refuse
 has no line and no salts: under form 2 one that files more than R = `NetworkCertifierParams.phase_releases` releases in a
 class is no execution phase's of the schedule, the keep raises naming the release, the class and R, and `serve`'s
 publisher process ends on it, which fails the run at its next record's close.
 
-Under form 2 the network certifier ends every execution phase of the run, the last at the run's last close, and one
+Under form 2 the network attester ends every execution phase of the run, the last at the run's last close, and one
 it doesn't hand without releases. For that one the publisher's process signs the word that it has no head
 (`connection_rows`' "The word that no head comes"): its line of `rows.jsonl` holds the word's record under
 `no_head` in place of a registration, and its blob of `rows.salts` is empty. So every execution phase has one line
@@ -39,17 +39,17 @@ so a line's rows, its blob of salts and the publisher's build and commit follow 
 `read` takes each table's salts by the rows the line's registration counts.
 
 In a schedule with a head offset (`NetworkCertifierParams.head_offset`) the publisher's process writes no line. It keeps the
-salts, which are witness, as it did, and hands each execution phase's line back to the network certifier
-(`Keeper(back=…)`, `NetworkCertifier.head_back`), whose tick writes it (`Lines`, the network certifier's `leave`) as it
-was handed back. The line holds no tick: the tick it left at is the network certifier's own note, in its log alone
+salts, which are witness, as it did, and hands each execution phase's line back to the network attester
+(`Keeper(back=…)`, `NetworkCertifier.head_back`), whose tick writes it (`Lines`, the network attester's `leave`) as it
+was handed back. The line holds no tick: the tick it left at is the network attester's own note, in its log alone
 (`warden.json`'s `heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the
 auditor's side, which is not built. A line that is not back by the last tick it could leave at is never written:
 that execution phase has no head, and the tick writes `{"missed": [link, direction, execution phase]}` in its
-place, the network certifier's own unsigned note of it, so that every execution phase still has one line and one
+place, the network attester's own unsigned note of it, so that every execution phase still has one line and one
 blob. A late line may leave after the next execution phase's, so `read` takes the lines by execution phase.
 
 **The check** (`check`). Every execution phase that is handed, and no other, has a registration that
-`connection_rows.check_registration` accepts under the network certifier's key and session, and its head is the head
+`connection_rows.check_registration` accepts under the network attester's key and session, and its head is the head
 of the tables laid from the records' own reading of the same cells, under the kept salts: the rows say what the
 records say. Under form 1 the handed ones are those whose three records and the next one's were published complete.
 Under form 2 they are those whose records, the ones before theirs and the ones after were, and every other
@@ -67,14 +67,14 @@ summary's `heads` names those execution phases for it.
 phases' order, after a first line that says what they were checked under:
 ``{"format": CHECKED, "checked_under": {"key_sha512": HEX, "session": HEX}}``. `CHECKED` is that line's own
 ``format`` word, which no registration has, so a reader refuses every other first line by the one word. The
-auditor hands the check the two: the SHA-512 of the network certifier's public key (`key_sha512`: over the LMS
+auditor hands the check the two: the SHA-512 of the network attester's public key (`key_sha512`: over the LMS
 public key ``I ‖ T[1]``, the bytes a deployment record and the period check's parameters write in hex) and its
 session. The run's deployment record is held to them: one that names a key of another hash, or another session,
 is a problem that says which, the first of the check's problems. So the key and the session the registrations
 verify under are the ones handed, and a run made under any other key, a rehearsal's own among them, gets no file
 under this one. A check that is handed neither writes no file, and one asked for a file without them refuses. It
 is the file a reader of connection rows takes its heads from
-(`stop_verdicts.REGISTRATIONS_FILE`), and the one place the network certifier's signature on such a head is
+(`stop_verdicts.REGISTRATIONS_FILE`), and the one place the network attester's signature on such a head is
 checked: that reader holds no key, and reads from the first line what the file was checked under. A refusal, the
 word that no head comes and a registration that fails either hold give no line. Where the check, or the caller's
 check it is part of, found any problem, or did not end, there is no file at all, and one already at that path is
@@ -104,13 +104,13 @@ item's), and, in the publisher's process, the build, the commit and the signatur
 is `--out`'s JSON.
 
 With `--head-offset N --head-wait W` the publisher's process hands each line back, and the cost also times each
-execution phase from its hand to its line back in the network certifier's process (`back_ms`), one execution phase
+execution phase from its hand to its line back in the network attester's process (`back_ms`), one execution phase
 at a time and before it times the items' pickling. Under `heads` it counts the lines back later than N buckets and
 within N + W (`late`) and those later still (`missed`: at W = 0, the heads that missed their tick), of the
 `phases` it ran, with the least offset at which none of them would be late (`least_offset`). The cost has no
 ticker: it counts by the host's clock from the hand, and its publisher does nothing else, where a served close has
 it keep the closing window's three records before the hand. So its count is a floor on a served run's; a served
-run's own count is its `missed` lines, and the network certifier's own log has the tick each line left at
+run's own count is its `missed` lines, and the network attester's own log has the tick each line left at
 (`warden.json`'s `heads`).
 """
 
@@ -206,7 +206,7 @@ def _request(params: NetworkCertifierParams, n: int, size: int, ids: int) -> byt
 
 
 def _device(params: NetworkCertifierParams, releases: Sequence[tuple[int, int]], lengths) -> NetworkCertifier:
-    """A network certifier at the close of execution phase 1 with `releases` as execution phase 0's, each ended in
+    """A network attester at the close of execution phase 1 with `releases` as execution phase 0's, each ended in
     its `END`, laid in its slot strides in order. Under form 2 its run goes on past execution phase 1, so that
     close hands execution phase 0's rows and ends no other. It is never run, so its clock is one nothing moves."""
     clock = VirtualClock(0.0)

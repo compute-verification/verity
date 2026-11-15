@@ -18,7 +18,7 @@ the responses' record's and the fails record's, each over a sampled digest (the 
 cells' head (`WR.Cells.commit` and `WR.registration`). `far` puts the span at the last execution phases a
 certificate can name, and `edge` puts it under the schedule `EDGE`, whose tail is one execution phase and no bucket
 less. `registered` gives the parameters the registered hardware (`site`): the site of a registration log's view, in
-which the link joins a host and a network certifier that registers the key, and the head of the log it was read at.
+which the link joins a host and a network attester that registers the key, and the head of the log it was read at.
 A change to the registered hardware takes its forms in turn by the seed (`SITE_FORMS`). With `between`, the two marks are on
 the messages of what runs between them (a wipe's start and end messages) in place of sampled ones, and with `alone` the
 registered host has the link as its one link.
@@ -63,7 +63,7 @@ LINKS = ("eth0", "rack/out", "a b", "l", "x" * 40, "r\u00e9seau/0", "\u7ebf\u8de
 EXPECT = {
     "honest": ACCEPT, "far": ACCEPT, "edge": ACCEPT, "registered": ACCEPT,
     # the registered hardware in the parameters: a site in which the link is none, or joins something else than a
-    # network certifier and a host; whose certifier registers another key, or one not in lower-case hex; a site
+    # network attester and a host; whose certifier registers another key, or one not in lower-case hex; a site
     # without a head or a head without a site; and a site that is not one a registration log's view writes
     "site-link": REJECT, "site-key": REJECT, "site-alone": REJECT, "site-form": REJECT,
     # a mark: on another link name, an ingress certificate, under another key, under the key's identifier with other
@@ -75,7 +75,7 @@ EXPECT = {
     # order, a tail past the last execution phase a certificate can name, and under `EDGE` a tail of two
     "missing": REJECT, "tail-short": REJECT, "no-tail": REJECT, "twice": REJECT, "outside": REJECT,
     "disorder": REJECT, "past-u64": REJECT, "edge-tail": REJECT,
-    # an execution phase's certificates: none (as the network certifier leaves one it faulted or refused a connection
+    # an execution phase's certificates: none (as the network attester leaves one it faulted or refused a connection
     # in), one or three, one on another link name, at another execution phase, an ingress one, in another session,
     # under another key, forged
     "faulted": REJECT, "cert-count": REJECT, "cert-link": REJECT, "cert-phase": REJECT, "cert-ingress": REJECT,
@@ -175,7 +175,7 @@ SITE_FORMS = {"site-link": 6, "site-key": 5, "site-alone": 2, "site-form": 23}
 def site(r: random.Random, link: str, key: str, elsewhere: str,
          joins: tuple[str, str] | None = ("node0", "cert0"), alone: bool = False) -> dict:
     """The site of a registration log's view, as the Site's JSON writes it: the host `node0` behind the network
-    certifier `cert0`, which registers `key` and splits the host's uplink in the link `link` and its other half, to the
+    attester `cert0`, which registers `key` and splits the host's uplink in the link `link` and its other half, to the
     outside; a second host behind a second certifier, on the link `elsewhere`; a link between the two hosts and the
     second host's bare uplink. `joins`: what the link `link` joins in place of the host and its certifier, or None for
     a site with no such link. `alone`: the site without the link between the two hosts, so that the link `link` is the
@@ -215,7 +215,7 @@ def _other_schedule(r: random.Random, s: Schedule) -> Schedule:
 def build(m: str, seed: int, *, between: Callable[[Callable[[bytes], bytes]], bytes] | None = None,
           alone: bool = False, record: int | None = None) -> dict:
     """A span with the one change `m` (`EXPECT`), sampled from `seed`. `between` is what runs between the two marks,
-    in place of their sampled messages: it is handed the network certifier's mark source, which marks the start
+    in place of their sampled messages: it is handed the network attester's mark source, which marks the start
     message it is called on and returns the start certificate's bytes (`Certificate.encode`), and it returns the end
     message, which the end mark is then on. `alone`: the registered hardware's host has the link as its one link
     (`site`). `record`: the egress record (its index in `span.records`) whose certificate a change to one execution

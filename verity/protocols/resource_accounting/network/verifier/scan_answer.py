@@ -15,7 +15,7 @@ JITTER_BOUND = 2
 
 
 def _found(run: Path, name: str) -> Path:
-    """A network certifier run's file: in the run's directory (`network_certifier_serve.py serve --out`), else its ``witness/``
+    """A network attester run's file: in the run's directory (`network_certifier_serve.py serve --out`), else its ``witness/``
     (the gate's `warden-rehearse --scan`)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():

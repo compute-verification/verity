@@ -24,7 +24,7 @@ cryptography's advantage:
 * `Certifier`: a server block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
-  with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the network certifier form's public parameters
+  with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the network attester form's public parameters
   set. Its δ is 0: the certifier is the auditor's device (`trusted-device`), and the side channels an assumed bound.
 * The inference-only check is a registration check, not an envelope: the registered circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
@@ -275,7 +275,7 @@ class Wipe:
         return n * self.game_delta_coin, n * self.prf_advantage
 
 
-#: the network certifier form's public parameters the declared I/O bound reads (`Certifier.declared`)
+#: the network attester form's public parameters the declared I/O bound reads (`Certifier.declared`)
 DECLARED_IO = ("cell_bytes", "cell_rate", "lanes", "cells", "id_bits", "hold", "outputs", "bucket_s", "window_buckets")
 
 
@@ -309,10 +309,10 @@ CELL_HEADER, ID_FIELD, PROMPT_START = 9, 11, 367
 
 @dataclass(frozen=True)
 class Certifier:
-    """A network certifier on each host's links, and the channels it doesn't read.
+    """A network attester on each host's links, and the channels it doesn't read.
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
-    inference block runs on a single server (ruled). At the network certifier form's public parameters (the `NetworkCertifierParams` of
+    inference block runs on a single server (ruled). At the network attester form's public parameters (the `NetworkCertifierParams` of
     `verity/protocols/resource_accounting/network/prover/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
     `IDB` bits an id, `D`, `T`) a request's declared input is at most
 
@@ -348,19 +348,19 @@ class Certifier:
     side: float = 0.0
     #: each server's ingress at most its inference blocks' declared inputs, at the parameters below
     declared: bool = False
-    #: `B`, bytes a cell; `r`, cells a lane a bucket (its `slots`, the network certifier's line rate); lanes a server; `C`, cells a
+    #: `B`, bytes a cell; `r`, cells a lane a bucket (its `slots`, the network attester's line rate); lanes a server; `C`, cells a
     #: request
     cell_bytes: float = math.nan
     cell_rate: float = math.nan
     lanes: float = math.nan
     cells: float = math.nan
-    #: `IDB`, bits an id; `D`, a slot held `D + 1` buckets from its admission (the network certifier's `delay`); `KO`, outputs a
+    #: `IDB`, bits an id; `D`, a slot held `D + 1` buckets from its admission (the network attester's `delay`); `KO`, outputs a
     #: request; `τ_b`, seconds a bucket
     id_bits: float = math.nan
     hold: float = math.nan
     outputs: float = math.nan
     bucket_s: float = math.nan
-    #: `T`, buckets an execution phase (the network certifier's `window`), the length the per-server bound is stated per
+    #: `T`, buckets an execution phase (the network attester's `window`), the length the per-server bound is stated per
     window_buckets: float = math.nan
     #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1 under
     #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
@@ -435,7 +435,7 @@ class Certifier:
 
     @property
     def line_rate(self) -> float:
-        """The network certifier's line rate a server, each way, bit/s: `lanes r 8B / τ_b`."""
+        """The network attester's line rate a server, each way, bit/s: `lanes r 8B / τ_b`."""
         return self.lanes * self.cell_rate * 8 * self.cell_bytes / self.bucket_s
 
     def prompts(self, ctx: Context) -> float:

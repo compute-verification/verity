@@ -7371,7 +7371,7 @@ def test_a_start_is_carried_only_past_a_record_the_verdict_log_accepted(pieces, 
 
 def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces, callers):
     """Lean and Python agreeing on cut and continue over three windows. Each window's certified arrivals are the root the
-    network certifier signed for it, which the verifier pins (`ing`: the arrivals open at the last window's edge first,
+    network attester signed for it, which the verifier pins (`ing`: the arrivals open at the last window's edge first,
     each at the values it arrived with and the outputs released of it); its rows (`req`) are its own, under its open
     root; and its pool chains. Three windows that carry the pool are accepted, arrivals with a continuation counted
     from the outputs serving computed or the last window's arrivals again are `R7-held`, and a window that restarts its

@@ -1,6 +1,6 @@
 """The tick an execution phase's head leaves at (`NetworkCertifierParams.head_offset`, `NetworkCertifierParams.head_wait`, `network_certifier`'s
 "The head's tick"), driven tick by tick on a `VirtualClock`. A schedule sets the two together or neither. With them
-whoever takes an execution phase's hand hands its head back to the network certifier, which publishes it at a tick
+whoever takes an execution phase's hand hands its head back to the network attester, which publishes it at a tick
 of the schedule: the due one for a head back by then, never sooner; the first it is back by for a late one, within
 W ticks of the due one; and at no tick for one later still, whose execution phase has no head. A schedule without
 them has the digest and the run it had."""
@@ -33,7 +33,7 @@ async def drive(params: NetworkCertifierParams, back: dict[int, int | None] | No
                 late: dict[int, float] | None = None):
     """A run of `phases` execution phases without a connection, each tick at its boundary (`late[t]` seconds past it
     for tick t). Whoever takes a hand is this driver: it hands execution phase w's head back just before tick
-    `back[w]` runs, never where that is None, and at the hand itself, as a publisher in the network certifier's own
+    `back[w]` runs, never where that is None, and at the hand itself, as a publisher in the network attester's own
     process does, where `back` doesn't name w. Returns the device, the hands as (tick, execution phase, strides),
     what left as (tick, execution phase, the tick `leave` was given, head), and what each `head_back` returned."""
     back = back or {}

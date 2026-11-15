@@ -143,7 +143,7 @@ class Account:
 
     @property
     def export_charged(self) -> bool:
-        """Whether the export is charged: only once network certifiers cover every link, and not
+        """Whether the export is charged: only once network attesters cover every link, and not
         applicable while `uncovered` names any."""
         return not self.uncovered
 
