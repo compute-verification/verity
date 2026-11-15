@@ -201,7 +201,7 @@ def _sha(p: Path) -> str:
 
 def packages(files: list[str]) -> list[str]:
     """The audited packages: directories whose tracked files include a `lean-audit.json`, the auditor's fixtures aside."""
-    return sorted({f.rsplit("/", 1)[0] for f in files if f.endswith("/lean-audit.json") and not f.startswith(LEAN_TOOL)})
+    return sorted({f.rsplit("/", 1)[0] for f in files if f.endswith("/lean-audit.json") and not f.startswith((LEAN_TOOL, f"tests/{LEAN_TOOL}"))})
 
 
 #: the files of a package no audit reads, by name, each with what does: out of the package's key and of the scratch tree,
