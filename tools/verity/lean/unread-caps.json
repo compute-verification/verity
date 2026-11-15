@@ -29,10 +29,6 @@
    "modules": 300,
    "declarations": 2415
   },
-  "Proofs/InferenceOnly": {
-   "modules": 1,
-   "declarations": 4
-  },
   "Proofs/Pous": {
    "modules": 1,
    "declarations": 3
