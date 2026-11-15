@@ -41,7 +41,7 @@ GPU 00000000:DB:00.0
 
 
 def _args(**more) -> argparse.Namespace:
-    return argparse.Namespace(**{"bin": "flock-circuit", "plain": False, "firewall": None, **more})
+    return argparse.Namespace(**{"bin": "flock-circuit", "plain": False, "zk_server": None, **more})
 
 
 @pytest.fixture
@@ -76,7 +76,7 @@ def test_an_audits_cards_go_to_the_proof_server_numbered_as_nvidia_smi_numbers_t
     assert made[-1]["env"] == {**a0.DIRECT, "CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
 
 
-@pytest.mark.parametrize("how", [{"plain": True}, {"firewall": "flock-firewall"}])
+@pytest.mark.parametrize("how", [{"plain": True}, {"zk_server": "flock-zk-server"}])
 def test_a_session_that_proves_on_the_cpu_takes_no_card_and_says_so(tmp_path, made, how):
     """A plain session is a process pair on the CPU, and one behind the ZK server proves on the CPU too, on the proof
     server's kept prover: without cards they are as before (here, with no sampled member, no proof server), and with

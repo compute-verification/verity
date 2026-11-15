@@ -37,13 +37,13 @@ a pass's certified stream and oracle, receipts it computed elsewhere among them:
 whose inputs are any function of the store, the stream and the oracle. A device reads such a carrier through its side
 sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts the side link without them.
 
-**A carrier of a declared circuit's.** A credited KV page's payload is a declared circuit `W`'s values. Its
+**A carrier of a registered circuit's.** A credited KV page's payload is a registered circuit `W`'s values. Its
 carrier's provenance is `W`'s computation from the chain's first write to the pass. So its inputs are `W`'s run inputs
 in those windows of the audit, and its encodes are `W`'s nonlinear units there, its budgeted units and its data
 products (`Provenance.OfCircuit`), which `W`'s census and `Gates.productsAt` count per window.
 
 **The tiles a pass read.** `readsIn` is `readsOn` restricted to the tiles `I j` of each pass `j`: the distinct
-device-memory sectors read from those tiles. With `I j` the tiles of a declared circuit's blocks, it is what a pass
+device-memory sectors read from those tiles. With `I j` the tiles of a registered circuit's blocks, it is what a pass
 read of that circuit's data.
 
 **A steered layout.** `steeredStore` is `coinStore` on a layout that reads the codec and the append coins as well as

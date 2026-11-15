@@ -19,7 +19,7 @@ untraced = ["tests/test_sketch.py"]
 # and its host twin's sources. sketch.py reads its variables through its settings.py, and the engine's through the
 # torch_gpu benchmarks' (sha512_rows/torch_engine.py, beside that registry's pyproject.toml), on verity_config.settings.
 inputs = ["tools/config/verity_config",
-          "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/claims/__init__.py",
+          "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py",
           "verity/protocols/accounting/pous", "verity/protocols/interface",
           "verity/protocols/accounting/pous/prover",
           "verity/channel.py",
