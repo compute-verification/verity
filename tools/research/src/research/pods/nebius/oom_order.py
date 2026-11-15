@@ -94,9 +94,12 @@ def reservations(ramlock: Path) -> list[dict]:
 
 
 def _read(p: Path) -> bytes | None:
+    """``p``'s bytes; None once its process has exited, or when unreadable, which is said."""
     try:
         return p.read_bytes()
-    except OSError:
+    except OSError as e:
+        if p.parent.exists():
+            print(f"oom_order: {p} unread, so its process is left out ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -113,7 +116,8 @@ def scan(proc: Path = PROC) -> dict[int, dict]:
         try:
             pgid = int(stat[stat.rindex(b")") + 2:].split()[2])
             cur = int(adj)
-        except (ValueError, IndexError):
+        except (ValueError, IndexError) as err:
+            print(f"oom_order: pid {e} left out, its stat or oom_score_adj doesn't parse ({err})", file=sys.stderr, flush=True)
             continue
         rss = 0
         for ln in status.splitlines():
@@ -191,10 +195,9 @@ def apply(plans: list[dict], procs: dict[int, dict], proc: Path = PROC, dry_run:
                 if not dry_run:
                     (proc / str(pid) / "oom_score_adj").write_text(str(p["adj"]))
                 moved.append([pid, cur])
-            except (FileNotFoundError, ProcessLookupError):
-                pass
             except OSError as e:
-                errors.append(f"{pid}: {type(e).__name__}: {e}")
+                if (proc / str(pid)).exists():
+                    errors.append(f"{pid}: {type(e).__name__}: {e}")
         if moved or errors:
             out.append({"at_utc": clock().strftime("%Y-%m-%dT%H:%M:%SZ"), "run": p["run"], "use_gb": round(p["use"] / GB, 1),
                         "reserved_gb": round(p["reserved"] / GB, 1), "adj": p["adj"], "set": moved, "dry_run": dry_run,

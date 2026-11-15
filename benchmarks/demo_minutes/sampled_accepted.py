@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The share of a served run's drawn units whose proofs the Lean verifier accepted on the auditor's machine, read off
+"""The share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine, read off
 its runs' records: the metric ``vllm/served-sampled-proofs-accepted`` (`benchmarks/demo_minutes/metrics.toml`).
 Standard library only; finding the runs and the served commit, and what it writes, are `minutes.py`'s.
 
@@ -8,19 +8,19 @@ Standard library only; finding the runs and the served commit, and what it write
 
 SERVED_RUN is the vLLM served run's (`adapters/vllm/tools/served_run/run.sh`), whose ``job.json`` names the served
 commit; VERDICT_RUN is the one whose ``out/record/verdicts.json`` (`served_verdicts.py record`) holds SPOT's row, its
-``protocols.integrity``. The drawn units are the members its Lean answer's profile drew at the finest level, the checked
-one (`Core.Integrity`). A unit counts as accepted only where all of these hold, and the first that doesn't is the
+``protocols.integrity``. The sampled proof blocks are the members its Lean answer's profile sampled at the finest level,
+the checked one (`Core.Integrity`). A proof block counts as accepted only where all of these hold, and the first that doesn't is the
 measurement's ``reason``, its value then 0:
 
 - the served commit is a commit of ``--main`` (default ``origin/main``) in the tree this file is in;
 - the record was composed off the served node (``composed_on.served_node`` false);
 - SPOT's row was recomputed by the Lean verifier on the host that composed it (its ``answer_from``, `LEAN_HERE`);
-- that verdict is accept, which the Lean verifier gives only when every drawn unit's proof passes.
+- that verdict is accept, which the Lean verifier gives only when every sampled proof block's proof passes.
 
-So a run's share is 100 or 0 today: the answer holds one verdict over every drawn unit, and a rejection names no count.
+So a run's share is 100 or 0 today: the answer holds one verdict over every sampled proof block, and a rejection names no count.
 It refuses, with no measurement and the reason (exit 1), a run without its record, a VERDICT_RUN with no
-``out/record/verdicts.json``, a record with no SPOT row or no ``composed_on.served_node``, and an accepting answer that
-names no drawn unit: a partial record is no measurement, where a complete one that fails a condition measures 0.
+``out/record/verdicts.json``, a record whose SPOT row is missing or empty or with no ``composed_on.served_node``, and an accepting answer that
+names no sampled proof block: a partial record is no measurement, where a complete one that fails a condition measures 0.
 """
 from __future__ import annotations
 
@@ -54,8 +54,8 @@ def _reader():
 R = _reader()
 
 
-def drawn(answer: dict) -> int | None:
-    """The members ``answer``'s profile drew at its finest level, None where it names none."""
+def sampled(answer: dict) -> int | None:
+    """The members ``answer``'s profile sampled at its finest level, None where it names none."""
     p = answer.get("profile") if isinstance(answer, dict) else None
     levels = (p or {}).get("levels") or []
     if not levels:
@@ -81,12 +81,12 @@ def share(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> di
         raise R.Refused(f"{verdicts.name}: no {RECORD}, the record of its verdicts")
     report = json.loads(f.read_text())
     row = (report.get("protocols") or {}).get("integrity")
-    if not isinstance(row, dict):
+    if not isinstance(row, dict) or not row:
         raise R.Refused(f"{verdicts.name}: its {RECORD} holds no SPOT row (protocols.integrity)")
     on = report.get("composed_on")
     if not isinstance(on, dict) or not isinstance(on.get("served_node"), bool):
         raise R.Refused(f"{verdicts.name}: its {RECORD} names no composed_on.served_node, so where it was composed is unknown")
-    n = drawn(row.get("answer") or {})
+    n = sampled(row.get("answer") or {})
     reasons = [
         off_main(sha, ref, repo or R.ROOT) and f"served from {sha}, not a commit of {ref}",
         on["served_node"] and "composed on the served node, not on the auditor's machine",
@@ -96,10 +96,10 @@ def share(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> di
     ]
     reason = next((r for r in reasons if r), None)
     if reason is None and not n:
-        raise R.Refused(f"{verdicts.name}: SPOT's accepting answer names no drawn unit at its finest level")
+        raise R.Refused(f"{verdicts.name}: SPOT's accepting answer names no sampled proof block at its finest level")
     accepted = n if reason is None else 0
     return {"name": METRIC, "value": 100 * accepted / n if n else 0, "unit": UNIT, "mark": "measured",
-            "better": "higher", "target": TARGET, "verdict": row.get("verdict"), "drawn": n, "accepted": accepted,
+            "better": "higher", "target": TARGET, "verdict": row.get("verdict"), "sampled": n, "accepted": accepted,
             "reason": reason, "runs": [served.name, verdicts.name], "commit": sha,
             "inputs": [f"measured: SPOT's row in {verdicts.name}'s {RECORD}, of the run {served.name} served"]}
 
@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     if d := R.settings.run_dir():
         doc = R.result(R.settings.run_id() or d.name, a.runs, m, why, METRIC, "benchmarks/demo_minutes/sampled_accepted.py")
         if m:
-            doc["validation"]["detail"] = (f"{m['accepted']} of {m['drawn'] or 'no'} drawn units accepted"
+            doc["validation"]["detail"] = (f"{m['accepted']} of {m['sampled'] or 'no'} sampled proof blocks accepted"
                                            + (f": {m['reason']}" if m["reason"] else ""))
         f = d / "result.json"
         tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")

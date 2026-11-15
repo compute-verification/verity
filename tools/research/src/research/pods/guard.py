@@ -48,10 +48,10 @@ RUNPOD_POD_ID (from /proc/1/environ when an ssh session did not inherit it), els
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
 import math
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -114,13 +114,8 @@ def parse_time(s: str | None) -> float | None:
     """Epoch seconds from ISO 8601 or RunPod's `YYYY-MM-DD HH:MM:SS.fff +0000 UTC`; None when absent or unparseable."""
     if not s:
         return None
-    t = str(s).strip().removesuffix(" UTC")
-    for fmt in ("%Y-%m-%d %H:%M:%S.%f %z", "%Y-%m-%d %H:%M:%S %z"):
-        try:
-            return dt.datetime.strptime(t, fmt).timestamp()
-        except ValueError:
-            pass
-    return B.parse_time(t)
+    # RunPod's form is ISO 8601 but for the space before its offset
+    return B.parse_time(re.sub(r" ([+-]\d{4})$", r"\1", str(s).strip().removesuffix(" UTC")))
 
 
 iso = B.iso
@@ -129,12 +124,16 @@ iso = B.iso
 def self_pod_id() -> str | None:
     if settings.get("RUNPOD_POD_ID"):
         return settings.need("RUNPOD_POD_ID")
+    environ = Path("/proc/1/environ")
+    if not environ.exists():
+        return None
     try:
-        for item in Path("/proc/1/environ").read_bytes().split(b"\0"):
+        for item in environ.read_bytes().split(b"\0"):
             if item.startswith(b"RUNPOD_POD_ID="):
                 return item.split(b"=", 1)[1].decode() or None
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"research pods guard: {environ} unread, so this machine's own pod is unknown ({type(e).__name__}: {e})",
+              file=sys.stderr, flush=True)
     return None
 
 
@@ -200,10 +199,8 @@ class Recorder:
         self.faults: dict[str, dict[str, Any]] = {}
 
     def _say(self, msg: str) -> None:
-        try:
-            print(f"research pods guard: {msg}", file=sys.stderr, flush=True)
-        except Exception:  # noqa: BLE001 -- stderr may be the log on the same full disk
-            pass
+        # stderr may be the log on the same full disk: its failure is a fault like the files', kept in the state
+        self.attempt("stderr", lambda: print(f"research pods guard: {msg}", file=sys.stderr, flush=True))
 
     def attempt(self, what: str, fn: Callable[[], None]) -> bool:
         try:
@@ -436,10 +433,12 @@ def _alive(pid: int) -> bool:
         os.kill(pid, 0)
     except (OSError, ValueError):
         return False
+    if not Path("/proc/self").exists():
+        return True                                                         # no /proc (macOS): the signal probe is all there is
     try:
         return b"guard" in Path(f"/proc/{pid}/cmdline").read_bytes()
     except OSError:
-        return True                                                         # no /proc (macOS): the signal probe is all there is
+        return False                                                        # exited since the signal probe
 
 
 def recorded_pid(pid_path: Path) -> int | None:
@@ -511,11 +510,16 @@ def supervise(cmd: list[str], poll_s: float, *, call: Callable[[list[str]], int]
               sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.time) -> int:
     """Run the guard `cmd` until it stops on purpose (STOP_CODES), starting it again `poll_s` after any other exit: a crash, a kill,
     an uncaught error.  A crash costs one poll, not the evening.  Returns the guard's last exit code."""
+    unsaid = 0
+
     def say(msg: str) -> None:
+        nonlocal unsaid
         try:
-            print(f"{iso(clock())} supervisor pid {os.getpid()}: {msg}", flush=True)
-        except Exception:  # noqa: BLE001 -- its output is the log, on a disk that may be full
-            pass
+            print(f"{iso(clock())} supervisor pid {os.getpid()}: {msg}"
+                  + (f" ({unsaid} earlier line(s) unwritten)" if unsaid else ""), flush=True)
+            unsaid = 0
+        except (OSError, ValueError):   # its output is the log, on a disk that may be full: the next line written counts it
+            unsaid += 1
 
     call = call or (lambda c: subprocess.call(c, env={**os.environ, SUPERVISED_ENV: "1"}))
     restarts = 0

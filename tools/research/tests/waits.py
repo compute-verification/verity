@@ -11,23 +11,24 @@ from types import SimpleNamespace
 from typing import Callable
 
 
-def wait_exit(pid: int) -> None:
-    """Return once `pid` has exited. A child of this process (a runner `remote.launch_request` started) is reaped; any other
-    (a runner a `research launch-request` subprocess left behind) is waited on through a pidfd, which is readable from its exit
-    on, reaped or not. A pid that is already gone has exited."""
+def wait_exit(pid: int) -> str:
+    """Return once `pid` has exited, saying how. A child of this process (a runner `remote.launch_request` started) is reaped;
+    any other (a runner a `research launch-request` subprocess left behind) is waited on through a pidfd, which is readable from
+    its exit on, reaped or not. A pid that is already gone has exited."""
     try:
         os.waitpid(pid, 0)
-        return
+        return "reaped"
     except ChildProcessError:           # not a child, or a child subprocess's cleanup of a dropped Popen already reaped
-        pass
+        how = "waited on through a pidfd"
     try:
         fd = os.pidfd_open(pid)
     except ProcessLookupError:
-        return
+        return "gone already"
     try:
         select.select([fd], [], [])
     finally:
         os.close(fd)
+    return how
 
 
 def wait_runner(run_dir: Path) -> None:
