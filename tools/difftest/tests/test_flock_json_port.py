@@ -368,14 +368,16 @@ def test_recorded_public_headers(server):
         assert D.replay(PARSE_CORE, case, server) == got, p
 
 
-#: The JSON the verifiers' tests hold: the fixtures and vectors under the protocols' `verifier/` directories.
+#: The JSON the verifiers' tests hold: the fixtures and vectors under the protocols' `verifier/` directories, and the
+#: served inner session SPOT's Lean `innerTreesReason` reads in Flock's prover tests.
 VERIFIER_FIXTURES = tuple(Path(__file__).resolve().parents[3] / p for p in (
     "verity/protocols/accounting/certifier/verifier/network/tests/fixtures",
     "verity/protocols/accounting/certifier/verifier/tests/fixtures",
     "verity/protocols/accounting/poub/verifier/tests/fixtures", "verity/protocols/accounting/poub/verifier/tests/vectors.json",
     "verity/protocols/accounting/pous/verifier/tests/fixtures", "verity/protocols/accounting/pouw/verifier/tests/vectors",
     "verity/protocols/proofs/recursion/verifier/firewall/tests/fixtures",
-    "verity/protocols/proofs/spot/verifier/lean/tests/fixtures", "verity/protocols/proofs/spot/verifier/tests/fixtures"))
+    "verity/protocols/proofs/flock/prover/tests/fixtures/inner-trees-served",
+    "verity/protocols/proofs/spot/verifier/tests/fixtures"))
 
 
 def _has_float(v) -> bool:
