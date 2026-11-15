@@ -7,7 +7,8 @@
 # artifact cache, or the seal the sampled recompile reads) lives under one, no network, and a fresh /proc. TMPDIR, TEMP
 # and TMP name a writable directory: TMPDIR if it is under an RW_DIR, else the private /tmp, else a private tmpfs on the
 # first RW_DIR's `.sandbox-tmp` (a tmpfs is gone with the sandbox), so a build writes nothing outside the RW_DIRs that
-# outlives it. Where a mount CMD could reach stays writable (its remount was refused), the sandbox refuses to run CMD.
+# outlives it. Where a mount CMD could write through stays writable (its remount was refused), the sandbox refuses to run
+# CMD.
 # An RO_DIR under an RW_DIR (a build's fetched dependencies) is bound read-only over itself.
 # With --at, TREE is also bound at FIXED, with every RW_DIR under it, and CMD starts in FIXED's copy of the directory it
 # was started in (one under TREE). Lean writes a source's absolute path into what it compiles, so a build that reads its
@@ -117,11 +118,32 @@ stuck=$(SANDBOX_KEPT=$(printf '%s\n' "${rw[@]}" "${ours[@]}") awk '
       if (!hid && o[i] !~ /^ro(,|$)/ && !(m[i] in kept)) print m[i]
     }
   }' /proc/self/mountinfo)
-if [ -n "$stuck" ]; then
-  echo "sandbox.sh: these mounts stay writable here, which the build could write through:" $stuck "(their read-only" \
-    "remount failed). Run the build where every mount can be remounted read-only in a user namespace." >&2
+echo 0 > /proc/sys/user/max_user_namespaces
+# A stuck mount is out of CMD's reach only where, run as CMD runs, this shows it: a directory above it that CMD can't
+# search and doesn't own (so can't chmod), or nothing in it that CMD may write or owns, and no directory CMD can search
+# but not list. Anything else leaves it writable, a find error other than EACCES included. A kernel filesystem under a
+# directory of the host's root, as tracefs under /sys/kernel/debug, is out of reach.
+unreachable='
+m=$1 me=$(id -u) up=() a=$1
+while [ "$a" != / ]; do a=$(dirname "$a"); up=("$a" "${up[@]}"); done
+for a in "${up[@]}"; do
+  [ -x "$a" ] && continue
+  o=$(stat -c %u "$a") && [ "$o" != "$me" ]
+  exit
+done
+command -v find >/dev/null || exit 1
+out=$(LC_ALL=C find "$m" -xdev ! -type l \( -writable -o -user "$me" -o -type d -executable ! -readable \) \
+  -printf "hit %p\n" -quit 2>&1)
+[ $? -le 1 ] || exit 1
+[ -z "$out" ] || ! printf "%s\n" "$out" | grep -qv "^find: .*: Permission denied$"'
+writable=()
+for m in $stuck; do
+  setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all -- bash -c "$unreachable" _ "$m" || writable+=("$m")
+done
+if [ ${#writable[@]} -gt 0 ]; then
+  echo "sandbox.sh: these mounts stay writable here, which the build could write through:" "${writable[@]}" "(their" \
+    "read-only remount failed). Run the build where every mount can be remounted read-only in a user namespace." >&2
   exit 3
 fi
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
-echo 0 > /proc/sys/user/max_user_namespaces
 exec setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all -- "$@"

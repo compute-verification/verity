@@ -142,31 +142,64 @@ def test_inside_the_sandbox_a_read_only_dir_is_read_and_never_written(tmp_path):
     assert (out / "got").read_bytes() == b"sealed" and not (seal / "no").exists()
 
 
-@needs_unshare
-@pytest.mark.parametrize("refused", ["tree", "cache"])
-def test_a_mount_whose_read_only_remount_fails_stops_the_sandbox_before_its_command_runs(tmp_path, monkeypatch, refused):
-    """The tree and an RO_DIR (Lake's artifact cache, or a seal) are each a mount of their own, made in a mount namespace
-    of the test's own, and a `mount` before the real one refuses the read-only remount of one of them, as a node's
-    kernel or mount can. That mount would stay writable inside, so the sandbox names it and exits before CMD runs: no
-    write lands in the tree or the cache."""
-    tmp = tmp_path.resolve()
+def remount_refused(tmp: Path, monkeypatch, refused: Path, binds: list[tuple[Path, Path]],
+                    locked: Path | None = None) -> subprocess.CompletedProcess:
+    """The sandbox, with the tree `tree` and the RO_DIR `cache` under ``tmp`` and the bound ``binds`` (source, target)
+    each a mount of its own, made in a mount namespace of the test's own, where a `mount` before the real one refuses the
+    read-only remount of ``refused``, as a node's kernel or mount can; ``locked``, when given, is made mode 0 after the
+    mounts. CMD writes into each target (`no`) and marks that it ran (`ran` in the RW_DIR)."""
     tree, cache = tmp / "tree", tmp / "cache"
     (tree / "pkg").mkdir(parents=True)
     cache.mkdir()
+    binds = [(tree, tree), (cache, cache), *binds]
     (bin_ := tmp / "bin").mkdir()
-    (bin_ / "mount").write_text(f'#!/bin/sh\n[ "$*" != "-o remount,bind,ro {tmp / refused}" ] || exit 32\n'
+    (bin_ / "mount").write_text(f'#!/bin/sh\n[ "$*" != "-o remount,bind,ro {refused}" ] || exit 32\n'
                                 f'exec {shutil.which("mount")} "$@"\n')
     (bin_ / "mount").chmod(0o755)
     monkeypatch.setenv("PATH", os.pathsep.join([str(bin_), *os.get_exec_path()]))
-    r = subprocess.run(["unshare", "--user", "--map-root-user", "--mount", "--", "bash", "-c",
-                        'mount --bind "$0" "$0" && mount --bind "$1" "$1" && exec "${@:2}"', str(tree), str(cache),
-                        *UNSHARE, "--", "bash", str(SANDBOX), "--ro", str(cache), str(tree / "pkg" / ".lake"), "--",
-                        "sh", "-c", 'touch "$0/pkg/no" "$1/no"; touch "$0/pkg/.lake/ran"', str(tree), str(cache)],
-                       capture_output=True, text=True)
+    setup = " && ".join(f'mount --bind "{s}" "{t}"' for s, t in binds) + (f' && chmod 0 "{locked}"' if locked else "")
+    writes = " ".join(f'"{t}/no"' for t in (tree / "pkg", *(t for _, t in binds[1:])))
+    return subprocess.run(["unshare", "--user", "--map-root-user", "--mount", "--", "bash", "-c", setup + ' && exec "$@"',
+                           "_", *UNSHARE, "--", "bash", str(SANDBOX), "--ro", str(cache), str(tree / "pkg" / ".lake"),
+                           "--", "sh", "-c", f'touch {writes} 2>/dev/null; touch "{tree}/pkg/.lake/ran"'],
+                          capture_output=True, text=True)
+
+
+@needs_unshare
+@pytest.mark.parametrize("refused", ["tree", "cache", "locked/inner"])
+def test_a_mount_the_command_could_write_whose_read_only_remount_fails_stops_the_sandbox_before_its_command_runs(
+        tmp_path, monkeypatch, refused):
+    """The tree, an RO_DIR (Lake's artifact cache, or a seal), or a directory of the runner's own under a directory the
+    command can't search but owns (so could chmod), whose read-only remount fails. That mount would stay writable inside,
+    so the sandbox names it and exits before CMD runs: no write lands in the tree, the cache or the mount."""
+    tmp = tmp_path.resolve()
+    (tmp / "locked" / "inner").mkdir(parents=True)
+    (src := tmp / "src").mkdir()
+    try:
+        r = remount_refused(tmp, monkeypatch, tmp / refused, [(src, tmp / "locked" / "inner")], tmp / "locked")
+    finally:
+        (tmp / "locked").chmod(0o755)
     assert r.returncode == 3, r.stdout + r.stderr
     assert f"these mounts stay writable here, which the build could write through: {tmp / refused} (" in r.stderr, r.stderr
-    assert not (tree / "pkg" / "no").exists() and not (cache / "no").exists()
-    assert not (tree / "pkg" / ".lake" / "ran").exists(), "CMD never ran"
+    assert not (tmp / "tree" / "pkg" / "no").exists() and not (tmp / "cache" / "no").exists()
+    assert list(src.iterdir()) == []
+    assert not (tmp / "tree" / "pkg" / ".lake" / "ran").exists(), "CMD never ran"
+
+
+@needs_unshare
+def test_a_mount_the_command_cannot_write_whose_read_only_remount_fails_leaves_the_command_to_run(tmp_path, monkeypatch):
+    """A directory of the host's root (the one holding `sh`), bound as a mount whose read-only remount fails, as a
+    node's tracefs stays writable: the command, which holds no capability and owns nothing there, can write nothing
+    through it, so the sandbox runs it, and its write there fails."""
+    system = Path(shutil.which("sh")).resolve().parent
+    if system.stat().st_uid == os.getuid() or os.access(system, os.W_OK):
+        pytest.skip(f"{system} is the runner's own or writable by it here")
+    tmp = tmp_path.resolve()
+    (target := tmp / "system").mkdir()
+    r = remount_refused(tmp, monkeypatch, target, [(system, target)])
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (tmp / "tree" / "pkg" / ".lake" / "ran").exists()
+    assert not (system / "no").exists() and not (tmp / "tree" / "pkg" / "no").exists()
 
 
 @needs_unshare
