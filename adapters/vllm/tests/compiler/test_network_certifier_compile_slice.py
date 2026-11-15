@@ -17,8 +17,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.accounting.certifier.verifier import arith_encode as AE
+from verity.protocols.accounting.certifier.verifier import charge_chain as CC
 
-from verity.protocols.accounting.certifier.verifier import arith_encode as AE, charge_chain as CC
 from verity_vllm.compiler import compile_slice as CS
 
 FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures"

@@ -19,7 +19,10 @@ from xml.etree import ElementTree
 import numpy as np
 import pytest
 from verity.protocols.accounting.poub.prover.node_store import serving
-from verity.protocols.accounting.poub.prover.node_store.registry import ArrayBacking, NodeMemory
+from verity.protocols.accounting.poub.prover.node_store.registry import (
+    ArrayBacking,
+    NodeMemory,
+)
 from verity.protocols.accounting.poub.tests.test_memory_map import BLOCK
 from verity.protocols.accounting.poub.tests.test_registry import CODEC, RECEIPT
 from verity.protocols.accounting.poub.tests.test_remote_session import (

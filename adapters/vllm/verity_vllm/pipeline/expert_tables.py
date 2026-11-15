@@ -38,8 +38,16 @@ import numpy as np
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError, option
-from verity_vllm.pipeline.expert_rows import (bnk_param, bnk_words, committer, of_request, shard_param, shard_words, table_param,
-                                               table_words)
+from verity_vllm.pipeline.expert_rows import (
+    bnk_param,
+    bnk_words,
+    committer,
+    of_request,
+    shard_param,
+    shard_words,
+    table_param,
+    table_words,
+)
 from verity_vllm.pipeline.serving_templates import shard_block
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.expert_tables import SCHEMA, ExpertTables
@@ -163,8 +171,8 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     """The registered entries of one field's ``tables`` (`tables_of`), its words ``words`` of ``shape`` as composed for the rank,
     each table committed at the rank's program ``digest`` and its ``nonce`` under ``key``; an embedding shard's over ``vocab``,
     the whole vocabulary's rows and the rank's first token."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
     from verity.protocols.accounting.pouw.prover.serving import registered_commit
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
     def rows(b: int, what: str, n: int) -> np.ndarray:
         if what == "vocab":

@@ -35,8 +35,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
-
 from verity.commitments.periods import rows as CS
+
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
@@ -88,6 +88,7 @@ def specs() -> SimpleNamespace:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+
     from verity_vllm.definitions.registry import act, deepgemm, fp8_moe_experts, moe
 
     return SimpleNamespace(
@@ -246,6 +247,7 @@ def partition() -> dict[str, Any]:
     slots stay out of the window."""
     from verity.circuits.codec import descriptor_id
     from verity.commitments.gates.embedding import read
+
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.serving_templates import FUSED
     from verity_vllm.query.program_view import spec_base, spec_statics

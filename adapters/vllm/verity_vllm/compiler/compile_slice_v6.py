@@ -107,24 +107,38 @@ from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any, Sequence
 
+from verity.circuits.boolean import BIT
 from verity.circuits.boolean import memcheck as MC
-from verity.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.boolean.forms import (
+    ONE,
+    ZERO,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+)
 from verity.circuits.boolean.gf128 import mul_forms
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments import pool_row as PR
 from verity.commitments.gates import block_key as BK
 from verity.commitments.gates import rowleaf as RG
-from verity_vllm.compiler import cache_step as CST, compile_slice as CS
+from verity.commitments.gates.frame_v3 import _refs
+from verity.protocols.accounting.certifier.verifier.head_check import (
+    _coll,
+    _Consts,
+    ands,
+)
+
+from verity_vllm.compiler import cache_step as CST
+from verity_vllm.compiler import cache_step_v3 as V3S
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import compile_slice_v4 as V4
+from verity_vllm.compiler import compile_slice_v5 as V5
 from verity_vllm.compiler import replay_chain as RC
 from verity_vllm.compiler import replay_step as RS
-from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4
-from verity_vllm.compiler import compile_slice_v5 as V5
-from verity.circuits.boolean import BIT
-from verity.circuits.boolean.trace import part as _part
-from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.accounting.certifier.verifier.head_check import _coll, _Consts, ands
 
 STATICS = V5.STATICS
 COMPILE_FLAGS = ("load", "steps", "cache", "served", "carry", "calls", "edge")

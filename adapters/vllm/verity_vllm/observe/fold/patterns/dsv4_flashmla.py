@@ -16,7 +16,6 @@ from verity_vllm.definitions.numerics.flashmla_twin import (
     sched_meta,
 )
 from verity_vllm.definitions.registry import dsv4_compressor as C
-
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.dsv4_cache import (
     _entry_slots,

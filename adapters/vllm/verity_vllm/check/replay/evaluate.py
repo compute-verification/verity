@@ -7,8 +7,6 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
-from verity_vllm.definitions.numerics.kernel_registry import Declined
-from verity_vllm.definitions.numerics.rows import EVALUATORS, ROWS
 
 from verity_vllm.check.replay.compare import (
     _interior_slice,
@@ -30,6 +28,8 @@ from verity_vllm.check.replay.index import (
 from verity_vllm.check.replay.opening import _ITEMSIZE, WordStore
 from verity_vllm.check.replay.replay_dump import dump_row_words
 from verity_vllm.commit.opened import OpeningNotVerified, opened_check
+from verity_vllm.definitions.numerics.kernel_registry import Declined
+from verity_vllm.definitions.numerics.rows import EVALUATORS, ROWS
 from verity_vllm.program.compact import is_file_prog
 from verity_vllm.query.manifest import format as RM
 

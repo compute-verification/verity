@@ -12,9 +12,9 @@ torch = pytest.importorskip("torch")
 
 from verity.circuits import evaluation as E  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity_vllm.definitions.registry import tp_allreduce as TA  # noqa: E402
 
 from verity_vllm.check.match import xrank_collectives as XC  # noqa: E402
+from verity_vllm.definitions.registry import tp_allreduce as TA  # noqa: E402
 from verity_vllm.pipeline.tp import xrank_dump as XD  # noqa: E402
 
 W = 8

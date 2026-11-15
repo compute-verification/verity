@@ -11,10 +11,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.registry import b1
 
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 from verity_vllm.config import workload_file
+from verity_vllm.definitions.registry import b1
 from verity_vllm.observe.events import DispatchEnter, RunHeader
 from verity_vllm.observe.fold.patterns import AttentionScope
 from verity_vllm.observe.fold.profiles import profile_module_for_case

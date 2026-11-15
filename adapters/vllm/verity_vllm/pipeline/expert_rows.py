@@ -50,9 +50,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
+
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import EXPERTS, shard_block, template
@@ -394,8 +394,8 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     `serving_rows._slices`; `table_words`) as core's ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
     held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`committer`), by
     parameter.  Refused for a table the registration names no nonce for."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
     from verity.protocols.accounting.pouw.prover.serving import registered_commit
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
     out: dict[str, Any] = {}
     nonces, key = committer["nonces"], bytes(committer["key"])
@@ -451,9 +451,8 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
     nonce is handed back as held (`_SHARDS`) and ``shard`` is called only where one is not, so a window pays for the shard's
     tables only where no earlier window of its process has.  Refused for a table the registration names no nonce for: the
     registration holds the shard's tables at its one width, and a table at any other is none of its."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-
     from verity.protocols.accounting.pouw.prover.serving import registered_commit
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
     nonces, key, W = committer["nonces"], bytes(committer["key"]), shard_block(H)
     out: dict[str, Any] = {}
@@ -544,7 +543,10 @@ class Reader:
     def pair(self, x: Row) -> dict[str, Any]:
         """Pair row ``x``'s operands: its activation, scales, routed weight, expert, that expert's weight and scale rows and the
         row's served words, which the twin of the row on them must be."""
-        from verity_vllm.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
+        from verity_vllm.definitions.numerics.fp8_moe_rows import (
+            TWIN_DOT_OF,
+            moe_expert_fp8_block_row,
+        )
         from verity_vllm.query.program_view import spec_statics
 
         rid, _pi, r, d = x

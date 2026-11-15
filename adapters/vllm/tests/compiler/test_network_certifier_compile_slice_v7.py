@@ -11,12 +11,12 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.accounting.certifier.prover import window_charge as WC
 
-from verity_vllm.compiler import compile_slice as CS
 from tests.compiler.test_network_certifier_compile_slice import BOOK
 from tests.compiler.test_network_certifier_compile_slice_w212 import CARRY, OWN, _load
+from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import compile_slice_v7 as V7
-from verity.protocols.accounting.certifier.prover import window_charge as WC
 
 
 @pytest.fixture(scope="module", params=["demo", "demo_async"])

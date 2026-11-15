@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
+from verity.device import load_card, number
+
 from verity_vllm.definitions.registry import dsa
 from verity_vllm.definitions.registry.boolean_rope import RoPEHeadGptJV2
 from verity_vllm.definitions.registry.dsa_norm import DsaRMSNorm
@@ -23,8 +25,6 @@ from verity_vllm.definitions.registry.sparse_mla_split import (
     SparseMlaSplit,
     launch_num_splits,
 )
-from verity.device import load_card, number
-
 from verity_vllm.engine.profiles.devices import CARD
 from verity_vllm.engine.profiles.engine_classes import CLASS_G
 from verity_vllm.observe.events import TritonLaunch, ViewDesc

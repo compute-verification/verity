@@ -16,17 +16,26 @@ from dataclasses import replace
 from typing import Any, NamedTuple
 
 import numpy as np
-
 from verity.commitments.periods import rows as CS
+
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline.serving_templates import COORDS, PART_STATICS, PARTS, coord_width, part, template
+from verity_vllm.pipeline.serving_templates import (
+    COORDS,
+    PART_STATICS,
+    PARTS,
+    coord_width,
+    part,
+    template,
+)
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]
 
 
 def _flashinfer_quant(x: np.ndarray) -> dict[str, np.ndarray]:
-    from verity_vllm.definitions.numerics.deepgemm_twins import flashinfer_quant_1x128_row
+    from verity_vllm.definitions.numerics.deepgemm_twins import (
+        flashinfer_quant_1x128_row,
+    )
 
     q, s = flashinfer_quant_1x128_row(x)
     return {"q": np.asarray(q, dtype=np.uint8), "s": np.asarray(s, dtype=np.uint32)}
@@ -46,7 +55,9 @@ def _vector8_scale(S: dict, x: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
 
 
 def _fused_vector8_scale(S: dict, x: np.ndarray, res: np.ndarray, w: np.ndarray) -> tuple[dict, dict]:
-    from verity_vllm.definitions.numerics.cuda_rmsnorm_rows import fused_add_rms_norm_rows
+    from verity_vllm.definitions.numerics.cuda_rmsnorm_rows import (
+        fused_add_rms_norm_rows,
+    )
 
     got = fused_add_rms_norm_rows(x[None], res[None], w, float(S["EPS"]), int(S["BLOCK"]))
     return {"scale": got["scale"]}, {0: got["out"][0], 1: got["residual"][0]}

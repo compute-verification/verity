@@ -56,10 +56,16 @@ from functools import cache
 from typing import Any, NamedTuple
 
 import numpy as np
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
 
-from verity.commitments.periods import rows as CS, wiring as WI
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline.serving_templates import CHAIN_OF, Template, template, values_widths
+from verity_vllm.pipeline.serving_templates import (
+    CHAIN_OF,
+    Template,
+    template,
+    values_widths,
+)
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]
@@ -86,7 +92,11 @@ class Place(NamedTuple):
 
 @cache
 def _plan(T: int, NS: int, BN: int, DV: int) -> tuple[Place, ...]:
-    from verity_vllm.definitions.registry.sparse_mla_split import check_split_statics, combine_cols, split_blocks
+    from verity_vllm.definitions.registry.sparse_mla_split import (
+        check_split_statics,
+        combine_cols,
+        split_blocks,
+    )
 
     check_split_statics(T, NS)
     out: list[Place] = []
@@ -110,7 +120,10 @@ def _plan(T: int, NS: int, BN: int, DV: int) -> tuple[Place, ...]:
 
 @cache
 def _places(T: int, NS: int, BN: int, DV: int, DR: int) -> tuple[Place, ...]:
-    from verity_vllm.definitions.registry.sparse_mla_split import combine_cols, split_blocks
+    from verity_vllm.definitions.registry.sparse_mla_split import (
+        combine_cols,
+        split_blocks,
+    )
 
     out = list(_plan(T, NS, BN, DV))
     whole = {(p.key, p.split, p.col): j for j, p in enumerate(out)}
@@ -294,7 +307,12 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
-    from verity_vllm.definitions.numerics.sparse_mla_split_twins import combine_rows, head_end_rows, split_chain_rows, split_end_rows
+    from verity_vllm.definitions.numerics.sparse_mla_split_twins import (
+        combine_rows,
+        head_end_rows,
+        split_chain_rows,
+        split_end_rows,
+    )
 
     tp = template(m.template)
     k = kind(tp)

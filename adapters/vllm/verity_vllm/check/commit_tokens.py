@@ -31,13 +31,13 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 
 from verity_vllm.check import executed_prefix as EP
 from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit.executed_prefix import ACTIVE_REFERENCE_ONLY
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.program.sampling_event import circuit_token_id
 from verity_vllm.records.schema_ids import COMMIT_TOKENS_SCHEMA
 

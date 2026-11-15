@@ -34,10 +34,10 @@ from dataclasses import replace
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import history as HT
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
+
 from verity_vllm.commit import history_tables as H
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.expert_rows import _digest_words, _entry

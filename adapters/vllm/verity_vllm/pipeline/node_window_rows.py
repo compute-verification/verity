@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
-
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.pipeline import window_replay as WRP
 
 if TYPE_CHECKING:

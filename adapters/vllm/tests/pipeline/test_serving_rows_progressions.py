@@ -8,10 +8,10 @@ import numpy as np
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity_vllm.definitions.registry import boolean_moe as BMOE
-from verity_vllm.definitions.registry import moe as M
 from verity_flock.class_statement import UnitStager
 
+from verity_vllm.definitions.registry import boolean_moe as BMOE
+from verity_vllm.definitions.registry import moe as M
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 

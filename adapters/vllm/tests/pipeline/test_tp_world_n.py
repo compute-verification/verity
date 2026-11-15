@@ -12,9 +12,9 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
+
 from verity_vllm.definitions.registry import b1_tp2 as TP2
 from verity_vllm.definitions.registry import prims as P
-
 from verity_vllm.program.frontend import collective_kinds
 
 # --- helpers --------------------------------------------------------------------------------------------------------------
@@ -143,10 +143,10 @@ def _derive_world8_collective(monkeypatch, *, fused: bool, custom: bool):
     pytest.importorskip("torch")
     import torch
 
-    from verity_vllm.program.frontend.vllm_derive import derive_report
     from verity_vllm.program.frontend.export_ops import ensure_ops
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+    from verity_vllm.program.frontend.vllm_derive import derive_report
 
     ensure_ops()
     monkeypatch.setitem(VB._OBSERVED, "allreduce_settings",
@@ -185,13 +185,13 @@ RTX_PRO_6000 = ((12, 0), 188)
 def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: int = 8192):
     pytest.importorskip("torch")
     import torch
-    from verity_vllm.definitions.registry.tp_allreduce import settings_of
 
-    from verity_vllm.program.frontend.vllm_derive import derive_report
+    from verity_vllm.definitions.registry.tp_allreduce import settings_of
     from verity_vllm.program.frontend.export_ops import ensure_ops
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.program.frontend.vllm_derive import derive_report
 
     ensure_ops()
     monkeypatch.setitem(VB._OBSERVED, "allreduce_settings", settings_of(True, env))
@@ -374,7 +374,6 @@ def test_collective_record_names_own_and_peer_operands_at_worlds_2_4_and_8(W, ki
     from types import SimpleNamespace
 
     import torch
-
     from verity_torch.frontend import emit as E
     for rank in range(W):
         g = torch.fx.Graph()

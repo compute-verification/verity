@@ -518,6 +518,7 @@ def q_word_units(path: str | Path, units: Units | None = None) -> tuple[dict[int
     from verity.circuits import partition_object as PO
     from verity.circuits.cut import QueryInapplicable
     from verity.circuits.ops.boolean.versions import load_program
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     program, _digest = load_program(Path(path))
     calls = PO.calls(program)

@@ -6,8 +6,8 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from verity.channel import Refused
+
 from verity_vllm import messages as M
 from verity_vllm.pipeline import advice as A
 

@@ -11,9 +11,9 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.refs import Affine
 from verity.circuits.types import Array, RecordType, Value
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import value_inputs as VI
-
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,
@@ -504,6 +504,7 @@ def test_registered_values_are_inputs_of_the_program(memory):
         inputs,
         program_data,
     )
+
     from verity_vllm.definitions.registry import prims as P
 
     r = fold(toy_log(), toy_profile(registered_values=True), strict=True)

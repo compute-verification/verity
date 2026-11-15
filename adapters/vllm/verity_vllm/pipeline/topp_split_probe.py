@@ -51,7 +51,10 @@ MANIFEST_SEED = 20260920
 def drain_batches(num_sm: int) -> tuple[int, ...]:
     """The drain's batch sizes on a device of `num_sm` SMs, descending: DRAIN_BATCHES plus B and B + 1 for every B at which
     splits_for(B, num_sm) != splits_for(B + 1, num_sm), up to the split pipeline's largest batch."""
-    from verity_vllm.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, splits_for
+    from verity_vllm.definitions.registry.topp_geometry import (
+        SPLIT_MAX_BATCH,
+        splits_for,
+    )
     edges = {b for n in range(1, SPLIT_MAX_BATCH) if splits_for(n, num_sm) != splits_for(n + 1, num_sm) for b in (n, n + 1)}
     return tuple(sorted(set(DRAIN_BATCHES) | edges, reverse=True))
 

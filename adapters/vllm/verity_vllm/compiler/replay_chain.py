@@ -94,7 +94,16 @@ from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import BIT
-from verity.circuits.boolean.forms import ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    ZERO,
+    Circuit,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import SpecializedDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits

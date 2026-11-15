@@ -17,12 +17,12 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-
-from verity_vllm.compiler import compile_slice as CS
-from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4
-from verity_vllm.compiler import replay_chain as RC
 from verity.circuits import boolean as BL
 
+from verity_vllm.compiler import cache_step_v3 as V3S
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import compile_slice_v4 as V4
+from verity_vllm.compiler import replay_chain as RC
 
 #: SHA-512 of the reference's served rows and last state and window rows on each test's slices, by demonstration and
 #: test (`_as_reference`): the window's schedule, pinned, so a change to the reference that moves a row shows here

@@ -98,13 +98,27 @@ from typing import Callable, NamedTuple, Sequence
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import memcheck as MC
 from verity.circuits.boolean import trace as TR
-from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.forms import (
+    ONE,
+    OR,
+    ZERO,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+    sub,
+)
 from verity.circuits.boolean.gf128 import mul, mul_forms
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.accounting.certifier.verifier.head_check import _coll, _Consts, ands
+from verity.protocols.accounting.certifier.verifier.head_check import (
+    _coll,
+    _Consts,
+    ands,
+)
 
 __all__ = ["CacheStep", "Call", "KINDS", "Out", "PARTS", "PoolEnd", "PoolEntry", "PoolSlot", "Refused", "SLOT_STATICS",
            "STATICS", "Slot", "Stream", "TAGS", "arguments", "bput", "bsplit", "bus", "empty_pool", "evaluate", "rk",

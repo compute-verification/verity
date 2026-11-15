@@ -19,14 +19,6 @@ import types
 import numpy as np
 import pytest
 import torch
-from verity_vllm.definitions.numerics import rows as RK
-from verity_vllm.definitions.registry.dsa_topk import (
-    canonical_ok,
-    topk_set,
-    waksman_apply,
-    waksman_settings,
-    waksman_switches,
-)
 
 from tests.check.test_commit_verdict_replay_seed_of_record import (
     BASE,
@@ -43,6 +35,14 @@ from verity_vllm.commit import binding as B
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 from verity_vllm.commit.committer.run_values import RunValues
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.registry.dsa_topk import (
+    canonical_ok,
+    topk_set,
+    waksman_apply,
+    waksman_settings,
+    waksman_switches,
+)
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.manifest.format import RUN_FAMILY

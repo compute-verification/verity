@@ -8,7 +8,6 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
-
 from verity.commitments.periods import rows as CS
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")

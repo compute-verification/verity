@@ -21,6 +21,8 @@ from verity.circuits import partition_object as PO
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
 from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
 from verity.protocols.accounting.pouw.prover.circuit import live as L
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
@@ -29,8 +31,6 @@ from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols import pouw_h1_gpu as GPU
 from tests.protocols import pouw_h1_rehearsal as RH
 from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 AUDITOR = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py"
 #: two linears at K = 64 and one at K = 128: two strata

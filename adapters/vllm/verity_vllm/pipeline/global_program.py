@@ -33,7 +33,6 @@ from verity.circuits.codec import canonical_json, descriptor_size
 
 # published as `global_program.REGISTRY`: the registry with every registry module loaded (the loop below)
 from verity.circuits.defs import REGISTRY as REGISTRY
-from verity_vllm.definitions.registry.catalog import load as _load_registry
 
 from verity_vllm.check.match.batch_decomp import derived_shape
 from verity_vllm.check.match.declaration import MODELLED_ENGINE, compilation_facts
@@ -45,6 +44,7 @@ from verity_vllm.config import (
     workload_arg,
     workload_file,
 )
+from verity_vllm.definitions.registry.catalog import load as _load_registry
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.pipeline.cli import write

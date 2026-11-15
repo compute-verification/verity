@@ -36,9 +36,13 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     binding its Definition module's sidecar already checks, so they add no task."""
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.ops.boolean import gemm as BG
-    from verity_vllm.definitions.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
-    from verity_vllm.definitions.registry import flashmla as FM, flashmla_prefill as FP
-    from verity_vllm.definitions.registry import flashmla_dsv32 as FD, fp8_ds_mla_upconvert as FU
+
+    from verity_vllm.definitions.registry import dsv4_compressor as DC
+    from verity_vllm.definitions.registry import dsv4_qnorm_insert as DQ
+    from verity_vllm.definitions.registry import flashmla as FM
+    from verity_vllm.definitions.registry import flashmla_dsv32 as FD
+    from verity_vllm.definitions.registry import flashmla_prefill as FP
+    from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as FU
     from verity_vllm.definitions.registry import marlin_moe as MM
     from verity_vllm.definitions.registry import sparse_mla as SM
     from verity_vllm.definitions.registry import tp_allreduce as TA
@@ -86,9 +90,10 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics, or at
     `_served_kind_statics`' when no small table binds it: (label, the bound Definition, or the error)."""
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
+
     from verity_vllm import TargetProfile
-    from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.definitions.registry import prims as P
+    from verity_vllm.program.frontend.rules import vocab as V
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,

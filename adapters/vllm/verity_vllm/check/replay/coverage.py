@@ -8,8 +8,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.definitions.numerics.rows import EVALUATORS
-
 from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.opening import alias_table, resolve_op_path
 from verity_vllm.check.replay.population import (
@@ -17,6 +15,7 @@ from verity_vllm.check.replay.population import (
     EXECUTED_PREFIX_RULE,
     NOT_EXECUTED_SCOPE,
 )
+from verity_vllm.definitions.numerics.rows import EVALUATORS
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.fields import RecordError

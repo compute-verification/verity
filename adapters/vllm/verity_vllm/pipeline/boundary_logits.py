@@ -33,10 +33,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments.periods import links as LK
+from verity.commitments.periods import rows as CS
 
-from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
+from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_tables as BT
 
 __all__ = ["Builder", "Channel", "Kept", "LocalChannel", "Logits", "SamplerHook", "assignment", "load", "root",
            "span_rows", "stem"]

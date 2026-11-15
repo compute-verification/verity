@@ -62,7 +62,16 @@ from types import SimpleNamespace
 from typing import Sequence
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.forms import (
+    ZERO,
+    Circuit,
+    add,
+    and_reduce,
+    const_bits,
+    mux,
+    or_reduce,
+)
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
@@ -70,9 +79,10 @@ from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import _part, _refs
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf
-from verity.protocols.accounting.certifier.verifier import head_check as HC, io_tie as IT
+from verity.protocols.accounting.certifier.verifier import head_check as HC
+from verity.protocols.accounting.certifier.verifier import io_tie as IT
+
 from verity_vllm.compiler import replay_chain as RC
-from verity.circuits.boolean import BIT
 
 STATICS = ("R", "P", "G", "IW", "L", "T", "IB", "PB")
 STEP = ("R", "L", "T", "IB", "PB")

@@ -164,6 +164,7 @@ def programs(row: str, ranks: list[int] | None = None, *, part: list[str] | None
     (`evidence.build`, only the descriptors asked for) or read from a `bundle` (`records fetch`), and decoded through the registry
     (`program.boolean.load_program`).  A descriptor whose digest is not the record's is refused."""
     from verity.circuits.ops.boolean.versions import load_program
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     rec = record(row, bundle)
     want = selected(rec, ranks, part)

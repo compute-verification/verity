@@ -15,11 +15,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from verity.protocols.accounting.certifier.verifier import arith_encode as AE
+
+from tests.compiler.test_network_certifier_compile_slice import BOOK
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SR
-from tests.compiler.test_network_certifier_compile_slice import BOOK
 
 FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures"
 OWN, CLASS = "compile_slice_w212.json", "compile_slice_w212_class.json"

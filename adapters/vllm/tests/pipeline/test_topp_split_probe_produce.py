@@ -26,10 +26,10 @@ pytest.importorskip("torch")
 
 import numpy as np
 import torch
-from verity_vllm.definitions.registry import topp_geometry
-from verity_vllm.definitions.registry import topp_split as TS
 
 from tests import fake_vllm
+from verity_vllm.definitions.registry import topp_geometry
+from verity_vllm.definitions.registry import topp_split as TS
 from verity_vllm.pipeline import topp_split_probe as tp
 
 f32 = np.float32

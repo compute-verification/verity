@@ -10,11 +10,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from verity.commitments import domains
-from verity_vllm.compiler import compile_slice as CS, served_rows as SR
-from verity_vllm.compiler import served_statics as SS
+
 from tests.compiler.test_network_certifier_compile_slice import BOOK
+from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import served_rows as SR
+from verity_vllm.compiler import served_statics as SS
 
 FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
 ROWS = 1 << CS.FLAGS.index("rows")

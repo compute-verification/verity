@@ -51,6 +51,7 @@ def long_row_units() -> dict[str, tuple[Any, tuple[str, ...]]]:
     from verity.circuits.defs import bind
     from verity.commitments.gates.embedding import read
     from verity.commitments.history import CAPACITY
+
     from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
     from verity_vllm.definitions.registry import dsa_topk_reads as R
 
@@ -111,6 +112,7 @@ def measure(t: str) -> dict:
     process has already loaded (the registry, the long row's cut), and this process's peak GB."""
     from verity.circuits.codec import descriptor_id
     from verity.circuits.ops.boolean import versions as BB
+
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     BB.load()

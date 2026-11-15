@@ -9,11 +9,11 @@ from __future__ import annotations
 import random
 
 import pytest
-
-from verity_vllm.compiler import replay_chain as RC
+from verity.circuits.boolean.forms import Circuit
 from verity.protocols.accounting.certifier.verifier.head_check import ands
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.circuits.boolean.forms import Circuit
+
+from verity_vllm.compiler import replay_chain as RC
 
 SMALL = RC.Shape(R=3, W=2, A=3, L=40, NB=20, IW=4, Q=5, D=6, P=3, K=3)
 #: A a power of two (AC = 3 > DW = 1), one decision and one step a window
