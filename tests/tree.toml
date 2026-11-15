@@ -43,7 +43,7 @@ means = "the remote demo: SPOT, PoUW and the inference-only policy, with no audi
 
 [[tree]]
 path = "demos/onsite_network.toml"
-means = "onsite, network only: the network certifier, SPOT and the memory wipe"
+means = "onsite, network only: the network attester, SPOT and the memory wipe"
 
 [[tree]]
 path = "demos/onsite_compute.toml"
@@ -183,11 +183,23 @@ means = "flock, with spot and recursion on it, spot_flock on those and spot_floc
 
 [[tree]]
 path = "verity/protocols/resource_accounting/"
-means = "the accounting layer: pouw, pous, poub and certifier, for compute, memory and network, on the proofs"
+means = "the resource accounting layer: compute/pouw, memory/pous, memory/poub and network, on the proofs"
+
+[[tree]]
+path = "verity/protocols/resource_accounting/compute/"
+means = "the compute protocols: pouw"
+
+[[tree]]
+path = "verity/protocols/resource_accounting/memory/"
+means = "the memory protocols: pous and poub"
 
 [[tree]]
 path = "verity/protocols/workload_classification/"
-means = "the policy layer: inference_only, on accounting and the proofs"
+means = "the workload classification layer: training_detection/inference_only, on resource accounting and the proofs"
+
+[[tree]]
+path = "verity/protocols/workload_classification/training_detection/"
+means = "the training detection protocols: inference_only"
 
 [[tree]]
 path = "verity/protocols/proofs/flock/"
@@ -198,6 +210,10 @@ protocol = true
 path = "verity/protocols/proofs/spot/"
 means = "SPOT, the Sample-and-PrOve Transform, with the integrity profile"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/proofs/spot/verifier/challenger/"
+means = "the challenger's program, which the auditor's device runs"
 
 [[tree]]
 path = "verity/protocols/proofs/recursion/"
@@ -231,7 +247,7 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/resource_accounting/network/"
-means = "network certification: the network certifier and its guarantee"
+means = "network certification: the network attester and its guarantee"
 protocol = true
 
 [[tree]]
@@ -286,8 +302,8 @@ path = "verity/protocols/NAME/prover/"
 means = "what its prover builds and its verifier does not read"
 
 [[tree]]
-path = "verity/protocols/NAME/device/"
-means = "the programs the auditor's devices run"
+path = "verity/protocols/NAME/attester/"
+means = "the programs the auditor's attesters run"
 
 [[tree]]
 path = "verity/protocols/NAME/README.md"
