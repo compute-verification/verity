@@ -12,14 +12,15 @@ or carrier term: no other form is computed here.
 
 * timing, `1 − credited/whole`: each pass's credited bytes are its registered receipts' (its length less its post-seed
   reads) times the block's bytes, and `whole` is `R·span/10^9`;
-* sample, the window's wrong receipts at δ (`wrongReceipts`, `Stratified.count_bound` of one uniform sample of its
+* sample, the window's incorrect receipts at δ (`incorrectReceipts`, `Stratified.count_bound` of one uniform sample of its
   `drawn` receipts of its U) times the block's bytes;
 * chip, S_chip a pass; counting, AuditRO's bits a pass, `namedBits k + SLACK_LOG2` (`audit.named_bits`);
 * rebuild, the squaring ceiling's bytes a second, `squarings·BLOCK_BYTES/encode_squarings`, the codec's encode;
-* horizon and floor, the pooled bound (`Pooled.pooled` over the record's samples, g windows a sample): W wrong
-  receipts' bytes over the session, and each window's share at most min(1, f·U_g/U_t) of its receipts.
+* pooled (the ledger's `horizon`) and floor, the pooled bound (`Pooled.pooled` over the record's samples, g windows a
+  sample): W incorrect receipts' bytes over the session, and each window's share at most min(1, f·U_g/U_t) of its
+  receipts.
 
-The errors are every window's δ (the horizon's one δ) plus AuditRO's 2^-`SLACK_LOG2` a pass.
+The errors are every window's δ (the pooled bound's one δ) plus AuditRO's 2^-`SLACK_LOG2` a pass.
 
 `namedBits k` is k·`QUERIES_LOG2` − max(0, ⌊log₂ k! · (1 − 2^-40)⌋ − 1), with log₂ k! bracketed: exactly from k! up to
 `EXACT_FACTORIAL`, by Stirling's series with Robbins' bounds above it, its logarithms in fixed point rounded outward
@@ -148,14 +149,14 @@ def namedBits (k : Nat) : Except String Nat := do
     throw s!"the named bits of a pass of {k} receipts are not decided at {LOG_BITS} bits of log₂ {k}!"
   pure least.toNat
 
-/-- `C(n − m, k)/C(n, k) ≥ δ`: m of n units wrong escape a uniform sample of k with probability at least δ. -/
-def escapes (n k m : Nat) (δ : Rat) : Bool :=
+/-- `C(n − m, k)/C(n, k) ≥ δ`: m of n units incorrect all miss a uniform sample of k with probability at least δ. -/
+def misses (n k m : Nat) (δ : Rat) : Bool :=
   let (a, b) := (List.range k).foldl (fun (a, b) i => (a * (n - m - i), b * (n - i))) (1, 1)
   decide (δ.num * (b : Int) ≤ (a : Int) * δ.den)
 
 /-- `Stratified.count_bound` of one uniform sample of `k` of `n` receipts: the largest m ≤ n with
-`C(n − m, k)/C(n, k) ≥ δ`, none past the n − k a positive escape allows (all n at k = 0), by bisection. -/
-def wrongReceipts (n k : Nat) (δ : Rat) : Nat :=
+`C(n − m, k)/C(n, k) ≥ δ`, none past the n − k a positive miss probability allows (all n at k = 0), by bisection. -/
+def incorrectReceipts (n k : Nat) (δ : Rat) : Nat :=
   let finite := if k = 0 then n else n - k
   let rec go : Nat → Nat → Nat → Nat
     | 0, lo, _ => lo
@@ -163,7 +164,7 @@ def wrongReceipts (n k : Nat) (δ : Rat) : Nat :=
       if hi ≤ lo + 1 then lo
       else
         let mid := (lo + hi) / 2
-        if decide (mid ≤ finite) && escapes n k mid δ then go fuel mid hi else go fuel lo mid
+        if decide (mid ≤ finite) && misses n k mid δ then go fuel mid hi else go fuel lo mid
   go (Nat.log2 (n + 1) + 2) 0 (n + 1)
 
 /-- One γ's terms, each a fraction of the capacity over a span. -/
@@ -176,7 +177,7 @@ structure Terms where
   host : Rat
   link : Rat
   carrier : Rat
-  horizon : Rat
+  pooled : Rat
   floor : Rat
   deriving Inhabited
 
@@ -185,7 +186,7 @@ def Terms.gamma (t : Terms) : Rat :=
   t.timing + t.sample + t.chip + t.counting + t.rebuild + t.host + t.link + t.carrier
 
 /-- γ with the pooled sample. -/
-def Terms.gammaHorizon (t : Terms) : Rat := t.gamma - t.sample + t.horizon
+def Terms.gammaPooled (t : Terms) : Rat := t.gamma - t.sample + t.pooled
 
 /-- Window `window`'s terms over its own span. -/
 structure WindowGamma where
@@ -199,7 +200,7 @@ structure Gamma where
   terms : Terms
   windows : Array WindowGamma
   error : Rat
-  errorHorizon : Rat
+  errorPooled : Rat
 
 /-- The first window of the largest γ (`by`), the windows nonempty. -/
 def worst (ws : Array WindowGamma) (by_ : Terms → Rat) : WindowGamma :=
@@ -250,7 +251,7 @@ def gamma (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : 
     let readsT := us[t]! * b
     if wholeT < (readsT : Rat) then
       throw s!"window {t} certifies {readsT} bytes read, more than the capacity allows in its span: the capacity is understated"
-    let e := wrongReceipts us[t]! w.drawn δ
+    let e := incorrectReceipts us[t]! w.drawn δ
     let cr := ((w.lengths.zip w.post).foldl (fun n (l, p) => n + (l - p)) 0) * b
     let c := w.lengths.foldl (fun n k => n + bits k) 0
     let f := min 1 (pooled.floors[t / g]! * (groups[t / g]!.1 : Rat) / (us[t]! : Rat))
@@ -258,7 +259,7 @@ def gamma (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : 
       { window := t, spanNs := spanT,
         terms := { timing := 1 - (cr : Rat) / wholeT, sample := ((e * b : Nat) : Rat) / wholeT,
                    chip := ((w.lengths.size * chipBytes : Nat) : Rat) / wholeT, counting := (c : Rat) / 8 / wholeT,
-                   rebuild, host := 0, link := 0, carrier := 0, horizon := f * (readsT : Rat) / wholeT, floor := f } }
+                   rebuild, host := 0, link := 0, carrier := 0, pooled := f * (readsT : Rat) / wholeT, floor := f } }
     wrong := wrong + e
     credited := credited + cr
     counted := counted + c
@@ -267,8 +268,8 @@ def gamma (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : 
   pure
     { terms := { timing := 1 - (credited : Rat) / whole, sample := ((wrong * b : Nat) : Rat) / whole,
                  chip := ((passes * chipBytes : Nat) : Rat) / whole, counting := (counted : Rat) / 8 / whole,
-                 rebuild, host := 0, link := 0, carrier := 0, horizon := pooled.wrong * (b : Rat) / whole,
+                 rebuild, host := 0, link := 0, carrier := 0, pooled := pooled.wrong * (b : Rat) / whole,
                  floor := pooled.floor },
-      windows := out, error := (ws.size : Rat) * δ + beside, errorHorizon := δ + beside }
+      windows := out, error := (ws.size : Rat) * δ + beside, errorPooled := δ + beside }
 
 end Poub.Gamma

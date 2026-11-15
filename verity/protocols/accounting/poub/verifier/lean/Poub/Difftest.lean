@@ -550,7 +550,7 @@ def lineRecordFn (j : Json) : V Json := do
 
 private def termsJ (t : Gamma.Terms) : List (String × Json) :=
   [("gamma", ratJ t.gamma),
-   ("horizon", Json.mkObj [("floor", ratJ t.floor), ("gamma", ratJ t.gammaHorizon), ("sample", ratJ t.horizon)]),
+   ("horizon", Json.mkObj [("floor", ratJ t.floor), ("gamma", ratJ t.gammaPooled), ("sample", ratJ t.pooled)]),
    ("terms", Json.mkObj [("timing", ratJ t.timing), ("sample", ratJ t.sample), ("chip", ratJ t.chip),
      ("counting", ratJ t.counting), ("rebuild", ratJ t.rebuild), ("host", ratJ t.host), ("link", ratJ t.link),
      ("carrier", ratJ t.carrier)])]
@@ -558,14 +558,14 @@ private def termsJ (t : Gamma.Terms) : List (String × Json) :=
 /-- γ's terms as `audit.GammaTerms.to_json` writes them, each rational a string `n` or `n/d`. -/
 def gammaJ (x : Gamma.Gamma) : Json :=
   let w := Gamma.worst x.windows Gamma.Terms.gamma
-  let h := Gamma.worst x.windows Gamma.Terms.gammaHorizon
+  let h := Gamma.worst x.windows Gamma.Terms.gammaPooled
   Json.mkObj (termsJ x.terms ++
     [("linked", .bool false), ("steering_bits", .null),
      ("windows", .arr (x.windows.map fun v =>
        Json.mkObj ([("span_ns", toJson v.spanNs), ("window", toJson v.window)] ++ termsJ v.terms))),
-     ("error", Json.mkObj [("windows", ratJ x.error), ("horizon", ratJ x.errorHorizon)]),
+     ("error", Json.mkObj [("windows", ratJ x.error), ("horizon", ratJ x.errorPooled)]),
      ("worst", Json.mkObj [("gamma", ratJ w.terms.gamma),
-       ("horizon", Json.mkObj [("gamma", ratJ h.terms.gammaHorizon), ("window", toJson h.window)]),
+       ("horizon", Json.mkObj [("gamma", ratJ h.terms.gammaPooled), ("window", toJson h.window)]),
        ("window", toJson w.window)])])
 
 private def gammaOn (reg : Registration) (digest : ByteArray) (sm : Session.Summary) (g : Nat) (j : Json) : V Json := do

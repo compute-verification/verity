@@ -1490,8 +1490,7 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  Each reading's γ terms are the Lean verifier's, held to the ledger's (`gamma_answer`).  A
         reading the ledger refuses, or whose terms the Lean's don't hold, carries why, and the session then declares
-        nothing.  With the
-        session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
+        nothing.  With the session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
         `delta` is the memory line's δ in its six parts (`ledger.delta_parts`, each ratio text), whose sum `declared`'s
         forms carry.
         No δ or error here holds the windows' PRF advantages: each reads `ledger.DELTA_FORM`, and `named`
