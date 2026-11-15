@@ -44,7 +44,7 @@ by default, the sketch term alone keeps the error far above 2^-100 against that 
 The share is of the one card's read rate and its host's, at the figures of the tree's data sheets: the verifier's node
 is one card of the card's node sheet (`hardware/nodes/`), handed to it as `--node`. A line names the card and the sheet
 with the SHA-256 of the tree's data sheets (`hardware/`) and of the verifier
-(`verity/protocols/accounting/poub/verifier/`), the JSON's `machine`; a result whose digests are not `main`'s was
+(`verity/protocols/accounting/poub/verifier/`), Markdown left out, the JSON's `machine`; a result whose digests are not `main`'s was
 measured against another verifier or other figures, and is not comparable.
 
 - **What it needs from you:** nothing of ours. The first run downloads and builds into `LOCAL_WORK` only (default
