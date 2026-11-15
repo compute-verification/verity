@@ -11,6 +11,9 @@ file).
     verity bench prove --system flock --workload glm53 --json        the table as JSON
     verity bench prove lean-verify --lean VERIFIER --proof TREE      the Lean verifier timed on one kept proof, as the
                                                                      record the table's Lean verifier figures read
+    verity bench prove layers --flock DIR|RUN --zk DIR|RUN --sampling DIR|RUN --recursion DIR|RUN
+                                                                     the proof system by layer, a row each from its
+                                                                     run's output (`verity-bench prove-layers`)
 
 Under a research run, `--system spot` also writes `METRICS` into the run's result (`prove_records.record`).
 """
@@ -32,4 +35,6 @@ METRICS = {"benchmarks/prover-gpus-per-serving-gpu": "gpus_per_serving_gpu",
 
 if __name__ == "__main__":
     argv = sys.argv[1:]
-    sys.exit(main(argv) if argv[:1] == ["lean-verify"] else main(["prove", *argv], metrics=METRICS))
+    if argv[:1] == ["lean-verify"]:
+        sys.exit(main(argv))
+    sys.exit(main(["prove-layers", *argv[1:]]) if argv[:1] == ["layers"] else main(["prove", *argv], metrics=METRICS))
