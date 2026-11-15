@@ -1,0 +1,11 @@
+[Unit]
+Description=node 2's ended runs to node 1's store and R2, through node 1's Job (n2_custody.sh)
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=50%
+# a round starts no push after 20 min (VY_CUSTODY_PASS_S), and one push takes at most 20 min of rsync and 30 of its Job
+TimeoutStartSec=80min
+ExecStart=/bin/bash /workspace/pouw/infra/bin/n2_custody.sh

@@ -1,0 +1,42 @@
+# The property red team's refusal suite: Programs a stacking property (property/v1) must refuse or fully budget, the honest
+# steps.py shapes it must pass (`cases.py`), and a runner that grades any check, a function from a Program to a verdict
+# (`run.py`). Not a package: its modules import each other by name, from the runner's directory or pytest's `pythonpath`. `demo.py` is round 1's
+# registry-evaluator demo. `gates.py` is Model.lean's gate model on the canonical circuit (a `Program` the circuits IR's
+# reference evaluator runs), which the studies build in, pinned by `tests/test_gates.py`. `renorm.py` searches toy fields
+# for circuits of the model that return a square's digits with few budgeted gates: the falsification test of the
+# re-normalization conjecture N_L. `tests/test_key_binding_order.py` checks KeyBinding's ideal step against the codec's
+# {x, p − x} symmetry; KB-1's regression test is PoUB's `test_append_order.py`. `squaring.py` builds squaring
+# circuits at p1024 measured in the model's units (SquaringFloor's e a squaring); `free_codec.py` builds the whole codec
+# word from the one-word gather Model.lean once counted as free; `bitwise_codec.py` builds a block of words at 8 units a key
+# byte under the count before the repricing (bits kept bits by u8 mma ANDs and affine NOTs), which falsified
+# EncodeChainHardness; `products_pass.py` counts the gate model's data products on property/v1's pass (honest int8:
+# the attention row's QKᵀ and PV).
+[tool.pytest.ini_options]
+testpaths = ["."]
+pythonpath = ["../../../benchmarks/property_redteam"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The cases are built from the circuits IR and evaluated by its reference evaluator, from core's registered primitives (ops,
+# PoUW's words) and the Definitions' integer, gather and cast primitives (`verity_vllm.definitions.registry`, which imports
+# their twins in `verity_vllm.definitions.numerics`; both read `verity_vllm.definitions.evidence` and its `evidence.json`).
+# `demo.py`'s registry walk reads `verity.circuits.ops.boolean.versions` too.
+# The key-binding test reads PoUB, on the commitments, the randomness, the profile and the kernels' plans.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
+          "verity/channel.py",
+          "verity/circuits/kernels", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
+          "verity/protocols/proofs/spot/verifier/profile.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier", "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/remote.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
+          "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/circuit",
+          "adapters/vllm/verity_vllm/__init__.py",  # `verity_vllm.definitions`' package: importing it runs this first
+          "adapters/vllm/verity_vllm/definitions/__init__.py",
+          "adapters/vllm/verity_vllm/definitions/registry",
+          "adapters/vllm/verity_vllm/definitions/numerics", "adapters/vllm/verity_vllm/definitions/evidence.py",
+          "adapters/vllm/verity_vllm/definitions/evidence.json", "verity/circuits/ops/boolean/versions.py",
+          "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py",
+          "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
+          "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py",
+          "verity/protocols/proofs/spot/__init__.py",
+          "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/property_redteam"]

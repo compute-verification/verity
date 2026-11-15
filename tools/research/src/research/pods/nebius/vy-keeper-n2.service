@@ -1,0 +1,16 @@
+[Unit]
+Description=standing campaign targets: top each one up to its n chunks (vy-keeper tick, pods/nebius/keeper.py)
+
+[Service]
+Type=oneshot
+User=research
+TimeoutStartSec=5min
+# the chunks run as transient units of research's own systemd (lingering), so they outlive this oneshot
+Environment=XDG_RUNTIME_DIR=/run/user/1001
+Environment=KEEPER_NODE=vy-nebius-2
+Environment=KEEPER_GPU_LEASE=/workspace/pouw/infra/bin/gpu-lease
+# the timed windows booked on node 2, fill_runner.py's file
+Environment=KEEPER_WINDOWS=/workspace/pouw/fill/windows
+# node_ops reads one holder of all 8 GPUs as a timed window and pauses research's CPU-heavy work for it
+Environment=KEEPER_MAX_GPUS=7
+ExecStart=/usr/bin/python3 /usr/local/bin/vy-keeper tick

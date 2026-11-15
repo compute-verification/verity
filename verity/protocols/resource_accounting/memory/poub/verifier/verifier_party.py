@@ -1,0 +1,144 @@
+"""The PoUB session's verifier and challenger as a party of their own, so they run on a host the developer
+doesn't control (the challenger host, `trusted-device`) while the prover stays on its node.
+
+The verifier's side listens and the prover connects; each message is one line of JSON. The prover opens with its
+store's block count and payload root (`{"register": {"blocks", "payload_root"}}`). The verifier registers it from
+its own coins and answers with the registration (`{"hold": {"registration"}}`). It then sends each pass's challenge,
+its value and the root it was opened after (`{"run": {"challenge", "i", "previous", "t"}}`, the challenge a
+`coins.Released`, answered `{"root"}`), and each window's samples (`{"open": {"draws", "t"}}`, answered `{"openings":
+hex}` in the openings frame, `wire.encode_openings`, which it decodes strictly), and `{"end": {"commitment",
+"openings"}}` last, once the session has its outcome: the coin commitment and every released coin's opening, which
+the prover checks each challenge it was sent against (`audit_prover.Prover.end`), or `{"end": {}}` for a session
+left undecided. Its clock, log and coins are the verifier's own (`period.session`), so the case is the one
+`period_prover.run` makes in one process. The prover's end of these lines is `verity/protocols/resource_accounting/memory/poub/prover/period_prover.py`'s
+(`prove`, and `period_with`, one session with this side wherever `period.json` puts it).
+
+`python -m verity.protocols.resource_accounting.memory.poub.verifier.verifier_party [--listen HOST:PORT]` is the verifier's side (`main`):
+it reads the request `{"deadline_ns", "node", "passes", "samples", "window_ns", "windows"}` as one JSON line on stdin,
+prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `command()` is the argv that
+starts that side on this machine.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import secrets
+import socket
+import sys
+import time
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, BinaryIO
+
+from . import audit, wire
+from . import coins as C
+from . import period as P
+
+MODULE = "verity.protocols.resource_accounting.memory.poub.verifier.verifier_party"
+PREMISE = "trusted-device"
+
+
+def _send(f: BinaryIO, doc: Mapping[str, Any]) -> None:
+    f.write(json.dumps(dict(doc), sort_keys=True).encode() + b"\n")
+    f.flush()
+
+
+def _recv(f: BinaryIO) -> dict[str, Any]:
+    line = f.readline()
+    if not line.endswith(b"\n"):
+        raise ConnectionError("the peer closed mid-session")
+    doc = json.loads(line)
+    if not isinstance(doc, dict) or len(doc) != 1:
+        raise ValueError("a message is a JSON object of one key")
+    return doc
+
+
+class Remote:
+    """The prover across the connection `f`, as the verifier's side sees it (`period.Peer`)."""
+
+    def __init__(self, f: BinaryIO) -> None:
+        self.f, self.ended = f, False
+
+    def register(self) -> tuple[int, bytes]:
+        m = _recv(self.f).get("register")
+        if not isinstance(m, dict) or type(m.get("blocks")) is not int or not isinstance(m.get("payload_root"), str):
+            raise ValueError("the prover opens with {\"register\": {\"blocks\", \"payload_root\"}}")
+        return m["blocks"], bytes.fromhex(m["payload_root"])
+
+    def hold(self, registration: audit.Registration) -> None:
+        _send(self.f, {"hold": {"registration": P.registration_json(registration)}})
+
+    def run(self, challenge: C.Released, t: int, i: int, previous: bytes) -> bytes:
+        _send(self.f, {"run": {"challenge": challenge.to_json(), "i": i, "previous": previous.hex(), "t": t}})
+        root = _recv(self.f).get("root")
+        if not isinstance(root, str):
+            raise ValueError("a pass is answered {\"root\": hex}")
+        return bytes.fromhex(root)
+
+    def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[audit.Opening]:
+        _send(self.f, {"open": {"draws": [list(d) for d in draws], "t": t}})
+        body = _recv(self.f).get("openings")
+        got = wire.decode_openings(bytes.fromhex(body)) if isinstance(body, str) else None
+        return [] if got is None else got
+
+    def end(self, commitment: C.LiveCommitment | None = None, openings: Sequence[C.LiveOpening] = ()) -> None:
+        """The session's last message, with its coins disclosed (`audit.AuditRun.disclose`), or without for a session
+        left undecided; sent once."""
+        if not self.ended:
+            _send(self.f, {"end": {} if commitment is None else {"commitment": commitment.to_json(),
+                                                                  "openings": [o.to_json() for o in openings]}})
+            self.ended = True
+
+
+def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Callable[[], int] = time.monotonic_ns,
+          sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until) -> P.Run:
+    """The verifier's side of one session over the connection `f` (`period.session` against `Remote`), ended with its
+    coins disclosed once it has its outcome."""
+    remote = Remote(f)
+    out = P.session(request["node"], remote, coins, windows=request["windows"], passes=request["passes"],
+                    samples=request["samples"], window_ns=request["window_ns"], deadline_ns=request["deadline_ns"],
+                    clock=clock, sleep_until=sleep_until)
+    remote.end()
+    return out
+
+
+def command() -> tuple[str, ...]:
+    """The argv that starts the verifier's side as a process on this machine."""
+    return (sys.executable, "-m", MODULE, "--listen", "127.0.0.1:0")
+
+
+def placement(node: str, host: str) -> dict[str, Any]:
+    """Which host ran each party, and whether `trusted-device`'s premise holds: that the verifier and its challenger
+    ran on a machine the developer doesn't control, which is never the developer's node."""
+    return {"parties": {"challenger": host, "prover": node, "verifier": host},
+            PREMISE: (f"holds: the verifier and its challenger ran on {host}, not the developer's {node}" if host != node else
+                      f"unmet: the verifier and its challenger ran on the developer's node {node}")}
+
+
+def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
+               window_ns: int = 100_000_000, deadline_ns: int = 500_000_000) -> dict[str, Any]:
+    """The session's request, `period_prover.run`'s defaults unless given."""
+    return {"deadline_ns": deadline_ns, "node": node, "passes": passes, "samples": samples, "window_ns": window_ns,
+            "windows": windows}
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
+    ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
+    a = ap.parse_args(argv)
+    request = json.loads(sys.stdin.readline())
+    host, _, port = a.listen.rpartition(":")
+    with socket.create_server((host, int(port))) as srv:
+        print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
+        conn, _ = srv.accept()
+        with conn, conn.makefile("rwb") as f:
+            period = serve(f, request, coins=secrets.token_bytes(64))
+    print(json.dumps({"answer": period.answer, "case": period.case, "host": socket.gethostname()}, sort_keys=True),
+          flush=True)
+    return 0
+
+
+__all__ = ["PREMISE", "Remote", "command", "main", "placement", "request_of", "serve"]
+
+if __name__ == "__main__":
+    sys.exit(main())

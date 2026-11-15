@@ -1,0 +1,41 @@
+schema = "verity-bench/vllm-spec/v0"
+backend = "vllm"
+id = "llama31-8b-fp8-rtx-served-arm"
+# G2's served arm (benchmarks/served_commit/served_arm.py) at benchmarks' compiled-serving point: the Commit at
+# rows-sha512's 4 KiB rows, compiled (served-commit-rows-4k, control stock-fp8@compiled) and eager (commit-rows-4k-eager,
+# control stock-fp8), against stock FP8 as vLLM serves it (stock-fp8@compiled) and the batch-invariant eager stock FP8
+# every eager row is timed against (stock-fp8), interleaved rep by rep on one RTX PRO 6000. The preset is
+# llama31-8b-fp8-1gpu-compiled-full's (its 4,096-token step budget, capture sizes and 8 GiB KV pin in both modes), on G2's
+# width sweep.
+arms = ["stock-fp8", "stock-fp8@compiled", "served-commit-rows-4k", "commit-rows-4k-eager"]
+arm_modules = ["served_commit.served_arm:ROWS_4K_FP8", "served_commit.served_arm:EAGER_ROWS_4K_FP8"]
+sweep = "width"
+reps = 3
+eager = true
+
+[arm_settings."stock-fp8@compiled"]
+control = "none"
+
+[preset]
+id = "llama31-8b-fp8-rtx-served-arm"
+model = "unsloth/Llama-3.1-8B"
+revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
+case = "LLAMA31_8B"
+precision = "fp8"
+gpu_id = "rtx-pro-6000"
+gpu_count = 1
+vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+
+[preset.engine_settings]
+cuda_graphs = true
+capture_sizes = [1, 8, 32, 128]
+max_model_len = 8384
+# Four engines resident on one RTX PRO 6000 (about 9 GB of weights each, the 8 GiB pool, and the Commits' buffers).
+resident_gpu_memory_utilization = 0.20
+block_gpu_memory_utilization = 0.80
+max_num_batched_tokens = 4096
+resident_kv_cache_memory_bytes = 8589934592
+block_kv_cache_memory_bytes = 8589934592
+
+[admission]
+max_minutes = 120

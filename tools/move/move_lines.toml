@@ -1,0 +1,433 @@
+# Corrections to move commits' own records, which `restack.py` reads before a commit's message (its docstring has the
+# format): under the commit's full id, `line` (the move line it ran by), `hand` (the paths where its tree is, by hand, not
+# what that script writes on its parent) and `reason`. History is never rewritten, so a record is corrected here.
+
+["f7b30e1f7ce9263a24eca5186e43c0029af55689"]
+line = "Layout-move: tools/move/two_stage_verdicts_map.toml --no-lock"
+hand = ["tools/move/two_stage_verdicts_map.toml"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and kept its map as it was where layout.py rewrites the map's own paths."
+
+["4974327abaf70864c269bedad537067d26892d60"]
+hand = ["benchmarks/one_stage/onsite_record.py", "benchmarks/one_stage/tests/test_onsite_record.py"]
+reason = "The commit also holds device_term_map.toml's rename of trusted-host to trusted-device in three prose lines the collect branch brought, run before this map."
+
+["efb8d893607ea5c3d51c449e4581b043c7aa0ebb"]
+hand = ["benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py", "tools/move/docket_names_map.toml", "verity/protocols/proofs/spot/prover/cost/window_cost.py"]
+reason = "The commit also puts registration back for docket in the prose beside the names it renames back, and edits docket_names_map.toml's keep patterns and excludes to match."
+
+["96942e204b5c2efc583edc7b4fa09f51e9cd830a"]
+hand = ["tests/workload_messages.toml"]
+reason = "The commit also renames weights_docket_of_serve back in the message table's search pattern, a data file the word map excludes."
+
+["0b4c48a00c2c75d38c5be41f1184a13cb932d11c"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+hand = ["tools/research/src/research/store/moves.json"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and kept one entry for the map in research's moves.json where layout.py appends a second."
+
+["b2112f543e4609e75b93ff528ec5545ecadb900f"]
+line = "Layout-move: tools/move/vllm_profile_test_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["8f35530ca87cc286a1d75ce6eed64636a1a34ca4"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["3b94ba2b786dad839e371a8f3b42286d32c833c8"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["cc6b56dfe2adeffddf5bc62c2d00d5b5aaeb4631"]
+line = "Layout-move: tools/move/torch_adapter_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["e6c3e6eabd8fda375981e20c83c5af0dcd78f325"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+hand = ["verity/protocols/proofs/spot/prover/tests/test_audit_one_member.py"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and rewrote by hand the bare import of member_trees its subject names, which layout.py derives no module for."
+
+["9853a730c24e593ca621b602905eef8bef7d907f"]
+line = "Layout-move: tools/move/mla_inputs_map.toml --no-lock"
+hand = ["tools/move/mla_inputs_map.toml"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and kept its map as it was where layout.py rewrites the map's own paths."
+
+["08a0828b2fe2bab7f7c123ef5b2c3ff0878f51ac"]
+line = "Layout-move: tools/move/vllm_poub_option_map.toml --no-lock"
+hand = ["adapters/vllm/README.md", "adapters/vllm/pyproject.toml", "adapters/vllm/verity_vllm/pipeline/serve_remote.py", "adapters/vllm/verity_vllm/protocols/README.md", "adapters/vllm/verity_vllm/protocols/__init__.py"]
+reason = "The move ran with --no-lock, as its trailer doesn't say, and also renamed by hand the sites layout.py can't read as the moved directory: the adapter's suite inputs (relative to adapters/vllm/), two READMEs' prose, serve_remote's package-relative module name and DRIVERS' package name."
+
+["e5ca33162035c59f4ac8bf2c10acda9fa662da5b"]
+line = "Layout-move: tools/move/properties_map.toml --no-lock"
+hand = ["tools/move/properties_map.toml"]
+reason = "The move ran with --no-lock, as its message's command says and its trailer doesn't, and kept its map as it was where layout.py rewrites the map's own paths."
+
+["ce0e54799c28d14ac5e2850b85d711c25753e861"]
+line = "Layout-move: tools/move/pouw_tile_boolean_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its message's command says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["4f6e3df45fbcfa8938d17e9c3d897a30ebea4a92"]
+line = "Layout-move: tools/move/pouw_tile_boolean_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its message's command says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["473d8eefa2704f1aa8f8f395be0e6da85ba9f13e"]
+line = "Layout-move: tools/move/pouw_tile_boolean_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its message's command says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["2d3aee68646c89344a407daaf4aa586bd265bde1"]
+line = "Layout-move: tools/move/memory_gpu_weights_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its trailer doesn't say; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["441c946b99c24038de1790ae78a628bb8fe49549"]
+line = "Layout-move: tools/move/memory_gpu_bandwidth_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its trailer doesn't say; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["530accf39648959517d53d33889d5217d116efef"]
+line = "Layout-move: tools/move/memory_gpu_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its trailer doesn't say; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["3e79545193c65e72d684a29bc50b16e563ec5346"]
+hand = ["benchmarks/one_stage/advice_charge.py", "benchmarks/one_stage/onsite_record.py", "benchmarks/one_stage/tests/test_advice_charge.py", "benchmarks/one_stage/tests/test_onsite_record.py", "benchmarks/slowdown/README.md", "benchmarks/slowdown/slowdown/envelopes.py", "verity/protocols/proofs/spot/prover/tests/test_audit_one_member.py", "verity/protocols/proofs/spot/verifier/README.md", "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py", "verity/protocols/proofs/spot/verifier/one_stage/caller.py"]
+reason = "The rerun was kept to the three files its message names, and left as its parent had them the other files rename.py rewrites."
+
+["80a19b19117aafd24f46ed17b96137db33b2dc20"]
+hand = ["benchmarks/one_stage/advice_charge.py", "benchmarks/one_stage/onsite_record.py", "benchmarks/one_stage/tests/test_advice_charge.py", "benchmarks/one_stage/tests/test_onsite_record.py", "verity/protocols/proofs/spot/prover/audit/prove_path.py", "verity/protocols/proofs/spot/prover/tests/test_audit_one_member.py", "verity/protocols/proofs/spot/verifier/README.md", "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py", "verity/protocols/proofs/spot/verifier/one_stage/caller.py"]
+reason = "The rerun was kept to the two files its message names, and left as its parent had them the other files rename.py rewrites."
+
+["0f6f8e90edf60b9a6e6242a8c3a9a032f480832d"]
+line = "Move: tools/move/pouw_sample_h1_map.toml"
+reason = "The move ran rename.py by the map it adds, as its message says and no move line does."
+
+["3b93447e9e3f799af4570834a65eb5d306c30f92"]
+line = "Move: tools/move/pouw_sample_map.toml"
+reason = "The move ran rename.py by the map it adds, as its message says and no move line does."
+
+["7ef1e26c04e673c767867557994a5d355003fa1c"]
+line = "Move: tools/move/pouw_sample_ts_map.toml"
+reason = "The move ran rename.py by the map it adds, as its message says and no move line does."
+
+["35d39c1bdd330674510beb8b3a780fb788b03e88"]
+line = "Layout-move: tools/move/pouw_serving_torch_map.toml --no-lock"
+reason = "The move ran layout.py with --no-lock by the map it adds, as its message says and no move line does."
+
+["79a57ee4f6109541abeff5ce8bcdee07045c4248"]
+line = "Move: tools/move/dither_draw_map.toml"
+reason = "The commit ran rename.py with a word map, as its subject says, where its trailer names layout.py, which refuses the map."
+
+["6640ad12f3d32518944439c27f28d8da058ddea9"]
+line = "Layout-move: tools/move/two_stage_audit_map.toml --no-lock"
+reason = "The move left uv.lock as it was, as its message says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["d0e029f4670003ac1c6d883de9511173d4a31eb7"]
+line = "Layout-move: tools/move/demo_dirs_map.toml --no-lock"
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py, which refuses a path map."
+
+["48c45b3a2f5469afce0ad6b1fb185df0a5e35b93"]
+line = "Layout-move: tools/move/commitments_periods_map.toml --no-lock"
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py, which refuses a path map."
+
+["ac7fe4b7472ad49eb66c85842877c164c2f4d8e8"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py, which refuses a path map."
+
+["922443c0f7b04d60866c98ed4c32dee2c86e7d33"]
+line = "Layout-move: tools/move/docket_paths_map.toml --no-lock"
+hand = ["verity/protocols/accounting/certifier/prover/scan_zk.py"]
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py; it was kept to the files its message names, and left as its parent had it the one other file layout.py rewrites."
+
+["2ea5e3d0e4c416aaaf0aba26b68f71702f55445b"]
+line = "Layout-move: tools/move/pouw_serving_map.toml --no-lock"
+hand = ["adapters/vllm/tests/protocols/test_credit_gate_outside.py", "adapters/vllm/tests/protocols/test_pouw_h1_records.py", "adapters/vllm/tests/protocols/test_pouw_h1_records_device.py", "adapters/vllm/tests/protocols/test_pouw_h1_weight_roots.py", "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_outside.py", "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records.py", "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records_device.py", "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_weight_roots.py"]
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py; it was kept to the one line its message names, and left as its parent had them the adapter tests the map moves."
+
+["9f71545ac43a5e68da77b80ac46a581b3deef24c"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+hand = ["tools/research/src/research/store/moves.json", "verity/protocols/accounting/certifier/prover/pyproject.toml"]
+reason = "The rerun ran layout.py, with --no-lock, as its message's command says, where its trailer names rename.py; it left out the map's ledger record in moves.json and its rewrite of the certifier's suite inputs, as its message says."
+
+["85f22cb11aa0d59d5c4a0add92bfe4d22a068aa9"]
+hand = ["verity/protocols/proofs/spot/verifier/one_stage/caller.py"]
+reason = "The commit also rewrapped by hand caller.py's docstring opening, which rename.py's rewrite joined into one line."
+
+["b2196c5098099b4d46179a3579455fd098bf1be2"]
+hand = ["adapters/vllm/tests/test_messages.py", "benchmarks/network_traces/kind_scan.py", "benchmarks/network_traces/tests/test_kind_scan.py", "benchmarks/one_stage/onsite_record.py", "benchmarks/one_stage/tests/test_onsite_record.py"]
+reason = "The rerun was kept to the files its message names, and left as its parent had them the other files its script rewrites."
+
+["8b98edb1e6f3227328c878b3258e98f1ea851a33"]
+hand = ["adapters/vllm/tests/pipeline/test_serve_openai.py", "benchmarks/network_e2e/chain.py", "benchmarks/network_e2e/encodings/arith_vectors.py", "benchmarks/network_e2e/encodings/derived.py", "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/tests/test_replay.py", "benchmarks/network_e2e/encodings/tests/test_v1.py", "benchmarks/network_e2e/encodings/v1.py", "benchmarks/network_e2e/traces/README.md", "benchmarks/network_e2e/traces/admit_release.py", "benchmarks/network_e2e/traces/corpus.py", "benchmarks/network_e2e/traces/host_sample.py", "benchmarks/network_e2e/traces/join.sh", "benchmarks/network_e2e/traces/pyproject.toml", "benchmarks/network_e2e/traces/run.sh", "benchmarks/network_e2e/traces/summary.py", "benchmarks/network_e2e/traces/tests/test_arrival_order.py", "benchmarks/network_e2e/traces/tests/test_tick_corpus.py", "benchmarks/network_e2e/traces/tests/test_warden_probes.py", "benchmarks/network_e2e/traces/warden_probe.py", "benchmarks/network_traces/README.md", "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/chain_record.py", "benchmarks/network_traces/chain_record.sh", "benchmarks/network_traces/demo_stub.py", "benchmarks/network_traces/negatives.py", "benchmarks/network_traces/pyproject.toml", "benchmarks/network_traces/scan_zk.sh", "benchmarks/network_traces/served_session.py", "benchmarks/network_traces/tests/test_certifier_piece.py", "benchmarks/network_traces/tests/test_chain_record.py", "benchmarks/network_traces/tests/test_demo_stub.py", "benchmarks/network_traces/tests/test_kept_scan.py", "benchmarks/network_traces/tests/test_negatives.py", "benchmarks/network_traces/tests/test_out_request_values.py", "benchmarks/network_traces/tests/test_served_session.py", "benchmarks/network_traces/tests/test_warden_chain.py", "benchmarks/network_traces/tests/test_wipe_gate.py", "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/warden_zk.sh", "benchmarks/network_traces/wipe_gate.sh", "benchmarks/one_stage/a5_tp.sh", "benchmarks/one_stage/a5_warden.py", "benchmarks/one_stage/tests/test_a5_warden.py", "benchmarks/one_stage/tests/test_warden_replay.py", "benchmarks/one_stage/warden_replay.py", "security/Definitions/Certifier/Tap.lean", "security/Proofs/Certifier/README.md", "security/Proofs/Certifier/Tap.lean", "security/Proofs/Certifier/Warden.lean", "security/Proofs/Properties/Certifier/Check/TransferBlocks.lean", "security/lean-audit.json", "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier/Rows.lean", "verity/protocols/accounting/certifier/device/released_keys.json", "verity/protocols/accounting/certifier/device/runner_parts.py", "verity/protocols/accounting/certifier/device/tests/test_load_relay.py", "verity/protocols/accounting/certifier/device/tests/test_warden_serve.py", "verity/protocols/accounting/certifier/device/tests/test_warden_serve_phase10.py", "verity/protocols/accounting/certifier/device/warden_serve.py", "verity/protocols/accounting/certifier/prover/egress_zk.py", "verity/protocols/accounting/certifier/prover/ingress_scan.py", "verity/protocols/accounting/certifier/prover/io_ids.py", "verity/protocols/accounting/certifier/prover/n2_tie_zk.py", "verity/protocols/accounting/certifier/prover/n2_zk.py", "verity/protocols/accounting/certifier/prover/scan_period.py", "verity/protocols/accounting/certifier/prover/scan_zk.py", "verity/protocols/accounting/certifier/prover/tests/test_egress_zk.py", "verity/protocols/accounting/certifier/prover/tests/test_n2_tie_zk.py", "verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py", "verity/protocols/accounting/certifier/prover/tests/test_warden_zk.py", "verity/protocols/accounting/certifier/prover/warden_zk.py", "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.py", "verity/protocols/accounting/certifier/verifier/io_request.py", "verity/protocols/accounting/certifier/verifier/io_tie.py", "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean", "verity/protocols/accounting/certifier/verifier/service.py", "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py", "verity/protocols/accounting/certifier/verifier/tests/standin.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_egress.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_ingress_scan.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_request.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie_adversarial.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_io_tie_phase4.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_pacer.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_service.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_tie_service.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden_rows.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden_rows_phase11.py", "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden_rows_replay.py", "verity/protocols/accounting/certifier/verifier/tie_service.py", "verity/protocols/accounting/certifier/verifier/warden.py", "verity/protocols/accounting/certifier/verifier/warden_rows.py", "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/tests/test_auditor_load.py", "verity/protocols/compose/device/live_challenger/tests/test_auditor_warden.py", "verity/protocols/compose/device/live_challenger/tests/test_auditor_warden_serve.py"]
+reason = "The rerun was kept to the files its message names, and left as its parent had them the other files its script rewrites."
+
+["9e7c7f3c10e1d8e89748570e24ec17a4548ea1a7"]
+move = false
+reason = "The rename ran by a copy of law_lean_map.toml narrowed by hand to the five files its message names, which no commit holds; the map at its parent names paths its parent lacks, and rename.py refuses it there."
+
+["5751da8f37e8c64431cae54835d3d0c81d58eca5"]
+move = false
+reason = "The rename ran by a copy of inference_only_map.toml narrowed by hand to the fourteen files its message names, which no commit holds; the map at its parent names paths its parent lacks, and rename.py refuses it there."
+
+["6b2dae730f06053c576435fe828128e24166656d"]
+move = false
+reason = "The rename ran by a copy of theta_map.toml narrowed by hand to the three Lean files its message names, which no commit holds; the map at its parent names paths its parent lacks, and rename.py refuses it there."
+
+["e961879c09863af3ee7abcd89de06861d6dd4125"]
+line = "Layout-move: tools/move/docket_paths_map.toml --no-lock"
+reason = "The commit ran layout.py with --no-lock, as its message's command says; its trailer leaves the flag out, so the rerun writes another uv.lock."
+
+["026558480f855c6704d930e548920eff8eab6415"]
+line = "Layout-move: tools/move/pouw_harness_native_map.toml"
+reason = "The commit ran tools/move/pouw_harness_native_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["83d8c87b32da6ea69aed26a085e4e9786be10f84"]
+line = "Move: tools/move/accelerator_map.toml"
+reason = "The commit ran tools/move/accelerator_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["31f54393d2a24f86cc8ca5e19764fdefb7db041d"]
+line = "Layout-move: tools/move/pouw_gemm_kernels_map.toml"
+reason = "The commit ran tools/move/pouw_gemm_kernels_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["0c6434cadf4b59defbded5b1baa296cdc9006541"]
+line = "Layout-move: tools/move/pouw_served_zk_map.toml"
+reason = "The commit ran tools/move/pouw_served_zk_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["20101f041032702b055147a98b419ac8de566e28"]
+line = "Layout-move: tools/move/commit_gpu_map.toml"
+reason = "The commit ran tools/move/commit_gpu_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["fbdb72df6b95c5138bda2fdb8c8838c890b3bfc9"]
+line = "Move: tools/move/draw_compound_map.toml"
+reason = "The commit ran tools/move/draw_compound_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["73d28b7707a04143d4bb0d25ac1b0b3b5e3dc1ff"]
+line = "Layout-move: tools/move/filler_kernels_map.toml"
+reason = "The commit ran tools/move/filler_kernels_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/pouw/filler/arms.py", "benchmarks/pouw/filler/comm/tpcomm.cu", "benchmarks/pouw/filler/dcap.cu", "benchmarks/pouw/filler/dfill_ref.py", "benchmarks/pouw/filler/flin.cuh", "benchmarks/pouw/filler/fused_arm.py", "benchmarks/pouw/filler/lfill.cuh", "benchmarks/pouw/filler/pfill.cuh", "benchmarks/pouw/filler/pfill_arm.py", "benchmarks/pouw/filler/pfill_host.cpp", "benchmarks/pouw/filler/pfill_ref.py", "benchmarks/pouw/filler/psched_arm.py", "benchmarks/pouw/filler/tests/test_pfill_arm.py", "tests/lint/allowlists/device_figures.json", "tests/lint/allowlists/repo_retired_terms.json", "tools/move/filler_kernels_map.toml", "tools/research/src/research/store/moves.json", "verity/protocols/accounting/pouw/prover/kernels/filler/__init__.py", "verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu", "verity/protocols/accounting/pouw/prover/kernels/filler/dfill_ref.py", "verity/protocols/accounting/pouw/prover/kernels/filler/flin.cuh", "verity/protocols/accounting/pouw/prover/kernels/filler/lfill.cuh", "verity/protocols/accounting/pouw/prover/kernels/filler/pfill.cuh", "verity/protocols/accounting/pouw/prover/kernels/filler/pfill_host.cpp", "verity/protocols/accounting/pouw/prover/kernels/filler/pfill_ref.py"]
+
+["f884b4c23c9c382079b3e881a840fcd9b55d547c"]
+line = "Layout-move: tools/move/pouw_harness_native_back_map.toml"
+reason = "The commit ran tools/move/pouw_harness_native_back_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/harness/overhead_node.sh", "benchmarks/kernels/s8_linear/lt.py", "benchmarks/pouw/contents/paths/nvfp4_sm120.toml", "benchmarks/pouw/harness/README.md", "benchmarks/pouw/harness/bench.py", "benchmarks/pouw/harness/derive.py", "benchmarks/pouw/harness/fill.py", "benchmarks/pouw/harness/jobs/toolkit.sh", "benchmarks/pouw/harness/native.py", "benchmarks/pouw/harness/native/.gitignore", "benchmarks/pouw/harness/native/build.sh", "benchmarks/pouw/harness/native/cutlass_2x.cu", "benchmarks/pouw/harness/native/cutlass_3x.cu", "benchmarks/pouw/harness/native/cutlass_api.h", "benchmarks/pouw/harness/native/cutlass_registry.cu", "benchmarks/pouw/harness/native/harness.cu", "benchmarks/pouw/harness/native/lt.cu", "benchmarks/pouw/harness/run.sh", "benchmarks/pouw/nvfp4_sm120/README.md", "benchmarks/pouw/nvfp4_sm120/mainloop_nvf4.cuh", "benchmarks/pouw/nvfp4_sm120/nvf4_plain.cu", "benchmarks/pouw/settings.py", "benchmarks/pouw/tests/test_harness.py", "benchmarks/pouw/tests/test_run.py", "tests/lint/test_repo_retired_terms.py", "tools/move/pouw_harness_native_back_map.toml", "tools/research/src/research/store/moves.json", "verity/protocols/accounting/pouw/prover/kernels/harness/native/.gitignore", "verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh", "verity/protocols/accounting/pouw/prover/kernels/harness/native/cutlass_2x.cu", "verity/protocols/accounting/pouw/prover/kernels/harness/native/cutlass_3x.cu", "verity/protocols/accounting/pouw/prover/kernels/harness/native/cutlass_api.h", "verity/protocols/accounting/pouw/prover/kernels/harness/native/cutlass_registry.cu", "verity/protocols/accounting/pouw/prover/kernels/harness/native/harness.cu", "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu", "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/README.md", "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/mainloop_nvf4.cuh", "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/nvf4_plain.cu"]
+
+["03c95364913e050e62c1c03b3036ed691895b499"]
+line = "Layout-move: tools/move/served_zk_replays_back_map.toml"
+reason = "The commit ran tools/move/served_zk_replays_back_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/pouw/served_zk/replay_core.py", "benchmarks/pouw/served_zk/replay_window.py", "tests/lint/allowlists/repo_retired_terms.json", "tests/test_lean_vocabulary.py", "tools/move/served_zk_replays_back_map.toml", "tools/research/src/research/store/moves.json", "uv.lock", "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_core.py", "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py"]
+
+["27713f265cb8ee1f442782929ef21d0ef4c6dd96"]
+line = "Move: tools/move/match_capture_words_map.toml"
+reason = "The commit ran tools/move/match_capture_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["bdd1fc82fbf5ff707ebe4c69237f47c87bacb6ed"]
+line = "Layout-move: tools/move/filler_refs_back_map.toml"
+reason = "The commit ran tools/move/filler_refs_back_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/pouw/filler/dfill_ref.py", "benchmarks/pouw/filler/pfill_ref.py", "tools/move/filler_refs_back_map.toml", "tools/research/src/research/store/moves.json", "verity/protocols/accounting/pouw/prover/kernels/filler/dfill_ref.py", "verity/protocols/accounting/pouw/prover/kernels/filler/pfill_ref.py"]
+
+["6b038b03cc96aafa67a7ff0f7ba2941eccad89cb"]
+line = "Move: tools/move/slowdown_yield_map.toml"
+reason = "The commit ran tools/move/slowdown_yield_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/slowdown/slowdown/scenario.py", "benchmarks/slowdown/tests/test_theorem.py"]
+
+["e3cb35606e4ce76b77cab5703d0b9aed30c73722"]
+line = "Move: tools/move/fanin_map.toml"
+reason = "The commit ran tools/move/fanin_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/slowdown/slowdown/instances.py"]
+
+["47c07ff49f55f1b592eefe5b7454ab5ddd9b7d79"]
+line = "Move: tools/move/slowdown_namespace_map.toml"
+reason = "The commit ran tools/move/slowdown_namespace_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["ad7f77b4b26dcdab68d2a9ec88d2f41f82d3297b"]
+line = "Move: tools/move/draw_poub_pous_names_map.toml"
+reason = "The commit ran tools/move/draw_poub_pous_names_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["61e47d8632c9d2572d34740778cd2b7afa89ef68"]
+line = "Move: tools/move/firewall_words_map.toml"
+reason = "The commit ran tools/move/firewall_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["bc1a7a9b636fab744b9db06c6d71935158b653a9"]
+line = "Move: tools/move/fanin_lean_map.toml"
+reason = "The commit ran tools/move/fanin_lean_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["85bf9c2202c9006e7c06a66fe376adb84fcf0694"]
+line = "Move: tools/move/draw_poub_pous_lean_map.toml"
+reason = "The commit ran tools/move/draw_poub_pous_lean_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["5c3dc8ecfbf2e8d393712f8f37ff9f45cc416f1e"]
+line = "Move: tools/move/period_areas_map.toml"
+reason = "The commit ran tools/move/period_areas_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["110d7ea6b68a79e59f1888a14103b7b5385fa466"]
+line = "Move: tools/move/law_words_map.toml"
+reason = "The commit ran tools/move/law_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["d2f08ffcdc653308bb5845ea7df958f0a58a6322"]
+line = "Move: tools/move/draw_poub_lean_read_map.toml"
+reason = "The commit ran tools/move/draw_poub_lean_read_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["35e256e70b53fa87ec707c8e39c937206446a76e"]
+line = "Move: tools/move/draw_poub_test_module_map.toml"
+reason = "The commit ran tools/move/draw_poub_test_module_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["7f832b7d445dbc0696839d6dd024f66323235066"]
+line = "Move: tools/move/link_window_words_map.toml"
+reason = "The commit ran tools/move/link_window_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["d2e32df3b6f3f843f7f3c464b97bca02ed20be6e"]
+line = "Move: tools/move/leg_words_map.toml"
+reason = "The commit ran tools/move/leg_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["22362d4bcebc57e8c48559a98ae26eb3e1392993"]
+line = "Move: tools/move/draw_bare_map.toml"
+reason = "The commit ran tools/move/draw_bare_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["c587987eb068a1a225c695da6a04ce52c7cb6f13"]
+line = "Move: tools/move/slowdown_split_map.toml"
+reason = "The commit ran tools/move/slowdown_split_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["tools/move/slowdown_split_map.toml", "verity/protocols/policy/inference_only/verifier/README.md"]
+
+["e734f26d6b700e28d9184fe407d5def0173e3d4c"]
+line = "Move: tools/move/law_pous_setup_proof_map.toml"
+reason = "The commit ran tools/move/law_pous_setup_proof_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["verity/protocols/accounting/pous/prover/setup_proof.py", "verity/protocols/accounting/pous/verifier/setup_proof.py", "verity/protocols/accounting/pous/verifier/tests/test_pous_setup_proof.py"]
+
+["66778a061fb6e29290f841e99cfc0fad06897de1"]
+line = "Move: tools/move/netlist_words_map.toml"
+reason = "The commit ran tools/move/netlist_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["tests/test_lean_vocabulary.py", "tools/move/netlist_words_map.toml"]
+
+["aebfd01cd3de7517a2da0919c9ae1091f2e88283"]
+line = "Move: tools/move/production_words_map.toml"
+reason = "The commit ran tools/move/production_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["7dfb1f20851748e43a88b8182d8bc7acb1b7ac81"]
+line = "Move: tools/move/link_burst_poub_map.toml"
+reason = "The commit ran tools/move/link_burst_poub_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["tests/lint/allowlists/repo_retired_terms.json"]
+
+["271baad18d9aaaa3568f44af6f3e7c1e32a800a8"]
+line = "Layout-move: tools/move/two_stage_driver_test_map.toml"
+reason = "The commit ran tools/move/two_stage_driver_test_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["tools/move/audit_code_map.toml", "tools/move/two_stage_driver_test_map.toml", "uv.lock"]
+
+["31503960ad67e02c82145facfc5a8f063c1be8bc"]
+line = "Move: tools/move/coin_source_words_map.toml"
+reason = "The commit ran tools/move/coin_source_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["1f780ebb2021a1dc793d15cba602a017ad59f7fe"]
+line = "Move: tools/move/stage2_words_map.toml"
+reason = "The commit ran tools/move/stage2_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["2e9cd5437d716b8500ddf896cccd4e115c09e82a"]
+line = "Move: tools/move/link_burst_figures_map.toml"
+reason = "The commit ran tools/move/link_burst_figures_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["1c450e4ffb2b88e96290cf39ec93561710e6332b"]
+line = "Move: tools/move/law_words_certifier_map.toml"
+reason = "The commit ran tools/move/law_words_certifier_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["251f30af8d74b04e8fe6aa87835acaf852843850"]
+line = "Layout-move: tools/move/spot_tie_tests_prover_map.toml"
+reason = "The commit ran tools/move/spot_tie_tests_prover_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["verity/protocols/proofs/spot/prover/tests/settings.py", "verity/protocols/proofs/spot/verifier/pyproject.toml", "verity/protocols/proofs/spot/verifier/tests/settings.py"]
+
+["f2ca8cdf3fa1693deb1003d3c6dcc510407f5245"]
+line = "Layout-move: tools/move/spot_tie_tests_verifier_map.toml"
+reason = "The commit ran tools/move/spot_tie_tests_verifier_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["verity/protocols/proofs/spot/prover/tests/settings.py", "verity/protocols/proofs/spot/verifier/pyproject.toml", "verity/protocols/proofs/spot/verifier/tests/settings.py"]
+
+["4cf8052a789d3a4255eebbd2d0cfda7067fbde01"]
+line = "Move: tools/move/certified_store_block_map.toml"
+reason = "The commit ran tools/move/certified_store_block_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["a095b5e98c81f3cb25e11c35814097f3af0b6bb7"]
+line = "Move: tools/move/sass_gate_regs_max_map.toml"
+reason = "The commit ran tools/move/sass_gate_regs_max_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["1f2ee77cbee5249456e54c4ac6b9dd2bf62a6dd7"]
+line = "Layout-move: tools/move/acquire_fa2_tap_apply_map.toml"
+reason = "The commit ran tools/move/acquire_fa2_tap_apply_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["adapters/vllm/tests/acquire/test_fa2_tap_apply.py", "adapters/vllm/tests/acquire/test_tap_apply_scripts.py", "adapters/vllm/verity_vllm/acquire/fa2_tap_src/apply_fa2_tap.py", "adapters/vllm/verity_vllm/acquire/fa2_tap_src/verity_tap.h", "adapters/vllm/verity_vllm/ops/pod_fa2_tap.sh"]
+
+["d05c1cbd290cb2ed69732a9bc687d82d4bd0a441"]
+line = "Layout-move: tools/move/replay_chain_map.toml"
+reason = "The commit ran tools/move/replay_chain_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["fcf70f93dd9674c496fb3774cd50a04b0e2c3ace"]
+line = "Move: tools/move/c_flock_words_map.toml"
+reason = "The commit ran tools/move/c_flock_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["6ff591310bc372d6a25fd16ce6c8d340b8f4e3c1"]
+line = "Move: tools/move/unit_class_words_map.toml"
+reason = "The commit ran tools/move/unit_class_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["8d2330102b664b6b2636b8288c11bafd6a14515c"]
+line = "Move: tools/move/coin_server_words_map.toml"
+reason = "The commit ran tools/move/coin_server_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["aba8e048ae7529264e88a9a6ee14ecbbdabb9729"]
+line = "Move: tools/move/wrong_units_words_map.toml"
+reason = "The commit ran tools/move/wrong_units_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["6e107a6e2f0bbd1c0096fdf77e80c8b331b29e49"]
+line = "Move: tools/move/declared_words_map.toml"
+reason = "The commit ran tools/move/declared_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["a9cd42e9f2537c56fbfb0fbcbfe4e9f52ea55e9e"]
+line = "Move: tools/move/reference_circuit_words_map.toml"
+reason = "The commit ran tools/move/reference_circuit_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["f01b7354a55c8176aed8c1201328b8d514d493f2"]
+line = "Move: tools/move/warden_term_map.toml"
+reason = "The commit ran tools/move/warden_term_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["55867076da736bf32b5ee6c063dd1d183601bb1b"]
+line = "Move: tools/move/warden_map.toml"
+reason = "The commit ran tools/move/warden_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["tests/lint/allowlists/repo_retired_terms.json"]
+
+["bf813ebdc09f524098ba780fd4755470810cbee4"]
+line = "Move: tools/move/replay_unit_words_map.toml"
+reason = "The commit ran tools/move/replay_unit_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["b42cc93ec6262d30d55def7483d15358872f4655"]
+line = "Move: tools/move/sampled_unit_words_map.toml"
+reason = "The commit ran tools/move/sampled_unit_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["ffdbcef91740059b7d1c2033b57020ceb1f88090"]
+line = "Move: tools/move/compile_unit_words_map.toml"
+reason = "The commit ran tools/move/compile_unit_words_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["539f9fd9778c77c735e301c8ccdbb8381f591497"]
+line = "Layout-move: tools/move/two_stage_verdicts_back_map.toml"
+reason = "The commit ran tools/move/two_stage_verdicts_back_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/one_stage/tests/test_two_stage_verdicts.py", "tools/move/two_stage_verdicts_back_map.toml", "tools/move/two_stage_verdicts_map.toml", "tools/research/src/research/store/moves.json", "verity/protocols/proofs/spot/device/tests/test_two_stage_verdicts.py"]
+
+["1000dbcbc0a0c862033588d33032b5717e69f268"]
+line = "Layout-move: tools/move/leak_guard_home_map.toml"
+reason = "The commit ran tools/move/leak_guard_home_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/chain_record.sh", "benchmarks/network_traces/leak_guard.json", "benchmarks/network_traces/leak_guard.py", "benchmarks/network_traces/leak_guard_cost.py", "benchmarks/network_traces/served_session.py", "benchmarks/network_traces/tests/gate_runs.py", "benchmarks/network_traces/tests/test_chain_record_guard.py", "benchmarks/network_traces/tests/test_leak_guard.py", "benchmarks/network_traces/tests/test_network_certifier_chain.py", "benchmarks/network_traces/tests/test_wipe_gate.py", "benchmarks/network_traces/wipe_gate.sh", "tests/lint/allowlists/repo_retired_terms.json", "tools/move/leak_guard_home_map.toml", "tools/research/src/research/store/moves.json", "verity/protocols/accounting/certifier/device/leak_guard.json", "verity/protocols/accounting/certifier/device/leak_guard.py", "verity/protocols/accounting/certifier/device/tests/gate_runs.py", "verity/protocols/accounting/certifier/device/tests/test_leak_guard.py", "verity/protocols/accounting/certifier/device/tests/test_released_keys.py"]
+
+["a0e3940e222415699f9b5a4fc4e680cce87b4b0d"]
+line = "Move: tools/move/compile_unit_words_certifier_map.toml"
+reason = "The commit ran tools/move/compile_unit_words_certifier_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["a91a76a96e6ff7c14412eded7408a70348ae9151"]
+line = "Move: tools/move/draw_words_certifier_map.toml"
+reason = "The commit ran tools/move/draw_words_certifier_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/network_traces/tests/test_scan_zk_challenger.py", "tools/move/draw_words_certifier_map.toml"]
+
+["a67010c8a85fae79b594635e7d2cac32db706314"]
+line = "Move: tools/move/draw_words_network_benchmarks_map.toml"
+reason = "The commit ran tools/move/draw_words_network_benchmarks_map.toml, as its message says in prose, and carries no move line restack.py reads."
+
+["8a124b41c83254ba9d966496872256e8979e4c89"]
+line = "Layout-move: tools/move/released_keys_prover_map.toml"
+reason = "The commit ran tools/move/released_keys_prover_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/network_traces/leak_guard.py", "benchmarks/network_traces/tests/test_leak_guard.py", "benchmarks/network_traces/tests/test_n2_zk.py", "benchmarks/network_traces/tests/test_network_certifier_chain.py", "tools/move/released_keys_prover_map.toml", "tools/research/src/research/store/moves.json", "verity/protocols/accounting/certifier/device/released_keys.json", "verity/protocols/accounting/certifier/device/released_keys.py", "verity/protocols/accounting/certifier/device/tests/test_released_keys.py", "verity/protocols/accounting/certifier/prover/released_keys.json", "verity/protocols/accounting/certifier/prover/released_keys.py", "verity/protocols/accounting/certifier/prover/tests/test_released_keys.py", "verity/protocols/compose/device/live_challenger/tests/test_auditor_network_certifier_serve.py"]
+
+["f36a90a9eeb3471aec0ecc89867c3c3639174466"]
+line = "Layout-move: tools/move/certifier_prover_tests_map.toml"
+reason = "The commit ran tools/move/certifier_prover_tests_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/network_traces/tests/test_stop_verdicts.py", "tools/move/certifier_prover_tests_map.toml", "tools/research/src/research/store/moves.json", "verity/protocols/accounting/certifier/device/tests/test_connection_rows_run.py", "verity/protocols/accounting/certifier/device/tests/test_network_certifier_serve.py", "verity/protocols/accounting/certifier/device/tests/verdict_records.py", "verity/protocols/accounting/certifier/prover/tests/test_network_certifier_serve.py", "verity/protocols/accounting/certifier/prover/tests/verdict_records.py"]
+
+["00dac86f8bf84c9a2702f325b6bcc7eb9dbb3fcc"]
+line = "Layout-move: tools/move/audit_code_back_map.toml --no-lock"
+reason = "The commit ran tools/move/audit_code_back_map.toml, as its message says in prose, and carries no move line restack.py reads."
+hand = ["benchmarks/network_traces/tests/test_kept_scan.py", "benchmarks/network_traces/zk_drivers.py", "benchmarks/one_stage/a0.py", "benchmarks/one_stage/a11.py", "benchmarks/one_stage/a2.py", "benchmarks/one_stage/a3.py", "benchmarks/one_stage/a5_memo.py", "benchmarks/one_stage/a5_network_certifier.py", "benchmarks/one_stage/a5.py", "benchmarks/one_stage/a5_row_tables.py", "benchmarks/one_stage/a5_sparse_mla.py", "benchmarks/one_stage/a5_topp.py", "benchmarks/one_stage/a5_tp_gates.py", "benchmarks/one_stage/a6.py", "benchmarks/one_stage/a7.py", "benchmarks/one_stage/a8.py", "benchmarks/one_stage/cold_sessions.py", "benchmarks/one_stage/forged_proofs.py", "benchmarks/one_stage/form_refusals.py", "benchmarks/one_stage/inference_only.py", "benchmarks/one_stage/m1_unit.py", "benchmarks/one_stage/prove_bundle.py", "benchmarks/one_stage/prove_subprotocol.py", "benchmarks/one_stage/pyproject.toml", "benchmarks/one_stage/r2_population.py", "benchmarks/one_stage/rehearsal_limits.py", "benchmarks/one_stage/rehearsal_window.py", "benchmarks/one_stage/replay.py", "benchmarks/one_stage/served_compare.py", "benchmarks/one_stage/stop_audit.py", "benchmarks/one_stage/stop_audit_small.py", "benchmarks/one_stage/tests/test_a0_archive_once.py", "benchmarks/one_stage/tests/test_a0_challenger_draw.py", "benchmarks/one_stage/tests/test_a0_lean_refused.py", "benchmarks/one_stage/tests/test_a0_session_challenger.py", "benchmarks/one_stage/tests/test_a0_templated.py", "benchmarks/one_stage/tests/test_a0_verify_members.py", "benchmarks/one_stage/tests/test_a5_cards.py", "benchmarks/one_stage/tests/test_a5_case_v2.py", "benchmarks/one_stage/tests/test_a5_history.py", "benchmarks/one_stage/tests/test_a5_lean_pool.py", "benchmarks/one_stage/tests/test_a5_memo.py", "benchmarks/one_stage/tests/test_a5_negative_workers.py", "benchmarks/one_stage/tests/test_a5_network_certifier.py", "benchmarks/one_stage/tests/test_a5_outputs.py", "benchmarks/one_stage/tests/test_a5_sessions.py", "benchmarks/one_stage/tests/test_a5_tp_gates.py", "benchmarks/one_stage/tests/test_a5_wiring.py", "benchmarks/one_stage/tests/test_audit_two_members.py", "benchmarks/one_stage/tests/test_compose_cache.py", "benchmarks/one_stage/tests/test_kept_compose_cache.py", "benchmarks/one_stage/tests/test_prove_bundle.py", "benchmarks/one_stage/tests/test_r2_population.py", "benchmarks/one_stage/tests/test_recorded_texts.py", "benchmarks/one_stage/tests/test_stop_audit.py", "benchmarks/one_stage/tests/test_two_stage_cost.py", "benchmarks/one_stage/tests/test_two_stage_driver.py", "benchmarks/one_stage/tests/test_two_stage_second.py", "benchmarks/one_stage/tests/test_two_stage_verdicts.py", "benchmarks/one_stage/tests/test_v2_case.py", "benchmarks/one_stage/tests/test_verifier_env.py", "benchmarks/one_stage/two_stage.py", "benchmarks/one_stage/v2_case.py", "benchmarks/one_stage/window_commit.py", "benchmarks/one_stage/zk_cost.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/pyproject.toml", "benchmarks/prove_path/README.md", "benchmarks/prove_path/records_audit.py", "benchmarks/prove_path/tests/settings.py", "benchmarks/prove_path/tests/test_class_rows.py", "benchmarks/prove_path/tests/test_class_size.py", "benchmarks/prove_path/tests/test_prove_path.py", "benchmarks/prove_path/tests/test_records_audit.py", "benchmarks/prove_path/tests/test_window_cost.py", "benchmarks/prove_path/window_cost.py", "benchmarks/two_stage/audit.py", "benchmarks/verifier_cost/whole_run.py", "tests/import_order.toml", "tools/check/tests/test_shards.py", "verity/protocols/accounting/pouw/verifier/tests/test_pouw_epoch_coins.py", "verity/protocols/proofs/spot/prover/audit/README.md", "verity/protocols/proofs/spot/prover/cost/README.md", "verity/protocols/proofs/spot/prover/pyproject.toml", "verity/protocols/proofs/spot/prover/tests/settings.py", "verity/protocols/proofs/spot/prover/tests/test_recorded_texts.py"]

@@ -1,0 +1,43 @@
+# The interface every core protocol implements: its parameters, commitment and evidence read from canonical bytes, one
+# check, and an outcome (verdict, public outputs, profile) written as canonical JSON. Its modules import the base
+# package (`core_base`: canonical JSON, bytes and hashes) and the difftest harness's Lean, and nothing else; none
+# imports the commitments' package (`core_commitments`), which it still requires. Each protocol's package requires this
+# one; none needs Mathlib. It also holds the code's ticks, spans and monitoring period (`CoreProtocol.Period`), whose
+# difftest port `core-periods-difftest` serves through the difftest harness's Lean, as `core-canonical-json-difftest`
+# serves `Core.canonicalJson`'s answer under each JSON parser.
+name = "core_protocol"
+defaultTargets = ["CoreProtocol", "core-protocol-example"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "core_base"
+path = "../../circuits/base"
+
+[[require]]
+name = "core_commitments"
+path = "../../commitments/lean"
+
+[[require]]
+name = "verity_difftest"
+path = "../../circuits/difftest"
+
+[[lean_lib]]
+name = "CoreProtocol"
+
+# Not a default target: the difftest harness builds it by name (`verity_difftest.build`).
+[[lean_exe]]
+name = "core-periods-difftest"
+root = "CoreProtocol.PeriodDifftestMain"
+
+# Not a default target either: the difftest harness builds it by name.
+[[lean_exe]]
+name = "core-canonical-json-difftest"
+root = "CoreProtocol.CanonicalJsonDifftestMain"
+
+[[lean_exe]]
+name = "core-protocol-example"
+root = "CoreProtocol.ExampleMain"

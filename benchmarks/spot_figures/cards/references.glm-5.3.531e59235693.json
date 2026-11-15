@@ -1,0 +1,50 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "references",
+ "model": "GLM-5.3",
+ "status": "modeled",
+ "provisional": false,
+ "source": "GLM-5.3's infiltration lines (moved from art:e2d8a4de324ec7991c10d77174fc2a1ad824f16d73d5d12adfc28270bb90e44d, unchanged): GLM-5.3's sizes from its pinned config (zai-org/GLM-5.3@aca966e4e02791568aa6a4ced368624b3d897f42 config.json sha256 3ac72612095574542f7fff847ada8e59d9199dd8af44bdf625d7e02615572e69), BF16 values (16 bits); a token count per scope from SPOT figure 1's scopes (the census's world inference and 12,500-machine datacenter, requests sized from the workload card's served MACs).",
+ "runs": [],
+ "owner": "@proofs",
+ "value": {
+  "lines": [
+   {
+    "panel": "infiltration",
+    "label": "One steering vector (one token, one layer)",
+    "unit": "bit",
+    "value": 98304,
+    "source": "d_model BF16 values: 16 x 6,144"
+   },
+   {
+    "panel": "infiltration",
+    "label": "A 10-token trigger, as embedding rows",
+    "unit": "bit",
+    "value": 983040,
+    "source": "10 rows of d_model BF16 values"
+   },
+   {
+    "panel": "infiltration",
+    "label": "A rank-16 LoRA on every attention projection",
+    "unit": "bit",
+    "value": 1698398208,
+    "source": "16 x 6,634,368 parameters a rank, BF16"
+   },
+   {
+    "panel": "infiltration",
+    "label": "A steering vector on every token of the period",
+    "unit": "bit",
+    "by_scope": {
+     "world week": 1.756503622511158e+23,
+     "world month": 7.527872667904963e+23,
+     "world year": 9.158911745951038e+24,
+     "datacenter week": 4.684509341026131e+19,
+     "datacenter month": 2.0076468604397702e+20,
+     "datacenter year": 2.442637013535054e+21
+    },
+    "source": "the scope's tokens x one steering vector"
+   }
+  ]
+ },
+ "art": "art:531e592356931370dc61121a08f037ebf7799b11446c055688fa155816ce8eba"
+}

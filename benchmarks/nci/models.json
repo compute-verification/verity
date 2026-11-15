@@ -1,0 +1,82 @@
+[
+ {
+  "id": "kimi-k2",
+  "description": "Kimi K2: 1.04T parameters, 32B active per token, MoE",
+  "n_total": 1040000000000.0,
+  "n_active": 32000000000.0,
+  "d_model": 7168,
+  "entry_fee": 2048,
+  "fanout": 40000.0,
+  "note": "entry_fee is the routed-expert width (MLA's kv latent, 512, is a narrower inner dimension); fanout is the thread draft's MoE estimate of the updated weights one activation multiplies, which covers an MoE input value's 37,248 (router, shared expert and 8 routed experts) but not the LM head: one final hidden value multiplies all 163,840 vocabulary rows, so Threaded(d, 4e4) needs the LM head's forward products out of the counted multiplications"
+ },
+ {
+  "id": "dense-4m",
+  "description": "a dense transformer of 4e+06 parameters",
+  "n_total": 4000000.0,
+  "n_active": 4000000.0,
+  "d_model": 322,
+  "entry_fee": 322,
+  "fanout": 3542,
+  "note": "shape from N ~ 12 L d^2 with L ~ d/100; fanout ~ 11 d (q, k, v, gate, up)"
+ },
+ {
+  "id": "dense-125m",
+  "description": "a dense transformer of 1.25e+08 parameters",
+  "n_total": 125000000.0,
+  "n_active": 125000000.0,
+  "d_model": 1014,
+  "entry_fee": 1014,
+  "fanout": 11154,
+  "note": "shape from N ~ 12 L d^2 with L ~ d/100; fanout ~ 11 d (q, k, v, gate, up)"
+ },
+ {
+  "id": "dense-1b",
+  "description": "a dense transformer of 1e+09 parameters",
+  "n_total": 1000000000.0,
+  "n_active": 1000000000.0,
+  "d_model": 2027,
+  "entry_fee": 2027,
+  "fanout": 22297,
+  "note": "shape from N ~ 12 L d^2 with L ~ d/100; fanout ~ 11 d (q, k, v, gate, up)"
+ },
+ {
+  "id": "dense-7b",
+  "description": "a dense transformer of 7e+09 parameters",
+  "n_total": 7000000000.0,
+  "n_active": 7000000000.0,
+  "d_model": 3878,
+  "entry_fee": 3878,
+  "fanout": 42658,
+  "note": "shape from N ~ 12 L d^2 with L ~ d/100; fanout ~ 11 d (q, k, v, gate, up)"
+ },
+ {
+  "id": "dense-70b",
+  "description": "a dense transformer of 7e+10 parameters",
+  "n_total": 70000000000.0,
+  "n_active": 70000000000.0,
+  "d_model": 8355,
+  "entry_fee": 8355,
+  "fanout": 91905,
+  "note": "shape from N ~ 12 L d^2 with L ~ d/100; fanout ~ 11 d (q, k, v, gate, up)"
+ },
+ {
+  "id": "dense-100b",
+  "description": "the thread draft's dense example: 1e11 parameters, d_model 12288",
+  "n_total": 100000000000.0,
+  "n_active": 100000000000.0,
+  "d_model": 12288,
+  "entry_fee": 3072,
+  "fanout": 49152,
+  "note": "the thread draft's numbers, used by the dense-100b-1m-raw calibration and the dense-pretrain-thread-draft row, except the fan-out: the draft's 7168 is false, since one MLP input value multiplies the 4 x 12288 weights of the up projection (86016 if one normalized value also feeds q, k and v)"
+ },
+ {
+  "id": "dense-405b",
+  "description": "a dense transformer of 4.05e+11 parameters",
+  "n_total": 405000000000.0,
+  "n_active": 405000000000.0,
+  "d_model": 15000,
+  "entry_fee": 15000,
+  "fanout": 165000,
+  "note": "shape from N ~ 12 L d^2 with L ~ d/100; fanout ~ 11 d (q, k, v, gate, up)"
+ }
+]

@@ -1,0 +1,46 @@
+description = "adopted-bd-lm-d3 with Q rounded on +-127 (no peel): only K dithered in Q K^T; everything else as in adopted-bd-lm-d3 (3-bit coins on every dithered operand of the linears, lm_head, Q and K)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+dither_bits = 3
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+dither_bits = 3
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "round"
+k = "dither"
+v = "dither"
+qk_bits = 3
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

@@ -1,0 +1,8 @@
+name = "control"
+defaultTargets = ["Control"]
+
+[leanOptions]
+autoImplicit = false
+
+[[lean_lib]]
+name = "Control"

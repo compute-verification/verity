@@ -1,0 +1,47 @@
+{
+ "authenticatable": true,
+ "authenticity_reasons": [],
+ "binding": {
+  "object_digest": "216d2693855870915cfa13a9ef43ee874c04606995c54372f34ebf9b6f3d1fa8",
+  "public_values": "216d2693855870915cfa13a9ef43ee874c04606995c54372f34ebf9b6f3d1fa8b817bb5096602e204350a246cae27d8899a1aeb2d8152b6d94e13a47dd3075e101",
+  "statement_digest": "b817bb5096602e204350a246cae27d8899a1aeb2d8152b6d94e13a47dd3075e1"
+ },
+ "canonical": "{\"family\":{\"digest\":\"88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6\",\"id\":\"veritor.int8-q7@1\",\"width\":32},\"format\":\"typed-obligation/v0\",\"leaves\":[],\"obligations\":[],\"references\":[],\"roots\":[],\"subcircuits\":[]}",
+ "description": "No roots, leaves, references, subcircuits or obligations: the empty set is accepted and vacuously satisfied.",
+ "digest": "216d2693855870915cfa13a9ef43ee874c04606995c54372f34ebf9b6f3d1fa8",
+ "lowered_v3": {
+  "note": "derived by veritor.interface.lowering.lower_v3(): the format-2 lowering with maximal runs of consecutive packed words of one leaf merged into ranges (merge_ranges); expands to `lowering`",
+  "obligations": [],
+  "programs": []
+ },
+ "lowering": {
+  "note": "derived by veritor.interface.lowering.lower(); legacy backend data, not part of the Verity ontology",
+  "obligations": [],
+  "programs": []
+ },
+ "name": "accept/empty",
+ "object": {
+  "family": {
+   "digest": "88162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6",
+   "id": "veritor.int8-q7@1",
+   "width": 32
+  },
+  "format": "typed-obligation/v0",
+  "leaves": [],
+  "obligations": [],
+  "references": [],
+  "roots": [],
+  "subcircuits": []
+ },
+ "relations": "accept",
+ "statement": "76657269746f722f70726f6f66732f73746174656d656e742f7632000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6000000200000000000000000",
+ "statement_digest": "b817bb5096602e204350a246cae27d8899a1aeb2d8152b6d94e13a47dd3075e1",
+ "statement_v3": "76657269746f722f70726f6f66732f73746174656d656e742f7633000000001176657269746f722e696e74382d7137403188162784922551008cdff19a0a08a118d4bd6f02fbd65c71629c502a988b69c6000000200000000000000000",
+ "statement_v3_digest": "042d64361ab8b3902fd43e97470528b1edcc6a45d9a9b1203fea955340904721",
+ "subcircuits_well_formed": [],
+ "tags": [
+  "stage-1"
+ ],
+ "values": [],
+ "verdict": "accept"
+}

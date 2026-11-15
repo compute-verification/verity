@@ -1,0 +1,42 @@
+{
+ "certificate": {
+  "call_ns": 241500,
+  "claims": [
+   "ideal-permutation",
+   "random-oracle",
+   "feistel-indifferentiability",
+   "sequential-step-floor",
+   "perfect-isolation",
+   "cr/sha-256",
+   "live-verifier",
+   "designated-verifier"
+  ],
+  "cliff": 12,
+  "delta": "1/100",
+  "eps_log2": -128,
+  "hypotheses": [],
+  "k": 111,
+  "rho": "18/19",
+  "rounds": 5,
+  "segments": 1,
+  "theorem": "Pous.SecurityProofs.BandMultiMeetsFamily",
+  "work": 1048576
+ },
+ "name": "band-chain/d12/v1",
+ "point_vector": "band/64kb/segment",
+ "small": {
+  "params": {
+   "blocks_per_segment": 16,
+   "d": 12,
+   "m": 64,
+   "scheme": "band-chain",
+   "segments": 2
+  },
+  "root": "f1e988882a55d1f7a54c88d2e13532b8d32da2b8a8203596a67992fb16814427c64e2e30f262fbe414d9aeba2ab45befc28ef2747539bcc8d8cf60ea0705ac11",
+  "salt": "03cb895d51938e3efd94aa1d50964c5d62e4384f378eae90",
+  "segments": [
+   "0e9d9da39caa03c6dbcac6cac78fb4bf71650ee806481381f2344aaf6a5778c3",
+   "01bb4b37e33d5abdfbcb98e6afd91467e144d3238b153c68156ef8d6169e1bc9"
+  ]
+ }
+}

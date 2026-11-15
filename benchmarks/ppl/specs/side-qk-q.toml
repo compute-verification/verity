@@ -1,0 +1,43 @@
+description = "adopted-bd-lm with K rounded on +-127 (no peel): only Q dithered in Q K^T; the linears, lm_head and P V as in adopted-bd-lm"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+k = "round"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

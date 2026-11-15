@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "GeluTanhMulBf16_v4": {
+   "and": 15616,
+   "type": "ba7cac7b1b6c6647e8abbe48311d1cfa45106ab68d08bae15f1b1feb8605df8b3aa3919b4f028a174ada890b8592d9244cd6f4ee8a539c4af885e2c897695dba"
+  },
+  "TanhF32Rn_v3": {
+   "and": 15719,
+   "type": "17fb29e5e866b996cfa956cf85f8271e285514229bd3ed88124d080bf4ab9728a2d370393ed22c73aba9ef4ecc3b2f5a8c1196285bde5a5335310b1932df8463"
+  }
+ }
+}

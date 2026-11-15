@@ -1,0 +1,1 @@
+{"schema":"vllm-vu-set/v1/index","set":"gemm-coordinate-ampere-bf16-k2048","columns":["id","vu","request","engine_step","op_path","row","phase","source","sub"],"rows":[[0,256,"r0",1,"logits_processor",0,"first-decode","committed",{"n":7,"N":128256}],[1,256,"r0",1,"logits_processor",0,"first-decode","committed",{"n":4216,"N":128256}]]}
