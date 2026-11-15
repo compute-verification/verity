@@ -127,7 +127,7 @@ theorem HEChargedUntied_nontrivial : Guarantees.HEChargedUntied_nontrivial := by
         Toy.W.O) := by
     rw [toy_N, compl_univ, sum_empty, Nat.min_eq_left (Nat.zero_le _)]
     norm_num [workHEOn]
-  refine ⟨one_pos, fun _ => toy_values, fun _ => toy_noSharedPair, fun _ => toyReg_hardness_untied _,
+  refine ⟨⟨()⟩, one_pos, fun _ => toy_values, fun _ => toy_noSharedPair, fun _ => toyReg_hardness_untied _,
     fun _ => toy_exports 1, fun _ => by unfold ReadsOn; decide,
     fun _ => ⟨by decide, fun _ _ u v _ _ => Subsingleton.elim u v, by decide⟩, fun h => ?_, fun h => ?_⟩
   · unfold Slowdown.Assumptions.PeriodUntiedAtMost at h

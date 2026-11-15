@@ -253,13 +253,13 @@ def HEChargedUntied_honest : Prop :=
       (fun _ => (∅ : Finset (Finset (Fin Toy.C.N)))) 0 0
 
 /-- **`HEChargedUntied` without the period's limit**: the toy with its three inputs registered (`Toy.dReg`), one block
-holding both MACs, which reads nothing outside `θ` tied (`ReadsOn` at `k = T = S = 0`). On the one outcome all three
-input words are untied, one gate each and one reader (`UntiedWords` at `z = 1`, `w = 3`), and the period is accepted;
-(H) holds at the untied circuit and (E) at `1`. At `U = 0` and `ε = 0` the limit fails, and so does the bound: untied,
-the block reads three gates, and at `T + z U = 0`, `S + z (2 k + z w) min(U, |G| w) = 0` the bound is `0`, below
-`N = 2`. -/
+holding both MACs, which reads nothing outside `θ` tied (`ReadsOn` at `k = T = S = 0`). On the one outcome, the coins
+`Unit`, all three input words are untied, one gate each and one reader (`UntiedWords` at `z = 1`, `w = 3`), and the
+period is accepted; (H) holds at the untied circuit and (E) at `1`. At `U = 0` and `ε = 0` the limit fails, and so does
+the bound: untied, the block reads three gates, and at `T + z U = 0`, `S + z (2 k + z w) min(U, |G| w) = 0` the bound
+is `0`, below `N = 2`. -/
 def HEChargedUntied_nontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (∀ _x : Unit, ValuesInjective Toy.W Toy.val) ∧ (∀ _x : Unit, NoSharedPair Toy.W Toy.val) ∧
+  Nonempty Unit ∧ (0 : ℝ) < 1 ∧ (∀ _x : Unit, ValuesInjective Toy.W Toy.val) ∧ (∀ _x : Unit, NoSharedPair Toy.W Toy.val) ∧
     (∀ _x : Unit, Assumptions.Hardness (Toy.dReg.untie (Toy.inputWords.biUnion id)) Toy.arrays Toy.val ![1, 1]
       (0 + 1 * 3)) ∧
     (∀ _x : Unit, Assumptions.Exports Toy.W 1) ∧ (∀ _x : Unit, ReadsOn Toy.dReg Toy.P1 univ 0 0 0) ∧
