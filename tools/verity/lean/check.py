@@ -1411,8 +1411,6 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     for es in facts.get("assumption_reads", {}).values():
         for r in es:
             r["sha256"] = hashes[f"read:{r['name']}"]
-            if (m := f"moved-read:{r['name']}") in hashes:
-                r["moved"] = renamed_as[m] | {"sha256": hashes[m]}
     for c, e in facts.get("constants", {}).items():
         if f"const:{c}" in hashes:
             e["sha256"] = hashes[f"const:{c}"]
@@ -4830,7 +4828,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {regrouped} {REGROUPED}")
     if regrouped_own:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
-    out += assumption_changes(old, new, renames, facts)
+    out += assumption_changes(old, new, renames)
     before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
     where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
     out += [Change("verifier", a, f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the "
@@ -4864,12 +4862,12 @@ def premise_changes(a: dict, b: dict, new: dict) -> list[str]:
     return out
 
 
-def assumption_changes(old: dict, new: dict, renames: dict[str, str] | None = None, facts: dict | None = None) -> list[str]:
+def assumption_changes(old: dict, new: dict, renames: dict[str, str] | None = None) -> list[str]:
     """A line for each listed premise whose `digest` changed, or that has one where its record held none, and that no
     `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed.  After
-    `--moved` (``renames``) each of ``old``'s entries is read under its new name, and a premise that moved is compared by
-    the digest of what it reads under the old names (``facts``' `assumption_reads`, whose `moved` texts `Facts.lean`
-    prints): one line when that is its record's, moved from its old name.  And one
+    `--moved` (``renames``) each of ``old``'s entries is read under its new name, and a premise that moved gets one line:
+    its entry moved, where a `reads` record holds its definition, which that record's lines compare under the old names;
+    else a statement change, since its `digest` hashes the names of what it reads and is not compared.  And one
     for each that moved between `assumptions`, `domain` and `open`, or whose open entry's issue or due date changed, or
     whose domain entry's `why` or `cites` did; and one for each domain hypothesis ``old`` lists under none of the three,
     with its `why` and the guarantees whose records take it: it restricts what they say, and nothing else prints it."""
@@ -4877,12 +4875,6 @@ def assumption_changes(old: dict, new: dict, renames: dict[str, str] | None = No
         old = old | renamed_witnesses(old, renames)
     was, now = map(listed_premises, (old, new))
     records = new.get("guarantees") if isinstance(new.get("guarantees"), dict) else {}
-    walks = (facts or {}).get("assumption_reads") or {}
-
-    def as_was(a: str) -> str | None:
-        es = walks.get(a)
-        return digest([{"name": e["moved"]["as"], "kind": e["kind"], "sha256": e["moved"]["sha256"]} if e.get("moved")
-                       else e for e in es]) if es and all("sha256" in e for e in es) else None
 
     def takers(a: str) -> list[str]:
         return sorted(g for g, r in records.items() if isinstance(r, dict) and isinstance(p := r.get("premises"), dict)
@@ -4901,12 +4893,8 @@ def assumption_changes(old: dict, new: dict, renames: dict[str, str] | None = No
         k = kind(new, a)
         what = {"assumptions": "assumption", "domain": "domain hypothesis", "open": "open premise"}[k]
         if renames and a in was and (o := unrenamed(a, renames)) != a:
-            if a in held:
-                out.append(f"{what} {a}: moved from {o}: {MOVED_ENTRY}")
-            elif h and before and as_was(a) == before:
-                out.append(f"{what} {a}: moved from {o}: {MOVED}")
-            else:
-                out.append(Change(k, a, f"{what} {a}: changed (moved from {o}; its statement or a definition it reads)"))
+            out.append(f"{what} {a}: moved from {o}: {MOVED_ENTRY}" if a in held else
+                       Change(k, a, f"{what} {a}: moved from {o}, its digest not compared (it hashes the new names)"))
         elif a in was and h and h != before and a not in held:
             out.append(Change(k, a, f"{what} {a}: " + ("changed (its statement or a definition it reads)" if before else
                                                        "recorded: its statement and the definitions it reads, digested")))

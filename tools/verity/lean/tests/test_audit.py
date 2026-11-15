@@ -2759,9 +2759,9 @@ USES = ("import Control.Assumptions\nimport Control.Defs\nimport Control.Prem\nn
 def test_a_move_keeps_each_premise_entry_with_its_fields_on_a_real_build(tmp_path):
     """An open premise (its issue and due date), a domain hypothesis (its `why`) and a named assumption (its id and owner),
     each taken by a guarantee and moved with it: `--update --moved` re-keys their entries with every field, and the review
-    says each is the same statement moved, by the digest of what it reads under its old names (`Facts.lean`'s `moved-read`
-    texts of the premises' walks); a plain `--update` then changes nothing.  Staged for the run (``defer``), the lock is
-    left as it was until the run writes it.  A premise moved with a new body is a statement change."""
+    says each entry moved, its definition compared under its old name in `reads`, so nothing says a statement changed; a
+    plain `--update` then changes nothing.  Staged for the run (``defer``), the lock is left as it was until the run writes
+    it.  A premise moved with a new body is a statement change: its definition's `reads` line."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Prem\nimport Control.Uses\n")
@@ -2800,7 +2800,7 @@ def test_a_move_keeps_each_premise_entry_with_its_fields_on_a_real_build(tmp_pat
     assert now["ids"] == {"Control.Base": "control-hyp"} and set(now["guarantees"]) == {"Control.main_thm", "Control.U.uses"}
     for line in ("open premise Control.R.Op: moved from Control.P.Op", "domain hypothesis Control.R.Dom: moved from "
                  "Control.P.Dom", "assumption Control.Base: moved from Control.Hyp"):
-        assert any(n.startswith(line) for n in rep["review"]), (line, rep["review"])
+        assert f"{line}: {A.MOVED_ENTRY}" in rep["review"], (line, rep["review"])
     assert not rep["statement_changes"], rep["review"]
     again = audit()
     assert A.load(pkg) == now and not again.get("statement_changes"), again.get("review")
@@ -2808,8 +2808,9 @@ def test_a_move_keeps_each_premise_entry_with_its_fields_on_a_real_build(tmp_pat
     uses.write_text(USES.format(ns="U", p="S", hyp="Base"))
     build()
     rep = audit(moved={"Control.R": "Control.S"})
-    assert "open premise Control.S.Op: changed (moved from Control.R.Op; its statement or a definition it reads)" in \
+    assert "definition Control.S.Op (Control.Prem), was Control.R.Op (Control.Prem), read by Control.U.uses: changed" in \
         rep["review"] and rep["statement_changes"]
+    assert f"open premise Control.S.Op: moved from Control.R.Op: {A.MOVED_ENTRY}" in rep["review"]
     assert A.load(pkg)["open"]["Control.S.Op"]["issue"] == "LEAN-1"
 
 
@@ -3770,7 +3771,9 @@ def test_a_move_holds_the_names_of_the_base_lock_unless_they_move_away():
 def test_a_move_re_keys_the_premises_and_claims_with_every_field_of_their_entries():
     """`open`, `domain`, `assumptions`, `four_names_except` and `claims.witnesses` are re-keyed like the guarantees, each
     entry's fields kept (an open premise's issue and due date, a domain hypothesis's `why` and the guarantee it cites, a
-    named assumption's id and owner), so the names they hold come back (`lock_names`) and a move of one is no refusal."""
+    named assumption's id and owner), so the names they hold come back (`lock_names`) and a move of one is no refusal.
+    A moved premise whose definition a `reads` record holds says its entry moved; one no record holds is a statement
+    change, its digest hashing the new names."""
     moved = {"P.A": "P.X"}
     lock = {"guarantees": {"P.A.t": {"owner": "@lean"}, "P.A.g": {}},
             "open": {"P.A.Op": {"owner": "@amy", "digest": "d1", "issue": "LEAN-1", "due": "2026-12-31"}},
@@ -3788,6 +3791,13 @@ def test_a_move_re_keys_the_premises_and_claims_with_every_field_of_their_entrie
                                                                                    "meets": ["P.X.Small_meets", "P.B.m"]}}}
     assert {"P.A.Op", "P.A.Dom", "P.A.Hyp", "P.A.Small", "P.A.Small_fails", "P.A.Small_meets"} <= A.lock_names(lock)
     assert A.move_refusals(moved, lock) == []
+    entry = {"owner": "@amy", "issue": "LEAN-1", "due": "2026-12-31"}
+    walked = {"open": {"P.X.Op": entry | {"digest": "d2"}}, "reads": {}}
+    held = walked | {"reads": {"P.Prem": {"definitions": {"P.X.Op": "h"}}}}
+    before = {"open": {"P.A.Op": entry | {"digest": "d1"}}}
+    assert A.assumption_changes(before, held, moved) == [f"open premise P.X.Op: moved from P.A.Op: {A.MOVED_ENTRY}"]
+    assert A.statement_changes(A.assumption_changes(before, walked, moved)) == [
+        "open premise P.X.Op: moved from P.A.Op, its digest not compared (it hashes the new names)"]
 
 
 def test_a_moves_file_that_gives_one_name_two_new_names_is_refused(tmp_path):
