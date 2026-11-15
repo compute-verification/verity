@@ -1003,6 +1003,18 @@ def test_a_local_session_under_a_research_run_writes_no_result(store, capsys, wo
     assert not (tmp_path / "rundir" / "result.json").exists()
 
 
+def test_a_local_session_with_out_writes_its_document_there_and_no_measurement(store, capsys, work, tmp_path,
+                                                                               monkeypatch):
+    """Outside a research run, OUT names where the document is written, the file the README names; a --local
+    session is no audit, so its result holds no measurement."""
+    monkeypatch.setenv("OUT", str(tmp_path / "mine"))
+    assert bench(store, "--local", run=Machine()) == 0
+    _, doc, _ = printed(capsys)
+    assert json.loads((tmp_path / "mine" / "memory.json").read_text()) == doc and doc["local"] == M.LOCAL
+    result = tmp_path / "mine" / "result.json"
+    assert not result.exists() or json.loads(result.read_text()).get("measurements", []) == []
+
+
 @pytest.mark.parametrize("card, row", [("NVIDIA H100 80GB HBM3, 9.0", M.LOCAL_ROWS["9.0"]),
                                        ("NVIDIA RTX PRO 6000 Blackwell Server Edition, 12.0", M.LOCAL_ROWS["12.0"])])
 def test_local_takes_the_row_of_the_cards_compute_capability(store, capsys, work, card, row):
