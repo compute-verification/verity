@@ -1071,7 +1071,7 @@
   "Evaluate.TC.Spec",
   "Evaluate.TC.Dots",
   "Evaluate.TC.Fp8Atom",
-  "VStarRecursive.Protocol",
+  "VStarRecursion.Protocol",
   "VStarRecursive.Sampled",
   "Evaluate.Prims",
   "Definitions.Core.Scalar",
@@ -2560,7 +2560,7 @@
   "Properties.Certifier.Check": {
    "imports": ["NetworkCheck.Check", "NetworkCheck.TransferBlocks", "Properties.Hash.Identity", "Lms.Sign"],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and N2's execution phase verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
   "Properties.Certifier.Records": {
    "imports": ["NetworkCheck.RecordsGrid", "Properties.Certifier.Check"],
@@ -29636,7 +29636,7 @@
     "VStar.rowLine": "ab93587c702fbaa39c07489ba4bea6c2afc786fd4db8544e4db97136c0f577c1"
    }
   },
-  "VStarRecursive.Protocol": {
+  "VStarRecursion.Protocol": {
    "digest": "24c25e7e86c7a9b3f7c1147bc75bef036012f248ffa0b1416223d26adf00d5f5",
    "definitions": {
     "VStar.Recursive.Evidence": "750759ed94774839b812282e5b64d4c4f9cdff16ee8b980a1089dba40596a8f0",

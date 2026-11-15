@@ -146,7 +146,7 @@ class Figures:
     host_spec_bytes_per_s: float
     host_chip_bytes: int
     disk_bytes_per_s: float
-    link_window_bytes: int
+    phase_bytes: int
 
     @property
     def read_bytes_per_s(self) -> float:
@@ -183,7 +183,7 @@ class Figures:
     @classmethod
     def of_sheets(cls, node: Mapping, gpu: Mapping, host: Mapping, *, gpu_chip_bytes: int = GPU_CHIP_BYTES,
                   gpu_sha512_per_s: float = GPU_SHA512_PER_S, gpu_squarings_per_s: Mapping[str, float] | None = None,
-                  link_window_bytes: int = LINK_WINDOW_BYTES) -> Figures:
+                  phase_bytes: int = LINK_WINDOW_BYTES) -> Figures:
         """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
         and `load_card`): the node's `device.count`; its GPU card's `memory.read`, `memory.bandwidth` and
         `store.dram`; its host card's `memory.read`, `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no
@@ -202,7 +202,7 @@ class Figures:
                    float(value(gpu, "memory", "bandwidth")), gpu_chip_bytes, int(value(gpu, "store", "dram")),
                    gpu_sha512_per_s, dict(squarings), float(value(host, "memory", "read")),
                    float(value(host, "memory", "bandwidth")), int(value(host, "store", "chip")),
-                   float(value(host, "disk", "read")), link_window_bytes)
+                   float(value(host, "disk", "read")), phase_bytes)
 
 
 RTX_PRO_6000_NODE = Figures(GPUS, GPU_READ_BYTES_PER_S, GPU_SPEC_BYTES_PER_S, GPU_CHIP_BYTES, GPU_HBM_BYTES,
