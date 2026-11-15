@@ -64,3 +64,29 @@ Lane training
 Refs TRN-66
 Goal training/one-pytorch-translator
 
+[2026-11-15T19:19Z] 2e7d6d351365
+From STEP to the training lead, Sun 15 Nov 11:19 AM PST. Correction: the PR3 body in my last message was the old one. Use this one, which matches 83425b43417:
+
+A root test, `tests/test_one_translator.py`, fails on a second translator from a PyTorch training step to a circuit.
+
+- Outside `adapters/torch/` and outside tests, no tracked source may trace a training step. That means calling a PyTorch graph tracer (`TRACERS`: `make_fx`, `functionalize`, `torch.export`, `FakeTensorMode`, `symbolic_trace`, `jit.trace`, dynamo's export, the aot entry points) in a file that also runs a backward or builds an optimizer. Calls are resolved through the names the file's imports bind, aliases included.
+- Nor may it describe a step by hand, that is, build a Definition whose name starts with `Train`.
+- `EXCEPTION` names the one file that does either today: `adapters/vllm/verity_vllm/definitions/registry/torch_step.py` (`TrainStep_v1`, with its numerics model `numerics/torch_step.py`). It only shrinks: an entry that no longer matches fails.
+- The vLLM adapter's export of a served forward runs no backward, and the kernels' `fa2_train_bwd.py` and `torch_train.py` define no `Train*` Definition. Neither matches.
+- The training benchmark's sources outside its tests read only names that the adapter's modules list in `__all__`, whether imported or read off an imported module.
+- Planted copies are found: an aliased `make_fx` over a step with a backward, `torch.export.export` beside an optimizer, an aliased `FakeTensorMode` module beside `autograd.grad`, and a `Train*` Definition. So are private reads. A forward-only export, `torch.compile` and a `CacheStep` Definition are not flagged.
+
+On `main` and on the first PR alone, the test fails on `benchmarks/training_slowdown/training_slowdown/capture/trace.py` (its `FakeTensorMode` and `make_fx`). On the second PR, which deletes that file, it passes.
+
+The test is AST only. It doesn't see a tracer reached through `getattr` or an import by string, a step traced in a file that only receives its backward, or a step's Definition under another name. The docstring says so.
+
+Checked:
+- `uv run tools/check/suites.py repository --fresh` at 83425b43417: 369 passed (r20261115-184508-b793).
+- With `benchmarks/training_slowdown` and its grader at the earlier head 221255e0a65: 369, 803 and 36 passed, with 3 skipped (r20261115-174032-c469).
+
+Stacked on the second PR (`cursor/training-translator-switch-28a9`). It is recut onto the tree after the root `tests/` move.
+
+Lane training
+Refs TRN-66
+Goal training/one-pytorch-translator
+
