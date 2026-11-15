@@ -33,9 +33,9 @@ RULE = "P13 (no duplicate function bodies)"
 KIND = "duplicate-body"
 MIN_LINES = 9
 #: where the provers' side of ``verity`` is, from ``verity/``
-PROVER_PLACES = ("circuits", "commitments", "protocols/accounting/certifier/prover",
-                 "protocols/accounting/poub/verifier/commitments/gates", "protocols/accounting/pous/prover",
-                 "protocols/accounting/pouw/prover")
+PROVER_PLACES = ("circuits", "commitments", "protocols/resource_accounting/network/prover",
+                 "protocols/resource_accounting/memory/poub/verifier/commitments/gates", "protocols/resource_accounting/memory/pous/prover",
+                 "protocols/resource_accounting/compute/pouw/prover")
 #: a verifier's package inside one of those
 VERIFIER_PLACES = ("commitments/attest",)
 _DEFS = (ast.FunctionDef, ast.AsyncFunctionDef)

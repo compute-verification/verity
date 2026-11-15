@@ -24,7 +24,7 @@ import sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-KERNEL = os.path.join(HERE, "..", "..", "..", "verity", "protocols", "accounting", "pouw", "prover", "kernels",
+KERNEL = os.path.join(HERE, "..", "..", "..", "verity", "protocols", "resource_accounting", "compute", "pouw", "prover", "kernels",
                       "pearl_c_sm90")
 WINDOW, BLOCK_ROWS, BLOCK_COLS = 128, 64, 32
 

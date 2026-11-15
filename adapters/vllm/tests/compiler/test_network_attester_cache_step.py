@@ -15,7 +15,7 @@ from verity_vllm.compiler import cache_step as CS
 
 SMALL = CS.statics(8, 4, 8, 4, 32)
 S = SimpleNamespace(**SMALL)
-VECTORS = (Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier"
+VECTORS = (Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier"
            / "tests" / "fixtures" / "cache_step_vectors.json")
 
 

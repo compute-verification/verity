@@ -33,4 +33,4 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/resource_accounting/network", "adapters/vllm/verity_vllm/__init__.py",
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py",
-          "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py"]
+          "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py"]
