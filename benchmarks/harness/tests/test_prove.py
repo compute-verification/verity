@@ -614,8 +614,8 @@ def test_a_total_whose_every_type_is_steady_or_warm_is_modeled_never_measured():
 
     both = P.Census.of({**CENSUS, "definitions": {k: CENSUS["definitions"][k] for k in (GEMM64, GEMM32)}})
     rows = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),)
-    warm = (P.Warm(P.definition_id(GEMM32), 19, 4, 4, 2.0, 1, 4, "r20261115-000000-0001", "gemm32"),)
-    doc = P.report(P.Flock(rows, SESSIONS, "art:card", warm=warm).table(both), 1.0)
+    warm = (PF.Warm(P.definition_id(GEMM32), 19, 4, 4, 2.0, 1, 4, "r20261115-000000-0001", "gemm32"),)
+    doc = P.report(PF.Flock(rows, SESSIONS, "art:card", warm=warm).table(both), 1.0)
     assert sorted(r["source"] for r in doc["rows"]) == [P.STEADY, P.WARM]
     assert doc["totals"]["status"] == "modeled" and doc["totals"]["missing"] == []
     assert doc["totals"]["steady_time_share"] < 1.0
