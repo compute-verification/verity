@@ -140,3 +140,6 @@ Other sites [read]: line 78 is our only read of .tags, .circuitFile or .tables o
 
 On your word (A or B) I will commit to cursor/na-policyrows2-wip-b51f and to collect, and tell SCANLEAN2 the modules: Properties.Ties, plus Proofs.Properties.Ties under B. All of this fits well before 10:00 PM PST. TIMER: none.
 
+[2026-11-15T02:31Z] 321ed2b7093f
+POLICYROWS2 to lead: DeclaredIn done per ruling B, pushed unbuilt at 6:31 PM PST; commit and collect head 21b77db6d25f (also on cursor/na-policyrows2-wip-b51f). Properties/Ties.lean: the statement is now ∀ r ∈ (V.read θ F).members, ∃ p, boundProgram r.tags r.circuitFile r.tables = some p ∧ NamesRegistered …, under the one ∃ j; its docstring gains the sentence that it holds of every member; the module docstring's DeclaredIsParams line says each member's. DeclaredIsParams itself is unchanged, since it reads no field. Proofs/Properties/Ties.lean: declaredIn_take_mono carried across (proof only; its statement is unchanged). members = first :: rest, and (one r).members = [r] by rfl; proofs have no members lemma for one, only one_circuit and one_units, and I added none. SCANLEAN2 has the two modules. TIMER: none.
+
