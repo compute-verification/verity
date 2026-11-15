@@ -24,6 +24,7 @@ import ast
 import hashlib
 import json
 import math
+import re
 import runpy
 import shutil
 import sys
@@ -2034,8 +2035,8 @@ def test_a_run_from_before_rate_json_is_read_from_its_proof_server_reports(tmp_p
     assert all("out/light/server-k2" in r["note"] for r in at_two)
 
 
-#: a scan that read every run of its range but one, and found one of them off its card's node
-SCAN = R.OffNodeScan("r20261110-000000-0000", "r20261111-235959-ffff", frozenset({"r20261111-000000-0009"}),
+#: a scan that read two runs, and found one of them off its card's node
+SCAN = R.OffNodeScan("prove-glm53-flock-steady", frozenset({"r20261110-211750-65a0", "r20261111-000000-0001"}),
                      frozenset({"r20261110-211750-65a0"}))
 
 
@@ -2049,15 +2050,14 @@ SCAN = R.OffNodeScan("r20261110-000000-0000", "r20261111-235959-ffff", frozenset
     ({}, "r20261110-211750-65a0", True),
     ({}, "r20261111-000000-0001", False),
     ({R.CARD_NUMA: None, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261111-000000-0001", False),
-    ({}, "r20261111-000000-0009", None),
+    # a run between two the scan read is no run it read
+    ({}, "r20261111-000000-0000", None),
     ({}, "r20261112-000000-0001", None),
-    ({}, "r20261108-000000-0001", None),
-    ({R.CARD_NUMA: None, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261112-000000-0001", None),
+    ({R.CARD_NUMA: None, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261111-000000-0000", None),
     ({R.CARD_NUMA: 1, "cores": {"count": 24}}, "r20261112-000000-0001", None),
     ({R.CARD_NUMA: True, "cores": {"count": 24, "numa_nodes": [0]}}, "r20261112-000000-0001", None),
 ], ids=["differs", "spans-two", "equal", "equal-but-listed", "differs-but-read", "listed", "read-unlisted",
-        "null-read-unlisted", "unread-in-range", "after-range", "before-range", "null-after-range", "no-cpu-nodes",
-        "not-a-node"])
+        "null-read-unlisted", "unread-between-read", "unread-later", "null-unread", "no-cpu-nodes", "not-a-node"])
 def test_a_rows_card_is_off_or_on_its_cpus_numa_node_by_its_own_record_else_by_the_scan_of_its_run(row, run, off):
     assert R.off_node(row, run, SCAN) is off
 
@@ -2065,34 +2065,45 @@ def test_a_rows_card_is_off_or_on_its_cpus_numa_node_by_its_own_record_else_by_t
 def test_the_scan_holds_the_six_priced_off_node_runs_among_the_79_it_found_in_the_220_it_read(tmp_path):
     doc = json.loads(R.OFF_NODE.read_text())
     scan = R.off_node_scan()
-    assert (scan.first, scan.last) == ("r20261110-154054-2f3f", "r20261114-201314-65cd") and doc["covered"]["runs"] == 220
-    assert len(scan.unread) == 23 and len(scan.off) == 79 == len(doc["runs"])
+    assert scan.record == doc["record"] == "prove-glm53-flock-steady"
+    assert len(scan.read) == 220 == len(doc["read"]) and len(scan.off) == 79 == len(doc["off"]) and scan.off <= scan.read
     six = {"r20261110-211750-65a0": (2, [0]), "r20261110-190448-3b46": (2, [1]), "r20261110-190404-431a": (3, [2]),
            "r20261110-190457-2ce7": (2, [1]), "r20261110-232129-ed12": (2, [1]), "r20261110-232120-0c7b": (2, [1])}
-    assert {r: (doc["runs"][r]["card_numa_node"], doc["runs"][r]["cpu_numa_nodes"]) for r in six} == six
+    assert {r: (doc["off"][r]["card_numa_node"], doc["off"][r]["cpu_numa_nodes"]) for r in six} == six
     assert all(R.off_node({}, r) is True for r in six)
-    assert R.off_node({}, "r20261111-013927-ac13") is False and R.off_node({}, "r20261111-015333-38d6") is None
+    assert R.off_node({}, "r20261111-013927-ac13") is False
+    # inside the span of the runs read, but none of them: a run of a superseded target, and another record's run
+    assert min(scan.read) < "r20261111-015333-38d6" < "r20261113-162903-6d87" < max(scan.read)
+    assert R.off_node({}, "r20261111-015333-38d6") is None and R.off_node({}, "r20261113-162903-6d87") is None
     assert R.off_node({}, "r20261108-045435-b9cb") is None
     assert "host record and lease line" in doc["source"] and "kernels lane" in doc["source"]
 
-    def refused(doc: dict, match: str) -> None:
-        bad = tmp_path / "bad.json"
-        bad.write_text(json.dumps(doc))
-        with pytest.raises(ValueError, match=match):
-            R.off_node_scan.__wrapped__(bad)
+    good = {"source": "s", "record": "prove-glm53-flock-steady", "read": ["r20261110-000000-0001", "r20261110-000000-0002"],
+            "off": {"r20261110-000000-0001": {"card_numa_node": 2, "cpu_numa_nodes": [1]}}}
 
-    covered = {"first": "r20261110-000000-0000", "last": "r20261111-000000-0000", "unread": ["r20261110-000000-0009"]}
-    off = {"card_numa_node": 2, "cpu_numa_nodes": [1]}
-    ok = tmp_path / "ok.json"
-    ok.write_text(json.dumps({"source": "s", "covered": covered, "runs": {"r20261110-000000-0001": off}}))
-    assert R.off_node_scan.__wrapped__(ok).of("r20261110-000000-0001") is True
-    refused({"covered": covered, "runs": {"r20261110-000000-0001": {"card_numa_node": 1, "cpu_numa_nodes": [1]}}},
-            "lists no card's NUMA node and CPUs' NUMA nodes other than it alone")
-    refused({"covered": covered, "runs": {"r20261112-000000-0001": off}}, "is no run the scan read")
-    refused({"covered": covered, "runs": {"r20261110-000000-0009": off}}, "is no run the scan read")
-    refused({"covered": covered | {"unread": ["r20261112-000000-0001"]}, "runs": {}}, "lists runs outside")
-    refused({"covered": covered | {"first": covered["last"], "last": covered["first"]}, "runs": {}},
-            "isn't two run ids in order")
+    def loaded(text: str) -> R.OffNodeScan:
+        path = tmp_path / "scan.json"
+        path.write_text(text)
+        return R.off_node_scan.__wrapped__(path)
+
+    scan = loaded(json.dumps(good))
+    assert (scan.of("r20261110-000000-0001"), scan.of("r20261110-000000-0002"), scan.of("r20261110-000000-0003")) == (
+        True, False, None)
+    for bad, match in [
+        (good | {"record": "prove-glm53-flock-single"}, "is no workload's steady-state record"),
+        (good | {"read": [*good["read"], "r20261110-000000-0002"]}, "`read` lists r20261110-000000-0002 more than once"),
+        (good | {"read": [*good["read"], "run-3"]}, "`read` lists what isn't a run id: run-3"),
+        (good | {"off": {"r20261110-000000-0009": {"card_numa_node": 2, "cpu_numa_nodes": [1]}}},
+         "off-node run r20261110-000000-0009 isn't among the runs the scan read"),
+        (good | {"off": {"r20261110-000000-0001": {"card_numa_node": 1, "cpu_numa_nodes": [1]}}},
+         "lists no card's NUMA node and CPUs' NUMA nodes other than it alone"),
+    ]:
+        with pytest.raises(ValueError, match=re.escape(match)):
+            loaded(json.dumps(bad))
+    twice = json.dumps(good).replace('"off": {', '"off": {"r20261110-000000-0002": {"card_numa_node": 2, "cpu_numa_nodes": [1]}, '
+                                     '"r20261110-000000-0002": {"card_numa_node": 2, "cpu_numa_nodes": [1]}, ')
+    with pytest.raises(ValueError, match="lists r20261110-000000-0002 more than once"):
+        loaded(twice)
 
 
 def test_the_proving_totals_count_the_priced_steady_rows_off_on_and_not_recorded_against_their_cards_numa_node(
@@ -2100,7 +2111,7 @@ def test_the_proving_totals_count_the_priced_steady_rows_off_on_and_not_recorded
     """Runs the scan lists count off where their rows price a type, and not where they are superseded or their row
     isn't a steady-state measurement. A row that records its card's node counts by it: off where it differs, on where
     it's the CPUs' node. One that doesn't, or records null, counts on where the scan read its run, and not recorded
-    where its run is outside the scan's range, as the fixture's own runs are. The shares are the table's own weights,
+    where it didn't, as the fixture's own runs. The shares are the table's own weights,
     the rows' shares of the proving time at the sampling plan; the single-session card's rows are counted apart; and
     the count moves no value and no mark."""
 
@@ -2118,7 +2129,8 @@ def test_the_proving_totals_count_the_priced_steady_rows_off_on_and_not_recorded
         return {R.CARD_NUMA: card, "cores": {"count": 24, "list": "0-23", "numa_nodes": [0]}}
 
     listed = ["r20261110-211750-65a0", "r20261110-211750-65a1", "r20261110-211750-65a2", "r20261110-211750-65a3"]
-    monkeypatch.setattr(R, "off_node_scan", lambda: replace(SCAN, off=frozenset(listed)))
+    monkeypatch.setattr(R, "off_node_scan", lambda: replace(SCAN, read=SCAN.read | {*listed, "r20261111-000000-0003"},
+                                                            off=frozenset(listed)))
     priced = [ran(listed[0], rows["rmsnorm-v8"]), ran(listed[1], rows["ar-multimem"])]
     unpriced = ran(listed[2], rows["residual-add"] | {"flat": False})
     superseded = ran(listed[3], rows["fr-w2"])
@@ -2154,8 +2166,7 @@ def test_the_proving_totals_count_the_priced_steady_rows_off_on_and_not_recorded
     head, seconds, size = R.measurements(doc, metrics)
     assert head["inputs"][3] == seconds["inputs"][1] == line and line not in size.get("inputs", [])
 
-    monkeypatch.setattr(R, "off_node_scan", lambda: R.OffNodeScan("r20991231-000000-0000", "r20991231-000000-0000",
-                                                                   frozenset(), frozenset()))
+    monkeypatch.setattr(R, "off_node_scan", lambda: R.OffNodeScan(SCAN.record, frozenset(), frozenset()))
     none = R.build("spot", "glm53", store=s.fresh("unscanned"), root=REPO)
     assert none["totals"]["off_node"]["off"]["runs"] == [differs] and none["totals"]["off_node"]["on"]["runs"] == [equal]
     assert {k: v for k, v in none["totals"].items() if k != "off_node"} == {k: v for k, v in t.items() if k != "off_node"}

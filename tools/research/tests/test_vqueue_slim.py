@@ -1112,6 +1112,63 @@ def test_the_check_that_gates_passes_a_failure_only_an_allowance_at_its_base_cov
         assert got == Verdict(PASS)
 
 
+def _ended_remote(d: Path, final: tuple[str, ...] | None = None) -> None:
+    """``d`` as the local copy of a remote run that ended, which a fetch begun after its end brought ``final``'s files to
+    (`landing.FINAL`) when given."""
+    from research.landing import FINAL
+
+    (d / "remote.json").write_text(json.dumps({"remote_run_dir": f"/scratch/{d.name}", "machine": "m1"}))
+    (d / "status.json").write_text(json.dumps({"state": "done", "rc": 1}))
+    if final is not None:
+        (d / FINAL).write_text(json.dumps({"names": list(final)}))
+
+
+@pytest.mark.parametrize("rows", [True, False])
+def test_a_failed_suite_step_with_no_suite_record_is_pending_until_the_runs_final_fetch(world, monkeypatch, tmp_path, rows):
+    """lean-suites failed in an ended run whose copy holds no suite record of it: which suites failed, and whether an allowance
+    at the base covers them, is unknown until a fetch begun after the run ended brings its suite reports, so the check is
+    pending, its verdict unkept, never a fail.  Once that fetch brought them, it passes on the rows the allowance covers, and
+    with none fails on the step's unnamed test."""
+    from research.landing import EVIDENCE
+
+    allowing = {"tools/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)}
+    h, base, sha, _ = _harness(world, monkeypatch, tree=allowing)
+    rec = start(h.d, sha, base, shards=1)
+    d = _slim(h, tmp_path, lean_suites="")
+    _ended_remote(d)
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec
+    _ended_remote(d, ("steps.jsonl", "suites.json"))
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec
+    if rows:
+        (d / "suites-lean.json").write_text(json.dumps([PKG]))
+    _ended_remote(d, EVIDENCE)
+    got = judge(h.d, rec)
+    if rows:
+        assert got == Verdict(PASS) and "lean-suites" in rec["verdict"]["passed"]
+    else:
+        (f,) = got.failed
+        k = key(h.q.workdir, sha, "lean-suites") or f"{sha}:lean-suites"
+        assert (got.state, f.task, f.tests, got.ended) == (FAIL, "step lean-suites", {unnamed(k)}, True)
+
+
+def test_a_failed_suite_step_with_no_suite_record_fails_the_check_early_only_once_its_shard_s_final_fetch(
+        world, monkeypatch, tmp_path):
+    """A shard still runs circuit-check and an ended one failed pytest with no suite record of it in its copy: the check is
+    pending, not failed early, until a fetch begun after that shard ended brings its suite reports; with none there then,
+    it fails on pytest's unnamed test."""
+    from research.landing import EVIDENCE
+
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),), failed=((2, "pytest"),))
+    _ended_remote(h.evidence[1])
+    assert judge(h.d, rec) == Verdict(PENDING) and "early" not in rec and "verdict" not in rec
+    _ended_remote(h.evidence[1], EVIDENCE)
+    (f,) = judge(h.d, rec).failed
+    k = key(h.q.workdir, sha, "pytest") or f"{sha}:pytest"
+    assert (f.task, f.tests) == ("step pytest", {unnamed(k)}) and rec["early"]["state"] == FAIL
+
+
 @pytest.mark.parametrize("own", [False, True])
 def test_a_check_killed_on_what_only_the_candidates_own_allowance_covers_is_infra(world, monkeypatch, tmp_path, own):
     """A kill (a step's exit 137, on a suite that names no test) is the machine's fault unless an allowance at the base covers
