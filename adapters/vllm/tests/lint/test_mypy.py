@@ -46,7 +46,6 @@ CLEAN = (
     "verity_vllm/acquire/norm_tap_src",
     "verity_vllm/acquire/router_tap_src",
     "verity_vllm/program/quarantine",
-    "verity_vllm/properties/difftests",
 )
 #: the distributions whose versions change what mypy finds
 PACKAGES = ("mypy", "pydantic", "torch", "vllm")

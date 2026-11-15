@@ -83,7 +83,7 @@ and never multiplied. `Runs.CommittedBeforeCoin` is all the statements need of t
 W, its table) reads no coin of its own phase or of a later phase of its sequence. It may read any coin of another
 sequence, so nothing is assumed between sequences. That each phase's coin is uniform given everything before is
 `Runs.DrawIsTickets` over a uniform coin, which the challenger's log gives a real run
-(`FlockSoundness.Assumptions.UniformRandomBytes`, `Properties.Challenger.CoinsFromLog` and `DrawnByDevice`).
+(`FlockSoundness.Assumptions.UniformRandomBytes`, `Properties.Challenger.CoinsFromLog` and `SampledByDevice`).
 
 The two period statements are separate because their conjunction at one δ is false. A prefix end chosen after the
 coins (`PeriodYAtWIsTheCall`'s ∃) is the maximal inequality's, which bounds a tail and no mean; convex pooling needs a

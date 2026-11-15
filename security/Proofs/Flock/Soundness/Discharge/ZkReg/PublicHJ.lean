@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -34,7 +34,7 @@ second conjunct ties, at each read the verifier owns, to the root `--registered 
 
 * `rsZHJS_wrongRegZ`: the registered commit strings are the public file's (`keyLayoutH`'s population is `fun _ => pub`),
   so `wrongRegZ` is one set at every registration.
-* `zk_session_soundHJR_custody_drawn_reg`: the sampled proof blocks' form of the first conjunct,
+* `zk_session_soundHJR_custody_sampled_reg`: the sampled proof blocks' form of the first conjunct,
   `Pr[verity-verify-proof accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3, and the same second conjunct.
 -/
 
@@ -53,7 +53,7 @@ variable {n : ℕ} {Reg : Type}
 rows' value binding (`rsZHJS`) reads the registration only through the public file `pub`, so its `wrongRegZ` is one set
 at every registration. -/
 theorem rsZHJS_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPts : ℕ} {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
     (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (R R' : Reg) (Xv : Fin (Layout.keyN c hU n) → Bool) :
@@ -75,7 +75,7 @@ theorem zk_session_soundHJR_custody_reg
     (hscope : Layout.scopeOkH c = true)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -91,7 +91,7 @@ theorem zk_session_soundHJR_custody_reg
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZKR I own o ∧
@@ -117,7 +117,7 @@ theorem zk_session_soundHJR_custody_reg
     (decAtZJ (planZHJ dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
     (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
       (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-        fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ _ _ ?_
+        fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ _ _ ?_
   refine (zk_flock_countC_reg execArith hs512 _ (planZHJ dj y₀) (tabZHJ dj y₀) _
     (loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀) (placeZHJ dj y₀ ht hc hscope hU))
     (Layout.keyProg_readsOwn c hU n _)
@@ -129,14 +129,14 @@ theorem zk_session_soundHJR_custody_reg
 registered reads are checked.** `zk_session_soundHJR_custody_reg`'s first conjunct at the sampled proof blocks: the executable
 verifier accepts and some unit the session drew is in `wrongRegZ`. The sample is the session's, so no sampling design over it is
 assumed (no A3, no `kd ≤ n`). -/
-theorem zk_session_soundHJR_custody_drawn_reg
+theorem zk_session_soundHJR_custody_sampled_reg
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
     (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -151,7 +151,7 @@ theorem zk_session_soundHJR_custody_drawn_reg
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
@@ -178,15 +178,15 @@ theorem zk_session_soundHJR_custody_drawn_reg
       (reg σ) (cont σ) k Rw)
   refine le_trans (prob_mono (q := fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ W)
     (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _) ?_
-  refine (execRefinesZK_tables_drawn execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg
+  refine (execRefinesZK_tables_sampled execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg
     (decAtZJ (planZHJ dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
     (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
       (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-        fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+        fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     (fun S => ∃ u ∈ S, u ∈ W)).trans ?_
   refine (prob_mono (q := fun o : Bool × Finset (Fin n) => o.1 = true ∧ ¬ Disjoint W o.2)
     (fun o h => ⟨h.1, Finset.not_disjoint_iff.2 (let ⟨u, hu, hw⟩ := h.2; ⟨u, hw, hu⟩)⟩) _ _).trans ?_
-  refine (zk_flock_drawnC_reg execArith hs512 _ (planZHJ dj y₀) (tabZHJ dj y₀) _
+  refine (zk_flock_sampledC_reg execArith hs512 _ (planZHJ dj y₀) (tabZHJ dj y₀) _
     (loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀) (placeZHJ dj y₀ ht hc hscope hU))
     (Layout.keyProg_readsOwn c hU n _)
     hRw hM hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) ht' σ).trans ?_

@@ -137,11 +137,11 @@ def test_int8_attention_binds_kv_quant_and_rows_and_evaluates_to_the_backend(vll
     assert got == _bits(IA.window_attention(q, k, v, ks, scale), torch.int16, np.uint16)
 
 
-@pytest.mark.parametrize("h200,kind", [
+@pytest.mark.parametrize("fa3,kind", [
     (False, "Attention_v3{T=3,NH=2,KVH=1,D=32,BN=128}"),
     (True, "Attention_v4{T=3,NH=2,KVH=1,D=32,BN=128,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM=0}"),
 ])
-def test_a_flash_attention_layer_through_the_same_op_binds_the_attention_chain(vllm_attention, h200, kind):
+def test_a_flash_attention_layer_through_the_same_op_binds_the_attention_chain(vllm_attention, fa3, kind):
     """A bf16 layer's call goes to the attention rule, which shares `extend_history` with the int8 one: the accepted target's chain,
     and on the H200 FA3's, whose tiles read each row's index on the prefill."""
     from tests.program.test_sigmoid_moe_fp8_derive import H200
@@ -155,8 +155,8 @@ def test_a_flash_attention_layer_through_the_same_op_binds_the_attention_chain(v
     q, k, v = (torch.randn(T, n, D, generator=g).to(BF) for n in (H, G, G))
     observe_attention_impls({LAYER: dict(ATTN_PINS, impl="vllm.v1.attention.backends.flash_attn.FlashAttentionImpl", backend="FLASH_ATTN",
                                          scale=D ** -0.5, sliding_window=None, logits_soft_cap=None,
-                                         **({"vllm_flash_attn_version": 3} if h200 else {}))})
-    if h200:
+                                         **({"vllm_flash_attn_version": 3} if fa3 else {}))})
+    if fa3:
         observe_target_profile(H200)
     rep = derive_report(Attn(), (q, k, v), **PROF, rules=vllm_ruleset(), name="Attn")
     assert rep.unsupported is None, f"refused: {rep.unsupported}"

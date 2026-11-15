@@ -97,8 +97,8 @@ which the deployed plain reader looks up no column off `C` (`TxNoOff`), with the
 not open a level-0 position off `C` against `rootB₀`'s cap unless it self-clashes. -/
 theorem decodesTable_wrP_sc {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}
-    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.DrawOk I dj mPts S) (R : Reg) {N : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : Integrate.SampleSetup I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : DecodeZL.TagsOk I) {S : Finset (Fin n)} (hS : DecodeZL.SampleOk I dj mPts S) (R : Reg) {N : ℕ}
     (hN : N = 2 ^ (lvOf (Integrate.tablesAt (Reg := Reg) ht dj x₀ S R).sch 0).logLen) (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) (j : Fin [Integrate.tablesAt (Reg := Reg) ht dj x₀ S R].length) :
     Tables.DecodesTable (fun _ cap pend os => tableOutL H512 enc512 leaf512 cap pend os)

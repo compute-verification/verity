@@ -14,10 +14,10 @@ plain session at hidden outputs is still refused at two tables, the form just pa
 
 namespace Flock.Test.PlainHidden
 
-def subsetDraw : Draw.UnitDraw := { law := .subset 2, population := 8, units := #[1, 6] }
+def subsetDraw : Draw.UnitSample := { law := .subset 2, population := 8, units := #[1, 6] }
 
 def lawWhy (zk : Bool) (tags : Tags) : String :=
-  match ProvedScope.drawLaw zk tags false (some subsetDraw.toJson) with
+  match ProvedScope.sampleLaw zk tags false (some subsetDraw.toJson) with
   | .error e => e
   | .ok () => ""
 

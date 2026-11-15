@@ -60,7 +60,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage")
 ROOT = HERE.parents[1]

@@ -35,7 +35,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {K : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ} {D Sl : Type} [Inhabited D] [Inhabited Sl]
   (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {I : Inputs}
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
 
 /-- **The compiled `--zk` count curve at the hidden-output tables**: `zk_flock_countC_execOS_cr` at
 `planAtZKH dj y₀` (each sample's table `tableAtZKH dj y₀ S`, every unit in it). -/

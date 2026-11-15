@@ -46,9 +46,9 @@ def LoopServe {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Claim
         ∀ name, _root_.Flock.ZkServer.Level0.ofSession σ'.L0 sid name =
           _root_.Flock.ZkServer.Level0.ofSession (commitRead σ.L0 sid (spec.tables.zip (sts.map (·.m))) f).2 sid name) ∧
       (∃ ct, _root_.Flock.ZkServer.Session.streamsOk spec sts ct = true) ∧
-      (∃ (ls : Array _root_.Flock.ZkServer.Level0.Level0) (publics : List ByteArray), AfterDraw sid ls σ.L0 ∧
+      (∃ (ls : Array _root_.Flock.ZkServer.Level0.Level0) (publics : List ByteArray), AfterSample sid ls σ.L0 ∧
         (∀ j (hj : j < ls.size), ∃ g d hi, M.src (2 * j) = .ok (g, d, hi) ∧
-          _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) ∧
+          _root_.Flock.ZkServer.Level0.ofSamples sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) ∧
         M.L.ownMsg M.x M.w M.ρ (M.hist σ.c) = 0 :: FlockDeploy.linkBody (ls.toList.map (·.root)) publics ∧
         ls.size < 2 ^ 64 ∧ publics.length < 2 ^ 64 ∧ (∀ l ∈ ls, l.root.size < 2 ^ 64) ∧
         ∀ b ∈ publics, b.size < 2 ^ 64) ∧

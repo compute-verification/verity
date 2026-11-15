@@ -70,7 +70,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.commitments.windows.interface import K_MAX, PACK_LOG
+from verity.commitments.periods.interface import K_MAX, PACK_LOG
 
 from . import unit_costs_padding as P
 from .unit_costs import retree

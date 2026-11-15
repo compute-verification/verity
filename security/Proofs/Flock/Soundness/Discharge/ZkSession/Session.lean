@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkSession.Table
 public import Proofs.Flock.Soundness.SessionBatch
 public import Proofs.Flock.Soundness.Audit.Extraction
 public import Proofs.Flock.Soundness.Lowering
-public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.ExecSampleOS
 
 /-!
 # A batched `--zk` session and its audit (live/PROTOCOL.md §1–§7, PROTOCOL.md §5)

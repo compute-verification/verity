@@ -27,7 +27,7 @@ public import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 `verity-verify-proof verify --registered F` without `--zk` (`VerifiesR`: the verdict `PlainReg.AcceptsR` models and the statement
 check with the verifier's registered reads, `ScopeR`) accepts, at hidden outputs and `hm96-sha512/v1` leaves, a statement
 whose population's public file carries shared rows, which `verify` without `--registered` refuses. Each headline here is
-`FailClosed.Design`'s over `VerifiesR`, at any sample design (`DrawDesign`: the stratified sample or the live subset sample),
+`FailClosed.Design`'s over `VerifiesR`, at any sample design (`SampleDesign`: the stratified sample or the live subset sample),
 with the registered reads checked:
 
 * `flock_headline_exec_hiddenR`: where the wires feed neither the unit nor the outputs, `HiddenExec.flock_headline_hidden_design`
@@ -83,15 +83,15 @@ every accepted outcome (`PlainReg.checked_of_acceptsRH`). -/
 theorem flock_headline_exec_hiddenR
     {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false)
     (own : Array Flock.Registered.Port)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
-    (D : DrawDesign n)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
+    (D : SampleDesign n)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
     (hwr : RecordsLive I dj wr)
-    (hdraw : ∀ ω, DrawOkH I dj mPts ((Law.execOS (n := n) src D.law D.pop).draw ω))
+    (hdraw : ∀ ω, SampleOkH I dj mPts ((Law.execOS (n := n) src D.law D.pop).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : ScopeR I, LinkCRL ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtHS hs.typed (hs.parseH hh) (hs.scopeH hf) dj x₀ hs.built (hs.loadH hh) (Reg := Reg)).binding
@@ -167,15 +167,15 @@ accepted outcome (`PlainReg.checked_of_acceptsRHI`). -/
 theorem flock_headline_exec_hiddenRG
     {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true)
     (own : Array Flock.Registered.Port)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
-    (D : DrawDesign n)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
+    (D : SampleDesign n)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
     (hwr : RecordsLive I dj wr)
-    (hdraw : ∀ ω, DrawOkH I dj mPts ((Law.execOS (n := n) src D.law D.pop).draw ω))
+    (hdraw : ∀ ω, SampleOkH I dj mPts ((Law.execOS (n := n) src D.law D.pop).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src D.law D.pop) Reg (liveOf dg mPts N wr)))
     (hCR : ∀ hs : ScopeR I, LinkCRL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀)

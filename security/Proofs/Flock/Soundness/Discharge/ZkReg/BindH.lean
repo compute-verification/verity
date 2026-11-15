@@ -40,7 +40,7 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
+  (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
   (hscope : Layout.scopeOkH c = true)
   (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
@@ -55,7 +55,7 @@ theorem sitesShH_bcSiteS :
   intro S R u h M hM
   show BcSiteH ((tableShH dj y₀ S).acc (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)) pub ((tableShH dj y₀ S).o u h)
     ((tableShH dj y₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupZKH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupZKH I mPts S (dj S))
   · have e : tableShH dj y₀ S = (Classical.choice hS).x.table := by
       unfold tableShH
       rw [dite_eq_left_of_eq_true (eq_true hS)]

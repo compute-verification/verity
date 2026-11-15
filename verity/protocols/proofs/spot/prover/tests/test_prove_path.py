@@ -55,7 +55,7 @@ import pytest
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
 from verity.circuits.codec import canonical_json
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 from verity_difftest import settings as opt
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
@@ -655,19 +655,19 @@ def test_the_advices_negatives_are_each_refused_by_name(tp):
 
 
 @pytest.mark.slow
-def test_advice_committed_after_the_draw_passes_every_check_before_it_and_is_refused(tp):
+def test_advice_committed_after_the_sample_passes_every_check_before_it_and_is_refused(tp):
     """With the receipt the stream writes on receiving the honest docket, the honest docket holds; the same advice
     committed again after the coins (a fresh root, a true commitment of it, which `source` accepts with its opening) is refused."""
     compiler, bound, opening, mine, held = _mine(tp, "honest", 0)
     rec = _registered(tp["honest"] / "rank0")
     receipt = R.receipt(rec, A5.CHALLENGER, received="0")
     assert PP.advice_before_draw(receipt, rec, bound)["ok"]
-    got = PP.advice_after_draw(compiler, receipt, rec, opening, mine, held)
+    got = PP.advice_after_sample(compiler, receipt, rec, opening, mine, held)
     assert got == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
 
 
 @pytest.mark.slow
-def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit(tp):
+def test_a_forged_unit_passes_every_check_before_the_sample_and_differs_in_one_bit(tp):
     """The forged window's docket holds to the verifier's window and its own public bodies, as the honest one does: its
     rows, commit strings and roots agree with the flipped word. Its rows differ from the honest window's in exactly one bit."""
     _c, _b, _o, mine, held = _mine(tp, "forged", 0)
@@ -989,7 +989,7 @@ def test_a_run_is_one_committed_run_and_a_single_gpu_runs_one_window_is_rank_0()
         PP.ranks_of(argparse.Namespace(bundle="b", ranks="0,1"))
 
 
-def test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_units():
+def test_per_unit_timing_is_over_the_members_sampled_units_not_c_flocks_virtual_units():
     s = {"draw_counts": {"T": 2}, "timing": {"T": {"session_s": 501.2, "verify_s": 6.2, "lean_verify_s": 47.0,
                                                    "timing": {"prove_total_s": 428.9, "units": 16384, "k_log": 26,
                                                               "proof_bytes": [830330, 830330]}}}}

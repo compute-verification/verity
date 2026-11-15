@@ -68,9 +68,9 @@ theorem schedule_m1 {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedu
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ}
 
-namespace DrawSetupZK
+namespace SampleSetupZK
 
-variable {S : Finset (Fin n)} {d : Lean.Json} (y : DrawSetupZK I mPts S d)
+variable {S : Finset (Fin n)} {d : Lean.Json} (y : SampleSetupZK I mPts S d)
 
 /-- **The range setupH checked** (`checkInRange`): `k_log ≤ 27`, at most 1024 regions and `m_pts ≤ 64`. -/
 theorem inRange (ht : I.tags.typed = false) :
@@ -110,16 +110,16 @@ theorem table_M1 (ht : I.tags.typed = false) : y.table.M1 :=
 
 /-- **A refused sample's `--zk` table is at Flock ZK's parameters**: `contra`'s two regions. -/
 theorem refused_M1 (ht : I.tags.typed = false) : y.refused.M1 :=
-  y.tabAt_M1 ht _ _ (by simp [DrawSetup.contra])
+  y.tabAt_M1 ht _ _ (by simp [SampleSetup.contra])
 
-end DrawSetupZK
+end SampleSetupZK
 
 /-- **Every `--zk` table `tableAtZK` builds is at Flock ZK's parameters**: the sample's table, or the refused one. -/
 theorem tableAtZK_M1 (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) : (tableAtZK dj y₀ S).M1 := by
+    (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) : (tableAtZK dj y₀ S).M1 := by
   unfold tableAtZK
   split
-  · exact DrawSetupZK.table_M1 _ ht
+  · exact SampleSetupZK.table_M1 _ ht
   · exact y₀.refused_M1 ht
 
 end FlockSoundness.Discharge.ZkLink

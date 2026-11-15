@@ -45,10 +45,10 @@ caller's. `last` is the caller's as each read's audit record is, and is held to 
 module
 
 public import Spot.Record
-public import Spot.ChallengerDraw
+public import Spot.ChallengerSample
 meta import Spot.Record
 meta import Spot.ChallengerCoins
-meta import Spot.ChallengerDraw
+meta import Spot.ChallengerSample
 
 @[expose] public section
 set_option backward.privateInPublic true

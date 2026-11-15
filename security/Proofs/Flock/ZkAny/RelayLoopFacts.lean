@@ -604,7 +604,7 @@ theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
 and the model answers the round, the round's place is the model's scheduled round (`roundPlace_scheduled_first`). The
 rep's frame is fresh (`FreshAt`); `roundPlace` read the session's entry, the table's statement, name and level 0 and
 `withAlg`'s frame (`roundPlace_first_ok`); the level 0 is the one the loop drew (`BuiltAt`), so it gives a table as the
-model's placeholder for the round does (`tab_of_placeholder`), whose commitment's cap is its root (`cap_of_drawn`); and
+model's placeholder for the round does (`tab_of_placeholder`), whose commitment's cap is its root (`cap_of_sampled`); and
 the algebraic phase has a round (`Loop.rounds_pos`), so the round reads no salts and is not the inner proof's own. -/
 theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
@@ -701,7 +701,7 @@ theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
   obtain ⟨t, htab⟩ : ∃ t, _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t := by
     have h := tab_of_placeholder (g := gb) (d := db) (l := l0) hph (by rw [hdiv, hstmb]; exact hdb)
     rwa [hdiv, hstmb] at h
-  have hcap := cap_of_drawn hdb htab
+  have hcap := cap_of_sampled hdb htab
   obtain ⟨hi, hreal, -⟩ := hR i r rel name l0 stm t hr2 hsa hn hl0 hstm' htab
   have hst' : rel.sts[p.table]? = some stm := by
     rw [hpt]
