@@ -34,7 +34,7 @@ from verity.protocols.accounting.poub.verifier.receipts import Plan
 from verity.protocols.proofs.spot.device.challenger import COIN_BYTES as LIVE_COIN_BYTES
 from verity.protocols.proofs.spot.device.challenger import HM96, LiveChallenger
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent.parent / "tests" / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "lean")
+HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 EXE = "poub-difftest"
 #: The ports' side of record (`verity_difftest`): the Lean, the verifier `verity/protocols/accounting/poub/verifier/session/verifier.py` runs.

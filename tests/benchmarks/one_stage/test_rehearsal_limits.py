@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("one_stage_rehearsal_limits", HERE.parent / "rehearsal_limits.py")
+_spec = importlib.util.spec_from_file_location("one_stage_rehearsal_limits", HERE.parents[2] / "benchmarks" / "one_stage" / "rehearsal_limits.py")
 RL = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = RL
 _path = sys.path[:]

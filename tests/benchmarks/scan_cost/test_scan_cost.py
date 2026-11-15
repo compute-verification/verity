@@ -370,7 +370,7 @@ def test_the_pinned_baseline_is_the_scan_as_it_stands_at_the_benchmarks_identity
     assert {k: base["identity"][k] for k in ("class", "sample", "cores", "verifier_cores")} == {
         "class": "w63k4", "sample": "every unit", "cores": 21, "verifier_cores": 1}
     assert set(base["identity"]) == set(R.IDENTITY) and R.pinned(base["identity"]["class"])
-    run_sh = (HERE.parent / "run.sh").read_text(encoding="utf-8")
+    run_sh = (HERE.parents[2] / "benchmarks" / "scan_cost" / "run.sh").read_text(encoding="utf-8")
     assert 'N=${SC_CORES:-21}' in run_sh and 'SC_CLASS="${SC_CLASS:-w63k4}"' in run_sh
 
 
@@ -413,7 +413,7 @@ def tree(tmp_path):
     (top / "benchmarks" / "network_traces").mkdir(parents=True)
     (top / "benchmarks" / "scan_cost").mkdir()
     for name in ("run.sh", "result.py", "public.json"):
-        shutil.copy2(HERE.parent / name, top / "benchmarks" / "scan_cost" / name)
+        shutil.copy2(HERE.parents[2] / "benchmarks" / "scan_cost" / name, top / "benchmarks" / "scan_cost" / name)
     (top / "benchmarks" / "network_traces" / "scan_zk.sh").write_text(SCAN, encoding="utf-8")
     (top / "benchmarks" / "harness").symlink_to(ROOT / "benchmarks" / "harness")
     (top / "verity").symlink_to(ROOT / "verity")

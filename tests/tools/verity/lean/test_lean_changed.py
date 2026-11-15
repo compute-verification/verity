@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_changed", HERE.parent / "lean_changed.py")
+spec = importlib.util.spec_from_file_location("lean_changed", HERE.parents[3] / "tools" / "verity" / "lean" / "lean_changed.py")
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 

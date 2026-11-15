@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.parent / "rename.py")
+spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.parents[2] / "tools" / "move" / "rename.py")
 M = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = M      # `--jobs` hands its workers `M._rewrite`, which pickle finds by its module's name
 spec.loader.exec_module(M)

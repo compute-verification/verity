@@ -26,7 +26,7 @@ from verity.commitments import history as HT
 from verity.commitments.periods import history as HW, interface as I, rows as CS
 
 HERE = (Path(__file__).resolve().parent)
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier"))
 import a0  # noqa: E402
 import a5 as A5  # noqa: E402

@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import prove_subprotocol as L  # noqa: E402
 
 DOT = 'DOT={"fn":"HopperBF16WgmmaDot16_v1"}'

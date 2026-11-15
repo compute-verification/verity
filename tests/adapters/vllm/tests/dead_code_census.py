@@ -52,7 +52,7 @@ from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[0]  # adapters/vllm
+ROOT = HERE.parents[3] / "adapters" / "vllm"  # adapters/vllm
 REPO = ROOT.parents[1]
 ROOTS_FILE = HERE / "census_roots.txt"
 KEEP_FILE = HERE / "dead_code_keep.json"

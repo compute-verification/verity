@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-spec = importlib.util.spec_from_file_location("lean_claim_ids", HERE.parent / "claim_ids.py")
+spec = importlib.util.spec_from_file_location("lean_claim_ids", HERE.parents[3] / "tools" / "verity" / "lean" / "claim_ids.py")
 CI = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = CI
 spec.loader.exec_module(CI)

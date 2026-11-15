@@ -12,7 +12,7 @@ from verity_vllm.program import model as analytic
 
 
 def test_phi3_captured_rotary_table_is_within_the_analytic_bound():
-    p = Path(__file__).resolve().parents[2] / "out" / "gen" / "lanes" / "dense2" / "runs" / "phi3_mini_32x16" / "capture" / "cos_sin_cache.npy"
+    p = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "out" / "gen" / "lanes" / "dense2" / "runs" / "phi3_mini_32x16" / "capture" / "cos_sin_cache.npy"
     if not p.exists():
         pytest.skip("run artefact not present")
     r = analytic.check_cos_sin(phi3.C, p)
