@@ -385,7 +385,7 @@ theorem linkUnit_shape {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB
   | ok x => exact checkShape_ok hc
 
 theorem aux_ge (D : ℕ) : 512 * D ≤ 16 * VStar.auxWords D := by
-  unfold VStar.auxWords VStar.NODE_WORDS VStar.ROW_BLOCK
+  unfold VStar.auxWords VStar.NODE_WORDS VStar.ROW_CHUNK
   have := Nat.le_max_right 1 ((32 * D + 64 - 1) / 64)
   omega
 
