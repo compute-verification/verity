@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 from research import result
+from verity_config.settings import SHARED
 
 ROOT = Path(__file__).resolve().parents[2]
 SHOW = ["metrics", "show", "--json"]
@@ -63,10 +63,10 @@ def main() -> None:
     if report.get("top") is None:
         sys.exit(f"the dashboard can't read the goals: {report.get('topWhy') or 'its top goals are null'}")
     ok, total, misses = running(report)
-    where = Path(os.environ.get(result.ENV_RUN_DIR) or out)
+    where = Path(SHARED.RESEARCH_RUN_DIR or out)
     where.mkdir(parents=True, exist_ok=True)
-    doc = result.template(os.environ.get(result.ENV_RUN_ID) or "local")
-    doc["workload_fingerprint"]["source_sha"] = os.environ.get(result.ENV_SOURCE_SHA)
+    doc = result.template(SHARED.RESEARCH_RUN_ID or "local")
+    doc["workload_fingerprint"]["source_sha"] = SHARED.RESEARCH_SOURCE_SHA
     doc["measurements"].append({"name": "console/top-goals-running", "value": ok, "unit": "goals", "target": total,
                                 "mark": "measured", "inputs": ["measured"], "run": doc["run_id"],
                                 "commit": doc["workload_fingerprint"]["source_sha"]})
