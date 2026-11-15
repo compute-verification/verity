@@ -144,6 +144,7 @@ theorem runMembers_wf {slice : Spot.OneStageZk.Member → Json} {ms : Array Spot
   unfold Spot.OneStageZk.runMembers at h
   obtain ⟨held, -, h⟩ := bind_ok' h
   obtain ⟨_, -, h⟩ := bind_ok' h
+  obtain ⟨_, -, h⟩ := bind_ok' h
   obtain ⟨r₁, h₁, h⟩ := bind_ok' h
   obtain ⟨_, -, h⟩ := bind_ok' h
   obtain rfl : r₁ = r := Except.ok.inj h
@@ -158,6 +159,9 @@ theorem membersRun_wf {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.M
   unfold Spot.OneStageZk.membersRun at h
   obtain ⟨_, -, h⟩ := bind_ok' h
   obtain ⟨_, -, h⟩ := bind_ok' h
-  exact runMembers_wf h
+  obtain ⟨r₁, h₁, h⟩ := bind_ok' h
+  obtain ⟨_, -, h⟩ := bind_ok' h
+  obtain rfl : r₁ = r := Except.ok.inj h
+  exact runMembers_wf h₁
 
 end SpotFlock.RunsAs

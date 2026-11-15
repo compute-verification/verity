@@ -1,6 +1,6 @@
 module
 
-public import CoreProtocol.Registration
+public import RegistrationLog
 public import Definitions.Core.Compiler
 
 /-!

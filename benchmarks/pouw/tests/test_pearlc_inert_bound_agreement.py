@@ -1,7 +1,7 @@
 """The hidden inert-work bound (`circuit.inert_bound`'s `Pc8TileCap` at `inert_bound.row_rho`'s ρr, the template `inert_bound.served` serves)
 and the clear path's (`clear_work.inert_bound_failure`) on the same tile of the H100 record: one verdict on every tile, accepted
 and refused, under -h3's bound on a row (4ρ at its census k = 256, ρ at k = 1,024) and -h0's bound on the tile alone.
-The clear path's forming term (`pearl_c_inert_work.inert_elements`) reads each row's forming, here α = β = 1 and x = 0,
+The clear path's forming term (`pearl_c_inert_work.inert_elements`) reads each A and B̃ row's forming, here α = β = 1 and x = 0,
 which has no salt-dead element, and the tiles have no atom block that every word of a row flags, so it is 0, as the
 circuit's is on no salt-dead bits."""
 from __future__ import annotations
@@ -59,7 +59,8 @@ def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]
     hidden = evaluate(inert_bound.templates(k, d.name, TILE, N, row_rho=inert_bound.row_rho(scheme, k))["tile"], flat(ac), flat(bc),
                       flat(pa), flat(pb), [int(o) for o in ok], [0] * (tm * k // 32), flat(cert))[-1]
     reason = CW.inert_bound_failure(scheme, record, tile, SimpleNamespace(
-        a=SimpleNamespace(codes=ac, alpha=[ONE] * tm, x=[[0] * k] * tm, beta=[ONE] * tm), b=SimpleNamespace(codes=bc)))
+        a=SimpleNamespace(codes=ac, alpha=[ONE] * tm, x=[[0] * k] * tm, beta=[ONE] * tm),
+        b=SimpleNamespace(codes=bc, alpha=[ONE] * tn, x=[[0] * k] * tn, beta=[ONE] * tn)))
     return bool(hidden), reason is None, reason
 
 

@@ -343,7 +343,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
   every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
   generation config (a committing LLAMA32_1B's: temperature 0.6, top_p 0.9) to a request that omits them. The gate
-  takes a top_p below 1, which the compile unit refuses while the seeded top-p sampler's split count reads the live
+  takes a top_p below 1, which the compile slice's proof block refuses while the seeded top-p sampler's split count reads the live
   row count.
 - **A rehearsal's keys** (`--height`): LMS (N = 64, W = 1) at a tree height within `REHEARSAL_HEIGHT`, the
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its

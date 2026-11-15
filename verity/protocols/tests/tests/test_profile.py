@@ -75,8 +75,8 @@ def test_consumers_are_maximised_by_different_strategies():
     a = two_level(n_r=10_000, n_v=4, p=Fraction(1, 4), k=2, delta=0.01)
     ratio = {m: m / a.rho(m) for m in range(1, 5)}
     touched = {m: 1 / a.rho(m) for m in range(1, 5)}
-    assert max(ratio, key=ratio.get) == 4      # free compute concentrates into fully incorrect replay units
-    assert max(touched, key=touched.get) == 1  # KV laundering spreads one incorrect proof block per replay unit
+    assert max(ratio, key=ratio.get) == 4      # free compute concentrates into fully incorrect replay blocks
+    assert max(touched, key=touched.get) == 1  # KV laundering spreads one incorrect proof block per replay block
     assert incorrect_blocks(a) == pytest.approx(ratio[4] * log(100))
     assert touched_units(a) == pytest.approx(touched[1] * log(100))
 
@@ -172,7 +172,7 @@ def test_undrawn_levels_only_group():
 
 
 def test_the_cap_bounds_a_touched_utility_read_above_the_replay_level():
-    """16 replay units may be touched, but 8 requests of 64 replay units each hold at most 8 touched requests."""
+    """16 replay blocks may be touched, but 8 requests of 64 replay blocks each hold at most 8 touched requests."""
     a = IntegrityProfile(("request", "replay", "check"), (8, 64, 4),
                          {"replay": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
     assert round(touched_units(a), 1) == 16.0
