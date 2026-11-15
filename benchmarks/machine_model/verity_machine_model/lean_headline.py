@@ -521,7 +521,7 @@ public import Definitions.Pouw.Headline.Encoding
 /-!
 # {f.key}'s headline instance: {f.device} and {f.title} (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/machine_model/data`), and
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.{f.ns}SheetHeadline` reads it.
 
@@ -621,7 +621,7 @@ public import Definitions.Pouw.Headline.Sm120
 /-!
 # sm_120's measured headline instance: {VECTOR} and H1 + fx1 (trusted; generated)
 
-Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/machine_model/data`), and
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
