@@ -33,6 +33,7 @@ untraced = [
     "tests/test_bucket_index.py",
     "tests/test_budgets.py",
     "tests/test_carry.py",
+    "tests/test_check_merge_drivers.py",
     "tests/test_checked_guard.py",
     "tests/test_cli.py",
     "tests/test_commitmap.py",
@@ -151,6 +152,7 @@ untraced = [
 # a candidate's Lean inputs. tools/move/rename.py,
 # layout.py and restack.py: test_queue_moves_carry commits them into its origin and restacks a head across the moves they make;
 # restack.py reads its move_lines.toml beside it (`MOVE_LINES`) when test_queue_cross crosses a head. The RTX PRO 6000 node file and card: test_nebius_check holds pods/nebius/check.py's figures to them.
+# tools/check/merge_map.py and merge_rows.py: test_check_merge_drivers merges through them at either layout's place.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "benchmarks/numerical/bench-instances", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/circuits/kernels",
           "tools/check/lean_slot.py", "tools/check/slot.py", "tools/check/tool.py", "tools/check/drive.toml", "benchmarks/tc_probe",
           "pyproject.toml", "tools/config/pyproject.toml", "verity/protocols/proofs/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
@@ -165,7 +167,8 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "benchmarks/numeri
           "tools/verity/lean/settings.py", "tools/check/common.py",
           "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/verity_graph/__init__.py",
-          "hardware/nodes/rtx-pro-6000-server-x8.toml", "hardware/cards/rtx-pro-6000-server.toml"]
+          "hardware/nodes/rtx-pro-6000-server-x8.toml", "hardware/cards/rtx-pro-6000-server.toml",
+          "tools/check/merge_map.py", "tools/check/merge_rows.py"]
 parallel = true
 # the suite takes about 11 minutes on 3 workers and over an hour in one process (`held_workers`; on fewer, `bound` stretches
 # timeout_s in proportion)
