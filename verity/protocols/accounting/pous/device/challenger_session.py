@@ -216,8 +216,10 @@ def run(party: Party, params: Params, identity: Identity, f: BinaryIO, codec: Co
     while done is None:
         if told:
             r = Received(peer, told.pop())
+        elif asked:
+            r = answer(*asked.popleft())
         else:
-            r = answer(*asked.popleft()) if asked else Received(peer, codec.read(f))
+            r = Received(peer, codec.read(f))
         done = act(party.on(r))
     return done, records
 
