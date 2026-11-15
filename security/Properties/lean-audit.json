@@ -2660,10 +2660,12 @@
     "InferenceOnlyCheck.Theta",
     "InferenceOnlyCheck.Protocol",
     "InferenceOnlyCheck.Count",
+    "InferenceOnlyCheck.Record",
+    "Properties.InferenceOnly.Record",
     "Properties.InferenceOnly"
    ],
-   "except": [],
-   "why": "a property is stated over the definitions and the code it is about, never over a proof"
+   "except": ["Properties.InferenceOnly.PinnedRead"],
+   "why": "a property is stated over the definitions and the code it is about, never over a proof; Properties.InferenceOnly.PinnedRead was rooted on Sun 15 Nov, so the rule reads its imports for the first time: its edges are decided under NET-451 after the landing, by Wed 18 Nov"
   },
   "Properties.InferenceOnly.Desc": {
    "imports": [
