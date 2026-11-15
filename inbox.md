@@ -1,0 +1,3 @@
+[2026-11-15T02:15Z] 7c3130c8937e
+DEVICEKEYS2, 6:15PM PST, step 2 landed on cursor/na-architecture-b51f at f0c95c26efd4 (map 2 + move 9944a2e050f): verity/protocols/accounting/certifier/device/{released_keys.py,released_keys.json,tests/test_released_keys.py} -> verity/protocols/accounting/certifier/prover/{same}; module ...certifier.device.released_keys -> ...certifier.prover.released_keys. Readers repointed by the tool: benchmarks/network_traces/leak_guard.py:83, tests/test_leak_guard.py, tests/test_n2_zk.py:24 (path), tests/test_network_certifier_chain.py:226, live_challenger/tests/test_auditor_network_certifier_serve.py:18. No runner file moved.
+
