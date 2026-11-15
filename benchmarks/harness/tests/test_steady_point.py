@@ -24,7 +24,7 @@ from verity_bench import steady as S
 from verity_bench import steady_node as N
 from verity_bench import steady_plan as P
 from verity_bench import steady_spec as SP
-from verity_bench.cli import main
+from verity_bench.cli import _parser, main
 from verity_bench.tool import STEADY_POINT
 
 CIRCUIT = "the circuit of gemm64\n"
@@ -982,17 +982,44 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
         flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
         assert flags[:4] == ["research", "run", "--on", "vy-dc-h200"] and "--queue" not in flags and "--gpus" not in flags
         assert flags[flags.index("--source") + 1] == str(root) and flags[flags.index("--cwd") + 1] == "source"
-        assert flags[flags.index("--timeout") + 1] == "90m" and "--require-result" in flags
+        assert flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 5400}" and "--require-result" in flags
         assert flags[flags.index("--tool") + 1] == "verity_bench.tool:STEADY_POINT"
         assert [flags[i + 1] for i, token in enumerate(flags) if token == "--env"] == [
             "RUST_MIN_STACK=1073741824", f"VERITY_BENCH_SETUP={SETUP}"]
         assert through_slot(workload) and "gpu-lease" not in command
         assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py"]
+        assert workload[workload.index("--wait-max") + 1] == f"{jobs.DIRECT_WAIT_S}"
         assert workload[workload.index("--run-max") + 1] == "5400"
         assert workload[workload.index("--", 4) + 1:] == [
             "bash", "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,
             "--identity", item.identity]
         assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
+
+
+def test_a_run_given_the_booked_periods_end_never_ends_after_it_and_one_that_could_not_finish_is_not_launched(tmp_path):
+    """`run --end`: the run's timeout is the time left to the end, slot.py waits only as long as the spec's max_minutes
+    still fit before it, and a point whose max_minutes don't fit at its launch is refused, saying so."""
+
+    root, path = tree(tmp_path)
+    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, "why"))
+    commands = []
+    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", end=1_007_200, now=lambda: 1_000_000.4,
+                      execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    assert len(commands) == 3
+    for command in commands:
+        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
+        assert flags[flags.index("--timeout") + 1] == "7199"
+        assert workload[workload.index("--wait-max") + 1] == "1799"
+        assert workload[workload.index("--run-max") + 1] == "5400"
+    launched = []
+    with pytest.raises(ValueError, match=r"up to 90 min .* don't fit before its end, 1970-01-12T15:16:40Z: it would "
+                                         r"not finish, so it isn't launched"):
+        P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", end=1_005_400, now=lambda: 1_000_000.0,
+                   execute=lambda command, cwd: launched.append(command) or 0)
+    assert launched == []
+    assert _parser().parse_args(["run", "x", "--direct", "n", "--end", "1970-01-12T15:46Z"]).end == 1_007_160
+    with pytest.raises(SystemExit):
+        _parser().parse_args(["run", "x", "--end", "15:46"])
 
 
 def test_a_point_named_again_is_launched_though_a_passing_run_stands_for_it_and_plan_says_so(tmp_path):

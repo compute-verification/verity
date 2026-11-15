@@ -274,10 +274,10 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
     item = plan.points[1]
     assert command == [
         "research", "run", "--on", "vy-nebius-3", "--project", "verity", "--campaign", "vllm-bench", "--source", str(root),
-        "--cwd", "source", "--timeout", "120m", "--require-result", "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
+        "--cwd", "source", "--timeout", "21600", "--require-result", "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
         "--env", "VERITY_BENCH_VENV=/workspace/jobs/venv312", "--",
         "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
-        "--run-max", "7200", "--",
+        "--wait-max", "14400", "--run-max", "7200", "--",
         "gpu-lease", "1", "--wait", "--max-min", "120", "--preemptible", "--",
         "bash", "benchmarks/harness/run_point.sh", "--spec", "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml",
         "--point", "b32-p512-mixed", "--identity", item.identity,
@@ -287,7 +287,7 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
     assert cwd == root and flags[:4] == ["research", "run", "--on", "vy-nebius-3"]
     assert "--queue" not in flags and "--gpus" not in flags
     assert flags[flags.index("--source") + 1] == str(root) and flags[flags.index("--cwd") + 1] == "source"
-    assert flags[flags.index("--timeout") + 1] == "120m" and "--require-result" in flags
+    assert flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 7200}" and "--require-result" in flags
     assert flags[flags.index("--tool") + 1] == queued[queued.index("--tool") + 1]
     queued_flags = queued[:queued.index("--")]
     assert [flags[i + 1] for i, t in enumerate(flags) if t == "--env"] == [
@@ -347,7 +347,7 @@ def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_th
     assert len(commands) == 3
     for command in commands:
         flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-        assert flags[:4] == ["research", "run", "--on", node] and flags[flags.index("--timeout") + 1] == "120m"
+        assert flags[:4] == ["research", "run", "--on", node] and flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 7200}"
         assert through_slot(workload)
         lease = workload[workload.index("--", 4) + 1:]
         assert lease[:3] == ["gpu-lease", "1", "--wait"] and "--preemptible" in lease[:lease.index("--")]
