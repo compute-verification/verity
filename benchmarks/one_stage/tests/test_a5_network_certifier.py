@@ -1,10 +1,10 @@
-"""a5_network_certifier's window on a network certifier run driven tick by tick (`test_network_certifier_serve._run`), before anything is lowered or proved
-(`a5_network_certifier.main` does, through `a5.audit`, on a node): each transfer-gate chunk's registered port's rows, the network certifier's
-bucket rows committed under its salts, open the network certifier's signed root at the rows the verifier's own reads name, each
-unit's read (q, k) the Program's units' (`network_certifier_rows.Units`, from public structure alone) placed by the wiring the network certifier
+"""a5_network_certifier's window on a network attester run driven tick by tick (`test_network_certifier_serve._run`), before anything is lowered or proved
+(`a5_network_certifier.main` does, through `a5.audit`, on a node): each transfer-gate chunk's registered port's rows, the network attester's
+bucket rows committed under its salts, open the network attester's signed root at the rows the verifier's own reads name, each
+unit's read (q, k) the Program's units' (`network_certifier_rows.Units`, from public structure alone) placed by the wiring the network attester
 signed on connection q's own cell, and the header names the units' value and the same rows; the docket passes the
 verifier's check with every transfer-gate unit proved (work 0, floor all of them); the window's provenance is the
-verifier's read of the network certifier's dockets; the prover's own root under the network certifier's certificate, provenance naming
+verifier's read of the network attester's dockets; the prover's own root under the network attester's certificate, provenance naming
 another root, a foreign, a duplicate, a padding-slot and a past-the-cells read, and a statement made for another units'
 wiring (a pad in a data cell's place, its rows under the Program's value, two units swapped) are refused by name; and the
 altered window's unit 0 doesn't open."""
@@ -134,7 +134,7 @@ def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused_by_n
 
 def test_the_crossed_and_padded_wirings_would_open_a_foreign_cell_and_an_empty_slot(run):
     """What the two forged wirings would have the verifier read, had `port` placed them: connection q2's read on q1's
-    cell, and a connection the network certifier never served on B zero bytes."""
+    cell, and a connection the network attester never served on B zero bytes."""
     _tmp, at = run
     x = at[RC.INGRESS]
     B, w = x.params.cell_bytes, x.opening.wiring
@@ -163,7 +163,7 @@ def test_the_altered_cell_is_committed_under_the_network_certifiers_salt_and_doe
 
 @pytest.mark.parametrize("made", sorted(AW.MADE_FOR))
 def test_a_statement_made_for_another_units_wiring_is_refused_by_the_registered_reads(run, made):
-    """``--made-for``'s window: c1's header made for another units' wiring, its rows the network certifier's under the network certifier's salts
+    """``--made-for``'s window: c1's header made for another units' wiring, its rows the network attester's under the network attester's salts
     (they open the signed root at the positions the header names), its provenance the Program's, so the docket's
     checks pass and only the verifier's port of the Program's units refuses it, by `MADE_FOR`'s reason; c0 stays honest."""
     tmp, at = run

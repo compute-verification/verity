@@ -122,7 +122,7 @@ KEY0 = "0" * 48
 
 
 def site_with(*links: tuple[str, str, str]) -> dict:
-    """`CoreOnsite`'s `siteWith`: two hosts, a network certifier and a memory challenger, joined by `links`, as
+    """`CoreOnsite`'s `siteWith`: two hosts, a network attester and a memory challenger, joined by `links`, as
     `registered.site_of` reads a site."""
     locs = [{"id": "node0", "kind": "host", "key": ""}, {"id": "node1", "kind": "host", "key": ""},
             {"id": "cert0", "kind": "certifier", "key": KEY0}, {"id": "chal0", "kind": "challenger", "key": ""}]

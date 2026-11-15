@@ -19,7 +19,7 @@
   (`window_tie.py`) is that one on their toys;
 * the workload side's copy of the Lean verifier's ``--registered`` port (`spot/prover/registered_reads.py`) is the
   verifier's own;
-* a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
+* a window's audit is one compute audit of the network attester's period (`period`), its scan state's reads registered;
 * a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
   day's is refused;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
@@ -66,7 +66,7 @@ COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 TID = descriptor_id(COORD)
 SAMPLING_DESIGN = "stratified:2"
 RUN = "ab" * 64
-#: the value a period ties to its scan's state tree, which `period` takes from its caller (the network certifier's scan state)
+#: the value a period ties to its scan's state tree, which `period` takes from its caller (the network attester's scan state)
 TIED = "verity/certifier/scan-state/v1"
 
 
@@ -1215,7 +1215,7 @@ def _audited(window: Path, out: Path, docket: dict | None = None, accepted: bool
 
 
 def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_registered(tmp_path, capsys):
-    """`period`: a window whose circuit reads its own scan state (`TIED`) gives the network certifier's period its
+    """`period`: a window whose circuit reads its own scan state (`TIED`) gives the network attester's period its
     docket, the Program the audit sampled (the one the docket names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.

@@ -502,7 +502,7 @@ def test_errors_and_whole_response(tmp_path):
 
 
 def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
-    """The network certifier's id request in cells of P + 9 bytes (`id_form.id_request`, offset 0)."""
+    """The network attester's id request in cells of P + 9 bytes (`id_form.id_request`, offset 0)."""
     return IDF.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + HEADER.size,
                         offset=0)
 
@@ -528,7 +528,7 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
 
 
 def test_ids_answers_in_id_form_exactly_the_network_certifiers_id_requests():
-    """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network certifier's release
+    """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network attester's release
     headers (`release.with_release`: the release, the run and, as the certifier sends it, the release's bucket); its base
     for anything else, the shim's rebuilt POST, an id request in other cells, or bytes that aren't a request."""
     p = proto.IdsProtocol(payload=proto.ID_PAYLOAD, base=proto.PlainProtocol())
@@ -540,7 +540,7 @@ def test_ids_answers_in_id_form_exactly_the_network_certifiers_id_requests():
 
 
 def test_under_ids_the_network_certifiers_id_request_streams_raw_id_events_then_done(tmp_path):
-    """``--protocol ids`` on the network certifier's own id request (`id_form.id_request` in its P + 9-byte cells, offset 0, with the
+    """``--protocol ids`` on the network attester's own id request (`id_form.id_request` in its P + 9-byte cells, offset 0, with the
     release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
     scan's P = 503 every P bytes are one id event, the cells the certifier makes of them, and the whole is what
@@ -583,7 +583,7 @@ class Written:
 
 
 def failed_stream(protocol: Any, error: str) -> tuple[bytes, so.Server]:
-    """What `Server.handle` writes before it closes the connection, for the network certifier's id request (in cells of
+    """What `Server.handle` writes before it closes the connection, for the network attester's id request (in cells of
     140 + 9 bytes) whose engine sends one token, then fails with ``error``."""
     def submit(adm: Admission) -> None:
         adm.deliver(Delta([4853], " w"))
@@ -604,7 +604,7 @@ def failed_stream(protocol: Any, error: str) -> tuple[bytes, so.Server]:
 
 def test_under_ids_a_failed_stream_stops_unterminated():
     """``--protocol ids``: a stream the engine fails mid-way sends its ids so far and the connection closes, without
-    `io_tie.TRAILER` or any text, the same bytes whatever the error says: the network certifier then sees an unterminated
+    `io_tie.TRAILER` or any text, the same bytes whatever the error says: the network attester then sees an unterminated
     stream and fails it, where an END before the stop rule's position would read as a valid end. The reason is in the
     server's record. Under vLLM's framing (``--protocol vllm``, here its twin `PlainProtocol`) the error event is still
     sent before ``data: [DONE]``."""
@@ -628,7 +628,7 @@ def test_under_ids_a_failed_stream_stops_unterminated():
 
 
 def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
-    """The same endpoint under ``--protocol ids`` for the network certifier (a shim straight to the
+    """The same endpoint under ``--protocol ids`` for the network attester (a shim straight to the
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""

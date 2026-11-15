@@ -1,4 +1,4 @@
-"""leak_bounds' scaling by requests, which `verity bench certifier_term` prints: the network certifier's terms at the
+"""leak_bounds' scaling by requests, which `verity bench certifier_term` prints: the network attester's terms at the
 load of a node, the reference datacenter and the world, each check's by its own rule.
 
 - the scan's terms are the rows form's, held here to the Lean's `clog2` on a hand-worked

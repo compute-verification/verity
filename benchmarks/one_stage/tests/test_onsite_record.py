@@ -1,6 +1,6 @@
-"""`onsite_record.py` on toy served runs' $OUTs. A run whose network certifier, PoUW and composites are missing, as a
+"""`onsite_record.py` on toy served runs' $OUTs. A run whose network attester, PoUW and composites are missing, as a
 rehearsal's, records each of them missing with its why, and no bound and no period figure. A run whose network
-certifier accepted in the rows form records K term by term in the notation table's symbols, each naming the public
+attester accepted in the rows form records K term by term in the notation table's symbols, each naming the public
 fields it sums, with its overcount as a note, the seconds it covers, the line that published its verdict, the tree, and
 the connections its schedule's caps count (other caps are the connections' error); its run's own period proved, and
 each monitoring period's node proved where the run's period covers it and else scaled from the run, and the
@@ -15,14 +15,14 @@ phase, ℓ_a the cap of the run's published advice registration (no figure where
 audit's own docket binds an advice), with what is open named and no tighter figure beside it. A tied audit
 drawn in part charges its slot entries in k_{skip,j}; each cell states its share of the schedule's egress capacity,
 and the served egress is missing. SPOT's coins are live only where
-every COINS line names the live challenger at a named peer, and the network certifier's chain draws only where each
+every COINS line names the live challenger at a named peer, and the network attester's chain draws only where each
 takes everything; otherwise, or with none, live-coins is open by name (each chain draw by its own), the figure of
 record charges ℓ_a + 1 for each tied audit whatever else holds, and it and its cells are conditional on the coins, and
 so is the sampled-proofs verdict where its draw is the one open. While certifier-key is open an accepted network
 verdict is not established and its bound conditional on it. It closes only where the lock holds PeriodLeakRegistered
 at its pinned statement taking hA, hr and hkey as auditor-record and the run's check of the auditor's inputs holds:
 its certifier-key record's key, LMS parameters and session are the period's, and its registration, which checks,
-holds that key for a network certifier its log places. Where a circuit file the period lists isn't the one V3c's
+holds that key for a network attester its log places. Where a circuit file the period lists isn't the one V3c's
 published period names, or the scan's files are listed, an accepted network verdict is not established and there is
 no bound; so it is, and the composite of record's verdict too, where a file remote's SPOT case registers
 isn't, by SHA-512, the one its params name, or its public file the one V3c's audit pinned at staging, before the draw,
@@ -38,7 +38,7 @@ as not credited. PoUW's freed compute is never credited or claimed, whatever its
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
 The run is of record only when every verdict, the onsite composite's included, accepted and every drawn member is
 credited, PoUW's verdict aside: the record claims nothing of it, and lists it as its row states it. Where the run has
-the network certifier's composite without PoUW, that is the composite of record, named by its id: the run is of record
+the network attester's composite without PoUW, that is the composite of record, named by its id: the run is of record
 over its verdict and its subprotocols', remote's aside too, its error has no PoUW term, and no verified compute is
 credited.
 SPOT's guarantee is its window's ε at δ beside its pooled count over any number of windows, and that count for
@@ -106,7 +106,7 @@ TREE = "ab12" * 10
 LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
-#: the auditor's record of its network certifier's key, as `record_files.public_json` writes one, and session; and
+#: the auditor's record of its network attester's key, as `record_files.public_json` writes one, and session; and
 #: the period's params stating them, as `scan_period.rows_case` does: one listed entry, whose stretch holds the
 #: period's execution phase
 CERT_KEY = {"params": [64, 8, 10], "public": "c3" * 64, "key_id": "1d" * 16}
@@ -116,7 +116,7 @@ CERTIFIER = {"first": 0, "keys": [ENTRY], "lms": {"H": 10, "N": 64, "W": 8, "toy
 
 
 def key_record(key: dict = CERT_KEY, session: str = SESSION) -> dict:
-    """The auditor's record of its network certifier's deployment (`network_certifier_chain.RECORD`)."""
+    """The auditor's record of its network attester's deployment (`network_certifier_chain.RECORD`)."""
     dep = {"key": key, "session": session}
     return {"schema": WC.RECORD, "key": key, "session": session, "deployment": dep,
             "deployment_sha512": hashlib.sha512(json.dumps(dep).encode()).hexdigest()}
@@ -129,7 +129,7 @@ NODE0 = S.HostFigures(1 << 23)
 def site_registration(held: str = CERT_KEY["public"], placed: str | None = None,
                       composite: str = "onsite") -> dict:
     """The auditor's registration of the deployment (``--site-registration``): the log's params, its auditor holding
-    ``held`` for its network certifier cert0, and the log placing cert0, its key ``placed`` (``held`` unless given), on
+    ``held`` for its network attester cert0, and the log placing cert0, its key ``placed`` (``held`` unless given), on
     node0's uplink."""
     log = REG.chain(composite, [REG.site(
         locs=(S.Loc("site0", "site", time_unit=S.TIME_UNIT), S.Loc("node0", "host", "site0", chip=NODE0.chip),
@@ -237,7 +237,7 @@ TIED = "NetTiming.SecurityProofs.PeriodTiedCount"
 ACCEPTED = "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted"
 #: the theorem that discharges the free-input count's premise
 (COUNTED,) = OR.PREMISES["free-count"]["discharged_by"]
-#: the Property of the Lean audit over the network certifier's signed records that discharges schedules-covered
+#: the Property of the Lean audit over the network attester's signed records that discharges schedules-covered
 (COVERED,) = OR.PREMISES["schedules-covered"]["discharged_by"]
 
 
@@ -355,7 +355,7 @@ def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None
                composites: dict[str, dict] | None = None, coins: str | None = GATE,
                audit: dict | None = AUDITED, draw: dict = SUBSET1, bound: int = N - 1) -> Path:
     """A toy $OUT: SPOT accepted under ``draw`` with ``bound`` (`integrity_answer`), its audit's record
-    ``audit`` (none where None), PoUW and the network certifier missing unless given, the given composites and
+    ``audit`` (none where None), PoUW and the network attester missing unless given, the given composites and
     certifier case, and its COINS line, its sampled-proofs part ``coins`` (none where None); and beside it the auditor's
     inputs (`auditor_files`)."""
     out = tmp_path / "out"
@@ -384,7 +384,7 @@ def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None
 
 
 def chain_report(n2: str = "all", scan: str = "all") -> dict:
-    """The network certifier's published chain report (`certifier_piece.PUBLIC`), its draws at these sampling_designs."""
+    """The network attester's published chain report (`certifier_piece.PUBLIC`), its draws at these sampling_designs."""
     return {"steps": {s: {"eps_at_delta": {"law": sampling_design, "eps": "0"}} for s, sampling_design in (("n2", n2), ("scan", scan))}}
 
 
@@ -401,7 +401,7 @@ FREE_CHARGE = {"charge": "free", "is": OR.STATE_CHARGE, "tied": [0], "with_recor
                "unpinned": {g: None for g in OR.STATE_PINS}}
 SAMPLED_V1 = "verity/sampled-proofs/v1"
 REMOTE_IDS = (OR.INFERENCE_ONLY, OR.POUW_ID, SAMPLED_V1)
-#: the id the network certifier's composite without PoUW is registered under
+#: the id the network attester's composite without PoUW is registered under
 WITHOUT = "verity/remote-network-no-pouw/v0"
 WITHOUT_IDS = (OR.NETWORK, OR.INFERENCE_ONLY, SAMPLED_V1)
 
@@ -412,7 +412,7 @@ def sha512_of(params) -> str:
 
 
 def composed(out: Path, f: Path | None = None) -> str:
-    """`sha512_of` the params of OUT's network certifier case (or the case at ``f``), "00" where there is none."""
+    """`sha512_of` the params of OUT's network attester case (or the case at ``f``), "00" where there is none."""
     f = out / OR.CASE if f is None else f
     return sha512_of(json.loads(f.read_text())["params"]) if f.is_file() else "00"
 
@@ -428,7 +428,7 @@ def sampled_stated(out: Path) -> dict[str, str]:
 def with_composite(out: Path, name: str, product: str, ids: tuple[str, ...], verdict: str = "accept",
                    missing: tuple[str, ...] = (), inference_only: str = "accept") -> Path:
     """``out`` with ``product``'s composite.json in composite/NAME: a case of each of ``ids`` but those ``missing``,
-    which it names, inference-only's answering ``inference_only`` and each other accepting, the network certifier's
+    which it names, inference-only's answering ``inference_only`` and each other accepting, the network attester's
     with the params of OUT's case and remote's SPOT's with the params and commitment of its case beside OUT
     (`composed`, `sampled_case`), and Lean's ``verdict``."""
     stated = {OR.NETWORK: {"params_sha512": composed(out), "commitment": "00"}, SAMPLED_V1: sampled_stated(out)}
@@ -449,7 +449,7 @@ def remote_composite(verdict: str = "accept") -> dict:
 
 
 def with_onsite(out: Path, sampled: str = "accept") -> Path:
-    """``out`` with onsite's composite, accepting, its network certifier's case the params of OUT's (`composed`) and
+    """``out`` with onsite's composite, accepting, its network attester's case the params of OUT's (`composed`) and
     remote's SPOT case, answering ``sampled``, the params and commitment of the case beside OUT
     (`sampled_stated`)."""
     cases = [c for c in remote_composite()["cases"] if c["id"] != "verity/sampled-proofs/one-stage/v1"] + [
@@ -469,8 +469,8 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
              schedule: dict = SCHEDULE, audits: tuple[dict, ...] = (NO_ADVICE,),
              registration: dict | None = PUBLISHED, coins: str | None = GATE,
              draws: dict | None = ALL, params: dict | None = None, onsite: bool = True) -> Path:
-    """A run whose network certifier accepted ``public``, its case the period's of ``windows`` execution phases at
-    ``schedule``, whose caps are the schedule's (`Schedule.rowsCells`) unless given, the network certifier's key, LMS
+    """A run whose network attester accepted ``public``, its case the period's of ``windows`` execution phases at
+    ``schedule``, whose caps are the schedule's (`Schedule.rowsCells`) unless given, the network attester's key, LMS
     parameters and session the auditor's record's (`CERTIFIER`) and any other ``params``, and whose commitment holds
     ``audits``' dockets, with ``registration`` its published advice registration, none where None, ``coins`` its
     COINS line's sampled-proofs part (`served_out`), ``draws`` its chain report, none where None, and remote's
@@ -614,7 +614,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     with PeriodTiedCount, to be restated, unlisted, and the premises with no discharge named: every premise is open, by
     name, and so is PeriodTiedCount, so the figure of record charges ℓ_a + 1 for the tied audit, with no tight K beside
     it. certifier-key alone closes, by PeriodLeakRegistered at the fixture's stand-in pin taking the auditor's record
-    and the run's check of it, though PeriodLeakRegistered's other premises stay open: the network certifier's verdict
+    and the run's check of it, though PeriodLeakRegistered's other premises stay open: the network attester's verdict
     is accepted, and the figure and its cells are conditional on nothing."""
     for name, premise in UNNAMED.items():
         monkeypatch.setitem(OR.PREMISES, name, premise)
@@ -945,7 +945,7 @@ def test_at_the_trees_lock_certifier_key_stays_open_and_the_network_verdict_unes
         monkeypatch, tmp_path):
     """No Lean states PeriodLeakRegistered (`RESTATE_PERIOD`): the tree's locks hold no statement of it, and `RESTS_ON`
     pins none. So at the tree's lock certifier-key stays open even where the run's check of the auditor's record (hA,
-    hr and hkey, as auditor-record) holds, and an accepted network certifier's verdict is not established (`KEY_OPEN`).
+    hr and hkey, as auditor-record) holds, and an accepted network attester's verdict is not established (`KEY_OPEN`).
     Where that check fails, or no run's inputs were checked, the record says why too. The day the statement is in Lean,
     proved, held by the Properties lock and pinned here, this test fails: it is then to assert that certifier-key closes
     where the run's check holds, and only there."""
@@ -1111,7 +1111,7 @@ def test_a_published_advice_registration_stating_no_cap_of_at_least_1_bit_refuse
 def test_a_commitment_the_record_cant_read_leaves_no_figure_of_record_and_no_bound(tmp_path):
     """The case's commitment holds the period's audits. Where the record can't read it, the figure of record is its
     error (the audits' caps), and scan-state-pinned can't say whether an audit's window commits the scan's state, so it
-    doesn't hold: the network certifier's verdict is not established and there is no bound."""
+    doesn't hold: the network attester's verdict is not established and there is no bound."""
     out = accepted(tmp_path)
     case = dict(json.loads((out / OR.CASE).read_text()), commitment="00")
     (out / OR.CASE).write_text(json.dumps(case))
@@ -1332,7 +1332,7 @@ def with_deltas(out: Path, **deltas: object) -> Path:
 @pytest.mark.parametrize("eps, stated, vacuous", [("1/1048576", "262145/524288", False),
                                                   ("524289/1048576", "524289/524288", True)])
 def test_the_composites_error_sums_each_subprotocols_delta_with_its_source(tmp_path, eps, stated, vacuous):
-    """SPOT at its served δ = 1/2 and PoUW at 2^-20 from their rows, and the network certifier's eps from its
+    """SPOT at its served δ = 1/2 and PoUW at 2^-20 from their rows, and the network attester's eps from its
     bound: one tied audit's draw read at SPOT's 1/2 and again inside the network's eps is two terms. Their sum is
     stated as a lower bound on the error, inference-only's δ missing and the rest unvalued."""
     public = dict(PUBLIC, eps=eps, audits=[{"delta": str(Fraction(eps) - Fraction(1, 2 ** 20)), "drawn": 1,
@@ -1535,7 +1535,7 @@ def test_a_test_runs_measured_advice_charge_is_beside_the_bound_as_that_runs(tmp
 
 def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path):
     """With no composite of record, nothing states the parameters the period's check read, so auditor-record doesn't
-    hold and the network certifier's accepted verdict is not established, nor is SPOT's, its subprotocol there, which
+    hold and the network attester's accepted verdict is not established, nor is SPOT's, its subprotocol there, which
     credits no member; onsite's composite, accepting, makes the run of record, and its rejection leaves it not."""
     out = accepted(tmp_path, onsite=False)
     rec = record(out)
@@ -1607,7 +1607,7 @@ def test_spot_verdict_is_its_subprotocol_in_the_composite_of_record_never_the_re
 
 def test_under_the_network_certifiers_composite_without_pouw_the_run_is_of_record_over_its_subprotocols_alone(
         tmp_path, capsys):
-    """A run with the network certifier's composite without PoUW, under its own id: it is the composite of record, named
+    """A run with the network attester's composite without PoUW, under its own id: it is the composite of record, named
     by that id, though remote's and remote-network's, which compose PoUW's case, reject naming it missing. The run is of
     record over its verdict and its subprotocols', inference-only's from its case there, reading neither PoUW's nor
     remote's; its error sums no PoUW term; and the record and its line credit no verified compute, the line saying so in
@@ -1690,7 +1690,7 @@ def test_the_inference_only_verdict_says_where_alpha_and_gamma_came_from_never_a
 def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_established_and_its_bound_conditional_on_it(
         tmp_path, lock, capsys, how):
     """certifier-key open, every other premise discharged, both checks held and the coins live: the network
-    certifier's verdict is not established, its Lean answer's accept beside it, never cited as an accept with an open
+    attester's verdict is not established, its Lean answer's accept beside it, never cited as an accept with an open
     condition, so the run isn't of record; its bound stands, the figure of record charging ℓ_a + 1 for the tied audit,
     and it, its cells, the composite's error and the run's being of record are conditional on certifier-key by name.
     It is open where the lock doesn't hold PeriodLeakRegistered at its pinned statement (unlisted or restated, each
@@ -1782,7 +1782,7 @@ REFUSED_INPUTS = {
 def test_auditor_record_holds_where_the_auditors_record_and_registration_hold_the_periods_key_lms_and_session(tmp_path):
     """auditor-record on the run (`OR.auditor_record`): the period's parameters are, by SHA-512, those the composite of
     record composed, the auditor's certifier-key record states their key, LMS parameters and session, and its
-    registration, which checks, holds that key for a network certifier its log places; it names that certifier and
+    registration, which checks, holds that key for a network attester its log places; it names that certifier and
     each input it read by SHA-512."""
     a = auditor_files(tmp_path / "out")
     assert OR.auditor_record(CERTIFIER, sha512_of(CERTIFIER), a["certifier_key"], a["site_registration"]) == {
@@ -1798,7 +1798,7 @@ def test_auditor_record_doesnt_hold_where_an_input_isnt_given_or_isnt_the_period
     period's (a toy LMS included), where the period lists none readable or no listed entry's stretch holds its
     execution phase, where the registration log is one its check refuses or
     of another composite than its params', or isn't a registration's params and log, and where its auditor holds the
-    record's key for no network certifier its log places."""
+    record's key for no network attester its log places."""
     key, site, params, why = REFUSED_INPUTS[how]
     files = []
     for name, doc in (("certifier-key.json", key), ("site-registration.json", site)):
@@ -1811,7 +1811,7 @@ def test_auditor_record_doesnt_hold_where_an_input_isnt_given_or_isnt_the_period
 
 
 def test_auditor_record_holds_the_key_and_session_of_the_entry_whose_stretch_holds_the_periods_execution_phase(tmp_path):
-    """A rows-form period's parameters list each session of the network certifier from its start on (the period
+    """A rows-form period's parameters list each session of the network attester from its start on (the period
     check's accepted case with two sessions is this shape): with two listed and the period's execution phase in the
     second's stretch, auditor-record holds the second's key and session to the auditor's record, the entry
     NetworkCheck.Period.entryAt picks, so it holds against a record of the second and not against one of the first."""
@@ -1839,7 +1839,7 @@ def test_auditor_record_holds_the_key_and_session_of_the_entry_whose_stretch_hol
 def test_auditor_record_doesnt_hold_where_the_periods_params_arent_by_sha512_those_the_composite_of_record_composed(
         tmp_path, composed, why):
     """The period's parameters are the ones its check read only where their SHA-512 over canonical JSON is the one the
-    composite of record states for the network certifier's case: where it states none, or that of other parameters,
+    composite of record states for the network attester's case: where it states none, or that of other parameters,
     whether another key or any field more, auditor-record doesn't hold, though the auditor's record and registration
     state those parameters' key, LMS parameters and session."""
     a = auditor_files(tmp_path / "out")
@@ -1867,7 +1867,7 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
         tmp_path, capsys, how, why):
     """auditor-listing on the run: each circuit file the period's audit lists is, by SHA-512, the one its audit's
     sessions were verified against, V3c's published period (`OR.PERIOD`), whose docket is the one the case's
-    commitment holds for that audit. Where it holds, the network certifier's accepted verdict stands, the run of
+    commitment holds for that audit. Where it holds, the network attester's accepted verdict stands, the run of
     record. Where it doesn't, whatever else holds, the verdict is not established, its Lean answer's accept beside it,
     with no bound and nothing conditional on the listing: another file, a file fewer, the period of another audit, no
     published period, or the scan's files listed, of which the run publishes no record."""
@@ -1985,7 +1985,7 @@ def test_the_network_and_composite_verdicts_are_established_only_where_v3cs_read
     period holds to the scan's state, and one-stage's docket checks read nothing of the window, so the audit's
     driver pins its registered reads there. Where the entry its registered reads opened the state at (its published
     summary's registered.own) is that activations entry by value, root and domain, the audit accepted and its record
-    reported each sampled member's registered reads, the network certifier's verdict and the composite of record's stand
+    reported each sampled member's registered reads, the network attester's verdict and the composite of record's stand
     and the run is of record. Where any differs or its evidence is missing (no entry stated, no summary, no published
     period or another audit's, the audit not accepting, the reads unreported), both are not established, each its Lean
     accept beside it, and there is no bound."""
@@ -2110,7 +2110,7 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     case's is the circuit file θ names or the public file the evidence names, a drawn member's statement names no
     member of θ's, θ isn't the one the composite states, the run
     gave no case or a file it registers is gone, the public file isn't the pinned one, or the run gave no pin or its
-    case commits to a docket the composite doesn't state, auditor-listing doesn't hold: the network certifier's
+    case commits to a docket the composite doesn't state, auditor-listing doesn't hold: the network attester's
     verdict, the composite of record's and SPOT's, its subprotocol there, are not established, each its Lean accept
     beside it, with no bound and no member credited, and the run isn't of record."""
     out = accepted(tmp_path)
@@ -2431,8 +2431,8 @@ def test_spot_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_an
                                              (None, None, ["the period draw", "the scan's draw"])])
 def test_a_chain_draw_that_doesnt_take_everything_is_open_under_live_coins_by_its_name(tmp_path, capsys, n2, scan,
                                                                                          named):
-    """The network certifier's period draw or its scan's draw taking K of what it draws from (subset:K, stratified:k),
-    or a run that published no chain report: each such draw is open under live-coins by its name, though SPOT's COINS line names the live challenger, so the network certifier's figure of record charges ℓ_a + 1 for the
+    """The network attester's period draw or its scan's draw taking K of what it draws from (subset:K, stratified:k),
+    or a run that published no chain report: each such draw is open under live-coins by its name, though SPOT's COINS line names the live challenger, so the network attester's figure of record charges ℓ_a + 1 for the
     tied audit though both checks are held and every premise discharged, and it, its cells, the composite's error and
     the run's being of record are conditional on the coins; SPOT's verdict, on live coins, isn't."""
     out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), draws=None if n2 is None else chain_report(n2, scan))
@@ -2464,7 +2464,7 @@ def test_padding_out_of_free_open_leaves_the_conservative_figure_of_record_and_n
 
 
 def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_answer_and_else_the_drop(tmp_path):
-    """Remote's report drops the network certifier whatever its pieces hold; with the split certifier behind the front
+    """Remote's report drops the network attester whatever its pieces hold; with the split certifier behind the front
     its period check's answer, beside its case under OUT/pieces/certifier, is the verdict and the bound, as onsite's
     report composes it."""
     out = accepted(tmp_path)

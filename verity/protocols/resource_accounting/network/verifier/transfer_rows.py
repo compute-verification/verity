@@ -1,5 +1,5 @@
-"""The network certifier's transfer rows: a host's load, each value of the weights it loads once a session, committed
-by the network certifier on the host's uplink as it crosses, never by the prover, and signed with its key. The verifier
+"""The network attester's transfer rows: a host's load, each value of the weights it loads once a session, committed
+by the network attester on the host's uplink as it crosses, never by the prover, and signed with its key. The verifier
 pins each load's root from that certificate alone (`blocks.pins`), so every unit's row of a load is a registered read
 opened against the certifier's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`,
 `Flock.Registered.checkPort`), which don't change. Every other row into the host is the scan's state
@@ -32,7 +32,7 @@ received, which the prover holds.
 
 and its certificate is `Issuer.sign`'s of the transfer digest: the certifier's message for the link and execution phase
 in its session (`certificate.certificate_message`), so it verifies for that link, direction and execution phase alone.
-The network certifier's cells digest and its record digest of an execution phase's transfer blocks are under other tags,
+The network attester's cells digest and its record digest of an execution phase's transfer blocks are under other tags,
 so none verifies as another.
 
 **The kind** (`KINDS`) is ``load``, ingress: the registered parameters' leaves the load connection carries, once a
@@ -226,7 +226,7 @@ def check_registration(doc: Any, key: PublicKey, session: bytes, *, link: str, d
                        schema: str = SCHEMA) -> tuple[TransferHead, CommitmentDomain]:
     """The verifier's read of a transfer registration for the transfer it expects (its link and execution phase, kind,
     value, the circuit's program digest and the value's shape and row format, all from its own record), under the
-    network certifier's key and session: the head and the domain the verifier derived, or ValueError naming what
+    network attester's key and session: the head and the domain the verifier derived, or ValueError naming what
     fails."""
     _kind(kind, direction)
     _format(word_bits, schema)

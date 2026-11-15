@@ -3,7 +3,7 @@ output rows from its slots' values. Pinned on `test_window_circuit`'s TINY class
 positions a Program) at its grain, TINY's bf16 checkpoint on the H200 (FA3's `Attention_v4`, the class 4,32,4's
 attention; its exact-int8 window waits on its norm's reader, `test_window_circuit_int8`), with random weights registered
 under a committer's key and a scan state whose row at bucket 0 carries the two slots' requests; and the network
-certifier's scan of its own traffic (`scan_state`), which starts each request in the slot its anchor and lane give, at
+attester's scan of its own traffic (`scan_state`), which starts each request in the slot its anchor and lane give, at
 TINY's slots and the class of record's.
 """
 from __future__ import annotations
@@ -104,7 +104,7 @@ def _registered(config=S.TINY):
 
 def _window(config=S.TINY, grain=GRAIN):
     """The class circuit lowered, its weights, its registered values (each weight's parameter under `KEY`, and the scan
-    state's, `STATE` committed as a stand-in for the network certifier's, in ``row/v2`` rows as the scan's units commit
+    state's, `STATE` committed as a stand-in for the network attester's, in ``row/v2`` rows as the scan's units commit
     their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
     low = WC.lower(_registered(config), CLASS, None, grain, provable=False)
     fields = _weights(low.fn)
@@ -253,7 +253,7 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
 
 def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[int, tuple[int, ...]]]:
     """Id requests (`id_form.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``, request i
-    answered ids 100 + i and 200 + i, through the network certifier at ``cls``'s scan schedule for the transfer blocks of
+    answered ids 100 + i and 200 + i, through the network attester at ``cls``'s scan schedule for the transfer blocks of
     3 execution phases of its buckets (`scan_traffic.serve`, the certifier tests' driver): its registered ingress rows and each request's outputs by
     ordinal."""
     import importlib.util
@@ -275,7 +275,7 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
 
 
 def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
-    """`scan_state` on the network certifier's traffic at the class of record's slots (`SLOTS_CLASS`: 4 lanes, boundaries
+    """`scan_state` on the network attester's traffic at the class of record's slots (`SLOTS_CLASS`: 4 lanes, boundaries
     at buckets 0 and 16 of a 32-bucket window, TINY's bounds): three requests admitted at bucket 0 are anchored at bucket 16
     (WITHIN 12 on), in lanes 0, 1 and 2, so window 0's class Programs 1, 3 and 5 start them (slot nb·j + b); a fourth
     admitted at 5 is anchored at 32 (`scan_anchors`), window 1's first boundary, in lane 3: window 1's Program 6. Each
@@ -308,7 +308,7 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
 
 
 def test_the_scans_state_value_gives_the_window_its_slots(window):
-    """The window's scan state as the network certifier's scan gives it: `LANES`' two requests, admitted at bucket 0 of
+    """The window's scan state as the network attester's scan gives it: `LANES`' two requests, admitted at bucket 0 of
     TINY's 16-bucket windows, are anchored at bucket 16, window 1's one boundary, in lanes 0 and 1, so class Programs 0
     and 1 start them; the scan's rows, committed (`state_value`), give each slot its row and head as the stand-in's
     `STATE` does (`scan_slots`), and `Rows` takes the scan's value with the slots of those rows."""
@@ -653,7 +653,7 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     (``row-seg``), each committed under the committer's key at a nonce of its own: the table and a weight are core's commits
     of those rows under the weights record's program and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the
     registration's roots, `weights_registration`), and the entries name nothing but each value's size, domain and hiding
-    root. The scan state is no value of the committer's but the network certifier's, a row a bucket of the window. Each
+    root. The scan state is no value of the committer's but the network attester's, a row a bucket of the window. Each
     value is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
     low, fields, got, *_ = window
     assert set(got) == set(low.circuit.registered.params)

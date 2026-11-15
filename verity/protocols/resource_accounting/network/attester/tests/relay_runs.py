@@ -1,4 +1,4 @@
-"""A network certifier run driven tick by tick on a `VirtualClock` and published as `serve` and `client` publish one
+"""A network attester run driven tick by tick on a `VirtualClock` and published as `serve` and `client` publish one
 (`_run`), with the text schedule it runs at by default and its stand-ins for a connection's writer and an endpoint's
 response; and the gate's relay session at the scan's w63k4 schedule (`_session_argv`), which the challenger's tests
 hold the gate's command to. The device's tests and those of the programs that read a run import it by its package
@@ -71,7 +71,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
          process: bool = False, servers: list | None = None, params: NetworkCertifierParams = PARAMS,
          id_payload: int | None = None, load_heads: Path | None = None, arrive: dict[int, int] | None = None,
          late: dict[int, float] | None = None, back: dict[int, int | None] | None = None) -> NetworkCertifier:
-    """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
+    """A run of the network attester at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
     `process`, which first signs the load's heads `load_heads` when given), the session's start certified at base 0
     before any record, each window committed by `commit`, its connection rows kept as the publisher process keeps
@@ -79,10 +79,10 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at P =
     `id_payload` when given; `servers` gets the server's side of each connection, in connect order. In a schedule
     with a head offset the publisher hands each execution phase's line of connection rows back and the network
-    certifier's tick writes it, as in `serve`: the line is back at the hand itself when published inline and before
+    attester's tick writes it, as in `serve`: the line is back at the hand itself when published inline and before
     the next tick when by the process, or, inline, just before the tick `back` names for its execution phase, never
     where that is None. The run then ticks on past its last window while a line may still leave. Returns the
-    network certifier."""
+    network attester."""
     tau = params.bucket_ms / 1000
     height = 5 if load_heads or params.lengths else 4
     timed = params.head_offset is not None

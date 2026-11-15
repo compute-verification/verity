@@ -1,6 +1,6 @@
-"""A network certifier run (`network_certifier_serve.py rehearse`'s files) over a served window's traffic, for `a5_network_certifier.py --run`: the requests of
-a `verity-vllm serve-openai` run's closed Commit window K, sent through the network certifier in the order the run recorded them, and an
-upstream that answers each with the tokens the server streamed it, so the network certifier's cells carry that window's requests and
+"""A network attester run (`network_certifier_serve.py rehearse`'s files) over a served window's traffic, for `a5_network_certifier.py --run`: the requests of
+a `verity-vllm serve-openai` run's closed Commit window K, sent through the network attester in the order the run recorded them, and an
+upstream that answers each with the tokens the server streamed it, so the network attester's cells carry that window's requests and
 responses.
 
 * **The requests** (`traffic`): each request of ``requests.jsonl`` with rows in window K, as a streamed ``/v1/completions`` body:
@@ -13,13 +13,13 @@ responses.
   bytes are rendered again from them; a request the window doesn't hold is answered 404.
 * **The run** (`rehearse`): as `network_certifier_serve.py rehearse` runs one (a key in scratch, ``serve`` and ``client`` as processes, then
   ``check``), with that traffic and that upstream, in the ``bytes`` egress form (`network_certifier`'s "The egress form"): the upstream
-  answers in vLLM's completion form, which the id form refuses. ``--out`` holds the network certifier's files (``deployment.json``, the
+  answers in vLLM's completion form, which the id form refuses. ``--out`` holds the network attester's files (``deployment.json``, the
   records, ``cells.jsonl``; ``cells.salts`` is witness) and ``check.json``.
 
     python benchmarks/one_stage/network_certifier_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap S] [--token-ms 20] [schedule]
     python benchmarks/one_stage/network_certifier_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
 
-``--serve-window`` is the served run's Commit window; ``--window`` is the network certifier's own, in buckets (`NetworkCertifierParams`).
+``--serve-window`` is the served run's Commit window; ``--window`` is the network attester's own, in buckets (`NetworkCertifierParams`).
 """
 from __future__ import annotations
 

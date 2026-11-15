@@ -1,7 +1,7 @@
 """No executable of this package serves the wipe's counted check but the difftest's own (`wipe-count-test`).
 
 `MemoryChallenger.WipeProtocol.checkCounted` certifies at the count the evidence states, and nothing holds that count to
-the network certifier's count over the span until a composition ties `named` to it. So an executable that reaches the
+the network attester's count over the span until a composition ties `named` to it. So an executable that reaches the
 check (`checkCounted`, or a definition of `MemoryChallenger.WipeCount` built on it: `mkCounted`, `countedTest`) other than
 the ones `ALLOWED` names fails here: each `lean_exe` of `lakefile.toml`, its root module and every module of this package
 its `import` lines reach, read with comments left out. `named` alone, which `memory-challenger-difftest` reads, is the

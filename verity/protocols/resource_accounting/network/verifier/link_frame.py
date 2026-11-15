@@ -1,5 +1,5 @@
 """The link's frame: its header, the kinds both certifiers' frames have, and its codec. A link frame is B bytes: the
-header (kind, stream, the payload's length), the payload, then zero fill. The network certifier's cells are such
+header (kind, stream, the payload's length), the payload, then zero fill. The network attester's cells are such
 frames."""
 
 from __future__ import annotations

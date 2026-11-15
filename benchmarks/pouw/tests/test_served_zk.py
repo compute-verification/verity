@@ -669,7 +669,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
         served, tmp_path, monkeypatch):
     """What a certified execution phase of salted units runs through after `salt.unit_reason`, which no served-zk execution phase passes
     today (the two tests above): this test lifts that one rule (monkeypatched to accept) and holds the rest end to end
-    against the network certifier as the challenger reads it (`certified_salt.Certifier`).  The prover records its pass's weights, the
+    against the network attester as the challenger reads it (`certified_salt.Certifier`).  The prover records its pass's weights, the
     execution phase's stream (`stream_id`, naming the certifier's run, (key id, run id, ingress link)) and its prover id
     (`salt.prover_id`) with the certifier for PoUW execution phase 0 before its salt is
     sampled, signed, and salts its pass from the salt it receives in-band.  `register` reads that record on the execution phase's

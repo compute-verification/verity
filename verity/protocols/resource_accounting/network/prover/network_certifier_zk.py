@@ -1,5 +1,5 @@
-"""network-certifier-zk: the network certifier's bucket rows read by the proof system. A toy proof block over one row's bits, its
-port registered against the network certifier's signed egress root (`network_certifier_rows`), proved by Flock `prove --zk` behind
+"""network-certifier-zk: the network attester's bucket rows read by the proof system. A toy proof block over one row's bits, its
+port registered against the network attester's signed egress root (`network_certifier_rows`), proved by Flock `prove --zk` behind
 the Lean ZK server and held by the Lean verifier's registered reads (`verity-verify-proof verify --zk --registered`), through
 the one-stage audit as `n2_zk.py` proves N2's head checks.
 
@@ -7,35 +7,35 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
       [--units 16] [--dry]
 
 * **The run.** A network-certifier-serve run's directory (`network_certifier_serve.py rehearse`'s): `deployment.json`, the records, and the
-  rows the network certifier committed and signed while serving, a row a bucket: `cells.jsonl` (each execution phase's
-  registration) and `cells.salts` (the rows' salts and the wiring's, witness, which the network certifier hands the
+  rows the network attester committed and signed while serving, a row a bucket: `cells.jsonl` (each execution phase's
+  registration) and `cells.salts` (the rows' salts and the wiring's, witness, which the network attester hands the
   prover alone).
 * **The registration.** An egress execution phase's: its registration read by the verifier
   (`network_certifier_rows.check_registration`, under the deployment's key and session and the schedule), and the network
-  certifier's opening (the record's rows and wiring under the salts) held to its head.
+  attester's opening (the record's rows and wiring under the salts) held to its head.
 * **The proof block** (`WardenRowIdentity{B}`, B a row's S·B bytes): one bucket row's 8·B bits in (`row`), the same bits
   out (`o0`), each through two NOTs (the partition refuses a template with no gate; no AND).
 * **The proof blocks' wiring is the Program's** (`network_certifier_rows.Units`), fixed from public structure alone, never the
   cells' bytes: the connection admitted in an execution phase (its first row past the window's first, or window 0) with
   the most cells, at least D·r + n, and proof block i reading its egress cell i, its cell D·r + i (the D buckets before
   are its delay's pads, the schedule's). Each is at its bucket's row, the cell at its slot's words
-  (`network_certifier_rows.Wiring.place`, with the network certifier's wiring, opened to the verifier: the named gap). The
+  (`network_certifier_rows.Wiring.place`, with the network attester's wiring, opened to the verifier: the named gap). The
   verifier's port names the proof blocks' digest in its value (`network_certifier_rows.port`), so a statement made for any other
   proof blocks' wiring is refused by Lean's registered
   reads, even at the same rows.
 * **Members.** One statement of n units each, a shared-row public file every port of which is one of the verifier's
   own registered reads (`--registered`, which `Flock.Registered.checkComplete` holds to every port of the
-  circuit): the member's network certifier port at the network certifier's root (`network_certifier_rows.port`), and its other
+  circuit): the member's network attester port at the network attester's root (`network_certifier_rows.port`), and its other
   port at the member's committed value of it (`committed_value`: its units' rows under its own salts, committed before
   staging, the root the registration names before any coin, `audit_member`):
-  - ``sender``: ``o0`` registered, under the network certifier's salts and paths: the sender's unit opens its output as the rows;
+  - ``sender``: ``o0`` registered, under the network attester's salts and paths: the sender's unit opens its output as the rows;
   - ``receiver``: ``row`` registered: the receiver's check opens the same rows as its input;
   - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, proof block 0's cell one byte off: rows the
-    network certifier didn't sign (and the prover's registration of its own root, under the network certifier's
+    network attester didn't sign (and the prover's registration of its own root, under the network attester's
     certificate, is refused by `check_registration`);
-  - ``altered``: ``o0`` under the network certifier's salts and paths, proof block 0's input row one bit off in its
-    cell, so its output differs from the network certifier's row;
-  - ``pad``: ``o0`` under the network certifier's salts and paths, made for proof blocks whose proof block 0 reads the
+  - ``altered``: ``o0`` under the network attester's salts and paths, proof block 0's input row one bit off in its
+    cell, so its output differs from the network attester's row;
+  - ``pad``: ``o0`` under the network attester's salts and paths, made for proof blocks whose proof block 0 reads the
     connection's cell 0, a pad of its delay, where the Program's reads its egress cell 0: the header names the pad's
     proof blocks' wiring;
   - ``pad-named``: ``pad``'s rows under the Program's value, which is public: proof block 0's row isn't the Program's;
@@ -103,9 +103,9 @@ WardenRowIdentity = CompositeDefinition(
 # --- the run ----------------------------------------------------------------------------------------------------------
 
 def attestation(run: Path, n: int) -> SimpleNamespace:
-    """The egress execution phase to read, its registration as the verifier reads it, the network certifier's opening,
+    """The egress execution phase to read, its registration as the verifier reads it, the network attester's opening,
     and the Program's proof blocks' wiring (`units`, the module docstring's), from public structure alone: `reads` its
-    (connection, cell) each, the row and slot the network certifier's wiring places each at (`positions`, `slots`), and
+    (connection, cell) each, the row and slot the network attester's wiring places each at (`positions`, `slots`), and
     how many of them hold the server's bytes (`data_rows`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = NetworkCertifierParams(**dep["params"])
@@ -186,7 +186,7 @@ def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
 
 
 def opened(at: SimpleNamespace, mr: SimpleNamespace) -> list[bool]:
-    """Whether each of a member's rows, committed under its salt, climbs its path to the network certifier's signed root
+    """Whether each of a member's rows, committed under its salt, climbs its path to the network attester's signed root
     at the position the member's entry names."""
     return [WR.opens(at.dom, at.head.root, p, WR.bc(r, s), bytes.fromhex(path))
             for p, r, s, path in zip(mr.entry["positions"], mr.rows, mr.salts, mr.entry["paths"])]
@@ -200,9 +200,9 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> st
 
 
 def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> G.Registered:
-    """A member's own rows of a port no network certifier row registration holds (one a unit, its u16 words), committed
+    """A member's own rows of a port no network attester row registration holds (one a unit, its u16 words), committed
     before staging as a value registered on `head`'s execution phase: each row under a salt of the prover's own, in a tree
-    whose domain binds the statement's Program (its SHA-512, `program`) and the network certifier's root, so the root,
+    whose domain binds the statement's Program (its SHA-512, `program`) and the network attester's root, so the root,
     which the registration names before any coin, opens under no other execution phase's. The statement commits the port's
     rows under the same salts, so they open it."""
     return G.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, G.WORD_BITS, WR.SCHEMA,
@@ -273,9 +273,9 @@ def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
 
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     """Member `name`'s statement: its input rows, a shared-row file (each instance its own table row), its network
-    certifier port's rows under its salts and paths (`member_rows`) and its other port's under those of the member's
+    attester port's rows under its salts and paths (`member_rows`) and its other port's under those of the member's
     committed value of them (`committed_value`); and the verifier's own `--registered` file, which names both ports:
-    the network certifier's port at its root, the other at the committed value's."""
+    the network attester's port at its root, the other at the committed value's."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
     port, _ = MEMBERS[name]
@@ -319,7 +319,7 @@ def zk_server(M, m: dict) -> dict:
 
 def committed_roots(m: dict) -> tuple[dict, list]:
     """The registration's entries of a member's committed values (`committed_value`), each ``<member>/committed/<port>``:
-    the domain the verifier expects (its own, from the Program, the value's name and the network certifier's root) and
+    the domain the verifier expects (its own, from the Program, the value's name and the network attester's root) and
     the root the prover registers, which the verifier's registered reads name."""
     want, roots = {}, []
     for p, v in m["committed"].items():
@@ -414,7 +414,7 @@ def blobs_of(m: dict) -> tuple[dict[str, bytes], set[str]]:
 
 
 def pad_cells(at: SimpleNamespace) -> bytes:
-    """Each connection's pad as the network certifier writes it, (PAD, q) and zeros: fixed by the ordinal, which the
+    """Each connection's pad as the network attester writes it, (PAD, q) and zeros: fixed by the ordinal, which the
     wiring (opened to the verifier) names, so a 16-byte piece of it matches any small integer among zeros."""
     return b"".join(cell(PAD, q, b"", at.params.cell_bytes) for q, _, _ in at.opening.wiring.connections)
 

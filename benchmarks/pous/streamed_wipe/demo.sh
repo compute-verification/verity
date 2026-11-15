@@ -35,7 +35,7 @@
 #                        labels, or fM, one label past the foreign_bits published at the reads; a cheat's run
 #                        expects reject
 #   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
-#   --egress-bits N      the network certifier's egress count over the session, in bits, which the verifier's check
+#   --egress-bits N      the network attester's egress count over the session, in bits, which the verifier's check
 #                        takes as evidence in whole MiB, wherever the challenger runs (default: none, the bound
 #                        vacuous); no challenger is given it and the session signs none
 #   --link NAME=TO@VIA   a link leaving this node besides the control link and the challenger's, which the record names

@@ -26,14 +26,14 @@
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #     The STANDIN entries network_certifier and network_certifier:KIND are a5_network_certifier.py: transfer-gate chunks whose ports open the bucket rows of
-#     one connection's cells under the network certifier's signed roots, beside a sampled rest, on a network certifier run rehearsed here first (network_certifier_serve.py
+#     one connection's cells under the network attester's signed roots, beside a sampled rest, on a network attester run rehearsed here first (network_certifier_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
 #     execution phase with a5_network_certifier.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
 #     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local);
 #     network_certifier:altered reads one cell a bit off, and network_certifier:pad, network_certifier:pad-named and network_certifier:swapped make the egress chunk's
 #     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_WARDEN_RUN=DIR
-#     audits that network certifier run instead of rehearsing one (e.g. network_certifier_replay.py's, a served window's traffic through the
-#     network certifier), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_network_certifier.py --units, default 16).
+#     audits that network attester run instead of rehearsing one (e.g. network_certifier_replay.py's, a served window's traffic through the
+#     network attester), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_network_certifier.py --units, default 16).
 #     The STANDIN entries tp-gates and tp-gates:KIND are a5_tp_gates.py: both ranks of a synthetic Llama TP2 step of two
 #     requests, each rank's AllReduce2 chunks reading both ranks' registered partials of each request (layer 0's embedding,
 #     o_proj and down_proj at H = 2048), beside a sampled rest, on one local challenger session's coins (A5_CHALLENGER=local); tp-gates:altered

@@ -2,14 +2,14 @@
 its Lean check is held to (``network/tests/test_network_span_protocol.py``).
 
 A span runs from the execution phase of a start mark to the execution phase of an end mark, on one link of the network
-certifier. The count answers, from certificates alone: is every execution phase of the span and of its tail certified
+attester. The count answers, from certificates alone: is every execution phase of the span and of its tail certified
 under the schedule, and how many bits can have left on the link over them. Its formats are the Lean module's docstring;
 this module decodes them (`params`, `commitment`, `evidence`), checks them (`check`) and names what a composition ties
 (`named`). The framing of an answer (canonical JSON, hex, the outcome) is the core interface's, which a difftest's
 reference adds around these.
 
 **The marks.** Each mark is a `certificate.CertifiedMark`: the 64-byte message it was asked for, the 64-byte salt the
-network certifier sampled, and the certificate that signs the message under the salt (`mark_digest`) on the link's
+network attester sampled, and the certificate that signs the message under the salt (`mark_digest`) on the link's
 marks link name (`marks_link`). The count opens each (`CertifiedMark.refusal`) and reads its execution phase from its
 certificate. A mark's bytes in the commitment are `mark_bytes`: its certificate's bytes (`Certificate.encode`) behind
 their length, its salt, then its message. A link's name is what the period's check takes: at most 65,535 UTF-8 bytes.
@@ -19,7 +19,7 @@ was read at. The link and the key are then read off the site (`registered.regist
 the parameters. Nothing here holds the site to an accepted log: its caller does.
 
 **The span.** From the start mark's execution phase w_s to the end mark's w_e, then a tail (`tail`): the network
-certifier releases a connection's response late, by a bounded time, and reads a server's bytes only on a connection it
+attester releases a connection's response late, by a bounded time, and reads a server's bytes only on a connection it
 opened when it admitted that client's connection, so the bytes it has read by the end mark leave in the tail's
 execution phases at the latest. The count is `phases = w_e + tail − w_s + 1` execution phases, each at the
 schedule's capacity (`capacity_bits`): every cell of both egress records, the responses' and the fails', which both
@@ -29,7 +29,7 @@ marks' execution phases are not, since they say when the span ran, which a mark'
 
 **Each execution phase** of the span and its tail shows its two egress certificates (the responses' record's on the
 link, the fails record's on the link's fails link name) and the signed head of its egress cells, the one signed thing
-that names the schedule's digest (`WR.check_registration`). The network certifier certifies no record of an
+that names the schedule's digest (`WR.check_registration`). The network attester certifies no record of an
 execution phase it faulted or refused a connection in, so a span that holds one is rejected.
 
 **A reason** holds no number: the two marks' execution phases are not public, and a reason is part of an answer."""
@@ -144,11 +144,11 @@ def _schedule(j: Any) -> Schedule:
 
 
 def params(j: Any) -> Params:
-    """The count's parameters, all public: the network certifier's LMS key and its parameters, the certifier session,
+    """The count's parameters, all public: the network attester's LMS key and its parameters, the certifier session,
     the link, its name held to what the period's check holds it to, and the schedule. With the registered hardware
     (`site`, the site of a registration log's view, and `head`, the head of the log it was read at, which come
     together), the link and the key are read off the site (`registered.registered`): the link joins a network
-    certifier and a host, and the key is the one that certifier registered. A refusal there refuses the parameters."""
+    attester and a host, and the key is the one that certifier registered. A refusal there refuses the parameters."""
     if not isinstance(j, dict):
         raise Refused("the object: not an object")
     site = sorted(j) == REGISTERED_KEYS

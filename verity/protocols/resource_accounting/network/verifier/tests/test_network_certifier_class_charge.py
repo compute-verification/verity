@@ -330,7 +330,7 @@ def test_a_record_that_names_no_run_serve_registration_or_verifier_is_refused_by
 
 def test_four_verdicts_of_two_serves_or_under_two_registrations_are_charged_the_whole_schedule():
     """The four are one class's only where their records name one serve and one registration. The head holds the
-    network certifier's rows to a serve and says nothing of the values the stop record and the compute audit
+    network attester's rows to a serve and says nothing of the values the stop record and the compute audit
     judge, so four accepts on one head of one class, one of them of another serve's values or under another
     registration, charge nothing less, and the line says which name differs."""
     assert K.ONE == (K.SERVE, K.REGISTRATION) == ("serve", "registration")

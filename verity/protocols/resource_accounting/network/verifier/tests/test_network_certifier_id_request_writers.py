@@ -1,6 +1,6 @@
 """The id request has two writers: the verifier's `id_form.id_request` and the workload's declaration
 (`certifier.prover.workload.id_request`), which the adapter imports so it reads nothing of the verifier. They write
-the same bytes in the network certifier's cells (``offset=0``) and refuse the same fields, and the link frame's header
+the same bytes in the network attester's cells (``offset=0``) and refuse the same fields, and the link frame's header
 is one format on both sides. The same holds for a response's id events (`io_tie.id_event`) and its last bytes
 (`io_tie.TRAILER`), which the workload declares beside them."""
 

@@ -1,6 +1,6 @@
 # scan_cost
 
-What the network certifier's scan costs to prove and to verify, for each second of execution phase it covers. The
+What the network attester's scan costs to prove and to verify, for each second of execution phase it covers. The
 scan is `benchmarks/network_traces/scan_zk.sh`'s: the step-indexed scan of one link, composed in zero knowledge, on a
 CPU machine. This benchmark runs it once at a fixed identity, puts two numbers on its honest round with the stages
 they are made of, and refuses to write them unless the round's answer is the pinned one.

@@ -21,7 +21,7 @@ The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name th
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
 sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
 (`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
-The network certifier's older name is held in every tracked file but the few that spell it to move or find it
+The network attester's older name is held in every tracked file but the few that spell it to move or find it
 (``CERTIFIER_LEFT_OUT``): in no file's name, and in a file's text only in what the Glossary's row says keeps it
 (``CERTIFIER_KEPT``), by count (``CERTIFIER_NAMES``).
 
@@ -565,7 +565,7 @@ def test_the_spot_scan_reads_each_form():
                                                    "sampled-proofs": 1}
 
 
-#: The network certifier's older name (GLOSSARY.md, Older names), as a word or as a part of a name in any of its three
+#: The network attester's older name (GLOSSARY.md, Older names), as a word or as a part of a name in any of its three
 #: spellings; `BackwardEntry` holds none of them.
 CERTIFIER_OLD = re.compile(r"(?<![a-z])warden|Warden|WARDEN")
 #: The files the scan leaves out, each for what it holds the name for today.
@@ -624,7 +624,7 @@ def certifier_files(files: list[str]) -> list[str]:
 
 
 def certifier_names(files: list[str], read=_read) -> tuple[dict[str, int], list[str]]:
-    """The network certifier's older name in ``files``: each of CERTIFIER_KEPT's count, and what it keeps nowhere, a file's
+    """The network attester's older name in ``files``: each of CERTIFIER_KEPT's count, and what it keeps nowhere, a file's
     name that holds it (`FILE`) and a site none of the kinds spells (`FILE:LINE TEXT`)."""
     kept = {k: re.compile(spelling) for k, (spelling, _) in CERTIFIER_KEPT.items()}
     counts, other = dict.fromkeys(kept, 0), []
@@ -645,7 +645,7 @@ def certifier_names(files: list[str], read=_read) -> tuple[dict[str, int], list[
 
 
 def test_the_network_certifier_s_older_name_stays_only_where_the_glossary_keeps_it():
-    """No file's name holds the network certifier's older name, a file's text holds it only in what a format fixes, a
+    """No file's name holds the network attester's older name, a file's text holds it only in what a format fixes, a
     caller outside the tree gives, recorded data holds or a sentence says of the name itself, and each kind's count
     only falls. The files it reads are every tracked one but CERTIFIER_LEFT_OUT's."""
     counts, other = certifier_names(certifier_files(_tracked()))
@@ -838,7 +838,7 @@ def test_the_doc_scan_reads_poub_s_older_names():
 
 
 def test_the_doc_scan_reads_the_network_and_process_terms():
-    """The network certifier's, the lock's and the landing's older names, on toy files: a Commit period, a pinned key and
+    """The network attester's, the lock's and the landing's older names, on toy files: a Commit period, a pinned key and
     a trusted host stay."""
     docs = {
         "a.md": "The uplink\ntap and the auditor's tap.\n"

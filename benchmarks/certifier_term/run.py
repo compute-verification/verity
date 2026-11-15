@@ -1,4 +1,4 @@
-"""`verity bench certifier_term [ARGS]`: the network certifier's term for the served model at the load of a node, the
+"""`verity bench certifier_term [ARGS]`: the network attester's term for the served model at the load of a node, the
 census's reference datacenter and the world, over a week, a month and a year, in bits and GB (the README beside this
 file). It runs the calculator of K, `benchmarks/network_traces/leak_bounds.py`, with ARGS, and prints what that prints.
 
@@ -11,13 +11,13 @@ figure is the model's, and its mark and every name but the metric's say so (`MOD
 - `METRIC`, the metric's id: the term of record as the document gives it, in GB, beside the document's target. Its row
   is the scan's over the world's year (`RECORD`).
 - the card's figure, a `metric` named under `MODELED` and the card's mark (`CARD`: `simulated`): the same row's term at
-  the other jitter bound, what a network certifier whose network card releases at a set time would be charged, as the
+  the other jitter bound, what a network attester whose network card releases at a set time would be charged, as the
   document gives it under its label (`CARD_FIGURE`), in GB beside the same target. It is no term of record. Its
   `inputs` open with the card as the document states it: that it is simulated, and the clause the figure rests on.
 - `free`: the term K in bits, which the check bounds from above, beside the same target in bits.
 - `capacity`: what the scope's certified boundary links carry out over the period, in bits. It is read from the
   registered hardware and never copied: `--registration FILE` names a registration log, and a machine's uplink is the
-  link of its host that a network certifier splits (`uplink`), at its `beta` bits a second. `beta` is each way and the
+  link of its host that a network attester splits (`uplink`), at its `beta` bits a second. `beta` is each way and the
   term is egress, so it counts once. A scope's machines are each taken as registered so. With no registration it has
   no value, and its `inputs` say why.
 - `verified`: capacity less free, where both have a value.
@@ -95,7 +95,7 @@ def calculator() -> Any:
 def uplink(path: Path, links: int) -> Uplink:
     """A machine's uplink as the registration log at ``path`` registers it
     (`verity.protocols.registration.verifier.registration`'s committed log): the site its site entries
-    register (`Site.of_log`) holds one host, and each of that host's boundary links is split by a network certifier
+    register (`Site.of_log`) holds one host, and each of that host's boundary links is split by a network attester
     (`Site.is_boundary`, `Site.certified`), ``links`` of them, the model's links a machine.
     The log is read as given: its check is its verifier's."""
     from verity.protocols.registration.verifier import registration

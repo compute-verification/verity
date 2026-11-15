@@ -178,7 +178,7 @@ def class_size(v: Any) -> bool:
 class Span:
     """One request as the engine core served it: its engine id, prompt ids, sampling inputs (`SAMPLING`), the ids it was
     served, how it finished (a `FINISH` name, None while running) and, where the serve knows it, its release: the
-    network certifier's run and the request's index N in that run's release order."""
+    network attester's run and the request's index N in that run's release order."""
 
     engine_id: str
     prompt: tuple[int, ...]

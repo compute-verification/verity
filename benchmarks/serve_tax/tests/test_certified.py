@@ -1,4 +1,4 @@
-"""The arm behind the network certifier (`serve_tax.certified`): its data, its schedule, each side's commands, what
+"""The arm behind the network attester (`serve_tax.certified`): its data, its schedule, each side's commands, what
 ends the server's side, and the client's side from the certifier's start to its record, with stand-ins for the
 processes it starts."""
 from __future__ import annotations
