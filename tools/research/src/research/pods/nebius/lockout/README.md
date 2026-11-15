@@ -28,7 +28,8 @@ Apply order. Every step runs as vy-admin on the node and has its own rollback. W
    job user. Before the deploy, on the node, run `sudo groupadd -f --system vy-job`, then `sudo usermod -aG vy-job USER` for
    each account made for jobs and nothing else, or for a new one
    `sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups vy-job USER`. After the lock-out only vy-admin
-   can. `getent group vy-job` prints every job user. Rollback: `research deploy attic`.
+   can. `getent group vy-job` prints every job user. Rollback: `research deploy attic` on the cluster; on a CPU node the staged
+   files are entries, which attic leaves, and start nothing: `vy-lockout plan NODE` names each one for root to remove.
 2. vy-admin: `sudo vy-admin-setup KEYS` with a file of public keys copied to the node. The keys are never taken from a secret
    store and never put in git. Then log in as vy-admin and run `sudo -n true`. Rollback: `userdel -r vy-admin` and remove
    `/etc/sudoers.d/10-vy-admin`.

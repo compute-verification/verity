@@ -743,7 +743,13 @@ def plan_text(node: str) -> str:
                    "sudoers.d or a unit's .d, and starts nothing). From this deploy on, `research run --job-user USER` here asks "
                    f"vy-sudo for its unit, and vy-sudo starts one only as an account listed in group {JOB_GROUP}: before it, on the "
                    f"node, `sudo groupadd -f --system {JOB_GROUP}`, and `sudo usermod -aG {JOB_GROUP} USER` for each account made for "
-                   "jobs and nothing else (after the lock-out only vy-admin can)", "research deploy attic"),
+                   "jobs and nothing else (after the lock-out only vy-admin can)",
+         "research deploy attic" if cluster else
+         "the staged files start nothing; to remove them, as root: `rm -rf /usr/local/lib/vy-lockout /usr/local/sbin/vy-admin-setup "
+         f"/usr/local/sbin/vy-lockout /usr/local/sbin/vy-sudo /usr/local/sbin/vy-seal-runs {SSHD_ADMIN} "
+         "/etc/systemd/system/vy-seal-runs.service /etc/systemd/system/vy-seal-runs.timer "
+         "/etc/systemd/system/vy-sudo-fallback-expire.service /etc/systemd/system/vy-sudo-fallback-expire.timer && systemctl "
+         "daemon-reload` (drift then reads step lockout as not installed)"),
         ("vy-admin", "copy the public keys to the node, then `sudo vy-admin-setup KEYS`; "
                      + ("" if cluster else f"`sudo sshd -t && sudo systemctl reload ssh` ({SSHD_ADMIN}, which deploy staged: the node's "
                                            "sshd lets only research log in until then); ")
