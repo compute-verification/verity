@@ -1,5 +1,6 @@
 # The demos' minutes from the first command to the verdict (`minutes.py`, the remote demo's reader, and
-# `onsite_minutes.py`, which runs it with the onsite verdict). Not a package: its tests run in the workspace environment.
+# `onsite_minutes.py`, which runs it with the onsite verdict), and the share of a served run's sampled proof blocks the Lean
+# verifier accepted on the auditor's machine (`sampled_accepted.py`). Not a package: its tests run in the workspace environment.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
@@ -7,7 +8,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, for the served commit): keyed on the suite's whole tree
-untraced = ["tests/test_minutes.py", "tests/test_onsite_minutes.py"]
+untraced = ["tests/test_minutes.py", "tests/test_onsite_minutes.py", "tests/test_sampled_accepted.py"]
 # the served window's table, whose seven subprotocols `tests/test_onsite_minutes.py` holds `CHECKS` to
 inputs = [
     "tools/verity/cli/verity_cli/served_table.py",

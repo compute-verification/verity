@@ -39,7 +39,7 @@ says. These are the directories that have one:
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |
 | `verity bench property_redteam` | a stacking-property check graded against the red team's cases |
-| `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`), a row a block type, and the Lean verifier timed on one kept proof (`lean-verify`) |
+| `verity bench prove` | what a proof system's prover costs on a workload (`--system flock` or `spot`), a row a block type, and the Lean verifier timed on one kept proof (`lean-verify`); and the proof system by layer, Flock, with zero knowledge, with sampling and with recursion, a row each read from its run's output (`layers`) |
 | `verity bench prove_path` | a served run's proof blocks proved after the fact, behind the Lean ZK server and through the Lean verifier, with one forged run |
 | `verity bench rate_squaring` | squarings a second modulo the store codec's primes, each form gated before it is timed: `sq` on one GPU, `ifma` on the host's CPUs |
 | `verity bench recursion_e2e` | recursive witness zero knowledge, timed step by step: `plan`, `run`, `result`, `table` and `store` |
@@ -72,7 +72,12 @@ points, each with an identity. `verity-bench run SPEC` records one run per point
 only when every point has one, `compare` and `table` accept results only when their identities agree, and
 `served-table` and `breakdown` render from the evidence store. It also holds the code behind `verity bench overhead`.
 The harness's kit (`harness/verity_bench/kit.py`) holds what runners share, each written once: the GPU lease, the host
-stamp, the paired ratio and the result's writer, which records measurements and refuses a verdict of record.
+stamp, the paired ratio, the result's writer, which records measurements and refuses a verdict of record, and the
+report, the one way `verity bench compute`, `verity bench memory` and `verity bench inference_only` print and write
+their number. The report prints the text, then one line of JSON whose first keys are `value`, `unit`, `commit` and
+`run`. Under a research run it writes that line to `$RESEARCH_RUN_DIR/out/NAME.json` and the measurements to
+`$RESEARCH_RUN_DIR/result.json`; outside one, with `OUT` set, to `$OUT/NAME.json` and `$OUT/result.json`; with
+neither set, or set empty, it writes nothing. A command's `--out DIR` names the place in place of those.
 `benchmarks/harness/README.md` is its contract: how a point is timed and what a result says.
 
 ## What a benchmark may import and write
@@ -98,7 +103,7 @@ for a new benchmark.
 ## Metrics
 
 Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
-(the first `.py` or `.sh` under `benchmarks/`, `infra/` or `tools/` the command names:
+(the first `.py` or `.sh` under `benchmarks/`, `demos/`, `infra/` or `tools/` the command names:
 `benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each row's `owner` owns its file:
 the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a lead's
@@ -113,12 +118,13 @@ preserved. A loop that samples a number (the control pod's, `infra/control/loop_
 the site's `POST /api/metrics` (`research.metrics.send`) under a site key with `panels:write`; an agent's identity
 can't send one. A reading names the `command` that computed it and never a run, and the site refuses a reading that
 names a run. So every value on the tab is a preserved run's or a sent reading's. Of the readings sent for a row, the
-tab shows those that name no `period`, `over` or `member`, from the last 62 days: each of the last day, and the last
-of each three hours before it.
+tab's values are those that name no `period`, `over` or `member`, from the last 62 days: each of the last day, and the
+last of each three hours before it. Beside them it lists the newest reading of each line that names a `member`, which
+stays listed while it is within that window, whether or not the loop still sends it.
 
 Its owner keeps a row within its `every`: the control pod's rerun loop (`infra/control/metrics_rerun.py`) launches the
 `command` of a row whose newest value is older than its `every` as a `research run`, within the bounds its docstring
-lists, and a row whose command's script is under `infra/` is a loop's, which the loop sends. A row's keys:
+lists, and a row whose command's script is under `infra/control/` is a loop's, which the loop sends. A row's keys:
 
 - `id`: `OWNER/NAME`, under its owner's prefix.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
@@ -149,9 +155,11 @@ id may give a value for each period and scope it is computed at, each in its own
 three, over a week, a month and a year of a datacenter's and of the world's compute). A value for one member of a set
 (a deployed guarantee, a lead) names it as `member`, a non-empty string held only where given, and the writer keys on
 it too, so one id gives a value for each member (`lean/trust-gap`'s, one a deployed guarantee). Of a run's
-measurements under one id, the tab shows the one written last, one point a run. So a benchmark that writes one id for
-several periods, scopes or members writes the row's own last: the one its `title`, `unit` and `axis` are for
-(`exfiltration-gb-world-year`'s, the `year` over the `world`).
+measurements under one id, the tab's value is the one written last that names no member, or, where the run wrote none
+without a member, the one written last: one point a run. Beside it the tab lists the measurements that name a member
+from the newest run that wrote any. So a benchmark that writes one id for several periods, scopes or members writes
+the row's own last: the one its `title`, `unit` and `axis` are for (`exfiltration-gb-world-year`'s, the `year` over the
+`world`).
 
 The tab lists each number under every top goal its `goal` is or sits under, a top goal being a goal on the Goals page
 that nothing waits on, other than `top/parked`. A number whose goal sits under `top/parked` and under no top goal reads
@@ -182,7 +190,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
-| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`) | maintained |
+| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`); and the share of a served run's sampled proof blocks whose proofs the Lean verifier accepted on the auditor's machine (`sampled_accepted.py`) | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
