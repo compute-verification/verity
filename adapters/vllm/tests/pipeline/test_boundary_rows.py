@@ -40,7 +40,7 @@ from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR
 from verity_vllm.pipeline import boundary_stop as BS
 from verity_vllm.pipeline import boundary_windows as BW
-from verity_vllm.pipeline import boundary_words as WD
+from verity_vllm.pipeline import boundary_span as WD
 from verity_vllm.pipeline import long_row as LR
 
 XOR8 = PrimitiveDefinition("BoundaryRowsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,

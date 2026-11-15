@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import struct
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
-if TYPE_CHECKING:
-    from verity_vllm.pipeline.boundary_rows import Span
-
+MIN_CAP = 2
 #: `b.ingress`'s fields before its ids, each a u32 (``u64``: two, low first) of the request's own sampling inputs
 FIELDS = (("lp", "u32"), ("max_tokens", "u32"), ("min_tokens", "u32"), ("ignore_eos", "u32"), ("temperature", "f32"),
           ("top_p", "f32"), ("top_k", "i32"), ("min_p", "f32"), ("presence_penalty", "f32"), ("frequency_penalty", "f32"),
@@ -22,6 +22,47 @@ HEAD_U32 = sum(2 if t == "u64" else 1 for _, t in FIELDS)
 FIELD_AT = {k: sum(2 if t == "u64" else 1 for _, t in FIELDS[:i]) for i, (k, _) in enumerate(FIELDS)}
 #: `b.egress`'s finish codes; 0 is a request still running when the serve stopped
 FINISH = ("stop", "length", "abort", "error")
+
+
+def cap(n: int) -> int:
+    """The least power of two at least `MIN_CAP` and ``n``."""
+    return max(MIN_CAP, 1 << max(0, int(n) - 1).bit_length())
+
+
+def class_size(v: Any) -> bool:
+    """Whether ``v`` is a class's size, of prompt ids or of outputs (`Span.shape`)."""
+    return type(v) is int and v >= MIN_CAP and v & (v - 1) == 0
+
+
+@dataclass(frozen=True)
+class Span:
+    """One request as the engine core served it: its engine id, prompt ids, sampling inputs (`boundary_words.SAMPLING`),
+    the ids it was served, how it finished (a `boundary_words.FINISH` name, None while running) and, where the serve knows
+    it, its release: the network certifier's run and the request's index N in that run's release order."""
+
+    engine_id: str
+    prompt: tuple[int, ...]
+    sampling: Mapping[str, Any]
+    served: tuple[int, ...] = ()
+    finish: str | None = None
+    release: tuple[str, int] | None = None
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        """Its class (P, O)."""
+        return cap(len(self.prompt)), cap(len(self.served))
+
+    def to_json(self) -> dict[str, Any]:
+        return {"engine_id": self.engine_id, "prompt": list(self.prompt), "sampling": dict(self.sampling),
+                "served": list(self.served), "finish": self.finish,
+                **({} if self.release is None else {"release": list(self.release)})}
+
+    @classmethod
+    def from_json(cls, d: Mapping[str, Any]) -> Span:
+        release = d.get("release")
+        return cls(str(d["engine_id"]), tuple(d["prompt"]), dict(d["sampling"]), tuple(d["served"]), d["finish"],
+                   None if release is None else (str(release[0]), int(release[1])))
+
 
 
 def sampling_of(params: Any) -> dict[str, Any]:
@@ -86,4 +127,4 @@ def id_rows(span: Span, outputs: int) -> np.ndarray:
     return _words([*span.served] + [last] * (outputs - len(span.served))).reshape(outputs, 2)
 
 
-__all__ = ["FIELD_AT", "FIELDS", "FINISH", "HEAD_U32", "SAMPLING", "egress_row", "id_rows", "ingress_row", "sampling_of"]
+__all__ = ["FIELD_AT", "FIELDS", "FINISH", "HEAD_U32", "MIN_CAP", "SAMPLING", "Span", "cap", "class_size", "egress_row", "id_rows", "ingress_row", "sampling_of"]

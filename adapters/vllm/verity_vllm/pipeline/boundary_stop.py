@@ -50,7 +50,7 @@ from verity_vllm.pipeline.boundary_rows import (
     layout_of,
     row_type,
 )
-from verity_vllm.pipeline.boundary_words import FIELD_AT
+from verity_vllm.pipeline.boundary_span import FIELD_AT
 from verity_vllm.records.boundary_commit import FILE as COMMIT
 from verity_vllm.records.boundary_commit import BoundaryCommit
 

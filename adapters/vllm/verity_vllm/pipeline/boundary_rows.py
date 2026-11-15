@@ -114,7 +114,16 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_tables as BT
-from verity_vllm.pipeline.boundary_words import HEAD_U32, egress_row, id_rows, ingress_row
+from verity_vllm.pipeline.boundary_span import (
+    HEAD_U32,
+    MIN_CAP,
+    Span,
+    cap,
+    class_size,
+    egress_row,
+    id_rows,
+    ingress_row,
+)
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 from verity_vllm.records.boundary_tables import TableRoots
 
@@ -142,7 +151,6 @@ TABLES_UNDER_A_RULE = ("a serve under a stop rule commits no history tables: a t
                        "table's key names which of the two its class is (`boundary_tables.KEY`)")
 #: why no class says both `verdicts` and `ids`: its replay block has one return, and the class commits it once
 ONE_RETURN = "a class commits its replay block's return as verdicts or as ids, not as both"
-MIN_CAP = 2
 INDEX, SALTS = "index.json", "salts.bin"
 
 
@@ -151,46 +159,6 @@ def check_template(t: str) -> SpecializedDefinition:
     from verity_vllm.pipeline import serving_templates as ST
 
     return ST.template(t).fn
-
-
-def cap(n: int) -> int:
-    """The least power of two at least `MIN_CAP` and ``n``."""
-    return max(MIN_CAP, 1 << max(0, int(n) - 1).bit_length())
-
-
-def class_size(v: Any) -> bool:
-    """Whether ``v`` is a class's size, of prompt ids or of outputs (`Span.shape`)."""
-    return type(v) is int and v >= MIN_CAP and v & (v - 1) == 0
-
-
-@dataclass(frozen=True)
-class Span:
-    """One request as the engine core served it: its engine id, prompt ids, sampling inputs (`boundary_words.SAMPLING`),
-    the ids it was served, how it finished (a `boundary_words.FINISH` name, None while running) and, where the serve knows
-    it, its release: the network certifier's run and the request's index N in that run's release order."""
-
-    engine_id: str
-    prompt: tuple[int, ...]
-    sampling: Mapping[str, Any]
-    served: tuple[int, ...] = ()
-    finish: str | None = None
-    release: tuple[str, int] | None = None
-
-    @property
-    def shape(self) -> tuple[int, int]:
-        """Its class (P, O)."""
-        return cap(len(self.prompt)), cap(len(self.served))
-
-    def to_json(self) -> dict[str, Any]:
-        return {"engine_id": self.engine_id, "prompt": list(self.prompt), "sampling": dict(self.sampling),
-                "served": list(self.served), "finish": self.finish,
-                **({} if self.release is None else {"release": list(self.release)})}
-
-    @classmethod
-    def from_json(cls, d: Mapping[str, Any]) -> Span:
-        release = d.get("release")
-        return cls(str(d["engine_id"]), tuple(d["prompt"]), dict(d["sampling"]), tuple(d["served"]), d["finish"],
-                   None if release is None else (str(release[0]), int(release[1])))
 
 
 def linked(block: str, value: str, ports: Iterable[str]) -> str:
