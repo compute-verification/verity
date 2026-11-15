@@ -31,7 +31,7 @@ LEFT: list[tuple[str, str]] = [
     ("Circuit reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", FLAG),
     ("Circuit reader adapters/vllm/verity_vllm/pipeline/serve_seal.py", TO_CONVERT),
     ("Circuit writer adapters/vllm/verity_vllm/program/predict/aot.py", "the circuits lane's file"),
-    ("Circuit writer adapters/vllm/verity_vllm/records/predicted_row.py", TO_CONVERT),
+    ("Circuit writer adapters/vllm/verity_vllm/records/predicted_row.py", "declares the record, which aot.py writes"),
     ("CommitmentScheme reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", "flags whose values are the scheme's "
      "settings, read by the parser"),
     ("H1Registration writer adapters/vllm/verity_vllm/pipeline/serve_tie.py", STALE_FIND),
@@ -60,7 +60,7 @@ LEFT: list[tuple[str, str]] = [
     ("Run writer adapters/vllm/verity_vllm/pipeline/serve_commit.py", STALE_FIND),
     ("Run writer adapters/vllm/verity_vllm/pipeline/serve_commit.py", STALE_FIND),
     ("RunTotals reader adapters/vllm/tools/served_run/serve.sh", "a shell script that copies the file; it reads no body"),
-    ("Values writer adapters/vllm/verity_vllm/pipeline/serving_rows.py", STALE_FIND),
+    ("Values writer adapters/vllm/verity_vllm/pipeline/serving_rows.py", f"{IN_PROCESS}; {STALE_FIND}"),
 ]
 
 
