@@ -8,7 +8,7 @@ public import Proofs.Certifier.MonitoringPeriodChecked
 /-!
 # DRAFT (scratch branch, in no root): the lemma chain for `PooledLeakRegisteredChecked`
 
-Each `sorry` here is a named gap of the draft, not a proof.
+Steps 1 to 7 are proved here; 8 to 10 are not yet written.
 
 1. `ingress_of_registers` (new, routine): where the network certifier registers a record, the operator's moves over the
    horizon are the registered openings' values at the ingress gates.
@@ -21,7 +21,10 @@ Each `sorry` here is a named gap of the draft, not a proof.
 6. `pr_phase_le` (new, routine): a per-history bound on one phase lifts to the period's coins.
 7. `phaseLeaksChecked_regR` (new): each phase's checked leak relation at `WregR` fails with probability at most
    `e i + εchk i`.
-8. `encard_pooledReg_le` (new, routine): the pooled count in the `#Θ` form.
+8. `pooledChecked_of_event` (new, routine): `pooled_of_event` with `phaseLeaksChecked_regR` as the leak step and the
+   disjointness bound counted at `e i` a second time.
+9. `encard_pooledReg_le` (new): the pooled count in the `#Θ` form, after `encard_pooledJoint_le` takes `Θ`.
+10. The guarantee: 8 for the first conjunct, 9 for the second.
 -/
 
 @[expose] public section
