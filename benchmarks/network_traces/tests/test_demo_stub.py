@@ -217,13 +217,12 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
     """``serve --out``: each class request is answered the same bytes as without it, while the scheduler keeps
     serve-openai's records; requests.jsonl holds each one's user, the network attester's release headers, its ids and
     clock. Then what chain_record's network attester endpoint step runs on them: `verity-vllm advice` at the network
-    attester's bucket (its own `main`, a fixed compiler digest in place of the tree's code identity), and network-e2e's
-    `served_advice` with the certified I/O (each user's prompt, max_tokens and the ids it was answered) in ingress order
-    and the toy's EOS id: every Commit window's advice, those joined across a carry too, is bound to the certified
-    requests, each once, and rebuilt from them. At --window-steps 16 the plan's windows are cut with requests running,
-    at 64 only at idle."""
-    sys.path.insert(0, str(HERE.parent / "network_e2e"))
-    import chain
+    attester's bucket (its own `main`, a fixed compiler digest in place of the tree's code identity), and chain_record's
+    `served_advice` (`verity-vllm advice --bind`) with the certified I/O (each user's prompt, max_tokens and the ids it
+    was answered) in ingress order and the toy's EOS id: every Commit window's advice, those joined across a carry too,
+    is bound to the certified requests, each once, and rebuilt from them. At --window-steps 16 the plan's windows are cut
+    with requests running, at 64 only at idle."""
+    import chain_record as CR
     from verity_vllm.pipeline import advice as ADV
 
     got, server = _served_with_records(tmp_path, window_steps)
@@ -244,7 +243,7 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
     assert ADV.main(ADV.Options(run=str(tmp_path), tau=window["window_s"] / T, compiler_digest="ab" * 64)) == 0
     io = [{"user": f"user-{j}", "prompt": prompts[j], "max_tokens": 24, "output": S.outputs(prompts[j])}
           for j in range(7)]
-    _, bits = chain.served_advice(tmp_path, tmp_path / "advice", window, io, T, [S.VOCAB])
+    bits = CR.served_advice(tmp_path, tmp_path / "advice", window, io, T, [S.VOCAB])["bits"]
     windows = bits["commit_windows"]
     assert (bits["bound"], bits["rebuilt"], bits["bound_why"], bits["why"]) == (True, True, None, None), bits
     assert len(windows) >= 2 and all(w["opened"] and w["commit_is_the_windows"] for w in windows)

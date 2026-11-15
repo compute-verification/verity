@@ -211,7 +211,7 @@ def custody(gates: Path) -> dict:
 
 def endpoint_step(e: dict | None) -> dict:
     """network-e2e's ``--no-prove`` report on the run and the endpoint's records: the endpoint's own advice bound to the
-    run's certified I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
+    run's certified I/O and rebuilt from it (`served_advice`), and the I/O tie's verdict on the honest run
     (`chain.tie`), both in the clear. The tie decides a tampered run only where the rehearsal's own check let it
     through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the execution phases
     its changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
@@ -236,7 +236,7 @@ def endpoint_step(e: dict | None) -> dict:
 
 
 def advice_bits(b: dict) -> dict:
-    """The advice's bits over the run's windows (`chain.bits`): v0's encoding, and the residual's (what the advice says
+    """The advice's bits over the run's windows (verity_vllm's ``advice_bind.bits``): v0's encoding, and the residual's (what the advice says
     beyond what the walk derives from the certified I/O), None unless the advice was rebuilt from it."""
     runs = [w for w in b.get("windows") or [] if w.get("in_run")]
     derived = [w.get("derived_bits") for w in runs]
@@ -256,16 +256,34 @@ def network_attester_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
     return served_endpoint(WC.deployment(run)[0], WC.io(run), ep, eos)
 
 
-def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for the network attester run of ``dep`` (its ``deployment.json``), as network-e2e's
-    `endpoint_advice` makes it for a certifier rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
-    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network attester's bucket unless an index is there,
-    then ``chain.served_advice`` on the certified I/O ``io`` (`network_attester_chain.io`'s) over the network attester's
-    execution phases, with the model's EOS ids ``eos`` (a network attester run records none)."""
+def served_advice(ep: Path, adv: Path, window: dict, io: list[dict], T: int, eos: list[int]) -> dict:
+    """`verity-vllm advice --bind` (verity_vllm's ``advice_bind``) over the endpoint's records ``ep`` and their advice
+    ``adv``, for the run of execution phases ``window`` (``origin_unix``, ``windows``, ``window_s``) of T buckets, its
+    certified I/O ``io`` and the model's EOS ids ``eos``: the command's JSON, ``advice`` and ``bits``, or ``error`` (the
+    repr of what refused the records). The certified I/O is witness: it goes to the command on stdin and touches no
+    file. Raises when the command prints no such document."""
     import subprocess
 
-    sys.path.insert(0, str(HERE.parent / "network_e2e"))
-    import chain
+    p = subprocess.run([*ADVICE_CLI, str(ep), "--out", str(adv), "--bind", "-", "--eos", ",".join(map(str, eos)),
+                        "--T", str(T)], input=json.dumps({"deployment": window, "io": io}), capture_output=True,
+                       text=True, check=False)
+    why = f"verity-vllm advice --bind (exit {p.returncode}) printed no result: {p.stderr[-300:].strip()}"
+    try:
+        doc = json.loads(p.stdout)
+    except ValueError as err:
+        raise RuntimeError(why) from err
+    if not isinstance(doc, dict) or not ("error" in doc or {"advice", "bits"} <= doc.keys()):
+        raise RuntimeError(why)
+    return doc
+
+
+def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
+    """The endpoint's own advice for the network attester run of ``dep`` (its ``deployment.json``): `verity-vllm advice`
+    over the endpoint's records ``ep`` (verity_vllm's ``advice_bind.ENDPOINT``) into ``ep/advice`` at the network
+    attester's bucket unless an index is there, then bound (`served_advice`) to the certified I/O ``io``
+    (`network_attester_chain.io`'s) over the network attester's execution phases, with the model's EOS ids ``eos`` (a
+    network attester run records none)."""
+    import subprocess
 
     T = dep["params"]["window"]
     window = {"origin_unix": dep["origin_unix"], "windows": dep["windows"],
@@ -279,11 +297,10 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
         if not (adv / "windows.json").exists():
             return out | {"chain": {"bits": {"bound": False, "bound_why": f"verity-vllm advice made no index (exit "
                                              f"{p.returncode}: {(p.stdout + p.stderr)[-300:].strip()})"}}}
-    try:
-        info, bits = chain.served_advice(ep, adv, window, io["records"], T, eos)
-    except (OSError, KeyError, ValueError) as err:
-        return out | {"chain": {"bits": {"bound": False, "bound_why": f"the endpoint's advice: {err!r}"}}}
-    return out | {"advice": info, "chain": {"bits": bits}}
+    got = served_advice(ep, adv, window, io["records"], T, eos)
+    if "error" in got:
+        return out | {"chain": {"bits": {"bound": False, "bound_why": f"the endpoint's advice: {got['error']}"}}}
+    return out | {"advice": got["advice"], "chain": {"bits": got["bits"]}}
 
 
 def network_attester_endpoint_step(e: dict | None) -> dict:
@@ -1007,7 +1024,7 @@ def main(argv=None) -> int:
     e = sub.add_parser("endpoint",
                        help="the network certifier path: the endpoint's own advice bound to the network certifier's certified I/O")
     e.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path)
-    e.add_argument("--endpoint", required=True, type=Path, help="the endpoint's records (network-e2e chain.ENDPOINT)")
+    e.add_argument("--endpoint", required=True, type=Path, help="the endpoint's records (verity_vllm's advice_bind.ENDPOINT)")
     e.add_argument("--eos", required=True,
                    help="the model's EOS token ids, comma-separated (a network certifier run records none)")
     e.add_argument("--out", required=True, type=Path)
