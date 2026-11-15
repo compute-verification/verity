@@ -118,7 +118,7 @@ of each three hours before it.
 
 Its owner keeps a row within its `every`: the control pod's rerun loop (`infra/control/metrics_rerun.py`) launches the
 `command` of a row whose newest value is older than its `every` as a `research run`, within the bounds its docstring
-lists, and a row whose command's script is under `infra/` is a loop's, which the loop sends. A row's keys:
+lists, and a row whose command's script is under `infra/control/` is a loop's, which the loop sends. A row's keys:
 
 - `id`: `OWNER/NAME`, under its owner's prefix.
 - `title`: the number's headline on the tab, three to six plain words with no digit or backtick.

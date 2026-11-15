@@ -15,10 +15,10 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from research.metrics import REGISTRY_ROOTS
 from test_repository import ROOT
 
 NAME = "metrics.toml"
-REGISTRY_ROOTS = ("benchmarks", "demos", "infra", "tools")
 #: the one file every row once sat in, which no row may return to
 RETIRED = "benchmarks/metrics.toml"
 SKIP = {".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"}
