@@ -1191,6 +1191,19 @@ def test_send_stamps_a_hand_typed_header_time(fake, registry, capsys, monkeypatc
     assert "infra 13:00Z (sent 13:22Z): node 2 is free" in fake.messages[COORD][-1]["text"]
 
 
+def test_send_reply_and_ask_refuse_a_first_line_stamped_ahead_of_the_clock_and_post_nothing(fake, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromisoformat("2026-11-15T10:25:30+00:00"))   # 2:25 AM PST
+    root = fake.add(COORD, text="a thread", username="ci", bot_id=BOT)["ts"]
+    for argv in (["send", "--as", "infra", "--to", "@ci", "--kind", "fyi"], ["reply", "--as", "infra", "--thread", root],
+                 ["ask", "--as", "infra", "--to", "@ci"]):
+        rc, _, err = run(capsys, *argv, "--text", "infra, 2:28 AM PST: node 2 is free")
+        assert rc == 2 and "the first line says 2:28 AM PST and it is 2:25 AM PST: write the time " \
+                           "`TZ=America/Los_Angeles date` gives now, leave the time out, or, if it is a time to come, put " \
+                           "`by`, `at` or `ETA` before it" in err
+    assert len(fake.messages[COORD]) == 1
+    assert run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", "infra, 2:25 AM PST: free")[0] == 0
+
+
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
     ours = fake.add(COORD, text="x", username="infra", bot_id=BOT)
     renamed = fake.add(COORD, text="x", username="not-a-handle", bot_id=BOT)

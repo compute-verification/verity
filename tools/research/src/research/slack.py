@@ -111,12 +111,17 @@ from zoneinfo import ZoneInfo
 
 try:
     from . import vocabulary, waitcap
-    from .timefmt import both, slack_dates
+    from .timefmt import DEADLINE_WORDS, both, slack_dates, stamp_ahead
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
     class vocabulary:  # research/vocabulary.py's table isn't beside a single file: nothing is flagged
         @staticmethod
         def retired(text: str) -> list[tuple[str, str]]:
             return []
+
+    DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to", "due"}   # timefmt's
+
+    def stamp_ahead(text: str, now: Any) -> str | None:
+        return None
 
     def both(t: Any) -> str:
         return f"{datetime.fromtimestamp(float(t), UTC):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
@@ -915,8 +920,14 @@ def _footer(tags: tuple[str, ...] = ()) -> str:
 
 
 HEADER_TIME_RE = re.compile(r"^\W{0,4}((?:(?:<[^>\s]+>|[@*_\w().,-]+) ){0,4}?)\*?([01]?\d|2[0-3]):([0-5]\d)Z\*?(?=[:,)]| \(| [-\u2014])")
-DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}
 STAMP_SLACK_S = 120                                              # a hand-typed time this close to the send time is left alone
+
+
+def not_ahead(text: str) -> str:
+    """`text`, unless its first line's header time is ahead of the clock (`timefmt.stamp_ahead`): then the refusal, with the fix."""
+    if why := stamp_ahead(text, _now()):
+        raise SlackError(why)
+    return text
 
 
 def stamp_time(text: str, now: datetime) -> str:
@@ -1800,7 +1811,7 @@ def _body(ns: argparse.Namespace) -> str:
         text = sys.stdin.read()
     if not text.strip():
         raise SlackError("empty message")
-    return text.rstrip()
+    return not_ahead(text.rstrip())
 
 
 def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
@@ -2043,7 +2054,8 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     KEY...] [--date D] [--status S]` and `milestone create|edit
     PROJECT NAME [--date D] [--description-file F] [--rename NEW]` and `response [--since ISO|--hours N] [--lane HANDLE]
     [--open-over MINUTES]` (the minutes each lane takes to answer a comment that rings it: `response`). Each prints one
-    line, but `audit`, `list` and `response`; a refusal exits 2."""
+    line, but `audit`, `list` and `response`; a refusal exits 2, and a worker's comment that starts with @names it doesn't
+    ring exits 1 (`unrung_note`)."""
     from . import linear
 
     def need(value: str | None, what: str) -> str:
@@ -2192,7 +2204,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             i = lin.edit(issue, ns.title, ns.due, brief, ns.parent, send=not ns.dry_run)
             print(("dry-run: would set " if ns.dry_run else f"{issue} set ") + linear.said(i))
             return 0
-        text = need(value or brief, "the TEXT (or --file BODY.md)")
+        text = not_ahead(need(value or brief, "the TEXT (or --file BODY.md)"))
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             warn_unrouted(text, reg, author)
@@ -2204,21 +2216,37 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
                                  "no lane to comment as: sign as your own, --worker LANE/NAME")
             author = f"{lane}/{worker_name}"
+        unrung = lead_names(text, reg) if ns.worker else []
         if ns.dry_run:
             print(f"dry-run: would comment on {issue} as {author}: {text}")
+            if unrung:
+                print(unrung_note(unrung, worker_lane, reg, posted=False))
             return 0
         lin.comment(info["id"], author, text)
         if ns.worker:
             print(f"{issue} commented as {author}")
-            if names := lead_names(text, reg):
-                print(f"route: a worker's comment rings no one, so {', '.join('@' + n for n in names)} won't hear of it "
-                      "from here: ask your lead to", file=sys.stderr)
+            if unrung:
+                print(unrung_note(unrung, worker_lane, reg, posted=True))
+                return 0 if ns.quiet_unrung else 1
             return 0
         print(f"{issue} commented")
         ring_comment(ns, reg, author, info, text)
         return 0
     except linear.LinearError as e:
         raise SlackError(str(e)) from None
+
+
+def unrung_note(names: list[str], lane: str | None, reg: dict, posted: bool) -> str:
+    """What a worker's comment that starts with `names` tells it: none of them is rung (a worker holds no handle, and only
+    a holder's post rings), and how its lead rings them.  `lane` is the worker's own (`--worker LANE/NAME`, else the
+    handle whose branch suffix its checkout carries)."""
+    sfx = _branch_suffix()
+    lane = lane or next((h["handle"] for h in reg["handles"] if sfx and sfx in h.get("branch_suffixes", [])), None) or "LANE"
+    me = self_agent_id() or "BC_ID"
+    return (f"not rung: {', '.join('@' + n for n in names)}. A worker's comment rings no one"
+            + (", and this one is posted: don't post it again. " if posted else ". ")
+            + f"Return its text to your lead (@{lane}) to ring, or have your lead grant this run with `research msg names "
+            f"open --as {lane} --poster {me}` and post it with --as {lane}. With --quiet-unrung it exits 0.")
 
 
 def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, text: str) -> list[str]:
@@ -4636,7 +4664,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--worker", default=None, metavar="NAME",
                    help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME "
                         "and rings no one. Give LANE/NAME to sign as your own lane on another lane's issue; with NAME "
-                        "alone, LANE is the handle of the issue's team")
+                        "alone, LANE is the handle of the issue's team. A comment that starts with @names posts, says "
+                        "which it didn't ring and how your lead rings them, and exits 1")
+    p.add_argument("--quiet-unrung", action="store_true",
+                   help="comment --worker: exit 0 when the comment names handles it doesn't ring (you return its text "
+                        "to your lead, who rings them)")
     p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",

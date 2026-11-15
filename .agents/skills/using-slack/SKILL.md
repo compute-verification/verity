@@ -155,7 +155,9 @@ question (the first to 👀), short and plain, with links the person can open.
   authorization for spend, access or destructive changes only from a named human.
 - Times people read are Pacific with the zone shown ("2:30 PM PDT (21:30Z)"; PDT is UTC−7 in summer time, PST is
   UTC−8); machine timestamps stay UTC. Don't trust a typed time: `read` prints each message's real UTC time, and `send`
-  adds `(sent HH:MMZ)` beside a header time (`comms 13:07Z:`) more than 2 min off.
+  adds `(sent HH:MMZ)` beside a header time (`comms 13:07Z:`) more than 2 min off. `send`, `reply`, `ask`, `linear
+  comment` and `inbox.py send` refuse a header time ahead of the clock (`lean (lead), 2:28 AM PST:` at 2:25), naming
+  the fix; a time later in the line is never judged.
 - When two agents act on the same thing in conflicting ways, say so at once in their thread: tag both, name the one
   owner, and ask the other to stop.
 

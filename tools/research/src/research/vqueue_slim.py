@@ -78,11 +78,11 @@ from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
-from . import quick_tier
+from . import quick_tier, suite_layout
 from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP,
-                      NOT_STARTED, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
+                      NOT_STARTED, OWN_TRAIN, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
-                      step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root)
+                      step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root, unread_suites)
 from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git, allowed, judge_report, tier_report
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
@@ -91,9 +91,6 @@ from .vqueue_records import FAULT_RE
 
 #: a candidate's state from its two verdicts' (`combine`): the first of these either has
 ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
-#: the train.sh a candidate's check launches with: the loop's own, deployed with its pin, so a candidate's tree doesn't decide
-#: how its launch is waited for
-OWN_TRAIN = Path(__file__).resolve().parents[3] / "check" / "train.sh"
 #: a line of the loop's deselect list (`deselection`) that is a test's node id, its file's path from the repository's root
 DESELECT_RE = re.compile(r"(?!/|\.\./)[\w./-]+\.py::\S+")
 #: what declares lean-agreement's reads: the graph build family, whose lean-agreement task reads `VERIFIER`'s files and
@@ -133,7 +130,8 @@ STORE_SAYS = re.compile(r"^\s*tamper: |the evidence store is not reachable", re.
 #: would leave without a memory limit (`telemetry.cgroup.uncapped`), in its wording before and after its rename
 MACHINE_SAYS = re.compile(r"refused to start the workload: this machine (?:limits|caps) each login session")
 #: the code that decides every suite's verdict, which every suite's key holds (`suites.RUNNER`)
-SUITE_RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard")
+SUITE_RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard",
+                "tools/research/src/research/suite_layout.py")
 #: a Lean file's imports: each module of each `import` line (`public`, `meta`, `private` and `all` as Lean 4 writes them),
 #: and each file it reads as it is compiled (`include_str`, relative to it)
 IMPORT_RE = re.compile(r"^\s*(?:public\s+|private\s+)?(?:meta\s+)?import\s+(?:all\s+)?([^\n]+)", re.M)
@@ -634,7 +632,9 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     the candidate's steps ran: it registered no run, whatever ended its launcher; it never ran; or it ended without passing
     them and no run of it that failed (not a twin that never took a slot) recorded a step, as check.py refusing its own
     plan does.  Once its runs ended, ``rec`` keeps the machines those that failed ran on (``erred_on``), which a launch
-    again avoids (`start`'s ``avoid``).  Once it ended, pass when it passed each of them (the check that gates: in
+    again avoids (`start`'s ``avoid``).  The check that gates, ended, is pending while a suite step it is judged on failed
+    with no suite record of it fetched after its run ended (`landing.unread_suites`), and read as below once that fetch
+    brought its reports.  Once it ended, pass when it passed each of them (the check that gates: in
     every shard that holds it, `shard_passed`), a step that failed only on what an unexpired allowance of policy.toml at
     ``base`` covers counting as passed, so no candidate's allowance covers its own failure; fail with each of them it failed
     (a `Failed`: ``step NAME``, the step's content key at the candidate, the paths that failure names its culprit by,
@@ -697,10 +697,13 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
         return _keep(rec, _down(rec, f"never ran or was stopped ({why})", launch=True))
     base = rec.get("base")
     allow = base or tip
+    dirs = [d for ds in driver._shards(rec) for d in ds]
     if check:
         judged = _gate(driver, rec)
+        if not lost and any(unread_suites(d) & {*judged} for d in dirs):
+            return Verdict(PENDING)
         view = shard_steps(driver._shards(rec), [any(states[r][1] == 0 for r in g) for g in rec.get("groups") or [ids]])
-        passes = shard_passed(view, driver._allowed_steps(allow, [d for ds in driver._shards(rec) for d in ds]))
+        passes = shard_passed(view, driver._allowed_steps(allow, dirs))
         missed = [s for s in judged if s not in passes]
     else:
         off = driver._policy(tip).off_gate
@@ -708,7 +711,6 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
         missed = driver._unrun(ids, judged, allow)
     if not missed:
         return _keep(rec, Verdict(PASS), judged)
-    dirs = [d for ds in driver._shards(rec) for d in ds]
     ok = driver._every_shard(rec, states, lambda rc: rc == 0) or (
         driver._every_shard(rec, states, lambda rc: rc in (0, 1)) and driver._only_allowed(rec, allow))
     if not ok and (lost or any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC))
@@ -754,7 +756,8 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     (`_gate`) that such a run failed, not by a signal, or a suite of which it failed a named test, uncovered by an allowance
     at its base, read as once every shard ended (`failing`), from their dirs as this tick read them (`Landing.evidence`,
     `landing.Reads`: the Landing's own cache holds what the end's reading reads).  A suite failed beyond its tests alone, as a stop marks each suite it
-    cuts short, waits for the end.  Never kept, so not ``ended``: `vqueue.decide` reads a fail whose every failure is
+    cuts short, waits for the end, and a suite step that failed with no suite record of it fetched after its run ended
+    (`landing.unread_suites`) waits for that fetch.  Never kept, so not ``ended``: `vqueue.decide` reads a fail whose every failure is
     inherited as pending until the check ends.  ``rec`` holds it (``early``: its failures as `_keep` keeps a verdict's, with
     ``at``, when the first was written: a failed step's end, a failed suite's log's last write), which the check above reads
     (`based`)."""
@@ -770,10 +773,10 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     for d in dirs:
         if implicated(d) is None and killed(d):
             continue                                     # a kill, as `judge` reads it at the end: infra, never an early red
-        ended = {st.get("step"): st for st in step_records(d)}
+        ended, unread = {st.get("step"): st for st in step_records(d)}, unread_suites(d)
         for s in _gate(driver, rec):
             if (st := ended.get(s)) is not None:
-                if (st.get("status") != "failed" or not_run(st) or s in allowed
+                if (st.get("status") != "failed" or not_run(st) or s in allowed or s in unread
                         or isinstance(rc := st.get("rc"), int) and (rc < 0 or rc in KILLED_RC)):
                     continue
                 at.append(_epoch(st.get("ended_utc")) or driver.now())
@@ -1008,14 +1011,14 @@ def suite_reads(repo: Path, commit: str, suite: str) -> tuple[frozenset[str] | N
     """(every path suite ``suite`` (its directory) may read at ``commit``, the directories among them), as `suites.py`'s
     `inputs_of` allows its guard: its directory and its declared inputs; unless it declares `inputs_only`, what each workspace
     package it depends on ships (`_ships`), its dependencies, extras and dependency groups and theirs but their groups
-    (`suites.closure`); the workspace's pyproject.toml, `SUITE_RUNNER` and `ENV`.  (None, none) for the repository's own
-    suite, whose directory is the tree."""
+    (`suites.closure`), each with its tests under the root's `tests/` (`suite_layout.mirrors`); the workspace's
+    pyproject.toml, `SUITE_RUNNER` and `ENV`.  (None, none) for the repository's own suite, whose directory is the tree."""
     suite = suite.strip("/") or "."
     if suite == ".":
         return None, frozenset()
     data = suite_pyproject(repo, commit, suite)
     tests = data.get("tool", {}).get("verity", {}).get("tests", {})
-    out = {suite, *map(str, tests.get("inputs") or ()), "pyproject.toml", *SUITE_RUNNER, *ENV}
+    ins = {suite, *map(str, tests.get("inputs") or ())}
     if tests.get("inputs_only") is not True:
         pkgs, seen = _members(repo, commit), set()
         todo = [n for n in _requires(data) if n in pkgs]
@@ -1024,9 +1027,11 @@ def suite_reads(repo: Path, commit: str, suite: str) -> tuple[frozenset[str] | N
                 continue
             seen.add(n)
             todo += [r for r in _requires(suite_pyproject(repo, commit, pkgs[n]), groups=False) if r in pkgs]
-        out |= {p for n in seen if pkgs[n] != suite for p in _ships(repo, commit, pkgs[n])}
+        ins |= {p for n in seen if pkgs[n] != suite for p in _ships(repo, commit, pkgs[n])}
     r = _git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{tree}}", check=False)
     files = [p for p, _ in _files(repo, r.stdout.strip())] if not r.returncode else []
+    out = ins | suite_layout.mirrors(ins, lambda p: _is_file(files, p) or _is_dir(files, p))
+    out |= {"pyproject.toml", *SUITE_RUNNER, *ENV}
     return frozenset(out), frozenset(p for p in out if "*" not in p and "?" not in p and _is_dir(files, p))
 
 
@@ -1038,8 +1043,12 @@ def _is_dir(files: list[str], path: str) -> bool:
     return i < len(files) and files[i].startswith(path.rstrip("/") + "/")
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
+def _is_file(files: list[str], path: str) -> bool:
+    """Whether ``path`` is a file of the tree whose files (in git's order) are ``files``."""
+    import bisect
+
+    i = bisect.bisect_left(files, path)
+    return i < len(files) and files[i] == path
 
 
 def _requires(data: dict, groups: bool = True) -> list[str]:
@@ -1048,16 +1057,16 @@ def _requires(data: dict, groups: bool = True) -> list[str]:
     project = data.get("project", {})
     reqs = [*project.get("dependencies", []), *(r for extra in project.get("optional-dependencies", {}).values() for r in extra)]
     reqs += [r for g in data.get("dependency-groups", {}).values() if groups for r in g if isinstance(r, str)]
-    return [_norm(m[0]) for r in reqs if (m := re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r))]
+    return [suite_layout.norm(m[0]) for r in reqs if (m := re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r))]
 
 
 def _members(repo: Path, commit: str) -> dict[str, str]:
     """{distribution: directory} of the workspace packages at ``commit`` (`suites.members`), the root's own under "."."""
     root = suite_pyproject(repo, commit, ".")
-    out = {_norm(n): "." for n in [root.get("project", {}).get("name")] if isinstance(n, str)}
+    out = {suite_layout.norm(n): "." for n in [root.get("project", {}).get("name")] if isinstance(n, str)}
     for path in root.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
         if isinstance(n := suite_pyproject(repo, commit, path).get("project", {}).get("name"), str):
-            out[_norm(n)] = path
+            out[suite_layout.norm(n)] = path
     return out
 
 

@@ -162,12 +162,13 @@ class BoundaryWindows:
                        and int(cfg.get("per_prompt", 0)) == 0 and int(cfg.get("per_output", 1)) == 1):
             raise ValueError(f"the logits a class's ids were selected from are committed where it commits its ids (ids) "
                              f"and its check is GreedySelect_v1 inlined, one instance an output, not {t}")
+        words = BT.words_of((tc or {}).get("layout", "bf16"))
         ch = BT.Channel.of(tc, out, *public) if tc else None
         return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
                    inline=bool(cfg.get("inline", False)), sink=sink, tables=ch,
                    layers=BT.layers_of(tc["layers"]) if tc else (), capacity=int((tc or {}).get("capacity", HT.CAPACITY)),
-                   words=BT.LAYOUT_WORDS[(tc or {}).get("layout", "bf16")],
+                   words=words,
                    stop=stop, release=release, verdicts=bool(cfg.get("verdicts", False)),
                    ids=bool(cfg.get("ids", False)), logits=BL.Channel.of(lc, out, *public) if lc else None)
 

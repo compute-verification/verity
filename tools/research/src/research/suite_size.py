@@ -23,12 +23,13 @@ several (suites.py refuses it). Reads the checkout's tracked pyproject.toml file
 from __future__ import annotations
 
 import math
-import re
 import shlex
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
+
+from . import suite_layout
 
 SUITES_PY = "tools/check/suites.py"
 #: slot.py's option that gives a run its budget where it reserves less: the launcher sends it only to a tree whose slot.py
@@ -102,27 +103,23 @@ def touched(source: Path, names: list[str], rev: str) -> list[str] | None:
     return [] if listed == "none" else [n.strip() for n in listed.split(",") if n.strip()]
 
 
-def _norm(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
-
-
 def declared(source: Path) -> list[dict]:
-    """Each suite of the checkout (a pyproject.toml with [tool.pytest], named as suites.py names it) and what it declares."""
+    """Each suite of the checkout (a pyproject.toml with [tool.pytest], named as suites.py names it: `suite_layout.suite_name`)
+    and what it declares."""
     files = subprocess.run(["git", "-C", str(source), "ls-files", "-z", "--", "pyproject.toml", "*/pyproject.toml"],
                            capture_output=True, text=True).stdout.split("\0")
-    out = []
+    read = {}
     for f in filter(None, files):
         try:
-            data = tomllib.loads((source / f).read_text())
+            read[str(Path(f).parent)] = tomllib.loads((source / f).read_text())
         except (OSError, tomllib.TOMLDecodeError) as e:
             print(f"suite_size: {f} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
-            continue
+    out, dirs = [], suite_layout.member_dirs(lambda d: read.get(d, {}))
+    for path, data in read.items():
         if "pytest" not in data.get("tool", {}):
             continue
-        path = str(Path(f).parent)
-        project = data.get("project", {})
         tests = data["tool"].get("verity", {}).get("tests", {})
-        out.append({"name": "repository" if path == "." else _norm(project["name"]) if project.get("name") else path, "path": path,
+        out.append({"name": suite_layout.suite_name(path, data.get("project", {}), dirs), "path": path,
                     "worker_gb": float(tests.get("worker_gb", 0)), "timeout_s": float(tests.get("timeout_s", 0)),
                     "timeout_workers": int(tests.get("timeout_workers", 0))})
     return out
@@ -134,10 +131,11 @@ def _bound(s: dict, workers: int, undeclared: float) -> float:
 
 
 def pick(suites: list[dict], names: list[str]) -> list[dict] | None:
-    """suites.py's `select`: each name exactly a suite's name or path, else in exactly one; None when one doesn't resolve."""
+    """suites.py's `select`: each name exactly one that names a suite (`suite_layout.names`), else in exactly one; None when
+    one doesn't resolve."""
     chosen = []
     for n in names:
-        hits = [s for s in suites if n in (s["name"], s["path"], s["path"].rstrip("/"))] or \
+        hits = [s for s in suites if n in suite_layout.names(s["path"], s["name"])] or \
                [s for s in suites if n in s["name"] or n in s["path"]]
         if len(hits) != 1:
             return None
