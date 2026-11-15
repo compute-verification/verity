@@ -20,7 +20,7 @@
 #      .disk_work and removed with it; window.py counts it as host memory against WIN_MEM_GB. In RAM the node's
 #      MemAvailable is read before staging and every MEM_POLL_S during it: under MEM_FLOOR_GB the job stages nothing more,
 #      removes FLOCK_WORK and DISK_WORK and exits 5; a job that proves removes both at any exit, and STEPS=stage keeps them
-#      once window.py stage has ended. Under
+#      once window.py stage has ended, and before that removes a FLOCK_WORK in RAM it made. Under
 #      STEPS=stage the job ends here, FLOCK_WORK kept and, if every statement staged, .staged naming the commit
 #   3. (prove) on DEV=gpu, window.py route first: a statement past the GPU prover's nonzero bound goes to the CPU prover
 #      (out/gpu.units, out/cpu.units). window.py prove: one group per card of CARDS (one group on the CPU), each group's
@@ -29,7 +29,8 @@
 #      group on the job's cores with no card, into out/cpu/out (its kept/ there)
 #   4. (prove, LEAN=1, the default) Flock's Lean verifier on each proved statement's last kept session, in this job and on
 #      the statement FLOCK_WORK holds, before it is removed (lean_check.sh): out/lean.tsv, out/lean/NAME/SESSION/. A
-#      statement it doesn't accept, or a proved one it can't check, is LEAN REFUSED in steps.txt and the job exits 7;
+#      statement it doesn't accept, or a proved one it can't check, is LEAN REFUSED in steps.txt, one whose check the time
+#      to KILL_AT less 60 s stops LEAN TIMED OUT, one that time leaves no room for LEAN NOT CHECKED, and the job exits 7;
 #      nothing is retried. FLOCK_WORK removed at the job's end
 # env: UNITS (a path, or a name sent with the run) DEV (gpu|cpu) CARDS (gpu, to prove) SM (gpu) NOT_BEFORE KILL_AT; STEPS;
 #      FLOCK_WORK (under /workspace/tmp: STEPS=stage's choice, STEPS=prove's input); RAM_WORK=1 DISK_WORK (a FLOCK_WORK in
@@ -100,17 +101,19 @@ if has stage; then
   if [ -n "$ram" ] && [ "${RAM_WORK:-}" != 1 ]; then
     say "REFUSED: $what is in RAM; flock-tmpl-unit is built and run under FLOCK_WORK, on disk (RAM_WORK=1 puts it on DISK_WORK)"; exit 4
   fi
-  if [ -n "$FW" ]; then mkdir -p "$FW" || { say "no FLOCK_WORK $FW"; exit 4; }
-  else mkdir -p "$WR" && FW=$(mktemp -d "$WR/stage-prove.XXXXXX") || { say "no FLOCK_WORK under $WR"; exit 4; }; fi
+  made=
+  if [ -n "$FW" ]; then [ -e "$FW" ] || made=1; mkdir -p "$FW" || { say "no FLOCK_WORK $FW"; exit 4; }
+  else mkdir -p "$WR" && FW=$(mktemp -d "$WR/stage-prove.XXXXXX") || { say "no FLOCK_WORK under $WR"; exit 4; }; made=1; fi
   EX=$FW
   if [ -n "$ram" ]; then
+    [ -z "$made" ] || DROP=1
     EX=${DISK_WORK:-}; [ -n "$EX" ] || EX=$(mkdir -p /workspace/tmp && mktemp -d /workspace/tmp/stage-prove-exec.XXXXXX) \
       || { say "no DISK_WORK under /workspace/tmp"; exit 4; }
     case $EX in /dev/shm*) say "REFUSED: DISK_WORK $EX is in RAM"; exit 4 ;; esac
+    echo "$EX" > "$FW/.disk_work"; DROP=1
     for d in py flock-gpu-link flock-circuit tmpl-unit; do
       mkdir -p "$EX/$d" && { [ -L "$FW/$d" ] || ln -s "$EX/$d" "$FW/$d"; } || { say "no $d of DISK_WORK $EX linked into $FW"; exit 4; }
     done
-    echo "$EX" > "$FW/.disk_work"; DROP=1
     a=$(avail); [ "${a:-0}" -ge "$FLOOR" ] \
       || { say "REFUSED: the node's MemAvailable is ${a:-unread} GB, under MEM_FLOOR_GB=$FLOOR: nothing staged"; exit 5; }
   fi
@@ -205,11 +208,17 @@ if [ "$LEAN" = 1 ]; then
       fi
       lean_word "$D" > "$OUT/lean/$nm.word.txt" 2>&1 \
         || { say "LEAN REFUSED: $nm: program-word.json not written: $(tail -1 "$OUT/lean/$nm.word.txt" | cut -c1-200)"; bad=$((bad + 1)); continue; }
-      LEAN_BENCH=(timeout --signal=TERM --kill-after=30 "$(( KILL_AT - 60 - $(date +%s) ))" uv run --no-sync verity bench)
+      t=$(( KILL_AT - 60 - $(date +%s) ))
+      if [ "$t" -le 0 ]; then
+        say "LEAN NOT CHECKED: $nm $(basename "$sd"): $t s to KILL_AT less 60 s, no time to run the verifier"; bad=$((bad + 1)); continue
+      fi
+      LEAN_BENCH=(timeout --signal=TERM --kill-after=30 "$t" uv run --no-sync verity bench)
       if lean_check "$nm" "$sd" "$D" "$K" "$OUT/lean/$nm/$(basename "$sd")" "$EXE" "$OUT/lean.tsv"; then
         ok=$((ok + 1)); say "LEAN accepted: $nm $(basename "$sd"): $(tail -1 "$OUT/lean.tsv" | cut -f4-6)"
       else
-        bad=$((bad + 1)); say "LEAN REFUSED: $nm $(basename "$sd"): $(tail -1 "$OUT/lean.tsv" | cut -f3-6)"
+        bad=$((bad + 1)); w=REFUSED
+        case $(tail -1 "$OUT/lean.tsv" | cut -f3) in "no record (exit 124)" | "no record (exit 137)") w="TIMED OUT at KILL_AT less 60 s" ;; esac
+        say "LEAN $w: $nm $(basename "$sd"): $(tail -1 "$OUT/lean.tsv" | cut -f3-6)"
       fi
     done
   fi
