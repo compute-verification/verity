@@ -41,6 +41,7 @@ from verity_bench import lean_verify as L
 from verity_bench import prove as P
 from verity_bench import prove_flock as PF
 from verity_bench import prove_records as R
+from verity_bench import prove_render, prove_rows
 from verity_bench import spot_status
 from verity_bench import steady as S
 from verity_bench import steady_node as N
@@ -661,7 +662,7 @@ def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatc
             "(60.00% of the blocks, 18.75% of the blocks' MACs); `Rare_v1{N=1}` (20.00% of the blocks, 6.25% of the "
             "blocks' MACs)\n") in text
     assert "not measured at that size, and partial as that ratio is:" in text
-    monkeypatch.setattr(R, "MISSING_NAMED", 1)
+    monkeypatch.setattr(prove_render, "MISSING_NAMED", 1)
     assert "(60.00% of the blocks, 18.75% of the blocks' MACs); and 1 more, which `--json` names\n" in R.render(page)
     whole = R.render(page | {"totals": t | {"status": "measured", "missing": []}})
     assert "measured: steady-state measurements cover 100.0% of its proving time" in whole and "partial" not in whole
@@ -2130,8 +2131,8 @@ def test_the_proving_totals_count_the_priced_steady_rows_off_on_and_not_recorded
         return {R.CARD_NUMA: card, "cores": {"count": 24, "list": "0-23", "numa_nodes": [0]}}
 
     listed = ["r20261110-211750-65a0", "r20261110-211750-65a1", "r20261110-211750-65a2", "r20261110-211750-65a3"]
-    monkeypatch.setattr(R, "off_node_scan", lambda: replace(SCAN, read=SCAN.read | {*listed, "r20261111-000000-0003"},
-                                                            off=frozenset(listed)))
+    monkeypatch.setattr(prove_rows, "off_node_scan", lambda: replace(SCAN, read=SCAN.read | {*listed, "r20261111-000000-0003"},
+                                                                     off=frozenset(listed)))
     priced = [ran(listed[0], rows["rmsnorm-v8"]), ran(listed[1], rows["ar-multimem"])]
     unpriced = ran(listed[2], rows["residual-add"] | {"flat": False})
     superseded = ran(listed[3], rows["fr-w2"])
@@ -2167,7 +2168,7 @@ def test_the_proving_totals_count_the_priced_steady_rows_off_on_and_not_recorded
     head, seconds, size = R.measurements(doc, metrics)
     assert head["inputs"][3] == seconds["inputs"][1] == line and line not in size.get("inputs", [])
 
-    monkeypatch.setattr(R, "off_node_scan", lambda: R.OffNodeScan(SCAN.record, frozenset(), frozenset()))
+    monkeypatch.setattr(prove_rows, "off_node_scan", lambda: R.OffNodeScan(SCAN.record, frozenset(), frozenset()))
     none = R.build("spot", "glm53", store=s.fresh("unscanned"), root=REPO)
     assert none["totals"]["off_node"]["off"]["runs"] == [differs] and none["totals"]["off_node"]["on"]["runs"] == [equal]
     assert {k: v for k, v in none["totals"].items() if k != "off_node"} == {k: v for k, v in t.items() if k != "off_node"}
