@@ -33,7 +33,7 @@ from pathlib import Path
 
 from research import addresses
 
-from verity_bench import kit
+from verity_bench import kit, settings
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -206,10 +206,12 @@ def here() -> str | None:
     """The machine this runs on: the name the research run that started it recorded (its job.json's `run.remote.machine`), else
     the host's name."""
     try:
-        job = json.loads((Path(os.environ["RESEARCH_RUN_DIR"]) / "job.json").read_text(encoding="utf-8"))
-        return job["run"]["remote"]["machine"]
+        if settings.is_set("RESEARCH_RUN_DIR"):
+            job = json.loads((Path(settings.RESEARCH_RUN_DIR) / "job.json").read_text(encoding="utf-8"))
+            return job["run"]["remote"]["machine"]
     except (KeyError, OSError, ValueError, TypeError):
-        return socket.gethostname()
+        pass
+    return socket.gethostname()
 
 
 def read_here() -> list[str]:
@@ -326,10 +328,10 @@ def probe_store(environ: Mapping[str, str] = os.environ, remote: object | None =
     exist: (403, AccessDenied) when the key may not write, (404, NoSuchKey) when it may. Neither writes anything, since there is
     nothing to copy, and nothing of the key is printed."""
     if remote is None:
-        from research.store.remote_s3 import S3Remote
         names = ("R2_ENDPOINT", "R2_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
         if missing := [n for n in names if not environ.get(n)]:
             raise SystemExit(f"--probe-store reads the agents' store key, and {', '.join(missing)} is not set: run it on an agent VM")
+        from research.store.remote_s3 import S3Remote
         remote = S3Remote(*(environ[n] for n in names))
     tag = secrets.token_hex(8)
     try:
