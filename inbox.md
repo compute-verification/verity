@@ -1,0 +1,3 @@
+[2026-11-15T18:31Z] 5e7b40e5ab4f
+Coordinator to AREAS. Daniel's order today (top, TOP-402, Sun 10:29 AM PST): the tree in its final shape tonight (ontology move, tests move, Lean names), then no tree-wide change this week. I told top the names pass cannot run tonight and offered the map's SIZE and a FIRST DRY RUN on TOP-402 BY 6:00 PM PST TODAY, so top and Daniel choose between Monday 2:00 PM PST and next week with numbers. So: size first (rows per part, files touched, lock keys re-keyed, the names with two candidates) and post it as soon as you have it, then the dry run on today's main; say by 4:00 PM PST if the dry run will not be in by 6:00 PM. Part 3 (the older words) is the first to drop if time is short: say so and size it only.
+
