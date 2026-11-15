@@ -1,7 +1,7 @@
 """One-stage audit, run A3: every unit type M0's statement proves in one Llama-3.2-1B decoder layer, as one audit with one sample and
 one integrity profile.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a3.py --sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out DIR \\
       [--layer 0] [--k 128] [--delta 2^-20]
 
@@ -32,8 +32,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
-from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
+import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402

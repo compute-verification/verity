@@ -129,12 +129,12 @@ def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(t
 def test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample(tmp_path):
     ok = {"profile": "advice", "rc": {"n2": "0", "scan": "0"}}
     steps = _steps(tmp_path, ok)
-    draw = {"selection": "sampled", "law": "subset:2", "k": 2, "population": 4}
+    sample = {"selection": "sampled", "law": "subset:2", "k": 2, "population": 4}
     window = {"accepted": True, "proof": {"proved": True}, "as_expected": True}
     reference = [{"window": w, "expect": int(w != 0)} for w in range(4)]
 
     def run(name, member, units):
-        doc = {"draw": draw, "ok": name == "honest", "members": {name: member},
+        doc = {"draw": sample, "ok": name == "honest", "members": {name: member},
                "sampled": {name: {"draw": {"units": units}, "why": []}}}
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
         return str(tmp_path / f"{name}.json")
@@ -144,7 +144,7 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample(tmp_pa
                 run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [1, 2])]
     got = cr.report(steps)
     n2s = got["steps"]["n2"]
-    assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the draw"}
+    assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the sample"}
     assert not {"structured", "prove_s", "verify_s"} & set(n2s["members"]["honest"])
     assert n2s["members"]["moved"]["escaped_the_draw"] == {"incorrect_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
@@ -344,7 +344,7 @@ def test_leak_counts_the_scans_terms_on_the_network_certifier_run(tmp_path):
     for scope, n in doc["links"].items():
         assert rows["week", scope, "registered"]["per_period"] == pytest.approx(n * week["registered"]["per_period"])
         assert Fraction(rows["week", scope, "registered"]["eps"]) == n * Fraction(189_000, 2 ** 20)
-    with pytest.raises(SystemExit, match="drew 16 of 65"):
+    with pytest.raises(SystemExit, match="sampled 16 of 65"):
         cr.leak(run, {"draw": {"honest": 16}})
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
     with pytest.raises(ValueError, match="lanes = 4"):
@@ -409,7 +409,7 @@ def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_ex
     assert stand_in["why"] == {"n2": "stand-in: the simulated link"}
 
 
-def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
+def test_k_counts_the_audits_sample_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
     h = cr.pooled_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
                      {"advice": 8, "syncs": 0, "cells": 6})
     assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 6 + 80 + 15 + 2 + 4)
@@ -425,7 +425,7 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
     assert (cr.audit_of(tmp_path)["drawn"], cr.audit_of(tmp_path)["q"]) == (2, "1/3")
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "stratified", "k": 1,
                                                                                      "strata": [{**strata[0], "k": 0}, strata[1]]}}))
-    with pytest.raises(SystemExit, match="each drawn"):
+    with pytest.raises(SystemExit, match="each sampled"):
         cr.audit_of(tmp_path)
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     audit = cr.audit_of(tmp_path)

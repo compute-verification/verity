@@ -166,5 +166,11 @@ def test_its_id_and_its_check_are_the_leans() -> None:
     lake = (LEAN / "lakefile.toml").read_text(encoding="utf-8")
     root = re.search(rf'^name = "{re.escape(exe)}"\nroot = "([\w.]+)Main"$', lake, re.MULTILINE)
     assert root, f"{exe} is no executable of {LEAN.name}/lakefile.toml"
-    text = (LEAN / (root[1].replace(".", "/") + ".lean")).read_text(encoding="utf-8")
-    assert f'def protocolId : String := "{NC.ID}"' in text
+    def text(module: str) -> str:
+        return (LEAN / (module.replace(".", "/") + ".lean")).read_text(encoding="utf-8")
+    check = root[1]
+    own = dict.fromkeys([check, *re.findall(rf"^(?:public |meta )*import ({re.escape(check)}\.[\w.]+)$", text(check),
+                                            re.MULTILINE)])
+    ids = [(m, i) for m in own for i in re.findall(r'^def protocolId : String := "(.*)"$', text(m), re.MULTILINE)]
+    assert [i for _, i in ids] == [NC.ID], (
+        f"{check} and the modules it imports under it ({', '.join(own)}) declare protocolId {ids}, not once as {NC.ID}")

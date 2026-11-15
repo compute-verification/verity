@@ -1,6 +1,6 @@
 """Pod 85's release side (`pod/rec_inner.py release-parts`, `release-report`): V*'s statements named as 85 stages them, the
 release windows its ``RELEASE_WINDOWS_S`` gives them, and a recursive session read back from the ZK server's record against
-that schedule and the Lean session loop's ``ZK-SERVER-TIMES`` lines."""
+that schedule and the Lean session loop's ``FIREWALL-TIMES`` lines."""
 from __future__ import annotations
 
 import importlib.util
@@ -83,7 +83,7 @@ def test_a_stop_a_missing_part_or_a_loop_time_off_schedule_is_not_ok(tmp_path):
 def test_the_cli_reads_zk_server_times_lines_and_exits_on_the_verdict(tmp_path, capsys):
     state, sid, times = _session(tmp_path, len(PARTS))
     err = tmp_path / "prove.err"
-    err.write_text("noise\n" + "".join(f"ZK-SERVER-TIMES {json.dumps(t)}\n" for t in times))
+    err.write_text("noise\n" + "".join(f"FIREWALL-TIMES {json.dumps(t)}\n" for t in times))
     assert R.main(["release-report", "--state", str(state), "--session", sid, "--times", str(err)]) == 0
     assert json.loads(capsys.readouterr().out)["ok"]
     assert R.main(["release-report", "--state", str(state), "--session", sid]) == 1

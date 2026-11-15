@@ -3,7 +3,7 @@ module
 /-!
 # The certifier program: rows, grids, fill and the FIFO certifier
 
-The executable forms of `Security/Definitions/Certifier/Grid.lean` that the difftest runs, under the same names in
+The executable forms of `security/Definitions/Certifier/Grid.lean` that the difftest runs, under the same names in
 `NetworkCertifier`. Lean core only: `offset` sums over `List.finRange` where the reference sums over a `Finset`.
 `Proofs.Certifier.Code` proves what the difftest computes from them equal to the reference's.
 -/

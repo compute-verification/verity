@@ -68,11 +68,11 @@ fi
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $PY ] || { $UV venv -q --python 3.12 $FW/py && $UV pip install -q --python $PY numpy blake3; } || exit 1
-export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm:$REPO/adapters/torch
 # KEY: the staging tree's digest, over the Python under KEY_PATHS, the list window.py's KEY_PATHS repeats. A path the tree no
 # longer holds would leave the key without what was under it, and a statement staged before a change there would be proved
 # as current: the run stops instead
-KEY_PATHS="benchmarks/served_units/stage.py verity/circuits verity/commitments verity/protocols adapters/vllm/verity_vllm tools/verity/circuit_check/src"
+KEY_PATHS="benchmarks/served_units/stage.py verity/circuits verity/commitments verity/protocols adapters/vllm/verity_vllm adapters/torch/verity_torch tools/verity/circuit_check/src"
 for p in $KEY_PATHS; do
   [ -e $REPO/$p ] || { echo "prove_time.sh: no $p in $REPO, a path of the staging key: correct KEY_PATHS in" \
     "benchmarks/served_units/prove_time.sh and window.py together"; exit 1; }

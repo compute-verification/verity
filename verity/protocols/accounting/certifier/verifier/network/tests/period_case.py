@@ -321,7 +321,7 @@ class Window:
 @dataclasses.dataclass(frozen=True)
 class Facts:
     units: int
-    drawn: int
+    sampled: int
     delta: Fraction
     wrong: int
     #: `design`: the sample's design as a profile's level writes it, the registered one (`_facts`), off which `at`
@@ -1406,13 +1406,13 @@ def _facts(what: str, reg, prof: dict, pub) -> Facts:
     (lv,) = prof["levels"]
     design = lv["draw"]
     if isinstance(design, dict) and "subset" in design:
-        drawn = design["subset"]
+        sampled = design["subset"]
     elif isinstance(design, dict) and design.get("law") == "stratified":
-        drawn = sum(s["k"] for s in design["strata"])
+        sampled = sum(s["k"] for s in design["strata"])
     else:
-        raise Finding(REJECT, f"{what}: profile: not a subset or stratified draw")
-    if drawn > lv["size"]:
-        raise Finding(REJECT, f"{what}: profile: {drawn} sampled of {lv['size']} units: {OVERSAMPLED}")
+        raise Finding(REJECT, f"{what}: profile: not a subset or stratified sample")
+    if sampled > lv["size"]:
+        raise Finding(REJECT, f"{what}: profile: {sampled} sampled of {lv['size']} units: {OVERSAMPLED}")
     for s in design.get("strata", ()):
         if s["k"] > s["size"]:
             raise Finding(REJECT, f"{what}: profile: stratum '{s['name']}': {s['k']} sampled of {s['size']} units: "
@@ -1428,7 +1428,7 @@ def _facts(what: str, reg, prof: dict, pub) -> Facts:
     if not isinstance(bound, int) or isinstance(bound, bool) or bound < 0:
         raise Finding(REJECT, f"{what}: no bound")
     count = max(bound, _sample_bound(lv["size"], design, prof["delta"]))
-    return Facts(lv["size"], drawn, prof["delta"], count, design)
+    return Facts(lv["size"], sampled, prof["delta"], count, design)
 
 
 def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
@@ -1509,7 +1509,7 @@ def at_most(n: int, b: int) -> int:
 
 
 def _facts_json(f: Facts) -> dict:
-    return {"delta": str(f.delta), "drawn": f.drawn, "units": f.units, "wrong_units": f.wrong}
+    return {"delta": str(f.delta), "drawn": f.sampled, "units": f.units, "wrong_units": f.wrong}
 
 
 def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries: int | None = None) -> dict:
@@ -1572,7 +1572,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
         except Finding as x:
             findings.append(x)
         else:
-            if tied and f.drawn < f.units:
+            if tied and f.sampled < f.units:
                 charged[i] = f.at(TIED_DELTA)
     findings += [Finding(REJECT, f"window {p.first + i}: {UNWIRED}") for i, reg in enumerate(c.windows)
                  if not _wired(p, c.audits, reg)]
@@ -1716,10 +1716,10 @@ def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta:
     """One-stage's answer accepting `k` of `size` units sampled `subset:k`, or sampled stratified over `strata` (each
     `{k, name, size}`, k and size their sums), as `OneStage.check`'s public and profile have it."""
     units = list(range(k))
-    draw = {"subset": k} if strata is None else {"law": "stratified", "strata": strata}
+    sample = {"subset": k} if strata is None else {"law": "stratified", "strata": strata}
     return {"commitment": digest.hex(),
             "profile": {"covered": [], "delta": delta, "drawn": {UNIT: k},
-                        "levels": [{"draw": draw, "name": UNIT, "query": query, "size": size}],
+                        "levels": [{"draw": sample, "name": UNIT, "query": query, "size": size}],
                         "linked": False, "prescribed": [], "programs": [program]},
             "protocol": ONE_STAGE, "public": {"bound": bound, "drawn": units, "per_template": None, "proved": units},
             "reason": None, "verdict": ACCEPT}

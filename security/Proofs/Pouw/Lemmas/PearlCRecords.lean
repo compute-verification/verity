@@ -23,6 +23,7 @@ public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainInertBound
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
+public import Definitions.Pouw.Guarantees.PearlC4
 
 /-!
 # Pearl-C's statements at device records: lemmas
@@ -40,8 +41,9 @@ salt's bytes `salt`, and rests on that form at W1 (`Definitions.Pouw.Assumptions
 `Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1`, and the chain-cap and U-only forms' `…W1` beside them).
 Pearl-C4's rest on `TTOutFp4Sm120W1` or `TTOutTileFp4Sm120W1` and conclude at
 `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). The rest (the
-row-seed readers) are still stated over any `CostModel`. `EpsSm120v1LoopCast8p72Rev1InertShare1000_8192` and
-`EpsFp4Sm120_8192` are the served record's and Pearl-C4's gaps at 8192³ in ε form.
+row-seed readers) are still stated over any `CostModel`. `EpsSm120v1LoopCast8p72Rev1InertShare1000_8192` is the served
+record's gap at 8192³ in ε form. Pearl-C4's headline on sm_120 (`GapFp4Sm120_8192`, `_16384`, `SampledFp4Sm120_8192`,
+`_16384`, `EpsFp4Sm120_8192`) is listed, so it is stated in `Definitions.Pouw.Guarantees.PearlC4`.
 The hidden-audit form at the served record is `Proofs.Pouw.Lemmas.PearlCFlockTile`'s.
 -/
 
@@ -84,34 +86,6 @@ open Pouw.PearlC.Assumptions
 end Pouw.PearlC
 
 namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
-
-/-- **Pearl-C4's headline on sm_120, 16384³**, worst case under the cap `1/400`: `g = 5473473967/895794400000` (0.61102%).
-It holds only for noise the domain's rule allows (D-SK, `Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`), and says nothing yet
-about the deployed NVFP4 noise, whose lines are SHA-512 of the salt: there the domain is empty
-(`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). -/
-def _root_.Pouw.Guarantees.PearlC.GapFp4Sm120_16384 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120W1 sha fetch salt sem (1 / 400)),
-    GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh16384)
-    ((5473473967 / 895794400000 : ℚ) : ℝ) δPearlC
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
-
-/-- **Pearl-C4's headline on sm_120, 8192³**, worst case under the cap `1/400`: `g = 9875013901/1376663200000` (0.71732%).
-It holds only for noise the domain's rule allows (D-SK, `Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`), and says nothing yet
-about the deployed NVFP4 noise, whose lines are SHA-512 of the salt: there the domain is empty
-(`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). -/
-def _root_.Pouw.Guarantees.PearlC.GapFp4Sm120_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120W1 sha fetch salt sem (1 / 400)),
-    GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh8192)
-    ((9875013901 / 1376663200000 : ℚ) : ℝ) δPearlC
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- **v1 under rev1 at the cap 1/1,000, 16384³**, FP32 at 8.376, the honest cast at 8.72:
@@ -121,28 +95,6 @@ def _root_.Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1InertShare1000_16384
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
     (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh16384)
     ((1058166877 / 294158650000 : ℚ) : ℝ) δPearlC
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
-
-/-- **Pearl-C4's headline on sm_120 per audit tile, 16384³**: `GGapSampled` at `g = 5473473967/895794400000`. -/
-def _root_.Pouw.Guarantees.PearlC.SampledFp4Sm120_16384 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutTileFp4Sm120W1 sha fetch salt sem (1 / 400)),
-    GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCTilesFp4 devFp4Sm120 sem (1 / 400))
-    (pearlCDomainFp4At sem sh16384) ((5473473967 / 895794400000 : ℚ) : ℝ) δPearlC
-
-end Pouw.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
-
-/-- **Pearl-C4's headline on sm_120 per audit tile, 8192³**: `GGapSampled` at `g = 9875013901/1376663200000`. -/
-def _root_.Pouw.Guarantees.PearlC.SampledFp4Sm120_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutTileFp4Sm120W1 sha fetch salt sem (1 / 400)),
-    GGapSampled (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCTilesFp4 devFp4Sm120 sem (1 / 400))
-    (pearlCDomainFp4At sem sh8192) ((9875013901 / 1376663200000 : ℚ) : ℝ) δPearlC
 
 end Pouw.PearlC
 
@@ -1011,18 +963,3 @@ def SampledSm120v1Cast8p72Rev1InertShare1000_llama31_8b : Prop :=
       ((106307 / 27386000 : ℚ) : ℝ) δPearlC
 
 end Pouw.Guarantees.PearlC
-
-namespace Pouw.PearlC
-open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
-
-/-- **Pearl-C4's headline on sm_120, 8192³, in ε form**: `GapFp4Sm120_8192` at the advantage
-`ε = g/(1 − g) = 9875013901/1366788186099` (0.72250%). Like `GapFp4Sm120_8192`, it holds only for noise the domain's
-rule allows (D-SK, `Fp4Sem.SaltKeyedB`) and says nothing yet about the deployed NVFP4 noise, at which the domain is
-empty. -/
-def _root_.Pouw.Guarantees.PearlC.EpsFp4Sm120_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S),
-    TTOutFp4Sm120W1 sha fetch salt sem (1 / 400) →
-    Pouw.PearlC.Gε (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh8192)
-    ((9875013901 / 1366788186099 : ℚ) : ℝ) δPearlC
-
-end Pouw.PearlC

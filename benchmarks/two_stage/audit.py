@@ -48,7 +48,7 @@ those reads (the interior's at the interior record and the links' boundary ports
 and samples, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
 copies it reads them against (``guard/``, `guard.export`).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --main FILE \\
         --out DIR [--altered]
 """
@@ -70,7 +70,7 @@ from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
-from verity.protocols.proofs.spot.prover.audit import two_stage as TS  # noqa: E402
+import two_stage as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402

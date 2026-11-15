@@ -62,7 +62,7 @@ sys.path.insert(0, str(HERE))
 #: the directory of Flock's proof-format reader, `redigest.py`, which the leak scan reads proof streams with
 sys.path.insert(0, str(HERE.parents[1] / "verity/protocols/proofs/flock/prover/agreement"))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+import a0  # noqa: E402
 import a7  # noqa: E402
 import redigest  # noqa: E402
 from verity.protocols.accounting.certifier.prover import leak_scan as LS  # noqa: E402
@@ -259,7 +259,7 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     sampling_design = D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": "the openings of one window of a PoUB session (a8.py), on a "
+    win = {"kind": "stand-in", "of": "the openings of one window of a remote bandwidth session (a8.py), on a "
                                       f"{rs.store.registration.blocks}-chunk registered store",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "opening.plan_link: the plan row by its b || c to the verifier's own copy of the pass's plan"}

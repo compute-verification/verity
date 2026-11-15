@@ -68,7 +68,8 @@ def _parts(node: ast.AST) -> list[str]:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return [node.value]
     if isinstance(node, ast.JoinedStr):
-        return ["".join(v.value if isinstance(v, ast.Constant) else "{}" for v in node.values)]
+        return ["".join(v.value if isinstance(v, ast.Constant) and isinstance(v.value, str) else "{}"
+                        for v in node.values)]
     return [p for c in ast.iter_child_nodes(node) for p in _parts(c)]
 
 

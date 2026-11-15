@@ -1,10 +1,10 @@
 """`verity`: the repository's one command, dispatching to the tools beside it.
 
-    verity check [ARGS]             the whole check, run on `main` after each landing (check/check.py)
-    verity check PART... [ARGS]     only those parts of it, tests, circuits or lean (their jobs in check/ci.toml)
+    verity check [ARGS]             the whole check, run on `main` after each landing (tools/check/check.py)
+    verity check PART... [ARGS]     only those parts of it, tests, circuits or lean (their jobs in tools/check/ci.toml)
     verity check --record [ARGS]    the check recorded as an Attempt (check.py --record; a lane's own: --on M --pool NAME)
-    verity check move BASE HEAD     certify a pure move (check/move_check.py)
-    verity ci ls [--hours H]        recent check runs, running and ended, from their live records on the store (check/live.py)
+    verity check move BASE HEAD     certify a pure move (tools/check/move_check.py)
+    verity ci ls [--hours H]        recent check runs, running and ended, from the store's live records (tools/check/live.py)
     verity ci inspect RUN           a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
@@ -14,7 +14,7 @@
                                     its own (`verity verify proof verify --zk --circuit F --public F --session DIR`), run
                                     in the directory you are in and exiting with its status
     verity tasks list --json [--kind after-landing|preflight] [--changed BASE]
-                                    the check's task graph of this checkout (`tasks/v1`, check/tasks.py; its README's "Tasks")
+                                    the check's task graph here (`tasks/v1`, tools/check/tasks.py; its README's "Tasks")
     verity tasks run ID [--out FILE]
                                     run one task here as check runs it, and print its verdict, outputs, seconds and key
     verity graph [--json [--packed]] [--family F]
@@ -52,6 +52,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
+#: the check's scripts, which `verity check`, `verity ci` and `verity tasks` start
+CHECK = ROOT / "tools" / "check"
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
 USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]\n"
          "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
@@ -83,8 +85,8 @@ def _run(argv: list[str]) -> int:
 
 def _check(args: list[str]) -> int:
     if args and args[0] == "move":
-        return _run([sys.executable, str(HERE / "check" / "move_check.py"), *args[1:]])
-    return _run([sys.executable, str(HERE / "check" / "check.py"), *args])
+        return _run([sys.executable, str(CHECK / "move_check.py"), *args[1:]])
+    return _run([sys.executable, str(CHECK / "check.py"), *args])
 
 
 def _runner(top: str, command: str, args: list[str]) -> int:
@@ -301,11 +303,11 @@ def main(argv: list[str] | None = None) -> int:
     if args[0] == "check":
         return _check(args[1:])
     if args[0] == "ci":
-        return _run([sys.executable, str(HERE / "check" / "live.py"), *args[1:]])
+        return _run([sys.executable, str(CHECK / "live.py"), *args[1:]])
     if args[0] == "bench":
         return _runner("benchmarks", "bench", args[1:])
     if args[0] == "tasks":
-        return _run([sys.executable, str(HERE / "check" / "tasks.py"), *args[1:]])
+        return _run([sys.executable, str(CHECK / "tasks.py"), *args[1:]])
     if args[0] == "graph":
         from verity_graph.cli import main as graph
 

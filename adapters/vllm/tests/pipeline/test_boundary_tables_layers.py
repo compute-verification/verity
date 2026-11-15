@@ -64,8 +64,8 @@ def test_an_mla_layer_is_one_whose_bf16_cache_holds_the_latents_words_a_row(attr
     ({"cache": torch.zeros(2, 2, 4, BT.WORDS, dtype=torch.bfloat16)}, "(auto, torch.bfloat16, (2, 2, 4, 576))"),
 ])
 def test_a_cache_is_refused_for_its_words_type_its_latents_width_its_rows_length_or_its_dimensions_alone(attrs, cache):
-    why = (f"MLA layer {NAME}: its cache {cache} doesn't hold DsaLatentRow_v1's 576 bf16 words a row; serve with "
-           f"--kv-cache-dtype auto")
+    why = (f"MLA layer {NAME}: its cache {cache} holds neither DsaLatentRow_v1's 576 bf16 words a row nor fp8_ds_mla's "
+           f"656 bytes")
     with pytest.raises(ValueError, match=f"^{re.escape(why)}$"):
         BT.mla_layers(model(layer(**attrs)))
 

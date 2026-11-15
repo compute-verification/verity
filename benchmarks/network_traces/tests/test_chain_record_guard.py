@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from verity.protocols.accounting.certifier.device.tests.gate_runs import GATE, _gate, _put, _sig_piece, _tar
+from benchmarks.network_traces.tests.gate_runs import GATE, _gate, _put, _sig_piece, _tar
 
 ROOT = Path(__file__).resolve().parents[3]
 

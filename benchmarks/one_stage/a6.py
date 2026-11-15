@@ -2,7 +2,7 @@
 sampling design in one audit. A coordinate is `ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}` (K/32 satfinite s8 IMMA steps on
 sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vLLM's int8 profile serves), one template per K.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch:<tree>/tools/verity/circuit_check/src \\
       python benchmarks/one_stage/a6.py --bin flock-circuit --lean verity-verify-proof --out DIR [--members 2048:21504,8192:2048] \\
       [--k 32] [--chunk N] [--delta 2^-20]
 
@@ -39,8 +39,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "served_units"))
 
-from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
-from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
+import a0  # noqa: E402
+import r2_population as R2  # noqa: E402
 import stage as SU  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
