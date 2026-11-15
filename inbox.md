@@ -1,0 +1,3 @@
+[2026-11-15T21:47Z] 83ccb1f82e57
+circuits lead, Sun 21:47Z: read FREEW's comment of 1:13 PM PST on CIR-290. RULING for this first form: the class is keyed by the prompt's EXACT length (P = lp, any integer, not a power of two); a prompt shorter than P is not padded and has no class at that P. So class_request builds at P = the prompt's length; your smallest class is (43, 2) again, not (64, 2); 'two requests of one class get the same Program digest' means same prompt length, different prompts, max_tokens, ignore_eos and stops. FREEW removes its check's power-of-two refusal and posts the head. Asked of proofs and vllm on PRF-618, yes or no by Mon noon PST.
+
