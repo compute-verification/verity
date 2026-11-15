@@ -6,7 +6,7 @@ public import Properties.Poub.Remote.Schedule
 /-!
 # A registered circuit's space and bandwidth at the committed steering cap
 
-`Accounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
+`ResourceAccounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `ResourceAccounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` at the verifier's
 layout (`Properties.Poub.runLayout`: each tile where `checkOpening` checks the block at its position of the
 pass's plan) with that premise replaced by what the verifier checks: the schedule check (`Poub.Schedule.check`)
@@ -22,13 +22,13 @@ layout, `Properties.Poub.scheduleLayoutGap_code`).
 
 namespace Properties.RegisteredCircuit
 
-open Accounting
+open ResourceAccounting
 open Pous (pr)
 open scoped ENNReal
 
 /-- **A registered circuit's held and moved bits from an accepted stacked audit, at the committed steering cap.**
 
-`G` (`Accounting.Guarantees.RegisteredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
+`G` (`ResourceAccounting.Guarantees.RegisteredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
 the bound as it states them) at the verifier's layout, with its premise `SteeredLayout layout steer` replaced by the
 schedule check's acceptance at the cap `cap`, which is the event's first conjunct. `accepted c y`: at the prefix `c` of
 the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered

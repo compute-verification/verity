@@ -23,6 +23,7 @@ from pathlib import Path
 MAP = Path("tools/move/lean_names_pass_map.toml")
 TREES = ("Definitions", "Properties", "Proofs")
 WORD, NEW = "Accounting", "ResourceAccounting"
+RENAMED = {WORD, *(f"{t}.{WORD}" for t in TREES)}
 OTHER_FILES = ["*.json", "*.py", "*.md", "*.toml", "*.sh", "*.txt"]
 DECL = re.compile(r"^\s*(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|partial|unsafe|public|meta|nonrec|scoped)\s+)*"
                   r"(?:theorem|lemma|def|abbrev|structure|class|inductive|instance|opaque|axiom|irreducible_def|class\s+inductive)"
@@ -61,8 +62,10 @@ def scan(lines: list[str]) -> tuple[list[list[str]], set[str]]:
 
 
 def sites() -> dict[str, list[tuple[int, str, bool]]]:
-    """{file: [(line, the site, whether it is the root namespace)]} for each `Accounting` a `.lean` file spells outside a
-    longer dotted name; a site that resolves to a nested namespace, or to none the scan finds, is not the root's."""
+    """{file: [(line, the site, whether the map renames it)]} for each `Accounting` a `.lean` file spells outside a
+    longer dotted name: renamed where every namespace it resolves to is the root's or a tree's own (`RENAMED`, which all
+    end in `ResourceAccounting` after the pass); one that resolves to another nested namespace, or to none the scan
+    finds, is not."""
     texts = {f: Path(f).read_text(encoding="utf-8", errors="replace") for f in tracked("*.lean")}
     scans = {f: scan(code(t)) for f, t in texts.items() if WORD in t}
     decls = set().union(*(d for _, d in scans.values()))
@@ -77,14 +80,14 @@ def sites() -> dict[str, list[tuple[int, str, bool]]]:
                 stack = per[ln - 1]
                 if re.match(r"^\s*(namespace|end)\b", line):
                     outer = stack[:len(stack) - len(m.group(0).split("."))] if line.lstrip().startswith("end") else stack
-                    found.append((ln, m.group(0), not outer))
+                    found.append((ln, m.group(0), ".".join(outer + [WORD]) in RENAMED))
                     continue
                 first = m.group(1).split(".")[1] if m.group(1) else ""
                 hits = [p for i in range(len(stack), -1, -1) if (p := ".".join(stack[:i] + [WORD])) in spaces
                         and (not first or f"{p}.{first}" in spaces or f"{p}.{first}" in decls)]
                 hits += [p for o in sorted(opened) if (p := f"{o}.{WORD}") in spaces and p not in hits
                          and (not first or f"{p}.{first}" in spaces or f"{p}.{first}" in decls)]
-                found.append((ln, m.group(0), hits == [WORD]))
+                found.append((ln, m.group(0), bool(hits) and set(hits) <= RENAMED))
         if found:
             out[f] = found
     return out
