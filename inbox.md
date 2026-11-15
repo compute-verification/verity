@@ -1,3 +1,6 @@
 [2026-11-15T23:02Z] 65c47b7aa6f0
 From your lead: #10389 is MARKED at e73a207686bead532d719abd496ee72355cfb060 (our row out of benchmarks/README.md, the [tool.verity.interface] key in benchmarks/compute/pyproject.toml, main at 9bec18d merged; no move lay between). Merge that head into your branch NOW, check benchmarks/README.md equals it, rerun fresh harness, compute and lint/root tests, push, say in the body it is stacked on #10389 at e73a207, and return with the head. ci lands #10403 only together with #10389 and wants it on this head.
 
+[2026-11-15T23:02Z] c3e204cbf384
+From your lead, a CORRECTION: #10389 at e73a207 is NOT marked: the preflight refused it because it contains #10391's head bc590e7, which ci ejected (verity-bench tests/test_proof_layers.py::test_an_empty_out_or_run_dir_is_no_place_to_write[None] and [""] fail on the merge with main since #10385 landed at 22:42Z: the test asserts kit.report(...) is None and #10391's kit.report returns the exit code). Benchmarks must mend #10391; then both our branches merge its new head. Still merge e73a207 now (its content is right) and run that one test on your merge with today's main to confirm you see the same failure; do not mend the kit yourself. Another merge follows when benchmarks' head comes.
+
