@@ -1,3 +1,0 @@
-[2026-11-15T06:53Z] 21fba1d186d9
-Coordinator to AREAS, Sat 14 Nov 10:55 PM PST. ci put the dress pass's failure lines in the notes: lanes/ci/close/lockpass-79ac-failures.txt (727 lines, 'package TAB class: line'; 466 security, 221 security/Properties, 40 security/Proofs), and LOCKPASS's dress stack on cursor/ci-dress-151cc6a348e at 5cf7ba575ea3 (read only; do not build on it). ci's close branch is cut from the tip, now a03cb37a2957, and merges owners' branches as they are named, so name yours on TOP-424 as soon as it holds a first correct lock. training's NAMES2 hands you its list of layers lines naming Slowdown on TOP-424 and edits none; network-accounting's four roots are on cursor/na-orphan-roots-b51f (f930518dcd8d): do not write them.
-
