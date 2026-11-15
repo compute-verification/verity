@@ -85,13 +85,20 @@ if [ ! -f "$CUDA_HOME/include/cusparse.h" ]; then
   echo "serve_fresh: $CUDA_HOME/include lacks cusparse.h; the CUDA math headers come from the environment's nvidia wheels (CPATH)"
 fi
 
+# Each child runs in a process group of its own and is waited on in the background, so a signal to this script stops it and
+# everything it started (the compilers, the server and its engine) rather than leaving them on the card.
+CHILD=""; STEP=start
+trap '[ -n "$CHILD" ] && kill -TERM -- "-$CHILD" 2>/dev/null' EXIT
+trap 'echo "SERVE-FRESH FAILED $STEP: stopped by a signal"; exit 143' TERM INT HUP
 # step NAME CMD...: runs CMD (in adapters/vllm) into $LOGS/NAME.log, or prints it under --dry-run
 step() {
-  local name=$1; shift
+  local name=$1 rc; shift
   if [ "$DRY" = 1 ]; then echo "step $name: $*"; return 0; fi
   local t=$(date +%s)
-  echo "serve_fresh: $name ..."
-  (cd "$TREE/adapters/vllm" && "$@") > "$LOGS/$name.log" 2>&1 || fail "$name" "exit $? (log $LOGS/$name.log: $(tail -1 "$LOGS/$name.log" | cut -c1-200))"
+  echo "serve_fresh: $name ..."; STEP=$name
+  (cd "$TREE/adapters/vllm" && exec setsid -w "$@") > "$LOGS/$name.log" 2>&1 &
+  CHILD=$!; wait "$CHILD"; rc=$?; CHILD=""
+  [ "$rc" = 0 ] || fail "$name" "exit $rc (log $LOGS/$name.log: $(tail -1 "$LOGS/$name.log" | cut -c1-200))"
   echo "serve_fresh: $name done in $(( $(date +%s) - t )) s"
 }
 step bootstrap bash verity_vllm/ops/pod_bootstrap.sh --cases LLAMA32_1B_INT8 --out "$W/bootstrap"
@@ -117,18 +124,21 @@ if [ "$DRY" = 1 ]; then
   exit 0
 fi
 echo "serve_fresh: serve on port $PORT ..."
-(cd "$TREE/adapters/vllm" && exec "${SERVE[@]}") > "$LOGS/serve.log" 2>&1 &
-SERVER=$!
+STEP=serve
+(cd "$TREE/adapters/vllm" && exec setsid -w "${SERVE[@]}") > "$LOGS/serve.log" 2>&1 &
+SERVER=$!; CHILD=$SERVER
 for _ in $(seq 1 300); do
   kill -0 "$SERVER" 2>/dev/null || fail serve "the server exited before it listened (log $LOGS/serve.log)"
   curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null 2>&1 && break
   sleep 5
 done
 curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null 2>&1 || { kill -INT "$SERVER"; fail serve "not listening after 25 min (log $LOGS/serve.log)"; }
+STEP=request
 (cd "$TREE" && "${LOAD[@]}" --release "$(cat /proc/sys/kernel/random/uuid)") > "$LOGS/request.log" 2>&1
 lrc=$?
+STEP=stop
 kill -INT "$SERVER"
-wait "$SERVER"; src=$?
+wait "$SERVER"; src=$?; CHILD=""
 [ "$lrc" = 0 ] || fail request "exit $lrc (log $LOGS/request.log)"
 [ "$src" = 0 ] || fail stop "the server exited $src (log $LOGS/serve.log)"
 seal=$(grep -m1 '"window": 0[,}]' "$W/serve/seals.jsonl" 2>/dev/null)

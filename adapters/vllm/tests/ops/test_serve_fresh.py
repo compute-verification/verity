@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import subprocess
 from pathlib import Path
 
@@ -16,7 +17,7 @@ import pytest
 VLLM = Path(__file__).resolve().parents[2]
 SCRIPT = VLLM / "verity_vllm" / "ops" / "serve_fresh.sh"
 BASH = shutil.which("bash") or "/bin/bash"
-TOOLS = ("realpath", "dirname", "cut", "awk", "tr", "df", "tail", "mkdir")
+TOOLS = ("realpath", "dirname", "cut", "awk", "tr", "df", "tail", "mkdir", "bash", "date", "setsid")
 HOSTILE = {"WORK": "/workspace", "VENV": "/workspace/venv312", "HF_HOME": "/workspace/hf", "FA2": "/workspace/cp/fa2",
            "UV_CACHE_DIR": "/root/.cache/uv", "PIP_CACHE_DIR": "/root/.cache/pip", "HOME": "/root",
            "XDG_CACHE_HOME": "/root/.cache", "TRITON_CACHE_DIR": "/workspace/cache/triton"}
@@ -95,6 +96,29 @@ def test_a_machine_that_lacks_something_is_refused_in_one_line_before_anything_i
     assert len(r.stderr.strip().splitlines()) == 1 and says in r.stderr, r.stderr
     assert r.stdout.strip().splitlines()[-1].startswith("SERVE-FRESH FAILED check: ")
     assert not (tmp_path / "w" / "venv312").exists() and not (tmp_path / "w" / "logs").exists()
+
+
+def test_a_signal_to_the_script_stops_the_step_it_is_running_and_everything_that_step_started(tmp_path: Path) -> None:
+    """A stopped run once left its server holding the card: the step's whole process group must go with the script."""
+    ops = tmp_path / "tree" / "adapters" / "vllm" / "verity_vllm" / "ops"
+    ops.mkdir(parents=True)
+    (tmp_path / "tree" / "pyproject.toml").write_text("")
+    script = ops / SCRIPT.name
+    shutil.copy(SCRIPT, script)
+    fifo = tmp_path / "held"
+    os.mkfifo(fifo)
+    # the stand-in bootstrap says it is up, then a grandchild keeps the FIFO open until it is stopped
+    (ops / "pod_bootstrap.sh").write_text('exec 3>"$HELD"; echo up >&3; bash -c "exec tail -f /dev/null" 3>&3\n')
+    env = {**_machine(tmp_path, "0, 9.0, NVIDIA H200"), "DISK_GB": "0", "HELD": str(fifo)}
+    p = subprocess.Popen([BASH, str(script), "--work", str(tmp_path / "w")], cwd=tmp_path, env=env,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    with open(fifo) as held:
+        assert held.readline() == "up\n"
+        p.send_signal(signal.SIGTERM)
+        assert held.read() == ""   # end of file: every holder of the FIFO, the grandchild included, is gone
+    out, err = p.communicate()
+    assert p.returncode == 143, (out, err)
+    assert out.strip().splitlines()[-1] == "SERVE-FRESH FAILED bootstrap: stopped by a signal"
 
 
 def test_the_script_names_no_shared_path_and_no_cache_of_the_caller() -> None:
