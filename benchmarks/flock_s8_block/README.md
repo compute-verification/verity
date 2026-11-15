@@ -1,14 +1,14 @@
 # Flock --zk on an int8 row block
 
 The prover's price for proof blocks of `ROWS` adjacent cells of one int8 GEMM output row: `S8Matmul_v1{N=ROWS, K}` in its
-plain arm (`verity.definitions.ops.s8`), each instance's operand rows and output row hashed in the circuit, staged as a
+plain arm (`verity.circuits.ops.s8`), each instance's operand rows and output row hashed in the circuit, staged as a
 `verity/flock-circuit` statement of N instances (`class_statement --partition q-template-instance`) and proved in loopback
 `flock-circuit serve --zk` / `prove --zk` sessions, on the GPU under `gpu-lease` and on the CPU.
 
 Files:
 
 - `program.py`: the statement's Program, N instances of the template (`K`, `ROWS`, `N` from the environment).
-- `run.sh`: builds the CUDA prover (CUDA 13.3, `verity/protocols/flock/pod/cuda-13.3.sh`), stages each `K:N[:R]` of `STATEMENTS`, and
+- `run.sh`: builds the CUDA prover (CUDA 13.3, `verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh`), stages each `K:N[:R]` of `STATEMENTS`, and
   runs a session set per statement on the GPU (one lease, with GPU, DCGM and prover-core sampling, and an optional Nsight
   Systems session) and per statement of `CPU_STATEMENTS` on the CPU; `PLAIN_STATEMENTS` and `CPU_PLAIN_STATEMENTS` run the
   same sets without `--zk`. Each set passes only if the verifier recorded and accepted every session. Its header lists the
@@ -32,7 +32,7 @@ On a served window instead (the sampled audit's one-stage proof blocks over the 
 statement) and `served-plain` (plain SHA-512 leaves). With `SERVE_RUN`, staging first checks that the window's run root is the
 one the served run published. `DRAW=all` has each verifier sample every block, as a deployed one must: a `--zk` one by
 `--draw subset:N`, a plain one by the staged sample of every block (`draw.json`). The step `lean` (add it to `STEPS`)
-verifies every kept session of the two statements with Lean's `flock-verify`, the verifier: `--zk` sets as
+verifies every kept session of the two statements with Lean's `verity-verify-proof`, the verifier: `--zk` sets as
 `verity/flock-circuit`, and `served-plain`'s plain sets as `verity/flock-circuit+plain-leaves` (hm96 leaves without `--zk`
 are outside its plain scope).
 The job's `FLOCK_WORK` then holds the prover's values, so it is a directory the job makes and deletes:

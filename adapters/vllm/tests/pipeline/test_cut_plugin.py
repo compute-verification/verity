@@ -161,6 +161,7 @@ class Core:
         return {}, True
 
     def step_with_batch_queue(self):
+        assert self.batch_queue is not None
         s = self.scheduler
         if s.has_requests():
             self.batch_queue.appendleft(s.schedule())

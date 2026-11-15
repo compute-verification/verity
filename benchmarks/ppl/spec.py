@@ -22,16 +22,19 @@ from __future__ import annotations
 import inspect
 import re
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+
+__all__ = ["Arm", "BF16", "HEAD", "REGISTRY", "SPECS", "Step", "attention_step", "catalogue", "linear_step", "load",
+           "parse", "parse_step"]
 
 HERE = Path(__file__).resolve().parent
 SPECS = HERE / "specs"
 PHASES = ("real", "quantize", "integer")
 KINDS = ("linear", "attention")
-REGISTRY: dict[str, dict[str, "StepDef"]] = {k: {} for k in KINDS}
+REGISTRY: dict[str, dict[str, StepDef]] = {k: {} for k in KINDS}
 LINEAR_NAMES = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj", "mlp.gate_proj",
                 "mlp.up_proj", "mlp.down_proj")
 #: GLM-5.3's linears (glm.py), every routed expert's under `mlp.experts.E`
@@ -78,12 +81,15 @@ def _register(kind: str, name: str, phase: str, seeded, calib, on, check, source
     return deco
 
 
-def linear_step(name: str, *, phase: str = "real", seeded=False, calib=False, check=None, source="") -> Callable[[Callable], Callable]:
+def linear_step(name: str, *, phase: str = "real", seeded: bool | Callable[[dict], bool] = False,
+                calib: bool | Callable[[dict], bool] = False, check: Callable | None = None,
+                source: str = "") -> Callable[[Callable], Callable]:
     return _register("linear", name, phase, seeded, calib, ("linear",), check, source)
 
 
-def attention_step(name: str, *, phase: str = "real", seeded=False, calib=False, on=ATTENTION_MATMULS, check=None,
-                   source="") -> Callable[[Callable], Callable]:
+def attention_step(name: str, *, phase: str = "real", seeded: bool | Callable[[dict], bool] = False,
+                   calib: bool | Callable[[dict], bool] = False, on: Iterable[str] = ATTENTION_MATMULS,
+                   check: Callable | None = None, source: str = "") -> Callable[[Callable], Callable]:
     return _register("attention", name, phase, seeded, calib, on, check, source)
 
 

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Accel.Isa
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Mathlib.Data.NNRat.Floor
 
 /-!
@@ -66,7 +66,7 @@ abbrev Loc : Type := Σ s : Store, Fin (c.size s)
 abbrev Mem : Type := c.Loc → Word
 
 /-- **The units of each resource an opcode uses.** -/
-def use : Op x → Res → ℚ≥0
+def use : Opcode x → Res → ℚ≥0
   | .mma o sh sa sb, r =>
     (if r = .tensor then ((sh.m * sh.n * max sh.k 1 : ℕ) : ℚ≥0) * c.weight (x.fa o) else 0) + slot 1 r +
       (sh.wa (x.fa o) : ℚ≥0) * port sa r + (sh.wb (x.fb o) : ℚ≥0) * port sb r

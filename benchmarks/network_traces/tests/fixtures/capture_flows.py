@@ -60,10 +60,18 @@ def ethernet(packet: bytes, vlans: tuple[int, ...] = (), kind: int | None = None
     return bytes(12) + b"".join(struct.pack("!HH", 0x8100, v) for v in vlans) + struct.pack("!H", kind) + packet
 
 
-def cooked(packet: bytes, version: int = 1) -> bytes:
-    """A Linux cooked capture's frame of an IP packet."""
+def cooked(packet: bytes, version: int = 1, vlans: tuple[int, ...] = (), left: tuple[int, ...] = ()) -> bytes:
+    """A Linux cooked capture's frame of an IP packet. Under the VLAN tags `vlans`, outermost first, the header's type
+    is the first tag's, and each tag's two bytes and the type of what is under it follow the header: so a v1 capture
+    holds the tag the kernel took off a frame, which libpcap puts back, where a v2 capture holds none of it. `left`
+    are tags under those whose bytes are before the IP packet and that no type names, the type before each IP's
+    already: so a capture can hold a frame's second tag."""
     kind = 0x0800 if packet[0] >> 4 == 4 else 0x86DD
-    return (bytes(14) + struct.pack("!H", kind) if version == 1 else struct.pack("!H", kind) + bytes(18)) + packet
+    kinds = [0x8100] * len(vlans) + [kind]
+    tags = b"".join(struct.pack("!HH", v, k) for v, k in zip(vlans, kinds[1:]))
+    tags += b"".join(struct.pack("!HH", v, kind) for v in left)
+    head = struct.pack("!H", kinds[0])
+    return (bytes(14) + head if version == 1 else head + bytes(18)) + tags + packet
 
 
 def pcap(frames: list, *, link: int = ETHERNET, order: str = "<", nanos: bool = False, snapshot: int = 262144) -> bytes:

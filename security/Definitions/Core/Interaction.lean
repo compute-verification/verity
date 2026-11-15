@@ -8,7 +8,7 @@ public import Definitions.Core.Uniform
 # Interaction: the live-coin model every proof system's claims are stated in
 
 The vocabulary the claims of every proof system read, inner or outer: Flock's (`Definitions/Claims.lean`), the
-recursion's (`Definitions/Claims/Recursion.lean`), the sampled proofs' (`Definitions/Claims/Sampling.lean`) and the
+recursion's (`Definitions/Claims/Recursion.lean`), SPOT's (`Definitions/Claims/Sampling.lean`) and the
 composition of zero knowledge through a recursion (`Definitions/Core/Rec.lean`). It is
 Core's, and keeps the namespace `Claims` its records were written under. Its forms:
 
@@ -209,6 +209,12 @@ def RP.bind {R α β : Type} : RP R α → (α → RP R β) → RP R β
   | .hash q k, f => .hash q fun a => (k a).bind f
   | .rerun r k, f => .rerun r fun v => (k v).bind f
 
+/-- The samples a program reruns at, in order, against `H` and the runs `run`. -/
+def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Transcript) : RP R α → List R
+  | .ret _ => []
+  | .hash q k => RP.rerunsAt H run (k (H q))
+  | .rerun r k => r :: RP.rerunsAt H run (k (run r).seen)
+
 /-! ## Extractors -/
 
 /-- An extractor: its own coins `C x`, and a rerun program from the **judged run's coins** `r₀` and its coins. -/
@@ -365,7 +371,7 @@ def trustedBase : List String :=
      "coin that the --zk verifier sends at Hello and opens round by round",
    "the decoder's count: the deployed decoder's step count (Flock.Deploy.dec) is the cost of running it, one step " ++
      "per field operation (arithmetic or a comparison), per position compared and per column entry read",
-   "trusted-host: the auditor's device runs its stated code, timing included, on a host the prover doesn't control, " ++
+   "trusted-device: the auditor's device runs its stated code, timing included, on a host the prover doesn't control, " ++
      "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier state"]
 
 /-! ## The claims -/
@@ -543,8 +549,8 @@ structure Recorded {Coin : Type} (V : Verifier Coin) where
 
 /-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is for a test
 against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s `lean-agreement` job
-(`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier's checks
-(`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
+(`tools/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier's checks
+(`verity-verify-proof agree`, `verity/protocols/proofs/flock/prover/agreement/agree.py`) and fails unless each passes them. Its sessions are of
 forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (recs : List (Recorded V)) : Prop :=
   recs ≠ [] ∧ ∀ e ∈ recs, (run H (replay e.as) V e.x () e.r).out = .acc

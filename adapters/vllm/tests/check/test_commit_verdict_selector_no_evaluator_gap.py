@@ -3,7 +3,7 @@ replay excludes its output VUs from the population under the text `no registered
 why-class ('no-evaluator') as the ruled applicability domain (RoPE_v1, sampled_replay.NOT_YET), which `_complete_replay_population_gap`
 did not gate (it gated plane-fed + interior-composed-v2 only).  The selector's output is THE value a stochastic row adds and is
 reproducible from the committed logits only with the seed AND the top-p split count S (REQ-03), so until REQ-03 lands and a
-derived_rows evaluator exists, form (A) cannot replay it.  On the first stochastic row of record form (B)
+derived_rows evaluator exists, form (A) cannot replay it.  On the first stochastic workload of record form (B)
 value-checked the 32 sampled ids (compared_by_family.sampled_token_ids 32 == 32 (step, request) pairs, 0 mismatch, attribution complete),
 so C2 held through (B) + Match.  On a stochastic COMMIT-ONLY rerun WITHOUT --match-dir the same Commit PASSed with the 32 ids value-checked by
 NEITHER form: C1 / C3 bind them, nothing computes them -- a vacuous pass path (not exercised live).
@@ -16,12 +16,17 @@ has no fold instance) and `result` is None there -- that partiality is not about
 plane-fed FAIL still leads when both are present; greedy rows (TokenSelect_v1 HAS an evaluator) are byte-identical."""
 from __future__ import annotations
 
-import pytest
+from typing import Any
 
-from verity_vllm.check.c2_rules import _complete_replay_population_gap, _form_b_selector_coverage
+import pytest
+from verity_vllm.definitions.numerics.rows import EVALUATORS
+
+from verity_vllm.check.c2_rules import (
+    _complete_replay_population_gap,
+    _form_b_selector_coverage,
+)
 from verity_vllm.check.commit_pass import commit_verdict
-from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
-from verity.definitions.numerics.rows import EVALUATORS
+from verity_vllm.records.replay_codes import NOT_YET, why_class
 
 
 def _bnd(n_req):
@@ -37,25 +42,25 @@ K_ROPE = "no derived_rows evaluator for RoPE_v1 yet (v2)"
 K_ATTN = "consumes the request's K/V history across steps (state-linked replay, v2)"
 K_SEL = "no registered evaluator for GumbelTopPTokenSelect_v1"
 
-# the first stochastic row of record's sampled_replay_p0.json population (llama32-1b L40S B1 256/32 stoch-t0.8-p0.95):
+# the first stochastic workload of record's sampled_replay_p0.json population (llama32-1b L40S B1 256/32 stoch-t0.8-p0.95):
 # the NOT_YET domain (RoPE 9184, Attention 4592) + the 32 selector outputs (one per step) with no evaluator; the Const* structure rows are
 # counted by family only (no identity) and are not in not_evaluable
-SR_STOCH = {"result": True, "grade": "complete", "why": None,
-            "sample": {"evaluated": 919, "equal": 919, "mismatch_n": 0, "not_evaluated_n": 0},
-            "strata_unevaluated": [], "unevaluated_strata": [],
-            "population": {"vus": 32750, "not_evaluable": {K_ROPE: 9184, K_ATTN: 4592, K_SEL: 32},
-                           "not_evaluable_by_family": {"RoPE_v1": 9184, "Attention_v3": 4592, "GumbelTopPTokenSelect_v1": 32}}}
+SR_STOCH: dict[str, Any] = {"result": True, "grade": "complete", "why": None,
+                            "sample": {"evaluated": 919, "equal": 919, "mismatch_n": 0, "not_evaluated_n": 0},
+                            "strata_unevaluated": [], "unevaluated_strata": [],
+                            "population": {"vus": 32750, "not_evaluable": {K_ROPE: 9184, K_ATTN: 4592, K_SEL: 32},
+                                           "not_evaluable_by_family": {"RoPE_v1": 9184, "Attention_v3": 4592, "GumbelTopPTokenSelect_v1": 32}}}
 # a greedy dense row (phi3 B8 256/32): the NOT_YET domain only -- TokenSelect_v1 has an evaluator
 SR_GREEDY = {**SR_STOCH, "population": {"vus": 242048, "not_evaluable": {K_ROPE: 68480, K_ATTN: 34240}, "not_evaluable_by_family": {"RoPE_v1": 68480, "Attention_v3": 34240}}}
 
 # the same row's oracle_compare (runs.jsonl commit/oracle_compare): result None / grade attribution-complete -- value-partial on
 # instance_outputs (32 'no fold instance of this op at this step' = the selector's own instance output), the 32 sampled ids all compared
-OC_STOCH = {"result": None, "grade": "attribution-complete", "complete": False, "compared": 6304, "mismatch_n": 0,
-            "compared_by_family": {"input_token_ids": 32, "instance_outputs": 6240, "sampled_token_ids": 32},
-            "not_compared_by_family": {"hidden_stream": 512, "instance_outputs": 32},
-            "not_compared": {"no oracle family: hidden_stream": 512, "no fold instance of this op at this step": 32},
-            "attribution": {"complete": True, "pairs": 32, "unverified": [], "unverified_n": 0, "ambiguous_steps": [], "requests": ["r0"]},
-            "steps_not_snapshotted": []}
+OC_STOCH: dict[str, Any] = {"result": None, "grade": "attribution-complete", "complete": False, "compared": 6304, "mismatch_n": 0,
+                            "compared_by_family": {"input_token_ids": 32, "instance_outputs": 6240, "sampled_token_ids": 32},
+                            "not_compared_by_family": {"hidden_stream": 512, "instance_outputs": 32},
+                            "not_compared": {"no oracle family: hidden_stream": 512, "no fold instance of this op at this step": 32},
+                            "attribution": {"complete": True, "pairs": 32, "unverified": [], "unverified_n": 0, "ambiguous_steps": [], "requests": ["r0"]},
+                            "steps_not_snapshotted": []}
 
 
 def test_the_class_label_is_the_domains_and_the_family_is_not_in_the_domain():
@@ -74,7 +79,7 @@ def test_stochastic_commit_only_rerun_without_form_b_fails_by_name():
     assert "form (B) absent" in why and "value-checked by NEITHER form" in why and "REQ-03" in why
 
 
-def test_the_first_stochastic_row_of_record_passes_carrying_the_note():
+def test_the_first_stochastic_workload_of_record_passes_carrying_the_note():
     """C2 holds through (B) + Match; the PASS text says so instead of a bare PASS."""
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": SR_STOCH, "oracle_compare": OC_STOCH}, True, min_openings=64)
     assert ok, why

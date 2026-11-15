@@ -1,6 +1,6 @@
 """The red team's attacks on the device side of PoUB: the fused weight GEMM's
 receipt blocks (`sketch_receipt.gemm_vectors`, wt.cu's sketch warps) and attention's KV receipts (`kv_vectors`,
-`kv_fragment_sketch`: kv.cu's form 13), each against what the driver (`remote_bandwidth.receipts`, `audit.AuditRun`)
+`kv_fragment_sketch`: kv.cu's form 13), each against what the driver (`poub.receipts`, `audit.AuditRun`)
 credits and opens.  Each test asserts the property the driver's ledger needs and was marked xfail with its finding id
 while the device broke it; RB-D1's pass since
 store-order/v0, RB-D2's since form 13."""
@@ -14,6 +14,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py").parent))
 
 import sketch_receipt as SR  # noqa: E402
 

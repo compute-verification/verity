@@ -22,7 +22,7 @@ verity-flock = { workspace = true }
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_cli.py"]
 # The contract (verity_numerical.bench.contract) reads the census when it is imported; verity_flock.class_statement, which
-# draws the instances, imports circuit_check without declaring it.
+# samples the instances, imports circuit_check without declaring it.
 inputs = ["benchmarks/census", "tools/verity/circuit_check/src/circuit_check"]
 
 [tool.pytest.ini_options]
@@ -35,11 +35,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_instances.py", "tests/test_workloads.py"]
-paths = ["verity/protocols/certifier", "verity/protocols/pous", "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows"]
+paths = ["verity/protocols/accounting/certifier", "verity/protocols/accounting/pous", "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_workloads.py"]
-paths = ["verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py"]
+paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py"]
 
 # circuit-check's registries import each module with a sidecar under the adapters' packages (`circuit_check.sidecars.TREES`)
 [[tool.verity.tests.reads]]

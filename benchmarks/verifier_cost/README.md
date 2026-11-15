@@ -8,12 +8,12 @@ The workload is Serve_v1 (`benchmarks/network_sim/workload/served.py`) at a ladd
 30 layers), word-level and on bits. On bits it is `lift.on_bits`: every Definition Serve_v1 reaches, lifted to bits all
 the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says why). Two verifiers are measured:
 
-* `measure`, the inference-only check: `nci-check --policy` (`NciCheck.Desc`, one summary per Definition) on an instance whose θ is
+* `measure`, the inference-only check: `inference-only-check --policy` (`InferenceOnlyCheck.Desc`, one summary per Definition) on an instance whose θ is
   the registered inputs and whose inference blocks are the root's Calls, one each. `--policy` leaves out θ's provenance
-  (`NciCheck.Baseline`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
+  (`InferenceOnlyCheck.Theta`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
-  `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
-* `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
+  `inference-only-check --policy --unrolled` (`InferenceOnlyCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
+* `partition`, the one-stage verifier's partition: `spot-difftest`'s `partition` (`Partition.units`, `strata`,
   the expanded sampling design and the digest, as the verifier computes them) on Serve_v1 under the template query of its
   Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are
   small enough (`--unrolled-max`), and on the served shape: the population program of Serve_v1's largest Definition at
@@ -28,17 +28,17 @@ verity bench verifier_cost store RUN                     # its results.json or p
 verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~
 
-`nci_glm.sh` runs `nci-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
+`inference_only_glm.sh` runs `inference-only-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
 Build (vLLM, TP8 on 8×H200, a 256-token prompt and 32 sampled tokens), each checked against the Build's pinned
-digest. A registered Program's root is its inputs and one Call, the request, so the only division `NciCheck.Desc` can
+digest. A registered Program's root is its inputs and one Call, the request, so the only division `InferenceOnlyCheck.Desc` can
 check on it is that one inference block; and its weights are bound per run (`Input<w>_v1`), so θ can't hold them
-(`theta-not-registered`). `nci_glm.py` (its docstring has the cases) derives Programs with the same computed gates and
+(`theta-not-registered`). `inference_only_glm.py` (its docstring has the cases) derives Programs with the same computed gates and
 wires: rank 0's with its weights bound at registration (θ), one inference block per rank; and the eight ranks' requests joined into
 one Definition the node's root calls once, each collective reading the other ranks' partials where it read its
 `peers_*` inputs, one inference block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
 α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
-per layer, per Call) aren't checked here: their root would be the request's body, whose reads `NciCheck.Desc` holds as
-segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`); `nci_cost.py glm` counts and times
+per layer, per Call) aren't checked here: their root would be the request's body, whose reads `InferenceOnlyCheck.Desc` holds as
+segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`); `inference_only_cost.py glm` counts and times
 them. Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
 all through `--policy`, `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json`
 (`verity/nci-glm/v1`) has a row per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict
@@ -50,17 +50,17 @@ research data fetch "$B1_BUILD" --to B1 \
   --path 'build/rank*/build_workload/descriptor.json.gz'    # the Build; its meta's rank_workload_digests are the pins
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
   --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
-  -- bash benchmarks/verifier_cost/nci_glm.sh --jobs 10 [--case registered|rank|slice|node ...]
+  -- bash benchmarks/verifier_cost/inference_only_glm.sh --jobs 10 [--case registered|rank|slice|node ...]
 ~~~
 
-`nci_cost.sh` times `NciCheck.Desc` step by step (`nci-phases`, `nci_phases/Main.lean`: decode, summaries, root reads,
-the verdict, the slowest Definitions' summaries and their return pieces) beside `nci-check --policy`, on the `nci` suite's
+`inference_only_cost.sh` times `InferenceOnlyCheck.Desc` step by step (`inference-only-phases`, `inference_only_phases/Main.lean`: decode, summaries, root reads,
+the verdict, the slowest Definitions' summaries and their return pieces) beside `inference-only-check --policy`, on the `inference_only` suite's
 vectors (`suite`), Serve_v1 word-level and on bits (`serve`), and GLM-5.3's rank 0 word-level and lifted to bits (`glm`);
-`nci_cost.py`'s docstring has the cases.
+`inference_only_cost.py`'s docstring has the cases.
 
 ~~~sh
 research run --project verity --on vy-nebius-cpu-2 --pool network --source . --cwd clone --mem-gb 320 --timeout 12h \
-  --send glm53-b1-rank0.descriptor.json.gz -- bash benchmarks/verifier_cost/nci_cost.sh [suite|serve|glm ...]
+  --send glm53-b1-rank0.descriptor.json.gz -- bash benchmarks/verifier_cost/inference_only_cost.sh [suite|serve|glm ...]
 ~~~
 
 `--case registered-node` checks the node Program that `verity-vllm predict node` registered, as registered.
@@ -75,26 +75,26 @@ research run --project verity --on vy-nebius-cpu-2 --pool network --source . --c
 - **The inference block.** One inference block holds every root node that isn't an input, which is the whole node's session (the demo's
   division).
 - **The checks**, in the order they start (`NODE_POINTS`):
-  - given the registration, the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), at A: the
+  - given the registration, the check of record (`inference-only-check INSTANCE TRUSTED`, `InferenceOnlyCheck.Theta`), at A: the
     policy check, then θ's provenance against the registration log;
   - `--policy` at A (Γ = 2^44, α = 2^-25);
   - at C (α = 2^-28) with Γ = 2^44 and with Γ = 2^52;
   - at A's four neighbours.
-- **Each `nci-check`** decodes the whole descriptor (about 50 GB resident for a whole-node session).
+- **Each `inference-only-check`** decodes the whole descriptor (about 50 GB resident for a whole-node session).
   `--check-mem-gb` caps each one's address space, which runs about 15 GB above its resident peak, so a check that
   outgrows its share of the run's `--mem-gb` fails rather than the node. A dry run on a root `Desc` can't read ends
   there.
-- **The root must be inputs and one Call.** `NciCheck.Desc` can't hold a session laid out as the root's own nodes
+- **The root must be inputs and one Call.** `InferenceOnlyCheck.Desc` can't hold a session laid out as the root's own nodes
   (`root_calls` in `results.json` counts them), for the reason above.
 
 ~~~sh
 research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-gb 120 --timeout 16h \
   $(for f in descriptor.json.gz trusted.json provenance.json registration.json; do echo --send glm53-b1-node.$f; done) \
-  -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2
+  -- bash benchmarks/verifier_cost/inference_only_glm.sh --case registered-node --node-digest HEX --jobs 2
 ~~~
 
-`flock_read.sh K...` measures Flock's Lean verifier (`flock-verify verify --zk`) on the H1 tile unit, step by step:
-`flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
+`flock_read.sh K...` measures Flock's Lean verifier (`verity-verify-proof verify --zk`) on the H1 tile unit, step by step:
+`flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `verity/protocols/accounting/pouw/prover/lowering/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
 `Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
 `$OUT` gets build-K.json (the unit's ANDs, matrix entries, text bytes and its Program descriptor's size) and
@@ -108,7 +108,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 `registration.sh N...` times the one-stage verifier's R3 against the window's ports: `registration.py` writes, per N, a
 valid v1 audit with N more ports (`test_difftest._many_ports`, a MoE window's shape; TPEVAL's w13 window at chunk cap 64
 is 1,536 members, about 12k ports), and `registration/Main.lean`, built in a scratch Lake package against the checkout's
-verifier, times `Registration.check` (one canonical key per root, `Registration.portIndex`) and `Registration.checkRef`
+verifier, times `Docket.check` (one canonical key per root, `Docket.portIndex`) and `Docket.checkRef`
 (R3 as first written, quadratic in the ports; `check_eq_checkRef` proves them equal) on the parsed input, and fails where
 their codes differ. `checkRef` runs up to `REF_MAX` ports (default 12288). `$OUT` gets registration.jsonl, one row per N
 and function (ports, roots, milliseconds, peak RSS, codes).
@@ -118,11 +118,43 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
+`population.sh N...` times the one-stage run's population-order check (`Slots.popOk`) against a template population's
+units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
+batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
+changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
+`Partition.unitGates` (a range at a time, `TemplateQuery.unitGates`), `Slots.popOk` (from the ranges,
+`popOk_eq_popOkRanges`: no replay block and no input gate is built), the one-stage check's call of it
+(`OneStageZk.popHeld`, compiled in `Spot/OneStageZkStatement.lean`, which imports `Spot.PopOrder` so that it runs from
+the ranges too; its row carries the root's input gates, counted) and the references: `TemplateQuery.gates` on every
+unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
+population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` units
+(default 50). `POPULATION_ARGS='--input-members M'` widens the root's input nodes to M members each, which only the
+layout's input class reads: `popOk`'s row and `popHeld`'s must not grow with M.
+`$OUT` gets population.jsonl, one row per N and function (units, milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
+  bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
+~~~
+
+`members_parse.sh N...` times the per-member form's parse of its members (`OneStageZk.membersOf`) against their count:
+`members_parse/Main.lean`, built in a scratch Lake package against the checkout's verifier, makes N members of one range
+of units each, no unit in two, and times the parse on them, then on the same members with one more whose range starts
+inside the last member's. It fails where the parse gives back other members than those made, name by name and unit by
+unit, or accepts the unit in two. The parse reads each member once and sorts the members' ranges, so its time must grow
+no faster than N log N: a time that quadruples where N doubles is work in the members squared. `$OUT` gets
+members_parse.jsonl, one row per N and case (members, milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone -- \
+  bash benchmarks/verifier_cost/members_parse.sh 1000 25000 100000 1000000
+~~~
+
 `whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
 `whole_run.py` writes, per N, an accepted `run` input (`run`: a v1 audit on challenger coins with N/8 more ports) or the
 program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's three templates,
 or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition walks every gate,
-so `l5` takes `desc`). The audit's law is the stratified rate of two in the population, `stratified-rate:2/P` over its
+so `l5` takes `desc`). The audit's sampling design is the stratified rate of two in the population, `stratified-rate:2/P` over its
 P units, on `toy` the stratified sampling design at K = 3. Stated over P, it samples one unit of each template and two
 of `toy`'s largest at every N, so the sample stays four units while the population it is timed against grows.
 `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
@@ -135,6 +167,36 @@ layout holds a proof block per input gate. `PERF_N` adds a `perf` profile at tha
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
   bash benchmarks/verifier_cost/whole_run.sh run toy 146 1000 10000 50000
+~~~
+
+`members_files.sh N|all...` times the per-member form's pass over every member's files against the members of one
+circuit file. `members_files.py` writes one per-member case as the executable's `check` takes it: a driver's (`MF_CASE`,
+an audit's `window/case-v2-members.json`), or a stand-in window's of `MEMBERS` members (default 300) of one unit over
+two templates (`benchmarks/one_stage/members_standin.py`'s: one member of each template sampled, the rest sharing their
+template's circuit file unsampled), audited as a served window's audit step runs it, on Flock's prover, the Lean
+verifier and the ZK server; v2's `check` must accept the case, and its seconds and peak RSS go to inputs.jsonl.
+`members_files/Main.lean`, built in a scratch Lake package against the checkout's verifier, takes the case's first N
+members of one circuit file (`all`: every member of the case) and times `OneStageZk.membersFiles` as the compiled
+check runs it (`membersFilesKept`: the blobs' lookup tables read once, a circuit file read and parsed once,
+`Spot/CircuitKept.lean`'s summary kept of it, and the strata of the partition's query evaluated on the program once
+for the members that share the parameters' partition) and the pass as stated, `Member.files` a member, each parsing
+its file and evaluating the query itself (`membersFiles_eq_kept` proves them equal). It exits 1 where the two disagree
+on a check's result or a member's files are not held. The stated pass runs up to `REF_MAX` members (default 150). The
+compiled pass's microseconds at N less those at 1, over N - 1, are its work on one more member of a file; the stated
+pass's over N are a member's with its file's parse. `MEMBERS` may name several sizes, a window, a case and its rows
+each: the rows at one N across the cases are the pass against the window's members at a fixed count of members handed.
+A stand-in window's program does not grow with its members (its root holds the templates' nodes), so these rows do
+not vary the program's size; each case's row says how large its program is and what one evaluation of its partition's
+query costs on it, which is the part of the stated pass's work on a member that grows with the program. `$OUT` gets
+members_files.jsonl: each case's row (its members, blobs and bytes, the circuit file's, its program's bytes and root
+nodes, and the microseconds of one evaluation of its partition's query's strata) and one row per N and pass (members,
+circuit files, microseconds, peak RSS, the result's digest).
+
+~~~sh
+research run --as proofs --project verity --on auto --source . --cwd clone --mem-gb 32 -- \
+  bash benchmarks/verifier_cost/members_files.sh 1 2 16 150 all
+research run --as proofs --project verity --on auto --source . --cwd clone --mem-gb 32 --env "MEMBERS=300 1200" -- \
+  bash benchmarks/verifier_cost/members_files.sh 1 16 150
 ~~~
 
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
@@ -179,17 +241,20 @@ through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmp
 same staged statement (stmt-base.jsonl).
 
 `flock_members.sh` measures what a member of a run waits before its first check when one process verifies the run's
-members in turn (`verify-members`, which reads the run's program once) against a process a member (`verify`). Per spec,
-`one_stage/m1_unit.py` stages, proves and verifies one statement bound to its program, and `flock_members.py` hands that
-member in `FM_MEMBERS` times each way, pinned to one core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers
-are a member's `before_check_ms` (the verifier's own `inputs:` and `setup:` stage lines) alone, as the kept process's
-first member, which pays the one read, and as a later member, with the memory the kept process holds between members
-(`rss_kb`: its resident memory at each `MEMBER` line). Every process runs under the verifier's allocator setting, as its
-Python callers start it (`proofs.verifier_env`), unless the job's environment sets a value of its own, and
-`members.json` records the value (`env`). Its guard: each kept member's `VERDICT` lines are byte for byte `verify`'s
-alone, every member is accepted and the kept process exits 0; a run that fails it exits nonzero and none of its figures
-counts. The target is a later member's wait with nothing of the program's in it: what is left reads the member's own
-circuit and public file.
+members in turn (`verify-members`, which reads the run's program once and hands each member the circuit file the member
+before it read) against a process a member (`verify`). Per spec, `one_stage/m1_unit.py` stages, proves and verifies one
+statement bound to its program, and `flock_members.py` hands that member in `FM_MEMBERS` times each way, pinned to one
+core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers are a member's `before_check_ms` (the verifier's own
+`inputs:` and `setup:` stage lines) alone, as the kept process's first member, which pays the one read, and as a later
+member, with the memory the kept process holds between members (`rss_kb`: its resident memory at each `MEMBER` line).
+Every process runs under the verifier's allocator setting, as its Python callers start it (`proofs.verifier_env`),
+unless the job's environment sets a value of its own, and `members.json` records the value (`env`). Its guard: each
+kept member's `VERDICT` lines are byte for byte `verify`'s alone, every member is accepted and the kept process exits
+0; a run that fails it exits nonzero and none of its figures counts. The target is a later member's wait
+with nothing of the program's in it, and nothing of a circuit file it shares with the member before it but the file's
+bytes read and compared. `FM_ORDER` (the members by their spec's index, `0,0,1,0`) adds the specs' members in one kept
+process: a member whose circuit file is another than the one before's pays for its own, and the process's peak RSS
+says what the change of file holds at once.
 
 ~~~sh
 research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd source -- \
@@ -228,8 +293,39 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
   bash benchmarks/verifier_cost/table_root/table_root.sh [--tables T] [--lengths 4096,40960,131072]
 ~~~
 
+`ledger_replay/ledger_replay.sh S...` times one replay of the auditor's ledger against its sessions:
+`ledger_replay/ledger_replay.py` writes, per S, a ledger of S sessions as the challenger's writer signs one (two-step:
+a reserve, an open and an end a session, a declaration a day, the sessions in one period, or in periods of `PERIOD`)
+under a key at the deployed LMS parameters, with what the `challenger_ledger` piece's reference
+(`challenger.audited_session`) answers on it, and times the reference's replay. `ledger_replay/Main.lean`, built in a
+scratch Lake package against the checkout's verifier, times the compiled replay (`Spot.Challenger.checked`), the
+difftest's piece around it, and the replay's parts made apart from it: each entry's parse, its line's SHA-512, its
+message, its LMS verification, and the loop's searches over what it has read so far. It refuses a ledger on which the
+piece's answer is not the reference's. A period's close lists its sessions, so one period's sessions stop where the
+close passes a ledger line's cap (`MAX_LEDGER_LINE`): both refuse that size, and its row says so. `$OUT` gets
+inputs.jsonl (one row per S: entries, bytes, the longest line, the reference's seconds and signature checks),
+ledger_replay.jsonl (one row per S and phase: microseconds, the least of `REPEAT`, and peak RSS), table.jsonl
+(`ledger_replay.py --table`: one row per S, the split, each part's share, and a least-squares fit of what the parts
+leave to `c + a S + b S²`), cpu.txt and the logs.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --pool research --cwd source \
+  --mem-wait 1800 -- bash benchmarks/verifier_cost/ledger_replay/ledger_replay.sh 10 30 100 300 1000
+~~~
+
+`ledger_replay/replays.sh W...` counts the replays one PoUW period check makes: `ledger_replay/replays.py` writes, per
+W, an honest period of W windows as PoUW's period difftest generates one and counts the replays its reference
+(`period_check.case`) makes, and the compiled check (`pouw-period serve`) answers the same case under
+`ledger_replay/calls.py`, which counts its entries into `Spot.Challenger.checked` by a breakpoint it holds with ptrace
+(x86-64 Linux; the nodes have no debugger). `$OUT` gets replays.jsonl, one row per W: each side's verdict and replays.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --pool research --cwd source \
+  --mem-wait 1800 -- bash benchmarks/verifier_cost/ledger_replay/replays.sh 1 2 3
+~~~
+
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
-config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs
+config's word-level descriptor: `verity-verify-proof qcall-program` at each X, with the output's SHA-256 so two commits' outputs
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
 the command.
 
@@ -241,10 +337,11 @@ seconds, peak RSS and the population (null where the verifier refuses the query)
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
 has none.
 
-Apart from `nci_glm`'s inputs and `flock_served`'s saved step, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
+Apart from `inference_only_glm`'s inputs and `flock_served`'s saved step, nothing here is a served Program: `on_bits`'s output and `inference_only_glm`'s derived Programs are
 this benchmark's constructions, and nothing outside this directory reads them.
 
 The suite (`tests/test_mains.py`, which `check` runs after its Lean steps) holds every `<name>/Main.lean` here to the
-verifier it times: each must still elaborate in the checkout's package, and `whole_run.py toy 146 --check` must still
-accept the run it writes. It builds no executable and runs no benchmark; a main in a new directory is held without being
-listed.
+verifier it times: each must still elaborate in the checkout's package, `whole_run.py toy 146 --check` must still
+accept the run it writes, and the ledger replay's generators must still write a ledger the challenger accepts and a
+period PoUW's period check accepts. It builds no executable and runs no benchmark; a main in a new directory is held
+without being listed.

@@ -67,8 +67,10 @@ def ask(tmp_path_factory):
                  ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"],
                  ["-C", str(ws), "remote", "set-url", "origin", "https://github.com/compute-verification/verity.git"]):
         subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+    # set here, since a module's fixture is built before conftest's per-test ones: the hook's tmux socket directory
     env = {**os.environ, **GIT_ENV, "AGENT_GUARD_STATE": str(state), "AGENT_GUARD_MIN_AVAIL": "0", "AGENT_INBOX_POLL_S": "off",
-           "AGENT_INBOX": str(tmp / "inbox")}
+           "AGENT_INBOX": str(tmp / "inbox"), "TMUX_TMPDIR": str(tmp)}
+    env.pop("TMUX", None)
 
     def run(command: str, cwd: Path = ws) -> dict:
         event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": ME, "cwd": str(cwd)}

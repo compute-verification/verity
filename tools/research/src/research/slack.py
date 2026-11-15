@@ -23,6 +23,7 @@ Notes are records, never messages.
   research msg linear project edit PROJECT [--team KEY...] [--date D|none] [--status S]   # teams, target date, status
   research msg linear milestone create|edit PROJECT NAME [--date D] [--description-file F] [--rename NEW]
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
+  research msg read --as NAME --mark-through TS [--json]           # mark read only those at or before TS (a --peek listing's last)
   research msg names open|read|close|list|revoke [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
@@ -88,6 +89,7 @@ from __future__ import annotations
 import argparse
 import base64
 import fcntl
+import fnmatch
 import html
 import http.client
 import json
@@ -122,8 +124,8 @@ except ImportError:                                                 # run as a s
     def slack_dates(text: str, now: Any = None) -> str:
         return text
 
-    class waitcap:  # research/waitcap.py's cap, which a single file carries itself
-        WAIT_CAP_S, STILL_GOING = 1200, 79
+    class waitcap:  # research/waitcap.py's limit, which a single file carries itself
+        WAIT_LIMIT_S, STILL_GOING = 1200, 79
 
         @staticmethod
         def still_going(what: str, check: str, waited_s: float, end: str) -> str:
@@ -214,7 +216,7 @@ AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-
                          r"|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")                 # a desktop agent's, a bare UUID
 WORKER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,39}")      # `linear comment --worker NAME`: shows as LANE/NAME
 QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
-CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
+LIMIT_PER_HOUR = 20                                              # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 POST_MAX = 3000                                                  # bytes: Slack splits a longer post into separate top-level messages
 INBOX_HEAD = "Inbox for @"
@@ -278,6 +280,7 @@ def origin_registry(path: Path, fetch: bool = True) -> dict | None:
 
 
 GROUP_ID_RE = re.compile(r"^S[0-9A-Z]{8,}$")
+STAFF_RE = re.compile(r"[a-z0-9*?][a-z0-9*?._-]{0,40}")                 # a `staffs` name pattern: `review-*`
 
 
 def group_ids(h: dict) -> set[str]:
@@ -384,6 +387,12 @@ def check_registry(reg: dict, path: str) -> dict:
         if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
             raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
                              f"{EXAMPLE_CHARS} characters, in a newcomer's words (what the chat router matches a post against)")
+        staffs, names = h.get("staffs", []), {o.get("handle") for o in reg["handles"]}
+        if not isinstance(staffs, list) or any(not isinstance(p, str) or not STAFF_RE.fullmatch(p)
+                                               or any(fnmatch.fnmatchcase(n, p) for n in names if n) for p in staffs):
+            raise SlackError(f"registry {path}: @{name}'s staffs: the names of the agents its holder alone may register "
+                             "(`research queue delegate`), as lower-case patterns such as `review-*`, each matching no handle, "
+                             "so it can never hand a lane's own name to another")
         lineage = h.get("lineage", [])
         if not isinstance(lineage, list) or not all(isinstance(a, str) and AGENT_ID_RE.fullmatch(a) for a in lineage):
             raise SlackError(f"registry {path}: @{name}'s lineage: the agent ids that held it before (bc-<8 hex> or its full "
@@ -1722,15 +1731,15 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                    and (not reminder or f": reminder ({reminder}): " in (m.get("text") or "")) for m in rung):
                 continue
             n = sum(_mentions_thread(m.get("text") or "", src, where) and _from(m.get("text") or "", author) for m in rung)
-            if n >= CAP_PER_HOUR:                                        # a loop is one author; a roll call is many, once each
-                if n == CAP_PER_HOUR:
+            if n >= LIMIT_PER_HOUR:                                      # a loop is one author; a roll call is many, once each
+                if n == LIMIT_PER_HOUR:
                     if where is None:                                    # a person's channel gets no router notes
                         api.call("chat.postMessage", channel=ch, thread_ts=src, username="router", unfurl_links="false",
-                                 text=f"routing @{author} to {to} paused here for the hour ({CAP_PER_HOUR} doorbells) {QUIET}")
+                                 text=f"routing @{author} to {to} paused here for the hour ({LIMIT_PER_HOUR} doorbells) {QUIET}")
                     api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                              text=f"from router, {'#' + where + ' ' if where else ''}thread {src}: paused @{author} here "
-                                  f"for the hour ({CAP_PER_HOUR} doorbells)")
-                lines.append(f"@{to}: paused (cap of {CAP_PER_HOUR} an hour from @{author} in this thread)")
+                                  f"for the hour ({LIMIT_PER_HOUR} doorbells)")
+                lines.append(f"@{to}: paused (limit of {LIMIT_PER_HOUR} an hour from @{author} in this thread)")
                 continue
             api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                      unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent, where,
@@ -2032,7 +2041,10 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
     `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]`, `project edit PROJECT [--team
     KEY...] [--date D] [--status S]` and `milestone create|edit
-    PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
+    PROJECT NAME [--date D] [--description-file F] [--rename NEW]` and `response [--since ISO|--hours N] [--lane HANDLE]
+    [--open-over MINUTES]` (the minutes each lane takes to answer a comment that rings it: `response`). Each prints one
+    line, but `audit`, `list` and `response`; a refusal exits 2, and a worker's comment that starts with @names it doesn't
+    ring exits 1 (`unrung_note`)."""
     from . import linear
 
     def need(value: str | None, what: str) -> str:
@@ -2107,6 +2119,18 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 print("\n".join([f"dry-run: would cancel {f['issue']}, a stray, with the comment: {linear.STRAY_NOTE}" for f in strays]
                                 if ns.dry_run else lin.close_strays(strays, author)) or "no strays to close", file=sys.stderr)
             return 1 if found else 0
+        if ns.verb == "response":
+            from . import response
+            from .timefmt import _utc
+            now = time.time() if ns.now is None else float(ns.now)
+            try:
+                since = _utc(ns.since).timestamp() if ns.since else now - ns.hours * 3600
+            except ValueError:
+                raise SlackError(f"--since {ns.since!r}: give a UTC time as ISO (2026-11-14T06:00Z)") from None
+            found, left = response.asks(lin.comments(response._iso(since)), reg, now, since)
+            rep = response.report(found, left, since, now, ns.open_over, ns.lane.lstrip("@") if ns.lane else None)
+            print(json.dumps(rep, indent=1) if ns.json else response.render(rep))
+            return 0
         if ns.verb == "update":
             print(lin.update(need(" ".join(filter(None, [ns.target, *ns.value])), "the PROJECT (a prefix of its name)"),
                              ns.health, brief))
@@ -2173,22 +2197,26 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             warn_unrouted(text, reg, author)
-        info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
+        info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } labels { nodes { name } } } }",
+                       {"id": issue})["issue"]
         if ns.worker:
             lane = worker_lane or linear.owners(reg).get(info["team"]["key"])
             if not lane:
                 raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
                                  "no lane to comment as: sign as your own, --worker LANE/NAME")
             author = f"{lane}/{worker_name}"
+        unrung = lead_names(text, reg) if ns.worker else []
         if ns.dry_run:
             print(f"dry-run: would comment on {issue} as {author}: {text}")
+            if unrung:
+                print(unrung_note(unrung, worker_lane, reg, posted=False))
             return 0
         lin.comment(info["id"], author, text)
         if ns.worker:
             print(f"{issue} commented as {author}")
-            if names := lead_names(text, reg):
-                print(f"route: a worker's comment rings no one, so {', '.join('@' + n for n in names)} won't hear of it "
-                      "from here: ask your lead to", file=sys.stderr)
+            if unrung:
+                print(unrung_note(unrung, worker_lane, reg, posted=True))
+                return 0 if ns.quiet_unrung else 1
             return 0
         print(f"{issue} commented")
         ring_comment(ns, reg, author, info, text)
@@ -2197,13 +2225,26 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError(str(e)) from None
 
 
+def unrung_note(names: list[str], lane: str | None, reg: dict, posted: bool) -> str:
+    """What a worker's comment that starts with `names` tells it: none of them is rung (a worker holds no handle, and only
+    a holder's post rings), and how its lead rings them.  `lane` is the worker's own (`--worker LANE/NAME`, else the
+    handle whose branch suffix its checkout carries)."""
+    sfx = _branch_suffix()
+    lane = lane or next((h["handle"] for h in reg["handles"] if sfx and sfx in h.get("branch_suffixes", [])), None) or "LANE"
+    me = self_agent_id() or "BC_ID"
+    return (f"not rung: {', '.join('@' + n for n in names)}. A worker's comment rings no one"
+            + (", and this one is posted: don't post it again. " if posted else ". ")
+            + f"Return its text to your lead (@{lane}) to ring, or have your lead grant this run with `research msg names "
+            f"open --as {lane} --poster {me}` and post it with --as {lane}. With --quiet-unrung it exits 0.")
+
+
 def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, text: str) -> list[str]:
-    """Ring the inbox of the issue's team's handle and of each name the comment starts with, as `send` would, so nobody
-    polls Linear for comments (no one subscribes to them: every handle writes as one app).  The author is never
-    rung.  One line per name."""
+    """Ring the inbox of the issue's lane (`linear.lane`: its `lane:` label's handle, else its team's handle) and of each
+    name the comment starts with, as `send` would, so nobody polls Linear for comments (no one subscribes to them: every
+    handle writes as one app).  The author is never rung.  One line per name."""
     from . import linear
 
-    owner = linear.owners(reg).get(issue["team"]["key"])
+    owner = linear.lane(issue, reg)
     names = list(dict.fromkeys(([owner] if owner else []) + lead_names(text, reg)))
     routes, api, lines = routes_of(ns), client(ns), []
     ch = channel_id(ns, reg, FRONT_DOOR)
@@ -2488,6 +2529,8 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError("read: --thread reads one thread; it doesn't take --as")
     if not (ns.thread or ns.since or ns.handle):
         raise SlackError("read: one of --thread TS, --since TS or --as NAME is required")
+    if ns.mark_through is not None and (not ns.handle or ns.peek or ns.urgent):
+        raise SlackError("read: --mark-through TS marks NAME's doorbells: pass --as NAME, and neither --peek nor --urgent")
     if ns.handle:
         name = ns.handle.lstrip("@")
         r = routes_of(ns).get_route(name, fresh=name not in routes_of(ns).local)
@@ -2838,15 +2881,42 @@ def render_unread(name: str, msgs: list[dict], reg: dict) -> str:
     return "\n".join(lines)
 
 
+def listed_through(name: str, msgs: list[dict]) -> str:
+    """The line a `--peek` listing ends with: the newest doorbell it showed, and the command that marks it and those before it
+    read and none that came after."""
+    newest = max((m["ts"] for m in msgs), key=float)
+    at = datetime.fromtimestamp(float(newest), UTC).strftime("%H:%M:%SZ")
+    return (f"listed through {newest} ({at}): `research msg read --as {name} --mark-through {newest}` marks these read, and "
+            "none that came after")
+
+
+def mark_through(name: str, msgs: list[dict], through: str, as_json: bool = False) -> int:
+    """Mark read the unread doorbells ``msgs`` at or before ``through`` (the ts a listing ended with), never one after it: a
+    doorbell that rang after the listing stays unread, however much later the mark is run."""
+    done = [m for m in msgs if float(m["ts"]) <= float(through)]
+    left = [m["ts"] for m in msgs if float(m["ts"]) > float(through)]
+    mark_read(name, done)
+    if as_json:
+        print(json.dumps({"marked": [m["ts"] for m in done], "unread": left}))
+    else:
+        at = datetime.fromtimestamp(float(through), UTC).strftime("%H:%M:%SZ")
+        print(f"SLACK @{name}: marked {len(done)} read through {through} ({at}); {len(left)} newer stay unread")
+    return 0
+
+
 def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     r = {**r, "channel": r.get("channel") or channel_id(ns, reg, FRONT_DOOR)}
     api = client(ns)
     since = getattr(ns, "since", None)
     msgs = unread(api, r, since)
+    if (through := getattr(ns, "mark_through", None)) is not None:
+        return mark_through(r["name"], msgs, through, ns.json)
     if ns.json:
         print(json.dumps(msgs, indent=2, ensure_ascii=False))
     else:
         print(render_unread(r["name"], msgs, reg))
+        if ns.peek and msgs:
+            print(listed_through(r["name"], msgs))
     if not ns.peek:
         mark_read(r["name"], msgs)
     return 1 if ns.urgent and not any(urgent_doorbell(m, reg) for m in msgs) else 0
@@ -4127,9 +4197,14 @@ class RouteError(SlackError):
         self.status, self.error = status, error
 
 
-def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]) -> dict:
+def http_open(method: str, url: str, data: bytes | None, headers: dict[str, str]):
+    """One request to a site route, following no redirect, in 30 s: the response, open, for the caller to read or not."""
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
-    with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r:
+    return urllib.request.build_opener(_NoRedirect).open(req, timeout=30)
+
+
+def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]) -> dict:
+    with http_open(method, url, data, headers) as r:
         return json.load(r)
 
 
@@ -4243,16 +4318,16 @@ def _decided(out: dict) -> bool:
 
 
 def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
-    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_CAP_S run
-    out; a card still pending at the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
+    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_LIMIT_S run
+    out; a card still pending at the limit exits STILL_GOING with the command that reads it later (research.waitcap)."""
     follow = page_follower(ns, reg)
     out, capped = wait_for(lambda: follow(route.call("GET", "/" + urllib.parse.quote(cid, safe=""))), sleep=_sleep, every=ns.every,
-                           polls=polls, max_s=waitcap.WAIT_CAP_S, clock=_clock)
+                           polls=polls, max_s=waitcap.WAIT_LIMIT_S, clock=_clock)
     ring_decision(ns, reg, cid, out)
     rc = _show(out, ns.json)
     if not capped:
         return rc
-    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_CAP_S,
+    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_LIMIT_S,
                               end="End your turn now; a subscription to the card's thread (subscribe_slack_thread) wakes you "
                                   "when Daniel answers."), file=sys.stderr)
     return waitcap.STILL_GOING
@@ -4560,9 +4635,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `project edit PROJECT [--team KEY...] [--date D] [--status S]` (adds teams, sets the target and status), `milestone create|edit PROJECT NAME "
                       "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`, `create --as HANDLE --title T --file BRIEF.md [--team KEY] "
-                      "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's); none sends a state")
+                      "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's), `response [--since ISO|--hours N] "
+                      "[--lane HANDLE] [--open-over MINUTES]` (how fast each lane answers the comments that ring it: "
+                      "research/response.py); none sends a state")
     p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
-                                    "project", "milestone", "create"))
+                                    "project", "milestone", "create", "response"))
     p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
@@ -4576,7 +4653,11 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--worker", default=None, metavar="NAME",
                    help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME "
                         "and rings no one. Give LANE/NAME to sign as your own lane on another lane's issue; with NAME "
-                        "alone, LANE is the handle of the issue's team")
+                        "alone, LANE is the handle of the issue's team. A comment that starts with @names posts, says "
+                        "which it didn't ring and how your lead rings them, and exits 1")
+    p.add_argument("--quiet-unrung", action="store_true",
+                   help="comment --worker: exit 0 when the comment names handles it doesn't ring (you return its text "
+                        "to your lead, who rings them)")
     p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",
@@ -4602,8 +4683,14 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--label", default=None, metavar="L", help="edit: add this label (`asker:NAME`, `asker-ok`)")
     p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
-    p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON")
-    p.add_argument("--now", default=None, metavar="EPOCH", help="audit: the time it audits at, in seconds since the epoch (default: now)")
+    p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON; response: "
+                                                       "its figures and every ask")
+    p.add_argument("--now", default=None, metavar="EPOCH", help="audit, response: the time it reads at, in seconds since the "
+                                                                "epoch (default: now)")
+    p.add_argument("--since", default=None, metavar="ISO", help="response: the window's start, a UTC time (default: --hours before now)")
+    p.add_argument("--hours", type=float, default=24, metavar="N", help="response: the window, hours before now (default 24)")
+    p.add_argument("--open-over", type=float, default=30, metavar="MINUTES",
+                   help="response: list the open asks older than this (default 30)")
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True)
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
@@ -4673,7 +4760,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         "with --as, NAME's doorbells since TS")
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells")
     p.add_argument("--limit", type=int, default=None)
-    p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
+    p.add_argument("--peek", action="store_true", help="--as: don't mark them read; the listing ends with the newest ts it showed")
+    p.add_argument("--mark-through", default=None, metavar="TS", type=since_ts,
+                   help="--as: list nothing, and mark read only the unread doorbells at or before TS (the ts a --peek listing "
+                        "ended with), never one that rang after it")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
     p = cmd("ask-daniel", "an ask's page in the Asks for Daniel database and its card in #ask-daniel; `status ID` reads the card's "
@@ -4689,7 +4779,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
     p.add_argument("--wait", action="store_true",
-                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
+                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_LIMIT_S} s (no tool "
                         f"call blocks longer than 20 minutes): a card still pending then exits {waitcap.STILL_GOING}, "
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")

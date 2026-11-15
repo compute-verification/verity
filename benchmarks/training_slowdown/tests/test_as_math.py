@@ -6,7 +6,7 @@ import torch
 from synthetic import JOBS, LORA, job_counted
 from torch.utils import flop_counter
 
-from training_slowdown import as_math, flops, run
+from training_slowdown import as_math, flops, grade, run
 
 #: each job's attention backward: the tiny lora's adapter is on q alone in the one block, with nothing trained below it
 ASKED = {"lora": "q:1", "whole": "none"}
@@ -20,7 +20,8 @@ TRIED = {job: JOBS[job] for job in ASKED} | {
 @pytest.fixture(scope="module")
 def records(tmp_path_factory):
     """Jobs of the tiny start, each as the counter writes it and as a counter that holds a fused attention kernel as
-    one row at torch's formula wrote it, that one with the job's trace: (fused, now) by job."""
+    one row at torch's formula wrote it, that one with the job's trace and, as such a counter wrote, with no dtype in
+    its op log: (fused, now) by job."""
     aten, formulas = torch.ops.aten, flop_counter.flop_registry
     one_row = dict(formulas) | {
         aten._scaled_dot_product_flash_attention_for_cpu: formulas[aten._scaled_dot_product_flash_attention],
@@ -34,13 +35,15 @@ def records(tmp_path_factory):
             patch.setattr(flops, "FUSED_ATTENTION", set())
             patch.setattr(flops, "FLOP_FORMULAS", one_row)
             fused, _ = job_counted(root / "fused", 3, **over)
-        out[job] = fused | {"trace": run.trace_step(cfg, route, model, optimizers, "cpu")}, now
+        out[job] = (grade.without_dtypes(fused) | {"trace": run.trace_step(cfg, route, model, optimizers, "cpu")},
+                    now)
     return out
 
 
 def counts(rec: dict) -> tuple:
-    """Every step's counts with its op log by row, and the record's totals."""
+    """Every step's counts with its op log by row, whatever dtype a row names, and the record's totals."""
     keep = ("step", "tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "by", "device_macs")
+    rec = grade.without_dtypes(rec)
     return ([{k: s.get(k) for k in keep} | {"log": {tuple(r[:4]): r[4:] for r in rec["structures"][s["struct"]]["log"]}}
              for s in (rec["setup"], *rec["steps"], rec["tail"])], rec["totals"]["macs"], rec["totals"]["device_macs"])
 
@@ -113,6 +116,24 @@ def test_a_trace_that_leaves_more_than_one_ask_open_is_refused_until_partial_pic
         rewritten(fused, "qk:2")
     with pytest.raises(ValueError, match="2 calls a step ask for q's alone at .* the record's row holds 1"):
         rewritten(fused, "q:2", trace=None)
+
+
+def test_a_fused_row_that_names_a_dtype_is_refused_and_other_rows_keep_theirs(records):
+    """A record whose op log names dtypes was written by the counter that writes the kernel's ops, so a fused row
+    that names one is no job's: the kernel's results aren't all in the dtype it computes in (its CPU form returns a
+    float32 beside a bf16 result), and the rewrite refuses it. A row that isn't a kernel's keeps the dtype it
+    names."""
+    fused, _ = records["whole"]
+    named = copy.deepcopy(fused)
+    for st in named["structures"].values():
+        st["log"] = [[*row, "bfloat16+float32" if "scaled_dot_product" in row[2] else "float32"] for row in st["log"]]
+    with pytest.raises(ValueError, match=r"_scaled_dot_product_flash_attention_for_cpu\w* .*: a fused row that names "
+                                         r"a dtype \(bfloat16\+float32\)"):
+        rewritten(named)
+    rows, _, _ = as_math.rewrite([["other", "param", "mul", "[[4]]", 2, 8, "float32"],
+                                  ["other", "param", "mul", "[[4]]", 1, 4, "bfloat16"]], [])
+    assert rows == [["other", "param", "mul", "[[4]]", 2, 8, "float32"],
+                    ["other", "param", "mul", "[[4]]", 1, 4, "bfloat16"]]
 
 
 SHAPE = (2, 3, 16, 4)  # b, h, s, d

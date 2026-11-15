@@ -6,8 +6,8 @@ import copy
 
 import pytest
 
-from verity_vllm.properties import record as REC
-from verity_vllm.properties import vocab_range_exactness as X
+from tests.properties import vocab_range_exactness as X
+from verity_vllm.records import property_record as REC
 
 
 def _rank(r):

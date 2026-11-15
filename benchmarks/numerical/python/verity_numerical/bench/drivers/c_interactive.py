@@ -1,12 +1,12 @@
-"""C-interactive (Flock, live verifier): ``verity/protocols/flock/pod/30-cell.sh`` on both pods, then ``verity_flock.register``.
+"""C-interactive (Flock, live verifier): ``verity/protocols/proofs/flock/prover/pod/30-cell.sh`` on both pods, then ``verity_flock.register``.
 
 A GEMM cell on an input set (directory or ``art:`` id) sends the set to both pods as the same tarball (``SET=``), and each side
 writes its own instance files from it (``verity_flock.instance_file.write_set``); on a census frozen set the scripts rebuild it.
 
 The circuit statement (``circuit:<template>``, ``verity/flock-circuit``, planned with ``--relation circuit:<template>``) runs
-``verity/protocols/flock/pod/61-circuit-cell.sh`` the same way (``verity_flock.circuit_bench``; the verifier stages only its public files).
+``verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh`` the same way (``verity_flock.circuit_bench``; the verifier stages only its public files).
 
-An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``verity/protocols/flock/pod/33-ir-cell.sh`` instead: the
+An IR template's relation (``irf:<template>``, ``verity/flock-ir-frame/v1``) runs ``verity/protocols/proofs/flock/prover/pod/33-ir-cell.sh`` instead: the
 cell's input set goes to both pods as a tarball, each pod stages its own instance files from it (``verity_flock.ir_bench``), and
 ``verity_flock.register`` names ``flock-ir-frame`` as the verifier binary.
 
@@ -23,7 +23,12 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from verity_flock.subcircuit_templates import Subcircuit
+
+    from ..cell import Cell
 
 __all__ = ["BACKEND", "FAMILY", "INTERACTIVE", "RESULT", "jobs", "register", "unmet"]
 
@@ -31,10 +36,10 @@ BACKEND = "C-interactive"
 FAMILY = "C-Flock"
 INTERACTIVE = True
 RESULT = "result.json"
-SCRIPT = "verity/protocols/flock/pod/30-cell.sh"
-IR_SCRIPT = "verity/protocols/flock/pod/33-ir-cell.sh"
+SCRIPT = "verity/protocols/proofs/flock/prover/pod/30-cell.sh"
+IR_SCRIPT = "verity/protocols/proofs/flock/prover/pod/33-ir-cell.sh"
 IR_PREFIX = "irf:"
-CIRCUIT_SCRIPT = "verity/protocols/flock/pod/61-circuit-cell.sh"
+CIRCUIT_SCRIPT = "verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh"
 CIRCUIT_PREFIX = "circuit:"
 #: relations other than the template module's that ``cell plan --relation`` may name
 RELATIONS = (CIRCUIT_PREFIX,)
@@ -42,14 +47,14 @@ RELATIONS = (CIRCUIT_PREFIX,)
 CIRCUIT_SCHEME = "frame-v3-sha512/hm96-sha512"
 
 
-def supports_relation(relation: str, sub, scheme: str):
+def supports_relation(relation: str, sub: Subcircuit, scheme: str) -> str | None | Literal[False]:
     """The circuit statement binds its rows under :data:`CIRCUIT_SCHEME` only; other relations are the template module's."""
     if relation.startswith(CIRCUIT_PREFIX):
         return None if scheme == CIRCUIT_SCHEME else f"verity/flock-circuit binds rows under {CIRCUIT_SCHEME}, not {scheme}"
     return False
 
 
-def set_tarball(cell) -> str:
+def set_tarball(cell: Cell) -> str:
     """The cell's input set as one tarball both pods receive (``research run --send``), under ``$TMPDIR/verity-cell-sets``."""
     src = Path(cell.input_set["path"])
     out = Path(tempfile.gettempdir()) / "verity-cell-sets" / f"{cell.input_set['content_digest']}.tar"
@@ -60,7 +65,7 @@ def set_tarball(cell) -> str:
     return str(out)
 
 
-def ir_jobs(cell, script: str = IR_SCRIPT) -> list[dict]:
+def ir_jobs(cell: Cell, script: str = IR_SCRIPT) -> list[dict]:
     if cell.input_set.get("kind") != "set":
         raise ValueError("an IR template cell runs on an input set (directory or art: id), not a census frozen set")
     tar = set_tarball(cell)
@@ -76,7 +81,7 @@ def ir_jobs(cell, script: str = IR_SCRIPT) -> list[dict]:
     ]
 
 
-def unmet(cell) -> str | None:
+def unmet(cell: Cell) -> str | None:
     if not cell.lane:
         return "C-interactive registers its result under the producing lane (verity_flock.register --lane): plan the cell with --lane"
     if not cell.rtt_target:
@@ -84,7 +89,7 @@ def unmet(cell) -> str | None:
     return None
 
 
-def jobs(cell) -> list[dict]:
+def jobs(cell: Cell) -> list[dict]:
     if cell.relation.startswith(CIRCUIT_PREFIX):
         return ir_jobs(cell, CIRCUIT_SCRIPT)
     if cell.relation.startswith(IR_PREFIX):
@@ -102,7 +107,7 @@ def jobs(cell) -> list[dict]:
     ]
 
 
-def register(cell, prover_run: Path, verifier_run: Path | None, out: Path) -> list[list[str]]:
+def register(cell: Cell, prover_run: Path, verifier_run: Path | None, out: Path) -> list[list[str]]:
     if verifier_run is None:
         raise ValueError("C-interactive registers from both runs: --verifier-run")
     if not cell.lane:
@@ -132,6 +137,6 @@ def ir_binary(prover_run: Path) -> str:
 
 
 def takes_lane() -> bool:
-    """Whether the installed ``verity_flock.register`` takes ``--lane`` (required from flock-backend a9d13f68; unknown before)."""
+    """Whether the installed ``verity_flock.register`` takes ``--lane``: a register that knows the flag requires it, and an earlier one rejects it."""
     r = subprocess.run([sys.executable, "-m", "verity_flock.register", "--help"], capture_output=True, text=True)
     return "--lane" in r.stdout

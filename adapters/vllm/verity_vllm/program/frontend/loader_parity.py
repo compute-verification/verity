@@ -38,6 +38,7 @@ def retie_lm_head_as_the_loader_does(model: nn.Module, vllm_config) -> dict:
     import glob
     import json as _json
     import struct
+
     from safetensors import safe_open
     root = mc.model
     if not os.path.isdir(root):
@@ -165,3 +166,6 @@ def as_the_loader_does(model: nn.Module, vllm_config) -> dict:
             "mla_absorbed_weights": mla_absorbed_weights_as_the_loader_does(model, vllm_config),
             "fp8_block_weights": fp8_block_weights_as_the_loader_does(model),
             "post_load_tensors": post_load_tensors_as_the_loader_does(model)}
+
+
+__all__ = ["as_the_loader_does"]

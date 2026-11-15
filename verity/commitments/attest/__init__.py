@@ -15,13 +15,13 @@ commits every execution phase's records, each a byte string, as the leaves of on
 record, "block ``w`` of the period was certified" with no content (`lms.liveness_message`): the party's one public
 message per execution phase, which the verifier checks in the clear (`lms.verify_liveness`). `Period.close` signs
 the root once
-(`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger drew, the link,
+(`lms.period_root_message`, binding the deployment's hash, the party, the attachment id the challenger sampled, the link,
 the period's index and the record count) and returns the `SignedPeriod`, which goes to the prover only, as witness. The
 party's lower key and the identity's certificate of it are public: every liveness record shows them in the clear. The
 prover opens the records a proof reads (`SignedPeriod.read`); the verifier checks the certificate in the clear
 (`Attest.checkKey`), and the proof runs `Attest.check` (Lean, this directory's ``lean/``, package ``core_attest``): the
 root's LMS signature under the lower key, then each read's path to the root. `Attest.accepts` is both. The period's unit,
-the root's signature as a Boolean Definition, is ``AttestPeriod_v1`` (`verity.definitions.commitments.gates.attest`).
+the root's signature as a Boolean Definition, is ``AttestPeriod_v1`` (`verity.commitments.gates.attest`).
 
 The party signs for one attachment at a time: `Period` starts its attachment on the signer (`lms.PartyKey.start`, which
 records it on the key's leaf state before any signature of it), so a restart within the attachment signs nothing more
@@ -108,7 +108,7 @@ def path(records: Sequence[bytes], position: int) -> tuple[bytes, ...]:
 
 def verify_opening(root_: bytes, count: int, position: int, record: bytes, siblings: Sequence[bytes]) -> bool:
     """Whether ``record`` at ``position`` climbs ``siblings`` to ``root_`` in a period tree of ``count`` records
-    (`Attest.check`'s test of each read, ``FrameV3Sha512.verifyOpening``)."""
+    (`Attest.check`'s test of each read, ``Flock.FV3.Domain.verifyOpening``)."""
     if len(root_) != 64 or not 0 <= position < count < 1 << 64 or len(siblings) != _depth(count):
         return False
     if any(len(s) != 64 for s in siblings):

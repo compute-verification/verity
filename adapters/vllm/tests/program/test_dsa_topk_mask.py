@@ -9,17 +9,16 @@ import random
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import lookup_primitive
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
-from verity.definitions import boolean as SW
-from verity.definitions.registry import boolean_dsa_topk_mask as BM
-from verity.definitions.registry import dsa_topk as T
-from verity.definitions.registry import dsa_topk_mask as M
+from verity.circuits.ops.boolean import versions as SW
+from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
+from verity_vllm.definitions.registry import dsa_topk as T
+from verity_vllm.definitions.registry import dsa_topk_mask as M
 
 POOL = [0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7FC00000, 0xFFC00000, 0x7F800000, 0xFF800000, 0x00000001, 0x80000001]
 
@@ -103,11 +102,11 @@ def test_the_concentrator_lists_every_masks_members_in_index_order() -> None:
                 mask = [int(j in members) for j in range(N)]
                 assert M.butterfly_apply(M.butterfly_settings(mask, K), list(range(N)), K) == list(members), (N, members)
     rng = random.Random(0)
-    for N, K in [(rng.randrange(10, 300), None) for _ in range(30)] + [(2049, 2048), (2080, 2048), (4096, 2048), (5000, 2048)]:
-        K = K or rng.randrange(1, N + 1)
-        members = sorted(rng.sample(range(N), K))
-        mask = [int(j in set(members)) for j in range(N)]
-        assert M.butterfly_apply(M.butterfly_settings(mask, K), list(range(N)), K) == members, (N, K)
+    for N, k in [(rng.randrange(10, 300), None) for _ in range(30)] + [(2049, 2048), (2080, 2048), (4096, 2048), (5000, 2048)]:
+        K = k or rng.randrange(1, N + 1)
+        chosen = sorted(rng.sample(range(N), K))
+        mask = [int(j in set(chosen)) for j in range(N)]
+        assert M.butterfly_apply(M.butterfly_settings(mask, K), list(range(N)), K) == chosen, (N, K)
 
 
 def test_the_switch_count_is_the_pruned_butterflys() -> None:

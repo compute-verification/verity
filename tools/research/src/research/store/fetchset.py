@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import fcntl
 import os
+import re
 import threading
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -55,15 +56,37 @@ def _tmp(dst: Path) -> Path:
     return dst.parent / f".tmp-{dst.name}-{os.getpid()}-{threading.get_ident()}"
 
 
+#: the names `lock` is taken under: a manifest's or a blob's hex, and the digest of an entry's path in a tree (`fixtures._entry_lock`)
+LOCK_NAME = re.compile(r"(?:manifest|blob|entry)-[0-9a-f]{64}")
+
+
 @contextmanager
 def lock(store: LocalStore, name: str) -> Iterator[None]:
     """An exclusive flock on `<store>/locks/<name>.lock`, held for the block: concurrent fetches of one key (threads or processes)
-    take turns, and the later one finds the first one's result in place.  The lock file stays; it holds no data."""
+    take turns, and the later one finds the first one's result in place.  The lock file holds no data, and a node's eviction
+    unlinks one it holds the lock of (`leftovers.evict_locks`), so the lock counts only while the path still names the file it
+    is on: a taker that waited on a file unlinked meanwhile would hold it beside one that made a new file of that name.  The
+    lock is therefore taken again, on whatever the path names now, until the two are one file (`_names`).  Whoever unlinks a
+    lock file must hold its lock, or this check does not cover it."""
     d = store.root / "locks"
     d.mkdir(exist_ok=True)
-    with open(d / f"{name}.lock", "a") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        yield
+    path = d / f"{name}.lock"
+    while True:
+        with open(path, "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            if _names(path, f.fileno()):
+                yield
+                return
+
+
+def _names(path: Path, fd: int) -> bool:
+    """Whether `path` still names the open file `fd`: same device and inode."""
+    try:
+        at = os.stat(path)
+    except FileNotFoundError:
+        return False
+    held = os.fstat(fd)
+    return (at.st_dev, at.st_ino) == (held.st_dev, held.st_ino)
 
 
 def _first(srcs: Sequence[Remote], key: str, dst: Path, check) -> tuple[str | None, list[str]]:

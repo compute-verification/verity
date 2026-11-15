@@ -1,11 +1,11 @@
 """No new gate family under the retired ``veritor.*`` prefix (the Glossary's "Older names").
 
 The existing ids are grandfathered: their spellings are baked into the ``*_FAMILY_DIGEST`` pins, fixtures and recorded
-runs, so they stay exactly as declared in ``../definitions/circuits/targets/target.py``. A new family takes a fresh id outside ``veritor.*``;
+runs, so they stay exactly as declared in ``targets/target.py``. A new family takes a fresh id outside ``veritor.*``;
 this test fails when ``target.py`` declares one inside it."""
 from __future__ import annotations
 
-from verity.definitions.circuits.targets import target as T
+from verity.circuits.targets import target as T
 
 GRANDFATHERED = {
     "veritor.tc-ampere-bf16",                                # TC_AMPERE_BF16_NAME
@@ -30,6 +30,6 @@ def test_no_new_veritor_family() -> None:
     )
     gone = GRANDFATHERED - declared
     assert not gone, (
-        f"grandfathered veritor.* id(s) {sorted(gone)} no longer declared in ../definitions/circuits/targets/target.py: "
+        f"grandfathered veritor.* id(s) {sorted(gone)} no longer declared in targets/target.py: "
         "if the family was retired on purpose, remove it here and from README.md's paragraph in the same PR"
     )

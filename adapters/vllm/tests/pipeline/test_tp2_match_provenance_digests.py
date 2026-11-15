@@ -7,12 +7,16 @@ import hashlib
 import json
 import types
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.pipeline.tp import match as M  # noqa: E402
+from verity_vllm.pipeline.tp import match as M
 
 SITES = [("model.embed_tokens", "all_reduce", 8), ("model.layers.0.self_attn.o_proj", "all_reduce", 8), ("logits_processor", "all_gather", 4)]
 
@@ -26,9 +30,9 @@ def _make(run: Path, *, mutate_pt=None, mutate_row=None) -> dict:
     cap = run / "capture"
     cap.mkdir(parents=True)
     g = torch.Generator().manual_seed(7)
-    rows = {0: [], 1: []}
+    rows: dict[int, list] = {0: [], 1: []}
     for step in (0, 1):
-        vals = {0: {"part": [], "out": []}, 1: {"part": [], "out": []}}
+        vals: dict[int, dict[str, list]] = {0: {"part": [], "out": []}, 1: {"part": [], "out": []}}
         for k, (site, kind, w) in enumerate(SITES):
             M_ = (5 if step == 0 else 1) if kind == "all_reduce" else 1
             a, b = (torch.randn(M_, w, generator=g).to(torch.bfloat16) for _ in range(2))

@@ -1,6 +1,6 @@
 """`session_split.py` on a stand-in proof server and device whose sessions' parts are planted as fixed + per-block lines: the
-fit recovers each line, the rest is ``e2e_s`` less the other parts, the order is cold at the largest k, one warm-up at each
-other k and timed rounds ascending then descending, every draw is a subset of the population of its k, and one refused
+fit recovers each line, the rest is ``e2e_s`` less the witness and the proving (which holds the waits), the order is cold at the largest k, one warm-up at each
+other k and timed rounds ascending then descending, every sample is a subset of the population of its k, and one refused
 session voids the run (no medians or fit, a VOID line, exit 1)."""
 from __future__ import annotations
 
@@ -13,14 +13,15 @@ sys.path.insert(0, str(HERE.parent))
 import server_rate as SR  # noqa: E402  (scripts beside the suite, importable only once their dir is on the path)
 import session_split as SS  # noqa: E402
 
-PLANT = {"witness_s": (2.0, 0.004), "prove_total_s": (0.2, 0.001), "wait_e2e_s": (2.9, 0.0), "rest_s": (0.1, 0.002)}
+#: the waits on the verifier are planted inside the proving, as a prover's LIVE record holds them
+PLANT = {"witness_s": (2.0, 0.004), "prove_total_s": (3.1, 0.001), "wait_e2e_s": (2.9, 0.0), "rest_s": (0.1, 0.002)}
 
 
 class Session:
     def __init__(self, label: str, k: int, d: Path, accepted: bool) -> None:
         self.label, self.prover, self.dir, self.accepted = label, "prover-gpu0-0", d, accepted
         self.live = {p: a + b * k for p, (a, b) in PLANT.items() if p != "rest_s"}
-        self.live["e2e_s"] = sum(a + b * k for a, b in PLANT.values())
+        self.live["e2e_s"] = sum(a + b * k for p, (a, b) in PLANT.items() if p != "wait_e2e_s")
         self.seconds = self.live["e2e_s"] + 0.05
 
     def result(self) -> None:

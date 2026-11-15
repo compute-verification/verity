@@ -20,7 +20,7 @@ from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
-PROGRAM = hashlib.sha256(b"program").digest()
+PROGRAM = hashlib.sha512(b"program").digest()
 
 
 def stream(steps: int = 3) -> list[list[tuple[str, bytes]]]:

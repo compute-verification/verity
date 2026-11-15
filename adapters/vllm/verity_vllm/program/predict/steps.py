@@ -7,7 +7,7 @@ its account in the output accounting (the advice through `reads.gate`):
   public bound on the advice's length in bits, and the advice code, if the registration selects it (`Registered.code`).
 - `salt`: the window's seed salt, public, which a stochastic request's seed derives from where its body names none
   (`reads.seed_of`): the bytes of the window record's ``seed_salt``.
-- `advice`: I1 v0 (`verity.protocols.certifier.verifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
+- `advice`: I1 v0 (`verity.protocols.accounting.certifier.verifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Under the advice
   code it is a v1 string (`pipeline.advice_code.codec`), which `advice_of` decodes against the network certifier's certified record
@@ -70,7 +70,7 @@ its account in the output accounting (the advice through `reads.gate`):
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
 - Each request Program returns its length rule over its outputs as its last check, which the verifier requires to be 1
-  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its caps.
+  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its length limits.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with bound T + 1 (the executed prefix), under the target's lag.
 - On a batch-invariant target, a request a Commit window carries in (admitted in an earlier window) compiles to the Program it has
@@ -119,15 +119,17 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import verity.protocols.certifier.verifier.advice as I1
+import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.frontend import stop_rule as SR
-from verity_vllm.program.prune import dead_units
-from verity.definitions.registry import io_shell as IO
+from verity_vllm.records.schema_ids import COMPILED_STEPS_SCHEMA
+from verity_torch.prune import dead_units
+from verity_vllm.definitions.registry import io_shell as IO
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape
@@ -139,11 +141,9 @@ from .segment import edge_groups, edge_of, launch_of, segment_of
 from .traced import NO_EDGE_TRACE, NO_PARTIAL_TRACE, trace_dir
 from .traced import trace_commands as trace_commands
 
-SCHEMA = "verity-vllm/compiled-steps/v2"
+SCHEMA = COMPILED_STEPS_SCHEMA
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
 EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
-#: ℓ when a registration names none: 1 MiB of advice (PROVE-PATH's `CAP_BITS`), far above a session's few thousand rows
-CAP_BITS = 1 << 23
 
 
 @dataclass(frozen=True)
@@ -302,7 +302,7 @@ def advice_of(registered: Registered, advice: Any, record: Any = None) -> Any:
     if record is not None:
         raise Unexpressible("a certified record is for the advice code, and the registration selects none: its advice is I1's")
     data = _advice_bytes(advice)
-    _within_cap(registered, data)
+    _within_cap_bits(registered, data)
     return _window_advice(data)
 
 
@@ -317,7 +317,7 @@ def _advice_bytes(advice: Any) -> bytes:
     raise Unexpressible(f"the advice is I1's bytes or an I1 Advice, not a {type(advice).__name__}: nothing else is advice")
 
 
-def _within_cap(registered: Registered, data: bytes) -> None:
+def _within_cap_bits(registered: Registered, data: bytes) -> None:
     if 8 * len(data) > registered.cap_bits:
         raise Unexpressible(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {registered.cap_bits} bits")
 
@@ -338,7 +338,7 @@ def _coded_advice(registered: Registered, advice: Any, record: Any) -> Any:
     """A v1 string's I1 v0, held to ℓ before any of it is read and decoded under the registered code at that ℓ."""
     if type(advice) is not bytes:
         raise Unexpressible(f"under the advice code its advice is a v1 string's bytes, not a {type(advice).__name__}")
-    _within_cap(registered, advice)
+    _within_cap_bits(registered, advice)
     if record is None:
         raise Unexpressible("the advice code decodes against the session's certified record, and none was given")
 
@@ -422,8 +422,8 @@ def launch_class(phi: Phi) -> None:
     elif (phi.target or {}).get("compilation") != CLASS_G_EXECUTIONS[phi.execution]:
         facts.append(f"target compilation {(phi.target or {}).get('compilation')!r} at execution {phi.execution!r}, not "
                      f"{CLASS_G_EXECUTIONS[phi.execution]!r}")
-    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {cap}" for k, cap in CLASS_G_LIMITS.items()
-              if type(eng.get(k)) is not int or not 0 < eng[k] <= cap]
+    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {limit}" for k, limit in CLASS_G_LIMITS.items()
+              if type(eng.get(k)) is not int or not 0 < eng[k] <= limit]
     if type(eng.get("enable_prefix_caching")) is not bool:
         facts.append(f"engine arg enable_prefix_caching {eng.get('enable_prefix_caching')!r}, not stated True or False")
     if facts:
@@ -534,7 +534,8 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: by
                                               T=u.events() - 1, prefix=u.prefix())
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()),
                            edge=edge)
-    steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
+    ran: list[Any] = units   # a step's row is of a request the plan kept: None's AttributeError otherwise
+    steps = [[RowRef(r, ran[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
     compiled = Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
                         cap_bits=registered.cap_bits, idle=plan.idle, named=names)
     from .batch import BatchDependent, check_compiled
@@ -637,7 +638,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
             try:
                 carry = carried.get(i)
                 LP, T, s0, C = shape_of(i, q.prompt_len, rows[i], q.output_len, carry)
-                if LP + T > max_pos:
+                if max_pos < LP + T:
                     raise Unexpressible(f"request {i}: positions to {LP + T - 1}, past the model's {max_pos} positions" if bi else
                                         f"request {i}: positions to {LP + T - 1}, past the {max_pos} the model and the registered "
                                         f"max_model_len allow")
@@ -651,11 +652,13 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                     continue
                 chunks, launch = ((), None) if bi else launch_of(i, LP, T, C, rows[i], adv.steps)
                 hit = C if recompute_hits and C and carry is None else 0
-                hit_steps, entries = (), ()
+                hit_steps: tuple[int, ...] = ()
+                entries: tuple[int, ...] = ()
                 if hit and not bi:
                     pre = hit_chunks(i, hit, rows, adv.steps, len(carried))
                     hit_steps = tuple(s for s, _, _, _ in pre)
-                    launch = tuple(tuple((r.n, r.start) for r in adv.steps[s].rows) for s in hit_steps) + launch
+                    served: Any = launch   # `launch_of`'s tuple: class G's requests alone get here (`not bi`)
+                    launch = tuple(tuple((r.n, r.start) for r in adv.steps[s].rows) for s in hit_steps) + served
                     entries = tuple(m for _, _, _, m in pre) + chunks
                     chunks = tuple(n for _, _, n, _ in pre) + chunks
                     entries = entries if entries != chunks else ()
@@ -718,7 +721,8 @@ def compare(summary: dict, root: str) -> dict:
         seen.add(d)
         res = Path(root, d, "result.json")
         doc = json.loads(res.read_text()) if res.exists() else {}
-        traced = (doc.get("program") or {}).get("digest")
+        program = doc.get("program")   # a trace that built no Program states none: no digest, and the unit counts no_trace
+        traced = (program if program else {}).get("digest")
         why = ((NO_EDGE_TRACE if u.get("edge") else NO_PARTIAL_TRACE if u.get("entries") else None) if not doc else
                str(doc.get("message") or doc.get("unsupported"))[:400])
         out.append({"unit": d, "compiled": u["digest"], "traced": traced,
@@ -729,3 +733,6 @@ def compare(summary: dict, root: str) -> dict:
 
 
 compile_steps = cyclic_gc_off(compile_steps)
+
+
+__all__ = ["Registered", "RequestUnit", "compile_steps", "plan_steps", "request_program", "trace_dir"]

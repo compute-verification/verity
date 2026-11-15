@@ -19,16 +19,41 @@ model is a configuration record, not a second profile implementation.
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.fold.patterns import (AttentionScope, BiasAdd, Embedding, FusedAddRMSNorm, GemmLaunch, KVCacheUpdate, LogitsGather,
-                        RMSNormTritonLaunch, RotaryEmbedding, SiluAndMul, TokenSelectArgmax, TokenSelectGumbelTopP, TokenSelectGumbelTwoStage,
-                        TransparentAten, TransparentTritonMetadata, fuse_bias_adds)
+from verity_vllm.observe.fold.patterns import (
+    AttentionScope,
+    BiasAdd,
+    Embedding,
+    FusedAddRMSNorm,
+    GemmLaunch,
+    KVCacheUpdate,
+    LogitsGather,
+    RMSNormTritonLaunch,
+    RotaryEmbedding,
+    SiluAndMul,
+    TokenSelectArgmax,
+    TokenSelectGumbelTopP,
+    TokenSelectGumbelTwoStage,
+    TransparentAten,
+    TransparentTritonMetadata,
+    fuse_bias_adds,
+)
+from verity_vllm.observe.fold.patterns.fp8 import (
+    CutlassScaledMmFp8Block,
+    PerTokenGroupFp8Quant,
+)
+from verity_vllm.observe.fold.patterns.int8 import (
+    Int8AttentionScope,
+    Int8RowQuant,
+    Int8ScaledMm,
+)
 from verity_vllm.observe.fold.resolver import Profile
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 
 PROFILE_ID = "vllm-d9105ea80-sm89-eager-bf16"
 
@@ -68,7 +93,7 @@ GEMM_NUM_STAGES = 3
 #: this value is only the profile's own default (the RTX 4090's 128 SMs) for headers that carry no device — one source.
 GEMM_NUM_SMS = DEFAULT_TARGET.num_sms
 
-#: `batch_invariant.py::_rms_norm_kernel` as `rms_norm_batch_invariant` launches it (W11's model, `verity/definitions/numerics/
+#: `batch_invariant.py::_rms_norm_kernel` as `rms_norm_batch_invariant` launches it (W11's model, `adapters/vllm/verity_vllm/definitions/numerics/
 #: rms_triton_model.py`): one CTA of 4 warps per row, 8 columns per thread per 1024-column chunk, warp butterfly
 #: xor 16,8,4,2,1, CTA `(w0 + w2) + (w1 + w3)` — the reduction tree `RMSNormTriton_v1` writes out.
 RMS_CONSTEXPRS: dict[str, Any] = {"BLOCK_SIZE": 1024, "HAS_WEIGHT": True}
@@ -198,7 +223,9 @@ _HF_KEYS = {"hidden_size": "H", "num_hidden_layers": "NL", "num_attention_heads"
 def make_check_header(C: dict[str, Any]) -> Callable[[RunHeader], list[str]]:
     def check_header(header: RunHeader) -> list[str]:
         """Mismatches between the run's recorded HF config and C (empty when consistent or when the header carries no config)."""
-        cfg = (header.model or {}).get("config") or {}
+        cfg = (header.model or {}).get("config")
+        if not cfg:
+            return []
         out = []
         for hf, key in _HF_KEYS.items():
             if hf in cfg and cfg[hf] != C[key]:
@@ -230,12 +257,10 @@ def make_patterns(C: dict[str, Any]) -> list:
     if C.get("FP8_BLOCK"):
         # the block-scaled FP8 linear (vLLM Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel, VLLM_USE_DEEP_GEMM=0): the
         # dynamic per-token-group activation quant and the blockwise CUTLASS scaled GEMM, each ONE registered family (registry.fp8)
-        from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
         fp8 = [PerTokenGroupFp8Quant(group=int(C["FP8_BLOCK"])), CutlassScaledMmFp8Block(group=int(C["FP8_BLOCK"]))]
     if C.get("INT8_EXACT"):
         # the exact-int8 profile's named ops (engine.int8_ops), each one registered Definition (registry.int8_exact); the attention
         # scope first, so a layer on the int8 backend never reaches the FA2 scope
-        from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8RowQuant, Int8ScaledMm
         fp8 = [Int8RowQuant(), Int8ScaledMm(), Int8AttentionScope()]
     return [
         *fp8,
@@ -259,15 +284,9 @@ def make_patterns(C: dict[str, Any]) -> list:
     ]
 
 
-PATTERNS = make_patterns(C)
-
-# the census allowlist is PROTECTED (verity_vllm/properties/kernel_allowlist.py); profiles only reference it
-from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST  # noqa: E402
-
-
 def build_profile(config: dict[str, Any], *, profile_id: str, case: str, model_note: str = "") -> Profile:
     """The κ profile for a static configuration (`b1.<case>_CONFIG`, `BN` derived if absent).  Shared: the κ pins,
-    the pattern list, the weight-name map, the kernel allowlist.  Per model: `C` (and so EPS / V / BN / BIAS), the
+    the pattern list and the weight-name map.  Per model: `C` (and so EPS / V / BN / BIAS), the
     Record the fold's `weights` parameter has, and the header consistency check."""
     C = config if "BN" in config else with_geometry(config)
     wf = make_weight_field(C)
@@ -277,7 +296,6 @@ def build_profile(config: dict[str, Any], *, profile_id: str, case: str, model_n
         config=C,
         weight_field=wf,
         accepted=False,
-        kernel_allowlist=KERNEL_ALLOWLIST,
         step_passes=(fuse_bias_adds,),
         notes={
             "case": case,

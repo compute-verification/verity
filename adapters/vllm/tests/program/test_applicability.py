@@ -25,7 +25,13 @@ import pytest
 pytest.importorskip("torch")
 pytest.importorskip("vllm")
 
-from verity_vllm.program.frontend.target_profile import ApplicabilityError, ArtifactIdentity, TargetProfile, load_artifact, reuse_mismatches
+from verity_vllm.program.frontend.target_profile import (
+    ApplicabilityError,
+    ArtifactIdentity,
+    TargetProfile,
+    load_artifact,
+    reuse_mismatches,
+)
 
 B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # the recorded request_8_4 and sens/base builds
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -70,6 +76,11 @@ def _env(extra=None, gpu_visible=False):
     return e
 
 
+def _spawn(out, cmd, **kw):
+    with open(out.with_suffix(".log"), "w") as log:
+        return subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, **kw)
+
+
 @pytest.fixture(scope="module")
 def builds(tmp_path_factory):
     root = tmp_path_factory.mktemp("cbfix")
@@ -79,26 +90,23 @@ def builds(tmp_path_factory):
         cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
         if target:
             cmd += ["--target", target]
-        procs[name] = (out, subprocess.Popen(cmd, cwd=REPO, env=_env(), stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
+        procs[name] = (out, _spawn(out, cmd, cwd=REPO, env=_env()))
     out = root / "export_divergence"
-    procs["export_divergence"] = (out, subprocess.Popen([sys.executable, "-c", _HOSTILE_EXPORT, str(out)], cwd=REPO, env=_env(),
-                                                        stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
+    procs["export_divergence"] = (out, _spawn(out, [sys.executable, "-c", _HOSTILE_EXPORT, str(out)], cwd=REPO, env=_env()))
     out = root / "dead_env"  # the default profile with the dead variable set in the environment
-    procs["dead_env"] = (out, subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
-                                                "--LP", "8", "--T", "4"], cwd=REPO, env=_env({"VLLM_ATTENTION_BACKEND": "TRITON_ATTN"}),
-                                               stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
+    procs["dead_env"] = (out, _spawn(out, [sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
+                                                "--LP", "8", "--T", "4"], cwd=REPO, env=_env({"VLLM_ATTENTION_BACKEND": "TRITON_ATTN"})))
     out = root / "gpu_host"  # the default profile on a host whose GPU (if any) is NOT hidden: a second construction host for (iii)
-    procs["gpu_host"] = (out, subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
-                                                "--LP", "8", "--T", "4"], cwd=REPO, env=_env(gpu_visible=True),
-                                               stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
+    procs["gpu_host"] = (out, _spawn(out, [sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request",
+                                                "--LP", "8", "--T", "4"], cwd=REPO, env=_env(gpu_visible=True)))
     res = {}
     for name, (out, p) in procs.items():
         rc = p.wait()
-        r = json.load(open(out / "result.json"))
+        r = json.loads((out / "result.json").read_text())
         assert "traceback_tail" not in r, f"{name} crashed: {r.get('exception')}: {r.get('message')}\n{r.get('traceback_tail')}"
-        m = json.load(open(out / "construction_manifest.json"))
+        m = json.loads((out / "construction_manifest.json").read_text())
         res[name] = {"rc": rc, "out": out, "result": r, "manifest": m,
-                     "artifact": json.load(open(out / "artifact.json")) if (out / "artifact.json").exists() else None}
+                     "artifact": json.loads((out / "artifact.json").read_text()) if (out / "artifact.json").exists() else None}
     return res
 
 
@@ -119,26 +127,26 @@ def test_program_digest_of_b0_8_4_unchanged_and_cross_host(builds):
 
 # -- (i) the reported case: different target, same circuit -> same digest, different identity, manifest says what was applied ----
 
-@pytest.mark.parametrize("name,cap,sms", [("cap80_108", [8, 0], 108), ("sms132", [8, 9], 132)])
-def test_case_i_same_digest_different_identity_manifest_reports_applied(builds, name, cap, sms):
+@pytest.mark.parametrize("name,capability,sms", [("cap80_108", [8, 0], 108), ("sms132", [8, 9], 132)])
+def test_case_i_same_digest_different_identity_manifest_reports_applied(builds, name, capability, sms):
     base, b = builds["base"], builds[name]
     assert b["rc"] == 0 and b["result"]["ok"] is True
     assert _digest(b) == _digest(base) == B0_DIGEST  # the circuit is genuinely unchanged for these targets
     assert b["artifact"]["identity"] != base["artifact"]["identity"]
     t = b["manifest"]["target"]
-    assert t["declared"]["compute_capability"] == cap and t["declared"]["num_sms"] == sms
-    assert t["applied"]["compute_capability"] == cap and t["applied"]["num_sms"] == sms  # read back from vLLM, not a literal
-    assert t["applied_after_export"]["compute_capability"] == cap and t["applied_after_export"]["num_sms"] == sms
+    assert t["declared"]["compute_capability"] == capability and t["declared"]["num_sms"] == sms
+    assert t["applied"]["compute_capability"] == capability and t["applied"]["num_sms"] == sms  # read back from vLLM, not a literal
+    assert t["applied_after_export"]["compute_capability"] == capability and t["applied_after_export"]["num_sms"] == sms
     decl = {d["field"]: d for d in b["manifest"]["declared"]}
-    assert decl["compute capability"]["value"] == f"{cap[0]}.{cap[1]}" and decl["compute capability"]["applied"] == cap
+    assert decl["compute capability"]["value"] == f"{capability[0]}.{capability[1]}" and decl["compute capability"]["applied"] == capability
     assert decl["NUM_SMS"]["value"] == sms and decl["NUM_SMS"]["applied"] == sms
     assert "8.9 (sm_89, Ada)" not in json.dumps(b["manifest"]["declared"])  # no hard-coded capability literal
     assert b["artifact"]["target_profile"] == t["declared"]
     # the applicability names the registered GEMM specialization the construction pinned (registry keyed by the target)
     app = b["artifact"]["applicability"]
-    assert (app["gemm_target"], app["tuned_gemm_arch_family"]) == (("ampere", None) if cap == [8, 0] else ("ada", "ada")), app
+    assert (app["gemm_target"], app["tuned_gemm_arch_family"]) == (("ampere", None) if capability == [8, 0] else ("ada", "ada")), app
     assert app["gemm_target_dot"] == "AmpereBF16TcDot16" and app["gemm_target_refusal"] is None
-    assert (app["tuned_gemm_table_sha256"] is None) == (cap == [8, 0])
+    assert (app["tuned_gemm_table_sha256"] is None) == (capability == [8, 0])
 
 
 def test_case_i_b_capability_applied_only_around_the_export_is_refused(builds):
@@ -277,6 +285,7 @@ def test_dead_env_var_is_recorded_as_ignored_not_declared(builds):
 def test_no_target_literal_remains_in_the_builder_sources():
     bindings = sorted(os.path.relpath(p, REPO) for p in glob.glob(os.path.join(REPO, "verity_vllm/program/frontend/rules/vllm_bindings/*.py")))
     for rel in ("verity_vllm/program/frontend/export_compat.py", *bindings, "verity_vllm/program/frontend/vllm_meta.py"):
-        src = open(os.path.join(REPO, rel)).read()
+        with open(os.path.join(REPO, rel)) as f:
+            src = f.read()
         assert "DeviceCapability(major=8" not in src and "8.9 (sm_89, Ada)" not in src, rel
         assert 'os.environ.get("VLLM_ATTENTION_BACKEND")' not in src, rel

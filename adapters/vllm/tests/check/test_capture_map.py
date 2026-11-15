@@ -8,6 +8,7 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
 
+import ast
 import copy
 import hashlib
 import json
@@ -15,13 +16,14 @@ from pathlib import Path
 
 import pytest
 import torch
+from verity_vllm.definitions.registry import catalog
 
 from tests.check.capture_map_check import check, check_target, report
 from verity_vllm.acquire.sources import moe_source
-from verity_vllm.commit import identity as ID
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.commit import identity as ID
 from verity_vllm.engine import meta_inventory as MI
-from verity.definitions.registry import catalog
+from verity_vllm.query.manifest.format import MOE_FP8_PLANES
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "glm_moe_dsa"
@@ -154,10 +156,10 @@ def test_an_unregistered_definition_fails(registry):
 def test_the_captures_are_registered_properties_and_the_map_is_its_checkpoints_at_its_world():
     """Each property a Program's `captures` names is registered (an unknown one fails the check), and the circuit database finds the
     map by the Build's checkpoint and world (`records.due`)."""
-    caps = CM.captures(CMAP)
-    assert caps["glm53_dsa_capture"] == ["fused-rope-triton", "mla-sparse-attention", "dsa-indexer-q", "dsa-indexer-k", "dsa-mqa-logits",
+    captures = CM.captures(CMAP)
+    assert captures["glm53_dsa_capture"] == ["fused-rope-triton", "mla-sparse-attention", "dsa-indexer-q", "dsa-indexer-k", "dsa-mqa-logits",
                                          "dsa-topk"]
-    assert caps["glm53_fa3_split_capture"] == ["mla-sparse-attention"] and caps["deepgemm_capture"] == ["fp8-block-linear-deepgemm"]
+    assert captures["glm53_fa3_split_capture"] == ["mla-sparse-attention"] and captures["deepgemm_capture"] == ["fp8-block-linear-deepgemm"]
     cmap = copy.deepcopy(CMAP)
     cmap["programs"]["silu-mul"]["captures"] = ["glm53_silu_capture"]
     assert _check(cmap) == ["program silu-mul: capture 'glm53_silu_capture' is not a registered property"]
@@ -260,8 +262,6 @@ def test_a_tap_bound_by_an_unknown_binder_fails():
 
 
 def test_moe_source_binds_its_ten_block_fp8_planes_and_the_unreduced_output_on_every_moe_layer():
-    from verity_vllm.query.manifest.format import MOE_FP8_PLANES
-
     sourced = [t for t in CMAP["taps"] if t.get("source", "").startswith("moe/")]
     assert [t["source"].rsplit("/", 1)[1] for t in sourced] == list(MOE_FP8_PLANES)
     assert all(t["commit"] == {"name": t["source"], "binder": "moe"} for t in sourced)
@@ -295,8 +295,6 @@ def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engi
     """`tp-capture --inventory-out` (the H200 runbook's serve smoke, capture-map check and observer log in one engine load): the
     document `write_live` makes of the ranks' `rank_inventory` passes the check, and the capture writes it once the engine is built,
     before the warm-up and the observer."""
-    import ast
-
     from verity_vllm.pipeline.tp import lease as TPL
 
     rpc_timeout = object()      # handed to collective_rpc unchanged
@@ -312,6 +310,7 @@ def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engi
     assert code == 0 and out.count(": 0 problems") == TP
     src = Path(TPL.__file__).with_name("capture.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main is not None
     at = [main.index(m) for m in ("LLM(**kw)", "write_live(llm", "throwaway_requests(", '"tp2_install"')]
     assert at == sorted(at), at
 

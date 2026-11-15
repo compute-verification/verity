@@ -1,6 +1,6 @@
 """The C2 oracle resolves a PROMOTED member through the Value's producer, not the module prefix of the fold's hint.
 
-Row #57 leg 3: over a Match that snapshotted every step, the 432 promoted `model`/`out` identities (the
+Row #57 part 3: over a Match that snapshotted every step, the 432 promoted `model`/`out` identities (the
 embedding scale's output crossing into layer 0) were "no fold instance of this op at this step" -- the fold hints that instance by
 the producing Call's own site, the manifest names it by the Program row's module.  Same Value, two names.  The oracle now answers
 from the dataflow: the fold instance of the producer family whose OUTPUT storage range contains an OPERAND view of a consumer
@@ -15,11 +15,21 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import numpy as np
 
+from tests.check.test_oracle_compare import (
+    ROWS,
+    U0,
+    U1,
+    H,
+    _bf16,
+    make_bmap,
+    make_match,
+    reader,
+)
 from verity_vllm.check import oracle_compare as OC
-from tests.check.test_oracle_compare import H, ROWS, U0, U1, _bf16, make_bmap, make_match, reader
 
 PRODUCER_OP = "top"                                   # the Program row's module (the manifest identity's op_path)
 PRODUCER_HINT = "top.scale/top.scale.k"              # the fold's hint: the producing Call's own site -- prefix `top.scale`, never `top`
@@ -37,12 +47,12 @@ def _add_promoted(d: str, *, producer_spec: str = PRODUCER_SPEC, with_producer: 
     data = _bf16(n, 9)
     sha = hashlib.sha256(data).hexdigest()
     fn = f"values/0/{sha[:16]}.bin"
-    open(os.path.join(d, "capture", fn), "wb").write(data)
-    snap = json.load(open(os.path.join(d, "capture", "snapshots.json")))
+    Path(os.path.join(d, "capture", fn)).write_bytes(data)
+    snap = json.loads(Path(os.path.join(d, "capture", "snapshots.json")).read_text())
     snap["entries"].append({"event": P_EVENT, "path": "outs", "view": {"$v": [P_ALLOC, 0, [n, H], [H, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                             "shape": [n, H], "strides": [H, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes",
                             "sha256": sha, "file": fn, "step": 0})
-    json.dump(snap, open(os.path.join(d, "capture", "snapshots.json"), "w"))
+    Path(os.path.join(d, "capture", "snapshots.json")).write_text(json.dumps(snap))
     with open(os.path.join(d, "instances.jsonl"), "a") as f:
         row = 0
         for u in order:
@@ -92,7 +102,7 @@ def test_promoted_member_resolves_through_the_producer_and_compares(tmp_path):
     assert res["result"] is True and res["complete"] is True and res["mismatch_n"] == 0, res
     assert res["compared"] == 2 * len(vals) + 2 + 2                              # + the two requests' promoted identities
     assert not any(k.startswith("no fold instance") for k in res["not_compared"]), res["not_compared"]
-    # the same key WITHOUT the dataflow rule is exactly the leg-3 symptom: the hint prefix `top.scale` is not the identity's `top`
+    # the same key WITHOUT the dataflow rule is exactly the part-3 symptom: the hint prefix `top.scale` is not the identity's `top`
     o = OC.MatchOracle(d)
     b, why, n = o.member_bytes(0, PRODUCER_OP, "out", "r0", producer={"spec": "ScaleRow_v1", "ordinal": None, "operand": None})
     assert b is None and why == "no fold instance of this op at this step" and n == 0
@@ -168,14 +178,14 @@ def test_promoted_resolution_ignores_a_consumer_reading_only_part_of_the_value(t
     d, vals = make_match(str(tmp_path))
     data = _add_promoted(d)
     # rewrite the consumer instances' operand as the first half of each row
-    lines = open(os.path.join(d, "instances.jsonl")).read().splitlines()
+    lines = Path(os.path.join(d, "instances.jsonl")).read_text().splitlines()
     out = []
     for ln in lines:
         m = json.loads(ln)
         if m.get("hint", "").startswith(CONSUMER_OP + "/"):
             m["operand_views"][0]["shape"] = [H // 2]
         out.append(json.dumps(m))
-    open(os.path.join(d, "instances.jsonl"), "w").write("\n".join(out) + "\n")
+    Path(os.path.join(d, "instances.jsonl")).write_text("\n".join(out) + "\n")
     bmap, committed = _promoted_bmap(vals, data)
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers=OC.producers_of(_manifest()))
     assert res["result"] is True and res["complete"] is True, res

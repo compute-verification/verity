@@ -6,7 +6,7 @@ The reservation model for one row stage is
 
 where every term is a NAMED allocation object of the row procedure (see `INVENTORY` below and
 `out/gen/sweep/evidence/admit/INVENTORY.md`) with a lifetime (first/last substage where it is resident) and a size
-law in plan-time scale variables (tokens, requests, layers, instances, workers, ...).  Coefficients are measured
+formula in plan-time scale variables (tokens, requests, layers, instances, workers, ...).  Coefficients are measured
 constants (each carries the attempt dir + numbers that pin it, in `CALIBRATION`); there is no global multiplier.
 Simultaneity is computed by a sweep over the stage's substage timeline (`peak_overlap`): sequential reuse is not
 simultaneous residency (the FP8 3-pair result), and a term that outlives its substage (the pymalloc heap residual,
@@ -26,10 +26,18 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import row_tokens, workload_file
-from verity_vllm.engine.profiles.admission_calibration import CALIBRATION, DENSE_DEFAULT, MODELS, uncalibrated_model_note
+from verity_vllm.engine.profiles.admission_calibration import (
+    CALIBRATION,
+    DENSE_DEFAULT,
+    MODELS,
+    uncalibrated_model_note,
+)
+from verity_vllm.records.schema_ids import ADMISSION_PLAN_SCHEMA
+
+__all__ = ["predict", "request_prompt_len", "row_config_from_workload"]
 
 MiB = 1 << 20
-SCHEMA = "verity/admission-plan/v1"
+SCHEMA = ADMISSION_PLAN_SCHEMA
 
 
 #: the value families `--retain-exclude hidden_m1` names (native_collect.retain_exclude_families): the attention launch's
@@ -42,9 +50,9 @@ INVENTORY: dict[str, dict[str, str]] = {
     "serving.engine_host": {"stage": "commit", "where": "commit_delta committer process at engine construction", "freed": "process exit", "scales": "constant per engine"},
     "serving.weights_mmap": {"stage": "commit", "where": "vLLM model load (safetensors mmap)", "freed": "engine teardown", "scales": "model weights bytes"},
     "build.program_graph": {"stage": "build", "where": "derive_request (Program object graph of one request)", "freed": "request derivation end (heap residual across requests)", "scales": "decode rows x context x layers"},
-    "match.capture.instance_records": {"stage": "match", "where": "m1_capture observer, per matched instance", "freed": "capture end (written to match/)", "scales": "instances"},
-    "match.capture.token_values": {"stage": "match", "where": "m1_capture observer value snapshots", "freed": "capture end", "scales": "tokens x declaration widths"},
-    "match.capture.hidden_values": {"stage": "match", "where": "m1_capture observer M1 hidden-stream snapshot", "freed": "capture end", "scales": "prompt tokens x K x heads"},
+    "match.capture.instance_records": {"stage": "match", "where": "match_capture observer, per matched instance", "freed": "capture end (written to match/)", "scales": "instances"},
+    "match.capture.token_values": {"stage": "match", "where": "match_capture observer value snapshots", "freed": "capture end", "scales": "tokens x declaration widths"},
+    "match.capture.hidden_values": {"stage": "match", "where": "match_capture observer M1 hidden-stream snapshot", "freed": "capture end", "scales": "prompt tokens x K x heads"},
     "match.fold.instance_state": {"stage": "match", "where": "fold (verity_vllm.observe.fold.fold) instance dicts", "freed": "fold end", "scales": "instances"},
     "match.fold.attention_operands": {"stage": "match", "where": "fold per-step attention operand rows", "freed": "fold end", "scales": "steps x context x layers"},
     "commit.pinned_pool": {"stage": "commit", "where": "bounded warm-up / first instrumented run (torch pinned host allocator)", "freed": "commit_delta exit (--retain host); per-pair release only under --retain none", "scales": "raw committed bytes x 1.25"},
@@ -74,14 +82,14 @@ def commit_points(pairs: int) -> list[str]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Row scale (plan-time inputs).  Artifact-derived overrides win over the structural estimates.
+# Row scale (plan-time inputs).
 # ---------------------------------------------------------------------------------------------------------------------
 @dataclass
 class RowScale:
     model: str
     requests: int = 1
     prompt_tokens: int = 1024            # sum over requests
-    decode_rows: int = 128               # sum over requests of decode steps (cap + lag)
+    decode_rows: int = 128               # sum over requests of decode steps (max_tokens + lag)
     steps: int = 129
     max_context: int = 1152              # K of the longest reachable context
     pairs: int = 3
@@ -99,17 +107,9 @@ class RowScale:
     # C2 byte source (module outputs) and drops the M1 export stream's chunk-aligned interior (no C2 consumer reads it; opens by replay)
     bounded_staging: bool = False
     retain_exclude: list[str] = field(default_factory=list)
-    largest_request_rows: int | None = None   # (cap + lag) of the request with the largest rows x context product
-    largest_request_ctx: int | None = None    # its prompt_len + cap + lag
-    largest_tensor_bytes: int | None = None   # 'largest tensor bound' ledger line when the row has run before
+    largest_request_rows: int | None = None   # (max_tokens + lag) of the request with the largest rows x context product
+    largest_request_ctx: int | None = None    # its prompt_len + max_tokens + lag
     host_limit_bytes: int | None = None
-    device_limit_bytes: int | None = None
-    # measured-at-plan-time overrides (admission JSON, fold_summary.json, commit.log)
-    scheduled_raw_bytes: int | None = None
-    token_bytes: int | None = None
-    hidden_bytes: int | None = None
-    n_instances: int | None = None
-    leaves: int | None = None
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -121,23 +121,15 @@ class RowScale:
         return int(self.prompt_tokens) + int(self.decode_rows)
 
     def instances(self) -> int:
-        if self.n_instances:
-            return int(self.n_instances)
         return round(self.spec["instances_per_layer_token"] * self.spec["layers"] * self.tokens)
 
     def token_bytes_est(self) -> int:
-        if self.token_bytes:
-            return int(self.token_bytes)
         return int(self.tokens * self.spec["per_token_bytes"])
 
     def hidden_bytes_est(self) -> int:
-        if self.hidden_bytes:
-            return int(self.hidden_bytes)
         return int(self.token_bytes_est() * self.max_context * self.spec["hidden_per_token_K"])
 
     def raw_bytes(self) -> int:
-        if self.scheduled_raw_bytes:
-            return int(self.scheduled_raw_bytes)
         return self.token_bytes_est() + self.hidden_bytes_est()
 
     def workers(self) -> int:
@@ -151,13 +143,11 @@ class RowScale:
             return int(self.largest_request_rows), int(self.largest_request_ctx)
         if self.requests <= 1:
             return int(self.decode_rows), int(self.max_context)
-        # a mixed row: the longest prompt with the longest cap is the row's (I, O) pair
+        # a mixed row: the longest prompt with the largest max_tokens is the row's (I, O) pair
         rows = int(self.max_context) - int(self.prompt_tokens // max(1, self.requests)) if self.max_context else self.decode_rows // self.requests
         return max(1, min(int(self.max_context), max(rows, self.decode_rows // self.requests))), int(self.max_context)
 
     def largest_tensor(self) -> int:
-        if self.largest_tensor_bytes:
-            return int(self.largest_tensor_bytes)
         per_prompt = self.spec.get("largest_tensor_per_prompt", 554_000_000)
         rows, ctx = self.largest_request()
         lp = max(1, ctx - rows)
@@ -192,7 +182,7 @@ def peak_overlap(intervals: Iterable[tuple[str, float, float, int]]) -> dict[str
     ev.sort(key=lambda e: (e[0], e[1]))   # frees (0) before allocs (1) at the same instant: touching intervals do not overlap
     cur = 0
     live: dict[str, int] = {}
-    best = {"peak_bytes": 0, "t": None, "live": {}}
+    best: dict[str, Any] = {"peak_bytes": 0, "t": None, "live": {}}
     for t, is_alloc, name, b in ev:
         if is_alloc:
             cur += b
@@ -209,10 +199,8 @@ def peak_overlap(intervals: Iterable[tuple[str, float, float, int]]) -> dict[str
 
 def _terms_to_intervals(terms: list[Term], points: list[str]) -> list[tuple[str, float, float, int]]:
     idx = {p: i for i, p in enumerate(points)}
-    out = []
+    out: list[tuple[str, float, float, int]] = []
     for t in terms:
-        if t.kind == "device":
-            continue
         a = idx[t.live_from]
         b = idx[t.live_until] + 1   # inclusive last point
         out.append((t.name, a, b, t.bytes))
@@ -256,7 +244,7 @@ def _decision(reserved: int, limit: int | None, live: dict[str, int], margin_byt
     """The refusal names what does not fit: the live terms at the peak, largest first, and the shortfall in bytes.
 
     A stage whose reservation carries a lower-bound term never reads as a plain admit -- the model knows it
-    under-fits that object (rows #57 and #60 were killed at 1.4-1.6x the prediction); admit is None with verdict LOWER_BOUND naming the
+    under-fits that object; admit is None with verdict LOWER_BOUND naming the
     terms and the observation, so the runner decides by name.  Over the limit it is still REFUSE (a lower bound above the limit is a refusal).
     """
     if limit is None:
@@ -338,7 +326,7 @@ def predict(cfg: RowScale) -> dict[str, Any]:
         # that path, never 0 MiB by name
         pool = int(raw * lf)
         pool_basis = f"raw {raw // MiB} MiB x {lf} (--retain {cfg.retain}{'' if cfg.retain == 'host' else ': allocated regardless of retention on the unbounded windowed path'})"
-    leaves = int(cfg.leaves or raw // C["commit.run_record.bytes_per_leaf"]["value"])
+    leaves = int(raw // C["commit.run_record.bytes_per_leaf"]["value"])
     leaf_digests = leaves * 32
     pool_until = last
     oracle_b = int(sp["c2_oracle_per_instance"] * inst)
@@ -423,25 +411,34 @@ def model_key_for_row(row_id: str) -> str:
     return key
 
 
+def request_prompt_len(request: dict[str, Any]) -> int:
+    """A workload request's prompt length: its `prompt_len`, else how many `prompt_token_ids` it lists; 0 where it gives neither."""
+    ids = request.get("prompt_token_ids")
+    return int(request.get("prompt_len") or (len(ids) if ids else 0))
+
+
 def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | None = None, pairs: int = 3, replay_workers: int | None = None,
                              host_limit_bytes: int | None = None) -> RowScale:
-    """Plan-time config from the sweep workload (workloads/<row>.json, or its parsed dict): the same facts row_pod.sh reads for B/I/O/LP/T."""
+    """Plan-time config from the sweep workload (workloads/<row>.json, or its parsed dict): the same facts row_pod.sh reads for B/I/O/LP/T.
+    A workload may leave out its `sweep`, its `requests` and its `engine` arguments: the row's shape is then its requests', else the
+    sweep's, else one request of 1,024 input and 128 output tokens, and its longest context the longest input and output."""
     w = workload_path if isinstance(workload_path, dict) else json.loads(workload_file(workload_path).read_text())
-    sw = w.get("sweep") or {}
+    sweep, requests, engine = w.get("sweep"), w.get("requests"), w.get("engine")
+    sw: dict[str, Any] = sweep if sweep else {}
+    reqs: list[dict[str, Any]] = requests if requests else []
     row = row_id or sw.get("row_id") or ("" if isinstance(workload_path, dict) else Path(workload_path).stem)
-    reqs = w.get("requests") or []
-    prompt = sum(int(r.get("prompt_len") or len(r.get("prompt_token_ids") or [])) for r in reqs) or int(sw.get("batch", 1)) * int(sw.get("max_input", 1024))
+    prompt = sum(request_prompt_len(r) for r in reqs) or int(sw.get("batch", 1)) * int(sw.get("max_input", 1024))
     decode = sum(int(r.get("max_tokens") or 0) for r in reqs) or int(sw.get("batch", 1)) * int(sw.get("max_output", 128))
     b = int(sw.get("batch") or len(reqs) or 1)
     i_max, o_max = int(sw.get("max_input") or 1024), int(sw.get("max_output") or 128)
     steps = int(w.get("expected_engine_steps") or o_max)
     lp_max = max((int(r.get("prompt_len") or 0) for r in reqs), default=i_max)
     t_max = max((int(r.get("max_tokens") or 0) for r in reqs), default=o_max)
-    ea = (w.get("engine") or {}).get("args") or {}
+    engine_args = engine.get("args") if engine else None
     key = model_key_for_row(row)
     notes = []
     if key not in MODELS:
         notes.append(uncalibrated_model_note(key))
-    return RowScale(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int(ea.get("max_model_len") or (i_max + o_max)),
+    return RowScale(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int((engine_args.get("max_model_len") if engine_args else None) or (i_max + o_max)),
                     pairs=pairs, replay_workers=replay_workers, host_limit_bytes=host_limit_bytes,
                     largest_request_rows=t_max, largest_request_ctx=lp_max + t_max, notes=notes)

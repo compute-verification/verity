@@ -20,7 +20,8 @@ class WeightsRows:
     """One registration's rows-sha512 roots under geometry digest ``geo`` and salt key ``wk``."""
 
     def __init__(self, geo: bytes, wk: bytes):
-        self.geo, self.wk, self._dev = geo, wk, None
+        self.geo, self.wk = geo, wk
+        self._dev: tuple[Any, Any] | None = None  # the extension's hasher and the nibble table on the device, made at the first device root
 
     def host_root(self, t: int, entry: list, flat: Any) -> bytes:
         return step_rows.tensor_root(self.geo, t, entry, memoryview(flat.cpu().numpy()).cast("B"), self.wk)
@@ -28,8 +29,8 @@ class WeightsRows:
     def device_root(self, t: int, entry: list, flat: Any) -> bytes:
         """`host_root` of a CUDA tensor's bytes, on its device."""
         import torch
-
         from verity.commitments.merkle import merkle_depth
+
         from verity_vllm.commit.committer.native_ext import ext
 
         e, RB = ext(), step_rows.ROW_BYTES
@@ -65,4 +66,4 @@ class WeightsRows:
         return r, 1
 
     def tree(self, names: list, roots: list[bytes]) -> dict:
-        return step_rows.weights_tree(self.geo, names, step_rows.names_digest(names), roots, self.wk)
+        return step_rows.weights_tree(self.geo, names, roots, self.wk)

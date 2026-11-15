@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..ctx import IntCtx
+from ..ctx import Ctx, IntCtx, Value
 from ..gadgets import Epilogue
 from ..params import REAL, Params, Reject
 from .gadgets import (
@@ -34,8 +34,8 @@ from .gadgets import (
 )
 
 __all__ = ["accepts_step", "accepts_vu", "check_step", "check_step_expr", "check_unit_expr", "check_vu",
-           "check_vu_expr", "check_vu_words_expr", "contracts", "gen_step", "gen_unit", "gen_vu", "step_output",
-           "vu_output"]
+           "check_vu_expr", "check_vu_words_expr", "contracts", "gen_step", "gen_unit", "gen_vu", "gen_vu_words",
+           "step_output", "vu_output"]
 
 def _k(p: Params) -> int:
     return sum(p.groups)
@@ -73,7 +73,8 @@ def _group(ctx, p: Params, state, prods: Sequence, hg: dict, tag: str, static: b
     return (s_out, e_hat, M, z), (ovf, sgn)
 
 
-def check_unit_expr(ctx, p: Params, state, a: Sequence, b: Sequence, h: dict, static: bool = False):
+def check_unit_expr(ctx: Ctx, p: Params, state: Sequence[Value], a: Sequence, b: Sequence, h: dict,
+                    static: bool = False) -> tuple[Sequence[Value], list[tuple[Value, Value]]]:
     """Every predicate of one unit on the incoming state; returns ``(state_out, [(ovf_eff, sgn) per group])``.
     ``static``: the state is the constant zero state (no split hint for its first group)."""
     k = _k(p)
@@ -93,7 +94,7 @@ def check_unit_expr(ctx, p: Params, state, a: Sequence, b: Sequence, h: dict, st
     return state, ovfs
 
 
-def check_step_expr(ctx, p: Params, c, a: Sequence, b: Sequence, h: dict):
+def check_step_expr(ctx: Ctx, p: Params, c: Value, a: Sequence, b: Sequence, h: dict) -> Value:
     """The word-in, word-out transition unit: returns the output word as an expression."""
     state, ovfs = check_unit_expr(ctx, p, StateDecode.check(ctx, p, c, h["acc"]), a, b, h)
     return Pack.check(ctx, p, state, ovfs)
@@ -178,7 +179,7 @@ def gen_vu(p: Params, a: Sequence[int], b: Sequence[int]) -> dict:
     return {"steps": steps, "epilogue": Epilogue.gen(p, y32)}
 
 
-def check_vu_expr(ctx, p: Params, a: Sequence, b: Sequence, h: dict):
+def check_vu_expr(ctx: Ctx, p: Params, a: Sequence, b: Sequence, h: dict) -> Value:
     k = _k(p)
     if len(a) != len(b) or not a or len(a) % k or len(h["steps"]) != len(a) // k:
         raise Reject(f"operand count must be a positive multiple of {k} with one unit witness per chunk")
@@ -193,7 +194,7 @@ def check_vu_expr(ctx, p: Params, a: Sequence, b: Sequence, h: dict):
     return Epilogue.check(ctx, p, y32, h["epilogue"])
 
 
-def check_vu_words_expr(ctx, p: Params, a: Sequence, b: Sequence, h: dict):
+def check_vu_words_expr(ctx: Ctx, p: Params, a: Sequence, b: Sequence, h: dict) -> Value:
     """The word-chained composition (v1's shape) on the v2 unit, for comparison; ``h`` as ``gen_vu_words``."""
     k = _k(p)
     c = 0

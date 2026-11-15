@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/word_codec/paged.py").parent))
 import step_spans as SS
 
 P = SS.P

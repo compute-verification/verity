@@ -7,7 +7,7 @@ the block source's attribution) mark the layer that runs.  Inside a committed st
 is replaced by the tapped op of `ops/pod_router_tap.sh`, `verity_router_tap.topk_softmax_tap`: vLLM's `topkGating`, launched the same way,
 whose threads also store the row's max, exponentials, reciprocal sum and probabilities (and under renormalize the selected probabilities
 and the scale) into a float32 [rows, words] buffer.  Everywhere else the installed op runs.  The tapped op computes exactly the installed
-op's outputs and every word equals the ordered router's committed value in the circuit (`properties.router_tap_exactness`).  The patch goes
+op's outputs and every word equals the ordered router's committed value in the circuit (`tests.properties.router_tap_exactness`).  The patch goes
 through `engine.hooks` and `uninstall` undoes it.  A launch inside a manifest layer whose geometry is not the manifest's, or that carries a
 correction bias (not in the circuit's router), runs the installed op and is a collector error.  vLLM's padding mask (`is_padding`, under
 VLLM_MOE_SKIP_PADDING) is passed through: it changes a padding row's ids, never the softmax, and a padded launch has more rows than the
@@ -17,13 +17,17 @@ from __future__ import annotations
 
 import hashlib
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.acquire.router_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.router_tap_src.build_ext import TAP_VERSION
 from verity_vllm.acquire.sources.moe_source import moe_layers_of
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
 from verity_vllm.query import router_softmax as RS
+
+logger = init_logger(__name__)
 
 
 def _file_sha256(path: str) -> str:
@@ -148,7 +152,7 @@ class RouterSoftmaxSource:
                  "evidence": (f"router-softmax source: `moe/L<k>/{RS.MEMBER}` of {len(self.layers)} MoE layers ({self.words_per_token} words "
                               f"per token row); tap build {self.so_path} (sha256 {self.stats['so_sha256']}); outputs bit-identical to the "
                               "installed topk_softmax and every word == the ordered router's committed value in the IR: "
-                              "verity_vllm.properties.router_tap_exactness")}]
+                              "tests.properties.router_tap_exactness")}]
 
 
 def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *,
@@ -159,13 +163,13 @@ def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, require
         return required_classes, None
     layers = RS.manifest_layers(manifest)
     if not layers:
-        print("[delta] REFUSE: --router-tap-so but the required-value manifest names no router_softmax identity (manifest build --router-softmax)",
-              flush=True)
+        logger.error("[delta] REFUSE: --router-tap-so but the required-value manifest names no router_softmax identity (manifest build "
+                     "--router-softmax)")
         raise SystemExit(3)
     src = RouterSoftmaxSource(com, model if model is not None else getattr(com, "model", None), layers, so)
     com.attach_source(src)
-    print(f"[delta] router-softmax source attached: {len(layers)} MoE layers, {src.words_per_token} words per token, tap {so} -> committer "
-          f"{com.name}", flush=True)
+    logger.info("[delta] router-softmax source attached: %d MoE layers, %d words per token, tap %s -> committer %s", len(layers),
+                src.words_per_token, so, com.name)
     if not explicit_classes and RS.FAMILY not in required_classes:
         return (*required_classes, RS.FAMILY), src
     return required_classes, src

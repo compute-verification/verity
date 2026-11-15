@@ -29,7 +29,7 @@ from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, fi
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
 
 
-class Registry:
+class DefinitionTable:
     """Registered function definitions by id `Name_vN`."""
 
     def __init__(self) -> None:
@@ -49,7 +49,17 @@ class Registry:
         return fid in self.defs
 
 
-REGISTRY = Registry()
+REGISTRY = DefinitionTable()
+
+#: the catalog packages, by name: each package whose modules register a catalog's Definitions, once it has named itself
+CATALOG_PACKAGES: set[str] = set()
+
+
+def catalog_package(name: str) -> None:
+    """Name package ``name`` a catalog package. A package of modules that register Definitions calls this with its own
+    ``__name__`` as it loads, so a reader that takes only a catalog's Definitions (a window's templates,
+    `verity.commitments.periods.interface`) knows them by the catalog that registered them, wherever its files are."""
+    CATALOG_PACKAGES.add(name)
 
 
 class FunctionDefinition:
@@ -61,7 +71,7 @@ class FunctionDefinition:
         return f"{self.name}_v{self.version}"
 
 
-#: what a table a primitive reads by index is: a ``library`` object (an operation's own definition, `verity.definitions.circuits.library`) or a
+#: what a table a primitive reads by index is: a ``library`` object (an operation's own definition, `verity.circuits.library`) or a
 #: ``registered`` input of the program, which the primitive still holds while it declares it
 TABLE_KINDS = ("library", "registered")
 
@@ -97,6 +107,12 @@ def conformance_label(text: str, of: str = "a Definition") -> str:
     return m.group(0)
 
 
+def _a_name_twice(params: Sequence[tuple[str, Type]]) -> bool:
+    """Whether two of `params` have one name. A parameter is read by its name (a port, a registered read), so every decoder
+    and builder refuses a Definition where this holds."""
+    return len({n for n, _ in params}) != len(params)
+
+
 @dataclass(eq=False)
 class PrimitiveDefinition(FunctionDefinition):
     """`tables`: every table the primitive's definition reads by index (its evaluator, or the circuit that proves it), as
@@ -119,6 +135,8 @@ class PrimitiveDefinition(FunctionDefinition):
             raise TypeError(f"a primitive returns exactly one Value<w>; {self.id} declares {self.ret!r}")
         conformance_label(self.conformance, self.id)
         self.params = tuple((n, t) for n, t in self.params)
+        if _a_name_twice(self.params):
+            raise ValueError(f"primitive {self.id}: parameters: a name twice")
         self.tables = tuple((n, k) for n, k in self.tables)
         bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
         if bad:
@@ -258,7 +276,9 @@ def _consistent_statics(a, b) -> bool:
 
 def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) -> "SpecializedDefinition":
     """Explicit binding record. Partial binds compose; all statics must be bound before the body is built. A record
-    the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached.
+    the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached, and before the cache is
+    read: the key holds a list and a tuple of equal items alike (`_static_key`), so a record refused for its type is
+    refused after an equal-keyed one binds.
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
@@ -273,11 +293,11 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
         if k not in F.statics:
             raise TypeError(f"{F.id} has no static parameter {k!r}")
     key = tuple((k, _static_key(merged[k])) for k in F.statics if k in merged)
+    why = F.refuse(merged) if F.refuse is not None else None
+    if why:
+        raise ValueError(f"{F.id} refuses this binding: {why}")
     sp = F._cache.get(key)
     if sp is None:
-        why = F.refuse(merged) if F.refuse is not None else None
-        if why:
-            raise ValueError(f"{F.id} refuses this binding: {why}")
         sp = SpecializedDefinition(F, merged, key)
         F._cache[key] = sp
     elif not _consistent_statics(sp.bindings, merged):
@@ -287,7 +307,7 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
 
 
 @dataclass(eq=False)
-class Node:
+class BodyNode:
     """One body node: a primitive call, a composite call, a `batch`, or a `scan`. Each node denotes one
     interval of gates in the canonical layout."""
 
@@ -317,9 +337,14 @@ class Node:
 class Body:
     params: tuple[tuple[str, Type], ...]
     ret_type: Type
-    nodes: list[Node]
+    nodes: list[BodyNode]
     ret: Refs
     offsets: list[int]  # gate offset of node k within this function; len == len(nodes) + 1
+
+    def __post_init__(self) -> None:
+        # a frontend may replace its builder's parameters before `finish`, and a body can be made without a builder
+        if _a_name_twice(self.params):
+            raise ValueError("parameters: a name twice")
 
     @property
     def gates(self) -> int:
@@ -479,7 +504,10 @@ def _plain_static(v):
 
 def _build_body(sp: SpecializedDefinition) -> Body:
     params, ret_type = sp.signature()
-    B = Builder(params, ret_type)
+    try:
+        B = Builder(params, ret_type)
+    except ValueError as e:
+        raise ValueError(f"definition {sp.id!r}: {e}") from e
     args = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
     out = sp.defn.body(B, sp.S(), *args)
     return B.finish(out)
@@ -553,7 +581,7 @@ class _Widths:
     node `below`'s arguments cannot read in dataflow order: such a descriptor decodes, and the checkers name the defect
     (PROTOCOL.md §4.4)."""
 
-    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["Node"]) -> None:
+    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["BodyNode"]) -> None:
         self.params, self.nodes = params, nodes
         self.below = len(nodes)
         self.forward = False  # a reference to node `below` or later was passed over: the `PartLog` memo is off from then on
@@ -726,13 +754,15 @@ class Builder:
     its fields) and every node a reference names exists."""
 
     def __init__(self, params: tuple[tuple[str, Type], ...], ret_type: Type) -> None:
+        if _a_name_twice(params):
+            raise ValueError("parameters: a name twice")
         self.params = params
         self.ret_type = ret_type
-        self.nodes: list[Node] = []
+        self.nodes: list[BodyNode] = []
         self.offsets: list[int] = [0]
 
     # -- helpers --------------------------------------------------------------------
-    def _emit(self, node: Node) -> Coll:
+    def _emit(self, node: BodyNode) -> Coll:
         k = len(self.nodes)
         self.nodes.append(node)
         self.offsets.append(self.offsets[-1] + node.gates)
@@ -756,7 +786,7 @@ class Builder:
             fn = bind(fn)
         _, ret = self._check_args(fn, args, "call")
         form = "primitive" if isinstance(fn, PrimitiveDefinition) else "call"
-        return self._emit(Node(form, fn, tuple(args), ret, name=name))
+        return self._emit(BodyNode(form, fn, tuple(args), ret, name=name))
 
     def batch(self, fn, *args: Coll, axes: Sequence[int | None], n: int | None = None, name: str | None = None) -> Coll:
         """`batch(F, args, axes)`: `n` independent calls of `F` (dataflow-independent). `axes[i]` is the
@@ -787,7 +817,7 @@ class Builder:
             n = next(iter(lengths))
         if n is None:
             raise TypeError("batch: n is required when no argument is mapped")
-        return self._emit(Node("batch", fn, tuple(args), Array(n, ret), axes=axes, n=n, name=name))
+        return self._emit(BodyNode("batch", fn, tuple(args), Array(n, ret), axes=axes, n=n, name=name))
 
     def scan(self, step, init: Coll, xs: Sequence[Coll] = (), shared: Sequence[Coll] = (), n: int | None = None,
              name: str | None = None) -> Coll:
@@ -825,7 +855,7 @@ class Builder:
         if n is None:
             raise TypeError("scan: n is required when there are no xs")
         out_t = TupleT(carry_t, Array(n, y_t))
-        return self._emit(Node("scan", step, (init,) + xs + shared, out_t, n=n, n_xs=len(xs), name=name))
+        return self._emit(BodyNode("scan", step, (init,) + xs + shared, out_t, n=n, n_xs=len(xs), name=name))
 
     def finish(self, out: Coll) -> Body:
         if not isinstance(out, Coll):
@@ -869,5 +899,6 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
     return deco
 
 
-__all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
-           "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat"]
+__all__ = ["DefinitionTable", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "BodyNode",
+           "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat",
+           "CATALOG_PACKAGES", "catalog_package"]

@@ -23,7 +23,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 POOL_DIRS = [Path(p) for p in os.environ.get("GPU_POOL_DIRS", "/run/gpu-lease,/run/gpu-lease-circuits").split(",") if p]
@@ -33,7 +33,7 @@ FENCE_CMD = "n1-lease-fence"
 
 
 def iso(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def compute_apps() -> list[tuple[int, str]]:
@@ -131,7 +131,8 @@ def leases() -> dict[int, list[tuple[Path, int]]]:
                 continue
             try:
                 owner = (d / f"{lock.stem}.owner").read_text()
-            except OSError:
+            except OSError as e:
+                print(f"gpu_stray: {d / f'{lock.stem}.owner'} unread, so its held lock is skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 continue
             m = re.search(r"\bpid=(\d+)", owner)
             if m and FENCE_CMD not in owner:

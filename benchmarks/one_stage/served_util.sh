@@ -25,9 +25,10 @@
 #           row, as graphs: not the served stack either (the B4 row's Build declares synchronous scheduling), so util.json's
 #           served_stack is false for both
 # ASYNC=1 serves a Commit arm (noseal, seal, h1) with --async-scheduling, in a tree whose serve-openai takes it with the
-# Commit on (its `serve_row` module). No bench row's Build declares async scheduling yet, so serve-openai's row check (`serve_row.of`) takes
-# the row whichever scheduler it declares, as `tests/pipeline/serve_async_commit_gpu.py` does: its records attest the row's
-# LAG 0 Programs, so the arm is <arm>-async and not the served stack. SEQS defaults to 2·T/1024, as for async.
+# Commit on (its `serve_row` module), as <arm>-async; SEQS defaults to 2·T/1024, as for async. With a ROW whose Build
+# declares async scheduling (LAG 1), serve-openai's row check (`serve_row.of`) holds the engine to it and the arm is the
+# served stack. With a row that declares sync (B4's), the check is bypassed, as `tests/pipeline/serve_async_commit_gpu.py`
+# does: its records attest the row's LAG 0 Programs, so the arm is not the served stack.
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
@@ -39,10 +40,10 @@
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), SEAL_HOLD_GB (--seal-hold-gb, 32: the committed bytes of the windows
-# queued or sealing; a window at T 8,192 is 13.6 GB, so 32 seals two at once and 48, with RETAIN_DEVICE_GB 48, three), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
+# queued or sealing; a window at T 8,192 is 13.6 GB, so 32 seals two at once and 48, with RETAIN_DEVICE_GB 48, three), STANDIN_SAMPLES (protocols of RELEASE_AFTER no drawer serves yet: the
 # harness samples each window for each once its windows.jsonl line is out, reading only the step-input port's ids and
 # positions at each of its steps, 16T bytes a step, which the seal's positions check reads and the release keeps only when a
-# sample names them; standin_draws.txt counts them), STANDIN_POLL_S (0.2, how often the stand-in drawer reads windows.jsonl;
+# sample names them; standin_samples.txt counts them), STANDIN_POLL_S (0.2, how often the stand-in drawer reads windows.jsonl;
 # serve-openai scans its samples every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
@@ -50,6 +51,8 @@
 # and sizes (in util.json), the step trace, the loads' timings files (times and token counts), steps.txt. Request
 # bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
 set -uo pipefail
+for o in STANDIN_DRAWS:STANDIN_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "served-util: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
 ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
@@ -79,7 +82,7 @@ if [ "${1:-}" != leased ]; then
   mkdir -p "$D"
   if [ "$ARM" != graphs ] && [ "$ARM" != async ]; then
     (cd "$TREE/adapters/vllm" && HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
-      PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src \
+      PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src \
       "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
     prc=$?
     [ "$prc" = 0 ] && [ -f "$PRED/predicted.json" ] \
@@ -90,7 +93,7 @@ if [ "${1:-}" != leased ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
       | sh -s -- -y --default-toolchain none > "$OUT/lean.txt" 2>&1
-    (cd "$TREE/verity/protocols/pouw/verifier/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
+    (cd "$TREE/verity/protocols/accounting/pouw/verifier/lean/check" && lake build pouw-check-difftest) >> "$OUT/lean.txt" 2>&1
     lrc=$?; say "LEAN pouw-check-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi
@@ -124,7 +127,7 @@ fi
 ulimit -n "$(ulimit -Hn)"
 export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 CUDA_HOME=/usr/local/cuda-13.0
 export PATH=$VENV/bin:$CUDA_HOME/bin:$HOME/.elan/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=${VERITY_RETAIN:-host} HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1
@@ -160,11 +163,15 @@ if [ "${ASYNC:-0}" = 1 ]; then
   serve=("$PY" -c 'import json, sys
 from pathlib import Path
 from verity_vllm.pipeline import cli, serve_row as RW, serve_seal as SS
+checked = RW.of
 def of(opts):
     if not opts.required_manifest:
         return None
     path = Path(SS.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
     got = json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"]
+    if got is True:
+        print(f"UTIL the row declares async_scheduling true: serve_row checks it ({path})", flush=True)
+        return checked(opts)
     print(f"UTIL row scheduler check bypassed (not the served stack): the row declares async_scheduling {got}", flush=True)
     return {"async_scheduling": got, "source": str(path)}
 RW.of = of
@@ -187,7 +194,7 @@ cd "$TREE/adapters/vllm" || exit 9
   "${serve[@]}" "${args[@]}" ${EXTRA:-} > "$SCR/serve.log" 2>&1 &
 srv=$!
 drawer=
-if [ -n "${STANDIN_DRAWS:-}" ]; then
+if [ -n "${STANDIN_SAMPLES:-}" ]; then
   "$PY" -c 'import json, os, sys, time
 d, protos, poll, done = sys.argv[1], [p for p in sys.argv[2].split(",") if p], float(sys.argv[3]), set()
 while True:
@@ -208,7 +215,7 @@ while True:
                 os.rename(tmp, f"{d}/draws/w{k}.{p}.json")
                 done.add((k, p))
                 print(f"w{k} {p}", flush=True)
-    time.sleep(poll)' "$D" "$STANDIN_DRAWS" "${STANDIN_POLL_S:-0.2}" > "$OUT/standin_draws.txt" 2>&1 &
+    time.sleep(poll)' "$D" "$STANDIN_SAMPLES" "${STANDIN_POLL_S:-0.2}" > "$OUT/standin_samples.txt" 2>&1 &
   drawer=$!
 fi
 spid=
@@ -238,7 +245,7 @@ fi
 spid=$(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200) (pid ${spid:-unknown})"
 load() {  # $1 requests, $2 seed, $3 name
-  "$PY" "$TREE/demos/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
+  "$PY" "$TREE/adapters/vllm/tools/served_run/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
     --max-tokens 1 --rate 1000 --seed "$2" --out "$SCR/$3.jsonl" > "$SCR/$3.log" 2>&1
 }
 load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"
@@ -260,7 +267,7 @@ fi
 "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1
 wait "$srv"; say "SERVE stopped (exit $?)"
 reap
-[ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$OUT/standin_draws.txt") ($STANDIN_DRAWS, the step-input port only)"; }
+[ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$OUT/standin_samples.txt") ($STANDIN_SAMPLES, the step-input port only)"; }
 trap - TERM INT
 log
 "$NSYS" export --type sqlite --force-overwrite=true -o "$SCR/prof.sqlite" "$SCR/prof.nsys-rep" > "$OUT/nsys_export.txt" 2>&1

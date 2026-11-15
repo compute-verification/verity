@@ -11,7 +11,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
@@ -26,9 +26,9 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyStmt
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousV2
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousSeg
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundInst
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousV2
 
 @[expose] public section

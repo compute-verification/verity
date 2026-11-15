@@ -1,8 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Laws
-import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.SamplingDesigns
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 
 /-!
 # Achievability, the granularity optimum and unequal units: the proofs
@@ -11,11 +11,11 @@ import Proofs.Flock.Soundness.Audit.Law
 as a hypothesis (`hCA`), and `FreeCompute` passes its proof.
 
 * `achievability`: independent samples with `q_u = min(1, Λ/C · w u)` rounded up to multiples of `1/den`. Rounding up
-  only lowers each escape, and `1 − q_u ≤ e^{−Λ w_u / C}`, so a set doing work at least `C` escapes with at most
+  only lowers each missProb, and `1 − q_u ≤ e^{−Λ w_u / C}`, so a set doing work at least `C` escapes with at most
   `e^{−Λ} = δ`.
 * `granularityOptimum`: the lower side is `ConverseAsymptotic` at `K = ⌈C/s⌉` (`granularity_arith`); the upper side is
   `achievability` at `ε/(n·c(s) + 1)`. `granularityChoice` composes the two.
-* `unequalDraws`: unit `u` is in class `⌊log_ρ (w u / a)⌋`, so it does work in `[aρ^j, aρ^{j+1})`. On each class,
+* `unequalSamples`: unit `u` is in class `⌊log_ρ (w u / a)⌋`, so it does work in `[aρ^j, aρ^{j+1})`. On each class,
   `ConverseAsymptotic` at `K_j = ⌈C/(aρ^j)⌉` bounds its samples (`class_bound`), and the classes' bounds sum.
 * `unequalCost_of_le`: the same per class, weighted by the class's cheapest unit, with `c(ρt) ≤ ρ·c(t)`. It assumes
   `a ≤ A`, which every `n ≥ 1` implies; without it the statement is false at `n = 0` (`unequalCost_needs_le`).
@@ -57,13 +57,13 @@ theorem unitCost_mono {f o x y : ℝ} (ho : 0 ≤ o) (h : x ≤ y) : unitCost f 
   unfold unitCost
   nlinarith
 
-theorem cost_const {n : ℕ} (L : Law n) (c : ℝ) : cost L (fun _ => c) = meanDraws L * c := by
-  unfold cost meanDraws
+theorem cost_const {n : ℕ} (L : SamplingDesign n) (c : ℝ) : cost L (fun _ => c) = meanSamples L * c := by
+  unfold cost meanSamples
   rw [Finset.sum_mul]
 
 /-- A sampling design under which every set of at least `K` units escapes with at most `δ` misses `K` units with at most `δ`. -/
-theorem miss_toReal_le_of {n : ℕ} {L : Law n} {K : ℕ} {δ : ℝ} (hδ : 0 ≤ δ)
-    (h : ∀ B : Finset (Fin n), K ≤ B.card → (L.escape B).toReal ≤ δ) : (L.miss K).toReal ≤ δ := by
+theorem miss_toReal_le_of {n : ℕ} {L : SamplingDesign n} {K : ℕ} {δ : ℝ} (hδ : 0 ≤ δ)
+    (h : ∀ B : Finset (Fin n), K ≤ B.card → (L.missProb B).toReal ≤ δ) : (L.miss K).toReal ≤ δ := by
   have hle : L.miss K ≤ ENNReal.ofReal δ := iSup₂_le fun B hB =>
     (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (L.escape_le_one B)) hδ).2 (h B hB)
   calc (L.miss K).toReal ≤ (ENNReal.ofReal δ).toReal := ENNReal.toReal_mono ENNReal.ofReal_ne_top hle
@@ -99,7 +99,7 @@ theorem achievability : Guarantees.Achievability := by
       calc (num u : ℝ) < q u * den + 1 := h1
         _ = (q u + (den : ℝ)⁻¹) * den := by field_simp
     linarith
-  refine ⟨Law.bernoulliOf num den, fun B hB => ?_, fun u => ?_⟩
+  refine ⟨SamplingDesign.bernoulliOf num den, fun B hB => ?_, fun u => ?_⟩
   · rw [bern_escape_toReal hnum]
     calc ∏ u ∈ B, (1 - (num u : ℝ) / den) ≤ ∏ u ∈ B, Real.exp (-(Λ / C * w u)) := by
           refine Finset.prod_le_prod₀ (fun u _ => ?_) (fun u _ => ?_)
@@ -189,17 +189,17 @@ theorem granularityOptimum (hCA : Guarantees.ConverseAsymptotic) : Guarantees.Gr
   have hΛ : 0 ≤ Λ := log_inv_nonneg hδ0 hδ1
   refine ⟨fun L hL => ?_, fun ε hε => ?_⟩
   · rw [cost_const]
-    suffices h : n * s / C * Λ * (1 - s / C - C / (n * s) - s * Λ / (2 * C)) ≤ meanDraws L by
+    suffices h : n * s / C * Λ * (1 - s / C - C / (n * s) - s * Λ / (2 * C)) ≤ meanSamples L by
       calc c * (n * s / C * Λ) * (1 - s / C - C / (n * s) - s * Λ / (2 * C))
           = c * (n * s / C * Λ * (1 - s / C - C / (n * s) - s * Λ / (2 * C))) := by ring
-        _ ≤ c * meanDraws L := mul_le_mul_of_nonneg_left h hc
-        _ = meanDraws L * c := mul_comm _ _
+        _ ≤ c * meanSamples L := mul_le_mul_of_nonneg_left h hc
+        _ = meanSamples L * c := mul_comm _ _
     have hpre : 0 ≤ (n : ℝ) * s / C * Λ := by positivity
     rcases le_or_gt (1 - s / C - C / (n * s) - s * Λ / (2 * C)) 0 with hX | hX
-    · exact (mul_nonpos_of_nonneg_of_nonpos hpre hX).trans (meanDraws_nonneg L)
+    · exact (mul_nonpos_of_nonneg_of_nonpos hpre hX).trans (meanSamples_nonneg L)
     rcases Nat.eq_zero_or_pos n with hn | hn
     · subst hn
-      simpa using meanDraws_nonneg L
+      simpa using meanSamples_nonneg L
     have hn' : (0 : ℝ) < n := by exact_mod_cast hn
     have hCs : 0 < C / s := div_pos hC hs
     set K := ⌈C / s⌉₊ with hKdef
@@ -328,7 +328,7 @@ theorem class_arith {m t A C : ℝ} {K : ℕ} (ht : 0 < t) (hC : 0 < C) (hm : 0 
 /-- **One class's samples.** A set `S` of units each doing work at least `t`, with `t ≤ A` when `S` has a unit, is sampled
 `Λ (1 − AΛ/(2C)) (|S|·t/C·(1 − A/C) − 1)` times in expectation, by `ConverseAsymptotic` on `L` restricted to `S` at
 `K = ⌈C/t⌉`. -/
-theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : Law n) (w : Fin n → ℝ) {A C δ t : ℝ}
+theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : SamplingDesign n) (w : Fin n → ℝ) {A C δ t : ℝ}
     (hC : 0 < C) (hδ0 : 0 < δ) (hδ1 : δ ≤ 1) (hAΛ : A * Real.log δ⁻¹ ≤ C) (hL : MeetsTarget L w C δ)
     (S : Finset (Fin n)) (ht : 0 < t) (htS : ∀ u ∈ S, t ≤ w u) (htA : S.Nonempty → t ≤ A) :
     Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) * (S.card * t / C * (1 - A / C) - 1) ≤
@@ -358,7 +358,7 @@ theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : Law n) 
           _ = ∑ _i ∈ B, t := by rw [sum_const, nsmul_eq_mul]
           _ ≤ ∑ i ∈ B, w (S.orderEmbOfFin rfl i) := sum_le_sum fun i _ => htS _ (orderEmbOfFin_mem' S i)
       have h := hCA S.card K (restrict L S) δ hK0 hKm hδ0 hδ1 hmiss
-      rw [meanDraws_restrict] at h
+      rw [meanSamples_restrict] at h
       refine le_trans ?_ h
       have hq : 0 ≤ ((S.card : ℝ) - K + 1) / K := by
         have : (K : ℝ) ≤ S.card := by exact_mod_cast hKm
@@ -395,7 +395,7 @@ theorem sum_classes {n : ℕ} (w : Fin n → ℝ) {ρ a A : ℝ} (hρ : 1 < ρ) 
     exact class_le hρ ha (hw u).1 (hw u).2) g
 
 /-- **The converse for unequal units, in samples.** -/
-theorem unequalDraws (hCA : Guarantees.ConverseAsymptotic) : Guarantees.UnequalDraws := by
+theorem unequalSamples (hCA : Guarantees.ConverseAsymptotic) : Guarantees.UnequalSamples := by
   intro n w ρ a A C δ hρ ha hw hC hδ0 hδ1 hAΛ L hL
   have hρ0 : 0 < ρ := by linarith
   set Λ := Real.log δ⁻¹ with hΛdef
@@ -410,7 +410,7 @@ theorem unequalDraws (hCA : Guarantees.ConverseAsymptotic) : Guarantees.UnequalD
       rw [sub_nonpos, le_div_iff₀ hC]
       linarith
     have h2 : (∑ u, w u) / (ρ * C) * (1 - A / C) - ((J : ℝ) + 1) ≤ 0 := by linarith
-    exact (mul_nonpos_of_nonneg_of_nonpos (mul_nonneg hΛ hβ) h2).trans (meanDraws_nonneg L)
+    exact (mul_nonpos_of_nonneg_of_nonpos (mul_nonneg hΛ hβ) h2).trans (meanSamples_nonneg L)
   have hAC' : 0 ≤ 1 - A / C := by
     rw [sub_nonneg, div_le_one hC]
     exact hAC.le
@@ -428,7 +428,7 @@ theorem unequalDraws (hCA : Guarantees.ConverseAsymptotic) : Guarantees.UnequalD
           (sum_classes w hρ ha hw _).symm
       _ = ∑ j ∈ range (J + 1), ((classOf w ρ a j).card : ℝ) * (a * ρ ^ j) := sum_congr rfl fun j _ => by
           rw [sum_congr rfl fun u hu => by rw [(mem_filter.1 hu).2], sum_const, nsmul_eq_mul]
-  have hmean : meanDraws L = ∑ j ∈ range (J + 1), ∑ u ∈ classOf w ρ a j, (L.incl u).toReal :=
+  have hmean : meanSamples L = ∑ j ∈ range (J + 1), ∑ u ∈ classOf w ρ a j, (L.incl u).toReal :=
     (sum_classes w hρ ha hw _).symm
   rw [hmean]
   calc Λ * (1 - A * Λ / (2 * C)) * ((∑ u, w u) / (ρ * C) * (1 - A / C) - ((J : ℝ) + 1))
@@ -462,7 +462,7 @@ theorem mul_unitCost_le {f o ρ t x : ℝ} (hf : 0 ≤ f) (ho : 0 ≤ o) (hρ : 
 is false (`unequalCost_needs_le`). -/
 theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : Fin n → ℝ) {ρ a A C δ f o : ℝ}
     (hρ : 1 < ρ) (ha : 0 < a) (haA : a ≤ A) (hw : ∀ u, a ≤ w u ∧ w u ≤ A) (hC : 0 < C) (hδ0 : 0 < δ) (hδ1 : δ ≤ 1)
-    (hf : 0 ≤ f) (ho : 0 ≤ o) (hAΛ : A * Real.log δ⁻¹ ≤ C) (L : Law n) (hL : MeetsTarget L w C δ) :
+    (hf : 0 ≤ f) (ho : 0 ≤ o) (hAΛ : A * Real.log δ⁻¹ ≤ C) (L : SamplingDesign n) (hL : MeetsTarget L w C δ) :
     Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
         ((∑ u, w u * unitCost f o (w u)) / (ρ ^ 2 * C) * (1 - A / C) -
           (⌊Real.logb ρ (A / a)⌋₊ + 1) * unitCost f o A) ≤ cost L fun u => unitCost f o (w u) := by
@@ -557,12 +557,12 @@ theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : F
 `0`. -/
 theorem unequalCost_needs_le : ¬ ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ f o : ℝ), 1 < ρ → 0 < a →
     (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C → 0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C →
-      ∀ L : Law n, MeetsTarget L w C δ →
+      ∀ L : SamplingDesign n, MeetsTarget L w C δ →
         Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
             ((∑ u, w u * unitCost f o (w u)) / (ρ ^ 2 * C) * (1 - A / C) -
               (⌊Real.logb ρ (A / a)⌋₊ + 1) * unitCost f o A) ≤ cost L fun u => unitCost f o (w u) := by
   intro h
-  have hmeets : MeetsTarget (Law.subset 0 0 le_rfl) (Fin.elim0 : Fin 0 → ℝ) 1 (1 / 2) := fun B hB => by
+  have hmeets : MeetsTarget (SamplingDesign.subset 0 0 le_rfl) (Fin.elim0 : Fin 0 → ℝ) 1 (1 / 2) := fun B hB => by
     rw [Finset.eq_empty_of_isEmpty B, Finset.sum_empty] at hB
     norm_num at hB
   have hΛ : Real.log (1 / 2 : ℝ)⁻¹ = Real.log 2 := by norm_num

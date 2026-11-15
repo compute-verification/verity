@@ -83,8 +83,9 @@ def test_the_repositorys_environment_read_list_merges_per_file_and_a_registry_ma
 
 
 def test_the_keep_map_merges_by_module():
-    base = {"schema": "vllm-dead-code-keep/v1", "modules": {"m.a": "why a", "m.b": "why b"}}
-    merged, why = MA.merge(base, {**base, "modules": {"m.a": "why a"}}, {**base, "modules": {**base["modules"], "m.c": "why c"}})
+    modules = {"m.a": "why a", "m.b": "why b"}
+    base = {"schema": "vllm-dead-code-keep/v1", "modules": modules}
+    merged, why = MA.merge(base, {**base, "modules": {"m.a": "why a"}}, {**base, "modules": {**modules, "m.c": "why c"}})
     assert why == [] and merged == {"schema": "vllm-dead-code-keep/v1", "modules": {"m.a": "why a", "m.c": "why c"}}
     _, why = MA.merge(base, {**base, "modules": {"m.a": "kept"}}, {**base, "modules": {"m.a": "moved"}})
     assert why == ["modules.m.a: changed on both sides, differently"]

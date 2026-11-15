@@ -51,7 +51,7 @@ def _load(name: str, path: Path):
     return mod
 
 
-G = _load("gpu_kit_sass_gate", HERE.parent / "gpu_kit" / "sass_gate.py")
+G = _load("gpu_kit_sass_gate", HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "gpu_kit" / "sass_gate.py")
 rows = _load("opcode_probe_rows", HERE / "rows.py")
 
 
@@ -183,7 +183,7 @@ def make_rows(binary: Path, probes: list[dict], verdicts: list[dict], lines: lis
                      "binary": binary.name, "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                      "row": row or None, "words": p["words"] or None, "census": line, "tags": tags,
                      "sink": gates.get(p["name"]), "note": p["note"] or None, "blocks_asked": p.get("blocks") or None,
-                     **r})
+                     "until": p.get("until") or None, **r})
     return side
 
 

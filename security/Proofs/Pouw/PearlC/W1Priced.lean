@@ -12,7 +12,7 @@ W1 itself at the same `g` and `δ`, with no new assumption:
 
 - `gGap_of_cost_le`: a model that charges at least another's, with the same runs and at most its calls, inherits its
   gap property. An adversary within budget `T` under the dearer model is within it under the cheaper one, and commits
-  the same transcript.
+  the same trace.
 - `w1_cost_le_priced`: W1's refund only waives fetches, so W1 charges at most the priced sum when `fetch ≥ 0`.
 - `gGap_w1Priced`: hence `GGap (w1 dv P salt) → GGap (w1Priced dv salt)`.
 - `w1Priced_cost`: the priced cost is compute plus `fetch` times `w1Read`, the two accounts' shares.
@@ -44,14 +44,14 @@ theorem gGap_of_cost_le [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM�
   let A₁ : Adversary CM₁ := ⟨A.pre, f A.online, A.act⟩
   have hA₁ : A₁.Bounded U T q := fun H s =>
     ⟨(hcost _ _ _ _ _ _).trans (hA H s).1, (Nat.add_le_add_left (hcalls _ _ _ _ _ _) _).trans (hA H s).2⟩
-  have e : ∀ x : (Q → R) × S, A₁.transcript U x.1 x.2 = A.transcript U x.1 x.2 := fun x =>
+  have e : ∀ x : (Q → R) × S, A₁.trace U x.1 x.2 = A.trace U x.1 x.2 := fun x =>
     hrun A.online x.1 U A.act (A.pre.eval x.1) x.2
   have := h U hU T hT q hq A₁ hA₁
   simpa only [e] using this
 
 /-- **W1 charges at most the priced sum**: its refund only waives first fetches. -/
 theorem w1_cost_le_priced (dv : W1Device) (hf : 0 ≤ dv.prices.fetch) (P : Protocol Q R S) (salt : S → List ℕ)
-    (pr : Prog) (H : Q → R) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S) :
+    (pr : CodeImage) (H : Q → R) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S) :
     (w1 dv P salt).cost pr H U act σ s ≤ (w1Priced dv salt).cost pr H U act σ s := by
   simp only [w1, w1Priced, w1Read]
   rw [Rat.cast_le]
@@ -66,7 +66,7 @@ theorem gGap_w1Priced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : 
     (fun _ _ _ _ _ _ => le_rfl) (w1_cost_le_priced dv hf P salt) P D g δ h
 
 /-- **The priced cost splits between the accounts**: compute, plus `fetch` per word read. -/
-theorem w1Priced_cost (dv : W1Device) (salt : S → List ℕ) (pr : Prog) (H : Q → R) (U : Workload)
+theorem w1Priced_cost (dv : W1Device) (salt : S → List ℕ) (pr : CodeImage) (H : Q → R) (U : Workload)
     (act : ℕ → Codes) (σ : State) (s : S) :
     (w1Priced dv salt).cost pr H U act σ s =
       ((final dv (salt s) pr U act σ).cost : ℝ) + (dv.prices.fetch : ℝ) * (w1Read dv (salt s) pr U act σ : ℝ) := by

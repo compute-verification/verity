@@ -2,6 +2,7 @@
 it must leave alone."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -85,6 +86,30 @@ def test_a_second_run_on_the_moved_tree_changes_nothing(moved):
                    check=True, capture_output=True)
     assert git(moved, "status", "--porcelain") == ""
     assert len(json.loads((moved / "tools/research/src/research/store/moves.json").read_text())["moves"]) == 1
+
+
+def test_only_rewrites_the_files_it_lists_and_those_it_moves(tmp_path):
+    """A carry reruns a map on the merge of a later main, over the files the merge brought (`--only FILE`): a file it
+    lists, and one main added at an old path, which moves, are rewritten as the whole move rewrites them; any other file
+    is left as it was, unread."""
+    r = tmp_path / "repo"
+    files = {"census/hardware.json": "{}\n", "census/added.json": "{}\n", "listed.py": 'P = "census/hardware.json"\n',
+             "other.py": 'P = "census/hardware.json"\n', "census/README.md": "see census/hardware.json\n",
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(LIMIT_MAP)
+    (tmp_path / "only.txt").write_text("listed.py\n")
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock",
+                    "--only", str(tmp_path / "only.txt")], check=True, capture_output=True)
+    assert (r / "listed.py").read_text() == 'P = "catalog/census/hardware.json"\n'
+    assert (r / "catalog/census/README.md").read_text() == "see catalog/census/hardware.json\n", "a moved file is rewritten"
+    assert (r / "catalog/census/added.json").exists() and not (r / "census").exists()
+    assert (r / "other.py").read_text() == files["other.py"]
 
 
 def test_a_string_literal_in_rust_or_lean_keeps_its_text_and_only_a_path_in_one_moves(moved):
@@ -337,6 +362,156 @@ def test_a_lake_file_that_does_not_parse_stops_the_move(tmp_path):
     assert L.lake_dirs("lake-manifest.json", '[{"type": "path", "dir": "x"}]') == []
 
 
+PINNED_MANIFEST = '{"packages": [{"type": "path", "name": "check", "inherited": true, "dir": "../../pol/verifier/check/lean"}]}\n'
+PINNED_README = "The check: pol/verifier/check/README.md.\n"
+PINNED_MAP = """[roots]
+old = {{}}
+new = {{}}
+
+[paths]
+"pol/verifier/check/" = "pol/verifier/"
+{rows}
+[modules]
+"pol.verifier.check" = "pol.verifier"
+{modules}
+[rewrite]
+exclude = ["fix/**", "**/TRUSTED.sha256"]
+include = ["**/lake-manifest.json"{include}]
+"""
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _pinned_tree(tmp_path: Path, json_pins: dict[str, dict], more: dict[str, str] | None = None, include: str = "",
+                 rows: str = "", modules: str = "") -> tuple[Path, subprocess.CompletedProcess]:
+    """The mover's run on a tree whose `sec/Proofs` manifest names a package the map moves, as a requirement it inherits:
+    `pous/TRUSTED.sha256` pins the manifest and a lakefile, `pins.py` lists it and each of `json_pins` ({pin: {path:
+    digest}} under "inputs"), and the map excludes them from the rewrite as a move's map does, unless `include` names one.
+    `more` adds files, `rows` and `modules` the map's rows."""
+    listed = "".join(f'Pin("{p}", "inputs", ""), ' for p in json_pins)
+    files = {"sec/Proofs/lake-manifest.json": PINNED_MANIFEST, "sec/Proofs/lakefile.toml": 'name = "proofs"\n',
+             "pol/verifier/check/lean/lakefile.toml": 'name = "check"\n', "pol/verifier/check/README.md": "# check\n",
+             "README.md": PINNED_README,
+             "pous/TRUSTED.sha256": f"{_sha(PINNED_MANIFEST)}  ../sec/Proofs/lake-manifest.json\n"
+                                    f"{_sha(chr(10))}  ../sec/Proofs/lakefile.toml\n",
+             "tools/check/pins.py":
+                 "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
+                 "    path: str\n    key: str | None\n    under: str\n\n\n"
+                 f'PINS = (Pin("pous/TRUSTED.sha256", None, "pous"), {listed})\n',
+             **{p: json.dumps({"inputs": d}, indent=2) + "\n" for p, d in json_pins.items()}, **(more or {})}
+    return _run(tmp_path, files, PINNED_MAP.format(include=include, rows=rows, modules=modules))
+
+
+def test_a_pin_follows_a_lake_manifest_the_move_rewrites_and_a_second_run_changes_nothing(tmp_path):
+    """A pin of `pins.py`, a `sha256sum` listing or a JSON pin, that held the digest of a Lake manifest the move rewrites
+    gets its new digest, as `rename.py` repins one: a move changes a manifest only in where its path packages sit, which no
+    pinned output reads. A digest it holds of any other file the move rewrites (the README), or one that was stale, stays
+    for its command."""
+    vec = {"README.md": _sha(PINNED_README), "sec/Proofs/lake-manifest.json": _sha(PINNED_MANIFEST),
+           "sec/Proofs/lakefile.toml": "0" * 64}
+    r, p = _pinned_tree(tmp_path, {"fix/vec.json": vec})
+    assert p.returncode == 0, p.stderr
+    manifest = (r / "sec/Proofs/lake-manifest.json").read_text()
+    assert manifest == PINNED_MANIFEST.replace("pol/verifier/check/lean", "pol/verifier/lean")
+    assert (r / "README.md").read_text() == "The check: pol/verifier/README.md.\n"
+    assert (r / "pous/TRUSTED.sha256").read_text() == (f"{_sha(manifest)}  ../sec/Proofs/lake-manifest.json\n"
+                                                       f"{_sha(chr(10))}  ../sec/Proofs/lakefile.toml\n")
+    assert json.loads((r / "fix/vec.json").read_text()) == {"inputs": {**vec, "sec/Proofs/lake-manifest.json": _sha(manifest)}}
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "move")
+    again = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"],
+                           capture_output=True, text=True)
+    assert again.returncode == 0, again.stderr
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_sha256sum_pins_repinned_manifest_is_certified_a_pure_move(tmp_path):
+    """`move_check.py` takes a `TRUSTED.sha256` line rewritten to its file's digest at the head as part of a pure move."""
+    r, p = _pinned_tree(tmp_path, {})
+    assert p.returncode == 0, p.stderr
+    manifest = (r / "sec/Proofs/lake-manifest.json").read_text()
+    assert (r / "pous/TRUSTED.sha256").read_text().startswith(f"{_sha(manifest)}  ../sec/Proofs/lake-manifest.json\n")
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+
+
+def test_a_pinned_digest_the_rewrite_changes_other_than_a_manifests_stops_the_move(tmp_path):
+    """A digest of a pin file the map rewrites that changes other than by a manifest's repin (here a recorded run's
+    directory, named by a digest the map renames) stops the move, which names the pin, though the same pin's manifest
+    digest would follow."""
+    old, new = "a" * 64, "b" * 64
+    vec = {f"runs/{old}/out.txt": _sha("a run\n"), "sec/Proofs/lake-manifest.json": _sha(PINNED_MANIFEST)}
+    r, p = _pinned_tree(tmp_path, {"runs/vec.json": vec}, {f"runs/{old}/out.txt": "a run\n"}, include=', "runs/vec.json"',
+                        rows=f'"runs/{old}/" = "runs/{new}/"\n', modules=f'"runs.{old}" = "runs.{new}"\n')
+    assert p.returncode == 1, p.stdout
+    assert p.stderr.strip().endswith("runs/vec.json: the rewrite would change a pinned digest"), p.stderr
+    assert json.loads((r / "runs/vec.json").read_text()) == {"inputs": vec}
+
+
+LEAN_MOVE_MAP = """[roots]
+old = {}
+new = {}
+
+[paths]
+"a/lean/A/M.lean" = "b/lean/B/M.lean"
+
+[modules]
+
+[rewrite]
+exclude = []
+include = []
+"""
+LEAN_M = "namespace A.M\n\ndef foo : Nat := 1\n\nend A.M\n"
+LEAN_B = "module\n\npublic import A.M -- the moved module\nmeta import A.Mx\n\nopen A.M in\ndef bar : Nat := A.M.foo\n"
+
+
+def _lean_lock(signature: str) -> str:
+    return json.dumps({"guarantees": {"B.G": {"owner": "@x", "signature": [signature]}}, "layers": ["A.M", "B"],
+                       "reads": {"A.M": {"definitions": {"A.M.foo": "00"}, "digest": "11"}}}, indent=1) + "\n"
+
+
+def _lean_tree(tmp_path: Path, signature: str = "B.G : A.M.foo = 1") -> tuple[Path, subprocess.CompletedProcess]:
+    """The mover's run on two Lake packages, `a` and `b`, moving module `A.M` of `a` to `B.M` of `b`: `a`'s root and `b`'s
+    module import it, and `b`'s lock reads it."""
+    return _run(tmp_path, {"a/lean/lakefile.toml": 'name = "a"\n', "a/lean/A.lean": "import A.M\n", "a/lean/A/M.lean": LEAN_M,
+                           "b/lean/lakefile.toml": 'name = "b"\n', "b/lean/B.lean": LEAN_B,
+                           "b/lean/lean-audit.json": _lean_lock(signature)}, LEAN_MOVE_MAP)
+
+
+def test_a_lean_modules_move_rewrites_its_importers_and_a_locks_module_names_and_nothing_else(tmp_path):
+    """A `.lean` file moved to another package is another module: each `import` of it names the new module, and a lock's
+    `reads` key and other whole module names follow it. Its declarations keep their namespace, so `open A.M` and `A.M.foo`
+    stay, as does a module whose name only starts with the moved one's; `move_check.py` certifies the commit."""
+    r, p = _lean_tree(tmp_path)
+    assert p.returncode == 0, p.stderr
+    assert not (r / "a/lean/A/M.lean").exists() and (r / "b/lean/B/M.lean").read_text() == LEAN_M
+    assert (r / "a/lean/A.lean").read_text() == "import B.M\n"
+    assert (r / "b/lean/B.lean").read_text() == LEAN_B.replace("public import A.M", "public import B.M")
+    lock = json.loads((r / "b/lean/lean-audit.json").read_text())
+    assert lock["layers"] == ["B.M", "B"] and lock["reads"] == {"B.M": {"definitions": {"A.M.foo": "00"}, "digest": "11"}}
+    assert lock["guarantees"] == json.loads(_lean_lock("B.G : A.M.foo = 1"))["guarantees"]
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+
+
+def test_a_lean_modules_move_it_could_not_certify_is_still_refused(tmp_path):
+    """A guarantee's record that names the moved module whole would change with it, and a pure move keeps the records byte
+    for byte: the move stops and names the lock. An edit of a Lean line other than an import, after the move, is refused
+    by `move_check.py`."""
+    r, p = _lean_tree(tmp_path, signature="B.G : A.M")
+    assert p.returncode == 1, p.stdout
+    assert p.stderr.strip().endswith("b/lean/lean-audit.json: the rewrite would change a guarantee or reads record"), p.stderr
+    r, p = _lean_tree(tmp_path / "edited")
+    assert p.returncode == 0, p.stderr
+    (r / "b/lean/B.lean").write_text((r / "b/lean/B.lean").read_text().replace("open A.M in", "open B.M in"))
+    git(r, "add", "-A")
+    assert not _certify(r, git(r, "rev-parse", "HEAD"))["certified"]
+
+
 def test_a_subpackage_renamed_under_the_same_parent_is_renamed_where_it_is_imported_from_that_parent(tmp_path):
     """`from pkg import old as O`, where `pkg.old` becomes `pkg.new`: the statement's module stays `pkg`, only the imported
     name changes, and an unchanged module is no reason to leave the statement as it was (the vLLM move left 30 such
@@ -452,7 +627,7 @@ def test_a_failed_uv_lock_fails_the_move(tmp_path, monkeypatch):
     """A move whose `uv lock` failed left a lock `uv sync` fails on, and exited 0, so `stage.py` certified a commit no suite
     could start on. It exits 1 with uv's reason, which `stage.py` and `restack.py` refuse on."""
     r = tmp_path / "repo"
-    files = {"old/a.txt": "", "tools/verity/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-9.9.9}\n",
+    files = {"old/a.txt": "", "tools/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-9.9.9}\n",
              "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
     for p, t in files.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
@@ -673,12 +848,12 @@ def test_a_brace_list_whose_paths_go_two_ways_is_split(tmp_path):
     assert (r / "boundary.toml").read_text() == want
 
 
-def _run(tmp_path: Path, files: dict[str, str], layout: str, *args: str) -> tuple[Path, subprocess.CompletedProcess]:
+def _run(tmp_path: Path, files: dict[str, str | bytes], layout: str, *args: str) -> tuple[Path, subprocess.CompletedProcess]:
     """The mover's run by the map ``layout`` on a new repository of ``files``."""
     r = tmp_path / "repo"
     for p, t in {"tools/research/src/research/store/moves.json": '{"moves": []}\n', **files}.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
-        (r / p).write_text(t)
+        (r / p).write_bytes(t) if isinstance(t, bytes) else (r / p).write_text(t)
     (tmp_path / "map.toml").write_text(layout)
     git(r, "init", "-q", "-b", "main")
     git(r, "add", "-A")
@@ -706,10 +881,10 @@ new = { verity = "verity" }
 def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_loses_its_marks(tmp_path):
     """`benchmarks/live/` was no package, and below `verity/` its modules import by name only if each directory up to the
     root is one; its tests, run by path, get no level, and neither do scripts that a package held as no module of its
-    own. `verity/core/` then holds only the `__init__.py` files that marked it and its packages: they go, and
-    `verity/__init__.py` and a package that never held more (`verity/empty/`) stay."""
+    own. `verity/core/` then holds only the `__init__.py` files that marked it and its packages, each of nothing but
+    comments and whitespace: they go, and `verity/__init__.py` and a package that never held more (`verity/empty/`) stay."""
     r, p = _run(tmp_path, {
-        "verity/__init__.py": "", "verity/core/__init__.py": '"""The trusted core."""\n', "verity/core/wire/__init__.py": "",
+        "verity/__init__.py": "", "verity/core/__init__.py": "# The trusted core.\n\n", "verity/core/wire/__init__.py": "",
         "verity/core/wire/frames.py": "X = 1\n", "verity/core/scripts/vectors.py": "Y = 1\n", "verity/core/sub/__init__.py": "",
         "verity/empty/__init__.py": "", "benchmarks/live/auditor.py": "Z = 1\n", "benchmarks/live/tests/test_auditor.py": "W = 1\n",
     }, LEVELS_MAP)
@@ -721,7 +896,112 @@ def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_lo
         "verity/configuration/scripts/vectors.py", "verity/configuration/wire/__init__.py", "verity/configuration/wire/frames.py",
         "verity/empty/__init__.py"]
     assert not (r / "verity/core").exists()
-    assert "`__init__.py` left alone in a package the move empties, deleted: 2" in p.stdout
+    assert "`__init__.py` of nothing but comments and whitespace, left in a package the move empties, deleted: 2" in p.stdout
+
+
+def test_an_anchor_inside_a_string_literal_stays_as_written(tmp_path):
+    """A moved file's own anchor is recounted from its new place; one inside a string (a toy's source, a docstring's
+    example) is no anchor of the file's, and recounting it would change the toy (or, joined back in parentheses with
+    double quotes inside a double-quoted string, leave the file unparseable)."""
+    toy = 'LIB = "ROOT = Path(__file__).resolve().parents[2]\\n"\n'
+    r, p = _run(tmp_path, {"tools/a/b/t.py": '"""`Path(__file__).parents[1]` names b."""\nROOT = Path(__file__).resolve().parents[3]\n'
+                           + toy, "tools/a/b/data.json": "{}\n"},
+                LEVELS_MAP.replace('"benchmarks/live/" = "verity/composite/device/live/"', '"tools/a/b/" = "tools/b/"')
+                .replace('"benchmarks.live" = "verity.composite.device.live"', '"tools.a.b" = "tools.b"'))
+    assert p.returncode == 0, p.stderr
+    assert (r / "tools/b/t.py").read_text() == ('"""`Path(__file__).parents[1]` names b."""\n'
+                                                 'ROOT = Path(__file__).resolve().parents[2]\n' + toy)
+
+
+@pytest.mark.parametrize("text, comments", [
+    ("", True), ("\n\n", True), ("# the data sheets\n", True), ("  # indented\r\n\t\n\f\n", True),
+    ("# -*- coding: utf-8 -*-\n# one a GPU\n", True), ("#!/usr/bin/env python3\n", True),
+    ('"""The data sheets."""\n', False), ("'''x'''\n# then a comment\n", False), ("pass\n", False), ("X = 1\n", False),
+    ("from .site import Card\n", False), ("def load(:\n", False), ('"""never closed\n', False), ("# x\0\n", False), (None, False),
+    (b"", True), (b"# the data sheets\n", True), (b'"""The data sheets."""\n', False), (b"# caf\xe9\n", False),
+])
+def test_only_comments_is_the_text_of_comments_and_whitespace_alone(text, comments):
+    """What the mover deletes with an emptied package, and what `move_check.py` reads at BASE by this same function: a
+    docstring is content, and so are code, text that doesn't parse, and bytes that aren't UTF-8 (or None, a text that
+    wasn't)."""
+    assert L.only_comments(text) is comments
+
+
+HELD_MAP = """[roots]
+old = { verity = "verity" }
+new = { verity = "verity" }
+
+[paths]
+"verity/hardware/cards/a100.toml" = "hardware/cards/a100.toml"
+"verity/hardware/nodes/n1.toml" = "hardware/nodes/n1.toml"
+"""
+HELD_TREE = {"verity/__init__.py": "", "verity/hardware/__init__.py": "", "verity/hardware/site.py": "S = 1\n",
+             "verity/hardware/cards/a100.toml": "peak = 1\n", "verity/hardware/nodes/n1.toml": "gpus = 8\n"}
+CODE = "from verity.hardware.site import S\n\n\ndef load(name):\n    return {name: S}\n"
+
+
+def _certify(r: Path, base: str) -> dict:
+    """`move_check.py`'s verdict on the mover's run, committed on ``base``."""
+    git(r, "commit", "-q", "-m", "move")
+    spec = importlib.util.spec_from_file_location("layout_move_check", HERE.parents[2] / "tools/check/move_check.py")
+    mc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mc)
+    return mc.certify(base.strip(), git(r, "rev-parse", "HEAD").strip(), cwd=str(r))
+
+
+@pytest.mark.parametrize("held", ["", "# one data sheet a GPU\n\n   \n"])
+def test_an_emptied_packages_init_of_comments_alone_is_deleted_and_certified(tmp_path, held):
+    """The map moves only the data sheets out of `cards/` and `nodes/`; their `__init__.py` files, empty or of comments and
+    whitespace alone, go with the packages, and `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {**HELD_TREE, "verity/hardware/cards/__init__.py": held, "verity/hardware/nodes/__init__.py": held},
+                HELD_MAP)
+    assert p.returncode == 0, p.stderr
+    assert not (r / "verity/hardware/cards").exists() and not (r / "verity/hardware/nodes").exists()
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+    assert cert["rules"]["emptied"] == ["verity/hardware/cards/__init__.py", "verity/hardware/nodes/__init__.py"]
+
+
+def test_a_relative_path_to_a_file_that_moves_beside_it_stays_relative_and_is_certified(tmp_path):
+    """`../../device/two_stage.sh` in `prover/audit/README.md` names a file the map moves into the README's own directory:
+    it is written `./two_stage.sh`, a path still read as relative, and `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {"spot/device/two_stage.sh": "echo two\n", "spot/prover/audit/README.md": "The stage (`../../device/two_stage.sh`).\n"},
+                '[roots]\nold = {}\nnew = {}\n\n[paths]\n"spot/device/two_stage.sh" = "spot/prover/audit/two_stage.sh"\n')
+    assert p.returncode == 0, p.stderr
+    assert (r / "spot/prover/audit/README.md").read_text() == "The stage (`./two_stage.sh`).\n"
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+
+
+@pytest.mark.parametrize("held", ['"""The data sheets, one a GPU."""\n', CODE, b"# caf\xe9\n"])
+@pytest.mark.parametrize("dry", [False, True])
+def test_an_emptied_packages_init_that_holds_more_stops_the_move_naming_it_and_the_fix(tmp_path, held, dry):
+    """A docstring, code, or bytes that aren't UTF-8 in an `__init__.py` the move would delete with its package stop the
+    whole move, dry run or not: exit 1, each such file named with the fix, and nothing written; `nodes/`, of nothing but a
+    comment, is not named."""
+    r, p = _run(tmp_path, {**HELD_TREE, "verity/hardware/cards/__init__.py": held,
+                           "verity/hardware/nodes/__init__.py": "# the nodes\n"}, HELD_MAP, *(["--dry-run"] if dry else []))
+    assert p.returncode == 1, p.stdout
+    first, fix = p.stderr.rstrip().splitlines()[-2:]
+    assert first == ("the move would delete 1 `__init__.py` file left in packages it empties that hold more than comments "
+                     "and whitespace: verity/hardware/cards/__init__.py")
+    assert fix.startswith("give each a row in the map saying where it goes")
+    assert p.stderr.rstrip().endswith("or delete it in a hand commit before the move")
+    kept = (r / "verity/hardware/cards/__init__.py").read_bytes()
+    assert git(r, "status", "--porcelain") == "" and kept == (held if isinstance(held, bytes) else held.encode())
+
+
+def test_an_init_that_holds_more_moves_by_its_row_and_the_move_is_certified(tmp_path):
+    """The fix: a row in the map sends the code where it goes (the package becomes a module of the same name), and the
+    range certifies."""
+    r, p = _run(tmp_path, {**HELD_TREE, "verity/hardware/cards/__init__.py": CODE, "verity/hardware/nodes/__init__.py": ""},
+                HELD_MAP.replace('[paths]\n', '[paths]\n"verity/hardware/cards/__init__.py" = "verity/hardware/cards.py"\n'))
+    assert p.returncode == 0, p.stderr
+    assert (r / "verity/hardware/cards.py").read_text() == CODE
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+    assert {"old": "verity/hardware/cards/__init__.py", "new": "verity/hardware/cards.py"} in cert["renames"]
 
 
 COVER_MAP = """[roots]
@@ -834,6 +1114,26 @@ def test_a_workspaces_members_and_a_directory_beside_its_own_parts_follow_the_to
     assert (r / "pyproject.toml").read_text() == (
         '[tool.uv.workspace]\nmembers = ["verity/flock/prover", "other"]\n\n[tool.uv.sources]\nother = { workspace = true }\n\n'
         '[tool.gate]\nkeyed = ["verity/flock", "other"]\nlevels = ["verity/flock/prover", "verity/flock/agreement"]\n')
+
+
+@pytest.mark.parametrize("stays", [{}, {"bench/slots/bench.py": "Y = 1\n"}])
+def test_a_workspace_member_whose_files_move_by_file_rows_follows_its_pyproject(tmp_path, stays):
+    """`bench/slots/`'s files move by rows of their own, with no row for the directory, and its bench may stay: the
+    workspace's `members` names the directory its `pyproject.toml` went to, rather than losing the distribution, and
+    `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {
+        **stays, "bench/slots/slots.py": "X = 1\n", "bench/slots/tests/test_slots.py": "def test():\n    pass\n",
+        "bench/slots/pyproject.toml": '[project]\nname = "slots"\n', "other/pyproject.toml": '[project]\nname = "other"\n',
+        "pyproject.toml": ('[project]\nname = "root"\n\n[tool.uv.workspace]\nmembers = ["other", "bench/slots"]\n\n'
+                           '[tool.uv.sources]\nother = { workspace = true }\n'),
+    }, '[roots]\nold = {}\nnew = {}\n\n[paths]\n"bench/slots/slots.py" = "lib/cuda/slots/slots.py"\n'
+       '"bench/slots/pyproject.toml" = "lib/cuda/slots/pyproject.toml"\n"bench/slots/tests/" = "lib/cuda/slots/tests/"\n\n'
+       '[modules]\n"bench.slots.slots" = "lib.cuda.slots.slots"\n"bench.slots.tests" = "lib.cuda.slots.tests"\n')
+    assert p.returncode == 0, p.stderr
+    assert 'members = ["other", "lib/cuda/slots"]\n' in (r / "pyproject.toml").read_text()
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
 
 
 NAMES = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n", "other/x.py": "X = 1\n",

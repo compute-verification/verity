@@ -3,10 +3,10 @@ W8A8 coordinates (`ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`) sta
 session proving k of them sampled by the verifier's Lean, with `flock-circuit prove --zk --gpu`, and the Lean verifier on the
 sessions.
 
-    python benchmarks/one_stage/zk_cost.py stage  --lean flock-verify --out DIR [--ks 4096,14336] [--sizes 1,8,64,512]
-    python benchmarks/one_stage/zk_cost.py stage  --out DIR --units "fp8-coord:K=6144 router" [--sizes half,full] [--draws c]
+    python benchmarks/one_stage/zk_cost.py stage  --lean verity-verify-proof --out DIR [--ks 4096,14336] [--sizes 1,8,64,512]
+    python benchmarks/one_stage/zk_cost.py stage  --out DIR --units "fp8-coord:K=6144 router-row" [--sizes half,full] [--draws c]
     python benchmarks/one_stage/zk_cost.py prove  --bin flock-circuit --out DIR [--arms fw,nofw] [--cold 2] [--runs 3] [--cpu]
-    python benchmarks/one_stage/zk_cost.py verify --lean flock-verify --out DIR
+    python benchmarks/one_stage/zk_cost.py verify --lean verity-verify-proof --out DIR
     python benchmarks/one_stage/zk_cost.py fit    --out DIR [--run RUN_ID]
     python benchmarks/one_stage/zk_cost.py overhead --out DIR [--card rtx-pro-6000-server]
 
@@ -15,32 +15,32 @@ sessions.
   Boolean circuit's cost doesn't depend on them). Its stage seconds exclude building the circuit, which a template pays
   once.
 * **Served proof-block types** (`--units`): instead of A6's coordinates, each of `benchmarks/served_units/stage.py`'s types
-  (GLM-5.3's at TP8, synthetic values), staged by that script with no Program: `--sizes` takes counts or `full` (the most
-  instances under the prover's 2^35 witness bits, from a probe staging's k_log, whose 2 instances a size of 2 reuses)
-  and `half`. Their samples are uniform
-  subsets the server reads (`serve --draw-file`), every instance at k = c, and Lean verifies the newest session of each
-  point and arm against the type's own partition and no Program, which it refuses for `NO_PROGRAM` once `Zk.verify` and
-  every check before the Program have passed: the record's `zk_verify_passed`, never its `accepted`.
+  (GLM-5.3's at TP8, synthetic values), staged by that script bound to the Program of its instances and that Program's
+  partition, which it writes beside the statement: `--sizes` takes counts or `full` (the most instances under the
+  prover's 2^35 witness bits, from a probe staging's k_log, whose 2 instances a size of 2 reuses) and `half`. Their
+  samples are uniform subsets the server reads (`serve --draw-file`), every instance at k = c, and Lean verifies the
+  newest session of each point and arm against the type's own partition and Program, which it must accept: a refusal,
+  whatever its reason, is a failed check.
   A type staged as a templated statement (a table read: its stage's ``unit.tmpl``) is proved, served and verified at
   `TMPL_STATEMENT` on its unit rows, placed once by ``--tmpl-unit-bin`` (`flock-tmpl-unit`).
-* **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
+* **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `verity-verify-proof draw --stratified k` over the statement's
   program and partition, on a development challenger's coins opened after the statement's partition digest and pin
-  (`a0.challenger_draw`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
+  (`a0.challenger_sample`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
   sampled proof blocks in one statement. An entry `k:arm+arm` runs only those arms at k (`c:dev+nofw 8:dev+nofw+fw`).
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
   statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost), the whole plan
   `--passes` times with each family's sizes in ABBA order, so that a drift in the node's load falls on every size alike.
   Each session records its prover's and ZK server's user and system seconds (their process trees', between the prover's
   LIVE lines) and the node's load, so that a session slowed by a busy node shows as one. Arm `fw` is the
-  design's path: the ZK server's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
+  design's path: the ZK server's send check on every session (`FC_ZK_SERVER=1`), which rechecks the host's witness; `nofw`
   is the same with the check off. Both take the host's witness (`FC_HOST_WITNESS=1`), as proof_throughput's ZK point does,
   so their difference is the ZK server's. Arm `dev` leaves both unset: the device builds the witness, which the ZK server
-  can't recheck (flock-circuit refuses `FC_FIREWALL=1` without the host's witness).
+  can't recheck (flock-circuit refuses `FC_ZK_SERVER=1` without the host's witness).
 * **Overhead** (`overhead`): per served type and arm, the timed sessions' end-to-end seconds at k = c fitted as
   `fixed + marginal c` over its sizes, with the marginal's standard error, each of the session's parts (`PARTS`: witness,
   proving, the wait on the ZK server, the rest) fitted the same way, and a dot product's proof overhead: its GPU-seconds a
   proof block over the GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format
-  (`verity.hardware.cards.rate`; `--card none` on a CPU node, whose witness and proving run on its CPUs rather than a device).
+  (`verity.device.rate`; `--card none` on a CPU node, whose witness and proving run on its CPUs rather than a device).
   Per statement and arm, its sessions at every k it drew, k = c among them, fitted over k (`drawn`): the statement's
   fixed seconds and a sampled block's, the deployed sample's price; `fw` less `nofw` at the same samples is the send
   check's increment. Its `observations.json` holds each arm's `costfit.Observation`s, prove the median timed session.
@@ -65,7 +65,7 @@ import socket
 import subprocess
 import sys
 import time
-from math import ceil, sqrt
+from math import sqrt
 from pathlib import Path
 
 import numpy as np
@@ -76,8 +76,8 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
-from verity.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
+from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E402
 
 #: a templated statement's id (`verity_flock.circuit.TMPL_STATEMENT`): its prover and server read the placed unit
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
@@ -86,16 +86,18 @@ TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): a `full` statement's
 MAX_BITS = 1 << 35
-#: the served types whose proof block is one output coordinate of a dot product, K MACs, and their operands' format
-DOT = {"fp8-coord": "e4m3", "s8-coord": "s8", "moe-w13": "e4m3", "moe-w2": "e4m3", "moe-chunk": "e4m3", "moe-gemmw": "e4m3",
-       "s8-linear": "s8"}
+#: the served types whose proof block is one output coordinate of a dot product, K MACs (their static ``K``), and their
+#: operands' format; a census name's stage.json has no statics
+DOT = {"fp8-coord": "e4m3", "s8-coord": "s8"}
 STAGE_PY = REPO / "benchmarks" / "served_units" / "stage.py"
 
 
 def unit_ands(K: int) -> int:
     """One coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 s8 steps, the epilogue, two K-byte
-    operand rows and three one-block rows (the scales and the output)."""
-    return K // 32 * S8_STEP + EPILOGUE + 2 * (HM96 + SHA512 * ceil((K + 17) / 128)) + 3 * (HM96 + SHA512)
+    operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
+    from verity.protocols.proofs.spot.prover.optimize import row_ands
+
+    return K // 32 * S8_STEP + EPILOGUE + 2 * row_ands(K) + 3 * row_ands(1)
 
 
 def draws(c: int, spec: str = "1,8,64,c") -> list[tuple[int, list[str] | None]]:
@@ -269,10 +271,11 @@ def stage_units(a, out: Path) -> list[dict]:
                 units = list(range(c)) if k == c else sorted(int(u) for u in rng.choice(c, size=k, replace=False))
                 (sd / f"draw-k{k}.json").write_text(json.dumps({"law": "subset", "population": c, "k": k, "units": units}))
                 std = sd / "stage"
-                part = std / "partition.json"
+                part, program = std / "partition.json", std / "program.json"
                 plan.append({"unit": spec, "tag": tag, "c": c, "k": k, "arms": arms, "dir": str(sd), "stage_dir": str(std),
                              "pin": (std / "pin.txt").read_text().strip(), "inst": str(std / "inst.bin"),
-                             "pub": str(std / "pub.bin"), "partition": str(part) if part.exists() else None})
+                             "pub": str(std / "pub.bin"), "partition": str(part) if part.exists() else None,
+                             "program": str(program) if program.exists() else None})
             print(f"ZKCOST staged {spec} c={c} (full {full}): {st['ands']} ANDs a unit, k_log {st['k_log']}, "
                   f"{st['definition']}, stage {st['seconds']['total']} s", flush=True)
     return plan
@@ -306,9 +309,9 @@ def stage(a) -> int:
             jsonl(out / "records" / "stage.jsonl", rec)
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k, arms in draws(c, a.draws):
-                law = D.derive(program, query, D.parse_design(f"stratified:{k}"))
-                p = a0.challenger_draw(a.lean, ["--program", str(sd / "program.json"), "--partition",
-                                                str(sd / "partition.json"), "--stratified", str(k)], law, c, statement,
+                sampling_design = D.derive(program, query, D.parse_design(f"stratified:{k}"))
+                p = a0.challenger_sample(a.lean, ["--program", str(sd / "program.json"), "--partition",
+                                                str(sd / "partition.json"), "--stratified", str(k)], sampling_design, c, statement,
                                        sd / f"draw-k{k}.log")
                 line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
                 if line is None:
@@ -353,12 +356,13 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
         tmpl = placed_unit(a, d)
         tables = ["--tables", str(d / "tables")] if (d / "tables").is_dir() else []
         tables += tmpl
-        fw_files = {"partition_file": pt["partition"], **({"statement": TMPL_STATEMENT} if tmpl else {})}
+        fw_files = {"partition_file": pt["partition"], "program_file": pt.get("program"),
+                    **({"statement": TMPL_STATEMENT} if tmpl else {})}
     else:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]
         fw_files = {"partition_file": sd / "partition.json", "program_file": sd / "program.json"}
-    env = {"FC_HOST_WITNESS": None if arm == "dev" else "1", "FC_FIREWALL": "1" if arm == "fw" else "0",
-           **(a0.firewall_env(fw_files) if arm == "fw" else {})}
+    env = {"FC_HOST_WITNESS": None if arm == "dev" else "1", "FC_ZK_SERVER": "1" if arm == "fw" else "0",
+           **(a0.zk_server_env(fw_files) if arm == "fw" else {})}
     serve_log = open(o / "serve.log", "w")
     serve = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{port}", "--out", str(o / "sessions"),
                               "--instances", pub, "--circuit", str(d / "circuit.txt"), *tables,
@@ -396,7 +400,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
             fw = {}
             for b in v.get("buckets") or []:
                 for key, x in (b or {}).items():
-                    if (key.startswith("t.firewall") or key.startswith("cpu.firewall")) and isinstance(x, (int, float)):
+                    if key.startswith(("t.zk_server", "cpu.zk_server", "t.firewall", "cpu.firewall")) and isinstance(x, (int, float)):
                         fw[key] = fw.get(key, 0.0) + float(x)
             lives.append({"t_emit_s": round(t, 3), "firewall": fw, "proof_bytes": sum(v.get("proof_bytes") or [0]),
                           **{x: v.get(x) for x in ("run", "warm", "accepted", "why", "prover_stopped", "e2e_s", "witness_s",
@@ -418,7 +422,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
            "accepted": rc == 0 and len(lives) == warm + runs and all(x["accepted"] is True for x in lives)}
     print(f"ZKCOST prove {pt.get('unit') or 'K=%s' % pt['K']} c={c} k={k} {arm} {mode}{rep}: rc {rc}, wall {usage['wall_s']:.2f} s, built {built} s, "
           f"e2e {[x['e2e_s'] and round(x['e2e_s'], 2) for x in lives]}, k_log {[x['k_log'] for x in lives]}, "
-          f"dense_m {[x['dense_m'] for x in lives]}, peak {peak_kb / 2**20:.1f} GiB (prover, serve and firewall summed), "
+          f"dense_m {[x['dense_m'] for x in lives]}, peak {peak_kb / 2**20:.1f} GiB (prover, serve and ZK server summed), "
           f"accepted {rec['accepted']}"
           + ("" if rec["accepted"] else f" ({[x['why'] for x in lives]}; {(o / 'prove.err').read_text()[-300:]!r})"), flush=True)
     return rec
@@ -475,26 +479,14 @@ def prove(a) -> int:
 
 # ---- verify ---------------------------------------------------------------------------------------------------------------
 
-#: flock-verify's refusal of a session verified without the verifier's program (`ProvedScope.NO_PROGRAM`), which it reaches
-#: once `Zk.verify` and every check before it have passed (the record, port-root, form and served-form checks come after
-#: it): a served type's honest verdict (benchmarks/served_units/summarize.py's), and never an acceptance
-NO_PROGRAM = "refused: a session without the verifier's program (--program)"
-
-
-def zk_verify_passed(v: dict) -> bool:
-    """Whether Lean's `Zk.verify` and every check before the Program passed on a session: Lean accepted it, or refused it
-    for `NO_PROGRAM` alone. Read off `accepted` and `why`, so a record from before the field was kept reads alike."""
-    return v.get("accepted") is True or (v.get("why") or "").startswith(NO_PROGRAM)
-
-
 def lean_outcome(v: dict) -> str:
-    """A Lean verdict as what happened: `accepted`, `NO_PROGRAM` (refused for that alone) or `FAIL`."""
-    return "accepted" if v.get("accepted") is True else "NO_PROGRAM" if zk_verify_passed(v) else "FAIL"
+    """A Lean verdict as what happened: `accepted`, or `refused` for any reason."""
+    return "accepted" if v.get("accepted") is True else "refused"
 
 
 def verify_unit(a, r: dict, plan: dict) -> dict:
-    """Lean on the newest session of a served type's warm process: its own partition, no Program. Its record keeps Lean's
-    `accepted` and `why` and adds `zk_verify_passed`."""
+    """Lean on the newest session of a served type's warm process, with the statement's own partition and Program. Its record
+    keeps Lean's `accepted` and `why`."""
     pt = plan[(r["tag"], r["c"], r["k"])]
     s, d = r["sessions"][-1], Path(pt["stage_dir"])
     tmpl = (d / "unit.tmpl").exists()
@@ -503,16 +495,15 @@ def verify_unit(a, r: dict, plan: dict) -> dict:
         rc, usage, lines = timed([a.lean, "verify", "--zk", "--statement", TMPL_STATEMENT if tmpl else a0.STATEMENT_ID,
                                   "--circuit", str(d / "circuit.txt"), "--public", pt["pub"],
                                   *(["--tables", str(d / "tables")] if tmpl else []),
-                                  *(["--partition", pt["partition"]] if pt["partition"] else []), "--session", s], fo, fe)
+                                  *(["--partition", pt["partition"]] if pt["partition"] else []),
+                                  *(["--program", pt["program"]] if pt.get("program") else []), "--session", s], fo, fe)
     line = next((x for _, x in lines if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {rc})"}
     why = v.get("why") or ""
     rec = {"unit": r["unit"], "tag": r["tag"], "c": r["c"], "k": r["k"], "arm": r["arm"], "mode": r["mode"], "rep": r["rep"],
-           "session": s, "accepted": v.get("accepted") is True, "why": v.get("why"), "zk_verify_passed": zk_verify_passed(v),
-           **{x: round(y, 3) for x, y in usage.items()}}
+           "session": s, "accepted": v.get("accepted") is True, "why": v.get("why"), **{x: round(y, 3) for x, y in usage.items()}}
     jsonl(Path(a.out) / "records" / "verify.jsonl", rec)
-    said = {"accepted": "accepted", "NO_PROGRAM": "Zk.verify passed, then refused for NO_PROGRAM", "FAIL": "FAILS"}
-    print(f"ZKCOST verify {r['unit']} c={r['c']} k={r['k']} {r['arm']}: {said[lean_outcome(rec)]}"
+    print(f"ZKCOST verify {r['unit']} c={r['c']} k={r['k']} {r['arm']}: {lean_outcome(rec)}"
           f"{f' ({why[:120]})' if why else ''} {usage['wall_s']:.2f} s wall", flush=True)
     return rec
 
@@ -520,9 +511,8 @@ def verify_unit(a, r: dict, plan: dict) -> dict:
 def verify(a) -> int:
     out = Path(a.out)
     keys: dict[str, dict] = {}
-    # a served type's session is verified without a Program, so the most it can do is get through Zk.verify and every
-    # check before the Program; A6's, verified at its Program, must be accepted
-    zk_verified, accepted, verdicts = True, True, []
+    # every session is verified at its statement's Program and must be accepted
+    accepted, verdicts = True, []
     proves = read_jsonl(out / "records" / "prove.jsonl")
     plan = {(p["tag"], p["c"], p["k"]): p for p in json.loads((out / "plan.json").read_text()) if "unit" in p}
     largest: dict[tuple, dict] = {}   # a served type's largest point a warm process of each arm proved
@@ -533,7 +523,7 @@ def verify(a) -> int:
                 largest[key] = r
     for r in largest.values():
         verdicts.append(verify_unit(a, r, plan))
-        zk_verified &= verdicts[-1]["zk_verify_passed"]
+        accepted &= verdicts[-1]["accepted"]
     for r in proves:
         if not r["accepted"] or r.get("unit"):
             continue
@@ -556,8 +546,7 @@ def verify(a) -> int:
             line = next((x for _, x in lines if x.startswith("VERDICT ")), None)
             v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {rc})"}
             rec = {"K": r["K"], "c": r["c"], "k": r["k"], "arm": r["arm"], "mode": r["mode"], "rep": r["rep"], "session": s,
-                   "accepted": v.get("accepted") is True, "why": v.get("why"), "zk_verify_passed": zk_verify_passed(v),
-                   "partition": v.get("partition"), **{x: round(y, 3) for x, y in usage.items()}}
+                   "accepted": v.get("accepted") is True, "why": v.get("why"), "partition": v.get("partition"), **{x: round(y, 3) for x, y in usage.items()}}
             jsonl(out / "records" / "verify.jsonl", rec)
             verdicts.append(rec)
             accepted &= rec["accepted"]
@@ -565,9 +554,9 @@ def verify(a) -> int:
                   f"{'accepted' if rec['accepted'] else 'not accepted'} {rec['why'] or ''} {usage['wall_s']:.2f} s wall, "
                   f"{usage['user_s'] + usage['sys_s']:.2f} s CPU", flush=True)
     outcomes = [lean_outcome(v) for v in verdicts]
-    print(f"ZKCOST verify: Lean accepted {outcomes.count('accepted')} of {len(outcomes)} sessions, refused "
-          f"{outcomes.count('NO_PROGRAM')} for NO_PROGRAM alone and failed {outcomes.count('FAIL')}", flush=True)
-    return 0 if zk_verified and accepted else 1
+    print(f"ZKCOST verify: Lean accepted {outcomes.count('accepted')} of {len(outcomes)} sessions and refused "
+          f"{outcomes.count('refused')}", flush=True)
+    return 0 if accepted else 1
 
 
 # ---- fit ------------------------------------------------------------------------------------------------------------------
@@ -699,10 +688,10 @@ PARTS = {"witness": lambda x: x.get("witness_s") or 0.0, "proving": lambda x: x[
 
 
 def overhead(a) -> int:
-    from verity.hardware import cards
+    from verity.device import load_card, rate
     out = Path(a.out)
     # --card none: a CPU node's sessions, which no GPU's peak divides
-    card = None if a.card == "none" else cards.load(a.card)
+    card = None if a.card == "none" else load_card(a.card)
     stages = [r for r in read_jsonl(out / "records" / "stage.jsonl") if r.get("unit")]
     proves = [r for r in read_jsonl(out / "records" / "prove.jsonl") if r.get("unit") and r["accepted"]]
     verifies = [r for r in read_jsonl(out / "records" / "verify.jsonl") if r.get("unit")]
@@ -717,7 +706,7 @@ def overhead(a) -> int:
     for tag in dict.fromkeys(r["tag"] for r in stages):
         st = {r["c"]: r for r in stages if r["tag"] == tag}
         s0 = st[max(st)]
-        peak = float(cards.rate(card, fmt=s0["format"])) if s0["macs"] and card else None
+        peak = float(rate(card, fmt=s0["format"])) if s0["macs"] and card else None
         t = {"unit": s0["unit"], "definition": s0["definition"], "class": s0.get("class"), "ands": s0["ands"],
              "k_log": s0["k_log"], "full": s0["full"], "sizes": sorted(st), "macs": s0["macs"], "format": s0["format"],
              "peak_mac_per_s": peak, "stage_s": {c: r["stage_s"] for c, r in st.items()}, "arms": {}, "drawn": {}}
@@ -742,8 +731,7 @@ def overhead(a) -> int:
                                      "s": {c: float(np.median([f(x) for x in xs])) for c, xs in whole.items()}}
                                  for n, f in PARTS.items()}
                        if all(x.get("wait_e2e_s") is not None for xs in whole.values() for x in xs) else {},
-                       "lean": [{"c": v["c"], "k": v["k"], "accepted": v["accepted"],
-                                 "zk_verify_passed": zk_verify_passed(v), "why": v["why"]}
+                       "lean": [{"c": v["c"], "k": v["k"], "accepted": v["accepted"], "why": v["why"]}
                                 for v in verifies if v["tag"] == tag and v["arm"] == arm]}
             cpu = {c: [x["cpu_s"] for x in xs if x.get("cpu_s")] for c, xs in whole.items()}
             if any(cpu.values()):
@@ -783,7 +771,7 @@ def overhead(a) -> int:
     rec = {"schema": "verity/proof-overhead/v1", "definition": DEFINITION, "card": a.card, "gpu": gpu, "run": a.run,
            "settings": "flock-circuit prove --zk --gpu, one warm process (its timed sessions' end-to-end seconds), every staged "
                        "proof block drawn (k = c); dev: the device's witness, nofw: the host's, fw: the host's and the ZK server's "
-                       "send check (FC_FIREWALL=1)", "types": types}
+                       "send check (FC_ZK_SERVER=1)", "types": types}
     (out / "overhead.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     (out / "observations.json").write_text(json.dumps(obs, indent=1))
     rows = ["| type | definition | arm | sizes | fixed s | marginal ms | amortized ms | overhead (marginal) | overhead (amortized) | Lean |",
@@ -834,7 +822,7 @@ def main() -> int:
     ap.add_argument("--units", default="", help="stage: served types (stage.py's TYPE[:S=V,...]), space-separated, instead of --ks")
     ap.add_argument("--sizes", default=None, help="stage: staged units a statement (default 1,8,64,512; with --units half,full)")
     ap.add_argument("--card", default="rtx-pro-6000-server",
-                    help="overhead: the card whose datasheet peak divides (verity.hardware.cards); none: a CPU node's sessions")
+                    help="overhead: the card whose datasheet peak divides (verity.device.load_card); none: a CPU node's sessions")
     ap.add_argument("--draws", default="1,8,64,c", help="stage: the sample sizes a statement is proved at, c meaning all its units")
     ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
     ap.add_argument("--arms", default="fw,nofw", help="fw: the ZK server's send check on (the design's path); nofw: off; "

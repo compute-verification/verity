@@ -19,7 +19,7 @@ decode     x ↦ ρ⁻¹(x) − c_j − t(i), j = k − 1 … 0; a word decodes 
 word       y < p as `limbs` little-endian u32 limbs (4, 8, 17, 8, 16: 16, 32, 68, 32, 64 bytes)
 ~~~
 
-The fields, and ρ and ρ⁻¹ at p = 3 mod 4, are the store codec's (`verity.protocols.poub.verifier.codec`'s
+The fields, and ρ and ρ⁻¹ at p = 3 mod 4, are the store codec's (`verity.protocols.accounting.poub.verifier.codec`'s
 `Field`, `rho` and `rho_inv`); p255's ρ and the keys are this module's.
 
 The fused GEMM's layout is the word codec's (`codec.fragment_stream`): tasks of one 16-row block and 512 columns, in
@@ -41,11 +41,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.protocols.poub.verifier import codec as RB
+from verity.protocols.accounting.poub.verifier import codec as RB
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import codec  # noqa: E402
+import codec
 
 DOMAIN = b"verity/word-codec/wide/v0\0"
 SEED_BYTES = 32
@@ -85,7 +85,7 @@ class Field(RB.Field):
 
     def check_payload(self, payload: int | None) -> int:
         b = self.payload if payload is None else payload
-        if not 8 <= b or ((1 << b) > self.p and not self.full_width(b)):
+        if b < 8 or ((1 << b) > self.p and not self.full_width(b)):
             raise ValueError(f"{self.name}: a payload is under {self.p.bit_length() - 1} bits, or the word's full width")
         return b
 
@@ -143,7 +143,6 @@ def c1(p: int) -> int:
 P255 = FIELDS[255].p
 SQRT_M1 = sqrt_m1(P255)
 C1 = c1(P255)
-C1_SQRT_M1 = C1 * SQRT_M1 % P255
 
 
 def legendre(a: int, p: int) -> int:

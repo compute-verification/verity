@@ -23,11 +23,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
-from verity.definitions.registry import b1
-from verity.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import lifted as L
 
 C = b1.B0_CONFIG  # HuggingFaceTB/SmolLM2-135M: NL=30, H=576, NH=9, KVH=3, D=64, V=49152
 LP, CAP = 256, 32
@@ -155,17 +154,17 @@ def _lserve_names(d_max: int, n_eos: int) -> list[str]:
 def test_address_stability_modulo_guard_nodes_vs_serve_v2(programs):
     p_u, p_l = programs
     assert p_u.gates > 10**9  # a real shape, not a toy
-    # the activity guard (2 per step + |E| + bot) + the Continuation_v1 controller (is_eos, out per slot; emit per slot) over cap = D_MAX + 1 slots
+    # the activity guard (2 per step + |E| + bot) + the Continuation_v1 controller (is_eos, out per slot; emit per slot) across cap = D_MAX + 1 slots
     assert p_l.gates == p_u.gates + 2 * D_MAX + len(EOS) + 2 + 3 * (D_MAX + 1) == p_u.gates + L.continuation_gate_count(D_MAX + 1, len(EOS), 0)
     assert p_l.input_gates == p_u.input_gates  # the same prescribed leaves (lifted widths, same count)
     names = [n for n, _ in _root_named(p_l)]
     assert names == _lserve_names(D_MAX, len(EOS))
     # every named unlifted root node ↦ a lifted body node of the same gate count, in the same order (monotone), covering the body
-    u, l = _root_named(p_u), dict(_body_named(p_l))
-    assert len(u) == len(l) and [n for n, _ in u] == [n for n, _ in _body_named(p_l)]
+    u, lifted = _root_named(p_u), dict(_body_named(p_l))
+    assert len(u) == len(lifted) and [n for n, _ in u] == [n for n, _ in _body_named(p_l)]
     covered, prev_hi = 0, -1
     for name, cu in u:
-        cl = l[name]
+        cl = lifted[name]
         assert cl.hi - cl.lo == cu.hi - cu.lo, name
         assert cl.lo >= prev_hi  # monotone: the lifted map is the unlifted one with the guard nodes spliced in
         prev_hi = cl.hi

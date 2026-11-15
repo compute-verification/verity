@@ -3,11 +3,10 @@
 `EngineArgs` beside the config's own `enforce_eager=True`; the target's other engine args do."""
 from __future__ import annotations
 
-import sys
-from types import ModuleType
-
 from verity_vllm.program.frontend import vllm_meta as vm
 from verity_vllm.program.frontend.target_profile import TargetProfile
+
+from tests import fake_vllm
 
 
 def _engine_args_seen(monkeypatch, **kw) -> dict:
@@ -21,9 +20,7 @@ def _engine_args_seen(monkeypatch, **kw) -> dict:
         def create_engine_config(self):
             return seen
 
-    stand_in = ModuleType("vllm.engine.arg_utils")
-    stand_in.EngineArgs = EngineArgs
-    monkeypatch.setitem(sys.modules, "vllm.engine.arg_utils", stand_in)
+    fake_vllm.install(monkeypatch).set("vllm.engine.arg_utils:EngineArgs", EngineArgs)
     vm.make_vllm_config(**kw)
     return seen
 

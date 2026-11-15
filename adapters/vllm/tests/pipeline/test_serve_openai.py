@@ -18,7 +18,9 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.certifier.verifier import active as A, compile_slice as CS, io_tie as IT, release as REL, served_rows as SRW
+from verity_vllm.compiler import compile_slice as CS, served_rows as SRW
+from verity.protocols.accounting.certifier.verifier import id_form as IDF, io_tie as IT, release as REL
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
@@ -125,7 +127,7 @@ def test_ids_frames_are_the_scans_id_events():
     req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
     assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
     assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
-    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - A.HEADER.size
+    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - HEADER.size
     with pytest.raises(ValueError, match="at least 138"):
         proto.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
@@ -147,7 +149,8 @@ def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifi
 
 
 @pytest.mark.parametrize("precision, parts, scope", [("verity_int8", ("linears",), "linears"),
-                                                     ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None)])
+                                                     ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None),
+                                                     ("bfloat16", ("linears",), None)])
 def test_every_precision_registers_the_verity_int8_method_before_the_engine(precision, parts, scope):
     got: list = []
     assert so.register_int8(precision, got.append) == scope
@@ -395,13 +398,15 @@ class Tokenizer:
 
 
 class Serving:
-    """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it."""
+    """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it; ``runner`` the model runner
+    (a `Runner`, by default a fresh one)."""
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None, pool: tuple[Any, int] | None = None, no_slice: str | None = None) -> None:
-        self.runner = Runner()
+                 arm: Any = None, runner: Runner | None = None, pool: tuple[Any, int] | None = None,
+                 no_slice: str | None = None) -> None:
+        self.runner = runner if runner is not None else Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks,
@@ -497,15 +502,14 @@ def test_errors_and_whole_response(tmp_path):
 
 
 def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
-    """The network certifier's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
-    return A.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
+    """The network certifier's id request in cells of P + 9 bytes (`id_form.id_request`, offset 0)."""
+    return IDF.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + HEADER.size,
                         offset=0)
 
 
 def shims_request(port: int) -> bytes:
-    """An id request as the network certifier's live shim sends it straight to the endpoint
-    (`benchmarks/network_traces/active_replay.LiveServer._serve`): its fields, the user forwarded and
-    certifier_serve's `UPSTREAM_FIELDS` added, compact, in a POST of the shim's own head with a release."""
+    """An id request as a shim in front of the endpoint sends it straight there: its fields, the user forwarded and
+    ``return_token_ids`` added, compact, in a POST of the shim's own head with a release."""
     body = json.loads(id_request().partition(b"\r\n\r\n")[2])
     name = body.pop("user")
     raw = json.dumps(body | {"user": name} | {"return_token_ids": True}, separators=(",", ":")).encode()
@@ -523,7 +527,7 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
     return head, body
 
 
-def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
+def test_ids_answers_in_id_form_exactly_the_network_certifiers_id_requests():
     """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network certifier's release
     headers (`release.with_release`: the release, the run and, as the certifier sends it, the release's bucket); its base
     for anything else, the shim's rebuilt POST, an id request in other cells, or bytes that aren't a request."""
@@ -535,12 +539,12 @@ def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
     assert proto.PlainProtocol().of(id_request()).name == "plain"
 
 
-def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
-    """``--protocol ids`` on the network certifier's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
+def test_under_ids_the_network_certifiers_id_request_streams_raw_id_events_then_done(tmp_path):
+    """``--protocol ids`` on the network certifier's own id request (`id_form.id_request` in its P + 9-byte cells, offset 0, with the
     release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
     scan's P = 503 every P bytes are one id event, the cells the certifier makes of them, and the whole is what
-    warden_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
+    network_certifier_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
     response under ids is still the JSON one."""
     for payload in (140, proto.ID_PAYLOAD):
         ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))
@@ -624,7 +628,7 @@ def test_under_ids_a_failed_stream_stops_unterminated():
 
 
 def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
-    """The same endpoint under ``--protocol ids`` for the network certifier (certifier_serve, straight to the
+    """The same endpoint under ``--protocol ids`` for the network certifier (a shim straight to the
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""

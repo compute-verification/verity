@@ -4,7 +4,7 @@
 #   research run --on vy-dc-h200-3 --project verity --campaign e2e-24h --source . --cwd source --timeout 90m \
 #     --env GPU_LEASE_WHO=memory-accounting -- bash adapters/vllm/tests/protocols/pous_gpu.sh
 #
-# Outside the lease: libp2v1.so built by benchmarks/torch_gpu/p2_stage/build.sh into $OUT/p2lib (sm_90a); torch, numpy,
+# Outside the lease: libp2v1.so built by verity/protocols/accounting/pous/prover/p2/p2_store/build.sh into $OUT/p2lib (sm_90a); torch, numpy,
 # safetensors and huggingface_hub from PyPI in a uv venv in the scratch directory; the base pin unsloth/Llama-3.2-1B at its
 # pinned revision into HF (default /workspace/tmp/memory-accounting/hf, kept with `research keep`), and the int8 pin
 # LLAMA32_1B_INT8 re-made beside it by `verity-vllm int8-checkpoint make`, which checks every file's sha256 against
@@ -20,12 +20,12 @@ S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 
-ARCH=sm_90a bash benchmarks/torch_gpu/p2_stage/build.sh "$O/p2lib" > "$O/build.log" 2>&1
+ARCH=sm_90a bash verity/protocols/accounting/pous/prover/p2/p2_store/build.sh "$O/p2lib" > "$O/build.log" 2>&1
 step build $?
 uv venv -q -p 3.12 "$S/venv" && uv pip install -q -p "$S/venv" torch numpy safetensors huggingface_hub > "$O/venv.log" 2>&1
 step venv $?
 PY=$S/venv/bin/python
-export PYTHONPATH=$ROOT:$ROOT/$V:$ROOT/verity/configuration/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=$ROOT:$ROOT/$V:$ROOT/tools/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$O/gpus.txt" 2>&1
 grep -qE "^(build|venv) rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt"; exit 2; }

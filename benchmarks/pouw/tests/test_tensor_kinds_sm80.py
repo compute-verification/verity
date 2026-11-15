@@ -5,31 +5,18 @@ joint row takes a convergence margin, and the census is in the machine model's s
 from __future__ import annotations
 
 import csv
-import importlib.util
 import io
 import json
 import re
-import sys
 from pathlib import Path
 
 import pytest
+import sm80 as SM
+from conftest import load
 
 POUW = Path(__file__).resolve().parents[1]
-SM80 = POUW / "tensor_kinds" / "sm80.py"
-
-
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-SM = _load("pouw_tensor_kinds_sm80", SM80)
-G = _load("gpu_kit_sass_gate", POUW / "gpu_kit" / "sass_gate.py")
+#: by `load`, under the name sm80.py loads the gate by, so the test's gate is the script's
+G = load("gpu_kit/sass_gate.py")
 LANE_MIX, LANE_IADD3, LANE_LOP3 = 0 | 1 << 4, 0 | 15 << 4, 2 | 15 << 4
 
 

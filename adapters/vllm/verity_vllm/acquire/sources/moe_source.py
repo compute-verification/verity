@@ -91,14 +91,19 @@ import inspect
 import re
 import time
 from collections.abc import Mapping
+from functools import partial
 from typing import Any
+
+from verity_vllm.definitions.registry.moe import router_kernel
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
 from verity_vllm.engine import hooks
-from verity.definitions.registry.moe import router_kernel
+from verity_vllm.log import init_logger
 from verity_vllm.query.manifest.bind import Port
 from verity_vllm.query.manifest.format import MOE_FP8_PLANES, MOE_PLANES
+
+logger = init_logger(__name__)
 
 MOE_MODULE_CLASSES = {"MoERunner", "MoERunnerInterface", "FusedMoE", "SharedFusedMoE"}
 TENSORS_PER_LAYER = len(MOE_PLANES)
@@ -201,7 +206,7 @@ class MoeBlockSource:
         self._handles: list = []
         self._hooks = hooks.Hooks()
         self.active = False
-        self.stats = {"launches": 0, "bytes": 0, "layers": len(self.layers), "tensors_per_layer": TENSORS_PER_LAYER, "acquire_s": 0.0,
+        self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "layers": len(self.layers), "tensors_per_layer": TENSORS_PER_LAYER, "acquire_s": 0.0,
                       "unattributed": 0, "shapes": {}, "plane_flushes": 0, "router": {}, "outputs": 0}
         # the committer decides (gather collector: a launch; arena committer: nothing staged -> False); absent = an old committer
         self._flush_after_plane = getattr(committer, "flush_after_plane", None)
@@ -228,7 +233,8 @@ class MoeBlockSource:
                               (TOPK_BIAS_MODULE, "fused_topk_bias")):
             try:
                 mod = importlib.import_module(modname)
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                logger.info_once("moe source: %s does not import here (%s): its %s is not wrapped", modname, repr(e), attr)
                 continue
             if hasattr(mod, attr):
                 sites.append((mod, attr))
@@ -259,7 +265,7 @@ class MoeBlockSource:
             self._handles.append(m.register_forward_pre_hook(pre_hook))
             self._handles.append(m.register_forward_hook(post_hook, always_call=True))
         for mod, attr in self._sites():
-            self._hooks.wrap(mod, attr, lambda orig, attr=attr, mod=mod: self._wrap(attr, orig, mod))
+            self._hooks.wrap(mod, attr, partial(self._wrap, attr, mod=mod))
         ops_c = self.torch.ops._C
         if hasattr(ops_c, GROUP_QUANT_OP):
             self._hooks.patch(ops_c, GROUP_QUANT_OP, self._group_quant(getattr(ops_c, GROUP_QUANT_OP)))
@@ -534,9 +540,22 @@ class MoeBlockSource:
                               "flushed off the device right after staging (its workspace is the block's own w2 output: cache1/cache3 alias), "
                               "and on Marlin act and down after the w2 launch (moe_sum's output is carved from act's workspace) -- "
                               f"{self.stats['plane_flushes']} flushes; identity_check requires exactly "
-                              f"{per_layer} per layer per step; value correspondence: verity_vllm/ops/moe_kernel_xcheck.py "
-                              f"(registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
+                              f"{per_layer} per layer per step; shapes seen {self.stats['shapes']}; value correspondence, each "
+                              "kernel's words on a GPU against its Definitions': nothing in the tree checks "
+                              "silu_and_mul_per_block_quant (the fused activation quant, whose outputs the w2 launch binds as act_q "
+                              "and act_scale); the others' checks are topk_softmax (the ordered router, 64 and 128 experts, top 8): "
+                              "tests.properties.router_tap_exactness; grouped_topk (sigmoid scores, one group, top 8 of 256): "
+                              "tests.properties.sigmoid_router_capture_gpu; dsv4_topk, topk_hash_softplus_sqrt and "
+                              "silu_and_mul_with_clamp: tests.properties.dsv4_moe_capture_gpu; moe_wna16_marlin_gemm: "
+                              "tests.properties.dsv4_marlin_capture_gpu; the group quant (through vLLM's per_token_group_quant_fp8) "
+                              "and the block-FP8 fused_moe_kernel, both with ue8m0 scales, beside silu_and_mul and moe_sum: "
+                              "tests.properties.glm53_block_fp8_capture_gpu; per_token_group_quant_fp8 and the block-FP8 "
+                              "fused_moe_kernel, both with f32 scales: the property blackwell_fp8_capture, which "
+                              "verity_vllm.records.property_record registers; "
+                              "the bf16 fused_moe_kernel, silu_and_mul and moe_sum (Triton experts, routing given): "
+                              "verity_vllm.program.moe_difftest")}]
 
 
-__all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "binds_planes", "claims", "hash_router_input",
-           "MOE_MODULE_CLASSES", "TENSORS_PER_LAYER", "COVERS_FAMILIES", "GROUP_QUANT_OP", "HASH_KERNEL", "LABELS", "PORTS", "CALL_PORTS"]
+__all__ = ["MoeBlockSource", "moe_layers_of", "plane_layer", "router_kernel", "grouped_topk_args", "binds_planes", "claims",
+           "hash_router_input", "MOE_MODULE_CLASSES", "TENSORS_PER_LAYER", "COVERS_FAMILIES", "GROUP_QUANT_OP", "HASH_KERNEL", "LABELS",
+           "PORTS", "CALL_PORTS"]

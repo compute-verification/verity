@@ -16,6 +16,10 @@ from the window's registration W, so one record is H1's Commit record and the au
   input-ids tables as its outputs from W (`pouw_h1_commit.reused`).
 * **Then.** `pouw_h1_commit.bind` holds R to W and binds it into calls_root, and only then come draw_root and the sample
   coin. The log (``h1/log.jsonl``) names W once written and R once bound, so the next window's W chains after R.
+* **The day** (``--day``, `serve_day`). The log's first line is the day's declaration (kind ``declaration``), each W
+  names it in its window (``day``, ``declaration``), and an R whose ``program`` isn't the day's declared one is refused
+  before it is named. W chains after the log's last W or R, never after the declaration, which is the deployment's
+  registration log's entry, not a ``verity/registration/v2`` record.
 * **Refused, never retried.** A window whose seal failed or never came (the server stopped first), whose release ran on the
   engine loop (which seals it after), whose prover state wasn't written, or whose command failed or wrote no R binds no
   record: no sample coin, the window's visible refusal (`pouw_h1_commit.named`). The command bounds its own time; the
@@ -30,8 +34,9 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import IO, Any
 
-from verity.protocols.spot.verifier.one_stage import registration as REG
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.accounting.pouw.prover.serving import CommitRecord, commit_registration
+from verity_vllm import messages as M
 
 #: the deployment's registration log under the serve dir's ``h1/``: one line a record, W at its writing and R once bound
 LOG = "log.jsonl"
@@ -50,13 +55,16 @@ class WindowTie:
     the log's last record, which the next W chains after."""
 
     def __init__(self, command: str, out: Path, *, flush: Callable[[], Any] | None = None,
-                 runner: Callable[[list[str], IO[str]], int] = run_command) -> None:
-        self.command, self.out, self.flush, self.runner = command, Path(out), flush, runner
+                 runner: Callable[[list[str], IO[str]], int] = run_command, day: Any = None) -> None:
+        self.command, self.out, self.flush, self.runner, self.day = command, Path(out), flush, runner, day
         self.log = self.out / "h1" / LOG
         self.last: str | None = None
-        if self.log.exists():
-            got = [json.loads(x) for x in self.log.read_text().splitlines() if x.strip()]
-            self.last = got[-1]["digest"] if got else None
+        got = [json.loads(x) for x in M.lines(self.log, "H1Registration")] if self.log.exists() else []
+        records = [x for x in got if x.get("kind") != "declaration"]
+        self.last = records[-1]["digest"] if records else None
+        if day is not None and not any(x.get("kind") == "declaration" and x.get("digest") == day.digest for x in got):
+            self.log.parent.mkdir(parents=True, exist_ok=True)
+            M.append(self.log, "H1Registration", json.dumps(day.line()).encode())
         self._cv = threading.Condition()
         self._seals: dict[int, dict[str, Any]] = {}
         self._refused: dict[int, str] = {}
@@ -64,7 +72,8 @@ class WindowTie:
         self._stopped = False
 
     def describe(self) -> dict[str, Any]:
-        return {"log": f"h1/{LOG}", "window": f"h1/w<k>/{W_FILE}", "record": f"h1/w<k>/{R_FILE}"}
+        return {"log": f"h1/{LOG}", "window": f"h1/w<k>/{W_FILE}", "record": f"h1/w<k>/{R_FILE}",
+                **({"day": self.day.naming()} if self.day is not None else {})}
 
     def sealed(self, window: int, line: Mapping[str, Any]) -> None:
         """Window ``window``'s seal line, or why it has none (``error``): its release, waiting in `hook`, goes on."""
@@ -98,7 +107,7 @@ class WindowTie:
             raise ValueError(f"window {window}'s seal failed, so window-commit has no row dir: {line['error']}"[:500])
         return line
 
-    def hook(self, window: int, prover: Path | None, kept: Callable[[], Any] | None) -> CT.CommitRecord:
+    def hook(self, window: int, prover: Path | None, kept: Callable[[], Any] | None) -> CommitRecord:
         """Window ``window``'s pouw setting ``commit_record`` (`pouw_h1_commit.CommitRecord`): its prover directory
         ``prover`` and ``kept``, which waits until its prover state is written."""
         return lambda run: self.record(window, run, prover, kept)
@@ -114,8 +123,8 @@ class WindowTie:
             kept()
         d = self.out / "h1" / f"w{window}"
         d.mkdir(parents=True, exist_ok=True)
-        w, wf, rf = CT.registration(run, self.last), d / W_FILE, d / R_FILE
-        wf.write_text(json.dumps(w, indent=1) + "\n")
+        w, wf, rf = commit_registration(run, self.last, self.day and self.day.naming()), d / W_FILE, d / R_FILE
+        M.write(wf, "H1Registration", (json.dumps(w, indent=1) + "\n").encode())
         self.last = self._logged(window, "registration", wf, REG.digest(w))
         rf.unlink(missing_ok=True)
         argv = ["bash", "-c", self.command, "_", str(self.out), str(window), str(wf), str(rf), str(prover or "")]
@@ -124,9 +133,11 @@ class WindowTie:
         if rc != 0:     # its output may name the window's values: the reason, which windows.jsonl carries, only points to it
             raise ValueError(f"--h1-window-commit exited {rc}: its output is in the serve dir's h1/w{window}/{COMMAND_LOG}")
         try:
-            r = json.loads(rf.read_text())
+            r = json.loads(M.read(rf, "H1Registration"))
         except (OSError, ValueError) as e:
             raise ValueError(f"--h1-window-commit wrote no record R to h1/w{window}/{R_FILE}: {e}") from None
+        if self.day is not None and (why := self.day.refusal(r)):
+            raise ValueError(f"R in h1/w{window}/{R_FILE}: {why}")
         with self._cv:
             self._named[window] = (rf, REG.digest(r) if isinstance(r, Mapping) else "")
         return w, r
@@ -140,9 +151,9 @@ class WindowTie:
             self.last = self._logged(window, "record", *named)
 
     def _logged(self, window: int, kind: str, path: Path, digest: str) -> str:
-        with open(self.log, "a") as fh:
-            fh.write(json.dumps({"window": window, "kind": kind, "file": str(path.relative_to(self.log.parent)),
-                                 "digest": digest}) + "\n")
+        M.append(self.log, "H1Registration", json.dumps({"window": window, "kind": kind,
+                                                         "file": str(path.relative_to(self.log.parent)),
+                                                         "digest": digest}).encode())
         return digest
 
 

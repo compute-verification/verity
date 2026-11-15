@@ -13,6 +13,8 @@ heartbeat_table = "store_private.control_heartbeat"
 cloud_watch_state = "/data/cloud-watch/state.json"
 
 [env]
+# {src}/infra/control/bin comes first: its `gh` runs {dir}/bin/gh with the pod's read-only App token of that call
+# (/data/infra/gh_read_token.sh --cached), so no loop reads GitHub with a token from an env file or from its start
 PATH = "{src}/infra/control/bin:{dir}/bin:/data/nebius/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
 PYTHONPATH = "{src}/tools/research/src:{src}/infra/ops"
 HOME = "/root"
@@ -36,6 +38,15 @@ argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/fleet
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/monitor.env"]
 env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-notes/machines.d", FLEET_SSH_KEY = "/root/.runpod/ssh/runpodctl-ssh-key", FLEET_RESEARCH = "{src}/infra/control/bin/research" }
 
+# all compute's dollars an hour to the site's metrics door with the panels key, from fleet's last pass and the budget guard's
+# last poll, each fleet pass once, the last one sent kept in its state (loop_metrics.py; metrics.toml's row is this argv; the
+# store index's pass length goes from store_index.sh with the same script)
+[[loop]]
+name = "loop-metrics"
+argv = ["python3.12", "-s", "{src}/infra/control/loop_metrics.py", "compute", "--every", "60", "--state", "{dir}/loop-metrics.json"]
+needs = ["/root/.config/verity/panels.key"]
+env = { FLEET_DIR = "{dir}/fleet" }
+
 # the relay-side monitors and CPU node 1's watchdog alerts, posted to #agent-alerts (tmux `watchdog-relay`). The node-side
 # monitors run only on node 2 (deploy.toml's vy-monitors.timer), which is stopped. The relay reads the `--on` host's node alert
 # dir over ssh every pass, and a host that doesn't answer is a failed read each pass, so `--on` names CPU node 1: it answers and
@@ -45,7 +56,7 @@ env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-no
 [[loop]]
 name = "monitors-relay"
 argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watchdog-relay@vy-control-verity", "--on", "vy-nebius-cpu-1",
-        "--only", "drift", "asks", "failed-checks", "fixtures-public", "unverified-main", "nightly-check",
+        "--only", "drift", "asks", "failed-checks", "fixtures-public", "unverified-main", "nightly-check", "stranded",
         "--machine-alerts", "vy-nebius-cpu-1=cpu1:/workspace/monitoring/watchdog/alerts",
         "--alerts", "{dir}/monitors/alerts", "--state", "{dir}/monitors/relay-state.json", "--posts", "{dir}/monitors/relay-posts.json"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
@@ -82,7 +93,7 @@ env = { RESEARCH_STORE = "/root/watchers-preflight-store" }
 # reads --state, and rings infra when it shows no outcome for 36 h
 [[loop]]
 name = "nightly-check"
-argv = ["python3.12", "-s", "{src}/infra/control/nightly_check.py", "--on", "vy-nebius-cpu-8", "--pool", "nightly",
+argv = ["python3.12", "-s", "{src}/infra/control/nightly_check.py", "--on", "vy-nebius-cpu-14", "--pool", "nightly",
         "--timeout", "36000", "--hour", "9", "--work", "/root/fast/nightly-check", "--state", "{dir}/nightly-check.json",
         "--tmp", "{dir}/nightly-check/tmp"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
@@ -99,11 +110,13 @@ needs = ["{dir}/top-asks.json"]
 # top's hourly sweep (top_watch.py sweep; top's Cursor timer admin-hourly-v3): unanswered asks, agents with no handle, the rules
 # thread, main stalled while next is ahead, idle H200s from fleet's samples, and the Linear audit with relay.env's Linear app
 # credentials (LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET), whose lines go to {dir}/linear-audit.jsonl; it also saves the Goals
-# page each hour in {dir}/goals/, read with the site key in {dir}/goals.key (events:read) once that is placed
+# page each hour in {dir}/goals/, read with the site key in {dir}/goals.key (events:read) once that is placed, and puts each copy
+# in the store, preserved, with r2.env's bucket and key pair, through a scratch store in a temporary directory that each save
+# deletes; with that remote, the Linear audit reads each open PR's ready mark from the store, as `research msg linear audit` does
 [[loop]]
 name = "top-sweep"
 argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "sweep", "--state", "{dir}/top-sweep.json"]
-env_files = ["/root/.config/verity/relay.env", "/data/agent-watch/cursor.env"]
+env_files = ["/root/.config/verity/relay.env", "/data/agent-watch/cursor.env", "/root/.config/verity/r2.env"]
 needs = ["{dir}/top-sweep.json"]
 env = { FLEET_DIR = "{dir}/fleet" }
 
@@ -131,3 +144,16 @@ name = "labels-pack"
 argv = ["python3.12", "-s", "-m", "research", "data", "labels-pack", "--every", "3600"]
 env_files = ["/root/.config/verity/r2.env"]
 env = { RESEARCH_STORE = "/root/watchers-labels-pack-store" }
+
+# each number a metrics.toml on main declares, launched again as a `research run` once its newest reading is older than its
+# `every` (metrics_rerun.py): a pass every --every seconds, from its own clone of main on the pod's own disk, at most --max
+# launches a pass, a CPU command on --on in its row's pool else --pool, a command asking for GPUs or naming a machine only on a
+# machine the lead's plan ({dir}/gpu-plan.toml) lists for it; nothing while {dir}/metrics-rerun.stop exists. It reads the door
+# with the site key in {dir}/metrics-rerun.env (JOBS_TOKEN, events:read)
+[[loop]]
+name = "metrics-rerun"
+argv = ["python3.12", "-s", "{src}/infra/control/metrics_rerun.py", "--tree", "/root/fast/metrics-rerun-tree",
+        "--state", "{dir}/metrics-rerun.json", "--stop", "{dir}/metrics-rerun.stop", "--plan", "{dir}/gpu-plan.toml",
+        "--on", "vy-nebius-cpu-12", "--pool", "research", "--every", "900", "--max", "2"]
+env_files = ["/root/.config/verity/r2.env", "{dir}/metrics-rerun.env"]
+env = { RESEARCH_STORE = "/root/watchers-metrics-rerun-store", RESEARCH_LANE = "infra" }

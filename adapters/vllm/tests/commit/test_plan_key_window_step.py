@@ -17,11 +17,10 @@ from types import SimpleNamespace
 
 import torch
 
+from tests.commit import test_native_collect_plan_cache as PC
 from verity_vllm.acquire.sources import int8_source as I8
 from verity_vllm.commit import step_rows as R
 from verity_vllm.engine import int8_ops
-
-from tests.commit import test_native_collect_plan_cache as PC
 
 LIN = "model.layers.0.mlp.down_proj"
 K = 4608                                        # a lone request's x_q outgrows the row padding the worker compares at
@@ -72,7 +71,9 @@ class _Runner(PC._Runner):
     def execute_model(self, scheduler_output, *a, **kw):
         n = scheduler_output.total_num_scheduled_tokens
         self.model.model.layers[0].mlp.down_proj((torch.arange(n * K) % 251 - 125).reshape(n, K).bfloat16())
-        self.committer._acquire("logits", torch.zeros(n, 40), self.committer._cur)
+        com = self.committer
+        assert com is not None
+        com._acquire("logits", torch.zeros(n, 40), com._cur)
 
 
 def _sched(reqs: list[tuple[str, int, int]]) -> SimpleNamespace:

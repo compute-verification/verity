@@ -26,7 +26,7 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- **C-Flock's zero knowledge at the session loop's own frames and inner rounds**: `SessionLoopZKDeployed`'s statement
+/-- **Flock's zero knowledge at the session loop's own frames and inner rounds**: `SessionLoopZKDeployed`'s statement
 at the release with the loop's own rounds of the inner proof (`withInner Masked.dataE L₁ real fin`), at every `L₁` and
 finish rounds `fin`, without its premise `LoopInnerRound0`, which holds there. -/
 def _root_.Flock.Guarantees.SessionLoopZKDeployedInner : Prop :=
@@ -44,7 +44,7 @@ def _root_.Flock.Guarantees.SessionLoopZKDeployedInner : Prop :=
         ℕ → V (Array F128 × ByteArray × Array ByteArray))
       (real : Msg → Flock.Wit →
         (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-        ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)),
+        ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)),
     real = Loop.realOf src → L₀ = LeanRelease.withInner Masked.dataE L₁ real fin →
     ∀ (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit),
     Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w → Loop.Serves x →

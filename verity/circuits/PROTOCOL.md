@@ -2,14 +2,14 @@
 
 This is the byte format of a Program and the rules that turn it into a circuit: from the canonical bytes of a descriptor, a
 reader obtains every gate, its primitive and its operand gates, and nothing else is needed. It is written for a second
-implementation, such as the Lean port of `Q_word` (`verity/protocols/spot/verifier/lean/`). It describes the bytes the codec writes and moves no digest.
+implementation, such as the Lean port of `Q_word` (`verity/protocols/proofs/spot/verifier/lean/`). It describes the bytes the codec writes and moves no digest.
 
 - Reference: `verity.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`,
   `definition_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
   `parts.n_members`, for §8, §10 and §11 `cut` and `partition_object`, for §9 `boolean`, and for §12 `ports`.
 - Vectors: `verity/circuits/tests/format_vectors.json`, written by
-  `uv run python tools/verity/check/pins.py --write verity/circuits/tests/format_vectors.json`.
+  `uv run python tools/check/pins.py --write verity/circuits/tests/format_vectors.json`.
 - Conformance: `verity/circuits/tests/test_format_spec.py` checks the reference against every vector, and restates
   canonical JSON (as RFC 8785), leaf order, reference sequences and the interning order independently of it. Each section
   names its vector keys. `verity/circuits/tests/partition_vectors.json` pins `Q_word` v1 on top of this format.
@@ -129,6 +129,8 @@ Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, re
 A primitive is one gate producing one `Value<w>`. Its evaluator is code, found by id in a registry, and the decoder refuses a
 primitive whose `params` or `ret` differ from the registry's; an `Input<w>_v1` or `RegisteredInput<w>_v1` id always denotes
 the Program's input primitive of that binding time (§5.2). A body's `params` and `ret_type` are inline types, not interned.
+A Definition's parameter names are distinct: a parameter is read by its name (a port's declaration, §12; a registered read),
+and two of one name would be read as one.
 
 Either entry may also carry `ports` (§12), and carries it only when its Definition declares port types. An entry without it is
 exactly the entry above.
@@ -219,6 +221,7 @@ have):
   holds it;
 - a primitive id that a family materialised by id matches only in part, or spells otherwise than its member's id (§5.2, §9);
 - a root that is not a composite without parameters;
+- a composite whose `params` give one name twice (§4.2; a primitive's are the registry's, which holds none that does);
 - an input node (§5.2) in a definition other than the root;
 - a node form other than the four, or keys other than its form's;
 - a primitive node whose callee is a composite, or a call or scan node whose callee is a primitive;
@@ -329,8 +332,8 @@ own bits, and a Program holds no data.
   primitive still holds. Outside an operation, a `registered` table is always listed, and a `library` one unless the library
   lists it.
 
-`verity.circuits` names no operations and no library tables, so the guard is `verity.definitions.circuits.operations.program_data`. It passes in the
-pinned list `verity/operations` v2 (`verity.definitions.circuits.operations.OPERATIONS`, `digest()`) and the tables of `verity/library` v2. An
+`verity.circuits` names no operations and no library tables, so the guard is `verity.circuits.operations.program_data`. It passes in the
+pinned list `verity/operations` v2 (`verity.circuits.operations.OPERATIONS`, `digest()`) and the tables of `verity/library` v2. An
 operation is a listed composite as the registry holds it, bound only to functions that hold no data, so a decoded Program's
 composites are no operations and their constants are listed.
 
@@ -458,7 +461,7 @@ parameters, so structure under `Q_word` v1 (§8), computed in no proof block.
 **Ids of the families.** A family member has one id, which the decoder materialises (§4.6) and nothing else does: the whole id
 matches its family's pattern, and the member it denotes carries exactly that id. `And<n>_v1` and `Xor<n>_v1` match
 `^(And|Xor)([2-9]|[1-9][0-9]+)_v1$`. The constant of width w ≥ 1 and value v, 0 ≤ v < 2^w, is
-`Const<w>[0x<h>]_v1` (`verity.definitions.ops.prims.const`), with w in decimal without leading zeros and h the lowercase hex of
+`Const<w>[0x<h>]_v1` (`verity.circuits.ops.prims.const`), with w in decimal without leading zeros and h the lowercase hex of
 v zero-padded to ⌊w/4⌋ digits, at least one (Python's `f"{v:0{w // 4}x}"`): `Const32[0x3f800000]_v1`, `Const16[0x3f80]_v1`,
 `Const5[0x5]_v1`, `Const5[0x1f]_v1`, `Const1[0x0]_v1`. So `And02_v1`, `And1_v1`, `And2_v1\n`, `Const32[0x0]_v1`,
 `Const32[0x03f800000]_v1`, `Const32[0x3F800000]_v1`, `Const5[0x05]_v1`, `Const032[0x3f800000]_v1`, `Const0[0x0]_v1` and
@@ -471,7 +474,7 @@ significant first), or a `Value<1>` that is not inside one. `elements(T)` lists 
 `word_type`: the signature of the word Definition it computes. A port's number format is metadata
 (`verity/metadata/v0`), outside every digest; the word view does not read it.
 
-Vectors (`verity/circuits/tests/boolean_vectors.json`, written by `uv run python tools/verity/check/pins.py --write` on it): `gates` (id,
+Vectors (`verity/circuits/tests/boolean_vectors.json`, written by `uv run python tools/check/pins.py --write` on it): `gates` (id,
 kind, parameters, return type, truth table), `constants`, `gate_ids` (id, its kind and inputs, or null), `constant_ids` (id,
 its width and value, or null), `word_view` (type, element widths, word type), and `program`: a 2-bit
 adder built from two full-adder calls, a batch of `Xor2_v1` over axis 1, a constant, a `Not_v1` and an `Xor3_v1`, with its
@@ -552,7 +555,7 @@ Rules the Program format left open, pinned here:
 - **A proof block with no outputs** (a dead gate) is still a proof block: every computing gate is in exactly one.
 - **An unread parameter leaf** is in the input unit and is not committed.
 
-Vectors: `qcall_vectors.json`, written by `uv run python tools/verity/check/pins.py --write` on its path. They cover a word
+Vectors: `qcall_vectors.json`, written by `uv run python tools/check/pins.py --write` on its path. They cover a word
 program and a Boolean program at two values of X. The word program has a Call that fits; one that splits into sub-Calls two levels
 down; a batch of a composite and of a primitive; a scan with a chained carry and one with a passed-through carry; pass-through
 outputs; a constant read by two proof blocks; a constant-derived gate committed across proof blocks; a 64-bit input and constant; a recompute
@@ -572,8 +575,8 @@ what they are without this section.
 ~~~text
 "ports": {"params": [[i, lo, hi, <in>], ...], "ret": [[lo, hi, <out>], ...], "inputs": [[k, lo, hi, <in>], ...],
           "transfer": true}
-<in>  = {"bound": [a, b], "kind": "coin" | "static" | "position", "receipt": true, "word": <name>}
-<out> = {"interval": [a, b], "sink": true, "word": <name>}
+<in>  = {"bound": [a, b], "kind": "coin" | "static" | "position", "receipt": true, "word": <name>, "certified": <label>}
+<out> = {"interval": [a, b], "sink": true, "word": <name>, "certified": <label>}
 ~~~
 
 A row types leaves `[lo, hi)` of parameter `i`, of the return, or of root node `k`, which is an input node (§5.2). The program
@@ -582,6 +585,18 @@ root, which has no `params`. A port names only what differs from the default (at
 The rows of each array are sorted (by `i` then `lo`, by `lo`, by `k` then `lo`), disjoint and maximal: two adjacent rows with
 equal ports are one. An empty array is omitted, and so is `ports` when nothing is declared. A word type is a name matching
 `[a-z][a-z0-9_]*`.
+
+`"certified": <label>` (`In(certified=...)`, `Out(certified=...)`), a label matching `[a-z][a-z0-9_]*`, says the row's
+leaves are one row of the certified table so labelled: on a `params` row, a row the proof block reads; on a `ret` row, one
+it writes. The label is the Program's; the certified values it stands for, and their names, are the verifier's, so a
+Program's digest names no value. It is declared only on a composite the root calls or batches, a template of the proof
+blocks: a primitive's ports, a program function's and so the root's `inputs` and `ret` never carry it (`E_PORT_DECL`). It
+types no leaf (no rule below reads it), and a harness (`ports.harness`) leaves it out. Which row of the table a proof
+block's port is follows from the Program's description alone: the SPOT verifier numbers a label's rows from 0
+over the root's nodes in order, each call or batch of a template marking it taking one row per member, and refuses a mark
+that is not one whole parameter or one whole field of the return (the output port `o<j>` of field `j`, or `o0` of a
+return that is no tuple or record), a label on two ports of one template, and a mark on a Definition any node but a root
+call or batch calls (`Spot.CertifiedRows`, `one_stage/certified_rows.py`).
 
 An interval `[a, b]` has integers `a ≤ b`. It types leaves of one width `w`, and reads them as signed when `a < 0` and as
 unsigned otherwise, so it lies within `[-2^(w-1), 2^(w-1) - 1]` or within `[0, 2^w - 1]`. A *full* interval is one of those
@@ -662,7 +677,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   check: PoUW's compile pass holds a proof block's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
-  `verity/protocols/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
+  `verity/protocols/accounting/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
   sink return, as a padded proof block's key count with no coin port beside it (never a seed), or in a test named with its reason
   (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
@@ -676,15 +691,18 @@ as declared, so a composite over exact steps declares the intervals its operands
   a receipt fold too; or an input leaf of origin `position` is read by more than one seed. Any number of seeds may read one
   coin, each at positions of its own, so each (coin, position) seeds one proof block; that distinct position leaves hold distinct
   values is the verifier's, which binds them.
-- **`E_PORT_DECL`**: the `ports` are malformed or not canonical, or a transfer gives no interval of its return's width.
+- **`E_PORT_DECL`**: the `ports` are malformed or not canonical, a transfer gives no interval of its return's width, or a
+  primitive, a program function or the root declares `certified`.
 
 `ports.facts(root)` gives every leaf's fact to the census and the stacking property. A Program in which no Definition declares
-ports is refused by none of the rules, and nothing is computed for it (`ports.check` returns None).
+ports, or none but certified marks, is refused by none of the rules, and nothing is computed for it (`ports.check` returns
+None).
 
 Vectors: `verity/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; an input's bound
 narrower than its type refused, and narrowed by a range check instead; a chain of exact steps declaring its words' intervals
 and a limb split's bound on them; an explicit limb split with its carries; a word read at
 another width (`E_REINTERPRET`), built and in a tampered descriptor; the coin rules through calls,
 batches and scans; seeds batched over positions, and a proof block's z read from its noise;
-tampered descriptors; the canonical form; and a pinned
+tampered descriptors; the canonical form; a certified mark on a template, built and decoded, and refused on a primitive,
+a program function and the root; and a pinned
 digest of one typed descriptor.

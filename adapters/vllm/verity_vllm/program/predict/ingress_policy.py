@@ -7,10 +7,12 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-from verity.definitions.registry import io_shell as IO
-from verity.definitions.registry.topp_geometry import registered_splits
+from verity_vllm.definitions.registry import io_shell as IO
+from verity_vllm.definitions.registry.topp_geometry import registered_splits
+
 from verity_vllm.pipeline import window_advice as WA
-from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
+from verity_vllm.program.frontend import seed_rule as SEED
+from verity_vllm.program.frontend import stop_rule as SR
 
 from . import reads
 from .common import Unexpressible
@@ -45,7 +47,7 @@ def ingress_body(i: int, q: WA.RequestAdvice, body: bytes, served: str | None, v
 def request_of(i: int, q: WA.RequestAdvice, body: Any, vocab: int) -> tuple[tuple[int, ...], dict]:
     """Request `i`'s certified prompt and sampling parameters, held to its advice record: the prompt is `prompt_len` token ids of
     the vocabulary, and its `max_tokens` bounds `output_len`, reached exactly when it finished on length (an abort is before it:
-    at its cap vLLM has finished it on length, and the abort finds nothing to free)."""
+    at its max_tokens vLLM has finished it on length, and the abort finds nothing to free)."""
     if not isinstance(body, Mapping) or any(type(k) is not str for k in body):
         raise Unexpressible(f"request {i} ({q.id!r}): no certified request body carries its id")
     prompt = body.get("prompt")
@@ -57,7 +59,7 @@ def request_of(i: int, q: WA.RequestAdvice, body: Any, vocab: int) -> tuple[tupl
     params = {k: v for k, v in body.items() if k not in _TRANSPORT}
     m = params.get("max_tokens")
     if type(m) is not int or m < 1:
-        raise Unexpressible(f"request {i}: max_tokens {m!r} (v0 needs the cap in the body, a positive integer)")
+        raise Unexpressible(f"request {i}: max_tokens {m!r} (v0 needs max_tokens in the body, a positive integer)")
     if q.output_len > m or (q.finish == "length" and q.output_len != m) or (q.finish == "abort" and q.output_len == m):
         raise Unexpressible(f"request {i}: {q.output_len} kept outputs, finished on {q.finish}, against its max_tokens {m}")
     if why := SR.body_refusal(params):
@@ -93,5 +95,6 @@ def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str, sa
         raise Unexpressible(f"request {i}: sampling the vocabulary can't express: {'; '.join(facts)}")
     if t == 0:
         return {"kind": "greedy"}, None
+    assert num_sms is not None, "a temperature above 0 on a target without num_sms is refused above"
     return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True,
              "splits": registered_splits(int(num_sms)), "rid": SEED.rid_of(request_id)}, reads.seed_of(i, request_id, seed, salt, carried))

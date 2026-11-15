@@ -140,7 +140,10 @@ def ensure_distributed(vllm_config, backend: str = "gloo") -> str:
     if _DIST_READY:
         return "already"
     from vllm.config import set_current_vllm_config
-    from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment
+    from vllm.distributed import (
+        ensure_model_parallel_initialized,
+        init_distributed_environment,
+    )
     with set_current_vllm_config(vllm_config):
         for attempt in range(_PORT_TRIES):
             try:
@@ -216,7 +219,7 @@ class EngineStep(nn.Module):
 
     def __init__(self, model: nn.Module, pos0: int, M: int, sampled_rows: str = "last") -> None:
         super().__init__()
-        self.model = model
+        self.model: Any = model
         self.pos0, self.M, self.sampled_rows = pos0, M, sampled_rows
 
     def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
@@ -241,10 +244,13 @@ class GreedyRequest(nn.Module):
 
     def __init__(self, model: nn.Module, LP: int, T: int) -> None:
         super().__init__()
-        self.model, self.LP, self.T = model, LP, T
+        self.model: Any = model
+        self.LP, self.T = LP, T
 
     def _step(self, ids: torch.Tensor, pos0: int, s: int) -> torch.Tensor:
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            launch_region,
+        )
         with launch_region(s, "tokens"):
             positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
             hidden = self.model(ids, positions)
@@ -278,7 +284,9 @@ class ChunkedGreedyRequest(GreedyRequest):
                              f"launches of at least one")
 
     def forward(self, prompt: torch.Tensor) -> torch.Tensor:
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            launch_region,
+        )
         a = 0
         for j, n in enumerate(self.chunks):
             with launch_region(j, "tokens"):
@@ -324,7 +332,8 @@ class PaddedGreedyRequest(nn.Module):
 
     def __init__(self, model: nn.Module, LP: int, D_MAX: int, eos_id: int) -> None:
         super().__init__()
-        self.model, self.LP, self.D_MAX, self.eos_id = model, LP, D_MAX, eos_id
+        self.model: Any = model
+        self.LP, self.D_MAX, self.eos_id = LP, D_MAX, eos_id
 
     def _logits(self, ids: torch.Tensor, pos0: int) -> torch.Tensor:
         positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
@@ -366,7 +375,7 @@ class StochasticEngineStep(nn.Module):
 
     def __init__(self, model: nn.Module, pos0: int, M: int, temperature: float, top_p: float, S: int) -> None:
         super().__init__()
-        self.model = model
+        self.model: Any = model
         self.pos0, self.M = pos0, M
         self.temperature, self.top_p = float(temperature), float(top_p)
         self.S = int(S)
@@ -394,12 +403,15 @@ class StochasticRequest(nn.Module):
 
     def __init__(self, model: nn.Module, LP: int, T: int, temperature: float, top_p: float, S: int) -> None:
         super().__init__()
-        self.model, self.LP, self.T = model, LP, T
+        self.model: Any = model
+        self.LP, self.T = LP, T
         self.temperature, self.top_p = float(temperature), float(top_p)
         self.S = int(S)
 
     def _step(self, ids: torch.Tensor, pos0: int, seed: torch.Tensor, s: int) -> torch.Tensor:
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            launch_region,
+        )
         from verity_vllm.program.frontend.rules.vllm_iface import iface
         with launch_region(s, "tokens"):
             positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
@@ -454,12 +466,12 @@ def prefix_input(model: nn.Module, C: int) -> torch.Tensor:
 def registered_policy_splits(sampling: dict) -> int:
     """The registered split count S of a stochastic policy: `sampling["splits"]`, refused unless it is an int equal to
     `topp_geometry.registered_splits` of the policy's geometry's num_SMs (`build.sampler_geometry`)."""
-    from verity.definitions.registry.topp_geometry import registered_splits
-    S, g = sampling.get("splits"), sampling.get("geometry") or {}
-    if g.get("num_sms") is None:
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
+    S, g = sampling.get("splits"), sampling.get("geometry")
+    if not g or g.get("num_sms") is None:
         raise ValueError(f"sampling.splits {S!r}: the policy's geometry declares no num_sms, so it has no registered split count")
     want = registered_splits(int(g["num_sms"]))
-    if type(S) is not int or S != want:
+    if type(S) is not int or want != S:
         raise ValueError(f"sampling.splits {S!r} is not the registered split count registered_splits({int(g['num_sms'])}) = {want}, "
                          f"the S the served engine pins")
     return S
@@ -468,7 +480,7 @@ def registered_policy_splits(sampling: dict) -> int:
 def cached_wrapper(mod: nn.Module, inputs: tuple, model: nn.Module, C: int) -> tuple[nn.Module, tuple]:
     """The request wrapper `mod` (with its example `inputs`) for a request whose first `C` prompt rows the prefix cache serves
     (`CachedGreedyRequest`, `CachedStochasticRequest`), the prefix (`prefix_input`) its last input."""
-    if type(mod) not in (GreedyRequest, StochasticRequest) or not 0 < C < mod.LP:
+    if not isinstance(mod, (GreedyRequest, StochasticRequest)) or type(mod) not in (GreedyRequest, StochasticRequest) or not 0 < C < mod.LP:
         raise ValueError(f"a cached prefix of C={C} rows needs a request wrapper and 0 < C < LP, got {type(mod).__name__}")
     if isinstance(mod, StochasticRequest):
         mod = CachedStochasticRequest(model, mod.LP, mod.T, mod.temperature, mod.top_p, C, S=mod.S)
@@ -571,6 +583,7 @@ def consulted_facts(vllm_config) -> dict:
 def no_fx_stack_traces():
     """Export without FX stack traces: nothing reads `node.meta["stack_trace"]`, and recording one per node was a tenth of a derive."""
     import torch.fx.config as fx_config
+
     from verity_vllm.engine import hooks
     with hooks.Hooks() as h:
         h.patch(fx_config, "do_not_emit_stack_traces", True)
@@ -585,6 +598,7 @@ def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, s
     export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile).
     Under a declared launch batch the graph keeps each node's `launch_region` tag."""
     import torch.fx.traceback as fxt
+
     from .export_compat import export_compat, read_back_applied
     from .rules.vllm_bindings.observations import launch_batch_declared
     from .triton_capture import intercept_triton_launches
@@ -617,7 +631,8 @@ def op_histogram(ep) -> dict[str, int]:
 
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
            "CachedGreedyRequest", "CachedStochasticRequest", "cached_wrapper", "prefix_input", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
-           "attention_impls", "export_facts", "BI_TRITON_KERNELS"]
+           "attention_impls", "export_facts", "BI_TRITON_KERNELS",
+           "with_peers", "probe_collectives"]
 
 
 def attention_impls(model: nn.Module) -> dict:
@@ -730,6 +745,7 @@ def mean_dim_override_facts() -> dict | None:
     try:
         import hashlib
         import inspect
+
         from vllm.model_executor.determinism import batch_invariant as bi
         k = bi.mean_kernel
         fn = getattr(k, "fn", k)

@@ -1,0 +1,13 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "memory-accounting/node-read-rate-uncertified"
+title = "Uncertified memory reads"
+owner = "memory-accounting"
+unit = "share"
+axis = "Share of a node's memory read rate that one session leaves uncertified, serving Llama 3.2 1B."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/memory/run.py --from FIRE_RUN"
+every = "7d"
+goal = "memory-accounting/share-to-target"

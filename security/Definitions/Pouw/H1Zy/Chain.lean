@@ -72,10 +72,10 @@ def sigmaR (x : SeedIn) : List ℕ := tagged receiptTag x
 def noiseChunk (seed : List ℕ) (t : ℕ) : List ℕ := digest (noiseTag ++ seed ++ beBytes 8 t)
 
 /-- Bit `β` of a block's 512 bits: bit `β mod 32` of its big-endian half `⌊β / 32⌋`. -/
-def blockBit (blk : List ℕ) (β : ℕ) : Bool := beNat ((blk.drop (4 * (β / 32))).take 4) / 2 ^ (β % 32) % 2 = 1
+def chunkBit (blk : List ℕ) (β : ℕ) : Bool := beNat ((blk.drop (4 * (β / 32))).take 4) / 2 ^ (β % 32) % 2 = 1
 
 /-- Bit `β` of a seed's noise stream from block `first` (`seeds.stream`, `h1tile._stream`). -/
-def streamBit (seed : List ℕ) (first β : ℕ) : Bool := blockBit (noiseChunk seed (first + β / 512)) (β % 512)
+def streamBit (seed : List ℕ) (first β : ℕ) : Bool := chunkBit (noiseChunk seed (first + β / 512)) (β % 512)
 
 /-- The value of `n` stream bits from bit `β`, least significant first (`h1tile._value`). -/
 def streamVal (seed : List ℕ) (first β n : ℕ) : ℕ :=

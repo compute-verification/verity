@@ -4,16 +4,26 @@ committed short) and the binding loader's two engine-step shapes -- over manifes
 (`test_sampled_replay.v2_manifest`) on a synthetic wired Program (no torch, no pod)."""
 from __future__ import annotations
 
+import ast
 import copy
+import hashlib
 import json
+import sys
+from pathlib import Path
 
 import pytest
 
+from tests.check.test_sampled_replay import _program, v2_manifest
 from verity_vllm.commit import binding as B
+from verity_vllm.program.instances_file import write_instances_file
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest.bind import coverage_check
-from verity_vllm.query.manifest.format import canonical_identity, manifest_digest, spec_statics, split_name
-from tests.check.test_sampled_replay import _program, v2_manifest
+from verity_vllm.query.manifest.format import (
+    canonical_identity,
+    manifest_digest,
+    spec_statics,
+    split_name,
+)
 
 EPS = 'EPS={"f64":"0x1.4f8b588e368f1p-17"}'
 
@@ -47,8 +57,24 @@ def test_digest_determinism():
         r.pop("geometry", None)
         r.pop("rows", None)
     assert manifest_digest(ids) == man["manifest_digest"]
+    rows = b"".join(json.dumps([r["family"]] + canonical_identity(r), separators=(",", ":"), sort_keys=True).encode() + b"\n"
+                    for r in sorted(ids, key=MF.row_key))
+    assert man["manifest_digest"] == hashlib.sha512(rows).hexdigest() and len(man["manifest_digest"]) == 128
     assert v2_manifest(inst, digest="q" * 64)["manifest_digest"] != man["manifest_digest"]   # the Program digest does
     assert len(canonical_identity(man["identities"][0])) == 8
+
+
+def test_the_folds_the_query_and_the_population_digests_are_whole_sha512_digests():
+    comps, ranks = ["b" * 128, "a" * 128], ["d" * 128, "c" * 128]
+    assert MF.components_fold_digest(comps) == hashlib.sha512(("workload-components/" + "a" * 128 + "," + "b" * 128).encode()).hexdigest()
+    assert MF.tp_ranks_fold_digest(ranks) == hashlib.sha512(("tp-ranks/" + "c" * 128 + "," + "d" * 128).encode()).hexdigest()
+    assert MF.query_id_digest("Q") == hashlib.sha512(b"Q").hexdigest()
+    assert {len(MF.components_fold_digest(comps)), len(MF.tp_ranks_fold_digest(ranks)), len(MF.query_id_digest("Q"))} == {128}
+    man = v2_manifest(_program()[0])
+    assert man["query"]["query_id_digest"] == MF.query_id_digest(man["query"]["query_text"])
+    ids = [B.identity(man["program_digest"], "r0", 0, 0, "m", "out", 0, 4, 0), B.identity(man["program_digest"], "r0", 1, 0, "m", "out", 0, 4, 0)]
+    lines = b"".join(json.dumps(B.identity_dict(i), sort_keys=True, separators=(",", ":")).encode() + b"\n" for i in ids)
+    assert B.population_digest(ids) == (hashlib.sha512(lines).hexdigest(), 2) and len(B.population_digest(ids)[0]) == 128
 
 
 def test_coverage_positive_and_negatives():
@@ -177,3 +203,98 @@ def test_fresh_b1_manifest_loads_in_binding_and_composition_skips(tmp_path):
     pb.write_text(json.dumps(bad))
     with pytest.raises(ValueError, match="engine_steps mixes"):
         B.load_required_manifest(str(pb), man["program_digest"], requests=["r0"], steps=2, ranks=[0], arrivals={"r0": 0})
+
+
+def test_program_dirs_for_passes_over_a_result_it_cannot_read(tmp_path):
+    """The lookup by a derive's result.json skips a candidate whose result.json is not JSON or cannot be opened, and takes the
+    next one that declares the request's shape; with no such candidate left it refuses by the request's name."""
+    fx = {"requests": [{"request_id": "r0", "prompt_len": 168, "max_tokens": 10}]}
+    (tmp_path / "build_request_a").mkdir()
+    (tmp_path / "build_request_a" / "result.json").write_text('{"ok": true, "LP": 168')
+    (tmp_path / "build_request_b").mkdir()
+    (tmp_path / "build_request_b" / "result.json").mkdir()
+    (tmp_path / "build_request_c").mkdir()
+    (tmp_path / "build_request_c" / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9}))
+    assert MF.program_dirs_for(fx, str(tmp_path)) == {"r0": str(tmp_path / "build_request_c")}
+    (tmp_path / "build_request_c" / "result.json").write_bytes(b"\xff\xfe{}")
+    with pytest.raises(SystemExit, match="r0 .*168,9"):
+        MF.program_dirs_for(fx, str(tmp_path))
+
+
+def test_program_dirs_for_passes_over_a_result_nested_past_the_parser(tmp_path):
+    """A result.json nested deeper than Python's parser reads, whole or in one part, is no JSON the lookup can read (`json`
+    raises `RecursionError` for it, which is no `ValueError`): the candidate is passed over like one that is not JSON."""
+    fx = {"requests": [{"request_id": "r0", "prompt_len": 168, "max_tokens": 10}]}
+    nested = "[" * 100_000 + "]" * 100_000
+    with pytest.raises(RecursionError):
+        json.loads(nested)
+    (tmp_path / "build_request_a").mkdir()
+    (tmp_path / "build_request_a" / "result.json").write_text(nested)
+    (tmp_path / "build_request_b").mkdir()
+    (tmp_path / "build_request_b" / "result.json").write_text('{"ok": true, "LP": 168, "T": 9, "C": ' + nested + "}")
+    with pytest.raises(SystemExit, match="r0 .*168,9"):
+        MF.program_dirs_for(fx, str(tmp_path))
+    (tmp_path / "build_request_c").mkdir()
+    (tmp_path / "build_request_c" / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9}))
+    assert MF.program_dirs_for(fx, str(tmp_path)) == {"r0": str(tmp_path / "build_request_c")}
+
+
+def test_load_program_reads_the_dirs_result_and_its_artifact_when_there_is_one(tmp_path):
+    """`load_program` returns the Program dir's result.json and artifact.json as the files hold them, and None for an artifact
+    the dir does not have."""
+    head: dict[str, object] = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None, "params": []}
+    write_instances_file(str(tmp_path / "instances.json.gz"), head, iter([]))
+    (tmp_path / "result.json").write_text(json.dumps({"ok": True, "LP": 3}))
+    got = MF.load_program(str(tmp_path))
+    assert (got["result"], got["artifact"], got["dir"]) == ({"ok": True, "LP": 3}, None, str(tmp_path))
+    assert got["instances"] == {**head, "rows": []}
+    (tmp_path / "artifact.json").write_text(json.dumps({"program": {"digest": "d" * 64}}))
+    assert MF.load_program(str(tmp_path))["artifact"] == {"program": {"digest": "d" * 64}}
+
+
+def test_programs_for_loads_the_program_of_each_declared_request(tmp_path):
+    """One loaded Program a declared request, under its label: the dir `program_dirs_for` finds for its shape, a warm request's
+    its own."""
+    fx = {"requests": [{"request_id": "r0", "prompt_len": 168, "max_tokens": 10}, {"request_id": "r1", "prompt_len": 168, "max_tokens": 10, "cached": 128}]}
+    head: dict[str, object] = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None, "params": []}
+    for name, C in (("build_request_LP168_T9", 0), ("build_request_LP168_T9_C128", 128)):
+        (tmp_path / name).mkdir()
+        write_instances_file(str(tmp_path / name / "instances.json.gz"), head, iter([]))
+        (tmp_path / name / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9, "C": C}))
+    dirs = MF.program_dirs_for(fx, str(tmp_path))
+    assert dirs == {"r0": str(tmp_path / "build_request_LP168_T9"), "r1": str(tmp_path / "build_request_LP168_T9_C128")}
+    got = MF.programs_for(fx, str(tmp_path))
+    assert got == {rid: MF.load_program(d) for rid, d in dirs.items()}
+    assert {rid: (p["dir"], p["result"]["C"], p["artifact"]) for rid, p in got.items()} == {"r0": (dirs["r0"], 0, None), "r1": (dirs["r1"], 128, None)}
+    assert MF.programs_for({"requests": []}, str(tmp_path)) == {}
+    with pytest.raises(SystemExit, match="no request Program for r2 .*169,9"):
+        MF.programs_for({"requests": [*fx["requests"], {"request_id": "r2", "prompt_len": 169, "max_tokens": 10}]}, str(tmp_path))
+
+
+def test_a_manifests_rows_are_read_under_the_name_its_layout_gives_them():
+    a, b = {"op_path": "a"}, {"op_path": "b"}
+    assert MF.manifest_rows({"identities": [a], "entries": [b]}) == [a], "the identity key first"
+    assert MF.manifest_rows({"identities": [], "entries": [b]}) == [b] and MF.manifest_rows({"rows": [a, b]}) == [a, b]
+    assert MF.manifest_rows({"identities": None}) == [] and MF.manifest_rows({}) == []
+    assert MF.identity_rows({"identities": [a]}) == [a] and MF.identity_rows({"entries": [b]}) == [] and MF.identity_rows(None) == []
+    assert MF.identity_rows({"identities": 0}) == [] and MF.identity_rows({"identities": ""}) == [], "an empty value of any type holds none"
+
+
+def test_a_workloads_sweep_and_requests_are_empty_where_it_holds_none():
+    assert MF.sweep_and_requests(None) == ({}, []) and MF.sweep_and_requests({"sweep": None}) == ({}, [])
+    assert MF.sweep_and_requests({"sweep": 0, "requests": ""}) == ({}, []), "an empty value of any type holds none"
+    w = {"sweep": {"batch": 2, "arrive_steps": [0, 3]}, "requests": [{"request_id": "r0"}, {"request_id": "r1"}]}
+    assert MF.sweep_and_requests(w) == (w["sweep"], w["requests"])
+
+
+def test_importing_the_format_loads_only_the_standard_library_and_records():
+    """What importing `format` loads is part of its contract: a suite that lists its inputs by file reads this module, and its
+    read guard fails on a file the list lacks.  So `load_program` and `program_dirs_for` import `program` inside themselves, and
+    the module's own imports are the standard library and `verity_vllm.records`."""
+    loaded: set[str] = set()
+    for node in ast.parse(Path(MF.__file__).read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Import):
+            loaded |= {a.name for a in node.names}
+        elif isinstance(node, ast.ImportFrom):
+            loaded.add("." * node.level + (node.module or ""))
+    assert {m for m in loaded if m.split(".")[0] not in sys.stdlib_module_names} == {"verity_vllm.records"}

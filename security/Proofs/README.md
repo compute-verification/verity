@@ -16,20 +16,20 @@ The package `security_proofs` (`security/Proofs/lakefile.toml`): every proof, `<
   `except` lists by module, with the few modules of other areas that read them.
 - Outside code may build modules here and run a Lean file that imports them in this package's Lake environment
   (`lake env lean`), or read this package's lock. These name a module here today, so renaming it changes them:
-  - `verity/protocols/pous/lean/grade.sh` builds `Proofs.Pous.Statements`, `Proofs.Pous.Sanity` and
+  - `tools/pous_grader/grade.sh` builds `Proofs.Pous.Statements`, `Proofs.Pous.Sanity` and
     `Proofs.Pous.Accounting.Numbers` for a submission to import, as `submissions/reference.lean` beside it does the
     first; `check.sh` beside it runs the Lean check on `security` with the grader, on scratch submissions that
     import `Proofs.Pous.Statements`.
-  - `verity/protocols/spot/verifier/tests/lean/generate.sh` runs `ExfiltrationVectors.lean`
+  - `verity/protocols/proofs/spot/verifier/tests/lean/generate.sh` runs `ExfiltrationVectors.lean`
     (`Proofs.Flock.Soundness.Audit.Influence`, `Proofs.Flock.Soundness.Audit.StratifiedMiss`) and
     `ExfiltrationTwoVectors.lean` (`Proofs.Flock.SamplingGeneric.TwoTable`), both beside it.
-  - `verity/protocols/flock/prover/tests/lean/generate.sh` runs `RandomnessVectors.lean` beside it
+  - `verity/protocols/proofs/flock/prover/tests/lean/generate.sh` runs `RandomnessVectors.lean` beside it
     (`Proofs.Flock.Soundness.PlanDraw`).
-  - `verity/protocols/flock/prover/tests/test_lean_verifier.py` builds `Proofs.Flock.Verifier`, which its scratch
+  - `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py` builds `Proofs.Flock.Verifier`, which its scratch
     files import; `test_security_inputs.py` beside it checks that the suite's inputs hold that module's imports.
   - `benchmarks/two_stage/tests/guard_node.py` builds `Proofs.Flock.SpotFlock.Code` and
     `Proofs.Flock.SamplingGeneric.TwoAt` and runs `TwoGuard.lean` beside it, which imports them.
-  - `verity/protocols/pouw/verifier/tests/test_lean_package.py` reads the lock's `runs` entry of `Proofs.Pouw.Bulk`.
+  - `verity/protocols/accounting/pouw/verifier/tests/test_lean_package.py` reads the lock's `runs` entry of `Proofs.Pouw.Bulk`.
 
 ## Areas
 
@@ -39,11 +39,11 @@ registry, path by path: `research msg owners PATH`.
 | Area | What it holds |
 |---|---|
 | `Accounting` | The proofs of resource accounting's guarantees; the joint period's bridges |
+| `Certifier` | The network certifier's proofs ([README](Certifier/README.md)) |
 | `Core` | `Verity.SecurityProofs.G` for core's guarantees, and every lemma behind them |
 | `Flock` | Flock's proofs: the verifier's, level3's and soundness's (`Flock/Soundness/README.md`) |
 | `Hash` | The hash area's proofs |
-| `Nci` | The proofs of the inference-only policy's guarantees |
-| `NetworkCertifier` | The network certifier's proofs ([README](NetworkCertifier/README.md)) |
+| `InferenceOnly` | The proofs of the inference-only policy's guarantees |
 | `Pous` | The proofs of PoUS's guarantees; `Statements` holds the lemmas' statements |
 | `Pouw` | PoUW's proofs: every theorem and lemma over `Definitions.Pouw` |
 | `Properties/` | The proofs of `security/Properties/`, under each property's area name |

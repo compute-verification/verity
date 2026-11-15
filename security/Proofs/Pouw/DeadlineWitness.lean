@@ -38,9 +38,9 @@ theorem honest_cost_le (H : D1.M1Q → D1.M1R) (s : Salt) :
   (outputPriced_cost_le _ H M1.sixteen _ _ s).trans sum_Wmm_sixteen.le
 
 theorem honest_honestClock :
-    Assumptions.HonestClock (outputPriced D1.M1Q D1.M1R Salt) M1.sixteen (pricedHonest (D1.m1 D1.m1Wref))
-      honestRun 1 :=
-  ⟨pricedHonest (D1.m1 D1.m1Wref), rfl, fun H s =>
+    Assumptions.HonestClock ((outputPriced D1.M1Q D1.M1R Salt).adversaries M1.sixteen)
+      (pricedHonest (D1.m1 D1.m1Wref)) honestRun 1 :=
+  Pouw.CostModel.honestClock_iff.2 ⟨pricedHonest (D1.m1 D1.m1Wref), rfl, fun H s =>
     ⟨fun _ => ⟨rfl, fun _ hm => hm⟩, (honest_cost_le H s).trans (honestRun_spentIn H s).ge, le_rfl⟩⟩
 
 theorem honest_boundedBy :
@@ -50,7 +50,7 @@ theorem honest_boundedBy :
     (pricedHonest_bounded (D1.m1 D1.m1Wref) (M1.queryBound D1.m1Wref) M1.sixteen H s).2⟩
 
 theorem dot_correct (H : Unit → Unit) (s : Unit) (u : Fin 1) :
-    (u : ℕ) ∈ correctSet acceptAll dot H s (commitAll.transcript dot H s) := by
+    (u : ℕ) ∈ correctSet acceptAll dot H s (commitAll.trace dot H s) := by
   classical
   unfold correctSet
   rw [Finset.mem_filter]
@@ -76,23 +76,23 @@ theorem WorkBetweenSaltAndDeadline_honest :
     M1.sixteen.InDomain D1.m1Domain ∧
       (pricedHonest (D1.m1 D1.m1Wref)).BoundedBy M1.sixteen honestRun 1 (16 * 2 ^ 44)
         (M1.sixteen.layout.N * D1.m1Queries) ∧
-      Assumptions.HonestClock (outputPriced D1.M1Q D1.M1R Salt) M1.sixteen (pricedHonest (D1.m1 D1.m1Wref))
-        honestRun 1 :=
+      Assumptions.HonestClock ((outputPriced D1.M1Q D1.M1R Salt).adversaries M1.sixteen)
+        (pricedHonest (D1.m1 D1.m1Wref)) honestRun 1 :=
   ⟨M1.sixteen_inDomain, honest_boundedBy, honest_honestClock⟩
 
 /-- **`SpareCapacityAtDeadline`'s premises hold at the milestone**: its sixteen units are in the domain, and the honest
 reference in the output-priced model meets the honest clock on the run that delivers at the deadline. -/
 theorem SpareCapacityAtDeadline_honest :
     M1.sixteen.InDomain D1.m1Domain ∧
-      Assumptions.HonestClock (outputPriced D1.M1Q D1.M1R Salt) M1.sixteen (pricedHonest (D1.m1 D1.m1Wref))
-        honestRun 1 :=
+      Assumptions.HonestClock ((outputPriced D1.M1Q D1.M1R Salt).adversaries M1.sixteen)
+        (pricedHonest (D1.m1 D1.m1Wref)) honestRun 1 :=
   ⟨M1.sixteen_inDomain, honest_honestClock⟩
 
 /-- **`WorkBetweenSaltAndDeadline`'s bound fails where the audit accepts everything**: one sample passes with
 probability 1, above `(1 − 1/2)^1 + 0`, while the run spends nothing. -/
 theorem WorkBetweenSaltAndDeadline_nontrivial :
     ¬ pr (fun x : (Unit → Unit) × Unit × (Fin 1 → Ticket (acceptAll.Wref dot.layout) dot.layout.N) =>
-        AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.transcript dot x.1 x.2.1))
+        AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.trace dot x.1 x.2.1))
             x.2.2 ∧
           (0 : ℝ) < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout ∧
           ¬ commitAll.Breaks dot x.1 x.2.1)
@@ -107,7 +107,7 @@ theorem WorkBetweenSaltAndDeadline_nontrivial :
 one sample passes with probability 1, above `(1 − 1/2)^1 + 0`. -/
 theorem SpareCapacityAtDeadline_nontrivial :
     ¬ pr (fun x : (Unit → Unit) × Unit × (Fin 1 → Ticket (acceptAll.Wref dot.layout) dot.layout.N) =>
-        AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.transcript dot x.1 x.2.1))
+        AcceptsBy idleRun 0 x.1 x.2.1 (correctSet acceptAll dot x.1 x.2.1 (commitAll.trace dot x.1 x.2.1))
             x.2.2 ∧
           0 * (0 - idleRun.ts) - (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref acceptAll dot.layout < 0 ∧
           ¬ commitAll.Breaks dot x.1 x.2.1)

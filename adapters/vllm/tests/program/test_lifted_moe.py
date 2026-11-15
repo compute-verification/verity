@@ -1,6 +1,6 @@
 """Stage MoE, spec + tiny circuit on CPU — **padded baseline (experimental)**.
 
-The registered fused-MoE block (`verity/definitions/registry/moe.py`: router top-k → expert row gather with the expert index as an
+The registered fused-MoE block (`adapters/vllm/verity_vllm/definitions/registry/moe.py`: router top-k → expert row gather with the expert index as an
 I32 VALUE → expert GEMMs → routed sum) lifted by node replay (`lifted.lift_def`), on a tiny per-token MoE FFN (E=4 experts, TOPK=2,
 K=16 hidden, N=16 intermediate, silu_and_mul).  What this establishes, gate for gate:
 
@@ -19,21 +19,22 @@ K=16 hidden, N=16 intermediate, silu_and_mul).  What this establishes, gate for 
     every expert's weight row is in the dataflow of every pair (the wide-fan-in gather), so no per-request Program shape depends on
     who is routed where — the fixed population holds for MoE as for dense.
 
-What it does NOT establish: anything about a real OLMoE record (a real OLMoE step under a larger cap needs a pod).
+What it does NOT establish: anything about a real OLMoE record (a real OLMoE step under a larger length bound needs a pod).
 """
 from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import Program, bind
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import composite
-from verity.circuits.refs import Coll, array_of, coll_concat, tuple_of
-from verity.definitions.registry import b1, lifted as L, moe, prims as P
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.prims import BF16, F32, I32
+from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import b1, moe
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.prims import BF16, F32, I32
 
 E, TOPK, VPT, K, N = 4, 2, 2, 16, 16
 BOT16, BOT32 = L.enc_bot(16), L.enc_bot(32)

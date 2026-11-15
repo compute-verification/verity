@@ -10,11 +10,16 @@ Rule tests need only torch importable (the collector module imports it); the byt
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
+from verity_vllm.commit.committer import native_collect as NC
 
 
 def _bare(fault: str = "", *, gather: bool = True, nc=None) -> NC.NativeCollectCommitter:
@@ -115,7 +120,7 @@ def test_moe_source_asks_the_committer_to_flush_the_up_plane_only():
     assert src.stats["plane_flushes"] == 1 and src.declaration_classes()[0]["plane_flushes"] == 1
 
     class OldCommitter(Committer):
-        flush_after_plane = None                              # attribute absent / None: no flush, no error
+        flush_after_plane: Any = None                         # attribute absent / None: no flush, no error
     log.clear()
     old = MS.MoeBlockSource(OldCommitter(), Model())
     old.cur_layer = 0
@@ -131,7 +136,9 @@ def test_pre_flush_wraps_only_the_consumers_and_flushes_before_forward():
             calls.append("flush")
 
     o = _bare(nc=FakeNC())
-    body = lambda *a, **k: calls.append("forward") or "out"                     # noqa: E731
+    def body(*a, **k):
+        calls.append("forward")
+        return "out"
 
     assert o._with_pre_flush(body, "model.layers.2.self_attn.o_proj") is body    # not a consumer: the body is returned as is
     w = o._with_pre_flush(body, "model.layers.3.input_layernorm")

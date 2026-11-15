@@ -1,4 +1,4 @@
-"""The committer and prover of one H1 window (`run.py` drives it; the challenger and the verifier never import this file).
+"""The committer and prover of one H1 window (`recorded.py` drives it; the challenger and the verifier never import this file).
 
     python window.py commit LAYER.npz WINDOW PRIV OUT.json [--k K] [--cols N] [--calls q_proj,...] [--program-sha512 HEX]
         each call's tables, as a served round commits them before its coin: its A table a/<K>@<c>, the window's A rows
@@ -57,7 +57,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import h1unit as U
+from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
+import h1form as F
 
 R, C = U.TILE
 RC = R * C
@@ -109,14 +110,14 @@ def window_records(com: dict, A: np.ndarray, SA: np.ndarray, B: np.ndarray, SB: 
     return out
 
 
-def cmd_commit(a) -> int:
+def cmd_commit(a: argparse.Namespace) -> int:
     lay = np.load(a.layer)
     priv = Path(a.priv)
     priv.mkdir(parents=True, exist_ok=True)
     calls = a.calls.split(",") if a.calls else sorted(k[2:] for k in lay.files if k.startswith("b_"))
     A = lay["a"][:, :a.k] if a.k else lay["a"]
     rows, k = A.shape
-    shape = U.Shape(k, R, C)
+    shape = F.shape(k, R, C)
     ports = {p.name: p for p in shape.ports()}
     m = U.slot(rows)
     A = np.concatenate([A, np.zeros((m - rows, k), A.dtype)])
@@ -134,12 +135,12 @@ def cmd_commit(a) -> int:
         tile0, b0 = tile0 + t, b0 + n
     B, SB = np.concatenate(Bs), np.concatenate(SBs)
     com = {"schema": "verity/pouw/h1-prove/commitment/v5", "window": a.window,
-           "unit": {"definition": "PouwH1TileZy_v1", "tile": f"PouwH1Tile_{U.tile()}", "k": k, "r": R, "c": C,
+           "unit": {"definition": "PouwH1TileZy_v1", "tile": f"PouwH1Tile_{F.tile()}", "k": k, "r": R, "c": C,
                     "exact": "GemmAccumulatorS8_v2"}, "slot": m, "calls": out_calls, "b_rows": len(B), "tiles": tile0}
     if a.program_sha512:
         prog = a.program_sha512
     else:
-        from verity.protocols.spot.verifier.one_stage import partition as P
+        from verity.protocols.proofs.spot.verifier.one_stage import partition as P
         prog = P.program_digest(shape.window([(c["name"], c["n"]) for c in out_calls], m)[0])
     ZY = window_records(com, A, SA, B, SB)
     wa, nc = U.row_words(A, SA), len(out_calls)
@@ -203,12 +204,12 @@ def _serve_one(u: int, d_word: bool = False, xa_flip: bool = False) -> tuple[int
     bit xa (A = 127 with dither bit 1). ``d_word``: as a kernel whose lane 0 made its D_1 entry 0 one too large, folded and
     recombined like the honest words, so z and the receipt agree with each other. ``xa_flip``: v3's z with one entry's xa
     flipped (`_xa_target`), the receipt the honest one."""
-    from verity.protocols.pouw.prover.circuit import h1tile as H
-    from verity.protocols.pouw.prover.circuit import seeds as SD
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
+    from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
     a, b, _sa, _sw = _rows(_W["priv"], _W["com"], u)
     roots_ = roots(_W["com"])
     a, b = [[int(x) & 0xFF for x in r] for r in a], [[int(x) & 0xFF for x in r] for r in b]
-    v3 = U.tile() == "v3"
+    v3 = F.tile() == "v3"
     lay = H.Layout(len(a), len(b), len(a[0]))
     rows, cols = H.noise(SD.seed(_W["salt"], u, *roots_), lay) if v3 or d_word or xa_flip else (None, None)
     xa = [H.row_wrap(a[i], rows[i]) for i in range(lay.r)] if rows else [[0] * lay.k for _ in range(lay.r)]
@@ -249,12 +250,12 @@ def _serve_one(u: int, d_word: bool = False, xa_flip: bool = False) -> tuple[int
 
 
 def _receipts(com: dict, rw: np.ndarray, sr: np.ndarray) -> tuple[list[bytes], bytes]:
-    port = U.Shape(com["unit"]["k"], R, C).ports()[-2]
+    port = F.shape(com["unit"]["k"], R, C).ports()[-2]
     bcr = U.commit_strings(port, rw, _bl(sr))
     return bcr, U.levels(U.domain(com["window"], "receipt", com["tiles"]), bcr)[-1][0]
 
 
-def cmd_serve(a) -> int:
+def cmd_serve(a: argparse.Namespace) -> int:
     priv_dir = Path(a.priv)
     com = json.loads((priv_dir / "commitment.json").read_text())
     salt = bytes.fromhex(a.salt)
@@ -269,7 +270,7 @@ def cmd_serve(a) -> int:
     bcr, rr = _receipts(com, rw, sr)
     priv.update(rw=rw, sr=sr, bcr=_bcs(bcr))
     np.savez(priv_dir / "rows.npz", **priv)
-    served = {"receipt_root": rr.hex(), "tiles": T, "salt": salt.hex(), "tile": U.tile(),
+    served = {"receipt_root": rr.hex(), "tiles": T, "salt": salt.hex(), "tile": F.tile(),
               "z_is_served_product": {"cells": T * RC, "equal": eq},
               "xa": {"entries": sum(map(sum, xas)), "tile_rows": T * R, "tile_rows_with_xa": sum(int(n > 0) for r in xas for n in r),
                      "tiles_with_xa": sum(int(any(r)) for r in xas)}}
@@ -326,7 +327,7 @@ def _record(a, com: dict, priv: dict, salt: bytes) -> tuple[dict[int, np.ndarray
     u = a.d_word if a.d_word is not None else a.xa_flip
     _init(a.priv, salt)
     _u, z, rc, _n, xa = _serve_one(u, d_word=a.d_word is not None, xa_flip=a.xa_flip is not None)
-    out = {u: _with_z(priv, com, u, z)} if U.tile() == "v3" else {}
+    out = {u: _with_z(priv, com, u, z)} if F.tile() == "v3" else {}
     info = {"receipt": U.receipt_words(rc)}
     if a.xa_flip is not None:
         info["xa_flip"] = {"xa_set_in_unit": sum(xa), "record_words_changed": int((out[u] != zyw[u]).sum()),
@@ -334,7 +335,7 @@ def _record(a, com: dict, priv: dict, salt: bytes) -> tuple[dict[int, np.ndarray
     return out, info
 
 
-def cmd_tamper(a) -> int:
+def cmd_tamper(a: argparse.Namespace) -> int:
     src, dst = Path(a.priv), Path(a.tampered)
     dst.mkdir(parents=True, exist_ok=True)
     com = json.loads((src / "commitment.json").read_text())
@@ -353,7 +354,7 @@ def cmd_tamper(a) -> int:
             receipts[a.d_word if a.d_word is not None else a.xa_flip] = info.pop("receipt")
     receipts = {u: w for u, w in receipts.items() if not np.array_equal(w, priv["rw"][u])}
     records = {u: w for u, w in records.items() if not np.array_equal(w, priv["zyw"][u])}
-    port = {p.name: p for p in U.Shape(com["unit"]["k"], R, C).ports()}
+    port = {p.name: p for p in F.shape(com["unit"]["k"], R, C).ports()}
     tables = []
     if records:
         priv["zyw"], priv["bczy"] = priv["zyw"].copy(), priv["bczy"].copy()
@@ -414,7 +415,7 @@ def table_bcs(priv: dict, com: dict, value: str) -> list[bytes]:
     return _bl(priv["bca"][int(c)]) if name == f"a/{k}" else _bl(priv["bczy"][call["tile0"]:call["tile0"] + call["tiles"]])
 
 
-def cmd_open(a) -> int:
+def cmd_open(a: argparse.Namespace) -> int:
     priv_dir, out = Path(a.priv), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     com = json.loads((priv_dir / "commitment.json").read_text())
@@ -481,7 +482,7 @@ def cmd_open(a) -> int:
 FLAGS = ("receipt", "receipt_word", "d_word", "xa_flip", "zy_word", "y_cell", "z_cell", "swap", "call", "z_only")
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("commit")
@@ -517,6 +518,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     return {"commit": cmd_commit, "serve": cmd_serve, "tamper": cmd_tamper, "open": cmd_open}[a.cmd](a)
 
+
+__all__ = ["tile_of", "unit_of"]
 
 if __name__ == "__main__":
     raise SystemExit(main())

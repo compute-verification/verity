@@ -8,13 +8,16 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
 import methodology
+
+__all__ = ["DATASETS", "LOCK_PATH", "build", "check", "cut", "dataset_path", "digest", "encoder", "file_sha256", "key",
+           "lock", "read_texts", "stream"]
 
 HERE = Path(__file__).resolve().parent
 DATASETS = json.loads((HERE / "datasets.json").read_text())

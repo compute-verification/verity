@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
-from verity_vllm.program.frontend.derive import refuse
-from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import CACHED_PREFIX as STATE, dtype_is, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
+
+from verity_torch.frontend.derive import refuse
+from verity_torch.frontend.rules.base import RuleInfo, StateRule
+from verity_torch.frontend.rules.common import CACHED_PREFIX as STATE
+from verity_torch.frontend.rules.common import dtype_is, known, shape
+from verity_torch.frontend.rules.bindings.operands import BF16
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+
+__all__ = ["layout_of"]
 
 
 class KvPrefixRule(StateRule):
@@ -25,14 +29,13 @@ class KvPrefixRule(StateRule):
                     evidence_domain="structural: the cached rows are the Program's input, bound by Match to the producing request's rows")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.vllm_iface import targets_for
         return targets_for("kv_prefix")
 
     def applies(self, node, ctx):
         prefix = node.args[0]
         if not isinstance(prefix, torch.fx.Node) or not isinstance(ctx.val(prefix), Coll) or not dtype_is(ctx, prefix, BF16):
             return "prefix is not a bf16 value collection"
-        s = shape(ctx, prefix)
+        s = known(shape(ctx, prefix))
         if len(s) != 4 or s[1] != 2 or s[2] < 1:
             return f"prefix has shape {s}, not [L, 2, C >= 1, KVH*D]"
         if ctx.state.get("kv_history") or ctx.state.get(STATE):
@@ -40,7 +43,7 @@ class KvPrefixRule(StateRule):
         return True
 
     def emit(self, node, ctx):
-        L, _, C, rl = shape(ctx, node.args[0])
+        L, _, C, rl = known(shape(ctx, node.args[0]))
         coll = ctx.coll(node.args[0]).reshape(Array(L, Array(2, Array(C, Array(rl, Value(16))))))
         ctx.record(self, node, {"layers": L, "rows": C, "row_leaves": rl}, emitted="(pending cached prefix; no gates)",
                    cached_prefix={"C": C, "row_leaves": rl, "layers": []})
@@ -63,15 +66,15 @@ def seed(ctx, node, layer_name: str, krow_list: list, vrow_list: list, KVH: int,
     if not p:
         return 0
     mp = ctx.module_path(node)
-    l = len(p["layers"])
-    if l >= p["L"]:
-        refuse("side_input", node, mp, f"layer {layer_name!r} is attention layer {l + 1} of the forward, the cached prefix holds {p['L']}")
+    opened = len(p["layers"])
+    if opened >= p["L"]:
+        refuse("side_input", node, mp, f"layer {layer_name!r} is attention layer {opened + 1} of the forward, the cached prefix holds {p['L']}")
     if p["row_leaves"] != KVH * D:
         refuse("shape", node, mp, f"the cached prefix's rows hold {p['row_leaves']} values, layer {layer_name!r} writes KVH*D = {KVH * D}")
     row_t = Array(KVH, Array(D, Value(16)))
     for j in range(p["C"]):
-        krow_list.append(p["coll"][l][0][j].reshape(row_t))
-        vrow_list.append(p["coll"][l][1][j].reshape(row_t))
+        krow_list.append(p["coll"][opened][0][j].reshape(row_t))
+        vrow_list.append(p["coll"][opened][1][j].reshape(row_t))
     p["layers"].append(layer_name)   # the provenance's `cached_prefix.layers` (`layout_of`)
     return p["C"]
 

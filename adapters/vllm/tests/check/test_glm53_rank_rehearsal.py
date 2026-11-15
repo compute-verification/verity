@@ -18,14 +18,31 @@ from pathlib import Path
 
 import pytest
 
-from tests.observe.test_fold_glm53_defaults import BMM_OUT_SCHEMA, CUDA, FAR_SCHEMA, H200, view
+from tests.observe.test_fold_glm53_defaults import (
+    BMM_OUT_SCHEMA,
+    CUDA,
+    FAR_SCHEMA,
+    H200,
+    view,
+)
 from verity_vllm.check.match import global_match_fast as GF
 from verity_vllm.check.match import program_compare as CMP
-from verity_vllm.observe.fold.profiles import generic as G
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, StorageAlloc, TritonLaunch, ViewDesc
+from verity_vllm.check.match import program_loaders as PL
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepEnd,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.patterns import dsa as DSA
-from verity_vllm.pipeline.match import INSTANCES_FORM_ENV, persist_program
+from verity_vllm.observe.fold.profiles import generic as G
+from verity_vllm.pipeline.match_fold import INSTANCES_FORM_ENV, persist_program
 from verity_vllm.program import compact as K
 
 CFG = json.loads((Path(__file__).parent / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
@@ -140,7 +157,7 @@ def _log(profile, crossed: bool = False) -> list:
 
 class _Rank:
     """The served and the crossed ("crossed": layer 1 reads layer 0's W_UV) folds, each persisted per stored form and loaded as
-    tp-fold-match's compare leg loads it (compact for progressions, runs for the record form), built on first use: session-wide, since
+    tp-fold-match's compare step loads it (compact for progressions, runs for the record form), built on first use: session-wide, since
     `--dist worksteal` interleaves this module's tests with others' and a module fixture would rebuild per test."""
 
     def __init__(self, tmp):
@@ -165,7 +182,7 @@ class _Rank:
         try:
             return CMP.load_oracle(d, f"{which}-{form}", compact=form == "progressions" if compact is None else compact)
         finally:
-            CMP.LOAD_NOTES.pop(d, None)
+            PL.LOAD_NOTES.pop(d, None)
 
     def prog(self, which: str, form: str) -> CMP.RootView:
         if (which, form) not in self.progs:
@@ -222,7 +239,7 @@ def test_the_progressions_compare_reaches_the_runs_verdict(rank):
 
 def test_the_progressions_compare_never_expands_a_strided_weight_read(rank, monkeypatch):
     """[8c01ad3dc, 04f0af376] The compact compare hashes and canons a W_UV read as its progressions: neither `_canonical_hash` nor the
-    weight map's per-run fallback (an overlapping map) expands its 131,072 runs (the record-form leg held ~1e6 run tuples a read)."""
+    weight map's per-run fallback (an overlapping map) expands its 131,072 runs (the record-form path held ~1e6 run tuples a read)."""
     P = rank.prog("served", "progressions")
     expanded, expand_into = [0], K._expand_into
 
@@ -238,7 +255,7 @@ def test_the_progressions_compare_never_expands_a_strided_weight_read(rank, monk
 
 def test_the_compact_load_splices_each_aliased_weight_read(rank, monkeypatch):
     """[799e16bad] Each token row's W_UV read after the first is an alias of the first: the compact load splices it in one list copy,
-    so `_Acc.progression` runs once per progression of each layer's first read, not again for every alias (51 % of GM-01's fold load)."""
+    so `_Acc.progression` runs once per progression of each layer's first read, not again for every alias."""
     calls, progression = [0], K._Acc.progression
 
     def counting(self, *a):

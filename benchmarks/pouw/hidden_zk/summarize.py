@@ -18,6 +18,7 @@ import os
 import statistics
 import sys
 from pathlib import Path
+from typing import Any
 
 OUT = Path(sys.argv[1])
 EXPECT = {"honest-own": True, "honest-wrong": False, "honest-chosen": False, "st-honest": True}
@@ -27,7 +28,7 @@ REFUSED = "refused: "
 NO_PROGRAM = "refused: a session without the verifier's program (--program)"
 
 
-def load(p: Path):
+def load(p: Path) -> Any:
     """``p``'s JSON, or None where the job left no such file; a file that doesn't parse reads as absent and is named on stderr."""
     if not p.is_file():
         return None
@@ -45,11 +46,11 @@ def tail(p: Path, n: int = 2) -> str:
         return ""
 
 
-def gb(t) -> float | None:
+def gb(t: dict | None) -> float | None:
     return round(t["maxrss_kb"] / 2**20, 2) if t else None
 
 
-def med(xs):
+def med(xs: list[float]) -> float | None:
     return round(statistics.median(xs), 4) if xs else None
 
 

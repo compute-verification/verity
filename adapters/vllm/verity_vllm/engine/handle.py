@@ -1,13 +1,16 @@
-"""A built engine's vLLM objects: the one module that knows vLLM's object graph (``llm_engine.engine_core[.engine_core]``
-and the uniproc executor's driver worker).
+"""A built engine's vLLM objects: the one module that knows vLLM's object graph (``llm_engine.engine_core[.engine_core]``,
+its executor and the uniproc executor's driver worker).
 
 Each accessor takes a :class:`verity_vllm.LLM`, a ``vllm.LLM`` or its ``LLMEngine``, and raises ``RuntimeError`` naming
 the multiprocess engine core when the object lives in another process (build with ``VLLM_ENABLE_V1_MULTIPROCESSING=0``,
-`engine.env.ENGINE`); `scheduler_or_none` returns None there instead.  Attribute reads only; nothing is patched.
+`engine.env.ENGINE`); `scheduler_or_none` and `executor_or_none` return None there instead, `core_or_none` returns the
+client the engine holds, `core_in_process` says whether that client holds the core in this process, and
+`structural_output_lag` says only which of vLLM's two architectures the engine is.
+Attribute reads only; nothing is patched.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, Union
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     import vllm
@@ -21,9 +24,37 @@ if TYPE_CHECKING:
         @property
         def vllm(self) -> vllm.LLM: ...
 
-    Engine = Union[Wrapper, vllm.LLM, LLMEngine]
+    type Engine = Wrapper | vllm.LLM | LLMEngine
 
-__all__ = ["engine_of", "model_runner", "scheduler", "scheduler_or_none"]
+__all__ = ["Lease", "Steps", "core_in_process", "core_or_none", "engine_of", "executor", "executor_or_none",
+           "model_runner", "scheduler", "scheduler_or_none", "structural_output_lag"]
+
+
+class Lease(Protocol):
+    """The engine core as the ``LLMEngine`` holds it, which a GPU lease ends: the core itself where it runs in this process
+    (its ``engine_core`` set), else its client; ``shutdown`` ends it, freeing what it holds on the device."""
+
+    @property
+    def engine_core(self) -> Any: ...
+
+    def shutdown(self) -> None: ...
+
+
+class Steps(Protocol):
+    """What serving needs of the ``LLMEngine``: a request taken, whether any request is still in flight, one step's outputs, the
+    settings it resolved (``vllm_config``, which decide its schedules) and its core (`Lease`)."""
+
+    @property
+    def vllm_config(self) -> Any: ...
+
+    @property
+    def engine_core(self) -> Lease: ...
+
+    def add_request(self, request_id: str, prompt: Any, params: Any) -> Any: ...
+
+    def has_unfinished_requests(self) -> bool: ...
+
+    def step(self) -> list[Any]: ...
 
 
 def engine_of(llm: Engine) -> LLMEngine:
@@ -35,6 +66,31 @@ def engine_of(llm: Engine) -> LLMEngine:
 def _engine_core(llm: Engine) -> Any:
     core = getattr(engine_of(llm), "engine_core", None)
     return getattr(core, "engine_core", None) or core
+
+
+def core_or_none(llm: Engine) -> Any:
+    """The engine core as the ``LLMEngine`` holds it (a client, where the core runs in another process), else None: for a
+    reader that records which it is."""
+    return getattr(engine_of(llm), "engine_core", None)
+
+
+def core_in_process(llm: Engine) -> bool:
+    """Whether vLLM's engine core runs in this process: what the ``LLMEngine`` holds is a client that holds the core as
+    its own ``engine_core``. False for a client of a core in another process, and for an engine that holds no such
+    client: one with no core at all (vLLM V0, whose executor is the engine's own; `structural_output_lag` tells it
+    apart) and one that holds a core with no client around it, whose parts the other accessors still give."""
+    return getattr(core_or_none(llm), "engine_core", None) is not None
+
+
+def structural_output_lag(llm: Engine) -> int | None:
+    """The output lag the engine's architecture implies: 1 for vLLM V1 (an ``engine_core``), 0 for V0 (the engine holds
+    its ``model_executor``, no core), None when the engine is of no known kind (a caller then keeps the lag it measured)."""
+    eng = engine_of(llm)
+    if getattr(eng, "engine_core", None) is not None:
+        return 1
+    if getattr(eng, "model_executor", None) is not None:
+        return 0
+    return None
 
 
 def scheduler(llm: Engine) -> Scheduler:
@@ -52,6 +108,22 @@ def scheduler_or_none(llm: Engine) -> Scheduler | None:
     engine core, a stub): for a reader that goes without it."""
     sched = getattr(_engine_core(llm), "scheduler", None)
     return sched if isinstance(getattr(sched, "requests", None), dict) else None
+
+
+def executor(llm: Engine) -> Any:
+    """The engine's in-process executor, whose ``collective_rpc`` reaches every worker."""
+    core = _engine_core(llm)
+    found = getattr(core, "model_executor", None)
+    if found is None or not callable(getattr(found, "collective_rpc", None)):
+        raise RuntimeError(f"{type(llm).__name__}: no in-process executor with collective_rpc (engine core "
+                           f"{type(core).__name__}); build with VLLM_ENABLE_V1_MULTIPROCESSING=0 (engine.env.ENGINE)")
+    return found
+
+
+def executor_or_none(llm: Engine) -> Any:
+    """The engine's in-process executor, whatever it can call, else None (a multiprocess engine core, a stub): for a
+    reader that records which it is."""
+    return getattr(_engine_core(llm), "model_executor", None)
 
 
 def model_runner(llm: Engine) -> GPUModelRunner:

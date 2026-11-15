@@ -25,7 +25,7 @@ in `benchmarks/numerical/tests/bench/test_census_data.py` check that.
   the instruction registry names operand dtypes (`bf16`, `e4m3`, `e2m1`); each is a `datatypes.json` id.
 - A subcircuit template id is kebab-case, for example `gemm-coordinate`. A subcircuit (a fully bound template) is
   `<template>/<params>/<semantics>`, for example `gemm-coordinate/k1536/sm90-wgmma-e4m3`,
-  `attention-head/d64-bn128/sm80-fa2-bf16` or `rmsnorm-fused-cuda/n2048-eps1e-05/bf16` (the forms bench-spine's generator writes). The
+  `attention-head/d64-bn128/sm80-fa2-bf16` or `rmsnorm-fused-cuda/n2048-eps1e-05/bf16` (the forms the input-set generator writes). The
   params and semantics segments are lowercase and may contain `.`, `_` and `-`. For GEMM, the semantics are the exact
   instruction's architecture, operation and types without its shape, and the full instruction is its `semantics` parameter; `legacy_target` keeps the
   target name it was known by, and `fidelity_notes` record known gaps from what serving runs. An input set's id is its dataset, slugged, for example `bench-instances-fp8-ada-v1`. Every
@@ -65,7 +65,7 @@ records the datatype of each port a bytes model counts. For example, the MoE rou
 
 A template the proof backends only partly prove records `verifier_evaluated`: the parts the verifier checks natively, their
 share of the template, whether the headline counts a cell as covering the template (with a footnote), and the ruling.
-Attention's softmax is counted, per red-team-flock-3's grant. Sampling is not counted; one
+Attention's softmax is counted, by the ruling its entry records. Sampling is not counted; one
 renderer switch counts it.
 
 ## Workloads
@@ -84,7 +84,7 @@ The captured input sets (vllm-vu-export) sample these counts. They cross-check t
 once registered; they don't replace the counts. An attention entry of a batch-1 workload also records `variable_counts`: the proof blocks at each key count T
 (runs of T with units per value). These come from its one request's positions and are checked against the stratum's population
 by phase. The headline weights attention cells by them, one T at a time. `source` names the row, its expected file and records artifact, and the commit it was read at. A proof block is a role
-that sampled proofs assigns in the source run; the census records the run's counts, not a unit definition.
+that SPOT assigns in the source run; the census records the run's counts, not a unit definition.
 
 ## Sourcing
 

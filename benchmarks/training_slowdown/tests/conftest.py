@@ -44,11 +44,24 @@ def one_thread():
     """Every test of the suite runs torch on one CPU thread: at the tests' shapes more threads only wait on each
     other. It does not make a bf16 product the same every time: the limit on oneDNN above does. It holds for the
     whole session, so a fixture a module computes once runs on the thread count of the tests that compare with
-    it: a product's bits differ with it."""
+    it: a product's bits differ with it. A job's default count is held at one too (`run.THREADS`), so a job a test
+    starts, in this process or its route's, runs on one thread unless the test gives it `--threads`."""
+    from training_slowdown import run
+
     threads = torch.get_num_threads()
     torch.set_num_threads(1)
-    yield
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(run, "THREADS", 1)
+        yield
     torch.set_num_threads(threads)
+
+
+@pytest.fixture(autouse=True)
+def back_to_one_thread(one_thread):
+    """A test that sets another count (a job started with `--threads`, which sets it in this process) leaves the
+    next test, and the fixtures it computes first, on one thread."""
+    yield
+    torch.set_num_threads(1)
 
 
 @pytest.fixture

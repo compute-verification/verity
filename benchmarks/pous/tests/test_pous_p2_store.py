@@ -1,11 +1,11 @@
-"""The encoded weights store (`p2_v1/store.py`): the real store's layout JSON and the toy fixture
-(`p2_v1/store-toy/`) regenerate as pinned, the layout, `W` and the staging buffers by their digests; the toy's `C*` decodes,
+"""The encoded weights store (`p2_store/store.py`): the real store's layout JSON and the toy fixture
+(`p2_store/store-toy/`) regenerate as pinned, the layout, `W` and the staging buffers by their digests; the toy's `C*` decodes,
 layer by layer, to its `W`'s tensors by `reference.decode`, by the registered codec and by `layout.decode_tensor`,
 passes the public-encoder setup with the pinned root, and refuses each negative block with its flag; the spot vectors
 decode at the real store's indices. The driver (`commit`, `encode`, `finish`, `verify`, `spot`, `tie`) runs on the CPU at a
 128-bit width with 16-block segments and the scheme's own codec in the GPU's place, over a small generator with the real
 one's tensors and names: the store it writes is the registered scheme's encoding of `W` in the layout (the public-encoder
-check accepts it, and `decode_layer` gives each layer's tensors), its roots are `setup.server_root`'s tree, `verify`
+check accepts it, and `decode_layer` gives each layer's tensors), its roots are `responder.server_root`'s tree, `verify`
 catches a changed byte, a rerun resumes to the same store, and two parts join to it. The store's default generator
 itself gives `W` at the real shape, and `commit` takes its manifest."""
 from __future__ import annotations
@@ -23,13 +23,15 @@ pytest.importorskip("verity")
 
 BENCH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BENCH))
-from p2_v1 import reference  # noqa: E402
-from p2_v1 import store as S  # noqa: E402
+sys.path.insert(0, str((BENCH.parents[1] / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference  # noqa: E402
+from p2_store import store as S  # noqa: E402
 
-from verity.protocols.pous.verifier import protocol, setup, verifier  # noqa: E402
-from verity.protocols.pous.verifier.layout import Layout, decode_tensor  # noqa: E402
-from verity.protocols.pous.verifier.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
-from verity.protocols.pous.verifier.verifier import VerifierKey  # noqa: E402
+from verity.protocols.accounting.pous.verifier import protocol, setup, verifier  # noqa: E402
+from verity.protocols.accounting.pous.verifier.layout import TensorLayout, decode_tensor  # noqa: E402
+from verity.protocols.accounting.pous.verifier.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
+from verity.protocols.accounting.pous.verifier.verifier import VerifierKey  # noqa: E402
+from verity.circuits import requirement  # noqa: E402
 
 TOY = json.loads((S.TOY_DIR / "toy.json").read_text())
 SPOT = json.loads((S.TOY_DIR / "spot.json").read_text())
@@ -69,7 +71,8 @@ def test_real_layout():
         assert qkv.first_block == 1_307_915 * l and store.staging_bytes(l) == 2_686_451_712
     (head,) = store.layer(52)
     assert (head.name, head.first_block, head.blocks) == ("lm_head.weight", 68_011_580, 2_043)
-    aligned = Layout.of(P2Params(S.W_BITS, S.C0, S.PER_SEGMENT), [(t.name, t.size) for t in store.tensors], align=True)
+    aligned = TensorLayout.of(P2Params(S.W_BITS, S.C0, S.PER_SEGMENT), [(t.name, t.size) for t in store.tensors],
+                              align=True)
     assert aligned.params.segments > p.segments + 50
 
 
@@ -82,7 +85,7 @@ def test_toy_regenerates():
     assert straddles == ["model.layers.0.mlp.down_proj.weight"] and STORE.layer(1)[0].first_block % 11
     commitment = setup.commit(STORE.params, W)
     assert commitment.hex() == TOY["commitment"]
-    assert setup.draw_salt(bytes.fromhex(TOY["source"]), commitment) == SALT
+    assert setup.sample_salt(bytes.fromhex(TOY["source"]), commitment) == SALT
     assert expand_prefix(STORE.params, SALT).hex() == TOY["prefix"]
     for data, key in ((W, "w_sha512"), (C_STAR, "c_star_sha512"), (STAGING, "staging_sha512")):
         assert hashlib.sha512(data).hexdigest() == TOY[key]
@@ -104,6 +107,14 @@ def test_toy_decode():
     seg = STORE.params.segment_bytes
     for s, blocks in enumerate(_segments()):
         assert decode_segment(STORE.params, None, SALT, s, blocks) == W[s * seg:(s + 1) * seg]
+
+
+def test_the_layout_reads_as_the_audits_store():
+    """`StoreLayout.store` is the toy's `C*` as `requirement.Store`: every block registered and resident at every step,
+    since nothing is written or freed after setup, and no payloads."""
+    held = STORE.store
+    assert held == requirement.Store(STORE.params.blocks, {}, {}, {})
+    assert held.resident(0) == held.resident(STORE.params.blocks) == frozenset(range(len(C_STAR) // NB))
 
 
 def test_toy_public_setup():
@@ -285,7 +296,7 @@ def test_store_is_the_registered_encoding(gen: tuple[str, str], tmp_path: Path) 
     w = lay.layout.pack({t.name: b"".join(mod.tensor_bytes(g, b"seed", p) for p in S.generator_parts(t.name))
                          for t in lay.tensors})
     commitment = setup.commit(q, w)
-    salt = setup.draw_salt(bytes.fromhex(SOURCE), commitment)
+    salt = setup.sample_salt(bytes.fromhex(SOURCE), commitment)
     assert (doc["commitment"], doc["salt"]) == (commitment.hex(), salt.hex())
     vk = setup.verifier_key_from_encoding(q, None, commitment, salt, _store_segments(store, q))
     assert doc["root"] == vk.root.hex()
@@ -368,7 +379,7 @@ def test_generated_with_the_default_generator(gen: tuple[str, str], tmp_path: Pa
     `commit` run whole at `tiny`, where `setup.json` holds that name as `"program"`. The stand-in has no name, and its
     manifest no key, that the default generator's lacks."""
     monkeypatch.syspath_prepend(str(ROOT))
-    mod = importlib.import_module("benchmarks.torch_gpu.p2_stage.served_weights")
+    mod = importlib.import_module("verity.protocols.accounting.pous.prover.served_weights")
     seed, h200 = mod.TEST_SEED, mod.H200
     real = S.Generated(S.GENERATOR, "h200", seed)
     assert real.mod is mod and S.layout_sha512(real.store) == S.LAYOUT_SHA512

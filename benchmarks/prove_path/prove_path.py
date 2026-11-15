@@ -2,11 +2,11 @@
 
 Each window's step units are Programs a registered compiler made from the advice (`pipeline.advice_windows`), not a declared
 workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),
-and each window's registration binds the compiler's digest and that commitment's root, before any coin. The prover commits each
+and each window's docket binds the compiler's digest and that commitment's root, before any coin. The prover commits each
 window over the compiler's Programs from its sealed bundle. The verifier, handed the commitment's opening (the named gap: the
-advice is opened to the verifier until the compile unit exists, README.md), compiles the advice with its own copy of the
+advice is opened to the verifier until the compile slice's proof block exists, README.md), compiles the advice with its own copy of the
 compiler, derives its own window and audits it through the one-stage audit's `service.Stream` (`benchmarks/one_stage/a5.py`'s
-`audit`): register, select on the auditor's challenger's coins (committed to the registration before any is read), Flock `--zk` behind the Lean
+`audit`): register, select on the auditor's challenger's coins (committed to the docket before any is read), Flock `--zk` behind the Lean
 ZK server on the sampled proof blocks, Lean's verdicts, and the outcome, which the Lean verifier's `Run.run` must agree with. It
 then checks that the advice was fixed before the sample (`advice_before_draw`).
 
@@ -31,11 +31,11 @@ Two kinds of committed run:
   (`served_identity`: compile_steps over the tree's code identity), its digest a single-GPU window's I2's over that code, so
   it covers what the compile reads of ``serve.json`` (`I2Compiler.digest`). The advice is committed once, by the server:
   the prover commits the window under the published binding (no re-commit), and both sides hold the published records to their
-  own (`serve_check`): the registration names this window, a compiler whose digest carries the cap ℓ and is the verifier's own,
+  own (`serve_check`): the docket names this window, a compiler whose digest carries the cap ℓ and is the verifier's own,
   and the root the opening opens; the root serve-openai published for the window is a SHA-512 root, the row dir's run root;
   and the advice, read as a Commit window's (`advice_codec`: `window_advice`, which carries requests across a window's open and
   close), opens where the window before it closed: its carried requests are that window's close, opened under that window's
-  registration, each at the state it was left in (`serve_follows`, refusing by name). A served window's circuit and records
+  docket, each at the state it was left in (`serve_follows`, refusing by name). A served window's circuit and records
   audit read I1's advice and refuse a window that carries a request.
 
     prove_path.py advice --workload F --out FILE
@@ -44,23 +44,27 @@ Two kinds of committed run:
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...] \\
         [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY] [--checkpoint-dir DIR]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
-        --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
+        --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR]
-    prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
+    prove_path.py compiler (--serve-run DIR | --serve FILE) [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py weights-registration --serve-run DIR --checkpoint-dir DIR --key FILE --out FILE [--checkpoints F] \\
-        [--tables DIR] [--hf-config F] [--target F]
+        [--tables DIR] [--hf-config F] [--target F] [--deployment-record FILE]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...]
     prove_path.py window-circuit --serve-run DIR --window K --row-dir DIR --advice FILE --out FILE [--cap N] [--description] \\
-        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...] [--hf-config F] [--target F] \\
-        [--cap-bits L]
+        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...] \\
+        [--pearl-tables SCHEME | --window-registration W] [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py serve-phi --model REPO --revision SHA --out FILE [--async-scheduling]
+    prove_path.py class-circuit --serve FILE --out FILE [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pearl-tables SCHEME] \\
+        [--cap N] [--description] [--pin NAME=ROOT ...] [--pins FILE ...] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
-        --checkpoint-dir DIR --out DIR [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--law L] [--cap N] \\
-        [--workers N] [--window-registration W --h1-key FILE] [--hf-config F] [--target F] [--cap-bits L]
+        --checkpoint-dir DIR --out DIR --sampling-design RATE [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--cap N] \\
+        [--workers N] [--window-registration W (--h1-key FILE | --pearl-passes DIR)] [--hf-config F] [--target F] \\
+        [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -75,18 +79,19 @@ Two kinds of committed run:
 * **audit** (the verifier): each window from the record, the opened advice and its own compiler (`open_advice`, `window_of`;
   a single-GPU or served window's Programs from its own Builds, written into ``--builds``, default ``OUT/builds``),
   audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_draw` on the
-  sample's receipt and the advice-root-after-the-draw negative (`advice_after_draw`); ``OUT/summary.json`` over the windows.
-  ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it sends proofs of the false
-  witness, and a window passes when its registration passed every check before the sample and Lean refused the outcome
-  (`forged_row`). ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample, the partition's
-  law ``stratified-rate:NUM/DEN``, over a window of one member, no registered reads or shared rows, Lean `verify --coins tree
+  sample's receipt and the advice-root-after-the-draw negative (`advice_after_sample`); ``OUT/summary.json`` over the windows.
+  ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it proves the false
+  witness, and a window passes when its docket passed every check before the sample, the outcome is a reject and
+  the forged unit's member was stopped (`forged_row`): the ZK server released no proof of it, or under ``--plain``, where
+  the proof leaves, Lean refused it. ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample, the partition's
+  sampling design ``stratified-rate:NUM/DEN``, over a window of one member, no registered reads or shared rows, Lean `verify --coins tree
   --stratified K`, no ZK server), and the summary names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
   (``charge``, `charge_terms`): ``advice_bits``; ``c``, the advice's bits where the window's leak count
   (`records_audit.leak_count`: ``other_inputs`` and ``bound``, beside it) is within the charge, else None; ``delta``,
   ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ) and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest is a single-GPU window's I2's (`I2Compiler.digest`) over
-  the tree's code (`source_identity.code_identity`: ``adapters/vllm`` and ``verity`` by content), so the audit runs on a
+  the tree's code (`code_identity`: ``adapters/vllm`` and ``verity`` by content), so the audit runs on a
   tree whose two are the server's; over what the compile reads of ``serve.json`` (its model, revision and that pin's config,
   target, execution and default seed), so the audit runs on the serve.json it was registered under; over ℓ and the transfer
   gates its model's compiler of record lists (`GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
@@ -97,14 +102,16 @@ Two kinds of committed run:
   rotary table at the engine's served words once they are within the analytic table's bound (``--tables``), the
   document ``verity-vllm advice --weights-of-record`` records in each window's registration; its roots are what
   ``window-circuit --pins`` and ``records_audit.py count --pins`` take. The verifier pins them before the first window's
-  coins and never recomputes one from the checkpoint.
+  coins and never recomputes one from the checkpoint. ``--deployment-record FILE`` writes it also as the first record of
+  the serve's registration log (`window_weights.deployment_record`).
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
 * **circuit**: a served window's registered compiler as a command (`circuit_of_advice`), what ``records_audit.py audit``'s
   compile check runs: the circuit record the advice compiles to, over its own Build of each Program (`own_builds`; it takes
   no row dir), and the length it charges. ``records_audit.py`` audits a window
-  from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
-  opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
+  from the records its integration hands Verity alone (``circuit.json``, the docket and the values, the advice's
+  opening) and loads of `verity_vllm` only a catalog package (`verity.circuits.defs.catalog_package`); this file's
+  ``audit`` holds a window to the vLLM run's own records.
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
   class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of buckets 0
   and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at the fixed slots; every slot's
@@ -113,11 +120,18 @@ Two kinds of committed run:
   each of its parameter alone, a weight's ``weights/<label>@<words>``; ``--pins REGISTRATION``, each weight's hiding root
   as the committer registered it before the first window's coins, `window_weights.weights_registration`'s ``{program,
   values}``, never a root computed from a checkpoint; a registered read counts registered only where the window's
-  registration, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free), which
+  docket, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free), which
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
-  unit's rows as the record's members.
+  unit's rows as the record's members. With ``--window-registration W`` (H1's docket of the window), the class's
+  circuit reads H1's tables (`window_class.Tables` of W's Program, no key), the circuit an H1-tied window-commit commits.
+* **class-circuit**: that Circuit from φ alone (`class_circuit_of_serve`), no advice, row dir or window: ``window-circuit``'s
+  record of any window of the class served under ``--serve``'s φ (a run's ``serve.json``, or **serve-phi**'s statement
+  of what it will record, read on the serving device before the run serves), since the circuit is the class's whatever the
+  traffic. So the verifier's record, and a period opened on it, can precede the serve. ``compiler`` reads nothing of the
+  run but ``serve.json``, which the serve writes as it starts listening, so before it ``compiler --serve FILE`` takes
+  **serve-phi**'s statement instead, and names the compiler the run's windows will register under.
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
-  Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
+  Program of the window's docket lowered at the small class ``--probe`` and projected with v19's heads
   (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
   requests).
 * **window-commit** (the prover): the served window committed as that Circuit's units (`window_commit_of_advice`):
@@ -128,33 +142,44 @@ Two kinds of committed run:
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
-  (`window_rows.standin_state`), a per-window value under the run root. Where the certifier front kept the network
-  certifier's run under the serve dir, slot k is instead the request whose Program the network certifier's scan of that
-  run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's records for
-  ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the verifier's own
-  ``window-circuit`` record is the circuit it holds it to. With ``--window-registration W`` (H1's registration of
-  the window) and ``--h1-key``, the circuit reads H1's tables where the model makes them (its rounds H1's steps, the
-  class's outputs), and the window's registration ``--out``/registration.json is chained right after W and registers
-  them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
+  (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
+  only, for the network certifier's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
+  the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
+  the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
+  records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
+  verifier's own ``window-circuit`` record is the circuit it holds it to. ``--sampling-design`` is the rate that audit states as
+  its stream's rule, and the window is committed under the sampling design that rate names over the circuit's proof
+  blocks (`window_design`), the design the stream holds its docket to. Each Program's Build is its own, from its
+  compile (`own_builds`, beside ``--out``, as ``circuit``'s), so it commits a window at its close, before the row dir holds
+  any (``advice_compile.py`` writes those once the serve is done). With ``--window-registration W`` (H1's
+  docket of the window) and ``--h1-key``, the circuit reads H1's tables where the model makes them (its rounds
+  H1's steps, the class's outputs), and the window's docket ``--out``/registration.json is chained right after W
+  and registers them as W's tables (`pouw_h1_commit.reuse`), refused unless the model made each as H1 committed it.
+  With ``--window-registration W`` (Pearl+'s window record, ``served_passes.py retain --window-record W``) and
+  ``--pearl-passes DIR`` (the window's passes, serve_pearl's ``pearl/w<k>/``), the circuit is cut at its linears
+  (`window_class.PearlTables` under W's scheme; its rounds the window's steps, the class's outputs), each cut linear's y
+  taken as served, and the docket is chained right after W and registers W's values (`pearl_c.window.reuse`),
+  refused unless its proof blocks make each row as Pearl+ committed it. ``window-circuit --pearl-tables SCHEME`` is the
+  verifier's own record of that cut circuit.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
 
 **Transfer gates** (``--transfer-gate T``, repeatable, the same on both sides): the templates the registered compiler lists as
 holding transfer gates (`advice_windows`: the I/O shell's units, proved with selection All, never sampled), which its digest
-covers (`I2Compiler`, `advice_windows.Traced`). The window's work law (``work-rate:NUM/DEN``, a stream's rule being a rate) then
+covers (`I2Compiler`, `advice_windows.Traced`). The window's work sampling design (``work-rate:NUM/DEN``, a stream's rule being a rate) then
 samples every unit of theirs beside the rest's share (`serving_rows.work_table_of`), and the stream registers with that work table. A served window's I2 lists them beside the
 server's code and ``serve.json`` (`I2Compiler.digest`), and its advice is registered under that compiler (``compiler``).
 A served window's list is its model's compiler of record's (`GATES_OF_RECORD`, by ``serve.json``'s ``model``) on both sides,
 whatever ``--transfer-gate`` says (`served_gates`: a list other than the record's is refused), so the verifier holds a
-registration to that list and no other. Until COMPILER lists the I/O shell's units, the run names a stand-in template, at TP1
-``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's `transfer_gate_negatives` and the registrations under
+docket to that list and no other. Until COMPILER lists the I/O shell's units, the run names a stand-in template, at TP1
+``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's `transfer_gate_negatives` and the dockets under
 the compiler listing none and under it less each one gate (`more_negatives`).
 
 **Coins**: each window's `service.Stream` samples on the auditor's challenger's coins, ``--challenger local|gate:USER@HOST --main
-FILE`` (`a5_coins`: the run root's one session, committed to each registration before any coin is
+FILE`` (`a5_coins`: the run root's one session, committed to each docket before any coin is
 read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
-history; ``gate:USER@HOST`` is the auditor host through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
+history; ``gate:USER@HOST`` is the auditor device through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
 ``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
 a root once, ever, and a window's honest and forged commits share the run root, so only one of them samples there.
 `advice_before_draw` holds the advice to the receipt of the stream that sampled.
@@ -165,6 +190,7 @@ import argparse
 import contextlib
 import functools
 import hashlib
+import importlib
 import json
 import multiprocessing
 import os
@@ -181,22 +207,19 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
-from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
+from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
+from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.commitments.windows import interface as IF  # noqa: E402
+from verity.commitments.periods import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import edge as E  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
+from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
-CAPPED = "verity/prove-path/capped-compiler/v0"
 I2 = "verity/prove-path/i2-compile-steps/v0"
-#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a TP Commit's few hundred requests (I1 spends tens of
-#: bits a row)
-CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
 LLAMA32_1B_CONFIG = HERE.parents[1] / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
@@ -213,33 +236,6 @@ PLAIN_INTERIM: str = json.loads((HERE / "sources.json").read_text())["plain_inte
 
 
 @dataclass(frozen=True)
-class Capped:
-    """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the sample as it fixes the code; `load` and ``transfer_gates`` are the inner
-    compiler's."""
-
-    inner: Any
-    cap_bits: int = CAP_BITS
-    name: str = CAPPED
-
-    def __post_init__(self) -> None:
-        if isinstance(self.cap_bits, bool) or not isinstance(self.cap_bits, int) or self.cap_bits < 8:
-            raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
-
-    @property
-    def digest(self) -> str:
-        return hashlib.sha512(canonical_json({"name": self.name, "cap_bits": self.cap_bits,
-                                              "compiler": {"name": str(self.inner.name), "digest": self.inner.digest}})).hexdigest()
-
-    @property
-    def transfer_gates(self) -> tuple[str, ...]:
-        return tuple(getattr(self.inner, "transfer_gates", ()))
-
-    def load(self, rank: int, world: int, requests: Any) -> Any:
-        return self.inner.load(rank, world, requests)
-
-
-@dataclass(frozen=True)
 class I2Compiler:
     """I2 (`predict.steps.compile_steps`) as a single-GPU window's compiler: the requests and their Programs are the ones I2
     compiles from the advice and each request's body by its I1 id (``ingress``; I2's prompts and sampling are values the request
@@ -249,14 +245,15 @@ class I2Compiler:
     recomputed from its descriptor, its rows held to the descriptor's): the Build's files are the bodies' cache, I2's digests
     are the Programs. What no digest covers (the rows' names, the parameters' names and types, ``supplied``, the
     correspondence and ``prefix_cache.json``) is the Build's word, so the verifier's I2 reads only Builds it wrote itself
-    (``own``, `own_builds`) and the prover's reads its row dir's. ``transfer_gates`` are the templates it lists as holding
-    transfer gates (module docstring), the run's stand-in until I2 lists the I/O shell's own. Its digest, a single-GPU
-    window's and a served one's alike, names its name, its code (``code``: a single-GPU window's I2 runs this tree's,
-    `code_identity`, ``verity`` and ``verity_vllm`` as git lists them, so a node's ignored build outputs don't move it; a
-    served window's, the server's registered compiler, `served_identity`), everything ``registered`` holds that I2 reads (φ:
-    the model, its revision and config, the target, the execution, and a served engine's world and engine args; the default
-    seed; ℓ; the served model name, where it names one) and that list. So a served window's ``serve.json`` is bound before the sample with the code: one that differs
-    from the one its advice was registered under names another compiler."""
+    (``own``, `own_builds`), as window-commit's does, and ``commit``'s reads its row dir's. ``transfer_gates`` are the
+    templates it lists as holding transfer gates (module docstring), the run's stand-in until I2 lists the I/O shell's own.
+    Its digest, a single-GPU window's and a served one's alike, names its name, its code (``code``: a single-GPU window's
+    I2 runs this tree's, `code_identity`; a served window's, the server's registered compiler, `served_identity`; both the
+    verifier's `interface.compiler_digest` over the integration's import closure as git lists it), everything
+    ``registered`` holds that I2 reads (φ: the model, its revision and config, the target, the execution, and a served
+    engine's world and engine args; the default seed; ℓ; the served model name, where it names one) and that list. So a
+    served window's ``serve.json`` is bound before the sample with the code: one that differs from the one its advice was
+    registered under names another compiler."""
 
     registered: Any
     ingress: Mapping[str, Mapping[str, Any]]
@@ -342,29 +339,10 @@ def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
         write_build(have[dg], program, named)
 
 
-#: the two packages a predicted Program is built from (`score.code_version`'s), by repository path
-CODE_DIRS = ("verity", "adapters/vllm/verity_vllm")
-
-
-@functools.lru_cache(maxsize=1)
 def code_identity() -> str:
-    """The code the compiler runs, once per process: every file git lists under `CODE_DIRS` (tracked, or untracked and not
-    ignored, so a node's build outputs, ``.lake`` under ``verity/``, don't count; docs, ``*.md``, compute nothing), by path and
-    content. Refused where the tree isn't a git work tree: a listing without git's ignore rules is another identity."""
-    import subprocess
-
-    import verity_vllm
-
-    root = Path(verity_vllm.__file__).resolve().parents[3]
-    p = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *CODE_DIRS], cwd=root,
-                       capture_output=True)
-    if p.returncode != 0:
-        raise ValueError(f"the compiler's code identity reads the tree's git listing, and {root} has none: "
-                         f"{p.stderr.decode(errors='replace').strip()[:200]}")
-    h = hashlib.sha256()
-    for rel in sorted({f for f in p.stdout.decode().split("\0") if f and not f.endswith(".md") and (root / f).is_file()}):
-        h.update(rel.encode() + b"\0" + hashlib.sha256((root / rel).read_bytes()).digest())
-    return h.hexdigest()
+    """The code a single-GPU window's I2 runs: the served compiler's digest (`served_identity`), so a single-GPU window's
+    I2 and a served one's name their code by one formula, the verifier's `interface.compiler_digest`."""
+    return served_identity()[1]
 
 
 def bodies_by_digest(programs_root: str) -> dict[str, str]:
@@ -393,7 +371,7 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
     from verity.circuits.codec import decode_program, descriptor_id, program_digest
     from verity.circuits.program import is_input
     from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     from verity_vllm.query.manifest import format as MF
 
     p = Path(d) / "descriptor.json.gz"
@@ -588,7 +566,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
 
 
 def registered_seed(serve: Mapping[str, Any]) -> int:
-    """The default seed a served window's registration fixes, `engine.served_seed.DEFAULT_SEED` (as vllm's registered compiler takes
+    """The default seed a served window's docket fixes, `engine.served_seed.DEFAULT_SEED` (as vllm's registered compiler takes
     it); a ValueError when ``serve.json`` says the server filled in another (or says none), since a request that sent no
     seed would be compiled under a seed its sample didn't use."""
     from verity_vllm.engine.served_seed import DEFAULT_SEED
@@ -633,11 +611,11 @@ def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None
 @functools.lru_cache(maxsize=1)
 def served_identity() -> tuple[str, str]:
     """The code a served window's compiler runs, as `verity-vllm advice` names it (``pipeline.advice``'s
-    ``registered_compiler``): compile_steps by its module path, its digest over the tree's code identity
-    (`source_identity.code_identity`: ``adapters/vllm`` and ``verity``), so the audit's tree holds the server's. The
+    ``registered_compiler``): compile_steps by its module path, its digest the verifier's `interface.compiler_digest` over
+    the integration's import closure (``adapters/vllm`` and ``verity``), so the audit's tree holds the server's. The
     window's I2 is that name, with this digest as its code (`i2_of_serve`)."""
     try:
-        from verity_vllm.pipeline import advice as ADV
+        ADV = importlib.import_module("verity_vllm.pipeline.advice")
     except ImportError:
         raise ValueError("a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), "
                          "which this tree lacks") from None
@@ -652,8 +630,9 @@ def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS, trans
 
 
 def compiler_of_args(a: argparse.Namespace) -> Capped:
-    """The run's compiler. The verifier's (``a.builds``, `own_builds`: ``audit``'s and ``circuit``'s) reads I2's Programs from
-    Builds it writes itself into ``a.builds`` from its compile; the prover's from its row dir."""
+    """The run's compiler. With ``a.builds`` (`own_builds`: ``audit``'s and ``circuit``'s, the verifier's, and
+    ``window-commit``'s) it reads I2's Programs from Builds it writes itself into ``a.builds`` from its compile; without,
+    from the row dir (``commit``'s)."""
     gates, own = getattr(a, "transfer_gate", None) or (), getattr(a, "builds", None)
     if served(a):
         return Capped(i2_of_serve(a.serve_run, a.window, own or a.row_dir, a.hf_config, a.target, a.cap_bits, gates, bool(own)), a.cap_bits)
@@ -673,12 +652,12 @@ def served(a: argparse.Namespace) -> bool:
 
 
 def serve_check(s: SimpleNamespace, bound: Mapping[str, Any], run_root: str, commitment: str, data: bytes) -> dict[str, Any]:
-    """A served window's published records held to the verifier's own, each check by name: its registration
+    """A served window's published records held to the verifier's own, each check by name: its docket
     (``advice/w<K>/registration.json``) names this window (``window``), a compiler whose digest carries the cap ℓ (``cap``: a
     `Capped` one) and is the verifier's own (``compiler``: I2 running the server's code under the run's ``serve.json``,
     `i2_of_serve`, and ℓ, so a ``serve.json`` other than the one the advice was registered under is refused here), and the advice root and length the
     opening opens (``advice``); the root serve-openai published for the window (``windows.jsonl``) is a SHA-512 root of a
-    ``rows-sha512`` store (``sha512``), the row dir's run root ``run_root`` (``run_root``), and the Commit the registration names
+    ``rows-sha512`` store (``sha512``), the row dir's run root ``run_root`` (``run_root``), and the Commit the docket names
     (``commit``: its run id and run root); and its advice ``data`` opens where the window before it closed (``follows``:
     `serve_follows`)."""
     reg, pub = s.registration, s.commit
@@ -700,13 +679,13 @@ NO_WINDOW = WA.Advice((), (), ())
 
 def serve_follows(s: SimpleNamespace, compiler: Mapping[str, str], data: bytes) -> dict[str, Any]:
     """The verifier's `window_advice.follows` for a served window (`serve_window`) whose advice is ``data``: the window it follows
-    (``s.last``) opens, under the verifier's ``compiler`` (its name and digest), the root and length its own registration binds
+    (``s.last``) opens, under the verifier's ``compiler`` (its name and digest), the root and length its own docket binds
     (`last_advice`), and ``data``'s carried requests are that window's close, each at the state it left it in (`edge.carried`),
     every one it left with outputs still to keep among them. A window no earlier one ran before carries nothing in.
     -> {ok, detail}: ``detail`` names that window (``last``) and, where ``data`` follows it, each carried request's field in
     each of its edge's ports (``carried``); else what doesn't follow, by name (``code``): `window_advice.FOLLOWS`'s (with
     ``request``, the request's id), ``advice`` where ``data`` isn't a window's advice, or ``opening`` where the window before
-    has no opening of the root its registration binds, and ``why``."""
+    has no opening of the root its docket binds, and ``why``."""
     at = {"last": None if s.last is None else s.last.window}
     try:
         advice = WA.decode(data)
@@ -725,7 +704,7 @@ def serve_follows(s: SimpleNamespace, compiler: Mapping[str, str], data: bytes) 
 
 def last_advice(last: SimpleNamespace, compiler: Mapping[str, str]) -> WA.Advice:
     """The advice of the window ``last`` (`serve_window`'s ``last``): its opening (``private/opening.json``), held to the binding
-    its registration carries, recomputed under ``compiler`` (`advice_windows.opened`); a ValueError naming what doesn't hold."""
+    its docket carries, recomputed under ``compiler`` (`advice_windows.opened`); a ValueError naming what doesn't hold."""
     reg = json.loads((last.dir / "registration.json").read_text())
     advice, bound = AW.opened(SimpleNamespace(**compiler), json.loads((last.dir / "private" / "opening.json").read_text()), WA)
     if reg.get("window") != last.window or reg.get("binding") != bound:
@@ -752,7 +731,7 @@ def opened_bytes(doc: Any) -> bytes:
 
 def serve_negatives(s: SimpleNamespace, compiler: Capped, bound: Mapping[str, Any], run_root: str,
                     commitment: str, data: bytes) -> dict[str, dict]:
-    """What `serve_check` refuses of a served window's published records: a registration whose compiler carries no cap (the inner
+    """What `serve_check` refuses of a served window's published records: a docket whose compiler carries no cap (the inner
     compiler's name and digest, as `verity-vllm advice` registers by default), one naming another window, the window's root
     published under vllm-v1 (32 bytes), and another Commit's root."""
     reg, pub = s.registration, s.commit
@@ -795,7 +774,7 @@ def commit_advice(compiler: Capped, data: bytes) -> tuple[list[dict], dict, dict
 
 def open_advice(compiler: Capped, doc: Any, codec: Any = None) -> tuple[list[dict], dict]:
     """The verifier's side of the opening (the named gap): the requests it compiles from the opened advice and the binding the
-    registration must carry (`advice_windows.of_opening`: the root recomputed from the advice and its salts). A malformed opening is
+    docket must carry (`advice_windows.of_opening`: the root recomputed from the advice and its salts). A malformed opening is
     a ValueError, as `compile_advice`'s refusals are. Under a served window's codec (`advice_codec`), whose carried requests
     the stand-in can't compile, the binding is recomputed without its requests (`advice_windows.opened`): I2's are the window's."""
     requests = compile_advice(compiler, opened_bytes(doc), codec)
@@ -844,7 +823,7 @@ def stand_in1(r: SimpleNamespace) -> dict[str, Any]:
 def window1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound: Mapping[str, Any]) -> tuple[Any, dict]:
     """The verifier's own window of a single-GPU Commit (`serving_rows.population` over ``compiler``'s Programs for the advice's
     ``requests``, the record's run root), from the record alone: no committed value is read. -> (the window, what `source1` holds
-    the registration to)."""
+    the docket to)."""
     from verity_vllm.pipeline import serving_rows as SRW
 
     r = record1(str(a.bundle), str(a.row_dir))
@@ -856,7 +835,7 @@ def window1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
 
 
 def source1(registered: dict[str, Any] | None, mine: Any, held: dict[str, Any]) -> dict[str, Any]:
-    """A single-GPU window's registration held to the verifier's own (`window1`): a ``stand-in`` of the record's run root, a
+    """A single-GPU window's docket held to the verifier's own (`window1`): a ``stand-in`` of the record's run root, a
     SHA-512 root (``sha512``), under the commitment the record's store names, with `stand_in1`'s ``of`` and ``link``, the
     Programs the verifier loaded and the compiler and advice it compiled (`tp.serving_rows.BINDING`)."""
     w, si = registered or {}, held["stand_in"]
@@ -872,7 +851,7 @@ def source_of(a: argparse.Namespace) -> Callable[[dict | None, Any, dict], dict]
 
 
 def with_serve(v: dict[str, Any], sv: dict[str, Any]) -> dict[str, Any]:
-    """A served window's source verdict: the registration's (`source1`) and the published records' (`serve_check`)."""
+    """A served window's source verdict: the docket's (`source1`) and the published records' (`serve_check`)."""
     return {"ok": v["ok"] and sv["ok"], "codes": [*v["codes"], *(c for c in sv["codes"] if c not in v["codes"])],
             "detail": {**v["detail"], "serve": sv["detail"]}}
 
@@ -906,7 +885,7 @@ def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
     verified against the record's run root, the weights (none for an activation template) each opened on its first read
     against the committed weights root (`cpu_replay.OnRead`), from the bundle's tensors and the checkpoint (`checkpoint_of`,
     composed as the Build's weight roles say, `cpu_replay.registered_roles`), and the per-expert cut's tables committed under
-    the committer's key and registration (`tables_of`), read before the bundle is opened."""
+    the committer's key and docket (`tables_of`), read before the bundle is opened."""
     from verity_vllm.check.oracle_compare import OpenedReader
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.pipeline import cpu_replay as CPU
@@ -1019,7 +998,7 @@ def commit_rank(job: tuple[argparse.Namespace, int, list[dict], dict]) -> dict:
 
 
 def commit(a: argparse.Namespace) -> int:
-    """The advice committed once, so every window's registration binds one root, then each window. A served window's advice the
+    """The advice committed once, so every window's docket binds one root, then each window. A served window's advice the
     server committed: its windows bind the published root (`served_advice`), and the opening stays the server's."""
     _world, ranks = ranks_of(a)
     t0 = time.time()
@@ -1040,8 +1019,8 @@ def commit(a: argparse.Namespace) -> int:
 
 def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, mine: Any, held: dict, served: Path,
                    opening: dict) -> dict[str, dict]:
-    """What the verifier refuses before any sample about the advice: a registration naming another compiler or another advice root,
-    the advice's opening under another salt (which opens no registered root), a registration binding no compiler or advice (a
+    """What the verifier refuses before any sample about the advice: a docket naming another compiler or another advice root,
+    the advice's opening under another salt (which opens no registered root), a docket binding no compiler or advice (a
     window over Programs of record passed off as the advice's), one whose compiler names another cap ℓ, one under the compiler
     listing no transfer gates and one under it less each one gate (where it lists some: a window sampling them, as another
     compiler's), and another rank's."""
@@ -1077,12 +1056,12 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
 
 def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any]) -> dict:
     """That the advice was fixed before the coins, checked rather than assumed, as `pouw.credit.draw_root` checks the credit bits:
-    the digest of the registration the verifier holds the opening to (`registration.digest`, which covers the window's
+    the digest of the docket the verifier holds the opening to (`registration.digest`, which covers the window's
     ``compiler`` and ``advice`` root) must be the one the sample's receipt names, the receipt the stream wrote when it received the
-    registration and before its select read any coin (the challenger's coins are committed to that digest before any is
-    read); and that registration must bind the compiler and the root the verifier
-    opened. -> {ok, codes, detail}: ``after-the-draw`` where the sample followed another registration, or another stream's,
-    ``compiler`` or ``advice`` where the registration binds another."""
+    docket and before its select read any coin (the challenger's coins are committed to that digest before any is
+    read); and that docket must bind the compiler and the root the verifier
+    opened. -> {ok, codes, detail}: ``after-the-draw`` where the sample followed another docket, or another stream's,
+    ``compiler`` or ``advice`` where the docket binds another."""
     import a5 as A5
 
     w = rec.get("window") or {}
@@ -1092,12 +1071,12 @@ def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound
             "detail": {"drawn_after": receipt.get("registration"), "registration": R.digest(rec), "received": receipt.get("received")}}
 
 
-def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
+def advice_after_sample(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
                       held: dict, source: Callable[[dict | None, Any, dict], dict] = SRT.source, codec: Any = None) -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
-    in a registration binding that root, with its opening. Every check before the sample passes on it (``source`` against the new
+    in a docket binding that root, with its opening. Every check before the sample passes on it (``source`` against the new
     opening: the root is a true commitment of the advice, read by ``codec``), and `advice_before_draw` refuses it
-    (``after-the-draw``): the sample followed the registration received first."""
+    (``after-the-draw``): the sample followed the docket received first."""
     data = bytes.fromhex(opening["advice"])
     late = AW.opening(data, AW.commit_advice(compiler, data))
     _reqs, bound = open_advice(compiler, late, codec)
@@ -1107,19 +1086,16 @@ def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping
     return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": src["ok"]}
 
 
-def forged_row(s: dict, forged: dict | None) -> dict:
-    """A forged window's verdict: its registration passed every check before the sample, the forged unit was sampled, and the outcome
-    is a reject with Lean's verifier refusing a sampled member."""
-    verdicts = (s.get("audit") or {}).get("verdicts") or {}
-    lean = {k: v for k, v in verdicts.items() if k.startswith("lean-verify/")}
+def forged_row(s: dict, forged: dict | None, wdir: Path) -> dict:
+    """A forged window's verdict (`records_audit.forged_outcome`, over its audit directory ``wdir``): its docket passed
+    every check before the sample, the forged unit was sampled, the outcome is a reject, and the forged unit's member was
+    stopped. Behind the ZK server, that is no proof of it released (``no_proof_released``); in a plain audit, which has no
+    ZK server, Lean's verifier refusing the proof it read (``lean_refused``)."""
     unit = None
     if forged is not None:
         unit = next(m["base"] for m in s.get("members") or [] if m["k"] == forged["member"]) + forged["unit"]
-    checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()),
-              "forged_unit_drawn": unit is not None and unit in (s.get("draw") or []),
-              "rejected": (s.get("audit") or {}).get("accepted") is False,
-              "lean_refused": any(v is False for v in lean.values())}
-    return {"ok": all(checks.values()), "checks": checks, "why": (s.get("audit") or {}).get("why")}
+    return forged_outcome(s, wdir, None if forged is None else forged["member"],
+                          {"forged_unit_drawn": unit is not None and unit in (s.get("draw") or [])})
 
 
 def per_unit(s: dict) -> dict[str, dict]:
@@ -1159,10 +1135,10 @@ def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits
     if not record.get("accepted"):
         return None
     p = AU.profile(record["registration"], record["draw"], delta)
-    law = p.strata()
+    sampling_design = p.strata()
     weights: float | dict[str, float] = max(bits.values())
-    if law is not None and {s.name for s in law.strata} <= set(bits):
-        weights = {s.name: float(bits[s.name]) for s in law.strata}
+    if sampling_design is not None and {s.name for s in sampling_design.strata} <= set(bits):
+        weights = {s.name: float(bits[s.name]) for s in sampling_design.strata}
     within = count["bound"] == "within the charge"
     return {"advice_bits": advice_bits, "c": advice_bits if within else None, "other_inputs": count["other_inputs"],
             "bound": count["bound"], "delta": delta, "wrong_units": record.get("wrong_units"), "template_bits": dict(bits),
@@ -1210,7 +1186,7 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
         rec, receipt = (json.loads((out / f).read_text()) for f in ("registration.json", "receipt.json"))
         row["advice_before_draw"] = advice_before_draw(receipt, rec, bound)
         row["negatives"] = {**(row["negatives"] or {}),
-                            "advice-root-after-the-draw": advice_after_draw(compiler, receipt, rec, opening, mine, held, src,
+                            "advice-root-after-the-draw": advice_after_sample(compiler, receipt, rec, opening, mine, held, src,
                                                                             advice_codec(a))}
         ordered = row["advice_before_draw"]["ok"] and row["negatives"]["advice-root-after-the-draw"]["refused"]
     else:
@@ -1218,7 +1194,7 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
     row["ok"] = ok and ordered
     if a.forged:
         forged = ((json.loads((Path(a.windows) / "commit.json").read_text())["ranks"]).get(str(r)) or {}).get("forged")
-        row["forged"] = {"unit": forged, **forged_row(s, forged)}
+        row["forged"] = {"unit": forged, **forged_row(s, forged, out)}
         row["ok"] = row["forged"]["ok"] and ordered
     return row
 
@@ -1232,7 +1208,8 @@ def coins_of(a: argparse.Namespace) -> dict[str, Any]:
 
 def audit(a: argparse.Namespace) -> int:
     import a5 as A5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     world, ranks = ranks_of(a)
     if a.port is None:
@@ -1261,7 +1238,7 @@ def audit(a: argparse.Namespace) -> int:
                      "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},
                      **({"plain": {"scope": A5.PLAIN_SCOPE, "interim": PLAIN_INTERIM}} if a.plain else {})}
     manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main, ssh_key=a.gate_key,
-                                          peer=a.peer, key_record=a.challenger_key)
+                                          peer=a.peer, key_record=a.challenger_key, local=LC.Local)
     try:
         for (_a, _w, r), row in in_processes(audit_rank, a.jobs, [(a, world, r) for r in ranks]):
             summary["ranks"][str(r)] = row
@@ -1295,15 +1272,15 @@ def audit(a: argparse.Namespace) -> int:
     return 0 if summary["ok"] else 1
 
 
-def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_bits: int,
-                 transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
+def compiler_doc(serve_run: str | None, hf_config: str | None, target: str | None, cap_bits: int,
+                 transfer_gates: Sequence[str] = (), serve_file: str | None = None) -> dict[str, Any]:
     """A served run's registered compiler, `Capped` over I2 running the server's code (`served_identity`) under the run's
-    ``serve.json`` (`registered_of_serve`), listing its model's transfer gates of record (`served_gates`, which
+    ``serve.json`` (`registered_of_serve`; ``serve_file`` instead, `serve_phi`'s statement of it before the serve), listing its model's transfer gates of record (`served_gates`, which
     ``transfer_gates`` may only restate): the name and digest its windows' bindings must carry, ℓ and the compiler it wraps
     (``inner``, what `verity-vllm advice --compiler-name --compiler-digest` takes, its digest `I2Compiler.digest`'s), the
     server's code (``served``), and the φ and default seed I2 compiles each window's Programs under."""
     name, digest = served_identity()
-    serve = json.loads((Path(serve_run) / "serve.json").read_text())
+    serve = json.loads(Path(serve_file or Path(str(serve_run)) / "serve.json").read_text())
     reg = registered_of_serve(serve, hf_config, target, cap_bits)
     inner = I2Compiler(reg, {}, "", name=name, transfer_gates=served_gates(serve, transfer_gates), code=digest)
     c = Capped(inner, cap_bits)
@@ -1335,12 +1312,15 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     ``verity-vllm advice --weights-of-record`` records in each window's registration, and the roots the verifier pins
     before the first window's coins (``window-circuit --pins``, ``records_audit.py count --pins``); the verifier never
     recomputes one. Refused (ValueError) for a checkpoint not of record or one the manifest pins as another model than
-    ``serve.json``'s, a served rotary table outside its bound, and as `advice.registered_weights` refuses it. -> how many
-    roots it registers, and the weight parameters it leaves free (``unrooted``)."""
+    ``serve.json``'s, a served rotary table outside its bound, and as `advice.registered_weights` refuses it. With
+    ``--deployment-record FILE``, the registration as the first record of the serve's registration log
+    (`window_weights.deployment_record`) is written there too, for Pearl+'s W to be chained after on a serve tied to it. -> how
+    many roots it registers, the weight parameters it leaves free (``unrooted``) and, given, that record's digest
+    (``deployment``)."""
     import numpy as np
 
     from verity_vllm.pipeline.advice import registered_weights
-    from verity_vllm.program.predict.window_weights import weights_registration
+    from verity_vllm.program.predict.window_weights import deployment_record, weights_registration
 
     serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
     cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"
@@ -1348,8 +1328,12 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
                                a.checkpoint_dir, checkpoints_manifest=a.checkpoints,
                                tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None)
     roots = registered_weights(doc, serve)
+    first = deployment_record(doc) if a.deployment_record else None
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
-    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out}
+    if first is not None:
+        Path(a.deployment_record).write_text(json.dumps(first, indent=1) + "\n")
+    return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out,
+            **({"deployment": R.digest(first)} if first is not None else {})}
 
 
 def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
@@ -1358,7 +1342,7 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
     (`serving_rows.population`, as `window1` makes the verifier's), each Program's Build this command's own, from its compile
     (`own_builds`, into a directory of its own beside ``--out``: it reads no row dir and needs no vLLM), and its circuit record
     (`serving_rows.circuit_record`) written to ``--out``, under no run (its `interface.RUN_FIELDS` empty: the compiler knows
-    none). -> the advice's length in bits, the one the registration charges (`advice_windows.of_advice`)."""
+    none). -> the advice's length in bits, the one the docket charges (`advice_windows.of_advice`)."""
     import tempfile
 
     from verity_vllm.pipeline import serving_rows as SRW
@@ -1392,17 +1376,22 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
     each held to the root the window's registration (``advice/w<K>/registration.json``) records for its parameter
-    (`registration_roots`)."""
+    (`registration_roots`). With ``--window-registration`` (H1's W of the window, `h1_tie` with no key), the class's
+    circuit reads H1's tables, the circuit an H1-tied window-commit commits."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity_vllm.program.predict.window_circuit import window_circuit
+    from verity_vllm.program.predict.window_circuit import PearlTables, window_circuit
 
     compiler, data, pins = compiler_of_args(a), Path(a.advice).read_bytes(), pins_of(a.pin, a.pins)
     compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
+    tie = h1_tie(a, cls, key=False)
+    if tie is not None and a.pearl_tables:
+        raise ValueError("--pearl-tables or --window-registration: the circuit reads Pearl+'s tables or H1's, not both")
+    tables = PearlTables(a.pearl_tables) if a.pearl_tables else None if tie is None else tie[2]
     t0 = time.time()
     try:
-        circuit = window_circuit(registered, compile_steps(registered, data, compiler.inner.ingress), cls)
+        circuit = window_circuit(registered, compile_steps(registered, data, compiler.inner.ingress), cls, tables=tables)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lowered = time.time() - t0
@@ -1414,14 +1403,64 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "seconds": {"circuit": round(lowered, 1), "record": round(time.time() - t0 - lowered, 1)}}
 
 
+def device_target(async_scheduling: bool = False) -> dict[str, Any]:
+    """This device's target profile (`verity_vllm.TargetProfile.from_device`, declaring ``async_scheduling`` only under
+    it) and execution, bi-eager where vLLM runs batch-invariant (``VLLM_BATCH_INVARIANT``), with no int8 scope: what
+    serve-openai's ``serve.json`` records of them for a model it reads none of (`verity_vllm.target_of` given no model)."""
+    from verity_vllm import target_of
+
+    return target_of(async_scheduling=async_scheduling)
+
+
+def serve_phi(a: argparse.Namespace) -> dict[str, Any]:
+    """What a serve-openai run's ``serve.json`` will record of φ, read before it serves: ``--model`` and ``--revision``,
+    the default seed it fills in (`engine.served_seed.DEFAULT_SEED`), and this device's target profile and execution
+    (`device_target`, under this process's environment, which must be the serve's: ``VLLM_BATCH_INVARIANT`` names the
+    execution; ``--async-scheduling`` as the serve's), with no int8 scope, which a checkpoint served in BF16 runs none
+    of. Written to ``--out``: `class_circuit_of_serve`'s ``--serve``, its circuit the one the run's windows are committed
+    as once ``serve.json`` says the same (`registered_of_serve` reads only these fields)."""
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
+    doc = {"model": a.model, "revision": a.revision, "default_seed": DEFAULT_SEED, **device_target(a.async_scheduling)}
+    Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+    return {"out": a.out, "execution": doc["execution"], "device": doc["target"].get("device_name")}
+
+
+def class_circuit_of_serve(a: argparse.Namespace) -> dict[str, Any]:
+    """A window class's one Circuit from φ alone (`window_circuit.class_circuit` at ``--class``, cut at Pearl+'s linears
+    with ``--pearl-tables``), no advice: ``--serve``'s φ (a run's ``serve.json``, or `serve_phi`'s statement of it before
+    the run serves; `registered_of_serve`). Its record (`interface.descriptor_record` at ``--cap``, or with
+    ``--description`` its description) is ``window-circuit``'s of any window of the class the run serves under that φ,
+    whatever its traffic (`window_circuit.window_circuit` refuses a window the class doesn't take and builds this
+    circuit), so it can be written, and a period opened on it, before the serve. -> the record's input count at the pins
+    (``--pin``, ``--pins``), and the seconds."""
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.window_circuit import PearlTables, class_circuit
+
+    serve, pins = json.loads(Path(a.serve).read_text()), pins_of(a.pin, a.pins)
+    registered, cls = registered_of_serve(serve, a.hf_config, a.target, a.cap_bits), window_class_of(a.window_class)
+    t0 = time.time()
+    try:
+        circuit = class_circuit(registered, cls, tables=PearlTables(a.pearl_tables) if a.pearl_tables else None)
+    except Unexpressible as e:
+        raise ValueError(f"I2's class circuit refuses φ: {e}") from None
+    lowered = time.time() - t0
+    doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
+    Path(a.out).write_bytes(IF.circuit_bytes(doc))
+    return {"count": IF.input_count(doc, pins=pins), "seconds": {"circuit": round(lowered, 1),
+                                                                  "record": round(time.time() - t0 - lowered, 1)}}
+
+
 def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
-    """A served window's padded size at its class ``--class`` (`class_size`): one class Program of the window's registration
+    """A served window's padded size at its class ``--class`` (`class_size`): one class Program of the window's docket
     lowered at the small class ``--probe`` (`window_circuit.class_circuit`, exact), projected to ``--class`` with v19's heads
     (`class_size.project`) and priced (`class_size.size`) a Program and at the class's slots, the window's circuit whatever
     its requests. -> the probe's census, the requests its advice compiles to and the two sizes."""
     from dataclasses import asdict
 
-    import class_size as CZ
+    from verity.protocols.proofs.spot.prover.audit import class_size as CZ
+    from verity_vllm.definitions.registry.attention_vocab import fa2_masked_from
+    from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict.window_circuit import class_circuit
 
     compiler = compiler_of_args(a)
@@ -1431,7 +1470,8 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1, provable=False))
     lowered = time.time() - t0
     try:
-        one = CZ.project(seen, probe, cls)
+        one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)),
+                         lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
         sizes = {"program": CZ.size(one), "window": CZ.size(one, cls.slots)}
     except ValueError as e:
         raise ValueError(f"{e} (the probe's census: {json.dumps(seen, sort_keys=True)})") from None
@@ -1439,55 +1479,35 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
-@contextlib.contextmanager
-def network_traces() -> Iterator[None]:
-    """``benchmarks/network_traces``' modules importable inside, then ``sys.path`` and the module ``replay`` as they were:
-    its ``replay``, which its ``active_replay`` imports, isn't one_stage's, which ``a5`` imports."""
-    path, replay = list(sys.path), sys.modules.pop("replay", None)
-    sys.path.insert(0, str(HERE.parent / "network_traces"))
-    try:
-        yield
-    finally:
-        sys.path[:] = path
-        sys.modules.pop("replay", None)
-        if replay is not None:
-            sys.modules["replay"] = replay
+#: what a caller passes for the network certifier run a serve kept: serve dir -> None where it kept none, else the run's
+#: deployment parameters, its certified I/O and its certified ingress, each execution phase's number and rows
+KeptIngress = Callable[[Path], tuple[Any, Mapping[str, Any], Sequence[tuple[int, Sequence[Any]]]] | None]
 
 
-def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[list[int]], list[str | None]] | None:
-    """The network certifier's scan of its run the certifier front kept under ``serve_dir``
-    (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
-    state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
-    None for a slot no request starts (`scan_state.scan_state`). The window is the link-window, of the class's
-    buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
-    certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
-    None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
-    from verity.protocols.certifier.verifier import warden_rows as WRW
+def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: KeptIngress | None = None,
+              ) -> tuple[list[list[int]], list[str | None]] | None:
+    """The network certifier's scan of its run the certifier front kept under ``serve_dir``, as a window of class
+    ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's state rows and slot k's request, the I1 id
+    (its id request's ``user``) of the one whose Program starts there, None for a slot no request starts
+    (`scan_state.scan_state`). The window is the execution phase, of the class's buckets, whose Programs start its
+    requests (their anchors, `scan_state.scan_anchors`); the scan reads the network certifier's certified ingress rows
+    from execution phase 0 and the outputs its egress cells carry. ``kept_ingress`` reads the kept run
+    (`KeptIngress`): the caller passes it, since SPOT reads the certifier's record as a certified input and imports
+    neither the certifier nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
+    doesn't give the window's scan or the caller passed no reader."""
     from verity_vllm.program.predict import scan_state as SS
 
-    with network_traces():
-        import certifier_piece as CP
-        import warden_chain as WCH
-        import warden_serve as WSV
-
-    if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
+    if kept_ingress is None:
+        raise ValueError("a window's scan reads the network certifier run its serve kept, or that it kept none, by the "
+                         "caller's reader, since SPOT imports neither the certifier nor a benchmark: run this from a "
+                         "caller that passes it (main's kept_ingress, as benchmarks/one_stage/window_commit.py does)")
+    if (kept := kept_ingress(serve_dir)) is None:
         return None
-    unpacked = None
-    try:
-        run = CP.kept_run(serve_dir)
-        unpacked, kept = CP.unpack(serve_dir / CP.PRIVATE / run / "fetch.tar.gz")
-        _, params = WCH.deployment(kept)
-        io = WCH.io(kept)
-        records = WSV.read_records(WCH.witness(kept), params)
-    except (SystemExit, CP.NotRun) as e:
-        raise ValueError(f"the certifier front's kept run: {e}") from None
-    finally:
-        if unpacked is not None:
-            CP.rm(unpacked)
+    params, io, phases = kept
     T = params.window
     cls.scan.serves(params)
     if T != cls.buckets:
-        raise ValueError(f"the kept run's link-windows are {T} buckets, not a window of class {cls}'s "
+        raise ValueError(f"the kept run's execution phases are {T} buckets, not a window of class {cls}'s "
                          f"{cls.buckets}: serve at the class's scan schedule")
     if not io["accepted"]:
         raise ValueError(f"the kept run's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
@@ -1497,21 +1517,35 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
                          "served traffic the network certifier didn't see")
     if None in (release := [by[u]["release"] for u in users]):
         raise ValueError("a request of the window has no END in the kept run's ingress")
-    windows = sorted(r.window for r in records[WSV.INGRESS])
+    windows = sorted(w for w, _ in phases)
     if windows != list(range(len(windows))):
-        raise ValueError(f"the kept run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
-    ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
+        raise ValueError(f"the kept run's ingress records are execution phases {windows[:8]}, not 0, 1, …")
+    ingress = [x for _, rows in sorted(phases, key=lambda p: p[0]) for x in rows]
     outputs = {r["stream"]: r["output"] for r in io["records"]}
     anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
     at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}
     if len(at) != 1 or None in at:
-        raise ValueError(f"the window's requests start in the scan's link-windows {sorted(map(str, at))}, not one")
+        raise ValueError(f"the window's requests start in the scan's execution phases {sorted(map(str, at))}, not one")
     (w,) = at
     rows, starts = SS.scan_state(cls, ingress, outputs, w * T)
     user = {r["stream"]: r["user"] for r in io["records"]}
     if bad := [q for q in starts if q is not None and q not in user]:
         raise ValueError(f"the scan starts connections {bad[:4]}, whose requests the kept run's certified I/O doesn't hold")
     return rows, [None if q is None else user[q] for q in starts]
+
+
+def scan_state_opening(value: Any, path: Path) -> Path:
+    """The window's `SCAN_STATE` value ``value`` (`window_rows.state_value`'s) opened whole at ``path`` for the network
+    certifier's scan, which reads it as its state tree (``scan_zk.py --v3c``, under the name its caller passes,
+    `scan_zk.SCAN_STATE_FILE`), prover only, every row (u16 little-endian) and then every salt. The window's
+    ``v<j>-private.bin`` holds only the rows its members read."""
+    import numpy as np
+
+    at = np.arange(value.leaves)
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        os.fchmod(f.fileno(), 0o600)
+        f.write(np.ascontiguousarray(RW.value_rows(value, at), dtype="<u2").tobytes() + RW.value_salts(value, at))
+    return path
 
 
 def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[str, Any]],
@@ -1553,17 +1587,18 @@ def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[s
     return out
 
 
-def h1_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
-    """With ``--window-registration``: H1's registration W of the window, its window Program's meta (the serve dir's
+def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str, Any], dict[str, Any], Any] | None:
+    """With ``--window-registration``: H1's docket W of the window, its window Program's meta (the serve dir's
     ``h1/`` `pouw_h1.PROGRAM_META`) and the circuit's tables of it (`window_class.Tables`, `pouw_h1_commit.shape`); None
-    without. ValueError where there's no ``--h1-key``, W is under another Program, or H1's rounds aren't the class's
-    outputs, a table a round the circuit reads."""
-    if not a.window_registration:
+    without. The tables are W's Program's alone, so the verifier's ``window-circuit`` reads them with no key (not
+    ``key``). ValueError where there's no ``--h1-key`` (``key``: window-commit's, whose docket reuses W's salts), W
+    is under another Program, or H1's rounds aren't the class's outputs, a table a round the circuit reads."""
+    if not a.window_registration or getattr(a, "pearl_passes", None):
         return None
     from verity_vllm.program.predict import window_circuit as WC
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import commit as CT
-    if not a.h1_key:
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+    if key and not a.h1_key:
         raise ValueError("--window-registration: give --h1-key, H1's prover key, whose salts W's tables take")
     w = json.loads(Path(a.window_registration).read_text())
     meta = json.loads((Path(a.serve_run) / "h1" / PH.PROGRAM_META).read_text())
@@ -1576,22 +1611,79 @@ def h1_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], dict[str, A
     return w, meta, WC.Tables(*CT.shape(meta["layout"], int(meta["steps"])))
 
 
-def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
+def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
+    """The sampling design a window of ``circuit`` is committed under (``window-commit --sampling-design``): the one the rate ``rule``,
+    which the window's audit states to its stream, names over the circuit's proof blocks (`service.params_sampling_design`), so the
+    window registers the design the stream holds it to. A fixed count is refused by name (`service.SamplingDesign`): no stream
+    takes it, and the audit would hold the window to another design."""
+    from verity.protocols.proofs.spot.verifier import service as S
+
+    S.SamplingDesign(rule)
+    program, query = circuit.program()
+    return dict(S.params_sampling_design(rule, program, query, None)[0])
+
+
+def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dict[str, Any]], list[int], Any] | None:
+    """With ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``: the window's passes, ``served.json`` and its retention):
+    Pearl+'s window record W of them (``--window-registration``, ``retain --window-record W``'s), the retained passes'
+    manifests, their rounds and the circuit's tables of them (`window_class.PearlTables` under W's scheme); None without.
+    ValueError without ``--window-registration``, beside ``--h1-key``, for a W of no Pearl-C scheme, or where the rounds
+    retained aren't the class's outputs, round s the window's s-th step, whose calls the circuit cut at its linears reads."""
+    if not getattr(a, "pearl_passes", None):
+        return None
+    from verity_vllm.program.predict import window_circuit as WC
+    if not a.window_registration:
+        raise ValueError("--pearl-passes: give --window-registration W, Pearl+'s window record of the passes "
+                         "(served_passes.py retain --window-record W)")
+    if getattr(a, "h1_key", None):
+        raise ValueError("--h1-key is H1's prover key: a window tied to Pearl+'s W takes its salts from the passes' manifests")
+    w, d = json.loads(Path(a.window_registration).read_text()), Path(a.pearl_passes)
+    scheme = str(((w if isinstance(w, dict) else {}).get("window") or {}).get("scheme"))
+    if not scheme.startswith("pearl-c-"):
+        raise ValueError(f"{a.window_registration} is no Pearl+ window record: its scheme is {scheme}")
+    held = [p for p in json.loads((d / "served.json").read_text())["passes"] if p.get("units")]
+    rounds = (json.loads((d / "retention.json").read_text())["rounds"] if (d / "retention.json").exists()
+              else list(range(len(held))))
+    if rounds != list(range(cls.outputs)):
+        raise ValueError(f"the window's retained rounds {rounds} aren't its class's {cls.outputs} outputs, round s its s-th "
+                         "step, whose calls the circuit cut at its linears reads")
+    return w, [json.loads(Path(held[s]["manifest"]).read_text()) for s in rounds], rounds, WC.PearlTables(scheme)
+
+
+def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | None = None,
+                            scan_state_file: str | None = None) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
-    under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
+    under the record's run root, the weights it serves committed under the committer's key ``--key`` as the docket
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
     window's own value. Where the certifier front kept the network certifier's run under the serve dir, the scan state is
     its scan of that run (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
     Program the scan starts there, its row the scan's (`place_slots`, refused where the scan starts a request in two
     slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
     one); else slot k holds the advice's k-th request and the scan state is a stand-in, the rows its slots' rows and
-    ``max_tokens`` give (`window_rows.standin_state`). Refused for a registration of another model. With
-    ``--window-registration`` (`h1_tie`), the circuit reads H1's tables and the registration reuses W's (``tie``: the
-    digest of W it is chained after, and the tables). -> the window's run root, its circuit record's SHA-512, its
+    ``max_tokens`` give (`window_rows.standin_state`). Refused for a docket of another model. With
+    ``--window-registration`` (`h1_tie`), the circuit reads H1's tables and the docket reuses W's (``tie``: the
+    digest of W it is chained after, and the tables); with ``--pearl-passes`` too (`pearl_tie`), the circuit is cut at its
+    linears and the docket reuses Pearl+'s W's values (`pearl_c.window.reuse`). -> the window's run root, its circuit record's SHA-512, its
     population and members, the scan state's kind (``scanned`` or ``stand-in``), the registered weights whose root the
-    window's is (``held``) and those it isn't, whose reads are free (``free``), ``tie``, and the seconds each part took."""
+    window's is (``held``) and those it isn't, whose reads are free (``free``), ``tie``, and the seconds each part took.
+    The window's sampling design is the one its rule ``--sampling-design``, a rate, names over the class circuit (`window_design`); a
+    rule that is no rate is refused before the class is lowered."""
+    import tempfile
+
+    out = Path(a.out).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="builds-", dir=out.parent) as builds:
+        a.builds = builds
+        return window_commit_of_builds(a, kept_ingress, scan_state_file)
+
+
+def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | None = None,
+                            scan_state_file: str | None = None) -> dict[str, Any]:
+    """`window_commit_of_advice` over its own Build of each Program, from its compile (`own_builds`, into ``a.builds``
+    beside ``--out``, as ``circuit``'s), never its row dir's: those are `advice_compile`'s, written once the serve is done,
+    and a window tied to W is committed at its close, before its sample coin (`serve_tie`)."""
     import numpy as np
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.check.oracle_compare import OpenedReader
@@ -1604,8 +1696,8 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity.protocols.spot.verifier.one_stage import draw as DR
-    from verity.protocols.spot.verifier.one_stage import registered as CR
+    from verity.protocols.proofs.spot.verifier import service as S
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
     seconds: dict[str, float] = {}
     t = time.time()
@@ -1614,12 +1706,17 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
         nonlocal t
         seconds[what], t = round(time.time() - t, 1), time.time()
 
+    if kept_ingress is None or scan_state_file is None:
+        raise ValueError("window-commit reads the network certifier run its serve kept, and names the scan state it opens "
+                         "for the certifier's scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT "
+                         "imports neither the certifier nor a benchmark: run benchmarks/one_stage/window_commit.py")
+    S.SamplingDesign(a.sampling_design)
     key = committer_key(Path(a.key))
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     requests = compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
-    tie = h1_tie(a, cls)
-    tables = None if tie is None else tie[2]
+    tie, pearl = h1_tie(a, cls), pearl_tie(a, cls)
+    tables = tie[2] if tie is not None else pearl[3] if pearl is not None else None
     try:
         compiled = compile_steps(registered, data, compiler.inner.ingress)
         WC.takes(compiled, cls, tables=tables)
@@ -1647,7 +1744,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
-    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units])
+    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], kept_ingress=kept_ingress)
     state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
@@ -1658,7 +1755,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
         if u is not None:
             pi = ProgramIndex(p.progs[u], program_dir=p.dirs[u])
             served_ = WRS.Served.of_record(pi, store, u, p.arrivals[u])
-        slots.append(WRS.Slot(low.fn, cls, row, weights, served_))
+        slots.append(WRS.Slot(low.fn, cls, row, weights, served_, cut=low.cut))
         rows.append((row, max_tokens))
     lap("slots")
     reg = WW.WeightsRegistration.of(json.loads(Path(a.registration).read_text()), a.registration)
@@ -1674,12 +1771,17 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     filled = WRS.Rows(low, slots, values)
     previous = None
     if tie is not None:
-        from verity_vllm.protocols.pouw.h1 import commit as CT
+        from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
         h1w, meta, _tables = tie
         values |= CT.reuse(h1w, meta["layout"], int(meta["steps"]), Path(a.h1_key).read_bytes(), filled.value)
         previous = R.digest(h1w)
+    elif pearl is not None:
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+        pw, manifests, rounds, _tables = pearl
+        values |= PWR.reuse(pw, manifests, filled.value, rounds)
+        previous = R.digest(pw)
     lap("rows")
-    win = IF.Window(low.circuit, run, DR.parse_design(a.law), a.cap, registered=values, forms=WRS.FORMS)
+    win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")
@@ -1688,6 +1790,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
+    scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
@@ -1743,7 +1846,11 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
             "requests": len(reqs)}
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None, scan_state_file: str | None = None) -> int:
+    """The commands (the module docstring). ``kept_ingress`` reads the network certifier run a serve kept
+    (`KeptIngress`), which ``window-commit``'s scan needs (`kept_scan`), and ``scan_state_file`` is the name its scan
+    reads the window's opened scan state under (`scan_state_opening`): a caller that may import the certifier and
+    ``benchmarks/`` passes both."""
     from verity_vllm.pipeline.workload_file import workload_file
 
     def workload_arg(s: str) -> str:
@@ -1778,7 +1885,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--jobs", type=int, help="ranks at once, each in its own process (default: commit one, audit every "
                        "audited rank, which draw from the run root's one challenger session)")
         p.add_argument("--transfer-gate", action="append", default=[], help="a template the registered compiler lists as holding "
-                       "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's law is work-rate:NUM/DEN). A "
+                       "transfer gates, in its digest, every unit of which is proved (repeatable; the partition's sampling design is work-rate:NUM/DEN). A "
                        "served window's are its model's of record (GATES_OF_RECORD), which this may only restate")
         p.add_argument("--out", required=True)
     p = sub.choices["commit"]
@@ -1797,18 +1904,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
-    p.add_argument("--firewall", required=True)
+    p.add_argument("--zk-server", required=True)
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port, rank r's from base + a5.RANK_PORTS·r "
                    "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
-    p.add_argument("--plain", action="store_true", help="plain Flock sessions, not --zk (a5's --plain): the partition's law "
+    p.add_argument("--plain", action="store_true", help="plain Flock sessions, not --zk (a5's --plain): the partition's sampling design "
                    "stratified (stratified-rate:NUM/DEN), each window one member with no registered reads or shared rows "
                    "(a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
                    "(a5_coins): local (a development session on this machine), or gate:USER@HOST "
-                   "(the auditor host through its SSH gate, with --peer and --challenger-key)")
+                   "(the auditor device through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
@@ -1817,7 +1924,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
-    p.add_argument("--serve-run", required=True)
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--serve-run")
+    g.add_argument("--serve", help="instead, before the run serves: serve-phi's statement of its serve.json")
     p.add_argument("--transfer-gate", action="append", default=[], help="a template the compiler lists as holding transfer gates "
                    "(repeatable; the model's of record, GATES_OF_RECORD, whatever it says: another list is refused)")
     p = sub.add_parser("weights-registration", help="a served run's weights registration, the committer's: what verity-vllm "
@@ -1829,6 +1938,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")
     p.add_argument("--tables", help="the dir holding the engine's served rotary table, cos_sin_cache.npy (serve-openai's; "
                    "default SERVE_RUN/private): registered once within its bound, else unrooted")
+    p.add_argument("--deployment-record", metavar="FILE", help="write the registration there as the first record of the "
+                   "serve's registration log too (verity/registration/v2), which Pearl+'s W is chained after on a serve tied to it")
     p.add_argument("--hf-config")
     p.add_argument("--target")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
@@ -1853,6 +1964,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a "
                    "registration of values {program, values}, the committer's weights registration "
                    "(window_weights.weights_registration), as `records_audit.py count --pins` takes them (repeatable)")
+    p.add_argument("--window-registration", help="H1's registration W of the window: the class's circuit reads H1's tables "
+                   "(`window_class.Tables` of W's Program, from the serve dir's h1/window-program.meta.json; no key), the "
+                   "circuit window-commit --window-registration W commits")
+    p = sub.add_parser("serve-phi", help="what a serve-openai run's serve.json will record of φ, read on this device before "
+                       "it serves (class-circuit's --serve)")
+    for flag in ("--model", "--revision", "--out"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--async-scheduling", action="store_true", help="the serve's --async-scheduling")
+    p = sub.add_parser("class-circuit", help="a window class's one Circuit from φ alone, no advice (window-circuit's record "
+                       "of any window of the class), its record written to --out: buildable before the serve")
+    for flag in ("--serve", "--out"):
+        p.add_argument(flag, required=True, help={"--serve": "φ: a run's serve.json, or serve-phi's statement of it"}.get(flag))
+    p.add_argument("--cap", type=int, default=64, help="units a member (a statement), the record's stated cap")
+    p.add_argument("--description", action="store_true", help="write the circuit's description, not its record")
+    p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT")
+    p.add_argument("--pins", action="append", default=[], metavar="FILE")
+    p.add_argument("--pearl-tables", metavar="SCHEME", help="the circuit cut at its linears, as window-circuit --pearl-tables")
     p = sub.add_parser("class-size", help="a served window's padded size at its class, projected from a small probe class")
     for flag in ("--serve-run", "--row-dir", "--advice"):
         p.add_argument(flag, required=True)
@@ -1870,16 +1998,26 @@ def main(argv: list[str] | None = None) -> int:
                    "opened from against the committed weights root")
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards, checked when given (each tensor is "
                    "held to its committed tensor root either way)")
-    p.add_argument("--law", default="subset:1", help="the proof system's law of the window")
+    p.add_argument("--sampling-design", required=True, help="the rate the window's audit states as its stream's rule (rate:NUM/DEN or "
+                   "stratified-rate:NUM/DEN), the window committed under the sampling design it names over the class "
+                   "circuit's proof blocks (`window_design`)")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
     p.add_argument("--workers", type=int, default=None, help="commit workers (default min(16, CPUs))")
     p.add_argument("--window-registration", help="H1's registration W of the window (`pouw_h1_commit.registration`): the "
                    "circuit reads H1's tables where the model makes them (`window_class.Tables`, from the serve dir's "
                    "h1/window-program.meta.json), and the window's registration registers them as W's tables, chained right "
-                   "after W (`pouw_h1_commit.reuse`)")
+                   "after W (`pouw_h1_commit.reuse`); with --pearl-passes, Pearl+'s window record W of the window's passes")
     p.add_argument("--h1-key", help="with --window-registration: H1's prover key file (its prover dir's key), whose salts "
                    "W's tables take")
-    for name in ("window-circuit", "class-size", "window-commit"):
+    p.add_argument("--pearl-passes", metavar="DIR", help="with --window-registration W: the window's Pearl+ passes "
+                   "(serve-openai's Pearl+ epoch pearl/w<k>/, retained by retain --window-record W): the circuit is cut "
+                   "at its linears (`window_class.PearlTables` under W's scheme), each cut linear's y taken as served, and "
+                   "the window's "
+                   "registration registers W's values, chained right after W (`pearl_c.window.reuse`)")
+    sub.choices["window-circuit"].add_argument("--pearl-tables", metavar="SCHEME", help="the circuit cut at its linears, "
+                                               "as a window tied to Pearl+'s W under PoUW scheme SCHEME commits it "
+                                               "(`window_class.PearlTables`)")
+    for name in ("window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,"
                                        "EVERY] (`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64,4,16)")
     sub.choices["audit"].add_argument("--builds", help="with --bundle or --serve-run: where the verifier writes its own Build of "
@@ -1887,20 +2025,22 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("audit", "circuit"):
         sub.choices[name].add_argument("--vllm-python", help="ignored: the verifier writes its own Builds from its compile, "
                                        "with no vLLM (own_builds)")
-    for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-size", "window-commit"):
+    for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)
-    for name in ("compiler", "circuit", "window-circuit", "class-size", "window-commit"):
+    for name in ("compiler", "circuit", "window-circuit", "class-circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--target")
     a = ap.parse_args(argv)
     if a.cmd == "compiler":
-        print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
+        print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate, a.serve), sort_keys=True))
         return 0
     if a.cmd == "window-commit":
         a.bundle = str(Path(a.row_dir) / "commit" / "replay_bundle_p0")
-    if a.cmd in ("circuit", "window-circuit", "class-size", "window-commit", "weights-registration"):
-        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice, "class-size": class_size_of_advice,
-                    "window-commit": window_commit_of_advice, "weights-registration": weights_registration_of_serve}
+    if a.cmd in ("circuit", "window-circuit", "class-circuit", "serve-phi", "class-size", "window-commit",
+                 "weights-registration"):
+        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice,
+                    "class-circuit": class_circuit_of_serve, "serve-phi": serve_phi, "class-size": class_size_of_advice,
+                    "window-commit": functools.partial(window_commit_of_advice, kept_ingress=kept_ingress, scan_state_file=scan_state_file), "weights-registration": weights_registration_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:

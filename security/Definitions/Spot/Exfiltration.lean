@@ -11,9 +11,9 @@ import Mathlib.Data.EReal.Inv
 /-!
 # Weight exfiltration before detection: the windowed audit as a game
 
-A lab serves its model through sampled proofs. The adversary controls the serving stack and knows the weights. The
+A lab serves its model through SPOT. The adversary controls the serving stack and knows the weights. The
 deployment is a sequence of audit windows (a request, or a batch of them). In each window the prover commits the
-window's values; the commitment fixes which units are wrong, and so what the window's egress carries beyond the honest
+window's values; the commitment fixes which units are incorrect, and so what the window's egress carries beyond the honest
 run. Then the challenger flips the window's coins, live and fresh, and a sampled incorrect proof block fails visibly. The egress of
 a window leaves before its verdict (detection, not prevention), and the deployment halts at the first failure.
 
@@ -39,7 +39,7 @@ The named assumptions:
   honest outputs carry weight bits fails it.
 
 `indepSample p` is the sample that catches unit `u` independently, when its coin `p u` comes up `true`, and
-`acceptCoins B` its coins that miss the wrong set `B`. A deployment's egress is its honest egress with a deviation
+`acceptCoins B` its coins that miss the incorrect set `B`. A deployment's egress is its honest egress with a deviation
 (`Dev`, `Dev.apply`) applied: the slots that differ, and their values. `changedThrough` collects the slots each window
 changes, through the first detection.
 
@@ -67,7 +67,7 @@ noncomputable def ex [Fintype Ω] (μ : PMF Ω) (n : ℕ) (F : (Fin n → Ω) �
   ∑ cs, (Verity.Game.iid μ n cs).toReal * F cs
 
 /-- The probability of the event `E` over `n` windows' coins, each flipped independently from `μ`: core's
-`Verity.Game.prPMFReal` under their law `iid μ n`. -/
+`Verity.Game.prPMFReal` under their distribution `iid μ n`. -/
 noncomputable abbrev prob [Fintype Ω] (μ : PMF Ω) (n : ℕ) (E : (Fin n → Ω) → Prop) : ℝ :=
   Verity.Game.prPMFReal (Verity.Game.iid μ n) E
 
@@ -107,11 +107,11 @@ def TrustedModel {W H T : Type} (ρ : PMF W) (S : W → T) (hon : W → H) (g : 
   ∀ γ : H → T, Verity.Game.prPMFReal ρ (fun w => γ (hon w) = S w) ≤ g
 
 /-- The sample that catches each unit `u` independently, when its coin `p u` comes up `true`: a coin says, per unit,
-whether a wrong `u` would be caught (sampled, and not lucky). -/
+whether an incorrect `u` would be caught (sampled, and not lucky). -/
 noncomputable abbrev indepSample {U : Type} [Fintype U] [DecidableEq U] (p : U → PMF Bool) : PMF (U → Bool) :=
-  Verity.Game.piLaw p
+  Verity.Game.piDistribution p
 
-/-- The coins of the independent sample on which the wrong set `B` escapes: none of its units is caught. -/
+/-- The coins of the independent sample on which the incorrect set `B` escapes: none of its units is caught. -/
 def acceptCoins {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=
   univ.filter fun c => ∀ u ∈ B, c u = false
 

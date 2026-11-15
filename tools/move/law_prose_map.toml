@@ -1,0 +1,126 @@
+# The LAW family's prose in the proof system's paths: what `tools/move/rename.py --map tools/move/law_prose_map.toml`
+# renames. GLOSSARY.md's term for "law" and "draw law" is the sampling design; this map gives a comment, a docstring and
+# Markdown's text that term, in the files the proofs lane holds (SPOT, Flock and recursion under `verity/protocols/proofs/`,
+# their areas of `security/`, SPOT's two-stage Lean, the commitments' sampling of units, and the lane's benchmarks).
+# `law_lean_map.toml` and `law_code_map.toml` rename the identifiers after it, so a name in backticks waits for them.
+#
+# Where a sentence says "law" for the distribution of a random variable (a joint law, the uniform law, equal in law), the
+# word is "distribution", as `terms_map.toml` gave the noise and coin laws, and so is a game's, a run's, a tape's, a
+# transcript's or a coin's law; the monad laws become the monad identities. Those phrases come first. A hyphenated name
+# (`R1-law`, the recorded case names such as "registration-law-another-k") is a recorded token and keeps its spelling,
+# and so does the record key `"law"` where a docstring shows a record ([keep]). The map renames prose only
+# (`scope = "prose"`), so it moves no path and renames no declaration.
+scope = "prose"
+
+[words]
+
+[rewrite]
+exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py"]
+
+[keep]
+patterns = ['\w-[Ll]aws?\b', '\b[Ll]aws?-\w', '''["']laws?["']''']
+
+[[words_in]]
+files = [
+  "benchmarks/commitments/*",
+  "benchmarks/dsa_topk/*",
+  "benchmarks/flock_kernels/*",
+  "benchmarks/flock_s8_block/*",
+  "benchmarks/multi_unit/*",
+  "benchmarks/one_stage/*",
+  "benchmarks/private_circuit/*",
+  "benchmarks/proof_throughput/*",
+  "benchmarks/remote_session/*",
+  "benchmarks/replay_ladder/*",
+  "benchmarks/route_capture/*",
+  "benchmarks/sampling_plan/*",
+  "benchmarks/serve_tax/*",
+  "benchmarks/spot_figures/*",
+  "benchmarks/spot_proved/*",
+  "benchmarks/two_stage/*",
+  "benchmarks/unit_walk/*",
+  "benchmarks/verifier_cost/*",
+  "security/Definitions/Accounting/ReadUnit.lean",
+  "security/Definitions/Accounting/Served.lean",
+  "security/Definitions/Assumptions/Flock.lean",
+  "security/Definitions/Core.lean",
+  "security/Definitions/Core/*",
+  "security/Definitions/Flock.lean",
+  "security/Definitions/Flock/Accounting/*",
+  "security/Definitions/Flock/Arith.lean",
+  "security/Definitions/Flock/Audit/*",
+  "security/Definitions/Flock/Circuit.lean",
+  "security/Definitions/Flock/Compiled.lean",
+  "security/Definitions/Flock/Defs.lean",
+  "security/Definitions/Flock/Extract.lean",
+  "security/Definitions/Flock/Game.lean",
+  "security/Definitions/Flock/Game/*",
+  "security/Definitions/Flock/Guarantees.lean",
+  "security/Definitions/Flock/Guarantees/Claims.lean",
+  "security/Definitions/Flock/Guarantees/RecursionClaims.lean",
+  "security/Definitions/Flock/Guarantees/SamplingClaims.lean",
+  "security/Definitions/Flock/Holo.lean",
+  "security/Definitions/Flock/HoloCompiled.lean",
+  "security/Definitions/Flock/Ligerito.lean",
+  "security/Definitions/Flock/LigeritoPad.lean",
+  "security/Definitions/Flock/Lowering.lean",
+  "security/Definitions/Flock/Merkle.lean",
+  "security/Definitions/Flock/Piop.lean",
+  "security/Definitions/Flock/Recursive/*",
+  "security/Definitions/Flock/Rewinding.lean",
+  "security/Definitions/Flock/Session.lean",
+  "security/Definitions/Flock/Sparse.lean",
+  "security/Definitions/Flock/Statement.lean",
+  "security/Definitions/Flock/ZK/*",
+  "security/Definitions/Hash.lean",
+  "security/Definitions/Hash/*",
+  "security/Definitions/Spot.lean",
+  "security/Definitions/Spot/*",
+  "security/Proofs/Accounting/ReadUnit.lean",
+  "security/Proofs/Accounting/ReadUnit/*",
+  "security/Proofs/Accounting/Served.lean",
+  "security/Proofs/Core.lean",
+  "security/Proofs/Core/*",
+  "security/Proofs/Flock.lean",
+  "security/Proofs/Flock/*",
+  "security/Proofs/Hash.lean",
+  "security/Proofs/Hash/*",
+  "security/Proofs/Properties/Accounting/Served.lean",
+  "security/Proofs/Properties/Challenger.lean",
+  "security/Proofs/Properties/Challenger/*",
+  "security/Proofs/Properties/Composition.lean",
+  "security/Proofs/Properties/Core/Period.lean",
+  "security/Proofs/Properties/Core/Site.lean",
+  "security/Proofs/Properties/Flock/*",
+  "security/Proofs/Properties/Hash/*",
+  "security/Proofs/Properties/Spot*",
+  "security/Proofs/Properties/Spot.lean",
+  "security/Proofs/Properties/Spot/*",
+  "security/Proofs/Properties/Verity/Recursive.lean",
+  "security/Proofs/Properties/Verity/Recursive/*",
+  "security/Proofs/Properties/Verity/Sampled.lean",
+  "security/Proofs/Properties/Verity/Sampled/*",
+  "security/Proofs/Properties/Verity/SampledCoins.lean",
+  "security/Proofs/Properties/Verity/SampledDraw.lean",
+  "security/Proofs/Properties/Verity/SampledLog.lean",
+  "security/Proofs/Properties/Verity/SampledRead.lean",
+  "security/Proofs/Properties/Verity/SampledTwo/*",
+  "security/Proofs/Spot.lean",
+  "security/Proofs/Spot/*",
+  "security/Properties/Accounting/Served.lean",
+  "security/Properties/Annot.lean",
+  "security/Properties/Challenger.lean",
+  "security/Properties/Composition.lean",
+  "security/Properties/Core/Period.lean",
+  "security/Properties/Core/Site.lean",
+  "security/Properties/Flock/Circuit.lean",
+  "security/Properties/Flock/Circuit/*",
+  "security/Properties/Flock/Nets.lean",
+  "security/Properties/Hash/*",
+  "security/Properties/Spot*",
+  "security/Properties/Spot.lean",
+  "security/Properties/Spot/*",
+  "verity/commitments/lean/Commitments/Draw.lean",
+  "verity/protocols/proofs/*",
+]
+words = { "monad laws" = "monad identities", "sample law" = "sampling design", "coin map's law" = "coin map's distribution", "game's law" = "game's distribution", "run's law" = "run's distribution", "runs' law" = "runs' distribution", "transcript's law" = "transcript's distribution", "tape's law" = "tape's distribution", "coin's law" = "coin's distribution", "coins' law" = "coins' distribution", "salts' law" = "salts' distribution", "salt's law" = "salt's distribution", "outcome's law" = "outcome's distribution", "play's law" = "play's distribution", "joint laws" = "joint distributions", "Joint laws" = "Joint distributions", "joint law" = "joint distribution", "Joint law" = "Joint distribution", "uniform laws" = "uniform distributions", "uniform law" = "uniform distribution", "Uniform law" = "Uniform distribution", "one-coin law" = "one-coin distribution", "coin law" = "coin distribution", "equal in law" = "equal in distribution", "in law" = "in distribution", "draw laws" = "sampling designs", "Draw laws" = "Sampling designs", "draw law" = "sampling design", "Draw law" = "Sampling design", "sampling laws" = "sampling designs", "sampling law" = "sampling design", "laws" = "sampling designs", "Laws" = "Sampling designs", "law" = "sampling design", "Law" = "Sampling design" }

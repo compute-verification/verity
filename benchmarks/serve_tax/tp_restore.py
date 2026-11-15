@@ -12,10 +12,10 @@ its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` m
 ``serve`` runs `serve_tax`'s ``record`` arm (vLLM's OpenAI server with the scheduler's step trace), with `tp_edge` as a
 second general plugin. It is pinned: PYTHONHASHSEED=0, request ids not randomized, Inductor's reduction block untimed,
 Model Runner V2. It drives the plan under Poisson arrivals, every request asking for its sampled token's logprob.
-With ``--sampling own`` each request sends the sampling it carries (``--plan-file``, the replay ladder's production
+With ``--sampling own`` each request sends the sampling it carries (``--plan-file``, the replay ladder's serving
 plan: ShareGPT, multi-turn and long prompts, each greedy or at temperature 0.7), the rest of it the server's
 generation-config defaults; ``--unseeded-share`` of the sampled requests go without a seed (`request_class`), so vLLM
-draws theirs, and the rest carry the public seed rule's. A named ``--sampling`` goes on every request instead, where
+samples theirs, and the rest carry the public seed rule's. A named ``--sampling`` goes on every request instead, where
 ``production`` sends no sampling fields: the generation config's defaults apply (GLM-5.3: temperature 1.0, top-p 0.95)
 and nothing is seeded, so with no greedy or seeded row in a batch vLLM samples with FlashInfer's sampler and the CUDA
 generator. Each edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record; the
@@ -62,7 +62,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
 import serve_tax as S  # noqa: E402 (beside this file)
 import tp_edge as E  # noqa: E402
@@ -81,7 +81,7 @@ AUTOTUNE_ENV = "VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR"
 ID = "tpr"
 #: the logprobs every request asks for: its sampled token's (the step trace's sampling record leaves this field out)
 LOGPROBS = 0
-#: ``--sampling`` for each request's own (a production plan's)
+#: ``--sampling`` for each request's own (a serving plan's)
 OWN = "own"
 
 
@@ -105,7 +105,7 @@ def request_class(r: Mapping[str, Any], rid: str, unseeded_share: float, samplin
 
 def own_body(real: Callable[..., dict], unseeded_share: float, sampling: str = OWN) -> Callable[..., dict]:
     """The request body, asking for each sampled token's logprob: for a plan's request without sampling of its own,
-    ``real`` (serve_tax's, decoding to its cap); for a production plan's, which stops at its end of text or its cap,
+    ``real`` (serve_tax's, decoding to its cap); for a serving plan's, which stops at its end of text or its cap,
     with `OWN` its own sampling and the public seed rule's seed (`corpus.request_seed`) unless it is unseeded, and under
     a named ``sampling`` that one with no seed."""
     C = S.corpus()
@@ -176,7 +176,7 @@ def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, 
 
 
 def lengthen(plan: list[dict], share: float, lo: int, hi: int, seed: int) -> list[dict]:
-    """The plan with a ``share`` of its requests (drawn under ``seed``) given long prompts, of ``lo`` to ``hi`` tokens
+    """The plan with a ``share`` of its requests (sampled under ``seed``) given long prompts, of ``lo`` to ``hi`` tokens
     each: the prompts of the plan's requests from the next one on, joined in order. A long prompt's prefill spans steps
     of the scheduler's token budget, so an edge can find one part done."""
     rng = random.Random(seed)

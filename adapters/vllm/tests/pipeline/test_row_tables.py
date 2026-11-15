@@ -12,17 +12,22 @@ import copy
 import json
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.definitions.ops import gemm as OG
+from verity.circuits.ops import gemm as OG
 from verity.commitments import row_table as RT
-from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R
-from verity_vllm.commit import index as IX, row_tables as RTB
-from verity.commitments.windows import rows as CS, tables as TB
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import tables as TB
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+
+from verity_vllm.commit import index as IX
+from verity_vllm.commit import row_tables as RTB
 from verity_vllm.pipeline import serving_rows as SRW
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'
@@ -51,13 +56,14 @@ class Served:
 
     def __init__(self, seed: int = 3) -> None:
         rng = np.random.default_rng(seed)
-        self.rows, self.ops, self.y = [], {}, {}
+        self.rows, self.ops = [], {}
+        self.y: dict[tuple[str, int, str], dict[int, np.ndarray]] = {}
         self.W = {op: rng.integers(-128, 128, (n, K)).astype(np.int8) for op, n in N.items()}
         self.sw = {op: (np.abs(rng.standard_normal(n)) * 0.02).astype(np.float32) for op, n in N.items()}
         for u, (rid, step, tok, i, op) in enumerate(ROWS):
             n, w = N[op], 1000 + list(N).index(op)
-            r = {"i": i, "spec": f"ScaledMmS8_v1{{K={K},N={n},DOT={DOT}}}",
-                 "args": [[["n", u, 0, K]], [["n", u, K, K + 1]], [["p", w, 0, n * K]], [["p", w, n * K, n * K + n]]]}
+            r: dict[str, Any] = {"i": i, "spec": f"ScaledMmS8_v1{{K={K},N={n},DOT={DOT}}}",
+                                 "args": [[["n", u, 0, K]], [["n", u, K, K + 1]], [["p", w, 0, n * K]], [["p", w, n * K, n * K + n]]]}
             d = {"statics": {"K": K, "N": n}, "op_path": op, "members": [("y", n, "bf16")], "row": tok, "step": step}
             self.rows.append((rid, None, r, d))
             x, sx = rng.integers(-128, 128, K).astype(np.int8), np.array([abs(rng.standard_normal()) / 127], np.float32)
@@ -95,19 +101,19 @@ class Served:
         return {op: (ids, np.stack(xs), np.array(ss, dtype=np.float32)) for op, (ids, xs, ss) in out.items()}
 
 
-def window(row_tables: bool = True, law=None, work_table=None) -> tuple[CS.Binding, Served, list]:
+def window(row_tables: bool = True, sampling_design=None, work_table=None) -> tuple[CS.Binding, Served, list]:
     s = Served()
     ms = SRW.members([COORD], [s.rows], [UNITS], {COORD: CAP})
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), law or D.parse_design("stratified:2"), RUN, tuple(ms),
+    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), sampling_design or D.parse_design("stratified:2"), RUN, tuple(ms),
                    tables, CTX.hex() if row_tables else "", work_table)
     return w, s, ms
 
 
-def committed(monkeypatch, row_tables: bool = True, law=None, work_table=None, **kw) -> tuple[CS.Committed, Served, list]:
-    w, s, ms = window(row_tables, law, work_table)
+def committed(monkeypatch, row_tables: bool = True, sampling_design=None, work_table=None, **kw) -> tuple[CS.Committed, Served, list]:
+    w, s, ms = window(row_tables, sampling_design, work_table)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
     return CS.commit(w, [g[0] for g in got], salt_key=bytes(32), row_salt_key=ROW_KEY, **kw), s, got
@@ -191,7 +197,7 @@ def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_an
     # the window's commit holds its steps to the roots serving recorded before their coins
     recorded = {step: sr.root for step, sr in served.items()}
     assert committed(monkeypatch, segment_roots=recorded)[0].roots == c.roots
-    with pytest.raises(ValueError, match=r"segments \[1\]: the window's segment roots are not the ones recorded"):
+    with pytest.raises(ValueError, match=r"segments \[1\]: the period's segment roots are not the ones recorded"):
         committed(monkeypatch, segment_roots={**recorded, 1: bytes(64)})
     w2, _, _ = window()
     with pytest.raises(ValueError, match="give row_salt_key"):
@@ -289,8 +295,11 @@ def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_
     reads = TB.registered_reads(mine, {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)},
                                  registered=REG)
     k0, k4 = mine.members[0].key, mine.members[4].key
-    lean = lambda key: {"accepted": True, "of_record": True,  # noqa: E731
-                        "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in reads[key]["ports"].items()}}
+
+    def lean(key: str) -> dict[str, Any]:
+        return {"accepted": True, "of_record": True,
+                "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in reads[key]["ports"].items()}}
+
     rec = TB.reported_reads(reads, {k0: lean(k0), k4: lean(k4)})
     t1 = mine.row_tables[1]
     assert rec["ok"] and rec["chunks"][k0] == {"reads": {CS.LINKED: {"value": t1.port, "root": c.table_roots[t1.port].hex()}},
@@ -306,7 +315,7 @@ def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_
 def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeypatch, tmp_path):
     """The chunker cuts at table boundaries, and a prover that builds its own chunks can't bring the old form back: the verifier's
     reads file names one root, and no row of another table opens it at any position through any of its paths (Lean's
-    `Registered.opens`, through its Python twin `registered.verify_read`; `verity/protocols/flock/prover/tests/test_lean_registered_reads.py`
+    `Registered.opens`, through its Python twin `registered.verify_read`; `verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py`
     runs the executable verifier on such a table). `registered_reads` writes no file for a member linking two tables, whatever
     built it."""
     c, _s, got = committed(monkeypatch)

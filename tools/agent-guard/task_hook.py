@@ -9,8 +9,8 @@ of the Slack registry, `.agents/skills/using-slack/registry.json`) it refuses a 
 one of the short read-only lookups in `LOOKUPS`. Cloud and background calls pass, and so does every other agent's. Reads
 Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes, and so does another
 step's event, unlogged. Each verdict is appended to
-$AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type and background flag,
-never its prompt.
+$AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type, background flag,
+model and whether it resumes an agent, never its prompt.
 
 It also refuses a cloud agent's (a `bc-` conversation's) write through Linear's MCP connector, which acts as the workspace
 owner, so the write would show as theirs: every Linear tool but the reads in `LINEAR_READS`, called through `CallDynamicTool`
@@ -20,16 +20,18 @@ refusal names the app's way to do it (the using-slack skill). Reads pass, and so
 among them. These verdicts aren't logged.
 """
 import json
-import os
 import re
 import sys
+import uuid
 from pathlib import Path
 
+import settings
 from settings import record_event
 
-REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY",
-                               Path(__file__).resolve().parents[2] / ".agents/skills/using-slack/registry.json"))
-LOG = Path(os.environ.get("AGENT_GUARD_TASK_LOG", "/tmp/agent-guard-task.jsonl"))
+#: the Slack registry of the checkout this file is in; `hook.sh` names origin/main's copy in its place
+OWN_REGISTRY = Path(__file__).resolve().parents[2] / ".agents/skills/using-slack/registry.json"
+REGISTRY = Path(settings.get("AGENT_GUARD_REGISTRY", OWN_REGISTRY))
+LOG = Path(settings.get("AGENT_GUARD_TASK_LOG", "/tmp/agent-guard-task.jsonl"))
 LOOKUPS = {"explore", "cursor-guide", "ci-investigator", "videoReview"}
 AGENT_ID = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LINEAR_READS = ("get_", "list_", "search_", "extract_")
@@ -43,13 +45,30 @@ LINEAR_WRITES = frozenset({
     "create_attachment_from_upload", "prepare_attachment_upload", "prepare_file_upload"})
 
 
-def holders() -> dict[str, str]:
-    """Agent id -> the handle it holds."""
+def holders(text: str | None = None) -> dict[str, str]:
+    """Agent id -> the handle it holds, by the registry whose text this is (REGISTRY's when none is given)."""
     try:
-        reg = json.loads(REGISTRY.read_text())
-    except (OSError, ValueError):
+        reg = json.loads(REGISTRY.read_text() if text is None else text)
+    except (OSError, ValueError) as e:
+        print(f"task_hook: the registry is unreadable, so no agent holds a handle ({type(e).__name__}: {e})", file=sys.stderr)
         return {}
     return {a: h.get("handle", "?") for h in reg.get("handles") or [] for a in AGENT_ID.findall(str(h.get("holder", "")))}
+
+
+#: `infra/cursor/launch_coordinator.py`'s NAMESPACE, which the guard can't import: a coordinator it launches for a handle
+#: is `bc-` and uuid5 of it and `HANDLE/GENERATION`
+COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")
+#: the generations of a handle's coordinator whose ids are a lead's
+LEAD_GENERATIONS = range(1, 51)
+
+
+def leads() -> set[str]:
+    """Every lead's agent id: each `holder` of the registry, and the id `launch_coordinator.py` gives each handle it
+    registers at each generation in LEAD_GENERATIONS. A registry that can't be read raises: the caller decides."""
+    text = REGISTRY.read_text()
+    handles = [h.get("handle") for h in json.loads(text).get("handles") or []]
+    return set(holders(text)) | {f"bc-{uuid.uuid5(COORDINATORS, f'{h}/{g}')}" for h in handles if isinstance(h, str) and h
+                                 for g in LEAD_GENERATIONS}
 
 
 def task_input(event: dict):
@@ -102,7 +121,8 @@ def linear_write(event: dict) -> str | None:
 def main() -> int:
     try:
         event = json.loads(sys.stdin.read() or "{}")
-    except ValueError:
+    except ValueError as e:
+        print(f"task_hook: the event is not JSON, so the call passes ({e})", file=sys.stderr)
         event = {}
     event = event if isinstance(event, dict) else {}
     record_event("task_hook.py", event)
@@ -121,9 +141,10 @@ def main() -> int:
         with open(LOG, "a") as f:
             f.write(json.dumps({"conversation_id": event.get("conversation_id"), "tool_name": event.get("tool_name"),
                                 "deny": bool(why), "input_keys": sorted(args),
-                                **{k: args.get(k) for k in ("environment", "subagent_type", "run_in_background")}}) + "\n")
-    except OSError:
-        pass
+                                **{k: args.get(k) for k in ("environment", "subagent_type", "run_in_background", "model")},
+                                "resume": bool(args.get("resume"))}) + "\n")
+    except OSError as e:
+        print(f"task_hook: verdict not logged to {LOG} ({type(e).__name__}: {e})", file=sys.stderr)
     print(json.dumps({"permission": "deny", "agent_message": why, "user_message": why} if why else {"permission": "allow"}))
     return 0
 

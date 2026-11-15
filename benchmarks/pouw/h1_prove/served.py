@@ -35,10 +35,10 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import CoinError, LiveOpening, ledger_head, pinned_session
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import CoinError, LiveOpening, ledger_head, pinned_session
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
 
 def locate(calls: list[dict], tile: tuple[int, int], u: int) -> dict:
@@ -54,7 +54,7 @@ def locate(calls: list[dict], tile: tuple[int, int], u: int) -> dict:
             "z_table": c["tables"]["z"], "a_table": c["tables"]["a"]}
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--calls", required=True)
     ap.add_argument("--session", required=True)
@@ -102,7 +102,7 @@ def main(argv=None) -> int:
         raise SystemExit(f"REFUSED: {why[0]}: {why[1]}")
     layout, _ = CR.layout_of(descriptor)
     strata, _ = CR.strata(layout)
-    CR.law(strata, k)
+    CR.sampling_design(strata, k)
     coin = LiveOpening.from_json(commits["draw"]["coin"]).coin
     out = {"window": root, "draw_root": commits["draw"]["root"], "coin": coin.hex(), "session": audited.session,
            "period": audited.period, "circuit": audited.circuit, "k": k,

@@ -49,20 +49,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import ceil, comb, floor, inf, log, log2, nextafter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+from verity.protocols.proofs.spot.prover.cost import h200 as H
 
-import h200 as H  # noqa: E402
-
-from verity.protocols.pouw.verifier.window import eps_at  # noqa: E402
-from verity.protocols.spot.verifier.consumers import entropy_bits
-from verity.protocols.spot.verifier.profile import MARGIN, Stratified, Stratum  # noqa: E402
-from verity.protocols.spot.optimize import (  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.window import eps_at
+from verity.protocols.proofs.spot.verifier.consumers import entropy_bits
+from verity.protocols.proofs.spot.verifier.profile import MARGIN, Stratified, Stratum
+from verity.protocols.proofs.spot.prover.optimize import (
     Candidate, CostModel, Objective, Plan, PlanBounds, ReplayGrain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
 
@@ -82,8 +79,6 @@ BUDGET_SHARE = 0.01
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8CoordinateRows_v1"
 TILE = "PouwH1LaneZy_v2"
-#: Flock's largest statement (it refuses k_log 28)
-K_LOG_MAX = 27
 #: M3's live sample: a uniform subset of this many of one block's units
 M3_UNITS = 8
 #: PoUW's proof block: J10-R's per-call lane unit `PouwH1LaneZy_v2` over
@@ -244,7 +239,7 @@ class _Memo(Stratum):
         return _RISK[key]
 
 
-def law(sizes: dict[str, int], cands: list[Candidate]) -> Stratified:
+def sampling_design(sizes: dict[str, int], cands: list[Candidate]) -> Stratified:
     return Stratified(tuple(_Memo(c.template, c.units, sizes[c.template]) for c in cands if c.template in sizes))
 
 
@@ -273,7 +268,7 @@ def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Object
     `count_bound` the leak is at least `certify`'s."""
     chosen = [c for c in cands if c.template in sizes]
     d = objective.delta
-    st = law(sizes, chosen)
+    st = sampling_design(sizes, chosen)
     harm = st.harm_bound({c.template: objective.harm(c) for c in chosen}, d)
     work = st.harm_bound({c.template: float(c.work + c.influence) for c in chosen}, d)
     count = floor(st.harm_bound({c.template: 1.0 for c in chosen}, d))

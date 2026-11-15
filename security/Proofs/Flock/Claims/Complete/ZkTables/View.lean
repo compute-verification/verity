@@ -5,6 +5,8 @@ public import Proofs.Flock.Claims.Complete.ZkTables.Level0
 public import Proofs.Flock.Claims.Complete.ZkTables.Table
 public import Proofs.Flock.Claims.Complete.Zk.InnerGo
 public import Proofs.Flock.Claims.Complete.Zk.ReplayPos
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Flock.With.ZkEq
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -105,26 +107,28 @@ theorem ringSwitchWith_checks (hs : Hashes V) (m : ℕ) (claims : Array Claim) (
 
 namespace Rs
 
+variable {wideLeaf : Bool}
+
 variable {tr : Trace} {c₁ c₂ : Array Claim}
 
-theorem betas_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) :
+theorem betas_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) :
     betas tr c₁ cs = betas tr c₂ cs := by
   unfold betas
   rw [hn]
   exact pushes_congr fun k _ => by rw [switch_congr hx k]
 
-theorem T_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) :
+theorem T_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) :
     T tr c₁ cs = T tr c₂ cs := by
   unfold T
   rw [hn, betas_congr hn hx]
 
-theorem perClaim_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) :
+theorem perClaim_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) :
     perClaim c₁ cs = perClaim c₂ cs := by
   unfold perClaim
   rw [hn]
   exact pushes_congr fun k _ => by rw [hx k]
 
-theorem sws_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Coins) :
+theorem sws_congr (hn : c₁.size = c₂.size) (hx : ∀ k : ℕ, c₁[k]!.x = c₂[k]!.x) (cs : Challenges) :
     sws c₁ cs = sws c₂ cs := by
   unfold sws
   rw [hn, perClaim_congr hn hx]
@@ -135,8 +139,8 @@ end Rs
 prover's through its ring switch, a ring switch that returns gives the prover's `T` and switched claims and stops
 where the prover's did. Its checks passing is each claim's identity on the prover's switched vectors. -/
 theorem rs_eq (hs : Hashes V) (st : Setup) (hk : st.fold.kLog = st.kLog) (tr : Trace) (e : Array Claim)
-    (lay : Zk.PadLayout) (hp : Array F128) (digest cap root : ByteArray) (cz : Zc.Coins)
-    (full : Array F128) (cl : Lc.Coins) (crs : Rs.Coins) (t₀ : Transcript) (h₀ : t₀.k = 0)
+    (lay : Zk.PadLayout) (hp : Array F128) (digest cap root : ByteArray) (cz : Zc.Challenges)
+    (full : Array F128) (cl : Lc.Challenges) (crs : Rs.Challenges) (t₀ : Transcript) (h₀ : t₀.k = 0)
     (hs₀ : t₀.rounds.size = 0) (R : Array Round) (rp : Zk.Replayed) (prf : Proof)
     (hR : Agrees R (Rs.tEnd tr (abcClaims st.m st.kLog (Zc.out st.m cz tr)
       (Lc.out st.fold st.m tr (Zc.out st.m cz tr) cl) ++ e) crs
@@ -194,8 +198,8 @@ theorem rs_eq (hs : Hashes V) (st : Setup) (hk : st.fold.kLog = st.kLog) (tr : T
 
 /-- **Every claim a rep opens has `m − 6` coordinates**, for a table with `k_log ≤ m`, at any link points: the extra
 claims' points are region points, of `m` coordinates (`regionPoint_size`). -/
-theorem claims_xsize' (st : Stmt) (hk : st.c.kLog ≤ st.m) (hm : 13 ≤ st.m) (tr : Trace) (zcs : Zc.Coins)
-    (cs : Lc.Coins) (points : Array (Array F128)) (extras : Array Claim) (hex : st.extraClaims points = .ok extras) :
+theorem claims_xsize' (st : Stmt) (hk : st.c.kLog ≤ st.m) (hm : 13 ≤ st.m) (tr : Trace) (zcs : Zc.Challenges)
+    (cs : Lc.Challenges) (points : Array (Array F128)) (extras : Array Claim) (hex : st.extraClaims points = .ok extras) :
     ∀ c ∈ abcClaims st.m st.c.kLog (Zc.out st.m zcs tr) (Lc.out st.circuitFold st.m tr (Zc.out st.m zcs tr) cs) ++
         extras, c.x.size = st.m - 6 := by
   intro c hc
@@ -297,7 +301,7 @@ its coins (`verifyInnerWith_of` with the batched constraint for `ConsHold`). -/
 theorem verifyInnerWith_of' (h : ByteArray → ByteArray) (h64 : ∀ b, (h b).size = 64) (lay : Zk.PadLayout)
     (tape : TapeZk) (i r : ℕ) (salt : ℕ → ByteArray) {ic : InnerCommit}
     (hic : innerCommitP (Hashes.ofSha512 h : Hashes V) (padsOf tape i r lay) salt = .ok ic) (finalC : F128)
-    {cons : Array (String × Zk.Lin)} (cs : InZ.Coins)
+    {cons : Array (String × Zk.Lin)} (cs : InZ.Challenges)
     (hz : ((InZ.lin lay (padsOf tape i r lay) cons cs).c +
       dot (InZ.lin lay (padsOf tape i r lay) cons cs).a (padsOf tape i r lay).h).isZero = true)
     (hb : (cs.cb 0).isZero = false) (t : Transcript) (hk : t.k = t.rounds.size) {R : Array Round}
@@ -396,17 +400,22 @@ theorem basis_size (sws : Array Switched) (q : Array F256) (e : ℕ) : (basis sw
   rw [← Array.foldl_toList]
   exact foldl_size_const (fun _ _ => by simp) _ _ (by simp)
 
-theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) : v.1.n = m - 7 := by
-  unfold Zk.schedule at h
-  obtain ⟨q0, -, h⟩ := except_ok_bind h
-  cases hf : fast100 m with
-  | none => rw [hf] at h; cases h
-  | some sch =>
-    rw [hf] at h
-    cases h
-    obtain ⟨hd, hm⟩ := FlockSoundness.Refine.fast100_dims m sch hf
-    show sch.n = m - 7
-    rw [hd.1, hm]
+theorem zkSchedule_n {wideLeaf : Bool} {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
+    v.1.n = m - 7 := by
+  by_cases hm : m < 40
+  · have key : ∀ (w : Bool) (m : Fin 40), (match Zk.schedule w m.val with
+        | .ok v => decide (v.1.n = m.val - 7)
+        | .error _ => true) = true := by
+      decide +kernel
+    have := key wideLeaf ⟨m, hm⟩
+    simp only [h, decide_eq_true_eq] at this
+    exact this
+  · exfalso
+    unfold Zk.schedule at h
+    obtain ⟨q0, hq0, -⟩ := except_ok_bind h
+    unfold Zk.queries0 at hq0
+    simp [show ¬m ≤ 24 by omega, show m ≠ 25 by omega, show m ≠ 26 by omega, show m ≠ 27 by omega,
+      show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
 end FlockComplete.Replay
 
@@ -501,7 +510,7 @@ theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr
     simp only [hlL, tPiop, Rs.tEnd_k, LcZ.tEnd_k, ZcZ.tEnd_k, hcs, piopSends]
     show l.size + (3 + _ + 3 + _ + (2 + e.size + 1)) = l.size + (0 + 3 + _ + 3 + _ + (2 + e.size) + 1)
     omega
-  obtain ⟨hLgV, htIk⟩ := hV resp (Claims.hOf H) (Setup.ofCircuit st).m v
+  obtain ⟨hLgV, htIk⟩ := hV (Setup.ofCircuit st).wideLeaf resp (Claims.hOf H) (Setup.ofCircuit st).m v
     (Rs.T tr (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e)) cm
     (packed tr (Setup.ofCircuit st).m)
     (basisVals (Rs.sws (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e))

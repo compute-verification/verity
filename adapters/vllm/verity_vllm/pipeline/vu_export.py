@@ -30,7 +30,7 @@ relation before it is written (a decomposition that does not reproduce the row's
 `Embedding_v1` is not exported (a commitment opening of the table, not a subcircuit).
 
 Layout of a set `<out>/sets/<name>/`: flat little-endian arrays `<port>.<u8|u16|u32|u64>`, instance-major (the
-`fixtures/bench-instances/v1` convention); a port whose width varies across inputs has `<port>.offsets.u64` (n + 1 word
+`benchmarks/numerical/bench-instances/v1` convention); a port whose width varies across inputs has `<port>.offsets.u64` (n + 1 word
 offsets).  `manifest.json` holds the relation, the ports, the sha256 of every file, the content digest (relation + ports + file
 digests, provenance excluded) and the provenance (row, model, run, commitment root, Program and manifest digests).  `index.json`
 has one row per instance (the VU it came from and the sub-index inside it).  `<out>/export.json` summarises the export and
@@ -42,20 +42,20 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+from collections.abc import Callable, Iterator
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any
 
 import numpy as np
-
 from verity.commitments.randomness import Key, derive
+from verity_vllm.definitions.numerics import derived_rows as D
+from verity_vllm.definitions.numerics import rows as RK
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import challenge as CH
-from verity.definitions.numerics import derived_rows as D
-from verity.definitions.numerics import rows as RK
 from verity_vllm.query.manifest import format as RM
 
 SET_SCHEMA = "vllm-vu-set/v1"
@@ -82,7 +82,7 @@ class Limits:
     workers: int = 8                         # > 1: a forked pool (host-retained stores only; a device-retained one runs serial)
 
     @classmethod
-    def from_dir(cls, out_dir: str | Path) -> "Limits":
+    def from_dir(cls, out_dir: str | Path) -> Limits:
         f = Path(out_dir) / "limits.json"
         return cls(**json.loads(f.read_text())) if f.is_file() else cls()
 
@@ -367,7 +367,7 @@ def _decompose_row(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
     ports.update({f"out.{k}": v.copy() for k, v in _outputs(out).items()})
     if sum(int(a.size) for a in ports.values()) > limits.max_row_words:
         return
-    rel = {"subcircuit": fam, "definition": fam, "statics": st, "rule": f"the registered row kernel of {fam} (verity.definitions.numerics.rows)"}
+    rel = {"subcircuit": fam, "definition": fam, "statics": st, "rule": f"the registered row kernel of {fam} (verity_vllm.definitions.numerics.rows)"}
     yield Instance(_row_set_name(fam, st), rel, ports, {})
 
 

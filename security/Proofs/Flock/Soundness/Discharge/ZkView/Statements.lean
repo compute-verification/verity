@@ -99,7 +99,7 @@ import VCVio.Prelude.Core
   messages at witness `w` and at `w'` are within `2·|Leaves|·hidingGap(My, saltHash)`. Its `hP`, `he` and `hI` are this
   file's to discharge: `hP` by `pairProver`'s definition, `he` because `randOf` is a bijection, `hI` because
   `preWith` at the ideal leaves is `Table.preView`.
-* `DecodeEncode`: `flock-verify verify --zk`'s parse inverts the file writer: `Zk.decode sh (encZk sh p) = .ok p` for every
+* `DecodeEncode`: `verity-verify-proof verify --zk`'s parse inverts the file writer: `Zk.decode sh (encZk sh p) = .ok p` for every
   decoded proof of the shape.
 -/
 

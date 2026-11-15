@@ -26,6 +26,9 @@ if TYPE_CHECKING:
     from gates import Gates
     from glm import GlmLayer
 
+__all__ = ["Collect", "Config", "Layer", "Weights", "check_reference", "head", "inv_freq", "make_layer", "rotary",
+           "rotate_half", "row_chunk"]
+
 #: what a calibration pass hands each linear's input to (and the attention's keys, as `keys`), by name
 Collect = Callable[[str, torch.Tensor], None]
 
@@ -67,7 +70,7 @@ class Config:
         return self.heads // self.kv_heads
 
     @staticmethod
-    def read(snapshot: Path) -> "Config":
+    def read(snapshot: Path) -> Config:
         c = json.loads((Path(snapshot) / "config.json").read_text())
         arch = ARCHS.get((c.get("architectures") or [""])[0])
         if arch is None:
