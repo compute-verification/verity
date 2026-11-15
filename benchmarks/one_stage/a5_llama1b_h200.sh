@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, over a GPU-served window: Llama-3.2-1B int8 batch-invariant eager on one H200 (ROW, default the B4
 # I256/O32 h200 row), its Build and Match of record and a deferred config-run Commit under rows-sha512 whose
-# --serving-rows window (llama32_1b_rope_d64_l0.json: every RoPEHead_v1{D=64} head of layer 0 at steps 1-7, by subset:1) is
+# --serving-rows window (llama32_1b_rope_d64_l0.json: every RoPEHead_v1{D=64} head of layer 0 at steps 1-7, by subset:1; or
+# A5_PARTITION's file, whose law is the sample) is
 # committed at its C2 site before the bundle is sealed (`c2_replay.serving_rows`): a `served` window under the Commit's 64-byte
 # run root. Then the Commit's C2 replay on CPU from the sealed bundle, and a5.sh (WINDOW=served, A5_ROW_DIR) on that bundle and
 # window, in the same job, so the window's private bodies (m*-private.bin, v*-private.bin: rows and salts) never leave the node.
@@ -30,7 +31,7 @@ TREE=$PWD
 H=${A5_TAPS:-/workspace/research/vllm-composed-h200int8}
 FA3=${FA3_SO:-$H/fa2/build/fa3_matReq/verity_fa3_matReq.so} FA3G=${FA3G_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NT=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
-PART=$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json
+PART=${A5_PARTITION:-$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json}
 ROOT=${A5_ROOT:-/workspace/research/vllm-sha512-a5}
 BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
 D=$BASE/$ROW WD=$BASE/serving-rows FW=${A5_FLOCK_WORK:-$ROOT/flock-work} KEPT=$BASE/unpublished
@@ -42,7 +43,7 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
 if [ -n "${A5_CARD:-}" ]; then
   real=$(command -v gpu-lease) || { echo "a5_llama1b_h200.sh: A5_CARD=$A5_CARD and no gpu-lease" >&2; exit 2; }
   mkdir -p "$BASE/bin"
-  printf '#!/usr/bin/env bash\n[ "$1" = status ] && exec %q status\nn=$1; shift\nexec %q "$n" --on %q "$@"\n' \
+  printf '#!/usr/bin/env bash\n[ "$1" = status ] && exec %q "$@"\nn=$1; shift\nexec %q "$n" --on %q "$@"\n' \
     "$real" "$real" "$A5_CARD" > "$BASE/bin/gpu-lease" && chmod +x "$BASE/bin/gpu-lease"
   GPU_LEASE=$BASE/bin/gpu-lease
 fi
