@@ -98,7 +98,7 @@ def resolve(row: str) -> tuple[str, str, str, int]:
     manifests, `config.checkpoint_entries`)."""
     wl = _doc(row_file(row))
     role = wl["case"]
-    cps = checkpoint_entries()
+    cps = checkpoint_entries(CHECKPOINTS)
     cp = next((c for c in cps if c.get("role") == role), None) or next((c for c in cps if has_role(c, role) and c.get("local_path")), None)
     if cp is None:
         raise UsageError(f"row {row}: no pin in {CHECKPOINTS.name} or its sibling manifests serves its case {role!r}")
