@@ -41,7 +41,7 @@ CARDS=${CARDS:-0} CORES=${CORES:-}
 if [ -n "$CORES" ] && [ -z "${ROWS_PINNED:-}" ]; then
   exec env ROWS_PINNED=1 taskset -c "$CORES" bash "$TREE/benchmarks/remote_session/rows.sh" "$@"
 fi
-export RS=benchmarks/remote_session PR=verity/protocols/accounting/poub/prover O=${OUT:-${RESEARCH_RUN_DIR:?}/out}
+export RS=benchmarks/remote_session PR=verity/protocols/resource_accounting/memory/poub/prover O=${OUT:-${RESEARCH_RUN_DIR:?}/out}
 mkdir -p "$O"
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$O/rows.txt"; }
 first() { local p; for p in "$@"; do [ -x "$p" ] && { echo "$p"; return; }; done; }
@@ -51,7 +51,7 @@ session() {  # under the lease: PLAN's sessions, the verifier's process beside t
   local port=$((7700 + RANDOM % 200)) sessions v p w
   sessions=$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))
   mkdir -p "$O/session"
-  pinned "${VERIFIER_CORES:-}" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py \
+  pinned "${VERIFIER_CORES:-}" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/remote_session/verifier_process.py \
     --port "$port" --out "$O/session" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES" \
     --jitter-ms "$JITTER_MS" --sessions "$sessions" --lean-exe "$LEAN_EXE" > "$O/session/verifier.log" 2>&1 & v=$!
   pinned "${PROVER_CORES:-}" "$PY" $PR/remote_session/prover.py --connect "127.0.0.1:$port" --out "$O/session" \
@@ -211,7 +211,7 @@ for step in $STEPS; do
         ${ROWS_ARGS:-} ;;
     session)
       # The verifier's Lean, built on the cores before the card is taken.
-      LEAN=verity/protocols/accounting/poub/verifier/lean
+      LEAN=verity/protocols/resource_accounting/memory/poub/verifier/lean
       if (cd "$LEAN" && lake build poub-verifier) > "$O/lean-build.log" 2>&1; then
         export LEAN_EXE=$TREE/$LEAN/.lake/build/bin/poub-verifier
         leased session bash "$TREE/$RS/rows.sh" session

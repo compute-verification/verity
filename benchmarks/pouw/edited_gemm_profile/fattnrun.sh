@@ -14,7 +14,7 @@
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
-export D=verity/protocols/accounting/pouw/prover/kernels/edited_gemm
+export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm
 # the references import their siblings as verity's modules, from the clone's root
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
 export BIN=$(mktemp -d /tmp/fattn.XXXXXX)
@@ -31,7 +31,7 @@ for b in fattn apv cgemm cwgemm; do
   [ -x "$BIN/$b" ] || { echo "build $b failed"; tail -30 "$O/build_$b.log"; echo "build $b rc 1" >> "$O/rc.txt"; exit 4; }
 done
 echo "build rc 0" >> "$O/rc.txt"
-$PY verity/protocols/accounting/pouw/prover/sass_gate.py "$BIN/fattn" "$BIN/cwgemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
+$PY verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py "$BIN/fattn" "$BIN/cwgemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
 echo "sass_gate (whole binary) rc $?" >> "$O/sass_gate.txt"
 # as aprun.sh: flagged instructions pass only in egemm.cu's never-launched kernels (an Args kernel of that name)
 $PY - "$O/sass_gate.json" > "$O/sass_scope.txt" 2>&1 <<'EOF'

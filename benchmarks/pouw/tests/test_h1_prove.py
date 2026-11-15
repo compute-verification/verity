@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U
 
 import h1form as F
 import layer as L
@@ -28,10 +28,10 @@ import recorded as RN
 import window as W
 from conftest import load
 
-from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
-from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
+from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
@@ -475,7 +475,7 @@ def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public
     row 100), and by default `window_ports`' A and B ports, which credit's registered file reads, with the rest unchanged."""
-    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
     for shape in (F.shape(64), F.shape(128)):
         t = shape.definition()
         bits = {p.name: p.bits for p in shape.ports()}

@@ -65,15 +65,15 @@ sys.path.insert(0, str(HERE.parents[1] / "verity/protocols/proofs/flock/prover/a
 import a0  # noqa: E402
 import a7  # noqa: E402
 import redigest  # noqa: E402
-from verity.protocols.accounting.certifier.prover import leak_scan as LS  # noqa: E402
-from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
-from verity.protocols.accounting.poub.prover import opening_prover  # noqa: E402
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
-from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import leak_scan as LS  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover import opening_prover  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.protocols.accounting.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC, class_statement as CS  # noqa: E402
 

@@ -124,7 +124,7 @@ from verity_vllm.compiler import compile_slice_v5 as V5
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean.trace import part as _part
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.accounting.certifier.verifier.head_check import _coll, _Consts, ands
+from verity.protocols.resource_accounting.network.verifier.head_check import _coll, _Consts, ands
 
 STATICS = V5.STATICS
 COMPILE_FLAGS = ("load", "steps", "cache", "served", "carry", "calls", "edge")

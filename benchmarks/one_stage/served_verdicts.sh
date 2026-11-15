@@ -212,7 +212,7 @@
 # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`, with D and OUT, on the node that holds the serve dir, writes
 # the hand-off from PIECES and the inference-only VERDICT (on a deferral's serve dir, at its settings, HOST as
 # `handoff`'s) and sends it to the compose gate on COMPOSE_NODE
-# (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@
+# (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@
 # the address VY_AUDITOR_2_HOST holds, vy-auditor-2's public one, where the gate admits senders (set it for any other COMPOSE_NODE;
 # with neither, the preflight refuses), the one word `compose`), a tar of the files its inputs.txt lists on the gate's stdin; the gate composes there at its
 # pinned tree (COMPOSE_BUILT: built at its pin; SAMPLED_EXE its prebuilt SPOT Lean; COMPOSE_TREE_ON the branch
@@ -911,7 +911,7 @@ print(f"the audit read its records tied to W {w}…, R chained right after it: {
 v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json
   (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py period --window "$VW/window" \
     --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json" --tied "$("$TREE/.venv/bin/python" -c \
-    'from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE; print(SCAN_STATE)')") > "$OUT/v3c-audit/period.log" 2>&1
+    'from verity.protocols.resource_accounting.network.verifier.blocks import SCAN_STATE; print(SCAN_STATE)')") > "$OUT/v3c-audit/period.log" 2>&1
   local rc=$?
   [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/"
   say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$OUT/v3c-audit/period.log" | cut -c1-800)"
@@ -1207,7 +1207,7 @@ block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each
   done
 }
 IO_POLICY=${IO_POLICY:-$OUT/inference-only-policy.json}
-IO_LEAN=$TREE/verity/protocols/policy/inference_only/verifier/lean/.lake/build/bin/inference-only-check
+IO_LEAN=$TREE/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-check
 io_class() {  # the inference-only verdict's class: IO_CLASS, else the first of CLASSES but `record`
   local c
   [ -z "${IO_CLASS:-}" ] || { echo "$IO_CLASS"; return 0; }
@@ -1433,7 +1433,7 @@ day_held() {  # a follow-on under DAY: the deferral's copy of the day's log, whi
   local got
   got=$("$TREE/.venv/bin/python" -c 'import json, sys
 from verity import device as S
-from verity.protocols.accounting.registration.verifier import registration as G
+from verity.protocols.registration.verifier import registration as G
 decl, day = json.load(open(sys.argv[1])), int(sys.argv[3])
 composite, log = G.log_of(json.load(open(sys.argv[2])))
 p = G.params_of(json.load(open(sys.argv[4]))) if len(sys.argv) > 4 else (composite, S.Auditor())
@@ -1948,7 +1948,7 @@ mkdir -p "$D" "$ROOT/cache" "$FW"
 if [ -z "$FOLLOW$COMPOSE" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; }; then
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
     | sh -s -- -y --default-toolchain none > "$OUT/elan.log" 2>&1
-  (cd "$TREE/verity/protocols/accounting/pouw/verifier/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
+  (cd "$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
     || { tail -20 "$OUT/h1-lean.log"; say "PREFLIGHT: H1's Lean verifier (pouw-check-difftest) didn't build"; exit 3; }
 fi
 
@@ -1963,7 +1963,7 @@ build() {  # what prove_path.sh builds, here while the endpoint serves; prove_pa
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
   # after verity-verify-proof's build, whose package it requires by path: the inference-only verdict's `inference-only-check --count`,
   # without which the verdict is the Python count's alone
-  (cd verity/protocols/policy/inference_only/verifier/lean && lake build inference-only-check) || echo "inference-only-check didn't build"
+  (cd verity/protocols/workload_classification/training_detection/inference_only/verifier/lean && lake build inference-only-check) || echo "inference-only-check didn't build"
 }
 if [ -n "$COMPOSE" ]; then ( unset PYTHONPATH; compose_build ) > "$OUT/build.log" 2>&1 &
 else ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &

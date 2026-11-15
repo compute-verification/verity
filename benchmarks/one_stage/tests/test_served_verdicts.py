@@ -66,10 +66,10 @@ from typing import Any
 import jsonschema
 import pytest
 from verity import device as SITE
-from verity.protocols.accounting.registration.verifier import registration as RL
-from verity.protocols.accounting.pous.verifier import wipe_period as W
+from verity.protocols.registration.verifier import registration as RL
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-from verity.protocols.accounting.poub.verifier import ledger
+from verity.protocols.resource_accounting.memory.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -1750,7 +1750,7 @@ def _draw(after: str = "c1" * 64, seed: int = 7) -> dict:
     coin ``pouw/draw`` 0 opened after ``after``, reserved as `DSID`."""
     import random
 
-    from verity.protocols.accounting.pouw.verifier import window as Wd
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 
     ch = Wd.draw_challenger(0, random.Random(seed).randbytes)
     opening = ch.open(Wd.DRAW, 0, bytes.fromhex(after))
@@ -1972,9 +1972,9 @@ def test_a_pearlplus_piece_holds_each_pass_salt_to_the_live_session_the_gate_hol
     its own manifest and to main's first-parent line, so the piece accepts; the first refusal names its pass and no pass
     after it is checked, and a key other than the pin's, no gate, key pin or line, a run that names no session or has no
     pass with calls, and a gate that refuses the fetch each reject, naming why."""
-    from verity.protocols.accounting.pouw.verifier import core_check as CC
-    from verity.protocols.proofs.spot.device import challenger as Ch
-    from verity.protocols.proofs.spot.device import remote
+    from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proofs.spot.verifier.challenger import remote
 
     files = {remote.KEY: json.dumps({"H": 5, "W": 4, "public": PUBLIC.hex()}), remote.RELEASES: '{"event": "root"}\n',
              remote.CLOSE: "{}"}
@@ -2169,7 +2169,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
     own reserve in its open Pearl-C period, whose circuit is the SHA-512 of the window-circuit record beside R), its coin
     published, Pearl+'s verdict tied to W, the window's docket R chained after W and its audit tied to W, and the
     Lean verdict on the same run. Returns the pieces dir, SPOT dir, the compose's key pin and lane."""
-    from verity.protocols.proofs.spot.device import remote
+    from verity.protocols.proofs.spot.verifier.challenger import remote
 
     served, verified = _pearlplus_run()
     draw = {"node draw": NODE, "draw off C": _draw("c2" * 64)}.get(case, DRAW)
@@ -2408,8 +2408,8 @@ def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tm
     withheld, its signed commitment the record's, its log showing C as its coin's one root, and the record's opening its
     coin after C with the record's source that coin; a node's sample is checked by none of it. Each failure names why, and
     the piece rejects on it."""
-    from verity.protocols.accounting.pouw.verifier import window as Wd
-    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 
     other = _draw(seed=8)
     signed = {"other commitment": other["commitment"]}.get(case, DRAW["commitment"])
@@ -2914,7 +2914,7 @@ print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 se
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
-INFERENCE_ONLY_CHECK = "verity/protocols/policy/inference_only/verifier/lean/.lake/build/bin/inference-only-check"
+INFERENCE_ONLY_CHECK = "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-check"
 
 
 def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str) -> tuple[int, list[str], list[list[str]]]:
@@ -5739,7 +5739,7 @@ sys.exit(H.gate(["--ssh", " ".join(sys.argv[1:]), "--key", "vllm"], host, sink=s
 '''
 GATE_PIN = "c0" * 20
 #: the compose gate's directory (its `host.py`), which the driver imports from
-LIVE_VERIFIER = HERE.parents[2] / "verity" / "protocols" / "accounting" / "poub" / "device" / "live_verifier"
+LIVE_VERIFIER = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "memory" / "poub" / "attester" / "live_verifier"
 
 
 def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
@@ -6626,9 +6626,9 @@ DIGEST = "5e" * 64
 
 
 def _auditor():
-    """Infra's gate, ``verity/protocols/compose/device/live_challenger/auditor.py``, as a module of its own."""
+    """Infra's gate, ``verity/protocols/compose/verifier/live_challenger/auditor.py``, as a module of its own."""
     import importlib.util
-    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
@@ -6638,7 +6638,7 @@ def _declared(tmp_path: Path, files: dict | None = None, live=(32, 2)) -> tuple[
     """A serve dir whose serve-openai declared a window Program of digest `DIGEST` at T 32, S 2 (serve.json and
     ``h1/window-program.meta.json``, its layout `served.declared_layout`'s over two linears at K 32 and 64), and a
     circuit-files directory for it whose manifest holds `files` (default the live file and k32's, not k64's)."""
-    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
     d, c = tmp_path / "serve", tmp_path / "circuits"
     (d / "h1").mkdir(parents=True)
     c.mkdir()
@@ -6657,9 +6657,9 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     commits the Program digest serve-openai wrote, its T, the sample K, the fixed length and the circuit files, each read
     back by core's credit as the window's period commits it; a stratum with no ``k<K>`` file yet is named and left out.
     It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
-    from verity.protocols.accounting.pouw.verifier import credit as CR
+    from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.commitments.crypto import lms
-    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)
@@ -6742,8 +6742,8 @@ def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes
     S, and writes them with serve-openai's own `served.write_program`; ``--like`` takes model, T and S from a serve
     dir and refuses a digest other than the one that run declared. The declaration and its digest are stand-ins here
     (a real one takes minutes); the node job checks the real one against a recorded run's digest."""
-    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
     seen = []
     monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None: ("program", shapes, modules, rows,
@@ -6814,11 +6814,11 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
     from types import SimpleNamespace
 
     torch = pytest.importorskip("torch")
-    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT, h1window as HW
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as HT, h1window as HW
     from verity_vllm.pipeline import serve_h1 as SH
     from verity_vllm.protocols import pouw
-    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
     model, j10r = "verity-int8/Llama-3.2-1B-INT8", {"pouw": {"unit": "j10r", "ks": [2048]}}
     llama, linear = _llama(torch, model)

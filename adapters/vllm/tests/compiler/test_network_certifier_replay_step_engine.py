@@ -12,7 +12,7 @@ import pytest
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import replay_step as RS
 
-FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures"
+FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "tests" / "fixtures"
 SLICES = ("compile_slice_smallkv", "compile_slice_w1", "compile_slice_w1_class", "compile_slice_w212",
           "compile_slice_w212_class", "compile_slice_w212_class_async")
 

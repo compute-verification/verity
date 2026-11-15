@@ -19,7 +19,7 @@ STEP_BESIDE = {"h1_prove": "recorded.py", "h1_lanes": "leaf.py"}
 #: each directory -> how many of its jobs the README describes without a row
 NO_ROW = {"served_h1": 1, "h1_prove": 2}
 #: each directory that moved out of benchmarks/pouw/ -> its place
-MOVED = {"served_zk": POUW.parents[1] / "verity/protocols/accounting/pouw/prover/kernels/served_zk"}
+MOVED = {"served_zk": POUW.parents[1] / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk"}
 
 
 def at(d: str) -> Path:

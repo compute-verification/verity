@@ -23,9 +23,9 @@ from typing import Any
 from verity.runtime import runner as runtime
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
-from verity.protocols.accounting.certifier.verifier import parties as NC
-from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
-from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams
+from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
 from verity.channel import Refused

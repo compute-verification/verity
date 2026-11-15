@@ -57,7 +57,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from verity.protocols.accounting.pouw.prover.lowering import h1unit as U
+from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U
 import h1form as F
 
 R, C = U.TILE
@@ -204,8 +204,8 @@ def _serve_one(u: int, d_word: bool = False, xa_flip: bool = False) -> tuple[int
     bit xa (A = 127 with dither bit 1). ``d_word``: as a kernel whose lane 0 made its D_1 entry 0 one too large, folded and
     recombined like the honest words, so z and the receipt agree with each other. ``xa_flip``: v3's z with one entry's xa
     flipped (`_xa_target`), the receipt the honest one."""
-    from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
-    from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
     a, b, _sa, _sw = _rows(_W["priv"], _W["com"], u)
     roots_ = roots(_W["com"])
     a, b = [[int(x) & 0xFF for x in r] for r in a], [[int(x) & 0xFF for x in r] for r in b]

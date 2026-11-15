@@ -124,7 +124,7 @@ class Pin:
         return f"cd {self.under} && {self._sha256sum(root)} > {Path(self.path).name}"
 
 
-NCP = "verity/protocols/accounting/pouw/verifier/tests/ncp_lean.py"
+NCP = "verity/protocols/resource_accounting/compute/pouw/verifier/tests/ncp_lean.py"
 PINS = (
     Pin("tools/pous_grader/TRUSTED.sha256", None, "tools/pous_grader", None),
     Pin("verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json", "inputs", "", "bash verity/protocols/proofs/flock/prover/tests/lean/generate.sh",
@@ -135,7 +135,7 @@ PINS = (
         "bash verity/protocols/proofs/spot/verifier/tests/lean/generate.sh", "security/Proofs"),
     Pin("verity/protocols/proofs/flock/prover/tests/fixtures/inner_claims.json", "inputs", "",
         "bash verity/protocols/proofs/flock/prover/tests/lean/generate_inner_claims.sh", "verity/protocols/proofs/flock/verifier"),
-    Pin("verity/protocols/accounting/pouw/verifier/tests/vectors/ncp_lean.json", "sources_sha256", "security",
+    Pin("verity/protocols/resource_accounting/compute/pouw/verifier/tests/vectors/ncp_lean.json", "sources_sha256", "security",
         f"uv run python {NCP} write security/ && (cd security/ && lake build Definitions.Pouw.NCP.RouteU && "
         f"lake env lean NcpCheck.lean > ncp_lean.out) && uv run python {NCP} pin security/ncp_lean.out security/; "
         f"s=$?; rm -f security/NcpCheck.lean security/ncp_lean.out; exit $s", "security"),

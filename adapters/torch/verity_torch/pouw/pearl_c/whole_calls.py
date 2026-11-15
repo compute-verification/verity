@@ -57,7 +57,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 import numpy as np
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 
 from verity_torch.pouw.pearl_c.ends import _RunState, _Stages
 from verity_torch.pouw.pearl_c.passes import call_index
@@ -147,7 +147,7 @@ class WholeCalls(_RunState):
     _prefetch_open: bool = False
     #: a commitment of each forward replayed whole beside the scheme's, while its ``enabled`` (with hashing): inside the
     #: capture, `stage(w, sh)` after each call's steps (and `prepare(w, sh)` outside it, in the warm-up); after each replay,
-    #: `after(calls, tiles_at)` on the replaying stream (verity/protocols/accounting/pouw/prover/kernels/served_zk/statement.py's `Statement`)
+    #: `after(calls, tiles_at)` on the replaying stream (verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/statement.py's `Statement`)
     statement: Any = None
 
     def whole_key(self, retained: bool | None = None) -> tuple | None:

@@ -27,10 +27,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
-from verity.protocols.accounting.pous.verifier import wipe_party as WP
-from verity.protocols.accounting.pous.verifier import wipe_period as W
+from verity.protocols.resource_accounting.memory.pous.attester import memory_challenger as mc
+from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
 
 WRAPPER = Path(__file__).resolve().parents[1] / "streamed_wipe" / "served_wipe.sh"
 DEMO = WRAPPER.parent / "demo.sh"
@@ -40,7 +40,7 @@ CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
 #: who decided, as the summary and the headline name it: the stand-in demo.sh's judge, on this host
 DECIDED = {"program": "wipe-protocol", "host": socket.gethostname()}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
-PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"))["key_sha512"]()
+PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "tests" / "wipe_side.py"))["key_sha512"]()
 #: the wipe key the run's configuration pins (VERITY_PINS): the pin of a run that sets none of its own
 AUDITOR_PIN = hashlib.sha512(b"the configuration's pin of the memory challenger's wipe key").hexdigest()
 PINS = [{"key-sha512": hashlib.sha512(b"its PoUS key").hexdigest(), "party": "memory-challenger", "protocol": "pous",
@@ -51,7 +51,7 @@ UNTRUSTED = "the session is signed by a key that is not a trusted memory challen
 TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
 ROOT = Path(__file__).resolve().parents[3]
 #: the Lean judge's package, `wipe-protocol`'s
-JUDGE = "verity/protocols/accounting/pous/device/lean"
+JUDGE = "verity/protocols/resource_accounting/memory/pous/attester/lean"
 LAKE = """#!/usr/bin/env bash
 echo "$PWD $*" >> "$FAKE_LAKE_LOG"
 python3 - << 'EOF' || exit 1

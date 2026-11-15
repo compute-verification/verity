@@ -18,7 +18,7 @@ import pytest
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4, compile_slice_v5 as V5
 from verity_vllm.compiler import replay_chain as RC
-from verity.protocols.accounting.certifier.verifier.head_check import ands
+from verity.protocols.resource_accounting.network.verifier.head_check import ands
 from verity.circuits import boolean as BL
 
 

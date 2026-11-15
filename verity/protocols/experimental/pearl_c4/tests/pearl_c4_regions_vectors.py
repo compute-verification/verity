@@ -9,10 +9,10 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "accounting" / "pouw" / "verifier" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "resource_accounting" / "compute" / "pouw" / "verifier" / "tests"))
 import pouw_regions_vectors as RV
 from verity.protocols.experimental.pearl_c4.prover import pc4
-from verity.protocols.accounting.pouw.prover.circuit.anchors import TileAnchors
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as F
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c4_regions.json"

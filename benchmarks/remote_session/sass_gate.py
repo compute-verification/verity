@@ -1,5 +1,5 @@
 """rows.sh's gate on the kernels a 64-row pass adds to `session.cu`, and their record: ptxas's report and cuobjdump's
-SASS of those seven, through the harness's `mma_gate` (verity/protocols/accounting/pouw/prover/sass_gate.py). Every
+SASS of those seven, through the harness's `mma_gate` (verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py). Every
 other kernel of the build is held to the base's, instruction for instruction, by `same_sass.py`. Refuses (exit 1, the
 reasons on stderr):
 
@@ -45,7 +45,7 @@ def _harness() -> ModuleType:
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(
-            name, Path(__file__).resolve().parents[2] / "verity/protocols/accounting/pouw/prover/sass_gate.py")
+            name, Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]

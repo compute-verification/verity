@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.protocols.accounting.certifier.verifier.certificate import Direction
+from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 
 HERE = Path(__file__).resolve().parents[1]
 SESSION = bytes(range(32))
@@ -55,8 +55,8 @@ def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
 def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_root():
     """On the certificate's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
     under the root, the changed one doesn't, and no other frame changes."""
-    from verity.protocols.accounting.certifier.verifier.certificate import frames_root, open_frame, verify_frame
-    from verity.protocols.accounting.certifier.verifier.grid import GridParams
+    from verity.protocols.resource_accounting.network.verifier.certificate import frames_root, open_frame, verify_frame
+    from verity.protocols.resource_accounting.network.verifier.grid import GridParams
 
     params = GridParams(buckets=4, allocation=2, frame_bytes=64, bucket_ms=100, queue_capacity=8)
     frames = [bytes([k]) * 64 for k in range(5)]
@@ -365,7 +365,7 @@ def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_r
     """serve-openai's rows by user (by http id without one) where they carry the prompt; each advice request's id
     request is its record's (its prompt ids, user and what it brought, seed 0 when it brought none), and one without a
     record a prompt of its length under its own id; a record whose prompt isn't the advice's length can't be tied."""
-    from verity.protocols.accounting.certifier.verifier.id_form import id_request
+    from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 
     brought = {"max_tokens": 3, "temperature": 0.5, "top_p": 0.9}
     (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
@@ -504,9 +504,9 @@ def test_a_changed_byte_of_a_network_certifiers_committed_cell_doesnt_read_under
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
     WR = pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
-    from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
-    from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, BlockGrid
-    from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams, cell
+    from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
+    from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, BlockGrid
+    from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifierParams, cell
 
     params = NetworkCertifierParams(cell_bytes=64, slots=2, lanes=2, window=2)
     B, S = params.cell_bytes, params.grid.allocation
@@ -529,7 +529,7 @@ def test_frame_on_a_network_certifier_run_reads_its_data_cells_row_and_refuses_t
     and not with a payload byte changed; a run that kept no salts is not applicable."""
     pytest.importorskip(NG.NETWORK_CERTIFIER_ROWS_MODULE)
     sys.path.insert(0, str(HERE / "tests"))
-    from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
+    from verity.protocols.resource_accounting.network.attester.tests import relay_runs as tws
 
     run, key = tmp_path / "run", tmp_path / "key"
     run.mkdir()

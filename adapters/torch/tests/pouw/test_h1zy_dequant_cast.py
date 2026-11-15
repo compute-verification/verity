@@ -7,7 +7,7 @@ import struct
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z
 
 M32 = (1 << 32) - 1
 

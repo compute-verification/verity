@@ -15,7 +15,7 @@ import pfill_ref as R
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-KERNEL = HERE.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/filler"
+KERNEL = HERE.parents[2] / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler"
 
 C0, C1 = 0x0123456789ABCDEF, 0xFEDCBA9876543210
 KINDS = {R.S8: [], R.BITS: ["-DPFILL_BITS"], **({R.BU: ["-DPFILL_BU", "-mpopcnt"]} if hasattr(R, "BU") else {})}

@@ -28,13 +28,13 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.device.tests.relay_runs import PARAMS, SESSION, _response, _Writer, ws
-from verity.protocols.accounting.certifier.verifier import relay_check as RC
-from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
-from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
-from verity.protocols.accounting.certifier.verifier.io_tie import TRAILER
-from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_head, with_release
-from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifier, NetworkCertifierParams, audit, cells, read_cell
+from verity.protocols.resource_accounting.network.attester.tests.relay_runs import PARAMS, SESSION, _response, _Writer, ws
+from verity.protocols.resource_accounting.network.verifier import relay_check as RC
+from verity.protocols.resource_accounting.network.verifier import network_certifier_rows as WR
+from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
+from verity.protocols.resource_accounting.network.verifier.io_tie import TRAILER
+from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_END, watermark_head, with_release
+from verity.protocols.resource_accounting.network.verifier.network_certifier import NetworkCertifier, NetworkCertifierParams, audit, cells, read_cell
 
 HERE = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"

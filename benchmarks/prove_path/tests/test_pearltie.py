@@ -61,11 +61,11 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
-from verity.protocols.accounting.pouw.verifier.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch

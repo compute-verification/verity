@@ -48,10 +48,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.accounting.poub.verifier import audit, ledger  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, ledger  # noqa: E402
 from verity.protocols.proofs.spot.prover import costfit  # noqa: E402
 
-from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 import sheets  # noqa: E402
 

@@ -14,7 +14,7 @@ import pytest
 
 FILLER = Path(__file__).resolve().parents[1]
 DCAP = Path(__file__).resolve().parents[1]
-KERNEL = DCAP.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/filler"
+KERNEL = DCAP.parents[2] / "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler"
 
 
 A = F.A  # the arms module fused_arm imported
@@ -103,7 +103,7 @@ def test_pump_only_build_runs_no_filler_warp(arm):
     assert all(q.FW == 0 and q.AFW == 0 for _, q in arm.table.values())
     src = (FILLER / "fscore.cu").read_text()
     assert re.search(r"#ifdef FSCORE_PUMP_ONLY\n#define FLIN_PUMP_ONLY\n#endif\n#define DCAP_FLIN\n", src)
-    assert src.index("#define FLIN_PUMP_ONLY") < src.index('#include "../../../verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu"')
+    assert src.index("#define FLIN_PUMP_ONLY") < src.index('#include "../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu"')
 
 
 def test_warp_arm_fills_through_dfill_k_warp():

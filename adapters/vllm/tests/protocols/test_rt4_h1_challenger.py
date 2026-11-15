@@ -39,12 +39,12 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.commitments.crypto import lms
-from verity.protocols.accounting.pouw.verifier import salt as PS
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import salt_of
-from verity.protocols.proofs.spot.device import challenger as LC
-from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.challenger import (
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import salt_of
+from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
+from verity.protocols.proofs.spot.verifier.challenger import remote as R
+from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     LiveCommitment,
     record_message,
 )
@@ -52,9 +52,9 @@ from verity.protocols.proofs.spot.device.challenger import (
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1 as T
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import requests as RQ
 
 PRIVATE, KEY = CH.challenger_key(1, H=6)
 COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64

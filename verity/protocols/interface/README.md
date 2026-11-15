@@ -110,7 +110,7 @@ own profile type and JSON.
 ## The registration log
 
 The registration log's check (`Core.Registration`) is registration's, the accounting protocol that runs once
-before any challenge: [`../accounting/registration/README.md`](../accounting/registration/README.md). The example Site
+before any challenge: [`../registration/README.md`](../registration/README.md). The example Site
 its example registers, which `Account`'s example reads too, is here (`CoreProtocol/SiteExample.lean`).
 
 ## What a protocol accounts for (`CoreProtocol/Account.lean`)

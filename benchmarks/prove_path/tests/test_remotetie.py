@@ -70,12 +70,12 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import Tables, WindowClass
 from verity_vllm.pipeline import serve_tie as TIE
-from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
-from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
-from verity.protocols.accounting.pouw.prover.serving.h1.words import chunk_words, ids_words
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words import chunk_words, ids_words
 
-from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
@@ -450,7 +450,7 @@ def lean(toy, written, tmp_path_factory) -> SimpleNamespace:
     one = _one_stage()
     SC = one.SC
     exes = SimpleNamespace(v1=SC.build(*SC.V1_LEAN), policy=SC.build(*SC.INFERENCE_ONLY_LEAN),
-                           period=SC.build(ROOT / "verity/protocols/accounting/pouw/verifier/lean/check", "pouw-period"),
+                           period=SC.build(ROOT / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check", "pouw-period"),
                            remote=SC.build(ROOT / "verity/protocols/compose/verifier/remote", "remote"))
     W, R = toy.h1.W, written.R
     serve = _serve(one, tmp_path_factory.mktemp("serve"), _v1_case(one, toy, written, W, R), W, R, exes.period)

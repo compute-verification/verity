@@ -14,20 +14,20 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import id_form as IDF, io_tie as IT
-from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
-from verity.protocols.accounting.certifier.verifier.release import RUN_ID_BYTES, with_release
+from verity.protocols.resource_accounting.network.verifier import id_form as IDF, io_tie as IT
+from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
+from verity.protocols.resource_accounting.network.verifier.release import RUN_ID_BYTES, with_release
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/verifier/live_challenger"))
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
-from verity.protocols.accounting.certifier.device import network_certifier_serve as ws  # noqa: E402
-from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
+from verity.protocols.resource_accounting.network.attester import network_certifier_serve as ws  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import scan_zk as sz  # noqa: E402
 
-from verity.protocols.accounting.certifier.device.tests.relay_runs import _run  # noqa: E402
+from verity.protocols.resource_accounting.network.attester.tests.relay_runs import _run  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name
@@ -311,8 +311,8 @@ def test_the_gates_demo_traffic_through_the_network_certifier_is_the_demo_stand_
     given exactly what the network certifier sent the server (its release headers on), serves every request and answers
     the bytes the network certifier certified, every connection ends within the two execution phases 24 tokens take at D
     = 27, and the check accepts the run."""
-    from verity.protocols.accounting.certifier.verifier import relay_check as RC
-    from verity.protocols.accounting.certifier.verifier.release import release_of
+    from verity.protocols.resource_accounting.network.verifier import relay_check as RC
+    from verity.protocols.resource_accounting.network.verifier.release import release_of
     prompts = S.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
            "prompts": True, "temperature": 0.0, "top_p": 1.0}

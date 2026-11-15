@@ -42,8 +42,8 @@ TRACES = Path(__file__).resolve().parents[2] / "benchmarks/network_traces"
 sys.path.insert(0, str(TRACES))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from verity.protocols.accounting.certifier.device import network_certifier_serve as ws  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
+from verity.protocols.resource_accounting.network.attester import network_certifier_serve as ws  # noqa: E402
+from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
 
 
 def served_requests(run: str | Path, window: int) -> list[dict]:
@@ -163,7 +163,7 @@ def rehearse(args) -> int:
     params = ws._params(args)
     sent = traffic(args.serve_run, args.serve_window, start_s=args.start, gap_s=args.gap)
     (out / "traffic.json").write_text(json.dumps(sent))
-    network_certifier = [sys.executable, str(Path(__file__).resolve().parents[2] / "verity/protocols/accounting/certifier/device/network_certifier_serve.py")]
+    network_certifier = [sys.executable, str(Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/network/attester/network_certifier_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="network-certifier-replay-"))
     procs: list[subprocess.Popen] = []
     try:

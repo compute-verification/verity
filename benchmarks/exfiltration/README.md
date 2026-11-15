@@ -81,7 +81,7 @@ the runs that replace it (`superseded_by`). It lists those runs once, and both r
 
 ### How the stop class is charged
 
-The command hands the list to the stop verdicts' reader, `verity/protocols/accounting/certifier/prover/stop_verdicts.py`
+The command hands the list to the stop verdicts' reader, `verity/protocols/resource_accounting/network/prover/stop_verdicts.py`
 (`of_runs(store, runs, superseded)`), every run that carries the record, with those another run replaces. It hands
 the reader's answer to the network certifier's calculator, which charges the stop class of its rows by it and by
 nothing else. What the reader reads in a run's files, and what holds an execution phase, are its own

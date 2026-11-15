@@ -18,7 +18,7 @@ from verity_vllm.compiler import served_statics as SS, served_tie as ST
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.commitments import advice as ADV
 
-FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
+FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
 
 
 def _book() -> dict:

@@ -17,7 +17,7 @@ from verity_vllm.compiler import cache_step_v3 as V3
 SMALL = V3.statics(NS=192, NE=96, NB=6, RW=4, KW=3, REFW=3, TW=8)
 S = SimpleNamespace(**SMALL)
 T = V3.TAGS
-VECTORS = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "cache_step_v3_vectors.json"
+VECTORS = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "tests" / "fixtures" / "cache_step_v3_vectors.json"
 GLM = {"NB": 5000, "RW": 20, "KW": 11, "REFW": 9, "TW": 28}
 
 
