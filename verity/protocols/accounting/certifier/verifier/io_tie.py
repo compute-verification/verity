@@ -13,8 +13,8 @@ egress cell i is in bucket s + D + ⌊i / r⌋, its slot i mod r: its n events (
 certifier's cut of the server's bytes, P = B − 9 of them, and a response is its events, each `id_event` padded with
 spaces to P, then `TRAILER`, shorter than P: so the network certifier's cut (`network_certifier.NetworkCertifier._egress`) is exactly n
 `DATA` cells, one event each, and an `END` that holds `TRAILER`, whenever the bytes are there by their deadlines. q is
-the request's ingress ordinal on the wire, from 1 as `active.Requests` numbers it, which the network certifier writes
-from the connection it terminated.
+the request's ingress ordinal on the wire, from 1, which the network certifier writes from the connection it
+terminated.
 
 **The map is a function of the advice** (`window_map`): for each slot, the cell the network certifier must have released
 there, as a record (q, e): a `DATA` on q whose id is entry e of its bucket's port, an `END` on q (`END_ENTRY`) or a

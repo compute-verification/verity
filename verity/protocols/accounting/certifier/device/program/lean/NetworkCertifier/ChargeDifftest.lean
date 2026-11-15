@@ -11,7 +11,7 @@ public import Lean.Data.Json.Parser
 on them. `NetworkCertifier/ChargeDifftestMain.lean` reads both files and fails unless `evaluate`, which computes the same
 results from the program's definitions (`NetworkCertifier.AdviceV1`), gives every one of them. The Lean audit runs it
 (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.Certifier.Code`
-(`CodeChargesV1`) proves `charges` equal to the reference's (`Security/Definitions/Certifier/AdviceV1.lean`).
+(`CodeChargesV1`) proves `charges` equal to the reference's (`security/Definitions/Certifier/AdviceV1.lean`).
 
 An instance is an execution phase size `N`, a book (`arrived`, n_arrived's bin frequencies at bins `0 … bitlen N`, its `total`,
 each zero count's `(freq, total)`, and the contexts' `priors`), a first carry, and windows, each `N` slots that ask or

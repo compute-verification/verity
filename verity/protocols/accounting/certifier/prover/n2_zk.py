@@ -91,7 +91,7 @@ ROUNDS = ("honest", "tampered")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
 ONE_SESSION = "outer proofs go through the ZK server one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per execution phase, by file (`member`)
-RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
+RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's sample",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
             "pub-1.bin": "the statement's public file", "session-*": "the session's files",
             "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
@@ -151,7 +151,7 @@ def plog(a, msg: str) -> None:
 
 
 def _no_coins(n: int) -> bytes:
-    raise AssertionError("Selection All draws every execution phase and reads no coins")
+    raise AssertionError("Selection All samples every execution phase and reads no coins")
 
 
 #: the verifier's own Lean runs (`proofs.verify`'s findings and refusal), by the proof's public file, so each
@@ -408,11 +408,11 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def other_subset(drawn: dict) -> list[int]:
+def other_subset(sampled: dict) -> list[int]:
     """A K-subset of the period's windows that isn't the sample's: the first K the sample didn't hold, then sampled ones
     from the start where it left fewer than K (none other at K = n)."""
-    held = set(drawn["units"])
-    return sorted(([w for w in range(drawn["population"]) if w not in held] + drawn["units"])[:drawn["k"]])
+    held = set(sampled["units"])
+    return sorted(([w for w in range(sampled["population"]) if w not in held] + sampled["units"])[:sampled["k"]])
 
 
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
@@ -441,39 +441,39 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
-    drawn, windows, segment = None, rd.windows, None
+    sampled, windows, segment = None, rd.windows, None
     if k is not None:
         try:
-            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
+            sampled = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
-        plog(a, f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
-             f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
+        plog(a, f"{name}: sampled windows {sampled['units']} ({sampled['k']} of {sampled['population']}) on "
+             f"{len(sampled['read']) // 2} coin bytes after the period's commitment {sampled['commitment'][:16]}")
         if forge is not None:
-            drawn = {**drawn, "units": forge(drawn)}
-            plog(a, f"{name}: the prover proves windows {drawn['units']} instead")
-        (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
-        windows = [rd.windows[u] for u in drawn["units"]]
+            sampled = {**sampled, "units": forge(sampled)}
+            plog(a, f"{name}: the prover proves windows {sampled['units']} instead")
+        (vdir / "period.json").write_text(json.dumps(sampled, indent=1, sort_keys=True))
+        windows = [rd.windows[u] for u in sampled["units"]]
     previous, rows = None, []
     for j, x in enumerate(windows):
         wdir, pre = out / f"w{x.window:03d}", f"w{x.window:03d}-"
-        reg = lw.register(stream, lw.registration(x.opening, previous), drawn)
+        reg = lw.register(stream, lw.registration(x.opening, previous), sampled)
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.root.hex():
             raise SystemExit(f"{name} window {x.window}: the registered root is not the statement's")
-        draw = stream.select(reg)
-        if list(draw.units) != [0]:
-            raise SystemExit(f"{name} window {x.window}: the stream drew {list(draw.units)}, not the one unit")
+        sample = stream.select(reg)
+        if list(sample.units) != [0]:
+            raise SystemExit(f"{name} window {x.window}: the stream sampled {list(sample.units)}, not the one unit")
         sdir = wdir / "session"
         m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin}
         record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else _free_port(), env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = SVC.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / "pub-1.bin", sessions), x.statement.salts,
                                   x.statement.output)
-        late = stream.deliver(draw, delivered.sessions())
+        late = stream.deliver(sample, delivered.sessions())
         t = time.time()
-        outcome = late or lw.outcome(stream, draw, x.certificates, rd.syncs, delivered,
+        outcome = late or lw.outcome(stream, sample, x.certificates, rd.syncs, delivered,
                                      circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
@@ -485,7 +485,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                  and all(list(f.units) == [0] for f in findings),
                  "opened_word": None if args is None else SVC._opened(delivered, 0, lw.row(args, "pub"), lw.bits("pub")),
                  "certified": lw.certified(x.window, x.certificates)}
-        files = {"registration.json": reg.record, "draw.json": dict(draw.draw),
+        files = {"registration.json": reg.record, "draw.json": dict(sample.draw),
                  "certificates.json": [_certificate(c) for c in x.certificates],
                  "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": _without_clear(body),
                  "delivered.json": {"salts": {r: s.hex() for r, s in x.statement.salts.items()},
@@ -516,13 +516,13 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
              f"{proof['opened_word']}; {'as expected' if row['as_expected'] else 'UNEXPECTED'}")
         wlog(a, f"{name} window {x.window}: prove {row['prove']['session_s']} s (prove_total "
              f"{row['prove']['prove_total_s']} s, {row['prove']['proof_bytes']} B), verify {verify_s} s")
-    network = lw.network_verdict(stream, rd.plan["windows"], drawn)
-    if drawn is not None:
+    network = lw.network_verdict(stream, rd.plan["windows"], sampled)
+    if sampled is not None:
         sel = network["selection"]
-        plog(a, f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
+        plog(a, f"{name}: the sample of record ({sel['by']}) is windows {sel['units']}; proved "
              f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
-                                                    "the windows proved are the draw of record's"))
-    return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn}),
+                                                    "the windows proved are the sample of record's"))
+    return {"windows": rows, "network": network, **({} if sampled is None else {"period": sampled}),
             **({} if segment is None else {"segment": segment})}
 
 
@@ -596,7 +596,7 @@ def prove(a) -> int:
     members["tampered"].every = bool(a.draw)
     n = len(members["honest"].windows)
     if a.draw and not 1 <= a.draw <= n:
-        raise SystemExit(f"--draw {a.draw}: a period draw takes 1 to {n} of the link's {n} windows")
+        raise SystemExit(f"--draw {a.draw}: a period sample takes 1 to {n} of the link's {n} windows")
     if a.draw and a.draw < n:
         members[OTHER] = phases(run)
     summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
@@ -675,7 +675,7 @@ def prove(a) -> int:
                 "audit": {"accepted": net["accepted"], "wrong_units": wu},
                 "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if net["accepted"]
                 else None}
-            plog(a, f"member {name}: the draw of record ({sel['by']}) {sel['units']}, {sel['k']} of "
+            plog(a, f"member {name}: the sample of record ({sel['by']}) {sel['units']}, {sel['k']} of "
                  f"{sel['population']}: at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta "
                  f"{wu['delta']:.3g}" + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
         plog(a, f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
@@ -712,7 +712,7 @@ def main(argv=None) -> int:
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--draw", type=int, default=0,
-                   help="K: each member's period sampled, K of its windows drawn on the verifier's coins after every "
+                   help="K: each member's period sampled, K of its windows sampled on the verifier's coins after every "
                         "window's root is committed, and only those proved (TransferBlocks.period_draw); tampered then "
                         "changes every window, and other_subset proves another K-subset; 0 (the default): every window")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")

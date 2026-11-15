@@ -70,8 +70,8 @@ class Run:
     def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07") -> None:
         self.tmp = tmp_path
         self.signer = signers.signer(tmp_path)
-        drawn = itertools.count(0xc0)
-        self.issuer = Issuer(self.signer, signers.SESSION, coins=lambda n: bytes([next(drawn) % 256]) * n)
+        sampled = itertools.count(0xc0)
+        self.issuer = Issuer(self.signer, signers.SESSION, coins=lambda n: bytes([next(sampled) % 256]) * n)
         self.lw = TransferBlocks(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
                               proof_deadline=proof_deadline, network_certifier=SVC.NetworkCertifierProfile(3, NETWORK_CERTIFIER_DIGEST))
         self.clock = Clock()
@@ -93,11 +93,11 @@ class Run:
         self.previous = reg.digest
         return reg
 
-    def prove(self, opening, draw, **kw) -> SVC.Delivered:
-        return standin.prove(self.lw, opening, draw, SYNCS, self.tmp / f"proof-{draw.docket.order}", **kw)
+    def prove(self, opening, sample, **kw) -> SVC.Delivered:
+        return standin.prove(self.lw, opening, sample, SYNCS, self.tmp / f"proof-{sample.docket.order}", **kw)
 
-    def decide(self, draw, opening, **kw) -> S.Outcome:
-        return standin.decide(self.lw, self.stream, draw, opening, SYNCS, self.tmp / f"proof-{draw.docket.order}",
+    def decide(self, sample, opening, **kw) -> S.Outcome:
+        return standin.decide(self.lw, self.stream, sample, opening, SYNCS, self.tmp / f"proof-{sample.docket.order}",
                               **kw)
 
     def round(self, opening, delivered=None) -> S.Outcome:
@@ -116,9 +116,9 @@ def test_one_phase_round_trip_is_the_exhaustive_fact(tmp_path):
     assert reg.order == 0 and reg.receipt["received"] == "0" and reg.record["population"] == 1
     assert reg.record["roots"] == [{"port": VALUE, "root": run.lw.root(opening), **run.lw.ports(0)[VALUE]}]
     assert S.check_public(run.lw.spec, reg.record).ok
-    draw = run.stream.select(reg)
-    assert draw.units == [0] and draw.draw["law"] == "subset" and draw.draw["k"] == 1
-    out = run.decide(draw, opening)
+    sample = run.stream.select(reg)
+    assert sample.units == [0] and sample.draw["law"] == "subset" and sample.draw["k"] == 1
+    out = run.decide(sample, opening)
     assert out.accepted and out.verdict.ok and out.exhaustive == S.Exhaustive(1) and out.profile is None
     assert out.terms == S.Terms(None) and out.public == {"verdict": 1, "deadline": 1}
     body = run.stream.records[0]
@@ -162,8 +162,8 @@ def test_a_registered_window_with_no_outcome_rejects_the_link(tmp_path):
     for w in range(2):
         run.round(run.honest(w))
     opening = run.honest(2)
-    draw = run.stream.select(run.register(opening))
-    assert run.stream.deliver(draw, run.prove(opening, draw).sessions()) is None
+    sample = run.stream.select(run.register(opening))
+    assert run.stream.deliver(sample, run.prove(opening, sample).sessions()) is None
     verdict = run.lw.network_verdict(run.stream)
     assert len(run.stream.log) == 3 and len(run.stream.records) == 2
     assert not verdict["accepted"] and verdict["refused"] == [2] and verdict["records"][2] is None
@@ -176,8 +176,8 @@ def test_a_gap_in_the_registration_order_rejects_the_link(tmp_path):
     run.round(run.honest(0))
     skipped = run.honest(2)
     reg = run.stream.register(run.lw.registration(skipped, run.previous), run.lw.ports(2))
-    draw = run.stream.select(reg)
-    assert run.decide(draw, skipped).accepted
+    sample = run.stream.select(reg)
+    assert run.decide(sample, skipped).accepted
     verdict = run.lw.network_verdict(run.stream)
     assert run.stream.symbols == ("accept", "accept")
     assert not verdict["accepted"] and verdict["refused"] == [1, 2] and verdict["records"][1:] == [None, None]
@@ -301,15 +301,15 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     run = Run(tmp_path)
     lw = run.lw
     opening = run.honest(0)
-    draw = run.stream.select(run.register(opening))
+    sample = run.stream.select(run.register(opening))
     certs = [r.certificate for r in opening.records]
 
     def verdict(delivered, certificates=certs, syncs=SYNCS, circuit=None, **kw):
-        return lw.verify(draw, certificates, syncs, delivered,
+        return lw.verify(sample, certificates, syncs, delivered,
                          circuit_sha512=circuit or standin.circuit_sha512(delivered), **kw)
 
     def prove(o, k, **kw):
-        return standin.prove(lw, o, draw, SYNCS, tmp_path / f"proof-{k}", **kw)
+        return standin.prove(lw, o, sample, SYNCS, tmp_path / f"proof-{k}", **kw)
 
     honest = prove(opening, "honest")
     v = verdict(honest)
@@ -376,8 +376,8 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path)
     outs = []
     for w, proved in enumerate((program, registered)):
         opening = run.honest(w)
-        draw = run.stream.select(run.register(opening))
-        outs.append(run.decide(draw, opening, program=proved))
+        sample = run.stream.select(run.register(opening))
+        outs.append(run.decide(sample, opening, program=proved))
     assert reject(outs[0]) and outs[1].accepted
 
     wide = replace(lw, params=GridParams(16, 2, 1))
@@ -508,33 +508,33 @@ def test_an_unset_deadline_bit_is_a_reject(tmp_path):
         opening = run.lw.commit(w, run.egress(egress_records()[w], deadline=not e_late),
                                 run.ingress(ingress_records()[w], deadline=not i_late), SALTS[w])
         reg = run.register(opening)
-        draw = run.stream.select(reg)
-        delivered = run.prove(opening, draw)
+        sample = run.stream.select(reg)
+        delivered = run.prove(opening, sample)
         assert delivered.output == 0b01
-        verdict = run.lw.verify(draw, [r.certificate for r in opening.records], SYNCS, delivered,
+        verdict = run.lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered,
                                 circuit_sha512=standin.circuit_sha512(delivered))
         assert verdict["public"] == {"verdict": 0, "deadline": 0} and verdict["accepted"] is False
         assert "clear" not in verdict
-        assert reject(run.decide(draw, opening))
+        assert reject(run.decide(sample, opening))
 
 
 def test_a_late_proof_is_a_reject(tmp_path):
     run = Run(tmp_path)
     certificates = [r.certificate for r in run.honest(0).records]
     opening = run.honest(0)
-    draw = run.stream.select(run.register(opening))
-    delivered = run.prove(opening, draw)
+    sample = run.stream.select(run.register(opening))
+    delivered = run.prove(opening, sample)
     run.clock.now = 60.5
-    out = run.stream.deliver(draw, delivered.sessions())
+    out = run.stream.deliver(sample, delivered.sessions())
     assert out is not None and not out.accepted and out.verdict.codes == ("late",) and out.public == {}
     with pytest.raises(S.Refused):
-        run.lw.outcome(run.stream, draw, certificates, SYNCS, delivered,
+        run.lw.outcome(run.stream, sample, certificates, SYNCS, delivered,
                        circuit_sha512=standin.circuit_sha512(delivered))
     opening = run.honest(1)
-    draw = run.stream.select(run.register(opening))
-    delivered = run.prove(opening, draw)
+    sample = run.stream.select(run.register(opening))
+    delivered = run.prove(opening, sample)
     run.clock.now = 125.0
-    assert run.lw.outcome(run.stream, draw, [r.certificate for r in opening.records], SYNCS, delivered,
+    assert run.lw.outcome(run.stream, sample, [r.certificate for r in opening.records], SYNCS, delivered,
                           circuit_sha512=standin.circuit_sha512(delivered)).verdict.codes == ("late",)
     assert run.stream.symbols == ("late", "late")
 
@@ -555,9 +555,9 @@ def test_the_outcome_binds_the_registered_root(tmp_path):
     assert all(c["ok"] for c in audit["checks"].values()) and audit["verdicts"]["network-audit"]["accepted"] is False
     assert audit["verdicts"]["network-audit"]["public"] == {"verdict": 0, "deadline": 1}
     honest = run.honest(1)
-    draw = run.stream.select(run.register(honest))
+    sample = run.stream.select(run.register(honest))
     mine = replace(honest, salts=SALTS[2])
-    own = run.decide(draw, mine, root=bytes.fromhex(run.lw.root(mine)))
+    own = run.decide(sample, mine, root=bytes.fromhex(run.lw.root(mine)))
     assert reject(own) and run.stream.records[1]["audit"]["verdicts"]["network-audit"]["public"] == {
         "verdict": 0, "deadline": 0}
 
@@ -583,12 +583,12 @@ def test_a_signer_that_refuses_leaves_the_window_unregistered(tmp_path):
 def test_the_opening_must_be_the_registered_phases(tmp_path):
     run = Run(tmp_path)
     opening = run.honest(0)
-    draw = run.stream.select(run.register(opening))
+    sample = run.stream.select(run.register(opening))
     with pytest.raises(ValueError, match="execution phase"):
-        run.lw.clear(run.honest(1), draw, SYNCS)
-    delivered = run.prove(opening, draw)
+        run.lw.clear(run.honest(1), sample, SYNCS)
+    delivered = run.prove(opening, sample)
     with pytest.raises(ValueError, match="execution phase"):
-        run.lw.verify(draw, [r.certificate for r in opening.records], SYNCS, delivered,
+        run.lw.verify(sample, [r.certificate for r in opening.records], SYNCS, delivered,
                       circuit_sha512=standin.circuit_sha512(delivered), opening=run.honest(1))
     for salts in ((SALTS[0][0],) * 4, SALTS[0][:2]):
         with pytest.raises(ValueError, match="salts"):
@@ -605,10 +605,10 @@ def test_a_link_is_a_network_certifiers_with_both_heads_under_its_digest_and_no_
     lw = run.lw
     assert lw.spec.public == SVC.PUBLIC and lw.windows == 3 and SVC.OF_RECORD == "lean"
     honest = run.honest(0)
-    draw = run.stream.select(run.register(honest))
-    out = standin.decide(lw, run.stream, draw, honest, (), tmp_path / "p0")
+    sample = run.stream.select(run.register(honest))
+    out = standin.decide(lw, run.stream, sample, honest, (), tmp_path / "p0")
     assert out.accepted and out.public == {"verdict": 1, "deadline": 1}
-    assert lw.clear(honest, draw)["accepted"]
+    assert lw.clear(honest, sample)["accepted"]
     verdict = run.stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
     assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": True}
     shaped = run.issuer.certify(egress_records()[1], EGRESS, PARAMS, parameters_digest(PARAMS, SYNC_SET))
@@ -656,8 +656,8 @@ def test_a_head_leaf_that_isnt_its_records_head_is_a_reject(tmp_path):
     rec = run.lw.registration(opening)
     rec = {**rec, "roots": [{**rec["roots"][0], "root": tree_levels(dom, leaves)[-1][0].hex()}]}
     reg = run.lw.register(run.stream, rec)
-    draw = run.stream.select(reg)
-    assert reject(run.decide(draw, opening))
+    sample = run.stream.select(reg)
+    assert reject(run.decide(sample, opening))
 
 
 def test_the_commitments_of_a_shared_row_file_are_its_instances_refs_rows(tmp_path):
