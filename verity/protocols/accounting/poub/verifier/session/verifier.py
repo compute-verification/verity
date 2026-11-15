@@ -674,9 +674,10 @@ def accepts(failure: dict | None, verdicts: dict, windows: int, outcome: dict | 
 
 
 GAMMA_HELD_LOG2 = 40
-"""How near `ledger.gamma`'s floats are held to the Lean's exact γ terms: a share of the capacity within 2^-40 of it, an
-error within 2^-40 of itself.  The floats round each term and sum, and a timing term near 0 cancels to about 2^-52 of
-the capacity, so a share is held absolutely."""
+"""How near `ledger.gamma`'s floats are held to the Lean's exact γ terms: a share of the capacity within 2^-40 of the
+larger of it and 1, an error within 2^-40 of itself.  The floats round each term and sum, and a timing term near 0
+cancels to about 2^-52 of the capacity, so a share below 1 is held absolutely; every term is nonnegative once the
+capacity checks pass, so none exceeds γ, and one above 1 (a span too short for its passes) is held relatively."""
 
 
 def _gamma_differs(lean: object, python: object, at: str = "") -> tuple[str, object, object] | None:
@@ -695,7 +696,7 @@ def _gamma_differs(lean: object, python: object, at: str = "") -> tuple[str, obj
             q = line.number(lean)
         except line.Malformed:
             return at, lean, python
-        slack = abs(q) if at.startswith(".error") else 1
+        slack = abs(q) if at.startswith(".error") else max(1, abs(q))
         return None if abs(Fraction(python) - q) <= slack / 2 ** GAMMA_HELD_LOG2 else (at, lean, python)
     return None if type(lean) is type(python) and lean == python else (at, lean, python)
 
@@ -734,9 +735,9 @@ def gamma_held(got: object, python: dict) -> dict:
     try:
         gs = [line.number(w["gamma"]) for w in got["windows"]]
         hs = [line.number(w["horizon"]["gamma"]) for w in got["windows"]]
-        if max(gs) - gs[held["worst"]["window"]] <= Fraction(2, 2 ** GAMMA_HELD_LOG2):
+        if max(gs) - gs[held["worst"]["window"]] <= max(1, max(gs)) * Fraction(2, 2 ** GAMMA_HELD_LOG2):
             held["worst"]["window"] = got["worst"]["window"]
-        if max(hs) - hs[held["worst"]["horizon"]["window"]] <= Fraction(2, 2 ** GAMMA_HELD_LOG2):
+        if max(hs) - hs[held["worst"]["horizon"]["window"]] <= max(1, max(hs)) * Fraction(2, 2 ** GAMMA_HELD_LOG2):
             held["worst"]["horizon"]["window"] = got["worst"]["horizon"]["window"]
     except (KeyError, IndexError, TypeError, ValueError):
         pass
