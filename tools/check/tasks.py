@@ -252,7 +252,7 @@ def lean_cover(pkg: str) -> list[str]:
     """The directories and files that hold everything an audit of ``pkg`` reads (`lean_audit.inputs`), with the controls'
     packages every Lean check run builds (`check.FIXTURES`) where they aren't under the Lean tool."""
     pkgs = [pkg, *LA.path_deps(pkg), *(d for q in LA.provers(pkg) for d in (q, *LA.path_deps(q)))]
-    fixtures = LA.lean_check().FIXTURES.relative_to(LA.ROOT).as_posix()
+    fixtures = (c := LA.lean_check()).FIXTURES.relative_to(c.ROOT).as_posix()
     return [*dict.fromkeys(pkgs), LA.LEAN_TOOL.rstrip("/"), *([] if covers(fixtures, [LA.LEAN_TOOL]) else [fixtures]),
             "tools/check/common.py"]
 

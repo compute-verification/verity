@@ -120,7 +120,7 @@ def options(table: dict, prefix: str = "") -> dict:
 
 def auditor() -> tuple[str, str]:
     """The auditor's directory and its fixtures' (`check.FIXTURES`, the controls' packages), whose Lake packages have no task."""
-    return la.LEAN_TOOL, la.lean_check().FIXTURES.relative_to(la.ROOT).as_posix() + "/"
+    return la.LEAN_TOOL, (c := la.lean_check()).FIXTURES.relative_to(c.ROOT).as_posix() + "/"
 
 
 def packages(root: Path, files: list[str]) -> dict[str, Package]:

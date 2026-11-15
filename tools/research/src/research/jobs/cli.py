@@ -115,7 +115,7 @@ def lean_fixtures(commit: str, cwd: Path | None = None) -> str:
     """`check.FIXTURES` at ``commit``, as a path in the tree, read without running check.py: its module-level assignments are
     evaluated in order where they are a path built from `Path(__file__)`, `.resolve()`, `.parent`, `.parents[i]`, `/` and
     string literals."""
-    def ev(n: ast.expr, names: dict[str, PurePosixPath]) -> PurePosixPath | str:
+    def ev(n: ast.expr, names: dict[str, PurePosixPath]) -> PurePosixPath | str | None:
         match n:
             case ast.Constant(value=str(s)):
                 return s
@@ -126,22 +126,19 @@ def lean_fixtures(commit: str, cwd: Path | None = None) -> str:
             case ast.Call(func=ast.Attribute(value=v, attr="resolve"), args=[]):
                 return ev(v, names)
             case ast.Attribute(value=v, attr="parent"):
-                return ev(v, names).parent
+                return p.parent if isinstance(p := ev(v, names), PurePosixPath) else None
             case ast.Subscript(value=ast.Attribute(value=v, attr="parents"), slice=ast.Constant(value=int(i))):
-                return ev(v, names).parents[i]
+                return p.parents[i] if isinstance(p := ev(v, names), PurePosixPath) and 0 <= i < len(p.parents) else None
             case ast.BinOp(left=a, op=ast.Div(), right=b):
-                return ev(a, names) / ev(b, names)
-        raise ValueError(ast.unparse(n))
+                l, r = ev(a, names), ev(b, names)
+                return l / r if isinstance(l, PurePosixPath) and r is not None else None
+        return None
 
     names: dict[str, PurePosixPath] = {}
     for node in ast.parse(_show(commit, LEAN_CHECK, cwd) or "").body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            try:
-                value = ev(node.value, names)
-            except (ValueError, IndexError):
-                continue
-            if isinstance(value, PurePosixPath):
-                names[node.targets[0].id] = value
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) \
+                and isinstance(value := ev(node.value, names), PurePosixPath):
+            names[node.targets[0].id] = value
     if "FIXTURES" not in names:
         raise SystemExit(f"research jobs: {LEAN_CHECK} at {commit[:12]} sets no `FIXTURES` this reads as a path "
                          f"(`lean_fixtures`): build it from `Path(__file__)` or `HERE` and string literals")

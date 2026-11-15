@@ -349,7 +349,7 @@ def test_the_auditor_s_fixtures_have_no_task_wherever_check_puts_them(tmp_path, 
     """The controls' packages (`check.FIXTURES`) are the Lean check's own, built by every run of it, and no lean-module,
     lean-lock or lean-env task's: also once they sit under the root's tests/, outside the Lean tool."""
     moved = "tests/tools/verity/lean/fixtures"
-    monkeypatch.setattr(lean_module.la, "lean_check", lambda: type("Check", (), {"FIXTURES": lean_module.la.ROOT / moved}))
+    monkeypatch.setattr(lean_module.la, "lean_check", lambda: type("Check", (), {"ROOT": ROOT, "FIXTURES": ROOT / moved}))
     old = "tools/verity/lean/tests/fixtures"
     files = {**{f.replace(old, moved): v for f, v in FILES.items()}, **OTHER_ENVS}
     tree = toy_tree(tmp_path / "tree", (ROOT / graph.SPEC).read_text(), files)
