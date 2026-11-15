@@ -317,6 +317,20 @@ private theorem parse_program (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
     Spot.Program.parse (Firewall.printJson programJ).toUTF8 = .ok program := by
   rw [← desc_eq hJ hpp]; exact Program.program_parse
 
+/-- A spliced 64-byte-hash digest passes `paramsOfJson`'s form check (`digest?`): its hex is 128 characters, non-empty,
+all `[0-9a-f]`. Proved from the hex facts (piece P6), so the walk need not evaluate the hash. -/
+private theorem digest?_hexOf {b : ByteArray} (h : b.size = 64) : Spot.OneStageZk.digest? (hexOf b) = true := by
+  have hlen : (hexOf b).length = 128 := by rw [Hex.length_hexOf, h]
+  have hne : hexOf b ≠ "" := fun he => by simp [he] at hlen
+  have hemp : (hexOf b).isEmpty = false := String.isEmpty_eq_false_iff.mpr hne
+  have hsha := Hex.isSha512Hex_hexOf h
+  unfold Flock.HmRow.isSha512Hex at hsha
+  rw [Bool.and_eq_true] at hsha
+  obtain ⟨_, hall⟩ := hsha
+  unfold Spot.OneStageZk.digest? Spot.isHex
+  rw [hlen, hemp, hall]
+  decide
+
 /-! ## v2's parameters, with every field named -/
 
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
@@ -341,6 +355,7 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
   have hdec : (Core.canonicalJson θ₀ >>= Core.Composition.decodeParams) = .ok
       [({ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ } : Core.Composition.Named)] := by
     rw [hA, hNθ]
+    show Core.Composition.decodeParams θJ = _
     unfold θJ
     generalize hgpj : paramsJ = gpj
     have rC : Flock.canon gpj = .ok (Firewall.printJson gpj) := by rw [← hgpj]; exact hBp
@@ -356,10 +371,21 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN 
       P.base.verifier.query = query ∧ P.base.verifier.law = law ∧ P.base.verifier.workTable = none ∧
       P.base.challenger = some (key₀, label₀) := by
     rw [hC, hNp]
+    -- The two spliced digests pass the form check; proved off the hash so the walk rewrites by them.
+    have hdc : Spot.OneStageZk.digest? (hexOf circuitSha) = true := by
+      apply digest?_hexOf; unfold circuitSha; exact Hex.size_hash circuitFile
+    have hdp : Spot.OneStageZk.digest? (hexOf (Sha512.hash publicFile)) = true := by
+      apply digest?_hexOf; exact Hex.size_hash publicFile
     unfold paramsJ partitionObj Spot.Partition.build
+    -- Detaint every canon-/hash-derived leaf so the field lookups reduce: the program digest in the partition, and the
+    -- circuit and public digests in `proofs`. The digest facts are restated over the fresh names.
     generalize hgh : hexOf programSha = gh
+    generalize hgc : hexOf circuitSha = gc
+    generalize hgp : hexOf (Sha512.hash publicFile) = gp
+    rw [hgc] at hdc
+    rw [hgp] at hdp
     refine ⟨?P, ?walk, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
-    case walk => fwd_walk [hDp, hE, hU] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
+    case walk => fwd_walk [hDp, hE, hU, hdc, hdp] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
     case f1 => kernel_rfl'            -- own.partition = partitionObj
     case f2 => rw [hpf]               -- own.program = programFile
     case f3 => kernel_rfl'            -- own.circuit
