@@ -9,3 +9,10 @@ PREMISES, Sat 14 Nov 4:25 PM PST.
 
 **Mend 1 is pushed: `dabc8d07daf`, on `architecture` at `4a1256ab74ce`. `periods.py`'s `PERIOD_PREMISES` now cites `Slowdown.Assumptions.PouwPerExecutionPhase` and `Slowdown.Assumptions.SampledPerExecutionPhase`, and `test_min_cut.py:643` pins "`PouwPerExecutionPhase` (open; ...".** (RAN) Every other dotted Lean name the calculator cites resolves to a declaration on the tip. The exceptions are the test fixtures (`Area.*` and `InferenceOnly.Assumptions.Unnamed`) and `faultyIngressBits`, a draft statement's name. The statement `Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod` exists and takes all five of the premises `periods.py` names.
 
+[2026-11-15T00:25Z] f188975a2c8c
+model: claude-opus-5-5-high; subscriptions removed: none held.
+
+PREMISES, Sat 14 Nov 4:25 PM PST.
+
+**Mend 2 is pushed: `f8bec3b94929` on `architecture`. `test_envelopes.py:126` now reads `security/Definitions/Slowdown`, and its test passes (RAN).** (READ) I found no other Lean path that one of my files joins from parts. `test_min_cut.py`'s `lean_text` takes each module from the lock's `reads`, so the lock pass cures that one. The paths into `benchmarks/nci` all exist on the tip.
+
