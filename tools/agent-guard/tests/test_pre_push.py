@@ -532,3 +532,105 @@ def test_the_one_identity_let_through_beside_the_checkouts_is_the_queues_and_an_
     sha = vm.commit("a tool's", **TRIAL)
     assert judged(sha) == 1 and judged(sha, "trial <other@invalid>") == 1
     assert judged(sha, "trial <trial@invalid>") == 0
+
+
+#: a real author `main` has, and one it hasn't, as a person's own git writes them
+PERSON = {"GIT_AUTHOR_NAME": "Ada Lovelace", "GIT_AUTHOR_EMAIL": "ada@lovelace.example",
+          "GIT_COMMITTER_NAME": "Ada Lovelace", "GIT_COMMITTER_EMAIL": "ada@lovelace.example"}
+STRANGER = {"GIT_AUTHOR_NAME": "Grace Hopper", "GIT_AUTHOR_EMAIL": "grace@hopper.example",
+            "GIT_COMMITTER_NAME": "Grace Hopper", "GIT_COMMITTER_EMAIL": "grace@hopper.example"}
+CARRY = "another author's commits are carried by a merge, not by a rebase or a cherry-pick"
+
+
+def on_main(vm: VM, names: dict[str, str]) -> None:
+    """The remote's `main` gains a commit under `names`, as the queue lands one, and the checkout's `origin/main` holds it."""
+    vm.commit("landed", **names)
+    vm.git("push", "-q", "origin", "main")
+
+
+def their_line(vm: VM, names: dict[str, str]) -> str:
+    """A branch `line` on the remote with one commit under `names`, cut from `main`; the checkout back on a new branch `work`
+    from `main`: that commit's id."""
+    vm.git("switch", "-q", "-c", "line")
+    theirs = vm.commit("their change", **names)
+    vm.git("push", "-q", "origin", "line")
+    vm.git("switch", "-q", "-c", "work", "main")
+    return theirs
+
+
+def picked(vm: VM, sha: str, **env: str) -> str:
+    vm.git("cherry-pick", "--allow-empty", sha, **env)
+    return vm.git("rev-parse", "HEAD").strip()
+
+
+def test_a_cherry_pick_of_a_commit_whose_author_authors_on_main_passes(vm):
+    """A cherry-pick keeps its source's author and has the picker as committer: an author the remote's `main` already has is
+    a real name this push does not bring in."""
+    on_main(vm, PERSON)
+    picked(vm, their_line(vm, PERSON))
+    assert vm.who("-1") == {f"Ada Lovelace <ada@lovelace.example> | {OWN}"}
+    p = vm.push("origin", "HEAD:refs/heads/work")
+    assert p.returncode == 0, p.stderr
+
+
+def test_the_same_pick_with_the_committer_exported_as_another_name_is_refused_on_the_committer(vm):
+    on_main(vm, PERSON)
+    sha = picked(vm, their_line(vm, PERSON), GIT_COMMITTER_NAME="trial", GIT_COMMITTER_EMAIL="trial@invalid")
+    p = vm.push("origin", "HEAD:refs/heads/work")
+    assert p.returncode != 0 and "work" not in vm.heads()
+    assert f"{sha[:12]} committer trial <trial@invalid>." in p.stderr and "author Ada" not in p.stderr
+
+
+def test_an_author_main_has_not_is_refused_with_the_carry_by_merge_and_no_filter_branch_and_the_merge_passes(vm):
+    on_main(vm, PERSON)
+    sha = picked(vm, their_line(vm, STRANGER))
+    p = vm.push("origin", "HEAD:refs/heads/work")
+    assert p.returncode != 0 and "work" not in vm.heads()
+    assert f"{sha[:12]} author Grace Hopper <grace@hopper.example>." in p.stderr
+    assert CARRY in p.stderr and "`git merge <their-branch-or-commit>`" in p.stderr
+    assert "the first push of that author's own commits is the author's to make" in p.stderr
+    assert "filter-branch" not in p.stderr
+    vm.git("switch", "-q", "-c", "merged", "main")
+    vm.git("merge", "-q", "--no-ff", "-m", "Merge line", "origin/line")
+    assert vm.push("origin", "HEAD:refs/heads/merged").returncode == 0, "the merge the refusal names passes"
+
+
+def test_an_author_under_invalid_is_refused_though_main_has_it(vm):
+    """`main` holds commits under made-up names a crossing gave them; a name under `invalid` stays refused as an author."""
+    on_main(vm, BY_HAND)
+    on_main(vm, PERSON)
+    sha = picked(vm, their_line(vm, BY_HAND))
+    p = vm.push("origin", "HEAD:refs/heads/work")
+    assert p.returncode != 0 and f"{sha[:12]} author restack carry <noreply@invalid>." in p.stderr
+    assert "whose author's address is under `invalid`" in p.stderr and CARRY not in p.stderr
+    vm.git("reset", "-q", "--hard", "main")
+    picked(vm, vm.git("rev-parse", "main").strip())
+    assert vm.push("origin", "HEAD:refs/heads/work").returncode == 0, "the same door lets a real author of main's through"
+
+
+def test_with_no_ref_of_the_remotes_main_here_the_refusal_says_to_fetch_it_and_then_the_pick_passes(vm):
+    on_main(vm, PERSON)
+    vm.git("update-ref", "-d", "refs/remotes/origin/main")
+    sha = picked(vm, their_line(vm, PERSON))
+    p = vm.push("origin", "HEAD:refs/heads/work")
+    assert p.returncode != 0 and f"{sha[:12]} author Ada Lovelace <ada@lovelace.example>." in p.stderr
+    assert "`refs/remotes/origin/main` is not here" in p.stderr and "`git fetch origin main` first" in p.stderr
+    vm.git("fetch", "-q", "origin", "main")
+    assert vm.push("origin", "HEAD:refs/heads/work").returncode == 0
+
+
+def test_the_filter_branch_a_refusal_prints_writes_again_the_made_up_names_alone_and_keeps_a_real_authors(vm):
+    """A branch holding a pick of a real author's commit, which passes, and a commit a shell's exported names wrote: the
+    refusal's own commands give the second the checkout's identity and leave the first's author as it was."""
+    on_main(vm, PERSON)
+    pick = picked(vm, their_line(vm, PERSON))
+    made = vm.shell(f"{EXPORTS}\ngit commit -q --allow-empty -m made\n", agent=None)
+    assert made.returncode == 0, made.stderr
+    p = vm.shell(f"{EXPORTS}\ngit push origin work")
+    assert p.returncode != 0 and "this push adds 1 commit that" in p.stderr and pick[:12] not in p.stderr
+    said = re.findall(r"`([^`]+)`", p.stderr)
+    unset, switch, again = (next(c for c in said if c.startswith(w)) for w in ("unset ", "git switch ", "FILTER_BRANCH_"))
+    done = vm.shell("\n".join([EXPORTS, unset, switch, again, "git push origin again"]).replace("<new-branch>", "again"))
+    assert done.returncode == 0, done.stderr
+    assert vm.git("log", "--format=%s: %an <%ae> | %cn <%ce>", "again", "--not", "main", cwd=vm.origin).splitlines() == [
+        f"made: {OWN} | {OWN}", f"their change: Ada Lovelace <ada@lovelace.example> | {OWN}"]
