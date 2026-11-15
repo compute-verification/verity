@@ -23,7 +23,7 @@ list, or two blobs that collide (`names_same`, `tables_same`). A collision is th
 (`Messages.blobsAlt_of`).
 
 **Not established here**: `MemberAtFixed` and `SampleAtFixed`, hypotheses. Each is a theorem where one pair of stage
-coins carries the bytes both plays' samples read (`StageCoinsOne`, `stageCoinsOne_of_play`): `SampleAtFixed` in
+coins carries the bytes both plays' samples read (`StageCoinsOne`): `SampleAtFixed` in
 `FormDraw.lean` (`sampleAtFixed_of_coins`), the model's check holding each session's sample to the verifier's own at
 the stage coins (`SpotFlock.sample_of_stmtOk`), and `MemberAtFixed` in `FormMember.lean` (`memberAtFixed_of_coins`),
 the model's check holding each statement's public file to its template's part and the form's check holding each

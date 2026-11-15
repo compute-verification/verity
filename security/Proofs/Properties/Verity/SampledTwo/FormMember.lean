@@ -36,8 +36,7 @@ have the same units (`MembersApart`, a theorem at any case).
   members it returns have no unit in common and a member has one (`FormMember.membersOf_apart`). The reader is
   walked join point by join point (`SpotFlock.DoWalk`).
 
-**Not established here**: `StageCoinsOne`, a hypothesis, which `stageCoinsOne_of_play` (`FormDraw.lean`) gives from
-`PlayCoinsOne`.
+**Not established here**: `StageCoinsOne` (`FormDraw.lean`), a hypothesis.
 -/
 
 @[expose] public section
