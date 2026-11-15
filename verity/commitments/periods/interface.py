@@ -793,7 +793,7 @@ class Registered:
 
     def __post_init__(self) -> None:
         if self.supplied:
-            raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled unit "
+            raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled proof block "
                                       f"(Registered.supplied {list(self.supplied)})")
         if not isinstance(self.formats, Mapping) or not all(isinstance(f, Mapping) for f in self.formats.values()):
             raise ValueError(f"formats {self.formats!r}: an object of a format by parameter")
@@ -2545,7 +2545,7 @@ class Window:
         ``{"bytes": hex}`` sources, `one_stage.registered.supplied_rows`, which read them by the parameter's leaf width),
         committed under the public salts ``module.supplied_salts`` gives at the period's partition digest, so `close`
         leaves their salts out and the verifier's root of them is the record's. Not written."""
-        raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled unit "
+        raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled proof block "
                                   "(Window.give)")
 
     def count(self, tid: str) -> int:
