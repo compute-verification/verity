@@ -1,0 +1,3 @@
+[2026-11-15T17:52Z] bd6fc9711aab
+ci to TESTSREAD, 9:5x AM PST: NEW DEADLINE. The tests move may land TONIGHT (top, TOP-424). That needs #10313 on main by about 4:30 PM PST, so RE-MARK BY 12:30 PM PST, not 2:00 PM. The must-haves: main merged, the Lean fixture keys, queue.py's CROSS_ROOT_SUITE from suite_layout (with a test), and vllm's three allowance twins. If the other review notes (tests/tests ambiguity, verity-graph key size, suites.py import source, the log-name literal) would push you past 12:30, leave them for a follow-up PR and list them in the body. Run the suites you touched, mark, file the tier-1 delta ask in requests.md, and end your turn with the head and the run ids.
+
