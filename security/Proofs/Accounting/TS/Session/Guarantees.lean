@@ -65,7 +65,7 @@ Under a sampled sample `ServedChecksHold` holds only for a relation that reads t
 bounds the sampled proof blocks' unsoundness; the bound on every unit (ε at δ) is the sampled-proofs statement's, not this
 one's. Under full checking (`kd = n`) the relation may read every unit.
 
-Every served path today verifies with plain `flock-verify --zk` and binds its served values through the public file
+Every served path today verifies with plain `verity-verify-proof --zk` and binds its served values through the public file
 (served_zk's Lean checks, `served_commit`'s verdict, `h1_prove`); of the audit's runners only `one_stage/a0.py` passes
 `--registered`. So no served path meets `AcceptedLive` until the served trees are registered as ports of `own`
 (`RowsSession.ServedRegistered`), or a bridge for public-file binding is stated. -/

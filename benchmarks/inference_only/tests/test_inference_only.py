@@ -80,6 +80,22 @@ def test_the_served_file_is_what_the_tree_computes_of_its_class() -> None:
     assert p.unexplained == 0 and p.outside == p.k - P.scan_state_bits(p.cls) > 0
 
 
+def test_a_model_pinned_at_several_revisions_has_a_shape_only_under_one_config(monkeypatch) -> None:
+    """A model the manifests pin at several revisions of one config.json is taken at its first pin; at two configs its
+    shape isn't known."""
+    from verity_vllm.engine.profiles import dense_generic as DG
+
+    base = next(e for e in DG.checkpoint_entries(DG.MANIFEST) if e.get("repo") == "unsloth/Llama-3.2-1B")
+    for config, ok in ((base["config_sha256"], True), ("0" * 64, False)):
+        pins = [base, {**base, "revision": "ab" * 20, "config_sha256": config}]
+        monkeypatch.setattr(DG, "checkpoint_entries", lambda _m, pins=pins: pins)
+        if ok:
+            assert P.pinned("unsloth/Llama-3.2-1B")[0] == base["revision"]
+        else:
+            with pytest.raises(ValueError, match="pin 2 revisions of it of more than one config.json"):
+                P.pinned("unsloth/Llama-3.2-1B")
+
+
 def test_a_policy_file_that_misstates_its_work_is_refused(tmp_path) -> None:
     text = P.SERVED.read_text().replace("total = 36241670144", "total = 36241670145")
     assert text != P.SERVED.read_text()
@@ -137,6 +153,12 @@ def test_the_count_refuses_the_session_program_on_k(counted) -> None:
     assert (few["verdict"], few["failed"]) == ("refused", "n")
 
 
+@pytest.mark.parametrize(("value", "word"), [(1000, "within target"), (999.999, "misses"), (1, "misses")])
+def test_the_metrics_verdict_holds_its_value_to_the_goals_target(value, word) -> None:
+    """The goal wants a slowdown of at least 1,000: 1,000 itself is within target, and anything below misses."""
+    assert report.verdict(value) == word
+
+
 def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(capsys, tmp_path) -> None:
     """The command on the served file and a small built record: the served number is first and is the JSON's value, the
     built class is labelled as not served, its refusal prints the verdict and what failed, and its number is the
@@ -147,7 +169,10 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     lines = out.splitlines()
     assert json.loads(lines[-1]) == doc == json.loads((tmp_path / "inference_only.json").read_text())
     result = json.loads((tmp_path / "result.json").read_text())
-    assert [(m["name"], m["value"], m["unit"]) for m in result["measurements"]] == [(report.METRIC, doc["value"], doc["unit"])]
+    assert [(m["name"], m["value"], m["unit"], m["mark"]) for m in result["measurements"]] == [
+        (report.METRIC, doc["value"], doc["unit"], "modeled")]
+    # the goal's target, which a value of 1 misses
+    assert [(m["target"], m["verdict"]) for m in result["measurements"]] == [(1000, "misses")] and report.TARGET == 1000
     assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")

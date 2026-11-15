@@ -1141,10 +1141,10 @@ class _MarlinLaunches(nn.Module):
         self.s13, self.s2 = p(self.bytes13), p(self.bytes2)
         self.block_m = block_m
 
-    def forward(self, x, ids, weights, act):
+    def forward(self, x, ids, topk_weights, act):
         blk, par = iface.marlin_moe_align(ids, MARLIN_E, self.block_m)
-        up = iface.marlin_moe_mxfp4_gemm(x, self.w13, self.s13, ids, blk, par, weights, self.block_m, MARLIN_TOPK, False)
-        down = iface.marlin_moe_mxfp4_gemm(act, self.w2, self.s2, ids, blk, par, weights, self.block_m, 1, True)
+        up = iface.marlin_moe_mxfp4_gemm(x, self.w13, self.s13, ids, blk, par, topk_weights, self.block_m, MARLIN_TOPK, False)
+        down = iface.marlin_moe_mxfp4_gemm(act, self.w2, self.s2, ids, blk, par, topk_weights, self.block_m, 1, True)
         return blk, par, up, down
 
 

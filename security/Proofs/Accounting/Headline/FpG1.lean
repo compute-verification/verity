@@ -246,8 +246,7 @@ theorem honest_load (r : SheetRow Sm120.Pipe) : Sm120.model.G.load (Sparse.count
 
 theorem honestRun_clock : SheetClock Sm120.sheet honestRun.run := by
   refine ⟨?_, le_rfl⟩
-  show (0 : ℝ) < ((2430 : ℕ) : ℝ)
-  norm_num
+  exact Nat.cast_pos.mpr (by decide)
 
 theorem honestRun_dispatch : SheetDispatch honestRun.run := by
   have e : Sm120.model.G.load (Sparse.counts flatAll) .issue = ∑ k : Fin 122, Sparse.counts flatAll k := by

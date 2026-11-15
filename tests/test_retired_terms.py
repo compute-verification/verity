@@ -203,7 +203,7 @@ HM96_HOME = "verity/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
-    "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
+    "N, the window's proof units": "a public item's reason in A5's Spec (`verity/protocols/proofs/spot/prover/audit/window_audit.py`): `Spec.digest` hashes it",
     "N, the round's proof units": "a public item's reason in scan_zk's Spec (`benchmarks/network_traces/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
@@ -598,7 +598,7 @@ def test_the_doc_scan_reads_the_party_terms():
 
 
 def test_the_doc_scan_reads_the_protocol_terms():
-    """The protocol's vocabulary (`ARCHITECTURE.md`, "How an audit works"), on toy files: hm96 rows keep their name in the commitments' own docs."""
+    """The protocol's vocabulary (`ARCHITECTURE.md`, Glossary), on toy files: hm96 rows keep their name in the commitments' own docs."""
     docs = {
         "NETWORK.md": "The warden, a network warden's cells, two Wardens.\n"
                       "`warden.py`, `--warden-run`, WardenParams and warden_rows stay.\n",

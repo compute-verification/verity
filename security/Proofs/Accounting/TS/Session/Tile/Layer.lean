@@ -46,7 +46,7 @@ with, not what the tile's Definition computes. This layer states that, on words,
 * `TileOk`: the Definition's checks at `ok = 1`, every cell with `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]`, the
   tile counterpart of `Accounting.TS.Lanes.LaneOk`'s cells;
 * `TileRel`: `CheckedRel`, and every sampled proof block's decoded view meets `TileOk`, or the `ok` tie collides (`OkColl`);
-* `tileLayer`: proof `i` of round `w` is accepted where flock-verify `--zk --registered` accepts its session at the
+* `tileLayer`: proof `i` of round `w` is accepted where verity-verify-proof `--zk --registered` accepts its session at the
   registered file's known content (`Registered.checkKnownAll`) and the file names every port of the circuit
   (`Registered.checkComplete`), opens the committed rows at the registered reads (`openedReg`), and its relation is
   `TileRel`.
@@ -88,7 +88,7 @@ def TileRel {R C K : ℕ} (s : RowsSession) (o : s.Out) (ok : String) (dq : List
     (v : ℕ → ℕ → Option Bool) : Prop :=
   CheckedRel s o ok v ∧ ((∀ u ∈ o.2.1, TileOk dq (dec v u.val)) ∨ ∃ ks, (ok, ks) ∈ known ∧ OkColl s ok ks)
 
-/-- **The tile layer through its Flock sessions**: proof `i` of round `w` is accepted where flock-verify
+/-- **The tile layer through its Flock sessions**: proof `i` of round `w` is accepted where verity-verify-proof
 `--zk --registered` accepts its session at the registered file's known content `known x w i` (`LiveAcceptsZKR`, and
 `Registered.checkKnownAll`) and under its complete check (`Registered.checkComplete`, run whenever `--registered` is
 given: every port of the circuit is a port of `own`), opens the committed rows at the registered reads

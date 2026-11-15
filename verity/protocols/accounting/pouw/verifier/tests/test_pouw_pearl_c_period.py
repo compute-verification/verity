@@ -54,7 +54,7 @@ class Lane:
         self._ledger = None
 
     def open(self, name: str, circuit: str = CIRCUIT, **fields: Any) -> None:
-        """Period `name`'s open, committing `circuit` and the further `fields` (its pin and freshness floor)."""
+        """Pearl-C period `name`'s open, committing `circuit` and the further `fields` (its pin and freshness floor)."""
         self._push(("period-open", None, {"period": name, "lane": rc.LANE, "by": rc.LANE, "cap": 4, "circuit": circuit,
                                           "key_sha512": hashlib.sha512(self.pub).hexdigest(), **fields}))
         self.name, self.members = name, []
@@ -133,8 +133,8 @@ def _base(rng: random.Random) -> tuple[dict, bytes, int]:
 
 
 def _two_periods(seed: str) -> tuple[Lane, list[dict], list[dict], list[bytes]]:
-    """Period A: epoch 0 over W (two passes, the second's calls numbered on from the first's) and epoch 1 over W;
-    period B: epoch 2 over W and epoch 0 over a second weights' root W2."""
+    """Pearl-C period A: epoch 0 over W (two passes, the second's calls numbered on from the first's) and epoch 1 over
+    W; period B: epoch 2 over W and epoch 0 over a second weights' root W2."""
     lane = Lane(seed)
     (b1, w, n), (b2, w2, _) = _base(lane.rng), _base(lane.rng)
     lane.open("p-a")
@@ -151,10 +151,10 @@ def _two_periods(seed: str) -> tuple[Lane, list[dict], list[dict], list[bytes]]:
 def test_an_honest_two_period_sequence_is_credited():
     for seed in range(2):
         lane, a, b, (w, w2) = _two_periods(f"honest/{seed}")
-        got, why = Cr.pearl_c_period_credit(*lane.args("p-a", a))
+        got, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", a))
         assert why is None and got["epochs"] == [[w.hex(), 0], [w.hex(), 1]]
         assert got["passes"] == [json.loads(bytes.fromhex(p["manifest"])) for p in a]
-        got_b, why = Cr.pearl_c_period_credit(*lane.args("p-b", b, got["epochs"]))
+        got_b, why = Cr.pearl_c_period_credit_twin(*lane.args("p-b", b, got["epochs"]))
         assert why is None and got_b["epochs"] == [[w.hex(), 2], [w2.hex(), 0]] and len(got_b["passes"]) == 3
 
 
@@ -162,11 +162,11 @@ def test_a_pass_whose_epoch_the_close_does_not_list_or_a_session_with_no_pass_re
     """Clause 1, exact match: the presented epochs are exactly the close's sessions, in its order."""
     lane, a, b, _ = _two_periods("exact")
     p0, p0b, p1 = a
-    assert Cr.pearl_c_period_credit(*lane.args("p-a", [p0, p0b]))[1][0] == "missing"
-    assert Cr.pearl_c_period_credit(*lane.args("p-a", [p1, p0, p0b]))[1][0] == "order"
-    _, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, b[0], p0b, p1]))
+    assert Cr.pearl_c_period_credit_twin(*lane.args("p-a", [p0, p0b]))[1][0] == "missing"
+    assert Cr.pearl_c_period_credit_twin(*lane.args("p-a", [p1, p0, p0b]))[1][0] == "order"
+    _, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [p0, b[0], p0b, p1]))
     assert why[0] == "period" and "only the sessions its close lists count" in why[1]
-    assert Cr.pearl_c_period_credit(*lane.args("p-c", a))[1][0] == "period"
+    assert Cr.pearl_c_period_credit_twin(*lane.args("p-c", a))[1][0] == "period"
 
 
 def test_an_abandoned_complete_salt_only_session_refuses_its_period():
@@ -182,7 +182,7 @@ def test_an_abandoned_complete_salt_only_session_refuses_its_period():
         assert {e["kind"]: e["body"] for e in map(json.loads, lane.ledger())
                 if e["session"] == abandoned}["end"]["complete"] is True
         passes = [lane.pass_(sid, base) for sid in sids if sid != abandoned]
-        got, why = Cr.pearl_c_period_credit(*lane.args("p-a", passes))
+        got, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", passes))
         assert got is None and why[0] == "missing" and "is missing" in why[1], where
 
 
@@ -194,7 +194,7 @@ def test_a_session_not_salt_only_refuses_the_period():
     lane.open("p-a")
     s0, s1 = lane.epoch(w, 0), lane.epoch(w, 1, h1=True)
     lane.close()
-    got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [lane.pass_(s0, base), lane.pass_(s1, base)]))
+    got, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [lane.pass_(s0, base), lane.pass_(s1, base)]))
     assert got is None and why[0] == Cr.SALT_ONLY and "not a Pearl-C salt session's" in why[1]
     salt_only, h1 = (lane.sessions[s][0].ch.commitment for s in (s0, s1))
     assert Wd.live_epoch_reason(salt_only) is not None and Wd.salt_epoch_reason(h1) is not None
@@ -206,7 +206,7 @@ def test_a_session_of_another_circuit_refuses_the_period():
     lane, a, _, _ = _two_periods("circuit")
     passes = list(a)
     passes[1] = {**passes[1], "descriptor": b"another circuit".hex()}
-    _, why = Cr.pearl_c_period_credit(*lane.args("p-a", passes))
+    _, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", passes))
     assert why[0] == "circuit" and "the one period p-a committed" in why[1]
 
 
@@ -219,7 +219,7 @@ def test_a_session_pinned_behind_its_periods_open_pin_refuses_the_period():
         lane.open("p-a", **{Cr.PERIOD_PIN_FIELD: rc.MAIN[2], Cr.STALE_FIELD: floor})
         sid = lane.epoch(w, 0, pinned=rc.MAIN[4])
         lane.close()
-        got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [lane.pass_(sid, base)]))
+        got, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [lane.pass_(sid, base)]))
         if refused:
             assert got is None and why[0] == "pin" and "pass 0 of period p-a is pinned 2 first-parent" in why[1], why
         else:
@@ -227,17 +227,17 @@ def test_a_session_pinned_behind_its_periods_open_pin_refuses_the_period():
 
 
 def test_a_refused_pass_refuses_the_period():
-    """Clause 4: each pass passes `core_check.pass_epoch` under the live inputs: a context naming another manifest, or
+    """Clause 4: each pass passes `core_check.pass_epoch_twin` under the live inputs: a context naming another manifest, or
     a salt that isn't its live coin's, refuses the period."""
     lane, a, _, _ = _two_periods("pass")
     p0, p0b, p1 = a
     named = {**p0b, "context": p0["context"]}
-    _, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, named, p1]))
+    _, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [p0, named, p1]))
     assert why[0] == Cr.PASS_REFUSED and "the pass is not the one the window's parameters name" in why[1]
     man = json.loads(bytes.fromhex(p1["manifest"]))
     man["salt"] = ("1" if man["salt"][0] == "0" else "0") + man["salt"][1:]
     sid = man["session"]["session"]
-    _, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, p0b, lane.evidence(sid, man)]))
+    _, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [p0, p0b, lane.evidence(sid, man)]))
     assert why[0] == Cr.PASS_REFUSED and "the pass's salt is not its live coin's" in why[1]
 
 
@@ -246,7 +246,7 @@ def test_a_context_not_a_string_refuses_the_period_as_a_refused_pass():
     lane, a, _, _ = _two_periods("context")
     p0, p0b, p1 = a
     for context in (None, 7, [p0b["context"]], {"context": p0b["context"]}):
-        got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, {**p0b, "context": context}, p1]))
+        got, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [p0, {**p0b, "context": context}, p1]))
         assert got is None and why[0] == Cr.PASS_REFUSED and "pass 1 of period p-a" in why[1], context
         assert "context is not a string" in why[1]
 
@@ -279,7 +279,7 @@ def _retained(lane: Lane, sid: str, base: dict) -> bytes:
 
 
 def test_a_pass_retained_in_vllms_form_is_accepted_and_credited_in_a_one_epoch_period():
-    """A retained manifest exactly as the vLLM integration writes it passes `core_check.pass_epoch` under the live inputs (``live
+    """A retained manifest exactly as the vLLM integration writes it passes `core_check.pass_epoch_twin` under the live inputs (``live
     coin``), and its one-epoch period credits it."""
     lane = Lane("retained")
     base, w, _ = _base(lane.rng)
@@ -291,8 +291,8 @@ def test_a_pass_retained_in_vllms_form_is_accepted_and_credited_in_a_one_epoch_p
           "manifest": raw.hex(), "session": lane.sessions[sid][0].files()}
     key, ledger, pins, main = lane.args("p-a", [ev])[:4]
     live = {"key": key, "ledger": ledger, "main": main, "pins": pins, "session": ev["session"]}
-    assert pc.CC.pass_epoch(None, raw, ev["context"], live=live, verify=rc.lms_verify) == ("live coin", None)
-    got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [ev]))
+    assert pc.CC.pass_epoch_twin(None, raw, ev["context"], live=live, verify=rc.lms_verify) == ("live coin", None)
+    got, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [ev]))
     assert why is None and got == {"epochs": [[w.hex(), 0]], "passes": [json.loads(raw)]}
 
 
@@ -301,9 +301,9 @@ def test_epochs_not_numbered_on_from_the_earlier_periods_refuse():
     from 2, not 0), period A again after itself (a repeat) and period B after an earlier list missing epoch 1 refuse."""
     lane, a, b, (w, _) = _two_periods("index")
     for earlier in ([], [[w.hex(), 0], [w.hex(), 1], [w.hex(), 2]], [[w.hex(), 0]]):
-        _, why = Cr.pearl_c_period_credit(*lane.args("p-b", b, earlier))
+        _, why = Cr.pearl_c_period_credit_twin(*lane.args("p-b", b, earlier))
         assert why[0] == Cr.INDEX and "with no gap or repeat" in why[1], earlier
-    _, why = Cr.pearl_c_period_credit(*lane.args("p-a", a, [[w.hex(), 1]]))
+    _, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", a, [[w.hex(), 1]]))
     assert why[0] == Cr.INDEX and "is not epoch 2" in why[1]
 
 
@@ -320,9 +320,9 @@ def test_a_gap_in_k_spends_the_weights_root():
     lane.open("p-b")
     s2 = lane.epoch(w, 2)
     lane.close()
-    got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [lane.pass_(s0, base)]))
+    got, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [lane.pass_(s0, base)]))
     assert why is None
-    _, why = Cr.pearl_c_period_credit(*lane.args("p-b", [lane.pass_(s2, base)], got["epochs"]))
+    _, why = Cr.pearl_c_period_credit_twin(*lane.args("p-b", [lane.pass_(s2, base)], got["epochs"]))
     assert why[0] == Cr.INDEX and "is not epoch 1" in why[1] and "re-key hm96" in why[1]
 
 
@@ -333,7 +333,7 @@ def test_two_passes_of_one_epoch_sharing_a_call_index_refuse_the_period():
     sid = json.loads(bytes.fromhex(p0["manifest"]))["session"]["session"]
     man = json.loads(bytes.fromhex(p0["manifest"]))
     man["run"] = "r-a-replay"
-    _, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, lane.evidence(sid, man), p1]))
+    _, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [p0, lane.evidence(sid, man), p1]))
     assert why[0] == Cr.REPEATED_CALL and "passes 0 and 1 both hold call index" in why[1]
 
 
@@ -342,10 +342,10 @@ def test_malformed_evidence_is_refused():
     p0 = a[0]
     for passes in ([], None, [{**p0, "extra": 1}], [{k: v for k, v in p0.items() if k != "descriptor"}],
                    [{**p0, "manifest": "zz"}]):
-        assert Cr.pearl_c_period_credit(*lane.args("p-a", passes)) == (None, ("period", Cr.PEARL_C_FORM)), passes
+        assert Cr.pearl_c_period_credit_twin(*lane.args("p-a", passes)) == (None, ("period", Cr.PEARL_C_FORM)), passes
     for earlier in (None, [[w.hex()]], [[w.hex(), -1]], [[w.hex(), True]], [[w.hex().upper(), 0]], [[w.hex(), 1 << 64]]):
-        assert Cr.pearl_c_period_credit(*lane.args("p-a", a, earlier)) == (None, (Cr.INDEX, Cr.EARLIER_FORM))
+        assert Cr.pearl_c_period_credit_twin(*lane.args("p-a", a, earlier)) == (None, (Cr.INDEX, Cr.EARLIER_FORM))
     man = json.loads(bytes.fromhex(p0["manifest"]))
     del man["pass_index"]
-    _, why = Cr.pearl_c_period_credit(*lane.args("p-a", [{**p0, "manifest": json.dumps(man).encode().hex()}]))
+    _, why = Cr.pearl_c_period_credit_twin(*lane.args("p-a", [{**p0, "manifest": json.dumps(man).encode().hex()}]))
     assert why[0] == Cr.PASS_REFUSED and "names no salt epoch" in why[1]

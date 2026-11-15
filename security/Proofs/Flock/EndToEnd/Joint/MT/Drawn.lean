@@ -27,8 +27,8 @@ import Proofs.Core.Game.Poly
 /-!
 # A sampling block of `J` tables stratified by subcircuit: its sampled proof blocks, its sample's miss, and its one budget
 
-* `StratifiedBlockMT.accepted_drawnWrong_le`: flock-verify accepts the sampling block with a sampled proof block wrong with
-  probability at most `ε_ks + ε_bind`: `zk_flock_drawnC_reg` at `planZHJ`, carried to flock-verify's acceptance at `J`
+* `StratifiedBlockMT.accepted_drawnWrong_le`: verity-verify-proof accepts the sampling block with a sampled proof block wrong with
+  probability at most `ε_ks + ε_bind`: `zk_flock_drawnC_reg` at `planZHJ`, carried to verity-verify-proof's acceptance at `J`
   tables by `execRefinesZK_tables_drawn`, as `ZkHidden.zk_session_soundHJ_custody_drawn_reg` is at a subset sample.
 * `StratifiedBlockMT.drawMiss_le`: the live sample misses a set `B` with probability at most `Law.stratified`'s escape of
   `B`, under A3 (`Law.execOS_escape_le`).

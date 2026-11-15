@@ -179,7 +179,8 @@ committed files that hold wherever the session's deployed commitment opens and a
 unbound in the transcript the witness `w` opens on the committed files' circuit is faulty in V5's statement at the
 session at `Flock.Bridge.partOf` over the registration's strata under `w`. -/
 theorem unbound_subset_faulty_part
-    (op : (g : Fin A.fileRead.circuit.N) → BitVec (A.fileRead.circuit.w g) → Prop) (hop : A.OpensUnder A.fileRead op)
+    (op : (g : Fin A.fileRead.circuit.N) → BitVec (A.fileRead.circuit.w g) → Prop)
+    (hop : A.OpensUnder (.one A.fileRead) op)
     (hc : ∀ g b, A.fileRead.consts g = some b → ∀ v : BitVec (A.fileRead.circuit.w g),
       (∀ i : Fin (A.fileRead.circuit.w g), v.getLsbD i.val = b) → op g v)
     (w : Wit) :

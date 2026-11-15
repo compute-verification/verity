@@ -35,7 +35,7 @@ BOT = "B0VERITY"
 BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "compute-research", "memory-accounting", "network-accounting",
-           "console", "dashboard", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
+           "console", "dashboard-goals", "dashboard-metrics", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
 
 
 class FakeSlack:
@@ -268,9 +268,9 @@ def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shad
 
 def test_every_handle_names_exactly_one_holder_and_a_predecessor_goes_in_its_lineage(registry):
     """Two holders in one handle split its doorbells and the watch's view (two coordinators would answer one chat).  A
-    handover's outgoing id goes in `lineage`."""
+    handover's outgoing id goes in `lineage`.  A handle no agent has taken yet has no `holder` key."""
     reg = json.loads(REAL_REGISTRY.read_text())
-    many = {h["handle"]: slack.AGENT_ID_RE.findall(h.get("holder") or "") for h in reg["handles"]}
+    many = {h["handle"]: slack.AGENT_ID_RE.findall(h["holder"] or "") for h in reg["handles"] if "holder" in h}
     assert {h: ids for h, ids in many.items() if len(ids) != 1} == {}, "one agent per handle: a second lane gets its own handle"
     with pytest.raises(slack.SlackError, match="lineage"):
         slack.check_registry({**reg, "handles": [{**reg["handles"][0], "lineage": ["gen-3"]}, *reg["handles"][1:]]}, "r")
@@ -347,10 +347,10 @@ def test_handles_and_subscriptions(registry, routes_dirs, capsys):
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
     rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
-                     "verity/circuits/ops/tc.py", "verity/circuits/cut.py", "AGENTS.md", "nowhere/x")
+                     "verity/circuits/ops/tc.py", "verity/protocols/proofs/flock/verifier/Flock.lean", "AGENTS.md", "nowhere/x")
     assert rc == 0 and [line.split() for line in out.splitlines()] == [
         ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
-        ["@circuits", "verity/circuits/ops/tc.py"], ["@proofs", "verity/circuits/cut.py"],
+        ["@circuits", "verity/circuits/ops/tc.py"], ["@proofs", "verity/protocols/proofs/flock/verifier/Flock.lean"],
         ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
     rc, out, _ = run(capsys, "owners")
@@ -1655,7 +1655,7 @@ def test_deliver_rings_explicit_names_in_place_of_the_rule_and_a_reminder_once_p
 def test_a_persons_doorbell_says_how_long_they_have_waited_and_still_rings_once(fake, registry, routes_dirs, people_d, capsys,
                                                                                  monkeypatch):
     """A doorbell for a person's post leads with them and how long they have waited since posting; a lane's doesn't.  The
-    once-per-post check, the hourly cap's count and `read --as`'s urgent-first order read it as any other doorbell."""
+    once-per-post check, the hourly limit's count and `read --as`'s urgent-first order read it as any other doorbell."""
     chat_users(fake)
     assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
     now = [1700001090.0]                                                                  # 18 min 10 s after the post
@@ -3185,20 +3185,20 @@ def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_
     assert bells(fake, circuits) == [] and len(bells(fake, lean)) == 1
 
 
-def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
+def test_one_author_rings_one_inbox_from_a_thread_at_most_limit_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a long one", username="circuits", bot_id=BOT)
-    for i in range(slack.CAP_PER_HOUR + 2):
+    for i in range(slack.LIMIT_PER_HOUR + 2):
         assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", f"point {i}")[0] == 0
     rung = bells(fake, box)
-    assert sum(m["text"].startswith("from infra,") for m in rung) == slack.CAP_PER_HOUR and sum("paused" in m["text"] for m in rung) == 1
+    assert sum(m["text"].startswith("from infra,") for m in rung) == slack.LIMIT_PER_HOUR and sum("paused" in m["text"] for m in rung) == 1
     notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
     assert len(notices) == 1 and notices[0]["text"].startswith("routing @infra to circuits paused here for the hour")
     assert slack.QUIET in notices[0]["text"]
     for who in ("proofs", "lean", "network-accounting", "comms", "top", "ci", "memory-accounting"):    # a roll call is not a loop
         assert run(capsys, "reply", "--as", who, "--thread", root["ts"], "--text", "subscribed")[0] == 0
-    assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.CAP_PER_HOUR + 7
+    assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.LIMIT_PER_HOUR + 7
 
 
 def test_a_long_multi_line_merge_thread_reply_rings_only_the_names_it_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
@@ -3507,6 +3507,31 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
     assert rc == 2 and "--thread reads one thread; it doesn't take --as" in err
     rc, _, err = run(capsys, "read")
     assert rc == 2 and "one of --thread TS, --since TS or --as NAME" in err
+
+
+def test_mark_through_marks_what_a_peek_listed_and_never_a_doorbell_that_rang_after(fake, registry, routes_dirs, capsys):
+    """A `--peek` listing, then a bare `read --as` minutes later to mark it, marked the doorbells that rang in between, unread.
+    The listing ends with the newest ts it showed, and `--mark-through` that ts leaves every later doorbell unread."""
+    inbox(fake, routes_dirs, "top")
+    run(capsys, "ask", "--as", "circuits", "--to", "@top", "--text", "first")
+    run(capsys, "ask", "--as", "circuits", "--to", "@top", "--text", "second")
+    rc, out, _ = run(capsys, "read", "--as", "top", "--peek")
+    first, second = json.loads(run(capsys, "read", "--as", "top", "--peek", "--json")[1])
+    at = datetime.fromtimestamp(float(second["ts"]), UTC).strftime("%H:%M:%SZ")
+    assert rc == 0 and out.splitlines()[-1] == (f"listed through {second['ts']} ({at}): `research msg read --as top "
+                                                f"--mark-through {second['ts']}` marks these read, and none that came after")
+    run(capsys, "ask", "--as", "circuits", "--to", "@top", "--text", "third, after the listing")
+    rc, out, _ = run(capsys, "read", "--as", "top", "--mark-through", second["ts"])
+    assert rc == 0 and out.strip() == f"SLACK @top: marked 2 read through {second['ts']} ({at}); 1 newer stay unread"
+    assert slack.seen_path("top").read_text().strip() == second["ts"]
+    left = json.loads(run(capsys, "read", "--as", "top", "--peek", "--json")[1])
+    assert [m["text"].endswith("third, after the listing") for m in left] == [True]
+    rc, out, _ = run(capsys, "read", "--as", "top", "--mark-through", first["ts"], "--json")
+    assert rc == 0 and json.loads(out) == {"marked": [], "unread": [left[0]["ts"]]}
+    assert slack.seen_path("top").read_text().strip() == second["ts"]
+    for bad in (("--thread", first["ts"]), ("--as", "top", "--peek"), ("--as", "top", "--urgent")):
+        rc, _, err = run(capsys, "read", *bad, "--mark-through", second["ts"])
+        assert rc == 2 and "--mark-through TS marks NAME's doorbells: pass --as NAME" in err
 
 
 def test_a_clone_holding_a_closed_route_rings_the_reopened_published_one(fake, registry, routes_dirs, capsys):
@@ -4009,7 +4034,7 @@ def test_slack_py_runs_as_a_single_file_from_any_checkout(tmp_path, registry):
     assert "@circuits" in out.stdout
 
 
-def test_a_single_file_carries_the_wait_cap_research_waitcap_states():
+def test_a_single_file_carries_the_wait_limit_research_waitcap_states():
     import importlib.util
 
     from research import waitcap
@@ -4018,7 +4043,7 @@ def test_a_single_file_carries_the_wait_cap_research_waitcap_states():
     single = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(single)
     assert single.waitcap is not waitcap
-    assert (single.waitcap.WAIT_CAP_S, single.waitcap.STILL_GOING) == (waitcap.WAIT_CAP_S, waitcap.STILL_GOING)
+    assert (single.waitcap.WAIT_LIMIT_S, single.waitcap.STILL_GOING) == (waitcap.WAIT_LIMIT_S, waitcap.STILL_GOING)
 
 
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["doorbells"]["cases"], ids=lambda v: v["name"])
@@ -4117,7 +4142,7 @@ def test_a_forward_loop_or_a_chain_past_three_hops_rings_no_closed_inbox(fake, r
     add_route(local, "old-b", boxes["old-b"], closed="2026-10-01T18:00Z", forward_to="old-a")
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-a", "--text", "where is the tree?")
     assert rc == 0 and "route @old-a: its forward_to loops or runs past 3 hops (stopped at @old-b)" in err
-    issue = {"identifier": "LEAN-1", "url": "https://linear.app/x/LEAN-1", "team": {"key": "NOPE"}}
+    issue = {"identifier": "LEAN-1", "url": "https://linear.app/x/LEAN-1", "team": {"key": "NOPE"}, "labels": {"nodes": []}}
     assert slack.ring_comment(argparse_ns(), json.loads(registry.read_text()), "infra", issue, "@old-a see the comment") == [
         "@old-a: its forward_to loops or runs past 3 hops (stopped at @old-b): see `research msg names list`; the comment is on LEAN-1"]
     assert all(bells(fake, b) == [] for b in boxes.values())
@@ -4185,7 +4210,7 @@ def test_a_doorbell_shaped_reply_the_router_didnt_post_does_not_stop_a_doorbell(
 
 def test_deliver_reads_all_of_the_inboxs_last_hour_so_a_busy_inbox_is_not_rung_twice(fake, registry, routes_dirs, capsys, monkeypatch):
     """`deliver` read one page of the inbox's last hour: past it, the post's own earlier doorbell went unseen (rung again
-    on each `deliver`), and so did an author's earlier doorbells (the loop cap never tripped)."""
+    on each `deliver`), and so did an author's earlier doorbells (the loop limit never tripped)."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
     for i in range(4):

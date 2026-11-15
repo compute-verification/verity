@@ -11,10 +11,10 @@ import copy
 import shutil
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.accounting.poub.verifier.receipts import Plan
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -34,26 +34,26 @@ def paths(x, prefix=()):
             yield from paths(v, prefix + (n,))
 
 
-def changed(draw, v):
+def changed(take, v):
     """`v` changed by one sampled edit of its kind."""
     if isinstance(v, bool):
         return not v
     if isinstance(v, int):
-        return draw(st.sampled_from([v + 1, v - 1, 0, -1, v + 2 ** 64, 2 * v + 1]))
+        return take(st.sampled_from([v + 1, v - 1, 0, -1, v + 2 ** 64, 2 * v + 1]))
     if isinstance(v, str) and v and len(v) % 2 == 0 and HEX.issuperset(v):
-        op = draw(st.integers(0, 9))
+        op = take(st.integers(0, 9))
         if op <= 5:
-            i = draw(st.integers(0, len(v) - 1))
-            return v[:i] + "0123456789abcdef"[(int(v[i], 16) + draw(st.integers(1, 15))) % 16] + v[i + 1:]
-        return {6: v[:-2], 7: v + "00", 8: "", 9: draw(st.sampled_from([v + "0", v.upper()]))}[op]
+            i = take(st.integers(0, len(v) - 1))
+            return v[:i] + "0123456789abcdef"[(int(v[i], 16) + take(st.integers(1, 15))) % 16] + v[i + 1:]
+        return {6: v[:-2], 7: v + "00", 8: "", 9: take(st.sampled_from([v + "0", v.upper()]))}[op]
     if isinstance(v, str):
-        return draw(st.sampled_from(["", "x", "sketch-sha512", "block-sha512", "p512", "p1024", "verify", "receive"]))
+        return take(st.sampled_from(["", "x", "sketch-sha512", "block-sha512", "p512", "p1024", "verify", "receive"]))
     if v is None:
-        return draw(st.sampled_from([0, [], "00", [[0, 1]], [[], []]]))
+        return take(st.sampled_from([0, [], "00", [[0, 1]], [[], []]]))
     if isinstance(v, list):
         if not v:
-            return draw(st.sampled_from([[0], [[0, 1]], ["00"], [[], []]]))
-        k, op = draw(st.integers(0, len(v) - 1)), draw(st.integers(0, 3))
+            return take(st.sampled_from([[0], [[0, 1]], ["00"], [[], []]]))
+        k, op = take(st.integers(0, len(v) - 1)), take(st.integers(0, 3))
         if op == 0:
             return v[:k] + v[k + 1:]
         if op == 1:
@@ -61,32 +61,32 @@ def changed(draw, v):
         if op == 2 and k + 1 < len(v):
             return v[:k] + [v[k + 1], v[k]] + v[k + 2:]
         return []
-    k = draw(st.sampled_from(sorted(v)))
-    if draw(st.integers(0, 3)):
-        return v | {k: changed(draw, v[k])}
+    k = take(st.sampled_from(sorted(v)))
+    if take(st.integers(0, 3)):
+        return v | {k: changed(take, v[k])}
     return {x: y for x, y in v.items() if x != k}
 
 
-def edit(draw, case: dict) -> None:
+def edit(take, case: dict) -> None:
     """One edit, in place: four times in five to one event (or the event list), else to the rest of the case."""
     events = case.get("events")
-    if isinstance(events, list) and events and draw(st.integers(0, 4)):
-        k = draw(st.integers(0, len(events) - 1))
+    if isinstance(events, list) and events and take(st.integers(0, 4)):
+        k = take(st.integers(0, len(events) - 1))
         places = [(("events",), events)] + [(("events", k) + p, v) for p, v in paths(events[k])]
     else:
         places = [(p, v) for p, v in paths(case) if p and p[0] != "events"]
-    path, v = places[draw(st.integers(0, len(places) - 1))]
+    path, v = places[take(st.integers(0, len(places) - 1))]
     x = case
     for p in path[:-1]:
         x = x[p]
-    x[path[-1]] = changed(draw, v)
+    x[path[-1]] = changed(take, v)
 
 
 @st.composite
-def edited(draw, base: st.SearchStrategy) -> dict:
-    case = copy.deepcopy(draw(base))
-    for _ in range(draw(st.integers(1, 2))):
-        edit(draw, case)
+def edited(take, base: st.SearchStrategy) -> dict:
+    case = copy.deepcopy(take(base))
+    for _ in range(take(st.integers(1, 2))):
+        edit(take, case)
     return case
 
 
@@ -100,36 +100,36 @@ def removed(plan: Plan, gone: set) -> tuple:
 
 
 @st.composite
-def shaped(draw, shared: bool = False) -> dict:
+def shaped(take, shared: bool = False) -> dict:
     """An honest session of a sampled shape over the default world's six chunks: at most four pages appended, a page no
     plan held yet released either way or named withdrawn. `shared`: two to four windows, sampled two to four a coin."""
-    windows = draw(st.integers(2, 4) if shared else st.integers(1, 2))
-    per_coin = draw(st.integers(2, 4)) if shared else 1
-    r = M.Run(windows=windows, samples=draw(st.integers(1, 40)), groups_per_coin=per_coin)
+    windows = take(st.integers(2, 4) if shared else st.integers(1, 2))
+    per_coin = take(st.integers(2, 4)) if shared else 1
+    r = M.Run(windows=windows, samples=take(st.integers(1, 40)), groups_per_coin=per_coin)
     N = r.store.registration.blocks
     live, held, budget = set(range(N)), set(), 4
     r.start()
     for _t in range(windows):
-        for _k in range(draw(st.integers(1, 3))):
-            if budget and draw(st.booleans()):
-                n = draw(st.integers(1, min(2, budget)))
+        for _k in range(take(st.integers(1, 3))):
+            if budget and take(st.booleans()):
+                n = take(st.integers(1, min(2, budget)))
                 budget -= n
                 a = r.append(n)
                 live |= set(range(a.first, a.first + n))
-            if len(live) > 1 and draw(st.integers(0, 3)) == 0:
-                j = draw(st.sampled_from(sorted(live)))
-                r.release(((j, 1),), ((j, 1),) if j >= N and j not in held and draw(st.booleans()) else ())
+            if len(live) > 1 and take(st.integers(0, 3)) == 0:
+                j = take(st.sampled_from(sorted(live)))
+                r.release(((j, 1),), ((j, 1),) if j >= N and j not in held and take(st.booleans()) else ())
                 live.discard(j)
-            blocks = draw(st.sets(st.sampled_from(sorted(live)), min_size=1, max_size=8))
+            blocks = take(st.sets(st.sampled_from(sorted(live)), min_size=1, max_size=8))
             held |= blocks
-            step = r.step + draw(st.integers(1, 3))
-            how = draw(st.integers(0, 2))
+            step = r.step + take(st.integers(1, 3))
+            how = take(st.integers(0, 2))
             if how == 0 and live >= set(range(N)) and blocks == set(range(N)):
                 r.run(step=step)
             elif how == 1:
                 r.run(change=(runs(blocks - set(r.plan)), removed(r.plan, set(r.plan) - blocks)), step=step)
             else:
-                r.run(Plan.of(draw(st.permutations(sorted(blocks))), r.store.extent), step=step)
+                r.run(Plan.of(take(st.permutations(sorted(blocks))), r.store.extent), step=step)
         r.boundary()
     r.finish()
     return r.case()

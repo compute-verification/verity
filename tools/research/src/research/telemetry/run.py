@@ -10,8 +10,8 @@ cgroup scopes and the run's processes outside its group the same way, SIGKILL on
 `scope_end` and a `scope_ended` mark (scope.Sweep: never the runner or its sampler), or, finding no request once the workload has
 exited, claims D/control/cancel as closed (scope.claim: a cancel that comes later ends the run itself), stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
 (128+signal when killed).  The sampler is never the reason the workload stops: a sampler start failure is recorded and CMD still runs.
-On a machine that caps each login session's memory, CMD never starts from a cgroup without a cap of its own (cgroup.uncapped): status
-failed, a no_memory_cap mark, exit 75.
+On a machine that limits each login session's memory, CMD never starts from a cgroup without a limit of its own (cgroup.uncapped): status
+failed, a no_memory_limit mark, exit 75.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from typing import Any
 
 from . import CANCEL_ACTORS, pyspy
 from .cancel import cancel as cancel_run
-from .cgroup import Cgroup, session_cap, uncapped
+from .cgroup import Cgroup, session_limit, uncapped
 from .classify import classify, write as write_failure
 from .events import Emitter, utc_now_ms
 from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
@@ -71,7 +71,7 @@ def _marker(attempt_dir: Path, actor: str, target_pid: int | None, target_pgid: 
 
 CONTROL_TIMEOUT = Path("control") / "timeout_s"     # attempt-dir relative; written by `tele set-timeout`, re-read by the run loop
 OUT_DIR = "out"                                     # attempt-dir relative; the workload's $OUT, which custody always uploads in full
-EX_NO_MEMORY_CAP = 75                               # EX_TEMPFAIL: the workload never started; it can start once its login gets its scope
+EX_NO_MEMORY_LIMIT = 75                               # EX_TEMPFAIL: the workload never started; it can start once its login gets its scope
 #: The clock (seconds) the stage timeout runs on; a test replaces it to decide when the deadline passes.  The recorded times
 #: (started_mono, ended_mono, wall_s) stay on time.monotonic, the clock of every event's t_mono.
 clock = time.monotonic
@@ -229,9 +229,23 @@ def _end_leftovers(em: Emitter, stage: str, pgid: int) -> None:
         pass
 
 
-def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None = None) -> int:
+def _end_record(ended: Callable[[], dict[str, Any]] | None, em: Emitter, stage: str) -> dict[str, Any]:
+    """What `ended` adds to the run's terminal status: nothing without one, and nothing but an `ended_failed` mark when it raises."""
+    if ended is None:
+        return {}
+    try:
+        return dict(ended())
+    except Exception as e:  # noqa: BLE001  what the caller records is never the reason a run has no terminal status
+        em.mark(stage, "ended_failed", error=f"{e.__class__.__name__}: {e}"[:300])
+        return {}
+
+
+def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None = None,
+        ended: Callable[[], dict[str, Any]] | None = None) -> int:
     """`poll`, when given, is called on each pass of the loop that waits for CMD, and is dropped, with a `poll_failed` mark, the
-    first time it raises: what the caller watches for while CMD runs (`research run`: a file to preserve, store.run_preserve)."""
+    first time it raises: what the caller watches for while CMD runs (`research run`: a file to preserve, store.run_preserve).
+    `ended`, when given, is called once CMD has ended (or could not start), and what it returns is written into status.json
+    in the same write as the terminal state, so no reader finds a run ended without it (`research run`: research.memmark)."""
     d = Path(a.attempt_dir)
     d.mkdir(parents=True, exist_ok=True)
     em = Emitter(d, proc="tele-run")
@@ -252,11 +266,12 @@ def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None =
                         cadence_s=a.cadence, pss_every_s=a.pss_every)
         write_json_atomic(d / "job.json", job)
     em.queue("started", stage=a.stage, job=a.job, attempt=a.attempt)
-    if (why := uncapped(Cgroup().limits(), session_cap())) is not None:
-        set_status(d, "failed", rc=EX_NO_MEMORY_CAP, signal=None, error=f"no memory cap: {why}", stage=a.stage)
-        em.emit("mark", stage=a.stage, name="no_memory_cap", error=why)
+    if (why := uncapped(Cgroup().limits(), session_limit())) is not None:
+        set_status(d, "failed", rc=EX_NO_MEMORY_LIMIT, signal=None, error=f"no memory limit: {why}", stage=a.stage,
+                   **_end_record(ended, em, a.stage))
+        em.emit("mark", stage=a.stage, name="no_memory_limit", error=why)
         print(f"[tele run] refused to start the workload: {why}", file=sys.stderr)
-        return EX_NO_MEMORY_CAP
+        return EX_NO_MEMORY_LIMIT
     # ---- workload first (so the sampler gets its pid), suspended until the sampler is up? no: start it, then the sampler; the first sample is <1 s later
     out_f = err_f = None
     if a.inherit_io:
@@ -272,7 +287,7 @@ def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None =
         proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, start_new_session=True, cwd=a.cwd or None,
                                 env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve()), "OUT": str((d / OUT_DIR).resolve())})
     except OSError as e:
-        set_status(d, "failed", rc=127, signal=None, error=f"spawn failed: {e}", stage=a.stage)
+        set_status(d, "failed", rc=127, signal=None, error=f"spawn failed: {e}", stage=a.stage, **_end_record(ended, em, a.stage))
         em.emit("mark", stage=a.stage, name="spawn_failed", error=str(e))
         return 127
     st = stat_fields(proc.pid)
@@ -361,7 +376,8 @@ def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None =
     outcome = "ok" if rc == 0 else "fail"
     em.span_end(a.stage, sid, outcome=outcome, rc=status_rc, signal=sig, timed_out=timed_out, refs=list(a.declared_output))
     set_status(d, "cancelled" if timed_out else ("done" if rc == 0 else "failed"), rc=status_rc, signal=sig, timed_out=timed_out, ended_mono=t_end,
-               ended_utc=utc_now_ms(), wall_s=t_end - t_start, rc_is_shell_status=True, **({"scope_end": scope_end} if scope_end else {}))
+               ended_utc=utc_now_ms(), wall_s=t_end - t_start, rc_is_shell_status=True, **({"scope_end": scope_end} if scope_end else {}),
+               **_end_record(ended, em, a.stage))
     # ---- stop the sampler (it lingers by itself once the root pid is gone; SIGTERM makes it take final readings now)
     if sampler is not None:
         try:

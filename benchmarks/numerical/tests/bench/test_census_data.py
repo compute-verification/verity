@@ -3,7 +3,11 @@ and the directory holds nothing but data (nothing imports it; it can move to its
 
 from __future__ import annotations
 
+import ast
+import collections
 import json
+import operator
+import pathlib
 import re
 
 import pytest
@@ -148,9 +152,9 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
     assert census.subcircuit_of(FP8_HOPPER_WGMMA.name).id == "gemm-coordinate/k1536/sm90-wgmma-e4m3"
     notes = {s.id: [n.note for n in s.fidelity_notes] for s in census.SUBCIRCUITS.values()}
     assert notes["gemm-coordinate/k1536/sm90-mma-bf16"] == [
-        "H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma (sm90.wgmma.m64n8k16.bf16). "
-        "On the H100 the two write the same words on every captured input, NaN and infinities included, so the gap is in the "
-        "name only; gemm-coordinate/k1536/sm90-wgmma-bf16 names the instruction production runs"]
+        ("H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma (sm90.wgmma.m64n8k16.bf16). "
+         "On the H100 the two write the same words on every captured input, NaN and infinities included, so the gap is in the "
+         "name only; gemm-coordinate/k1536/sm90-wgmma-bf16 names the instruction serving runs")]
     assert {i.id: i.provenance for i in census.INPUT_SETS.values()} == {
         "bench-instances-v1": "captured", "bench-instances-fp8-ada-v1": "synthetic", "bench-instances-bf16-hopper-v1": "synthetic",
         "bench-instances-fp8-hopper-v1": "synthetic", "bench-instances-nvfp4-sm120-v1": "synthetic"}
@@ -196,9 +200,6 @@ def test_workloads_are_the_regression_rows_template_mix() -> None:
     """Each workload is a served vLLM configuration with its template mix: the proof blocks per family and bound
     parameters, read from its regression row's replay partition (the counts the coverage audit cites).  The file is kept equal
     to those expectations, and only families the census has a template for name one."""
-    import collections
-    import pathlib
-
     repo = pathlib.Path(census.ROOT).parents[1]
     assert census.WORKLOADS, "no workloads"
     for w in census.WORKLOADS.values():
@@ -276,9 +277,6 @@ def test_every_templates_bound_ids_validate() -> None:
 
 def _ops(expr: str, env: dict) -> int:
     """An integer work-model expression (+ - * // and parentheses over names) evaluated without eval."""
-    import ast
-    import operator
-
     ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
 
     def ev(n: ast.AST) -> int:

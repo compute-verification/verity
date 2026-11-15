@@ -297,7 +297,7 @@ def test_schedule_stream_bound_reproduces_the_sizing_on_the_measured_b1_row():
     assert s["hidden_prefill_bytes"] == asz["prefill_hidden_bytes"] and s["hidden_bytes"] > s["hidden_prefill_bytes"]
     measured_run = 25075721724
     assert s["run_bytes"] < measured_run < s["run_bytes"] * 1.15, (s["run_bytes"], measured_run)     # the 1.15 factor covers the measured run
-    # B8: eight prompts arriving together prefill in ONE step (the row of record) -- the envelope bound counts three such steps
+    # B8: eight prompts arriving together prefill in ONE step (the workload of record) -- the envelope bound counts three such steps
     reqs8 = [{"prompt_token_ids": list(range(443)), "arrive_step": 0, "max_tokens": 128} for _ in range(8)]
     s8 = schedule_stream_bound(asz, reqs8, {"max_tokens": 128})
     assert s8["largest_step"]["prefill_seqs"] == 8 and s8["largest_step"]["tokens"] == 8 * 443 and s8["steps"] == 128
@@ -341,7 +341,7 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     assert _legacy(bn) > 23325 * MiB and _legacy(bn) // MiB == 29615, _legacy(bn) // MiB
     assert bx["raw_kept_bytes"] > 5440526844 and bx["levels_bytes"] > 6268967168                   # kept raw and levels each cover their measurement
     assert bn["raw_kept_bytes"] == 0 and bn["replay_bytes"] == bn["levels_bytes"] + bn["learn_budget_bytes"] + bn["picks"] * 256
-    # B8 row of record: 365/633/11/1024/817/449/165/73 at step 0 (one prefill of 3,537 tokens), caps up to 128
+    # B8 workload of record: 365/633/11/1024/817/449/165/73 at step 0 (one prefill of 3,537 tokens), caps up to 128
     reqs8 = [{"prompt_token_ids": list(range(n)), "arrive_step": 0, "max_tokens": c}
              for n, c in zip((365, 633, 11, 1024, 817, 449, 165, 73), (128, 113, 95, 35, 121, 3, 9, 2))]
     s8 = schedule_stream_bound(asz, reqs8, {"max_tokens": 128})
@@ -395,7 +395,7 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     rec["openings_after_release"]["deferred_received_n"] = 24
     rec["openings"]["verified"] = 39
     assert not commit_verdict(rec, True)[0]
-    # the population-drawn openings (binding) partition the same way: host share verifies, deferred share must reach the replay phase.
+    # the population-sampled openings (binding) partition the same way: host share verifies, deferred share must reach the replay phase.
     # A record WITH a binding block is a row-procedure record: C2 of record (replay / linkage / pin) must be on it for the PASS branch.
     from verity_vllm.check.commit_rules import binding_check
     po = {"n": 81, "bound": 81, "unbound_n": 0, "opened": 76, "verified": 76, "skipped": "retain=host excluding [...]: 5 of 81 -> replay", "deferred_replay_n": 5}

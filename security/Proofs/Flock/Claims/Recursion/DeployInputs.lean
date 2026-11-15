@@ -38,7 +38,7 @@ import VCVio.Prelude.Core
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
 
-A statement of the outer verifier the compiled verifier runs per V* part, `flock-verify verify --zk` with its recursive
+A statement of the outer verifier the compiled verifier runs per V* part, `verity-verify-proof verify --zk` with its recursive
 flags, is the canonical byte encoding (`RecRaw.encode`) of exactly what that command reads besides the session
 directory: Flock's statement (`FlockDeploy.Raw`, `--zk` on) and the bytes and numbers of `--rec-inner`, `--rec-part`,
 `--rec-bindings`, `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
@@ -62,7 +62,7 @@ reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `
 `Zk.shapeOk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
 (through `checkOpenTops` and `checkLevelTopReads`), `RecLinkPart.check` (the link table's part against the table and
-the inner statement), `RecVStar.checkLabels` and the sample's law.
+the inner statement), `RecVStar.checkLabels` and the sample's sampling design.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
 shipped ones, outside the oracle.
 -/
@@ -78,7 +78,7 @@ open Lean (Json)
 
 /-! ## The statement's bytes -/
 
-/-- **What `flock-verify verify --zk` reads of a V* part's statement** besides the session directory: Flock's statement,
+/-- **What `verity-verify-proof verify --zk` reads of a V* part's statement** besides the session directory: Flock's statement,
 then `--rec-inner`, `--rec-part`, `--rec-bindings`, `--rec-rows`, `--rec-inner-circuit`, `--rec-inner-public`,
 `--rec-inner-partition`, `--rec-inner-coins`, `--rec-inner-session`'s `session.json`, `--rec-inner-transcript`,
 `--rec-inner-registration`, `--rec-inner-statement`, the tables in `--rec-inner-tables`,

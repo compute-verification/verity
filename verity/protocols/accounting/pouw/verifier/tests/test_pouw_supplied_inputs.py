@@ -14,14 +14,14 @@ import pytest
 
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.circuits.ops.boolean import gemm as BG
 from verity.protocols.accounting.pouw.prover.circuit import compile as C
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
 from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 I8 = Array(8, BL.BIT)

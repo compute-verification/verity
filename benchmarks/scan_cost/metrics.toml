@@ -1,0 +1,24 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "network-accounting/scan-proving-cost"
+title = "Network certification proving cost"
+owner = "network-accounting"
+unit = "proving seconds a second"
+axis = "Seconds of proving for each second of execution it covers."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh"
+every = "7d"
+goal = "network/period-bound-checked"
+
+[[metric]]
+id = "network-accounting/scan-verifier-cost"
+title = "Network certification verifier cost"
+owner = "network-accounting"
+unit = "CPU seconds a second"
+axis = "Lean verifier CPU-seconds, on one core, for each second of execution it covers."
+better = "lower"
+command = "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh"
+every = "7d"
+goal = "network/period-bound-checked"

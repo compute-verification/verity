@@ -61,21 +61,26 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.lean-imports.driver": _lean_driver("--lean "),
                  "merge.lakefile-lists.name": "lakefile.toml: each side's requires and roots (tools/verity/lean/merge.py)",
                  "merge.lakefile-lists.driver": _lean_driver("--lakefile "),
-                 "merge.fixture-map.name": "artifacts.json: each side's fixtures (tools/verity/check/merge_map.py)",
-                 "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P",
-                 "merge.markdown-rows.name": "Markdown: each side's rows of a table (tools/verity/check/merge_rows.py)",
-                 "merge.markdown-rows.driver": "python3 tools/verity/check/merge_rows.py %O %A %B %P",
+                 "merge.fixture-map.name": "artifacts.json: each side's fixtures (tools/check/merge_map.py)",
+                 "merge.fixture-map.driver": "python3 tools/check/merge_map.py %O %A %B %P",
+                 "merge.markdown-rows.name": "Markdown: each side's rows of a table (tools/check/merge_rows.py)",
+                 "merge.markdown-rows.driver": "python3 tools/check/merge_rows.py %O %A %B %P",
                  "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
                                               "(adapters/vllm/tests/lint/merge_allowlist.py)",
                  # a crossing of the layout move merges once in each layout, so the script is found at either place
                  "merge.vllm-allowlist.driver": "f=adapters/vllm/tests/lint/merge_allowlist.py; "
                                                 "[ -f \"$f\" ] || f=integrations/vllm/tests/lint/merge_allowlist.py; "
                                                 "python3 \"$f\" %O %A %B %P",
-                 "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
-                                         "(tools/verity/lean/merge.py)",
-                 "merge.lean-caps.driver": _lean_driver("--caps "),
+                 # `--caps `: origin/main's merge.py, which the command runs, knows `--limits` only once it holds it (merge.LIMITS_FLAG)
+                 "merge.lean-limits.name": "tests/test_lean_packages.py: each side's change to the ratchet limits "
+                                           "(tools/verity/lean/merge.py)",
+                 "merge.lean-limits.driver": _lean_driver("--caps "),
                  "merge.pyproject-test-lists.name": "pyproject.toml: each side's [tool.verity.tests] lists (tools/verity/lean/merge.py)",
-                 "merge.pyproject-test-lists.driver": _lean_driver("--pyproject ")}
+                 "merge.pyproject-test-lists.driver": _lean_driver("--pyproject "),
+                 # the driver's name before the rename, with the same command, while a branch's `.gitattributes` names it
+                 "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet limits "
+                                         "(tools/verity/lean/merge.py)",
+                 "merge.lean-caps.driver": _lean_driver("--caps ")}
 
 
 CWD_CLONE = "clone"

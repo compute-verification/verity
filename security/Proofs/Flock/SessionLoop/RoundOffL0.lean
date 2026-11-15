@@ -57,7 +57,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace LeanRelease
 
@@ -92,7 +92,7 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
   have hq2 : 2 * j.val + r.val < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -145,8 +145,8 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
       (Masked.UE.tapeZk t)] at e
     exact e
   -- the openings' words are the opened coins
-  have hCM : _root_.Flock.Firewall.Frames.COIN_MAX = 65536 := rfl
-  have hW : ∀ p e, p < ops.length → e < min (loopNr x p) _root_.Flock.Firewall.Frames.COIN_MAX →
+  have hCM : _root_.Flock.ZkServer.Frames.COIN_MAX = 65536 := rfl
+  have hW : ∀ p e, p < ops.length → e < min (loopNr x p) _root_.Flock.ZkServer.Frames.COIN_MAX →
       (wordsAt x (ops.map fun p => CoinLayer.rd p.2) p)[e]! = Masked.slotAt (Loop.finS.pad (K := refK x) cs) p e := by
     intro p e hp he
     have hw := wordsAt_slot Masked.dataE x ops hlt.le (s := ops.length) (p := p) (e := e) hp le_rfl
@@ -232,7 +232,7 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     rfl
   have htabst : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! = tr.st := htabj.trans hT1.symm
   have hbasis : FlockComplete.basisVals (FlockComplete.Replay.Rs.sws
-        (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++ _root_.Flock.Firewall.Finish.claimsOf xs)
+        (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++ _root_.Flock.ZkServer.Finish.claimsOf xs)
         ⟨fun k e => (wordsAt x (ops.map fun p => CoinLayer.rd p.2) (Masked.rankSlot x j.val r.val + k))[e]!,
           fun e => (wordsAt x (ops.map fun p => CoinLayer.rd p.2)
             (Masked.rankSlot x j.val r.val + (2 + xs.size)))[e]!⟩) (tr.st.m - 7) =
@@ -271,7 +271,7 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     (FlockComplete.LigLock.l0BodyAt_congr_lt ?_ ?_ ?_)
   · intro _ e he
     exact hW (Masked.ligP0 x j r) e (by omega) (by
-      rw [hn0, Nat.min_eq_left (show (Masked.zkTab x j).sch.n ≤ _root_.Flock.Firewall.Frames.COIN_MAX by
+      rw [hn0, Nat.min_eq_left (show (Masked.zkTab x j).sch.n ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by
         rw [hCM]; omega)]
       exact he)
   · intro hi2
@@ -313,7 +313,7 @@ theorem release_sched_l0_pf (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
   have hjh : (2 * j.val + r.val) / 2 = j.val := by omega
   have hrm : (2 * j.val + r.val) % 2 = r.val := by omega
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [Masked.stsOf_half x j r]
     exact (Masked.zkTab x j).hz

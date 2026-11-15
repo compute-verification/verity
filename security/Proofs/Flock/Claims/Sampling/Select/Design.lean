@@ -37,7 +37,7 @@ theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law'
     simp only [size_rs, size_strata, Bool.or_eq_true, decide_eq_true_eq, not_or, not_lt] at hc
     omega
 
-/-- **`Flock.Draw.deriveWork`'s law, with its refusals**: each stratum its ranges and a floor from the table, the
+/-- **`Flock.Draw.deriveWork`'s sampling design, with its refusals**: each stratum its ranges and a floor from the table, the
 population doing some work. -/
 theorem deriveWork_wf (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (tab : Array (String × ℕ × ℕ))
     (law' : Flock.Draw.Law) (h : Flock.Draw.deriveWork k S tab = .ok law') :

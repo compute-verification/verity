@@ -49,7 +49,7 @@ import Proofs.Flock.Soundness.Lowering
 * `rowBitRead_of_col`: that gives `RowBitRead` at every unit: the column's gate in the unit's own instance is that row
   bit (`FlockVBridge.Decode.keyRowOf_instC`, an input row's in `HiddenExec.rowOfH`) and, read by a row of the unit and
   no gate of it, is a wire of the unit (`IsRowsUnit.mem_io_of_read`);
-* `known_held_at`, `known_bytes`, `known_readAt_zero`: where the known rows hold (`KnownHeld`), under flock-verify's
+* `known_held_at`, `known_bytes`, `known_readAt_zero`: where the known rows hold (`KnownHeld`), under verity-verify-proof's
   complete check, a registrant's row of a port the known content names is read at a position of the known rows and has
   that known row's `sha512/row/v2` bytes; a one-row known value is read at row 0;
 * `portBit_known`, `holds_known`: so `portBit` at the port's name reads the known row's bits.

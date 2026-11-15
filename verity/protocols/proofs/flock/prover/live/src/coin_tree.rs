@@ -435,7 +435,7 @@ pub fn check(spec: &Spec, rules: &Rules, root: &[u8; 64], stream: usize, round: 
 /// it sends and the root and session key from `Hello`'s answer (exactly 20 words, the key's bit 2047 zero), and checks every
 /// coin the verifier sends (the link points, every round) against them before handing it on, stripped of its opening.
 /// Anything else stops the prover there (a refusal), before it answers anything that depends on it. A ZK server session's
-/// coin check of record is the Lean session loop's instead (`Flock.Firewall.Session`), which owns its connection.
+/// coin check of record is the Lean session loop's instead (`Flock.ZkServer.Session`), which owns its connection.
 pub struct Checked<T: Transport> {
     pub inner: T,
     pub spec: Spec,
@@ -714,7 +714,7 @@ mod tests {
         opens: Vec<(&'static str, usize, Vec<F128>)>,
     }
 
-    /// The case through [`Checked`]: each step the Lean check takes (`flock-firewall coins`'s `hello`, `answer`, `open`) with
+    /// The case through [`Checked`]: each step the Lean check takes (`flock-zk-server coins`'s `hello`, `answer`, `open`) with
     /// what Rust answered, the coins handed on or the refusal, which ends the case.
     fn run(c: &Case) -> serde_json::Value {
         use serde_json::json;
@@ -753,8 +753,8 @@ mod tests {
         json!({"case": c.case, "steps": steps})
     }
 
-    /// `coin_open_vectors.json`, which `test_lean_coin_open.py` holds the Lean check (`Flock.Firewall.Coins`,
-    /// `flock-firewall coins`) to, word for word: honest and altered openings of the §9 tree through [`Checked`], each step
+    /// `coin_open_vectors.json`, which `test_lean_coin_open.py` holds the Lean check (`Flock.ZkServer.Coins`,
+    /// `flock-zk-server coins`) to, word for word: honest and altered openings of the §9 tree through [`Checked`], each step
     /// with Rust's answer. `COIN_OPEN_VECTORS=write` rewrites the file from these cases.
     #[test]
     fn checked_answers_the_lean_checks_vectors() {
@@ -823,7 +823,7 @@ mod tests {
         ];
         let ran: Vec<serde_json::Value> = cases.iter().map(run).collect();
         let built = serde_json::json!({
-            "comment": "The coin tree's opening checks (`coin-tree/hm96-sha512/v2`) on docs/coin-tree-v2.md §9's tree, which coin_tree.rs's test holds Rust's `Checked` to and test_lean_coin_open.py holds the Lean check (`Flock.Firewall.Coins`, `flock-firewall coins`) to, word for word. Each case is the steps the Lean check takes: the prover's `hello`, `Hello`'s `answer` (`Resp::Coins`' frame, hex), then each `open` of `n` coins of a stream's next round (its frame); an open's `coins` are the ones handed on (hex), and a step's `stop` is the refusal, which ends the case.",
+            "comment": "The coin tree's opening checks (`coin-tree/hm96-sha512/v2`) on docs/coin-tree-v2.md §9's tree, which coin_tree.rs's test holds Rust's `Checked` to and test_lean_coin_open.py holds the Lean check (`Flock.ZkServer.Coins`, `flock-zk-server coins`) to, word for word. Each case is the steps the Lean check takes: the prover's `hello`, `Hello`'s `answer` (`Resp::Coins`' frame, hex), then each `open` of `n` coins of a stream's next round (its frame); an open's `coins` are the ones handed on (hex), and a step's `stop` is the refusal, which ends the case.",
             "cases": ran,
         });
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/coin_open_vectors.json");

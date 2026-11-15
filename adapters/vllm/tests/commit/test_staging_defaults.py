@@ -89,22 +89,22 @@ def test_the_commit_resolves_the_collector_s_defaults(argv, want):
 
 
 def test_the_commit_reads_only_the_keys_enable_windows_returns(monkeypatch):
-    """`pipeline.commit.main` prints the window ring and writes its record from the dictionary the collector's `enable_windows`
-    returns, beside an engine and so on a GPU only, where the committers of its tests are stand-ins: every key `main` subscripts
+    """`pipeline.commit` prints the window ring and writes its record from the dictionary the collector's `enable_windows`
+    returns, beside an engine and so on a GPU only, where the committers of its tests are stand-ins: every key it subscripts
     that dictionary with is one the collector's own `enable_windows` returns, here over the CPU fakes."""
     import ast
     import inspect
 
     from verity_vllm.pipeline import commit as cd
 
-    tree = ast.parse(inspect.getsource(cd.main))
+    tree = ast.parse(inspect.getsource(cd))
     bound = {t.id for n in ast.walk(tree) if isinstance(n, ast.Assign) and isinstance(n.value, ast.Call)
              and getattr(n.value.func, "attr", None) == "enable_windows" for t in n.targets if isinstance(t, ast.Name)}
     read = {n.slice.value for n in ast.walk(tree) if isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name)
             and n.value.id in bound and isinstance(n.slice, ast.Constant)}
-    assert {"slots", "window_bytes"} <= read, "main no longer subscripts a name it binds to enable_windows(): point this test at its reader"
+    assert {"slots", "window_bytes"} <= read, "pipeline.commit no longer subscripts a name it binds to enable_windows(): point this test at its reader"
     info = committer(monkeypatch, "none", VERITY_WINDOW_MB=P.WINDOW_MB, VERITY_WINDOW_SLOTS=str(P.SLOTS)).enable_windows(None)
-    assert not read - set(info), (f"pipeline.commit.main reads {sorted(read - set(info), key=repr)} of the dictionary enable_windows returns, "
+    assert not read - set(info), (f"pipeline.commit reads {sorted(read - set(info), key=repr)} of the dictionary enable_windows returns, "
                                   f"whose keys are {sorted(info)}: a windowed Commit stops there with a KeyError")
 
 

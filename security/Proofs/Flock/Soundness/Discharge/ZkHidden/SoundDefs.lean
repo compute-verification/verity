@@ -52,13 +52,13 @@ noncomputable def opnAtZH (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : 
     (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) : ZkLink.OpensZ 𝔽 Dig (List UInt8) :=
   match Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
       I.program with
-  | .ok st => match Zk.schedule st.m with
+  | .ok st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => opnZ (Setup.ofCircuit st) sch (nXZ T S R) #[proofs[0]!, proofs[1]!]
     | .error _ => default
   | .error _ => default
 
 /-- **`RunsZC` at the live hidden-output `--zk` tables, at the sampling design's samples** (`RunsZCLive` under hidden outputs). Given
-that wherever flock-verify accepts a hidden-output session the `--zk` table is the executable's (`TablesAtZKHLive`), on
+that wherever verity-verify-proof accepts a hidden-output session the `--zk` table is the executable's (`TablesAtZKHLive`), on
 untyped one-table inputs under the tags `TagsOkH` fixes, whose circuit file `HmOut.parse` accepts (at the `--zk` tags)
 as a circuit whose unit returns the outputs, with `wr` the challenger's record of the live `--zk` session and each of
 the sampling design's samples proving its units at `mPts` link points (`DrawOkZKH` at `L.draw ω`), `RunsZC` holds at the sampling design's samples

@@ -3,7 +3,7 @@ tap build on `torch.ops`: the taps are CUDA builds, vLLM's attention ops are not
 is allocated on the CPU here.  What is held is the wrapper's side of a launch.  Outside a committed step the installed kernel runs.  Inside
 one the tap is armed with the launch's geometry, the tapped kernel runs and the stream buffer is committed under the launch's name.  A
 launch the build has no kernel for, or one the kernel skips, is a collector error and one more expected X-03 row.  `uninstall` puts back
-the op and disarms the tap.  The stream's words are `verity_vllm.properties.fa_tap_exactness`'s, on a GPU."""
+the op and disarms the tap.  The stream's words are `tests.properties.fa_tap_exactness`'s, on a GPU."""
 from __future__ import annotations
 
 import re
@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.test_vocab_range_source import Recorder
+from tests.acquire.test_vocab_range_source import Recorder, exactness_in_tree
 from verity_vllm.acquire.sources import hidden_source as H
 from verity_vllm.engine import hooks
 
@@ -223,7 +223,7 @@ def test_a_fa2_launch_of_a_step_arms_the_tap_with_its_geometry_and_commits_the_s
     [d] = src.declaration_classes()
     assert (d["class"], d["how"], d["tensors"], d["bytes"], d["tap_layout"], d["hdims"]) == (
         "fa2_hidden_m1_stream", "bound-as-leaf", 4, sum(nbytes) + nbytes[0], 8, [64, 128])
-    assert "row3" not in d and "ms" not in d
+    assert "row3" not in d and "ms" not in d and exactness_in_tree(src)
 
 
 def test_a_fa2_tile_other_than_the_hd64_one_is_named_in_its_stream_and_a_build_with_ms_commits_a_longer_one(ops):
@@ -345,7 +345,7 @@ def test_a_fa3_launch_of_a_step_arms_the_tap_with_its_packed_geometry_and_commit
     [d] = src.declaration_classes()
     assert (d["class"], d["tensors"], d["bytes"], d["tap_layout"], d["hdims"], d["tiles"]) == (
         "fa3_hidden_m1_stream", 4, sum(nbytes), 9, [64, 128], src.stats["tiles"])
-    assert d["tiles"] is not src.stats["tiles"] and "row3" not in d and "ms" not in d
+    assert d["tiles"] is not src.stats["tiles"] and "row3" not in d and "ms" not in d and exactness_in_tree(src)
 
 
 @pytest.mark.parametrize(("launch", "why"), [

@@ -213,7 +213,7 @@ def HOwnRoots (cOf : Cm → List UInt8) : Prop :=
 /-- **An accepted transcript samples the units that read a round's commitment, and labels them itself**: at every
 history, each transcript session `j` accepts has a sample that samples every unit some round-commitment port of `own`
 reads into its table (`partOf`, at the table's sample `drawJ`), and that table's sampled statement (`HmOut.drawn`) labels
-the unit with the unit. U4 (`checkFull` at the record's sample, which `flock-verify --registered --draw` runs) samples those
+the unit with the unit. U4 (`checkFull` at the record's sample, which `verity-verify-proof --registered --draw` runs) samples those
 units in full; the labels are the verifier's own where its partition derives the units (`Registered.derived`, which
 `Registered.check` requires). -/
 def RowsDrawn : Prop :=

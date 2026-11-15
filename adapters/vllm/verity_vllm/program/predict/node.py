@@ -209,6 +209,8 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     phis, nets, params, theta = P.phis, P.nets, P.params, P.theta
     world, kind = len(phis), (phi.sampling or {}).get("kind", "greedy")
     prompt_rows, decode_steps = request_shape(wrapper, LP, T)
+    lp: Any = LP   # as given: the launch's readers take `int` themselves
+    t: Any = T
     n = M if wrapper == "step" else prompt_rows
     events = 1 if wrapper == "step" else decode_steps + 1
     inputs = [list(_arr_shape(t)) for _, t in params[:P.weights_at[0]]]
@@ -222,7 +224,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         s = phi.sampling
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
                              top_p_bits=f32_bits(s.get("top_p", 1.0)))
-    batch = launch_batch(phis[0], prompt_rows, decode_steps) if wrapper == "request" else None
+    batch = launch_batch(phis[0], lp, t) if wrapper == "request" else None
     lockstep = _Lockstep(B, world)
     peers = [_Joined(lockstep, r) for r in range(world)]
     models = []
@@ -230,7 +232,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         model = nets[r].model(B, W[r], peers[r])
         in_launch(model, batch, nets[r].model_class, note=f", {len(phi.requests)} requests")
         if wrapper == "request" and isinstance(model, _Model):
-            model.ctx = launch_rows(phis[r], prompt_rows, decode_steps)
+            model.ctx = launch_rows(phis[r], lp, t)
         models.append(model)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     toks: list[list[Coll] | None] = [None] * world

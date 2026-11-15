@@ -40,11 +40,11 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The compiled part's setup is the model's recursive setup
 
 Each part `j` of the compiled recursive component (`VStar.Recursive.partVerdict`) sets its session up as
-`flock-verify verify --zk` does with that part's recursive flags: Flock's session (`OneStageZk.buildSessionOf`) and the
+`verity-verify-proof verify --zk` does with that part's recursive flags: Flock's session (`OneStageZk.buildSessionOf`) and the
 verifier's own checks on it (`BaseSetup`), then V\*'s checks block (after `RecSetup.checkInner` and
 `RecLinkPart.checkShape` at no link table), `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`, `RecCoins.check`,
 `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`, `RecLinkPart.check`
-at no link table, `RecVStar.checkLabels` and the sample's law. The model's recursive setup (`RecDeploy.RecIns.setup`,
+at no link table, `RecVStar.checkLabels` and the sample's sampling design. The model's recursive setup (`RecDeploy.RecIns.setup`,
 which `setupO` runs on a V\* statement) makes the same calls in the same order. This module matches them.
 
 * `recIns_setup_of_compiled`: where the staged statement's inputs `i` are the compiled part's (`SetupMatch`, `PartStatement`),
@@ -105,7 +105,7 @@ structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tag
 /-- **The compiled part's checks block** after Flock's session and the checks `BaseSetup` matches, each as the compiled
 part `j`'s check calls it on the session's tables `sts`: the inner checks, the inner shape at no link table, the
 registration's and V\*'s list's caps, V\*'s checks, one full table, the table's cap, `Zk.shapeOk`, check 5, the public
-rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the sample's law
+rows, the link rounds, the top rows, the link, the link table's part checks at no table, the labels, and the sample's sampling design
 where there is a sample. -/
 structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags) (circuitB : ByteArray)
     (partition : Lean.Json) (program : ByteArray) (registered : Option (Array Registered.Port))

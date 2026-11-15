@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Finish
+public import Flock.ZkServer.Finish
 public import Proofs.Flock.Claims.Complete.ZkTables.Round0
 public import Proofs.Flock.Claims.ZK.FinishCommit
 import Mathlib.Algebra.Order.Floor.Extended
@@ -40,7 +40,7 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
 # Level 0 as the session loop keeps it is `commit0`'s
 
 The finish on the session loop's frames port reads table `i`'s level-0 commitment off the loop's `Level0`
-(`Finish.commitOf`) instead of committing it again (`Finish.commit0`, `flock-firewall finish`'s `table` path). Here the
+(`Finish.commitOf`) instead of committing it again (`Finish.commit0`, `flock-zk-server finish`'s `table` path). Here the
 two are one, wherever the loop drew that `Level0` (`Level0.ofDraws`):
 
 * `commitRowsP_tree`: through `Hashes` whose node and leaf are functions, `FlockComplete.commitRowsP` returns, its
@@ -54,7 +54,9 @@ two are one, wherever the loop drew that `Level0` (`Level0.ofDraws`):
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
+
+variable {wideLeaf : Bool}
 
 
 /-- **A level's tree from its leaves**: through `Hashes` whose node is `nd` and whose leaf is `lf`, `commitRowsP`
@@ -114,7 +116,7 @@ theorem commitRows_tree (lv : Level) (rows : Array (Array F128)) (salt : ℕ →
 /-- **The session loop's level 0 is `commit0`'s**: where `ofDraws` returns `l`, the commitment read off it
 (`commitOf`) is `commit0`'s at its level, `t_pad` and table, so the loop's finish proves at the commitment the `table`
 path commits. -/
-theorem commitOf_eq {m : ℕ} {g : Array F128} {d : ByteArray} {l : Level0.Level0} (h : Level0.ofDraws m g d = .ok l) :
+theorem commitOf_eq {m : ℕ} {g : Array F128} {d : ByteArray} {l : Level0.Level0} (h : Level0.ofDraws wideLeaf m g d = .ok l) :
     commitOf l = commit0 l.lv l.tPad l.toIn := by
   obtain ⟨-, -, -, hrows, hlayers, -⟩ := Level0.ofDraws_ok h
   obtain ⟨hly, hcp⟩ := commitRows_tree l.lv (Link.rows l.lv l.tPad l.toIn.g l.toIn.extra l.toIn.lanePad) l.toIn.salt
@@ -132,4 +134,4 @@ theorem commitOf_eq {m : ℕ} {g : Array F128} {d : ByteArray} {l : Level0.Level
   rw [hlayers, Array.range_succ (n := l.lv.d - l.lv.cap), Array.append_singleton, Array.map_push, Array.back?_push, Option.getD_some, hrows]
   rfl
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

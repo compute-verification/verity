@@ -55,7 +55,7 @@ open scoped ENNReal
 
 open Classical in
 /-- **Flock's one-stage audit, end to end, with the rows link, at the sampled proof blocks.** `EndToEndRegisteredDrawn`'s
-setting, for `flock-verify verify --zk --registered F --session-tables J` over hidden outputs and any public file the
+setting, for `verity-verify-proof verify --zk --registered F --session-tables J` over hidden outputs and any public file the
 verifier loads (`pub`, whatever its header carries, a salt among it), in this order:
 1. **the operands' roots are registered**: `own` holds F's registered roots, and `rd`
    (`Registered.ReadsX`) is a registrant's opening of them: at each registered read `p`, the row `rd.wv p` and salt
@@ -69,7 +69,7 @@ verifier loads (`pub`, whatever its header carries, a salt among it), in this or
    `I` is fixed, and the verifier samples the units it audits.
 
 Then for every live prover `τ`,
-$$\Pr[\text{flock-verify accepts} \wedge \text{some sampled proof block is wrong or its rows are off}] \le
+$$\Pr[\text{verity-verify-proof accepts} \wedge \text{some sampled proof block is wrong or its rows are off}] \le
   \varepsilon_{ks} + \delta_{link} + \delta_{rows} + \delta_{reg},$$
 a sampled proof block `u` wrong as in `EndToEndRegisteredDrawn` (`wrongRegZ`), and its rows off unless, at the committed
 transcript fixed at registration (`XplurZC`, the plurality of the rows extraction finds), on each of `u`'s committed
@@ -94,7 +94,7 @@ Its named assumptions, each a hypothesis, are `EndToEndRegisteredDrawn`'s and tw
 registered reads' finder, which plays the audit once and outputs the session's opening at an off read and `rd`'s
 (`Registered.ReadsX.pick`). The rest are `EndToEndRegisteredDrawn`'s: the verify command's tags under hidden outputs
 (`TagsOkZHJ`), an untyped statement, the bound's numeric conditions, and `EndToEndHidden`'s reference setup `y₀`, which
-every sample flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). -/
+every sample verity-verify-proof accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). -/
 def EndToEndRegisteredRows : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- F's registered roots: registered before the statement and its coin

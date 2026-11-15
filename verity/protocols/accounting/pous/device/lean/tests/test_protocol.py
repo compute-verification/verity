@@ -9,11 +9,11 @@ import dataclasses
 import json
 import shutil
 
+import mc_cases as M
 import pytest
+import verity_difftest as D
 from hypothesis import strategies as st
 
-import mc_cases as M
-import verity_difftest as D
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

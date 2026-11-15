@@ -36,7 +36,7 @@ ROUTE = ("route the code through verity_vllm's interface (PUBLIC in tests/test_v
 #: interface and delete its line.  It only shrinks.
 ALLOWED = {
     # stock engines a benchmark builds and drives beside the integration's
-    "benchmarks/harness/verity_bench/vllm/runner.py": "benchmarks: verity-bench's vLLM arms, each a stock engine's requests",
+    "benchmarks/harness/verity_bench/vllm/engine.py": "benchmarks: verity-bench's vLLM arms, each a stock engine's requests",
     "benchmarks/served_commit/tp_decode.py": "circuits: a stock vllm.LLM at TP8 against a Commit arm in the same engine",
     **dict.fromkeys(("benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/profile_decode.py",
                      "benchmarks/pouw/pearl_c_vllm/served_passes.py"),
@@ -48,11 +48,11 @@ ALLOWED = {
                     "memory-accounting: an in-process LLMEngine under the remote bandwidth audit's binder"),
     "benchmarks/network_traces/record.py": "network-accounting: per-token timing of served requests (SamplingParams)",
     # the stock kernels a benchmark times or gates against
-    **dict.fromkeys(("benchmarks/hash/exactlin/kbench.py", "benchmarks/hash/exactlin/kgate.py",
-                     "benchmarks/hash/exactlin/ksweep.py"),
+    **dict.fromkeys(("benchmarks/kernels/exactlin/kbench.py", "benchmarks/kernels/exactlin/kgate.py",
+                     "benchmarks/kernels/exactlin/ksweep.py"),
                     "kernels: vLLM's int8 GEMMs (_custom_ops.cutlass_scaled_mm, triton_scaled_mm) as the exact linear's "
                     "kernel-level baseline and gate"),
-    **dict.fromkeys(("benchmarks/torch_gpu/s8_linear/bench.py", "benchmarks/torch_gpu/s8_linear/run.py"),
+    **dict.fromkeys(("benchmarks/kernels/s8_linear/bench.py", "benchmarks/kernels/s8_linear/run.py"),
                     "kernels: vLLM's int8 cutlass_scaled_mm as the plain GEMM the exact W8A8 linear is timed against"),
     **dict.fromkeys(("benchmarks/pouw/harness/torch_baselines.py", "benchmarks/pouw/pearl_c_sm90/glm53_timing.py",
                      "benchmarks/pouw/pearl_c_sm90/grouped_check.py"),
@@ -61,11 +61,11 @@ ALLOWED = {
     # served arms that replace a layer's kernels inside a stock engine
     **dict.fromkeys(("benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
                      "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/dither_so.py",
-                     "benchmarks/hash/dither/native.py", "benchmarks/hash/dither/sbench.py"),
+                     "benchmarks/hash/dither/sbench.py"),
                     "kernels: Dither's served arms, a stock vllm.LLM per arm with its int8 linears swapped in process"),
-    **dict.fromkeys(("benchmarks/hash/exactlin/percall.py", "benchmarks/hash/exactlin/share.py"),
+    **dict.fromkeys(("benchmarks/kernels/exactlin/percall.py", "benchmarks/kernels/exactlin/share.py"),
                     "kernels: sbench's served arms over stock vLLM int8 (TritonInt8ScaledMMLinearKernel)"),
-    **dict.fromkeys(("benchmarks/moe_align/served.py", "benchmarks/moe_align/stress.py"),
+    **dict.fromkeys(("benchmarks/kernels/moe_align/served.py", "benchmarks/kernels/moe_align/stress.py"),
                     "kernels: verity_vllm.engine.moe_align's canonical moe_align_block_size held to vLLM's op and to its "
                     "Marlin MoE path, served at TP8"),
     **dict.fromkeys(("benchmarks/vllm_encoded/kernels.py",

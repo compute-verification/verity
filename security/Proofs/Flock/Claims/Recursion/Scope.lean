@@ -39,7 +39,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # `Claims.Recursion.ScopeMatches` at the compiled verifier's parser and scope check
 
-The compiled verifier (`flock-verify verify --rec-inner`) reads, of a recursion statement, the inner statement's bytes,
+The compiled verifier (`verity-verify-proof verify --rec-inner`) reads, of a recursion statement, the inner statement's bytes,
 the inner statement's files where it holds them (`RecCoins.Source`), its own inner shape (`RecVStar.Inner`,
 `--rec-inner`) and each V* session's record (`Read`). Its setup refuses an inner shape whose V* list
 `RecVStar.statements` refuses, at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`
@@ -94,7 +94,7 @@ def rangeOk (sp : RecSparse.Shape) (st : Stmt) : Bool :=
       (Array.replicate (st.c.kLog - 6) (0 : F128)) rng).isOk
   | .error _ => false
 
-/-- A sample, readable: its `subset` law's `k`, population, units and closure. -/
+/-- A sample, readable: its `subset` sampling design's `k`, population, units and closure. -/
 def drawOf (D : Draw.UnitDraw) : Claims.Recursion.DrawRecord where
   subset := match D.law with
     | .subset k => some k

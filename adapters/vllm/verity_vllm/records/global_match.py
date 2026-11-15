@@ -7,15 +7,13 @@ Its writer is `check.match.global_match` (`check`, and its CLI's `impl`; the per
 A check's evidence and a request's entry are each check's own (`check.match.match_run.NamedCheck.info`): each is kept as written
 (`entry`, which `dump` writes back), with the fields a reader reads typed from it.
 
-    gm = GlobalMatch.load(row_dir / "global_match.json")       # MissingField / UnknownField name the file and the field
+    gm = GlobalMatch.of(json.loads(text), "global_match.json")  # MissingField / UnknownField name the file and the field
     gm.check("G6").lengths_by_request
 """
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.records.fields import RecordError, objects, only, optional, required
@@ -117,11 +115,6 @@ class GlobalMatch:
                                   _strs(required(doc, "failed_checks", where, (list, tuple)), where, "failed_checks")),
                    lag=optional(doc, "lag", where, Mapping),
                    info={k: doc[k] for k in INFO if k in doc})
-
-    @classmethod
-    def load(cls, path: str | Path) -> GlobalMatch:
-        with open(path) as f:
-            return cls.of(json.load(f), str(path))
 
     def dump(self) -> dict[str, Any]:
         """The JSON its writer writes: every field it holds, an absent optional one left out."""

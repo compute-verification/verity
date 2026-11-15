@@ -20,15 +20,15 @@ import Proofs.Flock.Soundness.Discharge.Tables.Headline
 # The soundness half of one plain sampled session of `J` tables
 
 `plain_session_soundJ`: for any live prover `τ` of a public-output plain session of `J ≥ 1` tables
-(`flock-verify verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
-`Pr[flock-verify accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
+(`verity-verify-proof verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
+`Pr[verity-verify-proof accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
 partition, each read at its site in the table it is sampled into (`sitesPJ`, `tabPJ`) and bound to the rows it commits
 (`rsPJ`), at the simulated prover `simAuditJ … τ` in the batched session of the `J` tables `planPJ`.
 
 It is `Integrate.flock_headline_exec` with the session's tables in place of its one, and two changes the tables force,
 as `Composed.zk_session_soundJ` makes them under `--zk`:
 
-* the sampling design is the live subset sample `Law.execOS src (.subset kd) n` (`--plain-tables` refuses every other law,
+* the sampling design is the live subset sample `Law.execOS src (.subset kd) n` (`--plain-tables` refuses every other sampling design,
   `ProvedScope.lawWhy` at `plainTables`), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` at `K ≤ n`
   (`Law.subset_miss`), under A3 at its one byte source;
 * the tags, the record and the samples are `TagsOkZJ` (public outputs, retained rounds, `hm96-sha512/v1` leaves),

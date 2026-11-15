@@ -1,6 +1,6 @@
 # Llama-3.1-8B decode in vLLM with its linear weights stored only as word-codec words. Not a package: `ve.cu`, `kernels.py`
 # and `serve.py` run on a GPU node; the torch layouts (`layout.py`) are tested here against the word codec's
-# byte-exact reference (`uv run tools/verity/check/suites.py benchmarks/vllm_encoded`).
+# byte-exact reference (`uv run tools/check/suites.py benchmarks/vllm_encoded`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -14,5 +14,5 @@ inputs = ["benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "be
           "verity/protocols/accounting/poub/verifier/__init__.py", "verity/protocols/accounting/poub/verifier/codec.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py",
-          "verity/hardware/__init__.py", "hardware/cards", "verity/hardware/cards.py",
+          "verity/hardware/__init__.py", "hardware/cards", "verity/device.py", "verity/channel.py",
           "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py"]  # kv_bench.py reads the RTX PRO 6000's card
