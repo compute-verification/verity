@@ -68,7 +68,7 @@ open Flock.Program (Prog Scope Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
 open Flock.Sigma (bits)
 open Spot.Bits (bitsOf)
-open InferenceOnlyCheck.RecordText (Tmpl tmplOf templatesOf outerOf)
+open Spot.RecordText (Tmpl tmplOf templatesOf outerOf)
 open InferenceOnlyCheck.Record.SecurityProofs (bitsOf_eq tmplOf_spec tmplOf_names piece_templates eq_of_nodup_map read_front
   finish_text front_text finish_wiring)
 open InferenceOnlyCheck.Record.SecurityProofs.Json (bind_ok mapM_ok)

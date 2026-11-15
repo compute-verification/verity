@@ -79,7 +79,7 @@ theorem wiring_wires {j : Json} {W : Wiring} (h : Wiring.ofJson j = .ok W) :
   exact ⟨x, hx⟩
 
 /-- **Every wire of the text's wiring has a step for each digit, and no digit of radix zero.** -/
-theorem text_digits {doc : Json} {text : Wiring} (h : InferenceOnlyCheck.RecordText.wiring doc = .ok text) :
+theorem text_digits {doc : Json} {text : Wiring} (h : Spot.RecordText.wiring doc = .ok text) :
     ∀ w ∈ text.wires, w.step.length = w.radix.length ∧ ∀ r ∈ w.radix, 1 ≤ r := by
   intro w hw
   obtain ⟨jw, hjw⟩ := wiring_wires h w hw
