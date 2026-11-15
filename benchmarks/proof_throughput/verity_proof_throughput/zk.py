@@ -30,18 +30,18 @@ FIELDS: tuple[tuple[str, str, str, str], ...] = (
      "the worker's inner proof is configuration 1's prover at best B; the unmasked outer arithmetic is not built, so this "
      "is an upper bound"),
     ("zk_server.cpu_s_per_session", "s", "stand-in",
-     "prover.cpu_s_per_session with FC_ZK_SERVER=1 less with FC_ZK_SERVER=0, both --zk on the host's witness at the same B: "
-     "the ZK server's send check"),
+     "prover.cpu_s_per_session with FC_FIREWALL=1 less with FC_FIREWALL=0, both --zk on the host's witness at the same B: "
+     "the firewall's send check"),
     ("zk_server.cpu_s_per_vu", "s", "stand-in", "zk_server.cpu_s_per_session / B"),
     ("net.bytes_worker_to_server", "B", "stand-in",
      "the --zk session's prover-to-verifier bytes (net.bytes_out): the outer messages the worker would hand the server"),
-    ("proof_bytes.released", "B", "stand-in", "the --zk session's proof, both reps, as the ZK server lets it out"),
+    ("proof_bytes.released", "B", "stand-in", "the --zk session's proof, both reps, as the firewall lets it out"),
     ("zk_server.cores_per_gpu", "ratio", "stand-in",
      "zk_server.cpu_s_per_session / the --zk session's t.total: cores that keep up with one GPU; servers = that / cores each"),
 )
 
-STANDIN = ("today's --zk path under the ZK server on the prover's node (FC_ZK_SERVER=1: flock-circuit's checks and the Lean "
-           "flock-zk-server processes it starts), not the worker/server split: the masks and salts are sampled on the prover's "
+STANDIN = ("today's --zk path under the ZK server on the prover's node (FC_FIREWALL=1: flock-circuit's checks and the Lean "
+           "flock-firewall processes it starts), not the worker/server split: the masks and salts are drawn on the prover's "
            "node, the witness is the host's (FC_HOST_WITNESS=1), the server checks the device's values on the same node")
 
 
@@ -68,12 +68,17 @@ def _jsonl(p: Path, prefix: str = "") -> list[dict[str, Any]]:
     return out
 
 
+#: the ZK server's times in a LIVE bucket: `t.firewall*` and `cpu.firewall*` in a session recorded before their rename
+TIMES = ("t.zk_server", "cpu.zk_server", "t.firewall", "cpu.firewall")
+
+
 def _zk_server(session: dict[str, Any]) -> dict[str, float]:
     """One session's ZK server times, summed over its reps' buckets."""
     got: dict[str, float] = {}
     for b in session.get("buckets") or []:
         for k, v in (b or {}).items():
-            if (k.startswith("t.zk_server") or k.startswith("cpu.zk_server")) and isinstance(v, (int, float)):
+            if k.startswith(TIMES) and isinstance(v, (int, float)):
+                k = k.replace("t.firewall", "t.zk_server").replace("cpu.firewall", "cpu.zk_server")
                 got[k] = got.get(k, 0.0) + float(v)
     return got
 
@@ -123,7 +128,7 @@ def point(d: Path, workload: Any, B: int, zk_server: bool, run_id: str | None) -
         "validation": {"status": "failed" if broke else "passed",
                        "checker": "flock-circuit serve --zk (live, loopback) on every session; the Lean verifier not run",
                        "detail": broke or f"{len(timed)} timed and the warm --zk sessions accepted live"
-                                           + (", under the ZK server's send check" if zk_server else ""),
+                                           + (", under the firewall's send check" if zk_server else ""),
                        "evidence": [p for p in ("out/results.jsonl", "out/prove.out", "out/prove.err") if (d / Path(p).name).exists()]},
         "measurements": ms,
         "measurement_files": [p for p in ("out/results.jsonl", "out/prove.out", "out/prove.err") if (d / Path(p).name).exists()],

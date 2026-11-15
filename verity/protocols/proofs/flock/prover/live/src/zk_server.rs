@@ -16,13 +16,18 @@ pub fn refused(what: impl std::fmt::Display) -> String {
     format!("ZK-SERVER-REFUSED: {what}")
 }
 
-/// The refusal of an environment that sets a ZK server control under its old name, `FC_FIREWALL<rest>`, and not under
-/// `FC_ZK_SERVER<rest>`: nothing reads the old name, so a job written for it would run as if the control were unset.
+/// The old and new prefixes of the ZK server's environment names.
+pub const RETIRED_ENV: [(&str, &str); 2] = [("FC_FIREWALL", "FC_ZK_SERVER"), ("FC_CORE_FIREWALL", "FC_CORE_ZK_SERVER")];
+
+/// The refusal of an environment that sets a ZK server control under its old name (`FC_FIREWALL<rest>`,
+/// `FC_CORE_FIREWALL<rest>`) and not under its new one: nothing reads the old name, so a job written for it would run as if
+/// the control were unset.
 pub fn retired_env<'a>(names: impl IntoIterator<Item = &'a str> + Clone) -> Option<String> {
-    let mut old: Vec<&str> = names.clone().into_iter().filter(|k| k.starts_with("FC_FIREWALL")).collect();
+    let mut old: Vec<(&str, String)> = names.clone().into_iter()
+        .filter_map(|k| RETIRED_ENV.iter().find_map(|(o, n)| k.strip_prefix(o).map(|rest| (k, format!("{n}{rest}")))))
+        .collect();
     old.sort_unstable();
-    old.into_iter().find_map(|k| {
-        let new = format!("FC_ZK_SERVER{}", &k["FC_FIREWALL".len()..]);
+    old.into_iter().find_map(|(k, new)| {
         (!names.clone().into_iter().any(|n| n == new))
             .then(|| format!("{k} is set and {new} is not: the ZK server's controls are read under {new}; set {new} instead"))
     })
@@ -997,6 +1002,8 @@ mod tests {
         assert!(why.starts_with("FC_FIREWALL is set and FC_ZK_SERVER is not") && why.ends_with("set FC_ZK_SERVER instead"), "{why}");
         assert_eq!(retired_env(["FC_FIREWALL", "FC_ZK_SERVER", "FC_ZK_SERVER_TAMPER"]), None);
         assert_eq!(retired_env(["FC_ZK_SERVER", "FC_HOST_WITNESS"]), None);
+        let why = retired_env(["FC_CORE_FIREWALL"]).expect("refused");
+        assert!(why.starts_with("FC_CORE_FIREWALL is set and FC_CORE_ZK_SERVER is not"), "{why}");
     }
 
     fn framed(f: impl FnOnce(&mut Framer<'_>)) -> Vec<(Vec<u8>, usize)> {

@@ -1028,7 +1028,7 @@ def main(argv=None) -> int:
             print(json.dumps(e, sort_keys=True))
         return 0
     relay(fw, a.session, a.part, a.listen, a.to, a.sessions, ready=lambda addr: print(f"SERVING {addr}", flush=True),
-          done=lambda res: print("ZK_SERVER\t" + json.dumps({"session": a.session, "part": a.part, **res}), flush=True),
+          done=lambda res: print("FIREWALL\t" + json.dumps({"session": a.session, "part": a.part, **res}), flush=True),
           proofs=a.proofs)
     return 0
 

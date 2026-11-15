@@ -112,6 +112,8 @@
 #              staged with a table of its own, the forgery's, its own)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+for o in LOOPBACK_DRAW:LOOPBACK_SAMPLE FC_FIREWALL:FC_ZK_SERVER; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
+  || { echo "rec-reprice: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
 [ -z "${GPU_LEASE_UUID:-}" ] || { echo "REFUSED: the job holds a GPU lease (launched with --gpus): launch it without, each prove leases its own"; exit 2; }
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-reprice-job}/out; mkdir -p $O
@@ -427,7 +429,7 @@ def live(d):
             "statement_digest": rows[0][1].get("statement_digest"), "prover_peak_gb": gb(d / "time-prove.txt"),
             "gpu_peak_mib": max(mib) if mib else None, "gpu_idle_mib": min(mib) if mib else None,
             "lease": [l for l in text(d / "prove.err").splitlines() if l.startswith("gpu-lease:")],
-            "buckets": [{k: x for k, x in b.items() if k.startswith(("t.", "cpu.", "zk_server_")) or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
+            "buckets": [{k: x for k, x in b.items() if k.startswith(("t.", "cpu.", "firewall_")) or k in ("device_witness", "native_sha")} for b in (timed[-1][1].get("buckets") or [])]
             if timed else None}
 
 def replay(p):
@@ -942,7 +944,7 @@ EOF
   # RELEASE=1: the recursive session the inner session opened (its ZK server.json), its parts as the inner step fixed them,
   # which must be V*'s statements here, and the staged statement of each part in their order (ORDER), every part one
   if [ $RELEASE = 1 ]; then
-    SID=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["session"])' $INNER/zk_server.json) \
+    SID=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["session"])' $INNER/firewall.json) \
       || { echo "RELEASE=1: $INNER opened no recursive session (no ZK server.json)"; exit 1; }
     mapfile -t PARTS < <(python3 -c 'import json, sys; print(*json.load(open(sys.argv[1]))["parts"], sep="\n")' $DD/release.json)
     mapfile -t ORDER < <(python3 - $VS $V $DD/release.json <<'EOF'
@@ -1063,7 +1065,7 @@ EOF
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
   (cd $V && sha512sum --quiet -c $O/oprove/statements.sha512) || { echo "a staged statement changed while sessions ran"; exit 1; }
   # RELEASE=1: the recursive session on the ZK server's record against its schedule, each part's release time beside when the
-  # Lean loop decided it (its ZK-SERVER-TIMES line in the part's prove.err); every part released, or the step fails
+  # Lean loop decided it (its FIREWALL-TIMES line in the part's prove.err); every part released, or the step fails
   if [ $RELEASE = 1 ]; then
     cp $FWS/record.jsonl $O/oprove/fw-record.jsonl
     python3 verity/protocols/proofs/flock/prover/pod/rec_inner.py release-report --state $FWS --session $SID \
