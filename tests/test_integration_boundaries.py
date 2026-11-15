@@ -118,7 +118,7 @@ def _modules(path: Path, text: str) -> set[str]:
 @functools.cache
 def _sites() -> frozenset[tuple[str, str]]:
     sites = set()
-    for path in sorted(SCANNED.rglob("*.py")):
+    for path in sorted([*SCANNED.rglob("*.py"), *(ROOT / "tests" / SCANNED.relative_to(ROOT)).rglob("*.py")]):
         rel = path.relative_to(ROOT)
         if any(part.startswith(".") or part in SKIP_DIRS for part in rel.parts):
             continue
