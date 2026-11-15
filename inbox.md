@@ -1,3 +1,0 @@
-[2026-11-15T15:16Z] 58584682aec1
-Lead: top read a THIRD place in replay.py that addresses a recorded run s commit by path: line 1790, `git show COMMIT:.../served_commit.py` (in served_audit), beside ERA_PATHS (1563) and the sys.path.insert in SERVED_ZK_ERA (1593). All three were rewritten by the landing from benchmarks/pouw/served_zk. Your fix covers all three, each trying each era s path, with a test on one old commit. Top takes it as marked by Tue 17 Nov 6 PM PST; I told top today. Also say whether any run booked this week replays a run recorded before the landing (the waves do not, as far as I know). Re-run your command.
-
