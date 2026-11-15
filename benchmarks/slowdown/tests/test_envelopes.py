@@ -123,7 +123,7 @@ def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
     server and the H200 give the same `x = 0.33`, and a slowdown of 3.04 (1.22 without reference efficiency), as
     `benchmarks/nci`'s slowdown reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
     has `x = 0.45`, which outruns that developer, so the slowdown is 1; the H200 (2.9%) has 1.12."""
-    lean_dir = ROOT / "security" / "Definitions" / "InferenceOnly"
+    lean_dir = ROOT / "security" / "Definitions" / "Slowdown"
     assert REMOTE_SLOWDOWN in (lean_dir / "Remote.lean").read_text()
     assert REMOTE_CONCLUSION in (lean_dir / "Guarantees" / "Remote.lean").read_text()
     for mfu, s, x in ((0.4, 0.001, 0.45), (1.0, 0.0, 0.2), (0.4, 0.0, 0.0), (0.5, 0.2, 0.01)):

@@ -196,13 +196,13 @@ def test_the_land_verdicts_gate_reads_lowrisk_excludes_and_adds_verdict_excludes
     for text in ('lowrisk_excludes = ["a/"]\n', 'verdict_excludes = ["a/"]\n', ""):
         assert DriveFlags.parse(text).plain_excludes == () and not lowrisk(["README.md"], DriveFlags.parse(text).plain_excludes)
     root = Path(__file__).resolve().parents[3]
-    flags = DriveFlags.parse((root / "tools/verity/check/drive.toml").read_text())
+    flags = DriveFlags.parse((root / "tools/check/drive.toml").read_text())
     for path in ("security/Proofs/Core/X.lean", "tools/pous_grader/lean-audit.json", "security/lakefile.toml",
                  "security/lean-toolchain", "security/lake-manifest.json", "x/TRUSTED.sha256", ".gitattributes",
-                 "tools/verity/check/check.py", "tools/verity/check/drive.toml", "tools/verity/check/policy.toml",
+                 "tools/check/check.py", "tools/check/drive.toml", "tools/check/policy.toml",
                  *(f"tools/research/src/research/{m}.py" for m in ("queue", "landing", "vqueue", "vqueue_loop", "vqueue_slim",
                                                                     "cli", "merge", "carry", "labelauth")),
-                 "tools/verity/lean/check.py", "verity/circuits/program.py", "verity/commitments/x.py", "verity/claims/x.py",
+                 "tools/verity/lean/check.py", "verity/circuits/program.py", "verity/commitments/x.py",
                  "tests/test_tree.py", "verity/protocols/accounting/pouw/verifier/audit.py",
                  "verity/protocols/compose/device/live_challenger/auditor.py", "infra/README.md", "tools/agent-guard/boot.sh"):
         assert not lowrisk([path, "README.md"], flags.plain_excludes), f"drive.toml's excludes let {path} land on a verdict"

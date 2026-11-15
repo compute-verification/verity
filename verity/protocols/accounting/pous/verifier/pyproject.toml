@@ -28,4 +28,15 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/accounting/pous/device/challenger_session.py",
           "verity/protocols/accounting/pous/device/continuous.py",
           "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py",
-          "verity/protocols/accounting/pous/__init__.py"]
+          "verity/protocols/accounting/pous/__init__.py",
+          # the memory challenger's key as a deployment starts it, and the wipe's native streamer, which the conftest
+          # and the wipe's store tests build and run
+          "verity/protocols/accounting/pous/device/onsite.py",
+          "verity/protocols/accounting/pous/device/wipe_stream.py",
+          "verity/protocols/accounting/pous/device/wipe_stream.c",
+          # SPOT's registered reads, which PoUS's served weights (`pous.prover.served_weights`) name
+          "verity/protocols/proofs/__init__.py", "verity/protocols/proofs/spot/__init__.py",
+          "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/registered.py"]

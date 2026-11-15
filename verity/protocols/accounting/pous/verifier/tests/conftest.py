@@ -39,6 +39,13 @@ def _no_default_clock(monkeypatch):
         monkeypatch.setattr(init, "__defaults__", tuple(defaults))
 
 
+@pytest.fixture(autouse=True)
+def _nothing_committed(monkeypatch):
+    """No configuration is committed unless a test hands in its own set (`memory_challenger.committed`): the committed
+    hashes are the `verity` command's file, which only the table's tests under `tools/verity/cli/tests/` read."""
+    monkeypatch.setattr(memory_challenger, "committed", lambda: frozenset())
+
+
 @pytest.fixture(scope="session")
 def wipe_streamer(tmp_path_factory) -> wipe_stream.Streamer:
     """`wipe_stream.c` built once for the suite, on two threads."""
