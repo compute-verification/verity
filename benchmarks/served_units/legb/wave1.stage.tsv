@@ -1,0 +1,8 @@
+unit	n_spec	n	dir	status	ands	k_log	unit_nnz	circuit_bytes	seconds	peak_gb
+census:SparseMlaSplit_v1{T=9,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1		census-sparsemlasplit-v1-t-9-ns-1-nh-8-dr-64-dv-512-bn-64-dot-fn-hopperbf16wgmma-27507ac7d951-n1	cut: time						
+census:AllReduceMnnvl_v1{WORLD=8,N=96,SHOT=1}	1	1	census-allreducemnnvl-v1-world-8-n-96-shot-1-n1-bb7eebd044482594	staged	678912	22	15851714	166993773	28	1.4
+census:Fp8GroupQuantUe8m0_v1{K=1536,G=128}	1	1	census-fp8groupquantue8m0-v1-k-1536-g-128-n1-bb7eebd044482594	staged	2863404	24	50989022	452841264	68	3.1
+census:SiluMul_v2{I=1536}	1	1	census-silumul-v2-i-1536-n1-bb7eebd044482594	staged	2174976	24	62992898	539253525	90	2.5
+census:DsaMqaLogits_v3{N=7,H=32,D=128}	1	1	census-dsamqalogits-v3-n-7-h-32-d-128-n1-bb7eebd044482594	staged	7616574	24	261610665	2115591353	183	9.6
+census:DsaMqaLogits_v3{N=60,H=32,D=128}	1	1	census-dsamqalogits-v3-n-60-h-32-d-128-n1-bb7eebd044482594	staged	65284920	27	2241865406	19699331908	1428	81.2
+census:SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	1	census-sparsemlaheadblock-v1-dr-64-dv-512-nvis-58-first-true-bn-64-dot-fn-hopper-cb1db85a8951-n1-bb7eebd044482594	staged	34336169	27	6831498378	61304941554	2476	66.3

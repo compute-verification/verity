@@ -1,0 +1,10 @@
+# leg B, wave 2 of 8: 9 types, about 540 GB of circuits, 5 predicted past the GPU prover's bound (the CPU prover's); largest first
+census:SparseMlaSplit_v1{T=9,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}@1	149	123	6675	116
+census:SparseMlaSplit_v1{T=8,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}@1	144	119	6431	112
+census:SparseMlaSplit_v1{T=7,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}@1	138	114	6186	108
+census:SparseMlaSplit_v1{T=6,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}@1	133	110	5943	104
+census:SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}@1	78	64	3471	60
+census:DsaMqaLogits_v3{N=59,H=32,D=128}@1	95	21	1952	19
+census:RMSNormCudaVector8_v1{N=6144,EPS={"f64":"0x1.4f8b588e368f1p-17"},BLOCK=256}@1	82	16	3050	14
+census:MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}@1	21	6	938	4
+census:DsaMqaLogits_v3{N=6,H=32,D=128}@1	11	3	278	4

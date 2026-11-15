@@ -1,0 +1,7 @@
+name	group	seconds	done	exit
+census-sparsemlaheadblock-v1-dr-64-dv-512-nvis-58-first-true-bn-64-dot-fn-hopper-cb1db85a8951-n1	gpu0	1171.8	0	2
+census-dsamqalogits-v3-n-60-h-32-d-128-n1	gpu1	453.4	1	0
+census-dsamqalogits-v3-n-7-h-32-d-128-n1	gpu2	56.8	1	0
+census-silumul-v2-i-1536-n1	gpu3	20.4	1	0
+census-allreducemnnvl-v1-world-8-n-96-shot-1-n1	gpu4	10.8	1	0
+census-fp8groupquantue8m0-v1-k-1536-g-128-n1	gpu4	18.3	1	0

@@ -1,0 +1,8 @@
+# leg B, wave 1 of 7: 7 types, about 200 GB of circuits; largest first
+census:SparseMlaSplit_v1{T=9,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}@1	149	123	6675	116
+census:SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}@1	78	64	3471	60
+census:DsaMqaLogits_v3{N=60,H=32,D=128}@1	96	21	1985	19
+census:DsaMqaLogits_v3{N=7,H=32,D=128}@1	13	3	324	4
+census:Fp8GroupQuantUe8m0_v1{K=1536,G=128}@1	10	2	194	4
+census:SiluMul_v2{I=1536}@1	5	2	115	4
+census:AllReduceMnnvl_v1{WORLD=8,N=96,SHOT=1}@1	4	1	39	4
