@@ -873,6 +873,13 @@ def test_a_research_run_under_the_repositorys_old_name_and_its_workload_are_kept
     assert p.argv == ["bash", "-lc", "a && b", "--", "--gpus", "1"] and p.opts == ["--on", "auto", "--gpus", "0"]
 
 
+def test_the_longest_timeout_is_the_custody_keys_default_life():
+    from research.store.credentials import parse_ttl
+    from research.store.custody import DEFAULT_TTL
+
+    assert D.RUN_TIMEOUT_MAX_S == parse_ttl(DEFAULT_TTL)
+
+
 def test_the_dispatcher_waits_out_the_runs_own_timeout_and_its_pools_wait():
     rest = POOL_WAIT_S + D.LAUNCH_TIMEOUT_S + D.RUN_MARGIN_S
     assert plan("--timeout 1h").limit_s == 3600 + rest

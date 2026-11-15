@@ -44,7 +44,7 @@ launched.  Launch logs are under `logs/`.
 
     payload     {repo, commit, command, lane}, nothing else: `command` is a `research run ... -- ARGV` line, `lane` the lane that
                 sent it.  A payload `run_plan` refuses completes `failed` with why, and nothing is launched.
-    allowlist   each option before `--` is one of RUN_ALLOWED, with a value of its form (`runline`), and anything else is refused:
+    allowlist   each option before `--` is one of `run_allowed`'s, with a value of its form (`runline`), and anything else is refused:
                 CPU machines only (`--on auto`, the default, or `--on vy-nebius-cpu-N`), and never a path or key of the pod
                 (`--send`, `--source`, `--env-host`, `--runs-dir`, `--store-read`), the run's machine-side settings (`--id`,
                 `--claimed`, custody) or an auditor device (`remote.restricted`).  `--gpus 0` is always added, so a kind the
@@ -75,8 +75,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..pods.lease import LEASE_FILE, RUN_MARGIN_S
-from ..store.credentials import parse_ttl
-from ..store.custody import DEFAULT_TTL
 from . import runline
 from .client import TOKEN_ENV, WORKER_TOKEN_ENV, Unreachable
 
@@ -112,9 +110,10 @@ COMMAND_MAX = 16384                         # characters of the line
 TAIL_BYTES = 6000                           # of stdout.log, in progress and the summary
 RESULT_BYTES = 2000                         # a result.json larger than this is named, not copied, in the summary
 SUMMARY_CHARS = 9000                        # the row, the tail and the result.json, under the site's 64 KiB body once escaped
-#: the longest --timeout: what the run's custody key lives without --custody-ttl, which the list doesn't hold, and so what
-#: `research run` allows; a run that gives none is stopped as though it gave this
-RUN_TIMEOUT_MAX_S = parse_ttl(DEFAULT_TTL)
+#: the longest --timeout: what the run's custody key lives without --custody-ttl (store.custody.DEFAULT_TTL; a test holds the
+#: two equal), which the list doesn't hold, and so what `research run` allows; a run that gives none is stopped as though it
+#: gave this
+RUN_TIMEOUT_MAX_S = 6 * 3600
 RUN_CPUS_MAX, RUN_MEM_GB_MAX = 64, 512
 CPU_MACHINE = re.compile(r"vy-nebius-cpu-[1-9][0-9]*")
 #: the queue's kinds whose shape takes no GPU (infra/cluster/kinds/)
@@ -159,7 +158,8 @@ def _on(restricted: Callable[[], set[str]]) -> Callable[[str], str | None]:
 
 
 def run_allowed(restricted: Callable[[], set[str]]) -> dict[str, runline.Form]:
-    """RUN_ALLOWED with `--on`'s check reading the auditor devices from ``restricted``."""
+    """Each option a research-run line may carry, and the form of its value; `--on`'s check reads the auditor devices from
+    ``restricted``."""
     from ..pods.nebius.slot_only import POOLS
 
     return {
@@ -180,7 +180,6 @@ def run_allowed(restricted: Callable[[], set[str]]) -> dict[str, runline.Form]:
     }
 
 
-RUN_ALLOWED = tuple(run_allowed(set))
 RUN_REPEATABLE = frozenset({"--expect", "--declared-output"})
 
 
