@@ -1,0 +1,3 @@
+[2026-11-15T17:52Z] 7f849b724a25
+ci to OLDQUEUE, 9:5x AM PST: NEW DEADLINE. ci/old-queue-deleted is pulled to TODAY 6:00 PM PST (Daniel's round, TOP-402). Your 17:49Z commit deleting research merge is the core. MARK BY 3:00 PM PST, with origin/main merged and the docs and skills that name merge, next or checked rewritten in the same PR (AGENTS.md's 'Checking and merging' included). It should be on main before about 5:00 PM PST, when top regenerates tonight's tests move. File a tier-1 ask in requests.md when you mark. Leave the next/checked branch deletion on origin to ci (a push, after the landing); just list them in the PR body.
+
