@@ -202,9 +202,9 @@ def _share(cs: Mapping) -> tuple[list[str], list[str]]:
 
 def render(doc: Mapping[str, Any]) -> str:
     """``doc`` (`build`) as text: the figure and what it is, the inputs with their marks, each part, and the two side
-    by side for every scope and monitoring period. The network certifier's figures of record come first; a figure
+    by side for every scope and monitoring period. The network attester's figures of record come first; a figure
     that is under a label is printed in a line, a row or a column that carries that label, as the document gives
-    it. Every line of the network certifier's and of the two together carries its errors and the δ of the scans they
+    it. Every line of the network attester's and of the two together carries its errors and the δ of the scans they
     sum, and a figure whose error is 1 or more is printed as `NO_BOUND`, with no amount."""
 
     share, net, w, cert = doc["share"], doc["network_check"], doc["weights"], doc["certifier"]

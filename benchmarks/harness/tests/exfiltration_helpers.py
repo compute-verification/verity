@@ -1,5 +1,5 @@
 """What the tests of `verity bench exfiltration` share: the fixture's runs (`fixtures/exfiltration/`) and the
-store that holds them, the network certifier's calculator, and a run whose stop verdicts are of record."""
+store that holds them, the network attester's calculator, and a run whose stop verdicts are of record."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def as_assumed(x: dict) -> dict:
 
 
 def term():
-    """The network certifier's calculator, as the command loads it."""
+    """The network attester's calculator, as the command loads it."""
 
     return E._load(REPO, "network_traces", "leak_bounds")
 
@@ -196,7 +196,7 @@ def held_phase(formats: Mapping[str, str]) -> dict[str, list[dict]]:
     that class and head, each accepted and complete, the stop record's and the response tie's at the registered
     rate; each verifier's negative control, refused for its word; and the serve's registration with those two
     verdicts' streams, each registering every block of 4. ``formats`` is each verdict's format (`listed`). The
-    reader holds no execution phase on them: it asks the network certifier's rule without a schedule, and the rule
+    reader holds no execution phase on them: it asks the network attester's rule without a schedule, and the rule
     charges no class below a schedule it was not handed. Nothing here is read by the command: the reader reads it
     and answers."""
 
