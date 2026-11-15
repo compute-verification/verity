@@ -44,6 +44,13 @@ def _vectors():
     return module
 
 
+def _script():
+    spec = importlib.util.spec_from_file_location("served_record_case", R.SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.fixture(scope="module")
 def case() -> dict:
     return {m["shape"]: m for m in _vectors().shaped()}["2x3 registered"]["case"]
@@ -66,21 +73,34 @@ def stand_in(tmp_path) -> Path:
 
 def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9, macs: int | None = None,
          tie: str | None = "same", n: int | None = None, kinds: bool = True, counts: int = 1,
-         limits: dict | None = None) -> list[str]:
+         limits: dict | None = None, registered: bool = False, unregister: bool = False) -> list[str]:
     """``case`` as a served run's files under ``where``, and the options that read them. Its rate rule's limits are the
     case's, or ``limits``; its policy is the case's count limits (``n`` in place of its n) on class `CLASS`, k by kind
     made of the linears' outputs and a scan state row of 16 bits (none where not ``kinds``). Its PoUW row is a development accept, or with ``accept`` Pearl+'s accept of record
     crediting ``credited`` of the ``macs`` it counts (default the class's linears), its window record the run's
-    registration's previous (``tie`` "same"), another, or none."""
+    registration's previous (``tie`` "same"), another, or none. With ``unregister`` its log's first record registers
+    no entry for the smallest parameter the record reads, as the case script's ``--unregister smallest`` makes it.
+    With ``registered`` the Program, the circuit record and the log are in its out/ (`record.REGISTERED`), and the
+    options are ``--served`` with the run's directory alone."""
     inst, tr = case["instance"], case["trusted"]
     run, out = where / "run", where / "out"
     (out / "record").mkdir(parents=True)
     run.mkdir()
+    log = tr["log"]
+    if unregister:
+        made_case, _ = _script().served_case(inst["program"], inst["record"], log,
+                                             {"alpha": inst["alpha"], "gamma": inst["gamma"]}, unregister="smallest")
+        log = made_case["trusted"]["log"]
     (run / "program.json").write_text(inst["program"])
     (run / "circuit.json").write_text(inst["record"])
-    logs = [run / f"log{k}.json" for k in range(len(tr["log"]))]
-    for path, rec in zip(logs, tr["log"]):
+    logs = [run / f"log{k}.json" for k in range(len(log))]
+    for path, rec in zip(logs, log):
         path.write_text(json.dumps(rec))
+    if registered:
+        (out / "registered").mkdir()
+        (out / R.REGISTERED["program"]).write_text(inst["program"])
+        (out / R.REGISTERED["circuit"]).write_text(inst["record"])
+        (out / R.REGISTERED["log"]).write_text("".join(json.dumps(rec) + "\n" for rec in log))
     count = {**case["count"], **({"n": n} if n else {})}
     for k in range(counts):
         (out / f"block-counts-{k}.json").write_text(json.dumps(count))
@@ -105,6 +125,8 @@ def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9
         row = {"verdict": "missing", "owner": "compute-accounting", "why": f"{SV.DEV_VERDICT}: not of record",
                "development": {"piece": "pearlplus", "verdict": "accept"}}
     (out / "record" / "verdicts.json").write_text(json.dumps({"run": RUN, "protocols": {"work": row}}))
+    if registered:
+        return ["--served", str(where)]
     return ["--served", str(out), "--program", str(run / "program.json"), "--circuit", str(run / "circuit.json"),
             "--log", *map(str, logs)]
 
@@ -234,8 +256,23 @@ def test_a_record_that_misstates_is_refused_before_the_check_runs(case, tmp_path
     assert e.value.code == 2 and "the record is refused" in err and why in err
 
 
+def test_a_record_with_no_program_is_one_and_says_the_check_did_not_run(case, tmp_path, capsys) -> None:
+    """A record that holds no Program (a serve under the Pearl+ tie writes none) can't be checked: the value is 1,
+    measured, its reading says why, and no check runs, whatever PoUW's accept credits."""
+    args = made(case, tmp_path, accept=True)
+    (tmp_path / "run" / "program.json").unlink()
+    rec = _main(args, tmp_path / "no-such-check")["record"]
+    lines = _record(capsys.readouterr().out.splitlines())
+    assert (rec["block"]["value"], rec["block"]["mark"]) == (1, "measured") and rec["cost"] is None
+    assert rec["block"]["reading"].startswith(R.NO_PROGRAM) and rec["pouw"]["verdict"] == "accept"
+    assert all("complies" not in v for v in rec["check"].values()) and rec["files"]["program_bytes"] is None
+    assert lines[0].startswith("FROM RUN made's RECORD: 1 (measured), the record holds no Program")
+    assert f"  check     {R.CHECK}: not run, {R.NO_PROGRAM}" in lines
+    assert {r["reading"] for r in rec["periods"]} == {"no Program, the check not run"}
+
+
 @pytest.mark.parametrize(("gone", "what"), [
-    ("run/program.json", "Program"), ("run/circuit.json", "circuit record"), ("run/log2.json", "record 2 of a registration log"),
+    ("run/circuit.json", "circuit record"), ("run/log2.json", "record 2 of a registration log"),
     ("out/record/verdicts.json", "compose verdicts"), ("out/inference-only-policy.json", "policy"),
     ("out/inference-only-limits.json", "rate rule's limits"), ("out/block-counts-0.json", "count's limits"),
 ])
@@ -248,12 +285,90 @@ def test_a_file_the_run_did_not_write_is_named(case, tmp_path, capsys, gone, wha
     assert f"the run wrote no {what} ({tmp_path / gone.replace('block-counts-0', 'block-counts-*')})" in capsys.readouterr().err
 
 
-def test_served_takes_the_files_it_names_and_they_take_it(case, stand_in, tmp_path, capsys) -> None:
+def test_the_files_named_apart_take_served_and_come_all_three_or_none(case, stand_in, tmp_path, capsys) -> None:
     args = made(case, tmp_path)
     for drop in (["--served", args[1]], args[2:4]):
         with pytest.raises(SystemExit):
             _main([x for x in args if x not in drop], stand_in)
-        assert "--served OUT takes --program, --circuit and --log" in capsys.readouterr().err
+        assert "--program, --circuit and --log take --served RUN, and come all three or none" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("accept", [False, True])
+def test_served_alone_reads_the_run_directorys_registered_files(case, stand_in, tmp_path, capsys, accept) -> None:
+    """``--served RUN`` alone, the run's directory or its out/, reads the files the run registered from out/'s
+    `REGISTERED`, its log one record a line, and gives what the same files named apart give; the first lines say the
+    number is a measurement and not an audit, and which record was read."""
+    named = _main(made(case, tmp_path / "a", accept=accept), stand_in)["record"]
+    made(case, tmp_path / "b", accept=accept, registered=True)
+    for served in (tmp_path / "b", tmp_path / "b" / "out"):
+        capsys.readouterr()
+        got = _main(["--served", str(served)], stand_in)["record"]
+        lines = capsys.readouterr().out.splitlines()
+        assert lines[1] == f"{report.MEASUREMENT} The served run's record read: {tmp_path / 'b' / 'out'}"
+        keys = ("run", "check", "pouw", "block", "files")
+        assert {x: got[x] for x in keys} == {x: named[x] for x in keys}
+        assert got["files"]["log_records"] == 3 and got["pouw"]["verdict"] == ("accept" if accept else "missing")
+
+
+def test_a_run_that_registered_no_files_where_served_reads_them_is_named(case, tmp_path, capsys) -> None:
+    made(case, tmp_path, registered=True)
+    (tmp_path / "out" / R.REGISTERED["log"]).unlink()
+    with pytest.raises(SystemExit):
+        _main(["--served", str(tmp_path)], tmp_path / "no-such-check")
+    assert f"the run wrote no registration log ({tmp_path / 'out' / R.REGISTERED['log']})" in capsys.readouterr().err
+
+
+def test_a_weight_left_unregistered_is_refused_by_the_count(case, stand_in, tmp_path, capsys) -> None:
+    """The log's first record without the smallest parameter the record reads: the count refuses the record, and so
+    does the rate rule, and the value is 1, measured, whatever PoUW's accept credits."""
+    rec = _main(made(case, tmp_path, accept=True, tie=None, unregister=True), stand_in)["record"]
+    assert {line: rec["check"][line]["complies"] for line in R.PUBLIC} == {"check": False, "count": False}
+    assert (rec["block"]["value"], rec["block"]["mark"]) == (1, "measured")
+    assert rec["block"]["reading"].startswith("the check refused the record (both rules)")
+
+
+def test_the_data_file_names_the_served_run_of_record_or_none(tmp_path) -> None:
+    """Absent, empty or with no `record`, the data file names no run; a path is the repository's root's or absolute;
+    any other key or a record that isn't a path is refused."""
+    f = tmp_path / "of_record.toml"
+    assert R.of_record(f) is None
+    for text, want in (("", None), ("# none\n", None), ('record = "runs/a"\n', P.ROOT / "runs/a"),
+                       (f'record = "{tmp_path}"\n', tmp_path)):
+        f.write_text(text)
+        assert R.of_record(f) == want
+    for text, why in (('record = 3\n', "a path, not 3"), ('record = ""\n', "a path"), ('run = "a"\n', "its one key"),
+                      ("record = [", "not TOML")):
+        f.write_text(text)
+        with pytest.raises(R.Refused, match=why):
+            R.of_record(f)
+
+
+def test_the_command_reads_the_run_the_data_file_names(case, stand_in, tmp_path, monkeypatch, capsys) -> None:
+    """With no --served, the record the data file names is read as --served would read it; --served names another."""
+    made(case, tmp_path / "of-record", registered=True)
+    f = tmp_path / "of_record.toml"
+    f.write_text(f'record = "{tmp_path / "of-record"}"\n')
+    monkeypatch.setattr(R, "OF_RECORD", f)
+    assert _main([], stand_in)["record"]["run"] == RUN
+    assert f"read: {tmp_path / 'of-record' / 'out'}" in capsys.readouterr().out
+    made(case, tmp_path / "other", registered=True)
+    _main(["--served", str(tmp_path / "other")], stand_in)
+    assert f"read: {tmp_path / 'other' / 'out'}" in capsys.readouterr().out
+    f.write_text("")
+    assert _main([], stand_in)["record"] is None
+
+
+def test_with_no_lake_the_command_says_in_one_line_what_it_needs(case, tmp_path, monkeypatch, capsys) -> None:
+    """Where the check would be built here and `lake` isn't on PATH, the command exits 1 before any work with one line
+    naming elan and the toolchain, for a served record and for the built class alike."""
+    monkeypatch.setattr(B.shutil, "which", lambda name: None)
+    toolchain = (B.PACKAGE / "lean-toolchain").read_text().strip()
+    for argv in (["--stated-only", *made(case, tmp_path)], []):
+        with pytest.raises(SystemExit) as e:
+            report.main(argv, commit=lambda: None)
+        out, err = capsys.readouterr()
+        assert e.value.code == 1 and out == ""
+        assert err.count("\n") == 1 and "`lake` isn't on PATH" in err and "elan" in err and toolchain in err
 
 
 def test_the_record_class_under_the_tie_is_its_own_kinds(tmp_path) -> None:

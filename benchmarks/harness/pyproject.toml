@@ -138,6 +138,19 @@ inputs = [
     # test checks against the interface's list of public modules
     "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e",
     "benchmarks/recursion_figures", "tests/test_vllm_public_api.py",
+    # `verity bench compute` and `verity bench memory` print and write through the kit's report, which a test holds
+    # each to on its own suite's fixtures and stand-in store, and they read what their own suites declare
+    "benchmarks/compute", "benchmarks/memory", "benchmarks/remote_session/summary.py", "verity/protocol.py",
+    "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/party.py", "verity/runtime/__init__.py",
+    "verity/runtime/handshake.py", "verity/runtime/framing.py", "tools/config/verity_config",
+    # and `verity bench inference_only --stated-only`, run as its own process, prices the stated policy with the
+    # slowdown calculator, which reads the census, the NCI catalog and each name's standing from the locks
+    "benchmarks/inference_only", "benchmarks/slowdown", "security/lean-audit.json", "security/Properties/lean-audit.json",
+    "benchmarks/nci/tiers.py", "benchmarks/nci/bracket.py", "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
+    "benchmarks/nci/calibrations.json",
+    # the core benchmarks' interface is benchmarks/README.md's section, whose table a test reads; a directory its table
+    # lists is read there too, so its row and its inputs here come in one change
+    "benchmarks/README.md",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
