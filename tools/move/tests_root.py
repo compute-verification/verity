@@ -108,6 +108,8 @@ KEEP_FILES = {
 }
 #: an import of a module by its bare name, as a kept module imports one beside it
 BARE_IMPORT = re.compile(r"^\s*(?:from\s+(\w+)\s+import|import\s+(\w+))", re.M)
+#: a Lean file's line naming the file that renders it, which a test compares its rendering to: the Lean is never rewritten
+GENERATED_BY = re.compile(r"[Gg]enerated by `([\w./-]+\.py)`")
 
 
 def git(*args: str, root: Path = ROOT) -> str:
@@ -445,10 +447,24 @@ def files_map(t: Tree) -> str:
            "exclude = " + _toml_list(EXCLUDE + _registered(t)) + "\n", "include = " + _toml_list(INCLUDE) + "\n",
            "# a test's relative paths name a toy's files; its anchors are `tests_root.py anchors`\n",
            "keep_relative = " + _toml_list([f"{d}/*.py" for d in dirs]) + "\n"]
+    if renders := _renders_lean(t, [*rows.items(), *((p, p) for p in kept)]):
+        out += ["# a moved file a Lean file names as what renders it keeps that name in its own text, as the Lean does\n",
+                "keep_in = { " + ", ".join(f"{json.dumps(n)} = {json.dumps(o)}" for n, o in renders.items()) + " }\n"]
     for d in dirs:
         if f"{d}/pyproject.toml" in t.tracked and _pythonpath(t, d):
             out.append(f"\n[pyproject.{json.dumps(t.destination(d) + 'pyproject.toml')}]\npythonpath_from = {json.dumps(d)}\n")
     return "".join(out)
+
+
+def _renders_lean(t: Tree, rows: list[tuple[str, str]]) -> dict[str, list[str]]:
+    """{new path: [old path]} for each file that moves and that a Lean file names as what generated it (`GENERATED_BY`)."""
+    out = {}
+    for f in t.files:
+        if f.endswith(".lean"):
+            for m in GENERATED_BY.finditer(t.read(f)):
+                if m.group(1) in t.tracked and (new := _mapped(m.group(1), rows)) != m.group(1):
+                    out[new] = [m.group(1)]
+    return dict(sorted(out.items()))
 
 
 def split_rows(path: str, root: Path = ROOT) -> str:
