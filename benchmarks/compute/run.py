@@ -73,8 +73,9 @@ read.
 
 `--per-call` also prints where the model's MACs the credit leaves out went (its give-up: the model's MACs less the
 credit), by cause and by matmul call, from the Pearl+ verifier's split of its accepted verdict's credit call by call
-(`out/pieces/pouw/verify.json`'s ``uncredited``, which Pearl+'s verifier writes once it is on main, or
-``--uncredited F``, such a split written beside the run's passes). Each call's real MACs are the MACs its credited cells
+(`out/pieces/pouw/verify.json`'s ``uncredited``, which Pearl+'s verifier has written since 13 Nov, or
+``--uncredited F``, such a split written beside the run's passes by `served_passes.py uncredited`, for a record from
+before). Each call's real MACs are the MACs its credited cells
 hold at |K| and the cells the band rule leaves out (excluded A rows, excluded B rows' column blocks, voluntary rows'
 bands and blocks, and the side channels' k − |K|); its credited cells' MACs are the deduction's terms (ε's, that of
 sampled tiles over the inert-work bound, and the inert-work share ι's) and its credit, as exact fractions. The causes
@@ -439,8 +440,9 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
     try:
         held = json.loads(given.read_text()) if given is not None else _held(tree, VERIFY)
         if held is None or (given is None and "uncredited" not in held):
-            raise Unreadable("the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
-                             "verifier side of the per-call give-up is on main")
+            raise Unreadable("the record holds no per-call give-up (`uncredited`): its verifier wrote none, as Pearl+'s "
+                             "verifier did before 13 Nov (#9477); `served_passes.py uncredited` computes one from the run's "
+                             "passes and verify.json, and --uncredited F reads it")
         answer = _held(tree, ANSWER)
         work, passes = answer["public"]["work"], answer["public"].get("passes")
         got, records = held["uncredited"], held.get("records")
@@ -703,8 +705,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     ap.add_argument("--per-call", action="store_true",
                     help="also print where the model's MACs the credit leaves out went, by cause and by matmul call")
     ap.add_argument("--uncredited", type=Path, metavar="F",
-                    help="with --per-call: a per-call give-up (`uncredited`) in a file of its own, for a record that holds "
-                         "none; the verifier writes it once Pearl+'s verifier side of the per-call give-up is on main")
+                    help="with --per-call: a per-call give-up (`uncredited`) in a file of its own, for a record whose "
+                         "verifier wrote none (before 13 Nov): `served_passes.py uncredited` computes one")
     ap.add_argument("--top", type=int, default=10, metavar="N", help="with --per-call: the calls printed (default 10)")
     a = ap.parse_args(argv)
     if (a.uncredited or a.top != 10) and not a.per_call:

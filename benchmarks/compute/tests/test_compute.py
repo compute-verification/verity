@@ -658,8 +658,9 @@ def test_the_uncredited_words_are_the_calls_own_sum_over_every_call(store, tmp_p
 
 
 @pytest.mark.parametrize("edits, why", [
-    ({"VERIFY": None}, ("the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
-                        "verifier side of the per-call give-up is on main")),
+    ({"VERIFY": None}, ("the record holds no per-call give-up (`uncredited`): its verifier wrote none, as Pearl+'s "
+                        "verifier did before 13 Nov (#9477); `served_passes.py uncredited` computes one from the run's "
+                        "passes and verify.json, and --uncredited F reads it")),
     ({"VERIFY": lambda d: d.pop("uncredited")}, "the record holds no per-call give-up (`uncredited`)"),
     ({"VERIFY": lambda d: d["uncredited"].pop("totals")}, "the per-call split doesn't read as one (KeyError: 'totals')"),
     ({"VERIFY": to("commitment", value="c1" * 64)}, "the per-call split is of another run commitment than the answer's"),
