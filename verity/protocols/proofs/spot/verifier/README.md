@@ -8,6 +8,11 @@ probability δ, at most so many proof blocks are incorrect, a proof block being 
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
+~~~sh
+uv run tools/check/suites.py verity/protocols/proofs/spot/verifier        # the Python and its checks
+uv run tools/check/suites.py verity/protocols/proofs/spot/verifier/lean   # the Lean verifier's difftests
+~~~
+
 SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v1`,
 `verity/protocols/compose/verifier/remote/`) composes it with Pearl+'s run (`verity/pouw/pearl-plus/v1`; H1's development executable
 `verity/remote/v0`, with PoUW's period `verity/pouw/period/v1`) and the inference-only policy, and onsite
@@ -134,17 +139,6 @@ A bound of S served bits charges a replay block at most F S, F the grain's fan-o
 Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
 unit on 16-bit words of its own) and a two-stage docket carries (`ExecutionPhaseCommitmentRecord.returned`);
 `plancheck.two` refuses a cap below them.
-Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
-step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
-refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
-block returns is read only at the boundary record's port for it: an interior docket that registers a value of
-that name is refused (`second-return`). It refuses an interior docket that registers a value the verifier
-doesn't hold, unless the value is the opened row of a read against a table round 1's record registers (its root and
-domain id those of one port of that record, its leaves the read's rows), at a key that is a port of that record or a
-value the verifier holds, its verdict held to 1 (`second-inputs`): any other is the prover's choice after the first
-stage's sample. A read is a template the auditor's params record as one (`"read": {"V", "H"}` beside its circuit
-file's SHA-512, `template_reads`): the record that `flock-read-tmpl check V H` accepted that file, made where the
-params are; round 2 runs no template check.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
@@ -158,6 +152,55 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 `served` once serving's record is frame-v3-sha512 / hm96-sha512 itself, or once the circuit opens the vllm-v1 SHA-256 leaves.
 
 ## Where things are
+
+| Part | Where |
+| --- | --- |
+| The guarantees' Lean | `security/Proofs/Flock/Soundness/Audit/`, whose `README.md` lists every theorem |
+| The executable sample | `verity/commitments/lean/Commitments/Draw.lean` (`verity-verify-proof draw`) |
+| The Lean verifier | `lean/` here (`spot-verifier`); its Python twin is `one_stage.verifier`, held to it by `lean/tests/test_difftest.py` |
+| The audit on the proofs | `lean/Spot/OneStageZk.lean` (`spot-one-stage-zk`); Python `one_stage.proofs` |
+| A monitoring period | `lean/Spot/MonitoringPeriod.lean`, `lean/Spot/MonitoringPeriodAudit.lean` (`spot-monitoring-period`) |
+| The challenger | `../device/challenger.py`, Lean of record `lean/Spot/Challenger.lean`; remote's coin path `security/Definitions/Core/Challenger.lean` |
+| The stream and the fleet | `service.py`, Lean `lean/Spot/Stream.lean` and `lean/Spot/Fleet.lean`, stated in `security/Properties/Spot/Halt.lean` |
+| The sampling planner | `../prover/` (`optimize`, `candidates`, `costfit`), used by `benchmarks/sampling_plan` |
+| The parties | `parties.py`, run by `verity.runtime.runner.run` |
+| The benchmark | `benchmarks/one_stage`, the one-stage audit end to end |
+
+Each part in full is under "The parts in detail", below.
+
+## Core API
+
+~~~python
+from verity.protocols.proofs.spot.verifier import service
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, docket as registration
+from verity.protocols.proofs.spot.device.coins import OwnRandomness, closure_of, draw_first
+from verity.protocols.proofs.spot.verifier.consumers import compute_bound, exfiltration_bound, infiltration_bound, location_bits
+from verity.protocols.proofs.spot.prover.optimize import Candidate, CostModel, Objective, frontier, for_budget
+from verity.protocols.proofs.spot.prover.candidates import Shape, cuts
+from verity.protocols.proofs.spot.prover.costfit import fit
+~~~
+
+Each module's docstring is its reference: `service` (the proof system: `Spec`, `Stream`, `Fleet`),
+`one_stage.docket` (the record and R1 to R8), `draw` (sampling designs), `partition`, `registered` (registered values),
+`served`, `audit` (the audit record and the profile), `verdict`, `hello`, `verifier` (each check by the Lean and the
+Python), `proofs` (Flock's Lean verifier on a statement's proof files), `parties`, `consumers`, `window_place`, `coins`
+(in `../device/`), and the untrusted planners `optimize`, `candidates` and `costfit` (in `../prover/`).
+
+## Round 2 of a two-stage run
+
+Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
+step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
+refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
+block returns is read only at the boundary record's port for it: an interior docket that registers a value of
+that name is refused (`second-return`). It refuses an interior docket that registers a value the verifier
+doesn't hold, unless the value is the opened row of a read against a table round 1's record registers (its root and
+domain id those of one port of that record, its leaves the read's rows), at a key that is a port of that record or a
+value the verifier holds, its verdict held to 1 (`second-inputs`): any other is the prover's choice after the first
+stage's sample. A read is a template the auditor's params record as one (`"read": {"V", "H"}` beside its circuit
+file's SHA-512, `template_reads`): the record that `flock-read-tmpl check V H` accepted that file, made where the
+params are; round 2 runs no template check.
+
+## The parts in detail
 
 - **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Flock/Soundness/Audit/`,
   whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
@@ -275,8 +318,6 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   Commit or from a deferred Commit's bundle by `verity_vllm.pipeline.deferred_rows`); its replay challenge is its own
   (`verity_vllm.commit.challenge`).
 
-Tests: `uv run tools/check/suites.py protocols/spot`.
-
 ### Verdicts of record
 
 No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
@@ -307,80 +348,6 @@ not give.
 | `one_stage.proofs.ks_form_why` | a reason or None for a circuit outside the form `verify --zk` covers (`Flock.KsScope.filesWhy`); a reason refuses a session, None leaves the binary's verdict |
 | `one_stage.proofs.template_why` | a reason or None for a circuit the template refuses, read only before `members.files_why`'s other refusals; None decides nothing |
 | `one_stage.proofs.population_why` | a reason or None for a public file whose units are not the docket's population in order (`Spot.FilePart.why`); None leaves `verify`'s verdict |
-
-## Core API
-
-~~~python
-from verity.protocols.proofs.spot.verifier import service
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, docket as registration
-from verity.protocols.proofs.spot.device.coins import OwnRandomness, closure_of, draw_first
-from verity.protocols.proofs.spot.verifier.consumers import compute_bound, exfiltration_bound, infiltration_bound, location_bits
-from verity.protocols.proofs.spot.prover.optimize import Candidate, CostModel, Objective, frontier, for_budget
-from verity.protocols.proofs.spot.prover.candidates import Shape, cuts
-from verity.protocols.proofs.spot.prover.costfit import fit
-~~~
-
-- `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law` and
-  `TwoStage`.
-  - `check_public` is the public-items rule on a docket, and `check_verdicts` what an outcome holds the verdicts
-    to before the audit record (the Python; a `Stream` runs each by the verifier, `verifier.check_public` and
-    `verifier.check_verdicts`).
-  - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (which refuses a
-    `closure=`), `session`, `deliver` and `outcome`, which
-    raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
-    is one subcircuit, or a window's several in order (a TP rank's served window): the check's `program` is then their
-    digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
-    and the window is sampled once, a stratum per subcircuit.
-  - `Fleet()` has `attach(stream, operator)`, before the stream's first docket; `halted` maps each halted
-    operator to its halt's cause.
-  - `selection_law` is the sampling design a rule names over N proof blocks, and `select_draw` the sample object from the
-    challenger's coins (or a sampler) under the expanded design, with a work sample's closure.
-- `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
-  the verifier's copies (R1 to R8), `matches_public` to its public file, `receipt` logs it, `digest` names it, and `window_domain` is a
-  registered root's commitment domain (`verity.commitments.window`'s, which an integration commits under).
-- `draw`: `parse_design` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
-  a work table), `check_draw` holds a sample to the docket and the verifier's sampling design, and `check_proved`
-  holds the proved proof blocks to the sample; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
-- `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
-  and the population programs `population_program` and `mixed_population_program` (`verity.circuits.population`'s,
-  which an integration builds its run's program with).
-- `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
-  `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
-  (the Lean verifier's `--registered`), `verify_read`.
-- `served`: `register_served`, how a served path registers its `ServedTree`s ("Served trees", below).
-- `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
-  sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
-- `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
-  (and `verifiers`: both verifiers' outcomes).
-- `hello`: `check_run`, the run's Hello and its one coin tree over `run_streams`.
-- `verifier`: each check by the Lean and the Python, as "The verifier" above lists them, and `hello`;
-  `check_verdicts` is given the service's Python verdict.
-- `proofs`: the proof system's own run of Flock's Lean verifier on a statement's proof files (`Proof`:
-  circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
-  `verity-verify-proof verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
-  returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
-  proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
-- `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
-  `spot_params_of`), in two stages with `TwoStageProofServer` and `TwoStageVerifier` (`SPOT_TWO_MANIFEST`,
-  `SPOT_TWO_PROTOCOL`), the core deployment's `ZkServer`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
-  the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
-- `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
-- `window_place`: `of`, `family` and `run`, the place a docket's window names in its window's session, the
-  family of challenges of that place and the root the session opens on; a stream holds a sample's challenger source
-  to that family.
-- `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's sample from it,
-  with `closure_of` for a work design's closure; `ChallengerCoins`, a sample's coins from one family of the auditor's
-  challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
-- `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per proof block, commitment, serve-time
-  `TensorCommit`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
-  cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
-  commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
-  and `work_law` registers it as `work:1`. Its two modes (`CostModel.commit_weight`, `PROVING_ONLY`) and its prices of
-  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the sampling designs
-  of the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
-- `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
-  in a public size class (`verity.circuits.partition_v2.size_class`); `pressure` gives the developer hints.
-- `costfit`: Flock's cost model fitted from measurements, as a cost-model/v1 record.
 
 ## The docket
 
@@ -575,66 +542,20 @@ Pinned by `tests/test_consumers.py` and the Lean-generated vectors, each regener
 
 ### The proof system
 
-`service.Stream` holds one protocol's dockets to its `Spec`, on the challenger's side:
-
-- **The public-items rule** (`check_public`): each observable item of a docket is the service's own, a
-  declared Value's one salted root, or an item the Spec declares in `public` with its kind and reason. It runs before
-  one-stage's R1 to R8.
-- **The sample.** `register` logs the record and its receipt, and `select` samples once from the challenger's coins as the
-  Lean verifier's `Flock.Draw.drawWith` does, with no derivation, held to `draw.check_draw`.
-- **Sessions over several rounds** (`Stream(rounds=R)`, `Stream.session`), which Flock's verifier refuses
-  (`Flock.ProvedScope`, `Draw.tablesWhy`).
-- **The salt and the docket deadline**: one salt an epoch, and a late docket ends the epoch. This is PoUW's
-  `Pouw.AcceptsBy` (`security/Definitions/Pouw/Game/Deadline.lean`).
-- **The stream's rules** (budget, open dockets, salt, deadlines, once-only steps), decided op by op by the verifier
-  (`verifier.stream`: `Spot/Stream.lean` beside `service._step`) on the counts and entries the op reads. A
-  disagreement stops the stream.
-- **The fleet's halt (R5-all)** (`service.Fleet`), decided by the verifier (`verifier.fleet`: `Spot/Fleet.lean` beside
-  `service._fleet_step`, and `Stream.lean`'s `halt`): `security/Properties/Spot/Halt.lean` states it.
-- **No retries**, **the failure budget**, **the log's history** (a check reads a few records, with the whole log's
-  verdict), **the records** (`verity/proof-service/stream/v0` and `outcome/v0`) and what a stream refuses until it is
-  built.
-
-Each rule, its formats and its refusal codes are in `service`'s module docstring. Pinned by `tests/test_service.py`,
-`tests/test_service_history.py`, `tests/test_service_sessions.py` and `tests/test_service_fleet.py`, and the stream's
-and the fleet's rules by the difftest's `stream` and `fleet` pieces.
+`service.Stream` holds one protocol's dockets to its `Spec`, on the challenger's side. Each rule (the public-items rule,
+the sample, sessions over several rounds, the salt and the docket deadline, the seed salt, the stream's rules, the
+fleet's halt, no retries, the failure budget, the log's history and the records), its formats and its refusal codes are
+in `service`'s module docstring. Pinned by `tests/test_service.py`, `tests/test_service_history.py`,
+`tests/test_service_sessions.py` and `tests/test_service_fleet.py`, and the stream's and the fleet's rules by the
+difftest's `stream` and `fleet` pieces.
 
 ### The sample's coins
 
-The verifier flips no coins of its own: a sample's coins are the auditor's challenger's, read from its log. A stream whose
-selection reads coins takes only a `coins.ChallengerCoins` (else `service.NO_OWN_COINS`; `All`, or a `sampler`'s stream,
-reads none), and `Run.run` refuses a sample that read coins without the challenger's evidence or under another
-`coin_source`. `coins.OwnRandomness` reads those bytes, after the docket, with `Flock.Draw`'s samplers and no hash,
-derivation or beacon; `draw_first` reads them as `Flock.Draw.drawWith` does, and `coins`' docstring has the byte layout.
-Nothing derives a sample but vLLM's legacy replay challenge, until its re-baseline. Pinned by `tests/test_coins.py`.
-`one_stage.verifier.coins` (`IO.getRandomBytes`) is only `challenger.LiveChallenger`'s entropy; tests sample from
-`tests/fake_challenger.py`.
-
-A stream's `coins.ChallengerCoins` come from `remote.RemoteChallenger` (`challenger.LiveChallenger` in process).
-`commit(after)` takes the prover's commitment (the docket's
-digest after its receipt, or the run's root) and fixes the family and its next index. Each read then opens
-ceil(missing / 64) more of the family's coins after it in one round trip, checks each against the challenger's
-commitment, and concatenates them, with no stretch. A rerun's extension opens only new indices, and a commitment is
-sampled once. The record is each `Segment` (family, first index, `after` and the openings). The verifier replays it with
-`read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the sample's coins
-are exactly those released after the commitment, every one read; the stream's digest says `"coins": "challenger"`.
-`Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{ledger, main, pins, segment, session}`, which is
-`draw_coins`'s: one object for the stream's check and a subprotocol's), and the run takes the commitment and the roots
-from the session the auditor's ledger opens for the docket's run (`register`'s `window_root`, never one the
-evidence names) under the challenger key the stream is made with (`Stream(key=)`, never one the evidence names: evidence
-that carries a key is refused), run from a commit the host's pins log records on the verifier's copy of main's
-first-parent line (`pinned_session`; `Stream(main=)`, which the copy the evidence carries must be), and refuses the select step (code `coins`) unless the
-session is a withheld one (`withheld_on`: the ledger's open says `withheld: true`, so its challenger released no root,
-salt or path before it closed) and the bytes the sample read are those coins, after the docket's digest. Missing evidence and a docket without its
-window root are refused the same way, a reject failing `run`; a sample that read no coins takes no evidence. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
-`challenger_draw_coins` and `run`.
-
-### The window's seed salt
-
-At the window's open, before it serves, the stream samples its seed salt (`Stream.seed_salt`): the first coin of the
-challenger's `seed-salt` family after the open root, which no sample reads. The record names it (`window.seed_salt`), a
-certified input its circuits read, public as coins. A verifier reads it from the challenger's log (`coins.seed_salt_of`,
-Lean `Challenger.seedSaltOf`), and R6 holds the window to it (`R6-seed-salt`, `tests/test_registered.py`).
+The verifier flips no coins of its own: a sample's coins are the auditor's challenger's, read from its log. The rules,
+the byte layout and the evidence are in `service`'s docstring (`Stream.outcome`) and `coins`'; `Run.run` refuses a
+sample that read coins without the challenger's evidence or under another `coin_source`. Pinned by
+`tests/test_coins.py`, `tests/test_challenger_coins.py` and the difftest's `challenger_read`, `challenger_draw_coins`
+and `run`.
 
 ### The registered compiler
 
