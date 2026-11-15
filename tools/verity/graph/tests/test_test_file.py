@@ -374,3 +374,38 @@ def test_it_fetches_the_registered_fixtures_git_does_not_hold(tmp_path, monkeypa
     task = {"vars": {"suite": "s"}, "inputs": [family.REGISTRY]}
     assert runner.fixtures(task, {"inputs": ["data"]}) == ["data/d.bin", "s/fx/a.bin"]
     assert runner.fixtures({**task, "inputs": []}, {}) == [], "a task that doesn't read the registry fetches nothing"
+
+
+#: a tree as the root's `tests/` mirroring it leaves it: each member's tests at `tests/<its directory>`, the repository's own
+#: suite beside them
+MIRRORED = {
+    "pyproject.toml": ('[project]\nname = "toy"\n\n[tool.uv.workspace]\nmembers = ["lib", "app", "tests/app"]\n\n'
+                       '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'),
+    "lib/pyproject.toml": '[project]\nname = "toy-lib"\n', "lib/toy_lib/__init__.py": "",
+    "app/pyproject.toml": '[project]\nname = "toy_app"\ndependencies = ["toy-lib"]\n', "app/toy_app/__init__.py": "",
+    "tests/app/pyproject.toml": ('[project]\nname = "toy-app-tests"\ndependencies = ["toy-app"]\n\n[tool.pytest.ini_options]\n'
+                                 'testpaths = ["."]\n\n[tool.verity.tests]\ninputs = ["cards"]\n'),
+    "tests/app/test_app.py": "", "tests/lib/test_lib.py": "", "cards/d.json": "{}\n", "tests/cards/test_d.py": "",
+    "tests/docs/pyproject.toml": '[tool.pytest.ini_options]\ntestpaths = ["."]\n', "tests/docs/test_docs.py": "",
+    "tests/test_root.py": "", "tests/lint/test_lint.py": "",
+}
+
+
+def test_suites_are_named_and_hold_their_tests_as_suites_py_says_where_the_tests_mirror_the_tree(tmp_path):
+    """A suite at `tests/X` is named as `X` names it (`suite_layout.suite_name`), the repository's suite collects none of the
+    suites under its test paths, and a path a suite reads holds its tests at `tests/X` too (`suite_layout.mirrors`)."""
+    for rel, text in MIRRORED.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text)
+    tree = family.Tree(tmp_path, sorted(MIRRORED))
+    found = family.discover(tree)
+    by = {s.path: s for s in found}
+    assert {s.path: s.name for s in found} == {".": "repository", "tests/app": "toy-app", "tests/docs": "docs"}
+    assert family.suite_tests(tree, by["."], found) == ["tests/cards/test_d.py", "tests/lib/test_lib.py", "tests/lint/test_lint.py",
+                                                        "tests/test_root.py"]
+    assert family.suite_tests(tree, by["tests/app"], found) == ["tests/app/test_app.py"]
+    whole = set(family.whole(tree, by["tests/app"], found))
+    assert {"app/toy_app/__init__.py", "lib/toy_lib/__init__.py", "tests/lib/test_lib.py", "cards/d.json", "tests/cards/test_d.py",
+            "tests/app/test_app.py"} <= whole
+    assert not {"tests/docs/test_docs.py", "tests/test_root.py"} & whole
+    assert {"cards/d.json", "tests/cards/test_d.py"} <= set(family.declared(tree, by["tests/app"], found, []))
