@@ -25,11 +25,9 @@ TREE = {
     "verity/__init__.py": "",
     "verity/a/__init__.py": "",
     "verity/a/mod.py": "X = 1\n",
-    "verity/a/settings.py": "REGISTRY = None\n",
     "verity/a/pyproject.toml": '[tool.pytest.ini_options]\ntestpaths = ["tests"]\npythonpath = ["."]\n\n[tool.verity.tests]\n'
                                'untraced = ["tests/test_a.py"]\n',
-    "verity/a/tests/test_a.py": "from pathlib import Path\n\nfrom verity.a import mod\n\nCODE = Path(__file__).parent / \"../..\" / \"a\" / \"mod.py\"\n"
-                                "SETTINGS = of(__file__)\n\n\n"
+    "verity/a/tests/test_a.py": "from pathlib import Path\n\nfrom verity.a import mod\n\nCODE = Path(__file__).parent / \"../..\" / \"a\" / \"mod.py\"\n\n\n"
                                 "def test_a():\n    assert mod.X and CODE.is_file()\n",
     "adapters/dist/pyproject.toml": '[project]\nname = "dist"\nversion = "0"\nrequires-python = ">=3.12"\n\n'
                                     '[project.optional-dependencies]\nx = ["plain"]\ny = ["requests"]\n\n[build-system]\nrequires = ["hatchling"]\n'
@@ -104,10 +102,10 @@ def test_split_moves_a_distributions_suite_to_a_virtual_member_in_its_tests_once
 
 
 def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproject_beside_them(tmp_path):
-    """After `split`, `maps`, its move, `suites-map`, its move, `anchors` and `registries`: every test is under `tests/`,
-    each suite's pyproject beside its tests collects them from its own directory and puts the same directories on its
-    path, a suite whose own directory held more than its tests reads it still, a test's relative reference to its code,
-    through `Path(__file__)` or a name bound to it, still reaches it, and its settings registry is still found."""
+    """After `split`, `maps`, its move, `suites-map`, its move and `anchors`: every test is under `tests/`, each suite's
+    pyproject beside its tests collects them from its own directory and puts the same directories on its path, a suite
+    whose own directory held more than its tests reads it still, and a test's relative reference to its code, through
+    `Path(__file__)` or a name bound to it, still reaches it."""
     r = repo(tmp_path)
     TR.run_split(TR.Tree(r), [])
     git(r, "commit", "-q", "-m", "split")
@@ -151,8 +149,3 @@ def test_the_maps_move_every_test_under_the_roots_tests_with_each_suites_pyproje
     assert 'CODE = HERE.parents[3] / "adapters" / "dist" / "dist" / "__init__.py"' in (
         r / "tests/adapters/dist/tests/test_d.py").read_text()
     assert TR.anchors(TR.Tree(r), base, write=False) == {}
-    TR.main(["registries", "--write"], root=r)
-    assert (r / "verity/a/pyproject.toml").read_text() == TR.STUB.format(suite="tests/verity/a/pyproject.toml")
-    assert 'SETTINGS = of(Path(__file__).resolve().parents[2] / "verity" / "a" / "settings.py")' in (
-        r / "tests/verity/a/test_a.py").read_text()
-    assert TR.registries(TR.Tree(r), write=False) == []

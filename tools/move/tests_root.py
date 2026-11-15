@@ -6,7 +6,6 @@
     python3 tools/move/tests_root.py maps               write `tests_root_map.toml`: every test under the root's tests/
     python3 tools/move/tests_root.py suites-map         after it moved them, `tests_root_suites_map.toml`: each suite's pyproject
     python3 tools/move/tests_root.py anchors BASE [--write]   each moved file's anchor that no longer names what it did at BASE
-    python3 tools/move/tests_root.py registries [--write]     a pyproject at each settings registry whose suite's pyproject moved
 
 The rule: a file at `X/tests/REST` goes to `tests/X/REST`, for each `X` under `AREAS`; the root suite's own files stay at the
 top of `tests/`. A suite's pyproject goes beside its tests (`tests/X/pyproject.toml`), so its directory is its tests' and
@@ -31,8 +30,7 @@ Where the rule can't hold as stated, the smallest change that keeps every suite 
 Each map is written from the tree as it is, so the sequence reruns on `main` after any later move: `split`, `maps`,
 `layout.py --map tests_root_map.toml`, `suites-map`, `layout.py --map tests_root_suites_map.toml`, `anchors BASE --write`
 (BASE the commit before the first move: `layout.py` recomputes a `Path(__file__)` anchor it reads as joins, but not one
-through a name bound to it, `HERE.parent`). Last, `registries --write`: a suite-only directory's `settings.py` is found beside its
-pyproject (`verity_config.settings.of`), so the pyproject's directory keeps one that says where its suite went. A map's `[modules]` is
+through a name bound to it, `HERE.parent`). A map's `[modules]` is
 what `layout.py --modules` derives, and its `[split]` rows are what its dry run finds: a reference to a directory whose
 tests or suite's pyproject alone move means what stays (a pythonpath entry, which `pythonpath_from` writes again, too)."""
 from __future__ import annotations
@@ -559,62 +557,6 @@ def anchors(t: Tree, base: str, write: bool) -> dict[str, list[str]]:
     return out
 
 
-REGISTRY = "settings.py"
-OF_FILE = re.compile(r"\bof\(__file__\)")
-STUB = ("# The settings registry's anchor: `verity_config.settings.of` reads the `settings.py` beside the nearest\n"
-        "# `pyproject.toml` above a file. This directory's suite is `{suite}`.\n")
-
-
-def registries(t: Tree, write: bool) -> list[str]:
-    """Each settings registry (`X/settings.py`) whose pyproject the suites map moved to `tests/X/`: a pyproject that says
-    so at `X`, so `settings.of` finds the registry from `X`'s files again, and each `of(__file__)` of a test now under
-    `tests/X/`, whose nearest pyproject is the suite's, reads it through a module of `X` it imports, else through a path to
-    `X/settings.py`. With `write`, done. [what changed]"""
-    out = []
-    for f in t.files:
-        x = posixpath.dirname(f)
-        if (posixpath.basename(f) != REGISTRY or not x or x.split("/")[0] not in AREAS or (t.root / x / "pyproject.toml").exists()
-                or not (t.root / MIRROR / x / "pyproject.toml").is_file()):
-            continue
-        suite = f"{MIRROR}/{x}/pyproject.toml"
-        out.append(f"{x}/pyproject.toml: the registry's anchor ({suite} holds the suite)")
-        if write:
-            (t.root / x / "pyproject.toml").write_text(STUB.format(suite=suite))
-        mine = f"{MIRROR}/{x}"
-        for g in t.files:
-            if not (g.endswith(".py") and under(g, mine)) or any(
-                    (t.root / d / "pyproject.toml").is_file() for d in _dirs_between(posixpath.dirname(g), mine)):
-                continue
-            text = t.read(g)
-            if not OF_FILE.search(text):
-                continue
-            levels = posixpath.dirname(g).count("/") + 1
-            mods = {posixpath.basename(h)[:-3] for h in t.files if under(h, x) and h.endswith(".py") and not any(
-                (t.root / d / "pyproject.toml").is_file() for d in _dirs_between(posixpath.dirname(h), x))}
-            own = [m.group(2) or m.group(1) for m in re.finditer(r"^import (\w+)(?: as (\w+))?$", text, re.M)
-                   if m.group(1) in mods]
-            if own:
-                expr = f"of({own[0]}.__file__)"
-            elif re.search(r"^from pathlib import (?:.*\b)?Path\b", text, re.M):
-                expr = f"of(Path(__file__).resolve().parents[{levels - 1}]" + "".join(f' / "{s}"' for s in [*x.split("/"), REGISTRY]) + ")"
-            else:
-                out.append(f"{g}: of(__file__) not rewritten: it imports neither a module of {x} nor `Path`")
-                continue
-            out.append(f"{g}: of(__file__) -> {expr}")
-            if write:
-                (t.root / g).write_text(OF_FILE.sub(lambda _: expr, text))
-    return out
-
-
-def _dirs_between(d: str, top: str) -> list[str]:
-    """The directories from `d` up to, not including, `top`."""
-    out = []
-    while d != top and under(d, top):
-        out.append(d)
-        d = posixpath.dirname(d)
-    return out
-
-
 def modules(path: str, root: Path = ROOT) -> str:
     """The `[modules]` table `layout.py --modules` derives for the map at `path`, as TOML."""
     r = subprocess.run([sys.executable, str(HERE / "layout.py"), "--root", str(root), "--map", path, "--modules"],
@@ -649,8 +591,6 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     an = sub.add_parser("anchors", help="each moved file's anchor that no longer names what it named at BASE")
     an.add_argument("base", help="the commit before the moves")
     an.add_argument("--write", action="store_true", help="rewrite each to name it again")
-    rg = sub.add_parser("registries", help="a pyproject at each settings registry whose suite's pyproject moved")
-    rg.add_argument("--write", action="store_true", help="write each, and point the suite's of(__file__) at it")
     a = ap.parse_args(argv)
     t = Tree(root)
     if a.cmd == "inventory":
@@ -674,11 +614,6 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
             print("\n".join(items))
         n = sum(" -> " in x for items in found.values() for x in items)
         print(f"tests_root: {n} anchor(s){' rewritten' if a.write else ''}, in {len(found)} file(s)")
-        return 0
-    if a.cmd == "registries":
-        found = registries(t, a.write)
-        print("\n".join(found))
-        print(f"tests_root: {len(found)} change(s){' made' if a.write else ''}")
         return 0
     if a.cmd == "maps":
         print(f"tests_root: wrote {write_map(t, FILES_MAP, files_map(t))}")
