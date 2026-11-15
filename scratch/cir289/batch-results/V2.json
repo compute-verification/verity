@@ -1,0 +1,3911 @@
+{
+ "batch": "V2",
+ "run": "r20261115-005126-fadc",
+ "kinds": 130,
+ "accepted": 130,
+ "stopped": [],
+ "hours": 4.75,
+ "peak_gb": 3.76,
+ "records": [
+  {
+   "tag": "v2-000",
+   "kind": "SparseMlaHeadValues_v1{NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 58304,
+   "k_log": 22,
+   "circuit_bytes": 62361410,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 0.85,
+    "serve": 0.57,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-001",
+   "kind": "SparseMlaHeadValues_v1{NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 58304,
+   "k_log": 22,
+   "circuit_bytes": 62361410,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.07,
+    "prove": 0.84,
+    "serve": 0.57,
+    "lean": 0.45
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-002",
+   "kind": "SparseMlaHeadValues_v1{NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 328000,
+   "k_log": 22,
+   "circuit_bytes": 115768276,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.18,
+    "prove": 0.92,
+    "serve": 0.65,
+    "lean": 0.68
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-003",
+   "kind": "SparseMlaHeadValues_v1{NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 328000,
+   "k_log": 22,
+   "circuit_bytes": 115768276,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.18,
+    "prove": 0.92,
+    "serve": 0.65,
+    "lean": 0.68
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-004",
+   "kind": "SparseMlaHeadValues_v1{NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 357824,
+   "k_log": 22,
+   "circuit_bytes": 118442947,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.19,
+    "prove": 0.93,
+    "serve": 0.66,
+    "lean": 0.69
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-005",
+   "kind": "SparseMlaHeadValues_v1{NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 357824,
+   "k_log": 22,
+   "circuit_bytes": 118442947,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.19,
+    "prove": 0.93,
+    "serve": 0.65,
+    "lean": 0.69
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-006",
+   "kind": "SparseMlaHeadValues_v1{NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 387712,
+   "k_log": 22,
+   "circuit_bytes": 124016615,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.21,
+    "prove": 0.94,
+    "serve": 0.66,
+    "lean": 0.63
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-007",
+   "kind": "SparseMlaHeadValues_v1{NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 387712,
+   "k_log": 22,
+   "circuit_bytes": 124016615,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.2,
+    "prove": 0.94,
+    "serve": 0.66,
+    "lean": 0.63
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-008",
+   "kind": "SparseMlaHeadValues_v1{NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 417600,
+   "k_log": 22,
+   "circuit_bytes": 134715153,
+   "seconds": 121,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.22,
+    "prove": 0.95,
+    "serve": 0.67,
+    "lean": 0.78
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-009",
+   "kind": "SparseMlaHeadValues_v1{NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 417600,
+   "k_log": 22,
+   "circuit_bytes": 134715153,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.22,
+    "prove": 0.95,
+    "serve": 0.67,
+    "lean": 0.78
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-010",
+   "kind": "SparseMlaHeadValues_v1{NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 447424,
+   "k_log": 22,
+   "circuit_bytes": 147699528,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.24,
+    "prove": 0.96,
+    "serve": 0.69,
+    "lean": 0.84
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-011",
+   "kind": "SparseMlaHeadValues_v1{NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 447424,
+   "k_log": 22,
+   "circuit_bytes": 147699528,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.26,
+    "prove": 0.96,
+    "serve": 0.69,
+    "lean": 0.84
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-012",
+   "kind": "SparseMlaHeadValues_v1{NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 477248,
+   "k_log": 22,
+   "circuit_bytes": 154193333,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.25,
+    "prove": 0.97,
+    "serve": 0.69,
+    "lean": 0.86
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-013",
+   "kind": "SparseMlaHeadValues_v1{NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 477248,
+   "k_log": 22,
+   "circuit_bytes": 154193333,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.25,
+    "prove": 0.97,
+    "serve": 0.69,
+    "lean": 0.86
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-014",
+   "kind": "SparseMlaHeadValues_v1{NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 507328,
+   "k_log": 22,
+   "circuit_bytes": 152111624,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.26,
+    "prove": 0.98,
+    "serve": 0.72,
+    "lean": 0.88
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-015",
+   "kind": "SparseMlaHeadValues_v1{NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 507328,
+   "k_log": 22,
+   "circuit_bytes": 152111624,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.26,
+    "prove": 0.98,
+    "serve": 0.72,
+    "lean": 0.88
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-016",
+   "kind": "SparseMlaHeadValues_v1{NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 88448,
+   "k_log": 22,
+   "circuit_bytes": 67074501,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 0.85,
+    "serve": 0.58,
+    "lean": 0.46
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-017",
+   "kind": "SparseMlaHeadValues_v1{NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 88448,
+   "k_log": 22,
+   "circuit_bytes": 67074501,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.08,
+    "prove": 0.85,
+    "serve": 0.58,
+    "lean": 0.46
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-018",
+   "kind": "SparseMlaHeadValues_v1{NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 118272,
+   "k_log": 22,
+   "circuit_bytes": 71236586,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.09,
+    "prove": 0.86,
+    "serve": 0.58,
+    "lean": 0.47
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-019",
+   "kind": "SparseMlaHeadValues_v1{NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 118272,
+   "k_log": 22,
+   "circuit_bytes": 71236586,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.09,
+    "prove": 0.86,
+    "serve": 0.59,
+    "lean": 0.47
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-020",
+   "kind": "SparseMlaHeadValues_v1{NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 148480,
+   "k_log": 22,
+   "circuit_bytes": 77617719,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.11,
+    "prove": 0.86,
+    "serve": 0.59,
+    "lean": 0.48
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-021",
+   "kind": "SparseMlaHeadValues_v1{NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 148480,
+   "k_log": 22,
+   "circuit_bytes": 77617719,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.11,
+    "prove": 0.86,
+    "serve": 0.59,
+    "lean": 0.48
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-022",
+   "kind": "SparseMlaHeadValues_v1{NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 178368,
+   "k_log": 22,
+   "circuit_bytes": 83369825,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.13,
+    "prove": 0.87,
+    "serve": 0.6,
+    "lean": 0.53
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-023",
+   "kind": "SparseMlaHeadValues_v1{NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 178368,
+   "k_log": 22,
+   "circuit_bytes": 83369825,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.13,
+    "prove": 0.87,
+    "serve": 0.6,
+    "lean": 0.53
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-024",
+   "kind": "SparseMlaHeadValues_v1{NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 208192,
+   "k_log": 22,
+   "circuit_bytes": 87084015,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.11,
+    "prove": 0.87,
+    "serve": 0.6,
+    "lean": 0.54
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-025",
+   "kind": "SparseMlaHeadValues_v1{NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 208192,
+   "k_log": 22,
+   "circuit_bytes": 87084015,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.11,
+    "prove": 0.87,
+    "serve": 0.6,
+    "lean": 0.54
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-026",
+   "kind": "SparseMlaHeadValues_v1{NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 238016,
+   "k_log": 22,
+   "circuit_bytes": 98446971,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.14,
+    "prove": 0.89,
+    "serve": 0.62,
+    "lean": 0.62
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-027",
+   "kind": "SparseMlaHeadValues_v1{NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 238016,
+   "k_log": 22,
+   "circuit_bytes": 98446971,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.15,
+    "prove": 0.89,
+    "serve": 0.62,
+    "lean": 0.62
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-028",
+   "kind": "SparseMlaHeadValues_v1{NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 268224,
+   "k_log": 22,
+   "circuit_bytes": 102109960,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.16,
+    "prove": 0.91,
+    "serve": 0.63,
+    "lean": 0.64
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-029",
+   "kind": "SparseMlaHeadValues_v1{NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 268224,
+   "k_log": 22,
+   "circuit_bytes": 102109960,
+   "seconds": 100,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.16,
+    "prove": 0.91,
+    "serve": 0.64,
+    "lean": 0.64
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-030",
+   "kind": "SparseMlaHeadValues_v1{NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 298176,
+   "k_log": 22,
+   "circuit_bytes": 107556742,
+   "seconds": 121,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.18,
+    "prove": 0.92,
+    "serve": 0.64,
+    "lean": 0.66
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-031",
+   "kind": "SparseMlaHeadValues_v1{NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 298176,
+   "k_log": 22,
+   "circuit_bytes": 107556742,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.16,
+    "prove": 0.92,
+    "serve": 0.64,
+    "lean": 0.66
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-032",
+   "kind": "SparseMlaHeadValues_v1{NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 585344,
+   "k_log": 22,
+   "circuit_bytes": 164921938,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.29,
+    "prove": 1.0,
+    "serve": 0.74,
+    "lean": 0.95
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-033",
+   "kind": "SparseMlaHeadValues_v1{NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 585344,
+   "k_log": 22,
+   "circuit_bytes": 164921938,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.29,
+    "prove": 1.0,
+    "serve": 0.74,
+    "lean": 0.95
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-034",
+   "kind": "SparseMlaHeadValues_v1{NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 615168,
+   "k_log": 22,
+   "circuit_bytes": 169716484,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.3,
+    "prove": 1.01,
+    "serve": 0.74,
+    "lean": 0.97
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-035",
+   "kind": "SparseMlaHeadValues_v1{NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 615168,
+   "k_log": 22,
+   "circuit_bytes": 169716484,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.3,
+    "prove": 1.0,
+    "serve": 0.75,
+    "lean": 1.02
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-036",
+   "kind": "SparseMlaHeadValues_v1{NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 645376,
+   "k_log": 22,
+   "circuit_bytes": 175736446,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.32,
+    "prove": 1.01,
+    "serve": 0.75,
+    "lean": 1.06
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-037",
+   "kind": "SparseMlaHeadValues_v1{NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 645376,
+   "k_log": 22,
+   "circuit_bytes": 175736446,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.32,
+    "prove": 1.01,
+    "serve": 0.75,
+    "lean": 1.06
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-038",
+   "kind": "SparseMlaHeadValues_v1{NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 675264,
+   "k_log": 23,
+   "circuit_bytes": 182195912,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.33,
+    "prove": 1.76,
+    "serve": 1.16,
+    "lean": 1.1
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-039",
+   "kind": "SparseMlaHeadValues_v1{NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 675264,
+   "k_log": 23,
+   "circuit_bytes": 182195912,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.33,
+    "prove": 1.76,
+    "serve": 1.17,
+    "lean": 1.11
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-040",
+   "kind": "SparseMlaHeadValues_v1{NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 705088,
+   "k_log": 23,
+   "circuit_bytes": 185960154,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.34,
+    "prove": 1.77,
+    "serve": 1.17,
+    "lean": 1.12
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-041",
+   "kind": "SparseMlaHeadValues_v1{NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 705088,
+   "k_log": 23,
+   "circuit_bytes": 185960154,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.34,
+    "prove": 1.76,
+    "serve": 1.17,
+    "lean": 1.12
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-042",
+   "kind": "SparseMlaHeadValues_v1{NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 734912,
+   "k_log": 23,
+   "circuit_bytes": 197733644,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.36,
+    "prove": 1.78,
+    "serve": 1.18,
+    "lean": 1.15
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-043",
+   "kind": "SparseMlaHeadValues_v1{NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 734912,
+   "k_log": 23,
+   "circuit_bytes": 197733644,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.36,
+    "prove": 1.78,
+    "serve": 1.18,
+    "lean": 1.15
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-044",
+   "kind": "SparseMlaHeadValues_v1{NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 765120,
+   "k_log": 23,
+   "circuit_bytes": 200438366,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.37,
+    "prove": 1.79,
+    "serve": 1.19,
+    "lean": 1.15
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-045",
+   "kind": "SparseMlaHeadValues_v1{NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 765120,
+   "k_log": 23,
+   "circuit_bytes": 200438366,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.37,
+    "prove": 1.79,
+    "serve": 1.19,
+    "lean": 1.15
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-046",
+   "kind": "SparseMlaHeadValues_v1{NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 795072,
+   "k_log": 23,
+   "circuit_bytes": 206689576,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.38,
+    "prove": 1.8,
+    "serve": 1.19,
+    "lean": 1.2
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-047",
+   "kind": "SparseMlaHeadValues_v1{NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 795072,
+   "k_log": 23,
+   "circuit_bytes": 206689576,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.38,
+    "prove": 1.8,
+    "serve": 1.19,
+    "lean": 1.17
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-048",
+   "kind": "SparseMlaHeadValues_v1{NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 824896,
+   "k_log": 23,
+   "circuit_bytes": 215140506,
+   "seconds": 121,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.4,
+    "prove": 1.81,
+    "serve": 1.2,
+    "lean": 1.19
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-049",
+   "kind": "SparseMlaHeadValues_v1{NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 824896,
+   "k_log": 23,
+   "circuit_bytes": 215140506,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.4,
+    "prove": 1.81,
+    "serve": 1.2,
+    "lean": 1.19
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-050",
+   "kind": "SparseMlaHeadValues_v1{NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 854720,
+   "k_log": 23,
+   "circuit_bytes": 217847150,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.41,
+    "prove": 1.81,
+    "serve": 1.21,
+    "lean": 1.23
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-051",
+   "kind": "SparseMlaHeadValues_v1{NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 854720,
+   "k_log": 23,
+   "circuit_bytes": 217847150,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.41,
+    "prove": 1.81,
+    "serve": 1.21,
+    "lean": 1.23
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-052",
+   "kind": "SparseMlaHeadValues_v1{NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 884608,
+   "k_log": 23,
+   "circuit_bytes": 223613696,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.42,
+    "prove": 1.82,
+    "serve": 1.21,
+    "lean": 1.24
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-053",
+   "kind": "SparseMlaHeadValues_v1{NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 884608,
+   "k_log": 23,
+   "circuit_bytes": 223613696,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.42,
+    "prove": 1.82,
+    "serve": 1.21,
+    "lean": 1.24
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-054",
+   "kind": "SparseMlaHeadValues_v1{NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 914496,
+   "k_log": 23,
+   "circuit_bytes": 234461082,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.44,
+    "prove": 1.83,
+    "serve": 1.22,
+    "lean": 1.4
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-055",
+   "kind": "SparseMlaHeadValues_v1{NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 914496,
+   "k_log": 23,
+   "circuit_bytes": 234461082,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.44,
+    "prove": 1.83,
+    "serve": 1.22,
+    "lean": 1.39
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-056",
+   "kind": "SparseMlaHeadValues_v1{NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 944320,
+   "k_log": 23,
+   "circuit_bytes": 247584278,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.46,
+    "prove": 1.85,
+    "serve": 1.24,
+    "lean": 1.42
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-057",
+   "kind": "SparseMlaHeadValues_v1{NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 944320,
+   "k_log": 23,
+   "circuit_bytes": 247584278,
+   "seconds": 121,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.46,
+    "prove": 1.85,
+    "serve": 1.24,
+    "lean": 1.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-058",
+   "kind": "SparseMlaHeadValues_v1{NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 974144,
+   "k_log": 23,
+   "circuit_bytes": 254701416,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.47,
+    "prove": 1.86,
+    "serve": 1.25,
+    "lean": 1.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-059",
+   "kind": "SparseMlaHeadValues_v1{NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 974144,
+   "k_log": 23,
+   "circuit_bytes": 254701416,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.47,
+    "prove": 1.86,
+    "serve": 1.25,
+    "lean": 1.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-060",
+   "kind": "SparseMlaHeadValues_v1{NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1004224,
+   "k_log": 23,
+   "circuit_bytes": 253216484,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.48,
+    "prove": 1.85,
+    "serve": 1.25,
+    "lean": 1.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-061",
+   "kind": "SparseMlaHeadValues_v1{NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1004224,
+   "k_log": 23,
+   "circuit_bytes": 253216484,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.49,
+    "prove": 1.85,
+    "serve": 1.25,
+    "lean": 1.43
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-062",
+   "kind": "SparseMlaHeadValues_v1{NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1034240,
+   "k_log": 23,
+   "circuit_bytes": 273484187,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.52,
+    "prove": 1.88,
+    "serve": 1.31,
+    "lean": 1.53
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-063",
+   "kind": "SparseMlaHeadValues_v1{NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1034240,
+   "k_log": 23,
+   "circuit_bytes": 273484187,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.52,
+    "prove": 1.88,
+    "serve": 1.31,
+    "lean": 1.54
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-064",
+   "kind": "SparseMlaHeadValues_v1{NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1112256,
+   "k_log": 23,
+   "circuit_bytes": 288030933,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.56,
+    "prove": 1.9,
+    "serve": 1.33,
+    "lean": 1.56
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-065",
+   "kind": "SparseMlaHeadValues_v1{NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1112256,
+   "k_log": 23,
+   "circuit_bytes": 288030933,
+   "seconds": 121,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.56,
+    "prove": 1.9,
+    "serve": 1.33,
+    "lean": 1.56
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-066",
+   "kind": "SparseMlaHeadValues_v1{NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1142080,
+   "k_log": 23,
+   "circuit_bytes": 293449790,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.58,
+    "prove": 1.9,
+    "serve": 1.33,
+    "lean": 1.58
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-067",
+   "kind": "SparseMlaHeadValues_v1{NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1142080,
+   "k_log": 23,
+   "circuit_bytes": 293449790,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.58,
+    "prove": 1.9,
+    "serve": 1.33,
+    "lean": 1.57
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-068",
+   "kind": "SparseMlaHeadValues_v1{NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1172288,
+   "k_log": 23,
+   "circuit_bytes": 300257386,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.59,
+    "prove": 1.91,
+    "serve": 1.33,
+    "lean": 1.6
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-069",
+   "kind": "SparseMlaHeadValues_v1{NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1172288,
+   "k_log": 23,
+   "circuit_bytes": 300257386,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.58,
+    "prove": 1.91,
+    "serve": 1.34,
+    "lean": 1.6
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-070",
+   "kind": "SparseMlaHeadValues_v1{NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1202176,
+   "k_log": 23,
+   "circuit_bytes": 307578836,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.61,
+    "prove": 1.92,
+    "serve": 1.35,
+    "lean": 1.62
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-071",
+   "kind": "SparseMlaHeadValues_v1{NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1202176,
+   "k_log": 23,
+   "circuit_bytes": 307578836,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.59,
+    "prove": 1.92,
+    "serve": 1.35,
+    "lean": 1.62
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-072",
+   "kind": "SparseMlaHeadValues_v1{NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1232000,
+   "k_log": 23,
+   "circuit_bytes": 311829554,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.6,
+    "prove": 1.92,
+    "serve": 1.35,
+    "lean": 1.64
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-073",
+   "kind": "SparseMlaHeadValues_v1{NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1232000,
+   "k_log": 23,
+   "circuit_bytes": 311829554,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.6,
+    "prove": 1.93,
+    "serve": 1.35,
+    "lean": 1.65
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-074",
+   "kind": "SparseMlaHeadValues_v1{NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1261824,
+   "k_log": 23,
+   "circuit_bytes": 325220899,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.64,
+    "prove": 1.94,
+    "serve": 1.37,
+    "lean": 1.76
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-075",
+   "kind": "SparseMlaHeadValues_v1{NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1261824,
+   "k_log": 23,
+   "circuit_bytes": 325220899,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.63,
+    "prove": 1.94,
+    "serve": 1.36,
+    "lean": 1.76
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-076",
+   "kind": "SparseMlaHeadValues_v1{NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1292032,
+   "k_log": 23,
+   "circuit_bytes": 328230496,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.64,
+    "prove": 1.94,
+    "serve": 1.37,
+    "lean": 1.76
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-077",
+   "kind": "SparseMlaHeadValues_v1{NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1292032,
+   "k_log": 23,
+   "circuit_bytes": 328230496,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.63,
+    "prove": 1.94,
+    "serve": 1.36,
+    "lean": 1.76
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-078",
+   "kind": "SparseMlaHeadValues_v1{NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1321984,
+   "k_log": 23,
+   "circuit_bytes": 335342178,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.65,
+    "prove": 1.95,
+    "serve": 1.37,
+    "lean": 1.76
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-079",
+   "kind": "SparseMlaHeadValues_v1{NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1321984,
+   "k_log": 23,
+   "circuit_bytes": 335342178,
+   "seconds": 120,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.65,
+    "prove": 1.95,
+    "serve": 1.37,
+    "lean": 1.77
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-080",
+   "kind": "SparseMlaHeadValues_v1{NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1351808,
+   "k_log": 23,
+   "circuit_bytes": 344882363,
+   "seconds": 141,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.68,
+    "prove": 1.96,
+    "serve": 1.38,
+    "lean": 1.83
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-081",
+   "kind": "SparseMlaHeadValues_v1{NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1351808,
+   "k_log": 23,
+   "circuit_bytes": 344882363,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.67,
+    "prove": 1.96,
+    "serve": 1.38,
+    "lean": 1.83
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-082",
+   "kind": "SparseMlaHeadValues_v1{NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1381632,
+   "k_log": 23,
+   "circuit_bytes": 347936448,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.67,
+    "prove": 1.96,
+    "serve": 1.39,
+    "lean": 1.84
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-083",
+   "kind": "SparseMlaHeadValues_v1{NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1381632,
+   "k_log": 23,
+   "circuit_bytes": 347936448,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.67,
+    "prove": 1.96,
+    "serve": 1.39,
+    "lean": 1.84
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-084",
+   "kind": "SparseMlaHeadValues_v1{NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1411520,
+   "k_log": 23,
+   "circuit_bytes": 354435589,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.68,
+    "prove": 1.97,
+    "serve": 1.39,
+    "lean": 1.86
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-085",
+   "kind": "SparseMlaHeadValues_v1{NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1411520,
+   "k_log": 23,
+   "circuit_bytes": 354435589,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.68,
+    "prove": 1.97,
+    "serve": 1.39,
+    "lean": 1.86
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-086",
+   "kind": "SparseMlaHeadValues_v1{NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1441408,
+   "k_log": 23,
+   "circuit_bytes": 366776957,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.7,
+    "prove": 1.98,
+    "serve": 1.4,
+    "lean": 1.92
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-087",
+   "kind": "SparseMlaHeadValues_v1{NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1441408,
+   "k_log": 23,
+   "circuit_bytes": 366776957,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.7,
+    "prove": 1.98,
+    "serve": 1.4,
+    "lean": 1.92
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-088",
+   "kind": "SparseMlaHeadValues_v1{NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1471232,
+   "k_log": 23,
+   "circuit_bytes": 381686329,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.73,
+    "prove": 1.99,
+    "serve": 1.42,
+    "lean": 1.99
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-089",
+   "kind": "SparseMlaHeadValues_v1{NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1471232,
+   "k_log": 23,
+   "circuit_bytes": 381686329,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.73,
+    "prove": 1.99,
+    "serve": 1.42,
+    "lean": 1.99
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-090",
+   "kind": "SparseMlaHeadValues_v1{NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1501056,
+   "k_log": 23,
+   "circuit_bytes": 389298307,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.75,
+    "prove": 2.0,
+    "serve": 1.42,
+    "lean": 2.03
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-091",
+   "kind": "SparseMlaHeadValues_v1{NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1501056,
+   "k_log": 23,
+   "circuit_bytes": 389298307,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.75,
+    "prove": 2.0,
+    "serve": 1.43,
+    "lean": 2.03
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-092",
+   "kind": "SparseMlaHeadValues_v1{NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1531136,
+   "k_log": 23,
+   "circuit_bytes": 386557709,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.76,
+    "prove": 2.01,
+    "serve": 1.43,
+    "lean": 2.02
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-093",
+   "kind": "SparseMlaHeadValues_v1{NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1531136,
+   "k_log": 23,
+   "circuit_bytes": 386557709,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.76,
+    "prove": 2.01,
+    "serve": 1.43,
+    "lean": 2.02
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-094",
+   "kind": "SparseMlaHeadValues_v1{NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1561152,
+   "k_log": 23,
+   "circuit_bytes": 406354930,
+   "seconds": 141,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.82,
+    "prove": 2.02,
+    "serve": 1.45,
+    "lean": 2.1
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-095",
+   "kind": "SparseMlaHeadValues_v1{NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1561152,
+   "k_log": 23,
+   "circuit_bytes": 406354930,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.82,
+    "prove": 2.02,
+    "serve": 1.45,
+    "lean": 2.1
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-096",
+   "kind": "SparseMlaHeadValues_v1{NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1639168,
+   "k_log": 23,
+   "circuit_bytes": 420919086,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.89,
+    "prove": 2.04,
+    "serve": 1.46,
+    "lean": 2.17
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-097",
+   "kind": "SparseMlaHeadValues_v1{NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1639168,
+   "k_log": 23,
+   "circuit_bytes": 420919086,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.89,
+    "prove": 2.04,
+    "serve": 1.46,
+    "lean": 2.17
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-098",
+   "kind": "SparseMlaHeadValues_v1{NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1668992,
+   "k_log": 23,
+   "circuit_bytes": 426349426,
+   "seconds": 140,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.92,
+    "prove": 2.05,
+    "serve": 1.47,
+    "lean": 2.2
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-099",
+   "kind": "SparseMlaHeadValues_v1{NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1668992,
+   "k_log": 23,
+   "circuit_bytes": 426349426,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.92,
+    "prove": 2.05,
+    "serve": 1.47,
+    "lean": 2.2
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-100",
+   "kind": "SparseMlaHeadValues_v1{NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1699200,
+   "k_log": 23,
+   "circuit_bytes": 433169270,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.95,
+    "prove": 2.05,
+    "serve": 1.47,
+    "lean": 2.23
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-101",
+   "kind": "SparseMlaHeadValues_v1{NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1699200,
+   "k_log": 23,
+   "circuit_bytes": 433169270,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.95,
+    "prove": 2.05,
+    "serve": 1.47,
+    "lean": 2.23
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-102",
+   "kind": "SparseMlaHeadValues_v1{NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1729088,
+   "k_log": 23,
+   "circuit_bytes": 440504122,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.98,
+    "prove": 2.06,
+    "serve": 1.48,
+    "lean": 2.27
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-103",
+   "kind": "SparseMlaHeadValues_v1{NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1729088,
+   "k_log": 23,
+   "circuit_bytes": 440504122,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 1.98,
+    "prove": 2.06,
+    "serve": 1.48,
+    "lean": 2.27
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-104",
+   "kind": "SparseMlaHeadValues_v1{NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1758912,
+   "k_log": 23,
+   "circuit_bytes": 444745278,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.0,
+    "prove": 2.07,
+    "serve": 1.48,
+    "lean": 2.31
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-105",
+   "kind": "SparseMlaHeadValues_v1{NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1758912,
+   "k_log": 23,
+   "circuit_bytes": 444745278,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.0,
+    "prove": 2.06,
+    "serve": 1.48,
+    "lean": 2.31
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-106",
+   "kind": "SparseMlaHeadValues_v1{NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1788736,
+   "k_log": 23,
+   "circuit_bytes": 458127298,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.04,
+    "prove": 2.08,
+    "serve": 1.5,
+    "lean": 2.37
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-107",
+   "kind": "SparseMlaHeadValues_v1{NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1788736,
+   "k_log": 23,
+   "circuit_bytes": 458127298,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.05,
+    "prove": 2.08,
+    "serve": 1.5,
+    "lean": 2.37
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-108",
+   "kind": "SparseMlaHeadValues_v1{NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1818944,
+   "k_log": 23,
+   "circuit_bytes": 461158406,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.07,
+    "prove": 2.08,
+    "serve": 1.5,
+    "lean": 2.38
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-109",
+   "kind": "SparseMlaHeadValues_v1{NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1818944,
+   "k_log": 23,
+   "circuit_bytes": 461158406,
+   "seconds": 150,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.07,
+    "prove": 2.09,
+    "serve": 1.5,
+    "lean": 2.38
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-110",
+   "kind": "SparseMlaHeadValues_v1{NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1848896,
+   "k_log": 24,
+   "circuit_bytes": 468253928,
+   "seconds": 160,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.1,
+    "prove": 3.58,
+    "serve": 2.32,
+    "lean": 2.42
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-111",
+   "kind": "SparseMlaHeadValues_v1{NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1848896,
+   "k_log": 24,
+   "circuit_bytes": 468253928,
+   "seconds": 160,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.1,
+    "prove": 3.58,
+    "serve": 2.32,
+    "lean": 2.42
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-112",
+   "kind": "SparseMlaHeadValues_v1{NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1878720,
+   "k_log": 24,
+   "circuit_bytes": 477798252,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.13,
+    "prove": 3.6,
+    "serve": 2.33,
+    "lean": 2.47
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-113",
+   "kind": "SparseMlaHeadValues_v1{NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1878720,
+   "k_log": 24,
+   "circuit_bytes": 477798252,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.13,
+    "prove": 3.59,
+    "serve": 2.33,
+    "lean": 2.47
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-114",
+   "kind": "SparseMlaHeadValues_v1{NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1908544,
+   "k_log": 24,
+   "circuit_bytes": 480864432,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.16,
+    "prove": 3.6,
+    "serve": 2.33,
+    "lean": 2.49
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-115",
+   "kind": "SparseMlaHeadValues_v1{NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1908544,
+   "k_log": 24,
+   "circuit_bytes": 480864432,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.16,
+    "prove": 3.6,
+    "serve": 2.34,
+    "lean": 2.49
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-116",
+   "kind": "SparseMlaHeadValues_v1{NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1938432,
+   "k_log": 24,
+   "circuit_bytes": 487385460,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.18,
+    "prove": 3.6,
+    "serve": 2.34,
+    "lean": 2.52
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-117",
+   "kind": "SparseMlaHeadValues_v1{NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1938432,
+   "k_log": 24,
+   "circuit_bytes": 487385460,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.19,
+    "prove": 3.6,
+    "serve": 2.34,
+    "lean": 2.52
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-118",
+   "kind": "SparseMlaHeadValues_v1{NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1968320,
+   "k_log": 24,
+   "circuit_bytes": 499720952,
+   "seconds": 171,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.23,
+    "prove": 3.62,
+    "serve": 2.35,
+    "lean": 2.6
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-119",
+   "kind": "SparseMlaHeadValues_v1{NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1968320,
+   "k_log": 24,
+   "circuit_bytes": 499720952,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.22,
+    "prove": 3.62,
+    "serve": 2.35,
+    "lean": 2.6
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-120",
+   "kind": "SparseMlaHeadValues_v1{NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 1998144,
+   "k_log": 24,
+   "circuit_bytes": 514602556,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.27,
+    "prove": 3.63,
+    "serve": 2.36,
+    "lean": 2.66
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-121",
+   "kind": "SparseMlaHeadValues_v1{NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 1998144,
+   "k_log": 24,
+   "circuit_bytes": 514602556,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.27,
+    "prove": 3.64,
+    "serve": 2.37,
+    "lean": 2.66
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-122",
+   "kind": "SparseMlaHeadValues_v1{NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 2027968,
+   "k_log": 24,
+   "circuit_bytes": 522242625,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.3,
+    "prove": 3.67,
+    "serve": 2.46,
+    "lean": 2.69
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-123",
+   "kind": "SparseMlaHeadValues_v1{NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 2027968,
+   "k_log": 24,
+   "circuit_bytes": 522242625,
+   "seconds": 171,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.3,
+    "prove": 3.67,
+    "serve": 2.46,
+    "lean": 2.69
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-124",
+   "kind": "SparseMlaHeadValues_v1{NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 2058048,
+   "k_log": 24,
+   "circuit_bytes": 519498984,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.31,
+    "prove": 3.67,
+    "serve": 2.46,
+    "lean": 2.68
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-125",
+   "kind": "SparseMlaHeadValues_v1{NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 2058048,
+   "k_log": 24,
+   "circuit_bytes": 519498984,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.31,
+    "prove": 3.67,
+    "serve": 2.46,
+    "lean": 2.68
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-126",
+   "kind": "SparseMlaHeadValues_v1{NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 2088064,
+   "k_log": 24,
+   "circuit_bytes": 542368185,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.38,
+    "prove": 3.69,
+    "serve": 2.48,
+    "lean": 2.79
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-127",
+   "kind": "SparseMlaHeadValues_v1{NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 2088064,
+   "k_log": 24,
+   "circuit_bytes": 542368185,
+   "seconds": 170,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.38,
+    "prove": 3.69,
+    "serve": 2.48,
+    "lean": 2.79
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-128",
+   "kind": "SparseMlaHeadValues_v1{NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=2}",
+   "ands": 2269440,
+   "k_log": 24,
+   "circuit_bytes": 609264611,
+   "seconds": 191,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.61,
+    "prove": 3.76,
+    "serve": 2.55,
+    "lean": 3.12
+   },
+   "outcome": "accepted"
+  },
+  {
+   "tag": "v2-129",
+   "kind": "SparseMlaHeadValues_v1{NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "staged": "SparseMlaHeadValues_v1{NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64,C=6}",
+   "ands": 2269440,
+   "k_log": 24,
+   "circuit_bytes": 609264611,
+   "seconds": 190,
+   "verdicts": {
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false
+    }
+   },
+   "peak_gb": {
+    "stage": 2.61,
+    "prove": 3.76,
+    "serve": 2.55,
+    "lean": 3.12
+   },
+   "outcome": "accepted"
+  }
+ ]
+}
