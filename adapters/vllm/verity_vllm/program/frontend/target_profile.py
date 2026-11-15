@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
@@ -34,8 +34,6 @@ from verity_vllm.program.frontend.kernel_readback import (  # noqa: F401
 
 if TYPE_CHECKING:
     from verity_vllm.program.frontend.gemm_targets import GemmTarget
-
-SCHEMA = "verity/aot-artifact/v1"
 
 
 def canonical_bytes(obj: Any) -> bytes:
@@ -684,94 +682,6 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
     return bad
 
 
-# -- the artifact wrapper --------------------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class ArtifactIdentity:
-    construction_version: dict
-    target_profile: dict
-    applicability: dict
-    program_digest: str
-    identity: str = field(default="")
-
-    @staticmethod
-    def compute(construction_version: dict, target_profile: TargetProfile | dict, applicability: dict, program_digest: str) -> str:
-        tp = target_profile.to_json() if isinstance(target_profile, TargetProfile) else target_profile
-        h = hashlib.sha256()
-        for part in (canonical_bytes(construction_version), canonical_bytes(tp), canonical_bytes(applicability), program_digest.encode()):
-            h.update(len(part).to_bytes(8, "big"))  # length-prefixed: no component can absorb its neighbour
-            h.update(part)
-        return h.hexdigest()
-
-    @classmethod
-    def build(cls, construction_version: dict, target_profile: TargetProfile, applicability: dict, program_digest: str) -> ArtifactIdentity:
-        tp = target_profile.to_json()
-        return cls(construction_version=construction_version, target_profile=tp, applicability=applicability, program_digest=program_digest,
-                   identity=cls.compute(construction_version, tp, applicability, program_digest))
-
-    def to_json(self) -> dict:
-        return {"schema": SCHEMA, "identity": self.identity, "construction_version": self.construction_version, "target_profile": self.target_profile,
-                "applicability": self.applicability, "program_digest": self.program_digest,
-                "identity_definition": "sha256(len8||canonical(construction_version) || len8||canonical(target_profile) || len8||canonical(applicability) || len8||program_digest)"}
-
-    @classmethod
-    def from_json(cls, d: dict) -> ArtifactIdentity:
-        if d.get("schema") != SCHEMA:
-            raise ValueError(f"artifact schema {d.get('schema')!r} is not {SCHEMA!r}")
-        return cls(construction_version=d["construction_version"], target_profile=d["target_profile"], applicability=d["applicability"],
-                   program_digest=d["program_digest"], identity=d["identity"])
-
-    def recomputed(self) -> str:
-        return self.compute(self.construction_version, self.target_profile, self.applicability, self.program_digest)
-
-
-class ApplicabilityError(RuntimeError):
-    """An artifact was requested outside its declared applicability; `.reasons` lists every differing field verbatim."""
-
-    def __init__(self, reasons: list[str]) -> None:
-        self.reasons = list(reasons)
-        super().__init__("artifact not applicable: " + "; ".join(self.reasons))
-
-
-def reuse_mismatches(artifact: ArtifactIdentity, profile: TargetProfile, applicability_now: dict | None, construction_version_now: dict | None = None) -> list[str]:
-    """Every reason `artifact` may NOT be reused by a requester declaring `profile` under `applicability_now` (the facts read back from
-    the requester's environment; None = not provided = every condition unverifiable = refused)."""
-    bad: list[str] = []
-    if artifact.recomputed() != artifact.identity:
-        bad.append(f"identity {artifact.identity} does not match its components (recomputed {artifact.recomputed()})")
-    want, have = profile.to_json(), dict(artifact.target_profile)
-    for k in sorted(set(want) | set(have)):
-        if want.get(k, "<absent>") != have.get(k, "<absent>"):
-            bad.append(f"target_profile.{k}: requested {want.get(k, '<absent>')!r}, artifact built for {have.get(k, '<absent>')!r}")
-    if applicability_now is None:
-        bad.append("applicability conditions of the requester were not provided (every condition is unverifiable)")
-    else:
-        for k in sorted(artifact.applicability):
-            if k not in applicability_now:
-                bad.append(f"applicability.{k}: artifact requires {artifact.applicability[k]!r}, requester did not report it")
-            elif applicability_now[k] != artifact.applicability[k]:
-                bad.append(f"applicability.{k}: artifact requires {artifact.applicability[k]!r}, requester has {applicability_now[k]!r}")
-    if construction_version_now is not None and canonical_bytes(construction_version_now) != canonical_bytes(artifact.construction_version):
-        bad.append("construction_version differs from the artifact's")
-    return bad
-
-
-def check_reuse(artifact: ArtifactIdentity, profile: TargetProfile, applicability_now: dict | None, construction_version_now: dict | None = None) -> ArtifactIdentity:
-    """Return `artifact` if it is applicable for the requester, else raise `ApplicabilityError` (fail-closed)."""
-    bad = reuse_mismatches(artifact, profile, applicability_now, construction_version_now)
-    if bad:
-        raise ApplicabilityError(bad)
-    return artifact
-
-
-def load_artifact(path: str, profile: TargetProfile, applicability_now: dict | None, construction_version_now: dict | None = None) -> ArtifactIdentity:
-    """Read `artifact.json` and admit it only under `profile` / `applicability_now` (`check_reuse`)."""
-    with open(path) as f:
-        art = ArtifactIdentity.from_json(json.load(f))
-    return check_reuse(art, profile, applicability_now, construction_version_now)
-
-
 def parse_target_arg(s: str | None, *, base: TargetProfile | None = None) -> TargetProfile:
     """CLI helper: None -> default; a JSON object -> overrides laid over `base` (`{"compute_capability": [9, 0]}`); a path to a JSON
     file -> the whole profile.  `base` defaults to THIS host's device profile when CUDA is available, else `default()` -- the same
@@ -801,5 +711,5 @@ def parse_target_arg(s: str | None, *, base: TargetProfile | None = None) -> Tar
     return TargetProfile.from_json(doc)
 
 
-__all__ = ["TargetProfile", "DEFAULT_TARGET", "ArtifactIdentity", "ApplicabilityError", "canonical_bytes", "sha256_hex", "profile_mismatches",
-           "reuse_mismatches", "check_reuse", "load_artifact", "parse_target_arg", "SCHEMA"]
+__all__ = ["TargetProfile", "DEFAULT_TARGET", "canonical_bytes", "sha256_hex", "profile_mismatches",
+           "parse_target_arg"]

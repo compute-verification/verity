@@ -489,7 +489,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     from verity_torch.correspondence.runtime import correspondence_digest
     from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
     from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
-    from verity_vllm.program.frontend.target_profile import ArtifactIdentity
+    from verity_vllm.program.frontend.artifact import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     supplied |= {"ir": ir} if (ir := rep.provenance.get("ir")) else {}   # ir=boolean: the word root and digest the bits were lifted from
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
