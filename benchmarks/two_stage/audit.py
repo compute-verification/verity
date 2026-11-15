@@ -138,7 +138,7 @@ def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
 
 
 def sampled(stream: S.Stream, coins: StageCoins, docket: S.WindowCommitmentRecord) -> tuple[S.Draw, dict]:
-    """The stream's one sample of ``registration``, on the coins opened after its digest, and their segment (which ends
+    """The stream's one sample of ``docket``, on the coins opened after its digest, and their segment (which ends
     the stage's turn on the session's client)."""
     coins.commit(bytes.fromhex(docket.digest))
     try:

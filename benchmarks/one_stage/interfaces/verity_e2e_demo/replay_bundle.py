@@ -58,7 +58,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
   path}``, its row's bytes and salt in the payload and ``path`` its opening against the value's root. Words no piece
   covers are zero, and a row of no pieces is all zero (a V row past n, which the Definition masks).
 
-  With ``registration``, `check` holds every step root the bundle opens against to the one the docket's
+  With ``docket``, `check` holds every step root the bundle opens against to the one the docket's
   ``window.commitment`` names (`steps_provenance`, every step's root registered before the coin) and fails closed on a
   step it doesn't name.
 
@@ -672,7 +672,7 @@ def open_reads(commitment: Commitment, rows: Sequence[tuple[Mapping[str, Any], b
 def check_reads(commitment: Mapping[str, Any], rows: Sequence[tuple[Mapping[str, Any], bytes, Sequence[Mapping[str, Any]]]],
                 payload: bytes, *, kind: str = "in", docket: Mapping[str, Any] | None = None) -> dict[str, str]:
     """`check`'s verdict on port rows' reads (each ``(coords, row, reads)``, `open_reads`'s) against a ``commitment``
-    section (`commitment_doc`), each step root held to the ``registration``'s when given: ``{key: why}``, empty when they
+    section (`commitment_doc`), each step root held to the ``docket``'s when given: ``{key: why}``, empty when they
     hold."""
     bad: dict[str, str] = {}
     com = _check_commitment({"commitment": commitment}, bad, docket)
@@ -855,7 +855,7 @@ def _replay_bits(fn: Any, params: Sequence[Any], ret: Any, lay: IF.RowLayout, ro
 def _check_commitment(doc: Mapping[str, Any], bad: dict[str, str],
                       docket: Mapping[str, Any] | None = None) -> tuple[Any, ...] | None:
     """The commitment section's layout, context and block trees recomputed: ``(context, layout, slots, step roots by (block,
-    step))``, or None (with ``bad`` filled) when its layout or context can't be read. With ``registration``, every step's
+    step))``, or None (with ``bad`` filled) when its layout or context can't be read. With ``docket``, every step's
     root is held to the one its ``window.commitment`` names (`steps_provenance`), and a step it doesn't name is refused."""
     com = doc["commitment"]
     if com.get("format") != COMMITMENT:
@@ -1002,7 +1002,7 @@ def _check_reads(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, payl
 
 def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] | None = None,
           replay_units: bool = True) -> dict[str, str]:
-    """The consumer's check of a bundle (module docstring): ``{key: why}``, empty when it holds. ``registration``: the
+    """The consumer's check of a bundle (module docstring): ``{key: why}``, empty when it holds. ``docket``: the
     window's ``registration.json``, whose roots and sampling design the bundle's must be, and whose ``window.commitment``
     (`steps_provenance`) names every step root the bundle opens against: a step it doesn't name fails closed."""
     bad: dict[str, str] = {}
