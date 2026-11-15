@@ -1,0 +1,11 @@
+{
+ "source": "A scan of the steady-state rows labelled run_of_record=prove-glm53-flock-steady that the plan of record prices, each run's leased card against its provers' CPUs, for rows timed before a row recorded its card's NUMA node: in these runs the card was on another NUMA node than the CPUs.",
+ "runs": {
+  "r20261110-190404-431a": {"card": 6, "card_numa_node": 3, "cpus": "48-71", "cpu_numa_node": 2},
+  "r20261110-190448-3b46": {"card": 5, "card_numa_node": 2, "cpus": "24-47", "cpu_numa_node": 1},
+  "r20261110-190457-2ce7": {"card": 5, "card_numa_node": 2, "cpu_numa_node": 1},
+  "r20261110-211750-65a0": {"card": 4, "card_numa_node": 2, "cpus": "12-23", "cpu_numa_node": 0},
+  "r20261110-232120-0c7b": {"card": 5, "card_numa_node": 2, "cpu_numa_node": 1},
+  "r20261110-232129-ed12": {"card": 5, "card_numa_node": 2, "cpu_numa_node": 1}
+ }
+}
