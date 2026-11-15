@@ -56,7 +56,7 @@ untraced = [
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",
-    "tests/test_labelauth.py", "tests/test_lean_prune.py", "tests/test_landing.py",
+    "tests/test_labelauth.py", "tests/test_lean_prune.py", "tests/test_landing.py", "tests/test_launcher_tree.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_merge_shards.py",
