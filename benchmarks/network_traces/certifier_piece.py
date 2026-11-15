@@ -175,7 +175,7 @@ import served_session as SS  # noqa: E402
 
 #: where the front keeps the gate's fetch and the piece its private files, under the serve dir
 PRIVATE = Path("private") / "certifier"
-#: the endpoint's records the chain reads (network_e2e `chain.ENDPOINT`)
+#: the endpoint's records the chain reads (verity_vllm's `advice_bind.ENDPOINT`)
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
 PROTOCOL = "verity/certifier/v0"
 #: the protocol ``network-rows`` answers, step 1's rows audit of the network attester's records

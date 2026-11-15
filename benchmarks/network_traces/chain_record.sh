@@ -26,7 +26,7 @@
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
 #      CR_DEPLOYED=1 (certs refuses a key that isn't LMS at lms.DEPLOYED, H = 20)
-#      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
+#      CR_ENDPOINT (the endpoint's records, verity_vllm advice_bind.ENDPOINT's four files: a tarball's name under inputs/,
 #      an art: id, or a directory; or the served node's endpoint report instead, a report.json beside no
 #      advice_trace.jsonl, which the endpoint step then reads rather than runs)
 #      CR_N2_CMD (replaces n2_zk.py prove; run with NETWORK_CERTIFIER, BIN, LEAN and N2OUT set, writing N2OUT/summary.json)

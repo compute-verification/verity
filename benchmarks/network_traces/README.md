@@ -350,7 +350,7 @@ The run of record takes the network chain end to end on the gate's machines:
 
 **How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate warden-rehearse --scan --peer HOST
 --port PORT --minutes 30` (the network attester as a relay), then `status` and `fetch`. The fetched tarballs go to one
-job, `chain_record.sh`, with the endpoint's records (`benchmarks/network_e2e/chain.py`'s `ENDPOINT`:
+job, `chain_record.sh`, with the endpoint's records (`verity_vllm.pipeline.advice_bind`'s `ENDPOINT`:
 `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and `serve.json` from the endpoint's serve directory,
 `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 binding and the two provers, and writes `out/report/report.json` and `report.md`:
@@ -424,7 +424,7 @@ parameters digest, no sync declared or charged). The I/O tie is proved on the re
 one relay run the certificates step read, and every one is required.
 
 A Commit period that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
-`verity-vllm/window-advice/v1`) is bound with the Commit period before it: `chain.served_advice` joins them into one I1
+`verity-vllm/window-advice/v1`) is bound with the Commit period before it: `verity-vllm advice --bind` joins them into one I1
 v0 advice (`window_chain.join`). A carried request's record and state are the earlier Commit period's, as its
 registered advice closed them (`window_advice.follows`), never the later one's own string's, so the advice's bits, and
 N2's K, charge the carry once. A Commit period that carries a request in from one the run doesn't hold, or that leaves a
