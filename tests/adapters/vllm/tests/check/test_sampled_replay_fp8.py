@@ -220,7 +220,7 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
     # the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
     prov = rep["evaluator_provenance"]
     assert set(prov) == {"Fp8GroupQuant_v1", "ScaledMmFp8BlockSharedScale_v1"}
-    npz = (Path(__file__).resolve().parents[5] / "adapters" / "vllm") / prov["ScaledMmFp8BlockSharedScale_v1"]["fixture"]
+    npz = Path(__file__).resolve().parents[2] / prov["ScaledMmFp8BlockSharedScale_v1"]["fixture"]  # its tests/ is the adapter's, at tests/adapters/vllm
     assert hashlib.sha256(npz.read_bytes()).hexdigest() == prov["ScaledMmFp8BlockSharedScale_v1"]["fixture_sha256"]
     assert "cp-h100" in prov["ScaledMmFp8BlockSharedScale_v1"]["device"] and prov["ScaledMmFp8BlockSharedScale_v1"]["captured_utc"] == "2026-09-19"
     assert "Embedding_v1" not in prov                                                    # registry-own evaluators carry no twin provenance

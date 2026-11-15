@@ -17,7 +17,7 @@ import pytest
 import torch
 import torch.fx.traceback as fxt
 from verity_torch.frontend.outcomes import Refuse
-from verity_vllm.config import workload_file
+from verity_vllm.config import WORKLOADS, workload_file
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build import applicability_conditions, run
@@ -29,9 +29,9 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 
 #: request steps 0 and 1 of the 65-row prompt of GLM-5.3's B8 row: its prefill beside two decoders, then six sequences
 BATCH = [[[1, 17], [1, 231], [65, 0]], [[1, 18], [1, 65], [187, 0]]]
-GLM_B8 = os.path.join(os.path.dirname(__file__), "..", "..", "workloads",
+GLM_B8 = os.path.join(WORKLOADS,
                       "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json")
-DSV4_B8 = os.path.join(os.path.dirname(__file__), "..", "..", "workloads",
+DSV4_B8 = os.path.join(WORKLOADS,
                        "dsv4-pro__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json")
 
 
