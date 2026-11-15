@@ -13,12 +13,12 @@ from collections import Counter
 
 import numpy as np
 import pytest
-from tests.program.predict.test_node_window import ENGINE, GLM53, TARGET
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import greedy_stages as G
 
+from tests.program.predict.test_node_window import ENGINE, GLM53, TARGET
+from verity_vllm.definitions.registry import greedy_stages as G
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline.boundary_rows import Span
