@@ -119,4 +119,5 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.p
            "**/*.lock", "tools/research/src/research/store/moves.json", "tools/research/tests/test_queue.py"]
 
 [keep]
-patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+# the statement's file as a block record holds it: its check holds a record made before the move to that value
+patterns = ['Security/Definitions/Accounting/Guarantees/JointLive\.lean', '[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
