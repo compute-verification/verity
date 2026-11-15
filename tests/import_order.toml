@@ -375,6 +375,29 @@ loads = [
 paths = [
     "verity/protocols/accounting/certifier/device",
 ]
+loads = [
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/protocols/accounting/certifier/verifier",
+    "verity/protocols/accounting/pous/verifier",
+    "verity/protocols/proofs/spot/verifier",
+]
+reaches = [
+    "verity/channel.py",
+    "verity/circuits",
+    "verity/commitments",
+    "verity/commitments/crypto",
+    "verity/commitments/randomness",
+    "verity/protocols/accounting/certifier/verifier",
+    "verity/protocols/accounting/pous/verifier",
+    "verity/protocols/proofs/spot/verifier",
+    "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/runtime",
+]
+loaded_by = [
+    "verity/protocols/accounting/certifier/prover/tests/test_network_certifier_serve.py",
+    "verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py",
+]
 
 [[place]]
 paths = [

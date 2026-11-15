@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from research import settings
 from research.pods import registry
 
 pytest.importorskip("yaml")
@@ -424,7 +425,7 @@ def pilot(tmp_path, monkeypatch):
     fake = bin_ / "nvidia-cuda-mps-control"
     fake.write_text(FAKE_MPS.format(py=os.path.realpath(sys.executable)))
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
-    monkeypatch.setenv("PATH", f"{bin_}:{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_}:{settings.need('PATH')}")
     monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
     monkeypatch.setenv("HOSTNAME", "pod-a")
     for k, v in {"PACK_SPOOL": tmp_path / "spool", "PACK_POLL_S": 0.01, "PACK_IDLE_S": 0, "PACK_STATS_S": 0,

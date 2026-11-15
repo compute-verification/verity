@@ -30,6 +30,7 @@ import tarfile
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import settings
 from .workproc import guard_env
 
 SH = Path(__file__).resolve().parent / "sh"
@@ -144,8 +145,8 @@ def remote_argv(*args: str) -> list[str]:
 def machine_extend(seconds: float, by: str, *, lease_dir: str | None = None) -> dict[str, Any]:
     """Machine side of `research run --on` (launch-request): push this pod's lease to at least now + seconds.  A machine without a
     lease (the control pod, a pod made before leases) has nothing to extend and says so."""
-    d = lease_dir or os.environ.get("LEASE_DIR") or LEASE_DIR
-    if not Path(d, "lease.sh").is_file() or not (Path(d, "lease").is_file() or os.environ.get(LEASE_ENV)):
+    d = lease_dir or settings.get("LEASE_DIR") or LEASE_DIR
+    if not Path(d, "lease.sh").is_file() or not (Path(d, "lease").is_file() or settings.get(LEASE_ENV)):
         return {"leased": False, "reason": f"no lease on this machine ({d}/lease)"}
     r = subprocess.run(extend_argv(seconds, by, d), capture_output=True, text=True, env={**os.environ, "LEASE_DIR": d})
     parts = r.stdout.split()
