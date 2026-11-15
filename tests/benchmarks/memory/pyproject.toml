@@ -11,11 +11,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the number is held to the session harness's own summary of the same records (`summary.py`'s `gamma_spec`),
 # settings.py is built on verity_config's registry, the result is written through the harness kit's writer, and a
 # number is printed or not by the reporting grid's rule for a row's error (`verity.protocol`)
-inputs = [
-    "benchmarks/remote_session/summary.py",
+inputs = ["benchmarks/memory", "benchmarks/remote_session/summary.py",
     "verity/protocol.py", "verity/channel.py", "tools/config/verity_config",
     "verity/__init__.py",
     "tools/config/verity_config/verity_settings.py",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/kit.py",
-    "benchmarks/harness/verity_bench/settings.py",, "benchmarks/memory"]
+    "benchmarks/harness/verity_bench/settings.py",
+]

@@ -6,8 +6,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # the runner writes its result with the platform's own helper and reads the run's variables from the shared settings
-inputs = [
-    "tools/config/verity_config",
+inputs = ["infra/dashboard", "tools/config/verity_config",
     "verity/__init__.py",
     "tools/research/src/research/__init__.py",
-    "tools/research/src/research/result.py",, "infra/dashboard"]
+    "tools/research/src/research/result.py",
+]
