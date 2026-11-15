@@ -69,7 +69,8 @@ uv run python benchmarks/rho/periods.py --bounds min-cut --scenario reference-on
   knowledge soundness, neither with a bound); and the reporting δs the incorrect-outputs row reports at. From
   `benchmarks/nci/calibrations.json`: the calibrated policy's `K`, with the least and the
   greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling
-  `data/reference.toml` states, and only its range is read (`params.ranges`). The census's numbers are the exception:
+  `data/reference.toml` states, and only its range is read (`params.ranges`). From the cards (`verity.device`): the
+  H200 servers' devices' memory and boundary links' line rate (`params.carded`). The census's numbers are the exception:
   `verity` takes them as parameters, so the registry reads no census. `data/` states the reference datacenter's
   machines (the count of each reference fleet of 8-GPU servers), the world's active parameters and the session
   policy's `Γ` at the world's model, each naming the census entry it is, and the tests hold each equal to

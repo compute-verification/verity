@@ -5,7 +5,7 @@ window (``fixtures/served-h1-window``, window 0's line of a served H200 run's wi
 period) is MISSING from both, with why, and writes no case, so `composite.py` leaves it out and names it missing; the
 directory is private as `composite.py` reads it; and ``--exe`` is the answer of record. The period's is the Lean's
 alone: with no ``pouw-period`` its piece is missing, never the Python reference's. Its cases here are answered by a
-stand-in ``pouw-period`` (`period_exe`), as credit's tests stand in for ``flock-verify``."""
+stand-in ``pouw-period`` (`period_exe`), as credit's tests stand in for ``verity-verify-proof``."""
 
 from __future__ import annotations
 
@@ -37,12 +37,12 @@ STATEMENTS = Path(__file__).resolve().parents[3] / "verity/protocols/accounting/
 @pytest.fixture
 def statements(tmp_path, monkeypatch):
     """credit's statements kit (`test_pouw_credit_statements`): its periods of proof files and its stand-in
-    flock-verify, which accepts a session only when it proves the files credit hands it; credit's Python asks, which
+    verity-verify-proof, which accepts a session only when it proves the files credit hands it; credit's Python asks, which
     the difftests hold to the Lean's."""
     spec = importlib.util.spec_from_file_location("pouw_credit_statements", STATEMENTS)
     kit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kit)
-    exe = tmp_path / "flock-verify"
+    exe = tmp_path / "verity-verify-proof"
     exe.write_text(kit.FAKE)
     exe.chmod(0o755)
     monkeypatch.setattr(PF, "executable", lambda: exe)

@@ -1,6 +1,6 @@
 """`answers`: the verifier's answers on a window's statements, each run once as credit asks for it and shared
 by the steps that judge them (credit's window check and the period's, ``--lean-answers``). Over the statements kit of
-core's credit tests (`test_pouw_credit_statements`: periods of proof files and a stand-in ``flock-verify`` that accepts
+core's credit tests (`test_pouw_credit_statements`: periods of proof files and a stand-in ``verity-verify-proof`` that accepts
 a session only when it proves every file credit hands it), under the Lean verdict of record and the Python reference:
 two steps over the same statements run the verifier once a statement, the second taking every answer by key; an input
 changed between them is another key, which the verifier answers afresh; and a statement the verifier rejects, refuses
@@ -44,7 +44,7 @@ def record(request, monkeypatch):
 
 @pytest.fixture
 def exe(tmp_path, monkeypatch) -> Path:
-    exe = tmp_path / "flock-verify"
+    exe = tmp_path / "verity-verify-proof"
     exe.write_text(kit().FAKE)
     exe.chmod(0o755)
     monkeypatch.setattr(PF, "executable", lambda: exe)
@@ -208,7 +208,7 @@ FAILURES = {
     "refused": (lambda s: None, lambda public: lambda proof: (
         (None, ("registered", "the registered file names no port")) if str(proof.public) == public else None)),
     "LeanError": (lambda s: None, lambda public: lambda proof: (
-        _raise(PF.LeanError("lake build flock-verify failed"))(proof) if str(proof.public) == public else None)),
+        _raise(PF.LeanError("lake build verity-verify-proof failed"))(proof) if str(proof.public) == public else None)),
     "KeyError": (lambda s: None, lambda public: lambda proof: (
         _raise(KeyError("ports"))(proof) if str(proof.public) == public else None)),
     "missing": (lambda s: shutil.rmtree(s["sessions"][0]), lambda public: None),
@@ -242,6 +242,6 @@ def test_a_statement_the_verifier_refuses_refuses_both_steps(failure, record, ex
     else:
         assert ran.runs[before:] == [] and period.ran == 0 and period.unkeyed == 0
         verdicts = {"rejected": "rejected session ", "refused": "refused registered: the registered file names no port",
-                    "LeanError": "error LeanError: lake build flock-verify failed", "KeyError": "error KeyError: 'ports'"}
+                    "LeanError": "error LeanError: lake build verity-verify-proof failed", "KeyError": "error KeyError: 'ports'"}
         assert said[-1].split(": ", 1)[1].startswith(verdicts[failure]) and " by key from the challenger check: " in said[-1]
 

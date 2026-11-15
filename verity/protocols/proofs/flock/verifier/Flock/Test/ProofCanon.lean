@@ -8,7 +8,7 @@ A proof file is the one encoding of what it decodes to (`Flock.Proof`, D17 and D
 file written field by field at a small shape (two levels, one query each, one-byte digests, no salts). `decodeProof`
 accepts the plain file in the deployed form, with the zk patch's `zk_level0 = None` after the pair; a file is read
 through its statement's pin (`plainBytes`), so upstream's form, without the tag, decodes under `--upstream-plain` alone,
-which only `flock-verify agree` takes (`verify` refuses it before it reads a file).
+which only `verity-verify-proof agree` takes (`verify` refuses it before it reads a file).
 Each form is refused where the other is pinned, and so is every other byte after the end, a plain file whose
 `matrix_evals` holds one pair, and a query, claim or consistency grinding nonce other than 0 (R4), each with its reason.
 -/
@@ -68,7 +68,7 @@ def canon : ByteArray := pair sh 2 0
 
 def tagged : ByteArray := canon ++ zeros 1
 
-/-- What the verifier decodes from `file` by default (`up = false`), and what `flock-verify agree` decodes under
+/-- What the verifier decodes from `file` by default (`up = false`), and what `verity-verify-proof agree` decodes under
 `--upstream-plain` (`up = true`). -/
 def read (up : Bool) (file : ByteArray) : V Proof := decodeProof sh (plainBytes up file)
 

@@ -70,7 +70,7 @@ structure Tags where
   `--zk` identity's `hooks` name (`Flock.Zk.hooks`); before, the pads and every table's samples were ChaCha20 streams of the
   prover's seed -/
   osMasks : Bool := false
-  /-- the plain proof files are upstream's form, which end after `consistency_batch_grinding_nonces` (`flock-verify agree
+  /-- the plain proof files are upstream's form, which end after `consistency_batch_grinding_nonces` (`verity-verify-proof agree
   --upstream-plain`, a form `verify` refuses: the agreement corpus's sessions, from upstream's builds); by default they are the deployed prover's,
   the zk patch's build (`pod/60-circuit.sh`), with its `zk_level0 = None` tag after, the one form `decodeProof` accepts;
   the verifier decodes upstream's as the file then that tag, and S17 hashes the file (`verifyFiles (plainBytes true)`;
@@ -410,15 +410,46 @@ def plainLeaves (t : Tags) : Bool :=
 /-- A recursive session's inner statement (`Tags.withPlainLeaves`): the default statement with plain SHA-512 leaves. -/
 def circuitPlainLeaves : Tags := { circuit.withPlainLeaves with name := "verity/flock-circuit+plain-leaves" }
 
+/-- The profile a wide-leaf statement's identity, `Hello` and domains name, where a `fast100` statement's name
+`fast100`. -/
+def WIDE_LEAF_PROFILE : String := "fast100-wide-leaf"
+
+/-- The wide-leaf statement's name (`circuitWideLeaf`, `wideLeaf`). -/
+def wideLeafName : String := "verity/flock-circuit+wide-leaf"
+
+/-- The templated wide-leaf statement's name (`circuitTmplWideLeaf`, `wideLeaf`, `isTmpl`). -/
+def tmplWideLeafName : String := "verity/flock-circuit/tmpl+wide-leaf"
+
+/-- **A wide-leaf statement's tags**, by name, as `isTmpl` reads a templated one's: its `--zk` schedule holds level 0 at
+`2^19` symbols for `m = 32 … 35` (`Zk.schedule`, `fast100Wide`), where the `fast100` statement's grows with `m`; at
+`m ≤ 31` the two schedules are one. -/
+def wideLeaf (t : Tags) : Bool := t.name == wideLeafName || t.name == tmplWideLeafName
+
+/-- An identity at the wide-leaf profile: its `profile` is `WIDE_LEAF_PROFILE`. The statement digest hashes the
+identity, Σ the digest and `Hello` Σ and the profile (`helloOf`), so a session of a statement is refused as one of its
+wide-leaf version and the other way round, at every `m`. -/
+def wideLeafIdentity (identity : Json) : Json := identity.setObjVal! "profile" (s WIDE_LEAF_PROFILE)
+
+/-- `verity/flock-circuit+wide-leaf`: the default statement at the wide-leaf schedule (`wideLeaf`), with the profile in
+its identity (`wideLeafIdentity`) and in its rep domains, `fast100-wide-leafx2` where the default statement's name
+`fast100x2`. Both statements stay, and which one an audit runs is the verifier's `--statement`, never the prover's
+choice. -/
+def circuitWideLeaf : Tags :=
+  { circuit with
+    name := wideLeafName, domainPrefix := "flock-circuit/fast100-wide-leafx2/rep",
+    manyTables := some { sigmaTag := "verity/flock-circuit/sigma-tables", domainPrefix := "flock-circuit/fast100-wide-leafx2/" },
+    identity := wideLeafIdentity circuit.identity }
+
 /-- The versions this verifier knows, by name, beside the templated ones (`templated`). `verify` accepts a session only
-at `circuit`, `circuitPlainLeaves` or `circuitTmpl` (`ProvedScope.served`); it sets every other version up and runs every
-check, so the agreement corpus and the recorded fixtures replay, and then refuses the session. -/
+at `circuit`, `circuitPlainLeaves`, `circuitWideLeaf`, `circuitTmpl` or `circuitTmplWideLeaf` (`ProvedScope.served`); it
+sets every other version up and runs every check, so the agreement corpus and the recorded fixtures replay, and then
+refuses the session. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
   circuitE51e2b86, circuitE51e2b86Selftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes210d32e1,
   circuitTypes210d32e1Selftest, circuitF5df3bbc, circuitF5df3bbcSelftest, circuitTypesF5df3bbc, circuitTypesF5df3bbcSelftest,
   circuitB3727bd9, circuitTypesB3727bd9, circuitTypesB3727bd9Selftest,
   circuitCec3e347, circuitTypesCec3e347, circuitTypesCec3e347Selftest,
-  circuit, circuitSelftest, circuitTypes, circuitTypesSelftest, circuitPlainLeaves]
+  circuit, circuitSelftest, circuitTypes, circuitTypesSelftest, circuitPlainLeaves, circuitWideLeaf]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 
@@ -435,14 +466,21 @@ def circuitTmpl : Tags :=
     sigmaTag := "verity/flock-circuit/tmpl/sigma", domainPrefix := "flock-circuit-tmpl/fast100x2/rep",
     identity := identityHidden false "verity/flock-circuit/tmpl" (leafScheme := leafSchemeHm96Os) }
 
+/-- `verity/flock-circuit/tmpl+wide-leaf`: the templated statement at the wide-leaf schedule (`wideLeaf`), with the
+profile in its identity and its rep domains as `circuitWideLeaf` has it. -/
+def circuitTmplWideLeaf : Tags :=
+  { circuitTmpl with
+    name := tmplWideLeafName, domainPrefix := "flock-circuit-tmpl/fast100-wide-leafx2/rep",
+    manyTables := circuitWideLeaf.manyTables, identity := wideLeafIdentity circuitTmpl.identity }
+
 /-- The templated statements: a circuit file whose unit `HmOut.parseTmpl` reads from its template. `verify` reads them by
 name (`isTmpl`), beside `all` and `find?`; its statement check passes them only in the form `ProvedScope.scopeOkT`
 covers. -/
-def templated : List Tags := [circuitTmpl]
+def templated : List Tags := [circuitTmpl, circuitTmplWideLeaf]
 
 /-- A templated statement's tags (`templated`, by name, as `verify` reads them). It compares the name alone: building
 `circuitTmpl` would hash its identity's default key (`leafSchemeHm96Os`) inside the compiled verifier. -/
-def isTmpl (t : Tags) : Bool := t.name == tmplName
+def isTmpl (t : Tags) : Bool := t.name == tmplName || t.name == tmplWideLeafName
 
 /-- The tags `--statement` names, as `verify` and `statement` read them: a statement of `all` (`find?`), else a templated
 one (`templated`). -/

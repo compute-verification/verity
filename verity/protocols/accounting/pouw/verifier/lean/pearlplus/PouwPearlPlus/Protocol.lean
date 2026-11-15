@@ -27,7 +27,7 @@ node's sample and a v1 record are refused as `of-record`.
     {"manifests": [manifest, …], "record": hex, "window": {"dropped": [s, …], "record": W, "rounds": [s, …] | null}}
 
 the retained passes' manifests, a nonempty list; the SHA-512 digest (lowercase hex) of the registration record the
-run is on, the record the policy and sampled proofs commit to, which remote ties it to (`Core.Remote.V1.run`); and the
+run is on, the record the policy and SPOT commit to, which remote ties it to (`Core.Remote.V1.run`); and the
 window record W the passes are tied to (`served_passes.py retain --window-record`'s, the record that registration is
 chained right after, which remote ties it to too, `Core.Remote.V1.window`), with the rounds the passes are, in their
 order (`null`: pass i is round i), and the rounds dropped from the retention before the coin. The check holds the

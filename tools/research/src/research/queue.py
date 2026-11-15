@@ -198,7 +198,7 @@ module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry
 it carries that isn't admitted, a merge of an old `next` that carries a PR's head the PR no longer lands (closed, rebuilt
 without it, or withdrawn: `stale_carried`, after `old_next` for one closed unlanded), and a failure of
 `tests/test_repository.py` (a report-genre name), which the preflight runs too, as it runs the landing gates on the head; a
-warn gate's failure (a Markdown file over its cap) it prints as a warning, and so it prints what the vLLM integration's ratchet
+warn gate's failure (a Markdown file over its size limit) it prints as a warning, and so it prints what the vLLM integration's ratchet
 gate fails on the merged tree (`PREFLIGHT_RATCHET`), since the gate tells a new violation by its text and can take an honest
 change's violation for one.  A Lean change can pass its own Lean check and break
 a module that imports it (a changed signature, dropped premises, a dropped import), which its candidate's records run finds,
@@ -833,7 +833,7 @@ class DriveFlags:
     #: close each open PR nothing will land, its head carried by a landed PR of the same owner or its change already on
     #: `land_into` (`drive.Driver._unlandable`): "on"; "log", only log each it would close; "off"
     close_unlandable: str = "off"
-    #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`drive.Driver.start_postland`):
+    #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`vqueue_slim.start`):
     #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
     #: planner's N (`tools/verity/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
     after_landing_shards: int | str = 1
@@ -1249,7 +1249,7 @@ def gate_refusal(repo: Path, main: str, head: str, gates: Iterable[str],
     """What ``gates``, each a ``kind`` (a landing gate, or a warn gate, whose failure refuses nothing), say of ``head`` against
     ``main`` (each judges the change from their merge base): (each failure, with its fix and how to run the gate; each gate
     that couldn't judge, with why).  ``head`` is a PR's head, or with ``onto`` its merge onto that branch, as the sync judges
-    it: what the members below add counts too (a merge can take a file over its cap with the members below it, though its
+    it: what the members below add counts too (a merge can take a file over its limit with the members below it, though its
     head alone is under).  A gate exits 0 to pass, and 1 with `--json`'s `{"failures": [{"why": ..., "fix": [...]}]}` to
     fail; anything else is unable to judge."""
     what, merged = (head[:12], "") if onto is None else (f"its merge onto `{onto}` ({head[:12]})", f" on its merge onto `{onto}`")
@@ -3891,7 +3891,7 @@ class NotStarted(str):
 
 
 class StillGoing(str):
-    """`ready --on`'s caller stopped waiting at research.waitcap's cap with the tier's run still going: nothing failed or was
+    """`ready --on`'s caller stopped waiting at research.waitcap's limit with the tier's run still going: nothing failed or was
     cancelled, and `research queue judge RUN` marks the PR once the run has ended."""
 
 
@@ -3947,12 +3947,12 @@ class RemoteQuickTier(QuickTier):
     (`NotStarted`), and neither did one with no machine to run on.  The tier has `timeout_s` from taking its slot (`--run-max`), so
     the run on the machine is bounded by the two together (`--timeout`), and the caller's wait by that plus REMOTE_GRACE_S of
     ``clock`` time (a fetch can take its ssh's own timeout, so polls are not counted), past which it ends with the poll under way.
-    The caller waits at most ``max_wait_s`` (research.waitcap's cap) of that: then the run goes on and the wait ends `StillGoing`."""
+    The caller waits at most ``max_wait_s`` (research.waitcap's limit) of that: then the run goes on and the wait ends `StillGoing`."""
 
     WORKTREE_SUFFIX = "-ship"
 
     def __init__(self, repo: Path, remote: str, on: str, *, by: str = "", project: str = "verity", root: Path | None = None,
-                 timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S, max_wait_s: float = waitcap.WAIT_CAP_S,
+                 timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S, max_wait_s: float = waitcap.WAIT_LIMIT_S,
                  poll_s: float = REMOTE_POLL_S, launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch,
                  fetch: Callable[[Path], dict] | None = None, sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic, place: Callable[[str, Path], tuple[str | None, str]] = place):
@@ -6935,7 +6935,7 @@ def main(argv: list[str]) -> int:
                     "warning), the rest on stderr")
     ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot (`auto` or "
                                                     "M1,M2: the one with a free check slot, as `check.py --on` picks), waiting for it "
-                                                    f"{waitcap.WAIT_CAP_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
+                                                    f"{waitcap.WAIT_LIMIT_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
                                                     "on: `judge RUN` marks the PR once it ends); judge: look "
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")

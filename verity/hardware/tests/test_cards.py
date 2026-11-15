@@ -317,7 +317,7 @@ def test_every_premise_is_listed() -> None:
 
 def test_the_quoted_numbers() -> None:
     """The clocks, host peaks, bandwidths and measured reads already quoted outside this package, pinned so that a
-    change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host card
+    change to one is deliberate: among them PoUB's verifier's `timing.py` HOST_ figures, which the RTX node's host card
     states beside the disks' read that PoUB's verifier rounds up, and its GPU's measured read, which the RTX PRO 6000's
     card states."""
     server, h200, b200 = load_card("rtx-pro-6000-server"), load_card("h200-sxm-141gb"), load_card("b200-sxm-180gb")

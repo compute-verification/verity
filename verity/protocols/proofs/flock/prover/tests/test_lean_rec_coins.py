@@ -47,7 +47,7 @@ from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
 LEAN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 UNIT = "rec-open/l16-h7"
@@ -78,7 +78,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 def built() -> None:
     assert (SET / "u" / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures verity/protocols/proofs/flock/prover/tests/fixtures/rec-coins`")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
 
 
 @pytest.fixture(scope="module")

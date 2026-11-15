@@ -15,7 +15,7 @@
   sample taken from the line `submit` writes for it, its record filed under the session's ``out`` (else the verifier's own
   directory). A verifier serves its queue in the order its connections arrive, so it takes one prover's sessions, and
   `submit` writes a session's two lines together.
-* **The verdict of record.** A session's ``verdict`` (Lean `flock-verify verify --zk` on its record, say) runs on a pool
+* **The verdict of record.** A session's ``verdict`` (Lean `verity-verify-proof verify --zk` on its record, say) runs on a pool
   of ``verdicts`` threads once both sides have recorded the session, off the provers' path.
 * **The challenger** (``challenger=True``, FLOCK_CHALLENGER=1's): each verifier takes every session's coin tree from a
   challenger of its own (`verity_flock.challengers`, `serve --queue --tree-from`), whose session ends with the verifier's

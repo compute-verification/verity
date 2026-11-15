@@ -63,6 +63,11 @@ $M$ runs with probability at most $\sum_{|S|=M}\prod_{t\in S} p_t$ (`prCoin_coun
 `prCoin_count_le_of_log`). When $p$ bounds "accepted and short" and shortness is fixed before any coins are flipped, every
 run is accepted with at least $M$ short with probability at most $p^M$ (`prCoin_forall_count_le_pow`); shortness the
 run's own coins decide gets only the count bounds.
+**The step with a charge** (`security/Proofs/Flock/Claims/ChargeOnce.lean`, outside this directory because
+its averages are `Claims.Ex` over the reals): where run $t$'s bound also holds the average, over the run's own coins, of
+a nonnegative charge that reads those coins and the earlier runs', the product of the runs' factors, on the runs whose
+bounds multiply to at most $c$, averages at most $c$ plus the average of the charges' sum (`ex_prod_add_le`): the charge
+is paid once over the $T$ runs, not at its largest value in each.
 `subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's
 other checks, since it imports `Flock.Draw`), **the running sampler**: over a uniform byte stream, the verifier's
 executable `Flock.Draw.subset k n` returns a sample missing $B$ with probability at most `subset_escape`'s

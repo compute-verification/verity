@@ -73,7 +73,7 @@ session: the record under its key, the close signed under it, the log the one th
 session its client closed; then the roots it received (`released_roots_of`).  A session that ends unclosed is no window's.
 
 **A recursive run's interactive-run record** (`RunRecord`, `RUN_KIND`) is the challenger's log of one recursive
-statement's run, which `flock-verify rec-compose --rec-run` reads (`Flock.RecCompose.checkRun`, C10 `OneRun`).  Its
+statement's run, which `verity-verify-proof rec-compose --rec-run` reads (`Flock.RecCompose.checkRun`, C10 `OneRun`).  Its
 parts' sessions are proved separately, each on its own keyed coin tree, so only this record shows they are one run:
 
     record  = {events, kind}                                       kind: RUN_KIND
@@ -2078,7 +2078,7 @@ def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
     return openings
 
 
-#: the interactive-run record of one recursive run (module docstring), which `flock-verify rec-compose --rec-run` reads
+#: the interactive-run record of one recursive run (module docstring), which `verity-verify-proof rec-compose --rec-run` reads
 RUN_KIND = "verity/rec-run/v1"
 
 

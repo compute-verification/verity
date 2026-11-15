@@ -11,6 +11,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceCapGap
 import Proofs.Pouw.PearlC.TTOutW1Variants
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # g at the RTX PRO 6000 (sm_120) records (staging, nothing pinned)

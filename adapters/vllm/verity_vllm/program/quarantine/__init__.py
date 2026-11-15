@@ -10,7 +10,7 @@ Admission (gate G4 + `verity_vllm.properties.quarantine_lint` + `verity_vllm.pro
      body gets a new version, the old one stays (lint);
   3. recognizer tests: the sub-package's pattern has positive AND negative tests (dtype / rank / alpha / layout / constexpr
      guards each demonstrably reject) in `tests/engine/test_gen_<lane>.py` (the sealed verifier runs them);
-  4. differential: `difftest produce` (production op, GPU) + `difftest check` (Verity body) bit-exact on randomized inputs
+  4. differential: `difftest produce` (the served op, GPU) + `difftest check` (Verity body) bit-exact on randomized inputs
      including the edge kinds zeros / max / subnormal / alternating -> `quarantine.json`;
   5. every specialization of the definition that appears in the target run is compared at least once by Tier A (replay);
   6. only then may an accepted profile use the definition.  Promotion out of quarantine into `verity.definitions.registry` is an

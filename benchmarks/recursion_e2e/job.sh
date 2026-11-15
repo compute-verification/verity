@@ -3,7 +3,7 @@
 # invocation under its own RESEARCH_RUN_DIR ($OUT/steps/<step>/r<i>, so every record 85 writes is kept) and /usr/bin/time -v,
 # every CPU step REPEAT times and every GPU step once with its runs; then the result (run.py result) in
 # $OUT/recursion_e2e.json and $OUT/table.md. Run from the verity tree; `verity bench recursion_e2e run` prints and launches
-# it, a firewalled run (85's CPU prover, GPU=0) as a plain run on a CPU node:
+# it, a run behind the ZK server (85's CPU prover, GPU=0) as a plain run on a CPU node:
 #   research run --on CPU_NODE --project verity --source . --cwd source --mem-gb 128 --timeout 327m -- \
 #     taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench
 # and a GPU one as a GPU host job on a GPU node's queue (85 leases a GPU around each prove itself).
@@ -36,18 +36,20 @@ set -uo pipefail
 # RELEASE=1: one inner session opens the one recursive session, and every step inside its first window runs once
 [ "${RELEASE:-0}" = 1 ] && export WARM=${WARM:-0} RUNS=${RUNS:-1} REPEAT=${REPEAT:-1}
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/rec-bench-$$}/out}; mkdir -p "$O"
+# the pod's python3 runs settings.py, run.py and forge_after.py from the tree: verity_config and verity after the run's roots
+export PYTHONPATH=${PYTHONPATH:+$PYTHONPATH:}$REPO/tools/config:$REPO
 # settings.py: an unknown REPEAT_* or OPROVE_*, or a value that doesn't parse, is refused; the value settings given are recorded
 SETTINGS=$(python3 benchmarks/recursion_e2e/settings.py record "$O/settings.json") || exit 2
 # 85's leases are preemptible unless GPU_PREEMPTIBLE is empty: on node 1 a waiter stops one after about 2 min, a lost
-# measurement (85 retries the statement afresh, at most GPU_TRIES times), so the bench's are not. A firewalled V* release
-# at K = 4096 takes minutes (L3: 519 s), past 85's default lease of 10 min for the larger statements (run.py's LEASE_MIN)
+# measurement (85 retries the statement afresh, at most GPU_TRIES times), so the bench's are not. A V* release through the ZK
+# server at K = 4096 takes minutes (L3: 519 s), past 85's default lease of 10 min for the larger statements (run.py's LEASE_MIN)
 export GPU_PREEMPTIBLE=${GPU_PREEMPTIBLE-} GPU_MAX_MIN=${GPU_MAX_MIN:-75}
 export K=${K:-4096} N=${N:-2}; export TAG=${TAG:-rb-${RESEARCH_RUN_ID:-$$}} WARM=${WARM:-1} RUNS=${RUNS:-3}
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/rec-bench}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 STEPS=${STEPS:-build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative}; REPEAT=${REPEAT:-3}; FORGE=${FORGE:-}
 MODES=${MODES:-firewall}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
 # OPROVE_GPU=0 (the default under the ZK server): V*'s statements proved by 85's CPU prover, no lease. A lease pool stops a
-# lease whose GPU computes nothing for about 10 min, and a firewalled release's GPU waits on the Lean session loop for minutes
+# lease whose GPU computes nothing for about 10 min, and during a release through the ZK server the GPU waits on its Lean session loop for minutes
 [[ ,$MODES, == *,firewall,* ]] && OPROVE_GPU=${OPROVE_GPU:-0} || OPROVE_GPU=${OPROVE_GPU:-${GPU:-1}}
 # V*'s statements one at a time, as the ZK server proves outer proofs: 85 proves 4 at once by default
 export OPROVE_JOBS=${OPROVE_JOBS:-1}
@@ -55,7 +57,7 @@ PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --own
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
   --why "the recursion bench's builds (and a KEEP_DATA=1 run's data/TAG): a cache, rebuilt by the next run" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2
-# 85 moves HOME where it can't write; its Lean builds (flock-verify, flock-firewall) must find the same elan
+# 85 moves HOME where it can't write; its Lean builds (the Lean verifier, the ZK server's Lean session loop) must find the same elan
 [ -w "$HOME" ] || { export HOME=$FLOCK_WORK/home; mkdir -p "$HOME"; }
 RR=/workspace/jobs/rec-reprice
 [ -z "${CUDA_TK:-}" ] && [ -x $RR/cuda-13.3.1/bin/nvcc ] && export CUDA_TK=$RR/cuda-13.3.1
@@ -115,9 +117,10 @@ for s in ${STEPS//,/ }; do
         step build 2 GPU=0 TAG=$TAG-g0 STAGE_FROM=$FLOCK_WORK/data/$TAG || { rc=1; continue; }
         rm -rf "$FLOCK_WORK/data/$TAG-g0"
       fi
-      # 85 builds flock-firewall (its build step, else oprove's) beside flock-verify, from this tree's Lean sources
+      # 85 builds the ZK server's Lean session loop (its build step, else oprove's) beside the Lean verifier, from this tree's
+      # Lean sources
       step oprove 1 MODES=$M REPLAY=0 WARM=${OPROVE_WARM:-0} RUNS=${OPROVE_RUNS:-1} GPU=$OPROVE_GPU || rc=1
-      fw=$L/lean-$LSHA/flock-firewall; [[ ,$M, != *,firewall,* ]] || [ ! -x $fw ] || sha256sum $fw >> "$O/params.txt" ;;
+      loop=$L/lean-$LSHA/flock-firewall; [[ ,$M, != *,firewall,* ]] || [ ! -x $loop ] || sha256sum $loop >> "$O/params.txt" ;;
     icheck|vcap|oreplay) for i in $(reps $s); do step $s $i || { rc=1; break; }; done ;;
     vstage) for i in $(reps vstage); do step vstage $i "FORGE=${FORGE//,/ }" || { rc=1; break; }; done ;;
     lean) for i in $(reps lean); do step lean $i JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;
@@ -126,7 +129,7 @@ for s in ${STEPS//,/ }; do
     # the forgeries the ZK server stops before release, made on the honest releases after proving and put to Lean with the
     # lean step's own flags (forge_after.py; out/forge-after.json)
     forge-after)
-      lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/flock-verify
+      lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/verity-verify-proof
       timed forge-after 1 env OUT=$O/steps/forge-after/r1/out python3 benchmarks/recursion_e2e/forge_after.py \
         --work "$FLOCK_WORK" --tag "$TAG" --run-out "$lo" --kinds "${FORGE_AFTER:-coef,dirs,message}" --jobs "${LEAN_JOBS:-4}" \
         --bin "$([ -f $lo/lean/own-L0.txt ] || [ -f $lo/lean/own-alg-p0.txt ] && echo run || echo lean)=$fv" || rc=1 ;;

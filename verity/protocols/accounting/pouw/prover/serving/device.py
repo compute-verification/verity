@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.circuits.kernels import SHA512
+from verity.commitments.cuda import SHA512
 from verity.protocols.accounting.pouw import prover
 from verity.protocols.accounting.pouw.prover.circuit import ncp2
 
@@ -33,7 +33,7 @@ from verity.protocols.accounting.pouw.prover.serving import circuit as PC
 from verity.protocols.accounting.pouw.prover.serving import native as PN
 
 HERE = Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
-#: the GPU's one SHA-512 (`verity.circuits.kernels.SHA512`), which ncp2.cuh includes: a source of every build, by its absolute path
+#: the GPU's one SHA-512 (`verity.commitments.cuda.SHA512`), which ncp2.cuh includes: a source of every build, by its absolute path
 #: (``HERE / s`` is then the path itself, so its bytes are in `source_digest`), and its directory on every build's include path
 SHA512_SOURCE, SHA512_INCLUDE = str(SHA512.resolve()), f"-I{SHA512.resolve().parent}"
 SOURCES = (SHA512_SOURCE, "ncp2.cuh", "ncp2_fast.cuh", "ncp2_host.cpp")

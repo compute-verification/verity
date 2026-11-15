@@ -10,7 +10,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 audit whose session is one table's live session (`liveTable`, the challenger with retained round bytes,
 `Refine/Live.lean`) written out as a session directory by `wr`, against the audit with the salted session
 `batchedSessionL` on one-table plans. What it takes is `Decodes` (`Refine/LiveSim.lean`) at each sample and registration:
-on every live outcome flock-verify accepts, each rep's game runs on the tape decoded from its stream and its proof file,
+on every live outcome verity-verify-proof accepts, each rep's game runs on the tape decoded from its stream and its proof file,
 and the salted table's verdict on those runs holds.
 
 * `sessionBL_one`: the salted session on one table is `modelTable`'s shape, with the reps of `tableAfterL` and the
@@ -21,7 +21,7 @@ and the salted table's verdict on those runs holds.
   the simulated session strategy), and the refinement at it,
   `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL …)) …`.
 * `Prog.flock_headline_live`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_one`. For one-table
-  plans and the live session `liveTable` written by `wr`, flock-verify accepts with at least `K` incorrect proof blocks of the
+  plans and the live session `liveTable` written by `wr`, verity-verify-proof accepts with at least `K` incorrect proof blocks of the
   simulated prover's committed values with probability at most `miss(K) + ksAvgStrict + linkBoundE`, given `Decodes`.
 
 What the refinement still needs past this: `Decodes` itself, which is deterministic (the decoder premise, the framing: the round bytes
@@ -174,8 +174,8 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts** (the decoder premise, named): at every sample and registration, on
-every live outcome whose session directory flock-verify accepts, each rep's game runs on the tape decoded from its
+/-- **The decoder is right on the sessions verity-verify-proof accepts** (the decoder premise, named): at every sample and registration, on
+every live outcome whose session directory verity-verify-proof accepts, each rep's game runs on the tape decoded from its
 stream and its proof file, and the salted table's verdict on those runs, with the cap `root_B` decodes to and the
 openings and salts the proof files decode to, holds. -/
 def DecodesAll : Prop :=
@@ -197,7 +197,7 @@ noncomputable def simAudit (hdec : DecodesAll H E Lf T I wr opn dec one fin capO
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
 /-- **The refinement for one-table sessions.** Against any live prover `τ` of the live audit whose session is
-`liveTable` written out by `wr`, flock-verify's acceptance is no likelier than the salted audit's acceptance against the
+`liveTable` written out by `wr`, verity-verify-proof's acceptance is no likelier than the salted audit's acceptance against the
 simulated prover `simAudit … τ`, with no live event added (`bad = ⊥`), whenever the decoder is right on accepted
 sessions (`DecodesAll`). -/
 theorem execRefines_one (hdec : DecodesAll H E Lf T I wr opn dec one fin capOf)
@@ -232,11 +232,11 @@ variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
 /-- **The headline at the executable, for one-table sessions of the challenger.** Let the verifier sample the units
 as in `Prog.flock_headline_L` (the live stratified sample under A3), let each sample's session be one table `T S R`, and let
 the live session be `liveTable` (the challenger, its coins uniform per round and sampled after the round's retained
-bytes), written out as a session directory by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K`
+bytes), written out as a session directory by `wr`. Against any live prover `τ`, verity-verify-proof accepts with at least `K`
 incorrect proof blocks of the committed values of the simulated prover (`simAudit … τ`) with probability at most
 `miss(K) + ε_ks + δ_link`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_one`, so `Pr[bad] = 0`.
 Beyond `Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`,
-`hCR`), it takes `hdec`: the decoder is right on the sessions flock-verify accepts (the decoder premise). -/
+`hCR`), it takes `hdec`: the decoder is right on the sessions verity-verify-proof accepts (the decoder premise). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)

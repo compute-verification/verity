@@ -126,7 +126,7 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
   obtain ⟨-, -, hspec, htabs⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
   have hq2 : 2 * j.val + r.val < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -326,8 +326,9 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
     exact Claims.ZKServer.ofDraws_order _ _ _
-  have htp' : _root_.Flock.Zk.schedule tb.st.m = .ok (tb.sch, tp) := by
-    rw [htm, ← hst]
+  have htw : tb.st.wideLeaf = (Masked.stAt x j).wideLeaf := by rw [hts']; rfl
+  have htp' : _root_.Flock.Zk.schedule tb.st.wideLeaf tb.st.m = .ok (tb.sch, tp) := by
+    rw [htm, htw, ← hst]
     exact htp
   have hlay : lay = _root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0 := by
     rw [hlayE, hts', hsch]

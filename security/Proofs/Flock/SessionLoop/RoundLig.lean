@@ -154,13 +154,13 @@ theorem release_sched_lig (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit 
   have hr2 := r.isLt
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
   -- the schedule: `k0 ≥ 1`, `n = m - 7 ≠ 0`, at least two levels, and its sizes fit the coins' counts
   obtain ⟨h25, h35, hsm, hk0, -, ⟨hn7, hlv, -⟩, -, -, -⟩ :=
-    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (Masked.zkTab x j).hz
+    FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ (Masked.zkTab x j).hz
   have hsn : (Masked.zkTab x j).sch.n ≠ 0 := by omega
   have hsmall := FlockComplete.JsonRT.zkSchedule_small h25 h35 (Masked.zkTab x j).hz
   have hn62 : (Masked.zkTab x j).sch.n < 2 ^ 62 :=

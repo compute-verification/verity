@@ -6,6 +6,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.KernelWrefGap
 import Proofs.Pouw.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # v1 under rev1 at a stricter cap, FP32 at the issue-bound add (FP8 security's file)

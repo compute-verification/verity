@@ -382,7 +382,7 @@ def _served(d: dict) -> list[int]:
 
 def _drawn(name: str, seed: int):
     d = cases.drawn_instance(random.Random(f"{name}/{seed}"), name)
-    return Cr.drawn(*(d[k] for k in cases.DRAWN_KEYS))
+    return Cr.drawn_twin(*(d[k] for k in cases.DRAWN_KEYS))
 
 
 def _window_drawn(name: str, seed: int):
@@ -410,7 +410,7 @@ def test_the_window_draw_is_its_coins(seed):
     stream, the sample's root as the registration and its receipts, over the strata of the descriptor's layout."""
     d, (got, refused) = _window_drawn("honest", seed)
     lay, _ = Cr.layout_of(bytes.fromhex(d["descriptor"]))
-    want, why = Cr.drawn(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
+    want, why = Cr.drawn_twin(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
                          {"receipts": d["draw"]["receipts"]}, lay, d["k"])
     assert refused is None and why is None and got == want
 
@@ -456,16 +456,16 @@ def test_the_drawn_units_are_the_draw_coins(seed):
     sampling design's k_s, and another coin, stream, registration or receipt samples another set; never a list handed in."""
     d = cases.drawn_instance(random.Random(f"honest/{seed}"))
     args = [d[k] for k in cases.DRAWN_KEYS]
-    got, refused = Cr.drawn(*args)
+    got, refused = Cr.drawn_twin(*args)
     ss, _ = Cr.strata(d["layout"])
     assert Cr.law(ss, d["k"]) is None
     assert refused is None and got == sorted(set(got))
     for s in ss:
         assert sum(any(lo <= u < hi for lo, hi in s["units"]) for u in got) == s["k"]
     big = {**d, "layout": cases.layout(random.Random(f"wide/{seed}"), big=True), "k": 100}
-    base, _ = Cr.drawn(*(big[k] for k in cases.DRAWN_KEYS))
+    base, _ = Cr.drawn_twin(*(big[k] for k in cases.DRAWN_KEYS))
     for k, v in (("coin", "ab" * 64), ("stream", "another"), ("registration", "cd" * 64), ("receipt", {"receipts": "x"})):
-        assert Cr.drawn(*({**big, k: v}[x] for x in cases.DRAWN_KEYS))[0] != base, k
+        assert Cr.drawn_twin(*({**big, k: v}[x] for x in cases.DRAWN_KEYS))[0] != base, k
 
 
 def test_the_strata_are_the_compiled_programs():

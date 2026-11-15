@@ -34,7 +34,7 @@ Every number says how it was obtained (``method``):
   affine in T, and built at T = BN + 16 and 2 BN + 16 (:data:`BLOCK_CHECKS`), whose excess over that fit must be one and
   two times one block's; a stratum of NB blocks is then the fit plus NB − 1 blocks' excess, evaluated at the stratum's
   mean T. The builds are at 16-aligned T: PV runs in 16-key steps, so a T between pads its last step.
-- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_counts`); the counts' recurrence is read off builds at every
+- ``scan fit`` (token-select): not affine in V (:func:`argmax_scan_counts`); the counts' recurrence is read off builds at every
   V in :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
 - ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_excess`): that
   excess is fitted with a curvature through the three points, unchecked; or, when those builds are over ``--exact-nnz``,
@@ -197,7 +197,7 @@ def registered(template: str, params: Mapping[str, Any], T: int | None = None) -
     The native tail (``tail_gates``) is evaluated by the verifier and has no rows. ``{"none": why}`` without one."""
     mod = lowerings.registry("C-Flock").module(template)
     if mod is None:
-        return {"none": "no registered C-Flock lowering"}
+        return {"none": "no registered Flock lowering"}
     sub = TM.get(template).bind(**params)
     if template not in REGISTERED_FN and (why := mod.supports(sub, SCHEME)):
         return {"none": why}
@@ -639,8 +639,8 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             check = scan(SCAN_CHECK)
             agree = check == _plain(res[SCAN_CHECK])
             V = int(params["V"])
-            r.update(method="exact" if V in res else "scan law", variable="V", points=[SCAN_POINTS[0], SCAN_POINTS[-1]],
-                     counts=scan(V), law=scan.constants, tables=res[SCAN_POINTS[-1]]["tables"],
+            r.update(method="exact" if V in res else "scan fit", variable="V", points=[SCAN_POINTS[0], SCAN_POINTS[-1]],
+                     counts=scan(V), fit=scan.constants, tables=res[SCAN_POINTS[-1]]["tables"],
                      definition=res[SCAN_POINTS[-1]]["definition"],
                      exact_check={"V": SCAN_CHECK, "result": "agrees" if agree else {m: [check[m], res[SCAN_CHECK][m]] for m in METRICS}})
             if not agree:
@@ -862,7 +862,7 @@ def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jo
         s.pop("_fit", None)
         s.pop("_block", None)
     return {"format": "verity/f6-unit-costs/v2", "epsilon": str(EPSILON), "delta": "2^-40", "K": K,
-            "draw": "uniform K-subset of all units per workload and granularity (a hidden partition cannot stratify by type)",
+            "sample": "uniform K-subset of all units per workload and granularity (a hidden partition cannot stratify by type)",
             "quantile": "least k with P(X > k) <= 2^-40, hypergeometric", "exact_nnz": exact_nnz, "attention_t": list(attention_t),
             "nnz": "registered lowering's layout where one exists (nnz_a + nnz_b + rows, C = I over rows), else the generic "
                    "whole lowering (nnz_AB + ANDs); nnz_generic is the generic count",
@@ -883,7 +883,7 @@ def _si(v: float | None) -> str:
     return f"{v:.3g}"
 
 
-METHOD_MARK = {"exact": "E", "affine": "A", "scan law": "S", "model": "M", "missing": "–", "excluded": "x", "not built": "nb"}
+METHOD_MARK = {"exact": "E", "affine": "A", "scan fit": "S", "model": "M", "missing": "–", "excluded": "x", "not built": "nb"}
 SOURCE_MARK = {"registered": "R", "generic": "G", "tree": "T"}
 
 
@@ -891,7 +891,7 @@ def render(inv: Mapping[str, Any]) -> str:
     lines = [f"# F6 unit costs: K = {inv['K']} sampled proof blocks (ε = {inv['epsilon']}, δ = {inv['delta']}), uniform over all units", "",
              ("Method: E exact build at the census parameters, A exact affine extrapolation (checked on 4 builds; attention: "
               "affine in T within a key block and in the block count, checked past the first block), S token-select's scan "
-              "law (read off every V in 2..139, checked by an exact build at V = 1030), M attention model (affine in T within "
+              "fit (read off every V in 2..139, checked by an exact build at V = 1030), M attention model (affine in T within "
               "a key block; past the first block, the metrics not affine in the block count are fitted with an unchecked "
               "curvature), – missing, x excluded, nb not built."), "",
              ("src: R the template's registered Flock lowering (units x its flock-ir-unit/v2 layout; committed = rows, "
