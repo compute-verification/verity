@@ -428,8 +428,7 @@ private theorem keys?_obj (kvs : Std.TreeMap.Raw String Lean.Json) :
 `String.splitOn`, which is not kernel-reducible); fed to the walk so `Core.Ratio.ofString "1/2" _` reduces (its `natOf`
 and `gcd` the walk then runs in the kernel). The one split the parameters' `delta` needs. -/
 private theorem split_half : "1/2".splitOn "/" = ["1", "2"] := by
-  unfold String.splitOn
-  simp (config := {decide := true}) only [ite_true, ite_false]
+  show String.splitOnAux "1/2" "/" 0 0 0 [] = ["1", "2"]
   repeat (rw [String.splitOnAux.eq_1]; simp (config := {decide := true}) only [ite_true, ite_false])
 
 /-! ## v2's parameters, with every field named -/
