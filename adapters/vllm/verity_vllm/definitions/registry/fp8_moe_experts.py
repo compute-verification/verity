@@ -168,7 +168,7 @@ CHUNK_STATICS = STATICS + ["FIRST", "LAST"]
 
 
 def chunk_sig(e4m3=E4M3, f32=F32, i32=I32, bf16=BF16):
-    return lambda S: ((("xq", Array(S.K, e4m3)), ("sx", Array(S.K // S.G, f32)), ("e", i32)) + ((() if S.FIRST else (("acc", f32),)))
+    return lambda S: ((("xq", Array(S.K, e4m3)), ("sx", Array(S.K // S.G, f32)), ("e", i32)) + (() if S.FIRST else (("acc", f32),))
                       + (("slab", Array(S.E, Array(S.K, e4m3))), ("ws", Array(S.E, Array(S.K // S.G, f32)))), bf16 if S.LAST else f32)
 
 
