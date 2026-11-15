@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["PousCheck"],
  "exempt": {
   "PousCheck.SetupProtocolMain": "the pous-setup executable's entry point, one line; its command is Core.Protocol.main of PousCheck.SetupProtocol.protocol, audited under PousCheck and CoreProtocol",
@@ -17,7 +17,7 @@
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "1462"],
    "data": {
     "difftest/instances.jsonl": "6f49803102d8e053e92b3b56533b64d250789af6eefb5b998907b43509711f93",
-    "difftest/python.jsonl": "90b1f6ca8a84d64ce2c4afd6d35641197e91e96ef89776a63de7327750aa05d6"
+    "difftest/python.jsonl": "ea3d329dd82d4876db1296151c8c4118f59a23729e421ac808874d58e6411093"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }

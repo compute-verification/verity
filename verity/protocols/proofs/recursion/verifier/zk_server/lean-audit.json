@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["ZkServer", "ZkServerHonestDifftest"],
  "exempt": {
   "ZkServerMain": "the core-zk-server executable's entry point: `session` is Core.ZkServer.Loop.main, every other command Core.Protocol.main of Core.ZkServer.protocol, audited under ZkServer and CoreProtocol",
