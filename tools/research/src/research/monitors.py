@@ -60,6 +60,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -1131,6 +1132,8 @@ SLOT_WRAPPER = "check/slot.py"
 CHECK_LINE = "/workspace/research/locks/check-line"     # slot.py's LINE beside its SLOTS: a waiter's ticket, locked while it waits
 NOT_STARTED = 75        # slot.py's exit when CMD never ran: a waiter past --wait-max, or a twin whose twin took a slot first
 FAILED_RECENT_S = 6 * 3600
+#: the largest steps.jsonl or suite report of a running check the reader brings the relay to judge its failures by (`_judged`)
+JUDGED_BYTES = 2 << 20
 #: how long a run that ended before any step failed may lack its failure.json: `research run` classifies the end a few seconds
 #: after status.json says so, and a post read in between would say "unclassified: no reason recorded" of a hand cancel
 CLASSIFY_S = 120
@@ -1223,6 +1226,23 @@ def steps(p):
     return out
 
 
+def judged(d, ran):
+    """What the relay judges a running check's failures by (`_judged`): its steps.jsonl and suite reports whole, and each failed
+    step's log's FAIL lines (all an allowance of circuit-check reads); a file over its bound is left out, which covers nothing."""
+    out = {}
+    for name, bound in [*((n, A["judged_bytes"]) for n in A["judged"]),
+                        *((os.path.basename(s["log"]), A["log_bytes"]) for s in ran if s.get("status") == "failed" and s.get("log"))]:
+        p = os.path.join(d, name)
+        try:
+            if os.path.getsize(p) <= bound:
+                with open(p, errors="replace") as f:
+                    text = f.read()
+                out[name] = text if name in A["judged"] else "".join(ln for ln in text.splitlines(True) if ln.startswith("FAIL "))
+        except OSError:
+            pass
+    return out
+
+
 now, rows = time.time(), []
 try:
     names = sorted(n for n in os.listdir(A["runs"]) if any(n.startswith("r" + d + "-") for d in A["days"]))
@@ -1257,6 +1277,8 @@ for n in names:
     if bad is not None:
         row.update(step=bad.get("step"), step_ended=bad.get("ended_utc"), rc=bad.get("rc"), suite=bad.get("suite", False),
                    line=bad.get("line") or (first_failing(os.path.join(d, bad["log"])) if bad.get("log") else None))
+        if state == "running" and not row["suite"]:
+            row["files"] = judged(d, ran)
     # the ratchet gate's lines, though another step failed first: each change it fails is a lane to ring
     gate = next((s for s in ran if s.get("step") == A["ratchet"]["step"] and s.get("status") == "failed"), None)
     if gate is not None:
@@ -1293,12 +1315,14 @@ print(json.dumps({"rows": rows, "waiting": waiting}))
 
 
 def failed_reader(now: float, *, runs: str = RUNS, requests: str = REQUESTS, line: str = CHECK_LINE) -> str:
+    from .landing import PROGRESS, SUITE_REPORTS
     from .reds import RATCHET_FAILED_RE, RATCHET_STEP
 
     days = sorted({time.strftime("%Y%m%d", time.gmtime(now - s)) for s in (0, FAILED_RECENT_S)})
     args = {"runs": runs, "requests": requests, "line": line, "days": days, "recent_s": FAILED_RECENT_S, "wrapper": SLOT_WRAPPER,
             "pick": list(FAILING), "log_bytes": 8 << 20, "not_started": NOT_STARTED, "classify_s": CLASSIFY_S,
-            "ratchet": {"step": RATCHET_STEP, "re": RATCHET_FAILED_RE.pattern, "max": RATCHET_LINES}}
+            "ratchet": {"step": RATCHET_STEP, "re": RATCHET_FAILED_RE.pattern, "max": RATCHET_LINES},
+            "judged": list(dict.fromkeys((PROGRESS[0], *SUITE_REPORTS))), "judged_bytes": JUDGED_BYTES}
     return FAILED_READER.replace("__ARGS__", repr(json.dumps(args)))
 
 
@@ -1376,12 +1400,35 @@ def step_job(step: str) -> str:
     return step.partition(":")[0]
 
 
-def _off_gate(ctx: Ctx, sha: str | None) -> tuple[str, ...]:
-    """policy.toml's `off_gate` at the run's commit ``sha`` on GitHub, or at `main` when GitHub can't give that commit's;
-    RuntimeError or `policy.PolicyError` when it can't be read."""
+def _policy(ctx: Ctx, sha: str | None):
+    """policy.toml (`research.policy.Policy`: its `off_gate` and allowances) at the run's commit ``sha`` on GitHub, or at `main`
+    when GitHub can't give that commit's; RuntimeError or `policy.PolicyError` when it can't be read."""
     from . import policy
 
-    return policy.parse(_raw(ctx, policy.PATH, sha), f"{policy.PATH} at {(sha or 'main')[:12]}").off_gate
+    return policy.parse(_raw(ctx, policy.PATH, sha), f"{policy.PATH} at {(sha or 'main')[:12]}")
+
+
+def _judged(pol, now: float, row: dict) -> tuple[set[str], set[str]]:
+    """(the steps running check ``row`` failed, those of them that failed only where ``pol``'s allowances live at ``now`` cover),
+    by the verified queue's own judge of a run's steps (`landing.allowed_steps`) over the files the reader brought (``files``)."""
+    from .landing import allowed_steps, failed_names
+
+    with tempfile.TemporaryDirectory(prefix="failed-checks-") as t:
+        d = Path(t)
+        for name, text in (row.get("files") or {}).items():
+            (d / Path(name).name).write_text(text)
+        return failed_names([d]), allowed_steps(pol, now, [d])
+
+
+def candidate(subjects: list[str]) -> int | None:
+    """The PR of the `Queue: #N` merge (`digest.QUEUE_SUBJECT`) at the tip of a commit's first-parent ``subjects``, beneath the
+    records commit the queue puts on a candidate whose locks it regenerated (`vqueue_records.LOCK_SUBJECT`): a commit the
+    verified queue built as a candidate; None for any other."""
+    from .digest import QUEUE_SUBJECT
+    from .vqueue_records import LOCK_SUBJECT
+
+    top = subjects[1:2] if subjects[:1] and subjects[0].startswith(LOCK_SUBJECT) else subjects[:1]
+    return int(m[1]) if top and (m := QUEUE_SUBJECT.match(top[0])) else None
 
 
 def _hm(utc: str | None) -> str:
@@ -1449,29 +1496,41 @@ def on_main(ctx: Ctx, sha: str | None) -> bool:
     return got.strip() in ("ahead", "identical")
 
 
-def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
+def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> tuple[str, bool] | None:
     """Cancel a check whose step on the merge gate failed while a ticket waits for a check slot on its machine (running on to
-    find more failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled.
-    A step whose job policy.toml's `off_gate` lists at the run's commit (`_off_gate`) holds no candidate, so its failure cancels
-    nothing; when the policy can't be read, nothing is cancelled and the post says so. A suites.py run's failed suite only
-    rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's (a suite can fail for
-    its machine's sake while the run's other steps are worth keeping)."""
+    find more failures is worth it only while nothing waits for its slot): (what the post says, whether that is final), or None
+    when it isn't cancelled and nothing needs saying.  A check of a commit the verified queue built as a candidate (`candidate`)
+    is never cancelled: its loop judges its parts, under the allowances at the candidate's base, as their steps end
+    (`vqueue_slim`) and stops them itself, and a red its base shares still lands it, so a cancel only throws away its evidence.
+    Of any other check, a step whose job policy.toml's `off_gate` lists at the run's commit (`_policy`) holds no candidate, and
+    one that failed only where an allowance live there covers (`_judged`, as the queue judges a step) is taken as passed, so
+    neither cancels anything (the second is said, and judged again on each pass, so a later red still cancels); when the policy
+    can't be read, nothing is cancelled and the post says so.  A suites.py run's failed suite only rings: the lander runs those
+    to land a PR on, and decides whether a suite that failed is its change's (a suite can fail for its machine's sake while the
+    run's other steps are worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
         return None
     if on_main(ctx, row.get("sha")):
         return None
+    if (pr := candidate(row.get("subjects") or [])) is not None:
+        return (f"Not cancelled, though a ticket waits for its slot: it checks a candidate of the verified queue (#{pr} at its "
+                "tip), whose loop judges its failures, allowances included, and stops its runs itself."), True
     try:
-        off = _off_gate(ctx, row.get("sha"))
+        pol = _policy(ctx, row.get("sha"))
     except Exception as e:  # noqa: BLE001  (an unread policy cancels nothing)
         why = f"{type(e).__name__}: {str(e)[:120]}".replace("`", "'")
-        return f"Not cancelled, though a ticket waits for its slot: policy.toml's `off_gate` is unread ({why})."
-    if step_job(row["step"]) in off:
-        return None
+        return f"Not cancelled, though a ticket waits for its slot: policy.toml is unread ({why}).", True
+    failed, allowed = _judged(pol, ctx.now, row)
+    gating = [s for s in dict.fromkeys([row["step"], *sorted(failed)]) if step_job(s) not in pol.off_gate]
+    if not (red := [s for s in gating if s not in allowed]):
+        return (f"Not cancelled, though a ticket waits for its slot: {', '.join(f'`{s}`' for s in gating)} failed only where "
+                "policy.toml's live allowances at its commit cover, which the verified queue takes as passed.", False) \
+            if gating else None
     who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
-            f"failed-checks: step {row['step']} failed while {len(waiting)} waited for a check slot on {machine} ({who})"],
+            f"failed-checks: step {red[0]} failed while {len(waiting)} waited for a check slot on {machine} ({who})"],
            timeout=120)
-    return f"Cancelled at {iso(ctx.now)[11:16]}Z, since {who} waited for a check slot on {machine}."
+    return f"Cancelled at {iso(ctx.now)[11:16]}Z, since {who} waited for a check slot on {machine}.", True
 
 
 def failed_checks(ctx: Ctx) -> list[Finding]:
@@ -1479,8 +1538,9 @@ def failed_checks(ctx: Ctx) -> list[Finding]:
     ended non-zero or was killed, in the last FAILED_RECENT_S: one post in the merge thread, leading with the lane of each open
     PR it checks (the handle its branch suffix names in the registry), of each merge a failed ratchet gate fails, the owner of
     the failed job and the lander (`failed_check`). One still running whose step on the merge gate failed (not policy.toml's
-    `off_gate`) is cancelled once a ticket waits for a check slot on its machine, and the post says so (or a second one, when it
-    comes later)."""
+    `off_gate`, nor only where its allowances cover) is cancelled once a ticket waits for a check slot on its machine, unless it
+    checks a candidate of the verified queue (`cancel_failed`), and the post says so, or why not (or a second one, when it comes
+    later)."""
     reg, memo, errors, out = _registry(), ctx.memo.setdefault("runs", {}), [], []
     for machine, host in CHECK_MACHINES:
         script = failed_reader(ctx.now)
@@ -1500,15 +1560,17 @@ def failed_checks(ctx: Ctx) -> list[Finding]:
             if "cancelled" not in got:
                 try:
                     if said := cancel_failed(ctx, machine, row, waiting):
-                        got["cancelled"] = said
-                        if new:
-                            got["text"] += " " + said
+                        if (slot := "cancelled" if said[1] else "spared") not in got:
+                            got[slot] = said[0]
+                            if new:
+                                got["text"] += " " + said[0]
                 except Exception as e:  # noqa: BLE001  (tried again next pass, while it still runs)
                     got["cancel_error"] = f"{type(e).__name__}: {e}"[:300]
             out.append(Finding(key, got["text"], owners=tuple(got["owners"]), thread=MERGE_THREAD))
-            if got.get("cancelled") and not got["text"].endswith(got["cancelled"]):
-                out.append(Finding(f"{key}:cancelled", f"*Check `{row['run']}` on {machine}*: {got['cancelled']}",
-                                   owners=tuple(got["owners"]), thread=MERGE_THREAD))
+            for slot in ("spared", "cancelled"):
+                if got.get(slot) and got[slot] not in got["text"]:
+                    out.append(Finding(f"{key}:{slot}", f"*Check `{row['run']}` on {machine}*: {got[slot]}",
+                                       owners=tuple(got["owners"]), thread=MERGE_THREAD))
     for k in [k for k, v in memo.items() if ctx.now - v["t"] > 2 * FAILED_RECENT_S]:
         del memo[k]
     if errors and len(errors) == len(CHECK_MACHINES):

@@ -1127,12 +1127,12 @@ def ci_toml(argv, refs=None) -> subprocess.CompletedProcess | None:
                                                 (1, "", f"gh: No commit found for the ref {ref}")))
 
 
-#: policy.toml's jobs off the merge gate, as GitHub gives the file (`monitors._off_gate`)
+#: policy.toml's jobs off the merge gate, as GitHub gives the file (`monitors._policy`)
 POLICY_TOML = 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'
 
 
 def policy_toml(argv, text: str | None = POLICY_TOML, reads: list | None = None) -> subprocess.CompletedProcess | None:
-    """GitHub's answer to `monitors._off_gate`'s read of policy.toml at a commit (``text``; None: GitHub answers nothing at any
+    """GitHub's answer to `monitors._policy`'s read of policy.toml at a commit (``text``; None: GitHub answers nothing at any
     ref), each ref read appended to ``reads``; None for another command."""
     if argv[:2] != ["gh", "api"] or "/contents/tools/check/policy.toml?ref=" not in argv[-1]:
         return None
@@ -1793,11 +1793,134 @@ def test_a_check_is_cancelled_for_no_step_while_policy_toml_is_unread_and_the_po
 
     memo: dict = {}
     (f,) = M.failed_checks(M.Ctx(now=T0, memo=memo, run=answer, act=True))
-    assert "Cancelled" not in f.text and f.text.count("Not cancelled, though a ticket waits for its slot: policy.toml's "
-                                                      "`off_gate` is unread (") == 1
+    assert "Cancelled" not in f.text and f.text.count("Not cancelled, though a ticket waits for its slot: policy.toml is "
+                                                      "unread (") == 1
     assert reads == (["705ca7269313", "main"] if policy is None else ["705ca7269313"])
     reads[:] = []
     assert [g.text for g in M.failed_checks(M.Ctx(now=T0 + 60, memo=memo, run=answer, act=True))] == [f.text] and reads == []
+
+
+CREDIT = "tests/protocols/test_credit_gate.py::test_the_drawn_set_from_a_fixed_coin_is_cores"
+LIVE, EXPIRED = "2026-10-04T00:00:00Z", "2026-10-03T20:00:00Z"      # T0 is 20:40Z on 3 Oct
+CANDIDATE = ["Queue: #10001 vllm: split the adapter", "Queue: #9998 infra: a monitor", "Queue: #9990 lean: a lemma"]
+TRAIN = ["Merge #1466 (ea2f79691)"]
+
+
+def credit_policy(expires: str | None) -> str:
+    """policy.toml at the run's commit: the off-gate jobs and, given ``expires``, an allowance of verity-vllm's credit-gate test."""
+    return POLICY_TOML + ("" if expires is None else f'[[allow]]\nid = "suite verity-vllm::{CREDIT}"\nowner = "compute-accounting"\n'
+                                                     f'expires = "{expires}"\nreason = "its fix is landing"\n')
+
+
+def credit_red(subjects: list[str], beyond: bool = False, more: tuple[dict, ...] = ()) -> dict:
+    """A check running on past its failed pytest step, which failed verity-vllm's credit-gate test (and for more, ``beyond``),
+    then the steps ``more``, with the files the reader brings of it (`monitors.judged`)."""
+    steps = [{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"}, *more]
+    return {"run": "r1", "state": "running", "step": "pytest", "step_ended": "2026-10-03T20:20:00Z", "line": f"FAILED {CREDIT}",
+            "subjects": subjects, "sha": "705ca7269313", "by": LANDER_ID,
+            "files": {"steps.jsonl": "".join(json.dumps(s) + "\n" for s in steps), "pytest.log": "",
+                      "suites.failed.json": json.dumps([{"name": "verity-vllm", "suite": "adapters/vllm", "failed_tests": [CREDIT],
+                                                         "beyond_tests": beyond}])}}
+
+
+def waited_on(rows: list[dict], calls: list, policy: str | None, reads: list | None = None):
+    """The relay's commands for a pass over one machine whose check ``rows`` hold a slot a ticket waits for, under ``policy``."""
+    def answer(argv, input=None, **kw):
+        calls.append(argv)
+        if toml := ci_toml(argv) or policy_toml(argv, policy, reads):
+            return toml
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": rows, "waiting": [{"run": "r2", "by": "lander"}]}), "")
+        if argv[:2] == ["gh", "-R"]:
+            return subprocess.CompletedProcess(argv, 0, json.dumps([{"number": 10001, "headRefName": "cursor/x-558b"}] if "list" in argv
+                                                                   else {"state": "OPEN", "headRefName": "cursor/x-558b"}), "")
+        if argv[:2] == ["gh", "api"]:
+            return subprocess.CompletedProcess(argv, 0, "diverged\n", "")
+        assert argv[3:5] == ["cancel", "r1"]
+        return subprocess.CompletedProcess(argv, 0, "research cancel: r1: SIGTERM", "")
+    return answer
+
+
+@pytest.mark.parametrize("records", [False, True], ids=["candidate", "records-commit"])
+@pytest.mark.parametrize("policy", [credit_policy(LIVE), credit_policy(None), None], ids=["allowed", "unallowed", "unread"])
+@pytest.mark.parametrize("beyond", [False, True], ids=["test", "beyond"])
+def test_a_check_of_a_verified_queue_candidate_is_never_cancelled_and_the_post_says_why(monkeypatch, records, policy, beyond):
+    """r20261115-185311-0984: the monitor cancelled a part of #10001's candidate for verity-vllm's allowed credit-gate tests while
+    a run waited for its slot; had the part not finished its steps, the queue would have lost a passing candidate's evidence.
+    The loop judges its own parts as each step ends (`vqueue_slim`), under the allowances at the candidate's base, which the
+    monitor doesn't read, and a red its base shares still lands the candidate: so a check of a candidate (its commit's tip a
+    `Queue: #N` merge, under the queue's records commit or not) is never cancelled, for an allowed red or a real one, and with
+    no policy read at all; the post says why, once."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-cpu-1", "vy-nebius-cpu-1"),))
+    row = credit_red(["Lock records regenerated for #10001", *CANDIDATE] if records else CANDIDATE, beyond)
+    calls, reads, memo = [], [], {}
+    answer = waited_on([row], calls, policy, reads)
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo=memo, run=answer, act=True))
+    assert not any("cancel" in c for c in calls) and reads == []
+    assert f.text.endswith(" Not cancelled, though a ticket waits for its slot: it checks a candidate of the verified queue "
+                           "(#10001 at its tip), whose loop judges its failures, allowances included, and stops its runs itself.")
+    assert [g.text for g in M.failed_checks(M.Ctx(now=T0 + 60, memo=memo, run=answer, act=True))] == [f.text]
+    assert not any("cancel" in c for c in calls)
+
+
+@pytest.mark.parametrize("expires,beyond,cancelled", [(LIVE, False, False), (EXPIRED, False, True), (None, False, True),
+                                                      (LIVE, True, True)])
+def test_a_check_that_failed_only_where_a_live_allowance_covers_runs_on_and_any_other_red_is_cancelled_as_before(
+        monkeypatch, expires, beyond, cancelled):
+    """A check of no candidate (a train) is judged as the verified queue judges a run's steps (`landing.allowed_steps`), by
+    policy.toml's allowances at its commit: a pytest step that failed only verity-vllm's allowed credit-gate test is taken as
+    passed, so the check runs on though a ticket waits, and the post says so; an expired allowance is as if absent, and a suite
+    that failed beyond its allowed test is red, so either is cancelled as before."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-cpu-1", "vy-nebius-cpu-1"),))
+    calls, reads = [], []
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=waited_on([credit_red(TRAIN, beyond)], calls, credit_policy(expires), reads),
+                                 act=True))
+    assert any("cancel" in c for c in calls) == cancelled and reads == ["705ca7269313"]
+    assert f.text.endswith(" Cancelled at 20:40Z, since r2 waited for a check slot on vy-nebius-cpu-1." if cancelled else
+                           " Not cancelled, though a ticket waits for its slot: `pytest` failed only where policy.toml's live "
+                           "allowances at its commit cover, which the verified queue takes as passed.")
+
+
+def test_a_check_spared_for_an_allowed_failure_is_still_cancelled_for_a_later_red(monkeypatch):
+    """Sparing a check for an allowed failure is judged again on each pass: once a gating step fails beyond the allowances, the
+    check is cancelled and a second post says so; a later failure off the merge gate cancels nothing."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-cpu-1", "vy-nebius-cpu-1"),))
+    rows, calls, memo = [credit_red(TRAIN, more=({"step": "circuit-check", "status": "failed", "rc": 1},))], [], {}
+    answer = waited_on(rows, calls, credit_policy(LIVE))
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo=memo, run=answer, act=True))
+    assert "failed only where policy.toml's live allowances" in f.text and not any("cancel" in c for c in calls)
+    assert [g.key for g in M.failed_checks(M.Ctx(now=T0 + 60, memo=memo, run=answer, act=True))] == ["vy-nebius-cpu-1:r1"]
+    rows[0] = credit_red(TRAIN, more=({"step": "circuit-check", "status": "failed", "rc": 1},
+                                      {"step": "lean-audit", "status": "failed", "rc": 1}))
+    got = M.failed_checks(M.Ctx(now=T0 + 120, memo=memo, run=answer, act=True))
+    assert [g.key for g in got] == ["vy-nebius-cpu-1:r1", "vy-nebius-cpu-1:r1:cancelled"] and got[0].text == f.text
+    assert [c for c in calls if "cancel" in c][0][-1].startswith("failed-checks: step lean-audit failed while 1 waited")
+
+
+def test_the_reader_brings_a_running_checks_steps_suite_reports_and_failed_logs_fail_lines_to_judge_its_failures_by(tmp_path):
+    """The relay judges a running check's failures by the queue's own judge (`landing.allowed_steps`), which reads the run's
+    steps.jsonl, its suite reports and a failed step's log's FAIL lines (circuit-check's allowances): the reader brings those,
+    each whole or not at all (a report over `JUDGED_BYTES` covers nothing), and nothing of a run that ended."""
+    slot = ["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py"]
+    steps = [{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"},
+             {"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"}]
+    failed = json.dumps([{"name": "verity-vllm", "failed_tests": [CREDIT], "beyond_tests": False}])
+    logs = {"pytest.log": f"FAILED {CREDIT}\n", "circuit-check.log": "PASS a\nFAIL width/overflow Foo_v1{N=8}\n",
+            "suites.failed.json": failed, "suites-lean.failed.json": "x" * (M.JUDGED_BYTES + 1)}
+    write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="running", rc=None, steps=steps, logs=logs)
+    write_run(tmp_path, "r20261003-200000-bbbb", command=slot, state="failed", rc=1, steps=steps, logs=logs)
+    script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
+    rows = {r["run"][-4:]: r for r in json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True,
+                                                                text=True, check=True).stdout)["rows"]}
+    files = rows["aaaa"]["files"]
+    assert sorted(files) == ["circuit-check.log", "pytest.log", "steps.jsonl", "suites.failed.json"]
+    assert (files["suites.failed.json"], files["pytest.log"], files["circuit-check.log"]) == (
+        failed, "", "FAIL width/overflow Foo_v1{N=8}\n")
+    assert files["steps.jsonl"] == (tmp_path / "runs" / "r20261003-200000-aaaa" / "steps.jsonl").read_text()
+    assert "files" not in rows["bbbb"]
 
 
 def test_unverified_main_rings_ci_and_top_each_hour_past_three_the_verified_queue_decides_nothing(tmp_path):
