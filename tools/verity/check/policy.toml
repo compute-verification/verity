@@ -35,6 +35,12 @@ expires = "2026-11-21T07:59:00Z"
 reason = "the credit period's verdict of record is the Lean verifier's; the Python gate's two tests follow it once it reads the Lean's"
 
 [[allow]]
+id = "suite verity-vllm::tests/protocols/test_credit_gate.py::test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused"
+owner = "compute-accounting"
+expires = "2026-11-21T07:59:00Z"
+reason = "the credit period's verdict of record is the Lean verifier's; this test of the Python gate follows it once it reads the Lean's"
+
+[[allow]]
 id = "suite verity-vllm::tests/lint/test_p10_size.py::test_no_new_or_grown_offenders"
 owner = "vllm"
 expires = "2026-11-17T07:59:00Z"
