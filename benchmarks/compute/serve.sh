@@ -39,18 +39,17 @@
 # path's window record W stands in its place. The passes stay under PASSES (default a directory under SCRATCH, else
 # $TMPDIR), outside OUT: they hold the run's activations and salt key.
 # Env: VERITY_BENCH_VENV (the pinned-vLLM Python's venv, else benchmarks/harness/env.sh's search), HF_HOME, CUDA_HOME,
-# RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459), DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc),
-# LEASE_MIN (30). Exit 0 only where Python and Lean both accept.
+# RUN_DIR (the run directory, default $RESEARCH_RUN_DIR, else ./compute-run), COINS (local), GPU (0), DRAWS (459),
+# DELTA (1/100), FAST (1; empty: the scalar reference alone), JOBS (nproc), LEASE_MIN (30). The load is
+# benchmarks/compute/load.toml's, which run.py holds the record to. Exit 0 only where Python and Lean both accept and
+# run.py prints the share.
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 3
 TREE=$PWD
 RUN=${RUN_DIR:-${RESEARCH_RUN_DIR:-$TREE/compute-run}}
 OUT=$RUN/out
-# the benchmark's load: the tied class, SLOTS requests of PROMPT prompt tokens and OUTPUTS output tokens
-CLASS=4,32,4
 COINS=${COINS:-local} GPU=${GPU-0} DRAWS=${DRAWS:-459} DELTA=${DELTA:-1/100} FAST=${FAST-1} JOBS=${JOBS:-$(nproc)}
-IFS=, read -r SLOTS PROMPT OUTPUTS <<< "$CLASS"
-REPO=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da SCHEME=pearl-c-h100-v1-h3
+SCHEME=pearl-c-h100-v1-h3
 SPEC=benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml
 SP=benchmarks/pouw/pearl_c_vllm/served_passes.py
 PIECE=$OUT/pieces/pouw REC=$OUT/record
@@ -58,6 +57,13 @@ mkdir -p "$OUT/logs" "$PIECE" "$REC" || exit 3
 # shellcheck source=/dev/null
 . benchmarks/harness/env.sh
 PY=$VENV/bin/python
+# the benchmark's load (benchmarks/compute/load.toml): the model, its revision, and the class, SLOTS requests of PROMPT
+# prompt tokens and OUTPUTS output tokens each
+read -r REPO REV SLOTS PROMPT OUTPUTS < <("$PY" -c 'import sys, tomllib
+d = tomllib.load(open(sys.argv[1], "rb"))
+print(d["model"], d["revision"], d["slots"], d["prompt"], d["outputs"])' benchmarks/compute/load.toml) && [ -n "$OUTPUTS" ] \
+  || { echo "benchmarks/compute/load.toml doesn't read as the benchmark's load" >&2; exit 3; }
+CLASS=$SLOTS,$PROMPT,$OUTPUTS
 export PATH=$HOME/.elan/bin:$PATH HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-0}
 W=${PASSES:-$(mktemp -d -p "${SCRATCH:-${TMPDIR:-/tmp}}" pearlplus-compute.XXXXXX)}
 P=$W/passes WR=$W/window-record.json
