@@ -28,8 +28,8 @@ from verity.commitments.periods import history as HW, interface as I, rows as CS
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-from benchmarks.one_stage import a0 as a0  # noqa: E402
-from benchmarks.one_stage import a5 as A5  # noqa: E402
+import a0  # noqa: E402
+import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)

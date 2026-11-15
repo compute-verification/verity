@@ -14,7 +14,7 @@ import pytest
 from verity_flock import challengers as CH
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
-from benchmarks.one_stage import a0 as a0
+import a0
 
 ENV = ("FC_ZK_SERVER", "FC_ZK_SERVER_LEAN", "FC_ZK_SERVER_STATEMENT", "FC_HOST_WITNESS")
 

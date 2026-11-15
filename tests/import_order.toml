@@ -56,16 +56,6 @@ order = [
 directory = "verity/protocols/proofs/flock"
 owner = "proofs"
 reason = "Flock's distribution (`verity_flock`) and its verifier's scripts"
-# the files of `verity` that load it, each by its path, until `known_reason`'s day; the list only shrinks
-known = [
-    "benchmarks/one_stage/compose_circuit.py",
-    "benchmarks/one_stage/prove_bundle.py",
-    "benchmarks/prove_path/records_audit.py",
-    "benchmarks/one_stage/a0.py",
-    "benchmarks/one_stage/two_stage.py",
-    "benchmarks/one_stage/a5.py",
-]
-known_reason = "SPOT's prover audit runs Flock's prover; owner proofs; goes the day `verity_flock` joins `verity`"
 
 [[distribution]]
 directory = "verity/protocols/accounting/pous/verifier/check"

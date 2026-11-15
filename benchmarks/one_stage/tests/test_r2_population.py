@@ -16,7 +16,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P, dock
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parent))
-from benchmarks.one_stage import r2_population as R2  # noqa: E402
+import r2_population as R2  # noqa: E402
 
 XOR8 = PrimitiveDefinition("R2PopulationTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)

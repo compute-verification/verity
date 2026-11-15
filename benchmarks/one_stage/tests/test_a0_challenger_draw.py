@@ -17,7 +17,7 @@ from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
-from benchmarks.one_stage import a0 as a0
+import a0
 
 #: a stand-in for verity-verify-proof: ``draw ... --stream-file F`` prints a DRAW line holding its argv and F's bytes
 FAKE = '''#!{python}

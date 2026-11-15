@@ -122,7 +122,7 @@ def test_window_circuit_and_class_size_default_to_the_class_of_record():
     """Without ``--class``, ``window-circuit`` and ``class-size`` take the class of record, the certifier run of record's
     envelope at the fixed slots (8 slots, 4 at each of buckets 0 and 16, EVERY 16; 1,024 prompt ids, 64 outputs); a
     given class is read as SLOTS,PROMPT,OUTPUTS[,LANES,EVERY], every slot at one boundary without LANES."""
-    from benchmarks.prove_path import prove_path as PP
+    import prove_path as PP
 
     assert PP.window_class_of(None) == CLASS_OF_RECORD == WindowClass(8, 1024, 64, lanes=4, every=16)
     assert PP.window_class_of("8,1024,64,4,16") == CLASS_OF_RECORD

@@ -17,7 +17,7 @@ HERE = (Path(__file__).resolve().parent)
 PUBLIC = Path(__file__).resolve().parent / "fixtures" / "bundle-window-public"
 E2E = HERE.parents[2] / "benchmarks" / "one_stage" / "interfaces" / "tests" / "fixtures"
 sys.path.insert(0, str(HERE.parent))
-from benchmarks.one_stage import prove_bundle as PB  # noqa: E402
+import prove_bundle as PB  # noqa: E402
 
 
 @pytest.fixture

@@ -5,19 +5,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "tests/test_template_audit_archive_once.py",
-    "tests/test_audit_one_member.py",
-    "tests/test_audit_two_members.py",
-    "tests/test_template_audit_verify_members.py",
-    "tests/test_window_audit_outputs.py",
-    "tests/test_kept_scan.py",
-    "tests/test_prove_path.py",
-    "tests/test_prove_path_sh_keep.py",
-    "tests/test_prove_path_sh_request_values.py",
-    "tests/test_check_memo.py",
-    "tests/test_records_audit.py",
-]
+untraced = []
 artifacts = [
     "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
     "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-zk-server",
@@ -124,11 +112,3 @@ inputs = [
     "verity/protocols/accounting/__init__.py",
     "verity/protocols/accounting/pouw/__init__.py",
 ]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_prove_bundle.py", "tests/test_records_audit.py"]
-paths = ["verity/circuits/ops"]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_prove_path.py"]
-paths = ["verity"]

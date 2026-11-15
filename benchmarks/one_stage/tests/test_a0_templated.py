@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
-from benchmarks.one_stage import a0 as a0
+import a0
 
 TMPL = "verity/flock-circuit/tmpl"
 

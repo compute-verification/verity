@@ -15,7 +15,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-TS = importlib.import_module("benchmarks.one_stage.two_stage")
+TS = importlib.import_module("two_stage")
 SM = importlib.import_module("two_stage_small")
 
 SECOND = ["second", "--first-stage", "s1.json", "--boundary", "class", "--capture", "capture", "--challenger", "local",

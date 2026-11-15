@@ -44,8 +44,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from benchmarks.one_stage import stop_audit as SA  # noqa: E402
-from benchmarks.one_stage import two_stage as TS  # noqa: E402
+import stop_audit as SA  # noqa: E402
+import two_stage as TS  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402

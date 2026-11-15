@@ -49,13 +49,14 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-sys.path[:0] = [str(REPO / "benchmarks" / "one_stage" / "interfaces"),
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[1]
+sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "benchmarks" / "one_stage" / "interfaces"),
                 str(REPO / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement")]
 
-from benchmarks.one_stage import a0 as a0  # noqa: E402
-from benchmarks.one_stage import a5 as A5  # noqa: E402
-from benchmarks.prove_path import records_audit as RA  # noqa: E402
+import a0  # noqa: E402
+import a5 as A5  # noqa: E402
+import records_audit as RA  # noqa: E402
 import zk_mutants as ZM  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402

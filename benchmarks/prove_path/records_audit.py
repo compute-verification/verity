@@ -187,7 +187,8 @@ from typing import Any
 
 import numpy as np
 
-HERE = (Path(__file__).resolve().parent.parent.parent / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit")
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity import device as ST  # noqa: E402
 from verity.protocols.accounting.registration.verifier import registration as G  # noqa: E402
@@ -730,7 +731,7 @@ def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound:
     binds the compiler and advice the compile check verified (``bound``, None for a circuit with none). -> {ok, codes, detail}:
     ``after-the-draw`` where the sample followed another docket or another stream's, ``compiler`` or ``advice`` where the
     docket binds another."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
 
     w, b = rec.get("window") or {}, bound or {}
     ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
@@ -819,7 +820,7 @@ def verifier_window(window_dir: Path, sampling_design: Mapping[str, Any] | str, 
     count by name): the window's sampling design and work table are then the ones that rate names over the window's own proof
     blocks (`a5.rated`), as the stream derives them. A window with row tables is refused: a5 checks their segment roots
     against the ones recorded before each coin (``step_roots``), which the records don't carry yet."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
 
     own = A5.template_sets(template_sets) if template_sets else {}
     resolve = lambda t: own[t][1] if t in own else catalog_resolve(t)  # noqa: E731
@@ -873,7 +874,7 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     proof, the round messages that carried it rebuilt and the coins kept), each verified by Lean `verify --zk` on the honest
     member's circuit and public file: what the verifier refuses, not the prover. Then that public file with one
     bit flipped (``public-bit-*``) under the honest proof."""
-    from benchmarks.one_stage import a0 as a0
+    import a0
     # the directory of `zk_mutants.py` and the modules it imports beside it
     sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py").parent))
     import zk_mutants as ZM
@@ -978,7 +979,7 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
     counted. A check with nothing to read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK
     server, and ``lean_refused`` where Lean refused only sessions it read no proof of (False where it refused none).
     ``sessions`` is what each session read records (`session_proofs`), and ``why`` the audit's reasons."""
-    from benchmarks.one_stage import a0 as a0
+    import a0
 
     audit, behind, no_value = s.get("audit") or {}, s.get("arm") == "fw", {}
     record = json.loads((wdir / "audit.json").read_text()) if (wdir / "audit.json").is_file() else {}
@@ -1009,7 +1010,7 @@ def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
@@ -1155,7 +1156,7 @@ def warm(a: argparse.Namespace) -> int:
     """Every template of the verifier's window that its composers make, composed into ``a.compose_cache`` bound to the window's
     partition and program (`a5.warm`), ``a.jobs`` at a time, before the timed audit: an audit with that cache then composes
     none. One JSON line a template (its seconds, pin and whether the cache held it), then a ``WARM`` line."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
 
     t0 = time.time()
     mine, _doc, sets = verifier_window(Path(a.window), a.sampling_design, Path(a.template_sets) if a.template_sets else None)
@@ -1169,7 +1170,7 @@ def warm(a: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)

@@ -35,7 +35,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from benchmarks.one_stage import a0 as a0  # noqa: E402
+import a0  # noqa: E402
 import forged_proofs as FP  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402

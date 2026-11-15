@@ -947,7 +947,7 @@ def _a5() -> Any:
     for d in (HERE.parent / "prove_path", HERE):
         if str(d) not in sys.path:
             sys.path.insert(0, str(d))
-    from benchmarks.one_stage import a5 as a5
+    import a5
 
     return a5
 
@@ -1000,7 +1000,7 @@ def statements(audit_dir: Path, window: CS.Binding) -> list[dict]:
     """Each member session's statement as round 2 takes it (``{"template", "header", "draw", "registered"}``): its
     template, its public file's header, its session record's ``unit_draw`` and the reads it was verified against. A
     member the second stage drew nothing of has no session and no statement."""
-    from benchmarks.one_stage import a0 as a0
+    import a0
 
     out = []
     for k, m in enumerate(window.members):
@@ -1088,7 +1088,7 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     allowed, and the outcome is the stream's (`outcome_of`). The report names what the proof
     server refused, in flock-circuit's words, where a session never ran."""
     a5 = _a5()
-    from benchmarks.prove_path import records_audit as RA
+    import records_audit as RA
 
     a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
     a.tie = {"log": [brec], **(tie or {})}

@@ -443,7 +443,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.altered and a.made_for:
         ap.error("one refused statement a run: --altered or --made-for")
-    from benchmarks.one_stage import a5 as a5
+    import a5
     from verity.protocols.proofs.spot.device import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 

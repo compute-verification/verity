@@ -58,7 +58,7 @@ from verity.commitments.periods import interface as IF, rows as CS
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
-from benchmarks.prove_path import records_audit as RA  # noqa: E402
+import records_audit as RA  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # noqa: E402
 
 K = 64
@@ -159,7 +159,7 @@ def test_a_registry_template_resolves_in_a_fresh_audit_process():
     code = f"""
 import sys
 sys.path.insert(0, {str(HERE.parent)!r})
-from benchmarks.prove_path import records_audit as RA
+import records_audit as RA
 from verity.circuits.codec import descriptor_id
 assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
 """
@@ -413,7 +413,7 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
     charge. Each count holds the pin to the window's root its advice registration records: where it records another root,
     or none, every registered read is free."""
-    from benchmarks.prove_path import prove_path as PP
+    import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.build import Unexpressible
@@ -465,7 +465,7 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
     linears under ``--pearl-tables`` alike (I2's class circuit stubbed, `window_circuit.window_circuit` left to call it).
     ``serve-phi`` states what serve.json will record of φ from this device (`prove_path.device_target` stubbed with the
     run's), and ``compiler --serve`` over it names the compiler ``compiler --serve-run`` names once the run has served."""
-    from benchmarks.prove_path import prove_path as PP
+    import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
 
@@ -504,7 +504,7 @@ def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp
     """``prove_path.py window-circuit --window-registration W``, the verifier's record of a window H1 tied: I2's window
     circuit reads H1's tables of W's Program (`h1_tie`'s, as window-commit's circuit with W reads them), and the command
     takes no key, which is H1's prover's alone; without W it reads none. Refused for a W under another Program."""
-    from benchmarks.prove_path import prove_path as PP
+    import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
     from verity.protocols.accounting.pouw.prover.serving import h1 as PH
@@ -716,7 +716,7 @@ def test_the_verifier_tie_tests_tie_is_the_audits_on_their_toys():
     code = f"""
 import sys
 sys.path[:0] = [{str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests")!r}, {str(HERE.parent)!r}]
-from benchmarks.prove_path import records_audit as RA
+import records_audit as RA
 from verity.circuits.codec import descriptor_id
 import json
 import test_pearltie as TP, test_remotetie as TR, window_tie as WT
@@ -847,7 +847,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     count registered (the root the window's docket records for the value), the value is the window's own to the
     output class (its readers sampled like any other unit), and the summary names W's digest and the values. The sessions
     (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
 
     got = _tied(tmp_path / "w")
@@ -1164,7 +1164,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     which it holds the root the window's docket records, the root the table is pinned at (`history.pins`). A
     docket that records no root for the table is refused before any session. The sessions (`a5.audit`) are stubbed
     and sample nothing, so the audit doesn't pass."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
     from verity.commitments import history as HT
 
@@ -1398,7 +1398,7 @@ def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
 
 
 def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it(written):
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
                               "compiled": True}
@@ -1460,7 +1460,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_pat
     """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
 
     got = _write(tmp_path / "w", n=20, cap=1)
@@ -1509,7 +1509,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     rejected audit does, and told both the command refuses its arguments before any session. The summary of a window
     that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
     takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
 
     why = "setup: registered reads: port w: table row 0 does not open weights's registered root at position 0"
@@ -1574,7 +1574,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
     is the records' alone. a5's workers' flags (`a5.lean_options`) reach the stub as given, a5's defaults otherwise, and
     the summary carries a5's ``negative_workers``."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
 
     mine, stated, _sets = RA.verifier_window(written.dir, D.parse_design(SAMPLING_DESIGN), None)
@@ -1623,7 +1623,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
     that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` too, and only where it is given."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
 
     seen = {}
@@ -1669,8 +1669,8 @@ def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_othe
     with it, and a compose cache kept under another build is not taken. Every other template's composer never asks for the
     executable, and its inputs and its key are the statement's alone; the Definition decides, not the statement's form. The
     read here is the toy template under the read's name (`read_tmpl.READ`), which is all `is_read` asks of a Definition."""
-    from benchmarks.one_stage import a5 as A5
-    from benchmarks.one_stage import compose_circuit as CM
+    import a5 as A5
+    import compose_circuit as CM
     from verity_flock import read_tmpl as RT
 
     st, flat = {"layout": "iv/hybrid/4", "structural": True}, {"reads": "inline"}
@@ -1707,9 +1707,9 @@ def test_the_audit_from_the_records_loads_of_verity_vllm_only_a_catalog_package(
 import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
-from benchmarks.prove_path import records_audit as RA
+import records_audit as RA
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, docket as R
-from benchmarks.one_stage import a5 as A5
+import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_design({SAMPLING_DESIGN!r}), None)
 rec = json.loads((d / "registration.json").read_text())
@@ -1736,7 +1736,7 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     synthetic serve-openai run of `test_prove_path` (its I2 compile stubbed, and the window over its Programs a coordinate
     window): it writes a circuit record the audit reads (`interface.window_of_record`) under no run and prints the length the
     docket charges, and exits `records_audit.REFUSED` on advice it can't compile."""
-    from benchmarks.prove_path import prove_path as PP
+    import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.pipeline import serving_rows as SRW
 
@@ -1801,7 +1801,7 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     circuit (a layer-1 SiluMul row and layer 0's first down_proj row swap names: one more SiluMul row in layer 0's scope), and
     ignores names that make the same one (layers 0 and 1's first SiluMul rows swapped, which moves only the prover's own reads;
     two weights fields swapped): the verifier's record is its own compile's in each case."""
-    from benchmarks.prove_path import prove_path as PP
+    import prove_path as PP
     from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
 
     s = _tiny_served(tmp_path, monkeypatch)

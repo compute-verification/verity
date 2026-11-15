@@ -24,7 +24,7 @@ from verity.commitments.periods import rows as CS
 from verity.commitments.periods import wiring as WI
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
-from benchmarks.one_stage import a5 as a5
+import a5
 
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 WIDE = bind(G.Gemm, K=16, N=32, **G.GEMM_AMPERE)

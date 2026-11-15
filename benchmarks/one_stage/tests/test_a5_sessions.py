@@ -15,7 +15,7 @@ import pytest
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parent))
-from benchmarks.one_stage import a5 as a5  # noqa: E402
+import a5  # noqa: E402
 
 
 def test_session_jobs_takes_one():

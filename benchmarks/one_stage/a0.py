@@ -48,7 +48,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
-from benchmarks.one_stage import r2_population as R2
+import r2_population as R2
 
 HERE = (Path(__file__).resolve().parent)
 SCHEME = "frame-v3-sha512/hm96-sha512"

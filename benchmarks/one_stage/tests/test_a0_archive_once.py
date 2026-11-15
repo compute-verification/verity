@@ -16,7 +16,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import pytest  # noqa: E402
 
-from benchmarks.one_stage import a0 as a0  # noqa: E402
+import a0  # noqa: E402
 
 #: a stand-in for verity-verify-proof: ``archive-put`` as Lean's (each file under its SHA-512, logged to ``puts``); ``verify``
 #: accepting when the circuit and public objects it is named hash to their keys, as `archiveGet` holds them, with

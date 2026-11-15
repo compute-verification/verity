@@ -37,8 +37,9 @@ from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boun
                                   interior_rows as IR, long_row as LR, serving_rows as SRW)
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "benchmarks" / "one_stage"))
 sys.path.insert(0, str(REPO / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-TS = importlib.import_module("benchmarks.one_stage.two_stage")
+TS = importlib.import_module("two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("verity.protocols.proofs.spot.device.challenger_session")
 VT = importlib.import_module("test_verdict_record")
@@ -949,7 +950,7 @@ def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it
     builds its stop stream again as the stop audit does, and takes `stop_audit.summary_of`'s own summary: the record
     names the class's boundary record, the directory the class is filed under and the rate its stop record registers.
     No session is proved and Lean is not called."""
-    SA = importlib.import_module("benchmarks.one_stage.stop_audit")
+    SA = importlib.import_module("stop_audit")
     pubs = [json.loads(json.dumps(_stop_class().public()))]
     monkeypatch.setattr(AC, "start", _start(OneSession("verdict-record")))
     (wrote,) = TS._first_all(_args(tmp_path), pubs, PAIR, RULE, None, STOP)
@@ -977,9 +978,10 @@ def test_the_command_finds_the_long_rows_check_by_its_id_in_a_process_that_never
     row's (`long_row`'s `DsaTopKReadRowsCut_v1`, which no registry module registers) is found in a process of its own,
     since this one has imported `long_row`."""
     t = descriptor_id(bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=E.read(16, 1)))
-    code = ("import sys\nfrom verity.protocols.proofs.spot.prover.audit import two_stage\nfrom verity.circuits.codec import descriptor_id\n"
+    code = ("import sys\nsys.path.insert(0, sys.argv[2])\nimport two_stage\nfrom verity.circuits.codec import descriptor_id\n"
             "assert 'verity_vllm.pipeline.long_row' not in sys.modules\nprint(descriptor_id(two_stage.template_fn(sys.argv[1])))")
-    got = subprocess.run([sys.executable, "-c", code, t], capture_output=True, text=True, check=False)
+    got = subprocess.run([sys.executable, "-c", code, t, str(REPO / "benchmarks" / "one_stage")], capture_output=True,
+                         text=True, check=False)
     assert got.returncode == 0, got.stderr[-2000:]
     assert got.stdout.strip() == t
 

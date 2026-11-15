@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[1])))
-from benchmarks.one_stage import a0 as a0
+import a0
 
 DIGEST = "5e" * 64
 MISSING = "session files: no such file or directory (error code: 2)\n  file: /s/circuit-00.rep0.bin"

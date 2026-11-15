@@ -204,9 +204,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-HERE = (Path(__file__).resolve().parent)
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from benchmarks.prove_path.records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
+from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -1061,7 +1062,7 @@ def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound
     read); and that docket must bind the compiler and the root the verifier
     opened. -> {ok, codes, detail}: ``after-the-draw`` where the sample followed another docket, or another stream's,
     ``compiler`` or ``advice`` where the docket binds another."""
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
 
     w = rec.get("window") or {}
     ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
@@ -1155,7 +1156,7 @@ def audit_rank(job: tuple[argparse.Namespace, int, int]) -> dict:
 
 
 def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
 
     t0 = time.time()
     compiler, requests, bound, opening = compiled(a)
@@ -1206,7 +1207,7 @@ def coins_of(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def audit(a: argparse.Namespace) -> int:
-    from benchmarks.one_stage import a5 as A5
+    import a5 as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 

@@ -14,8 +14,8 @@ import pytest
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parent))
 
-from benchmarks.one_stage import a0 as a0  # noqa: E402
-from test_template_audit_archive_once import window  # noqa: E402
+import a0  # noqa: E402
+from test_a0_archive_once import window  # noqa: E402
 
 
 def kept_window(tmp_path: Path) -> tuple[str, list[tuple[dict, Path]], a0.VerifyMembers]:

@@ -56,7 +56,7 @@ PRELUDE = '''import hashlib, importlib, json, os, sys
 from pathlib import Path
 from types import SimpleNamespace
 sys.path.insert(0, os.environ["ONE_STAGE"])
-from benchmarks.one_stage import a5 as a5
+import a5
 from verity_flock import circuit as FC
 
 circuits = a5.Program.__module__.rsplit(".", 1)[0]  # the circuits package, by the name a5 imports it under
