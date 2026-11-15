@@ -327,7 +327,7 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
         raise ValueError("the wipe's placement names the prover's store or has no store_gaps: it is of the format "
                          "before the placement named no device, so what the store leaves out isn't in it; run the "
                          "subprotocol again")
-    out = [] if wipe_party.holds(where) else [f"key custody: {where[wipe_party.PREMISE]}"]
+    out = [] if wipe_party.holds(where) else [f"key custody: {mc.premise(where)}"]
     if egress_mib is not None and egress_mib >= sw.EGRESS_MAX_UNITS:
         out.append("egress: uncounted, the check was given no network certifier's count over the session, so the bound "
                    "is vacuous")

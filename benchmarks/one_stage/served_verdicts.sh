@@ -1487,7 +1487,7 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   if [ -n "${COMPOSITE-1}" ]; then
     local why="composed by a deferral's follow-on on $(hostname -s), a prover node, which the prover controls: a"
     why+=" development check, no claim of record (only the compose follow-on's composite, off the served node on an"
-    why+=" auditor host, is the record's)"
+    why+=" auditor device, is the record's)"
     TPY=$TPY SERVED_NODE=$SERVED_NODE COMPOSE_DEVELOPMENT=$why bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" \
       || comp=1
     lean=(--composite "$OUT/composite")
