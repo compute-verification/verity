@@ -14,8 +14,8 @@ holds everywhere; this file adds what holds only here. Import from the owning mo
   `private_circuits` (the universal circuit), and the evaluator and a circuit's requirement in Lean (`evaluate`,
   `requirement`). The served kernels' circuits are the vLLM adapter's (`adapters/vllm/verity_vllm/definitions/`).
 - `commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms` and
-  `identity` (Lean), `attest` (the auditor's hardware's signed period roots), `window.py` (what an adapter hands the
-  prover for each execution phase) and the security claims' ids (`claim_ids.py`).
+  `identity` (Lean), `attest` (the auditor's hardware's signed period roots), `periods` (what an adapter hands Verity,
+  one period at a time) and the security claims' ids (`claim_ids.py`).
 - Three base Lean packages hold the shared Lean, which Flock's verifier and the packages requiring it load:
   `circuits/base/` (bytes, hashes and parsing), `circuits/lean/` (the circuit format) and `commitments/lean/`
   (frame-v3 and the sampling of units).
@@ -31,8 +31,8 @@ below are today's.
   (`flock/prover/agreement/`). `spot/verifier/` is SPOT, sampling, with the integrity profile (`profile`).
   `recursion/` is the recursion layer. `spot_flock/verifier/lean/` is SPOT[Flock], the argument SPOT builds over Flock,
   and `spot_flock_recursion/` composes it with the recursion, the recursive audit.
-- **Resource accounting** (`protocols/accounting/`): `pouw`, `pous`, `poub` and `certifier` (compute, memory and
-  network) and `registration` (the registration log, checked once, before any challenge; its Lean is still in
+- **Resource accounting** (`protocols/accounting/`): `pouw` (compute), `pous` and `poub` (memory), `certifier`
+  (network) and `registration` (the registration log, checked once, before any challenge; its Lean is still in
   `interface/`).
 - **Workload classification** (`protocols/policy/`): `inference_only`, on resource accounting. Its check
   (`inference_only/verifier/lean/`) is Lean only; its Python is its manifest alone
